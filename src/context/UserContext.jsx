@@ -33,17 +33,23 @@ export function UserProvider({ children }) {
     return [];
   });
 
-  // Fetch initial tracks & profile sync ONCE on mount or user login (NO 5s polling loop!)
+  // Fetch initial tracks & profile sync ONCE on mount or user login
   useEffect(() => {
     let isMounted = true;
     const fetchInitialData = async () => {
       try {
         const email = currentUser?.email || '';
+        const token = localStorage.getItem('liofy_jwt_token');
         const url = email 
           ? `${API_BASE_URL}/api/user/sync?email=${encodeURIComponent(email)}` 
           : `${API_BASE_URL}/api/tracks`;
         
-        const res = await fetch(url);
+        const res = await fetch(url, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          }
+        });
         if (!res.ok || !isMounted) return;
 
         const data = await res.json();
@@ -101,6 +107,7 @@ export function UserProvider({ children }) {
       localStorage.setItem('liofy_user', JSON.stringify(currentUser));
     } else {
       localStorage.removeItem('liofy_user');
+      localStorage.removeItem('liofy_jwt_token');
     }
   }, [currentUser]);
 

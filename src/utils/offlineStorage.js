@@ -3,8 +3,15 @@ const DB_NAME = 'LiofyOfflineDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'downloaded_tracks';
 
-// Maintain tracked Blob URLs to revoke when no longer needed
+// Track active Blob URLs in memory and revoke when no longer needed to prevent RAM memory leaks
 const activeBlobUrls = new Map();
+
+export function revokeAllBlobUrls() {
+  activeBlobUrls.forEach((url) => {
+    try { URL.revokeObjectURL(url); } catch (e) {}
+  });
+  activeBlobUrls.clear();
+}
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -93,7 +100,7 @@ export async function getOfflineTrackAudioUrl(trackId) {
   }
 }
 
-// Get all downloaded tracks with fresh Blob URLs
+// Get all downloaded tracks with fresh Blob URLs (safely tracked)
 export async function getOfflineTracks() {
   try {
     const db = await openDB();
@@ -106,7 +113,12 @@ export async function getOfflineTracks() {
         const formatted = items.map(item => {
           let audioUrl = item.audioUrl;
           if (item.audioBlob) {
+            const idStr = String(item.id);
+            if (activeBlobUrls.has(idStr)) {
+              try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
+            }
             audioUrl = URL.createObjectURL(item.audioBlob);
+            activeBlobUrls.set(idStr, audioUrl);
           }
           return { ...item, audioUrl, downloaded: true };
         });
@@ -161,4 +173,3 @@ export async function removeTrackOffline(trackId) {
     return false;
   }
 }
-

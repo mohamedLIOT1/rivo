@@ -113,7 +113,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   };
 
-  // Synchronize Playback Audio Source
+  // Synchronize Playback Audio Source & Mobile MediaSession API
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !currentTrack || !currentTrack.audioUrl) return;
@@ -127,6 +127,25 @@ export function AudioProvider({ children, tracks, setTracks }) {
       audio.play().catch((err) => console.warn('Audio auto-play policy handle:', err));
     } else {
       audio.pause();
+    }
+
+    // MediaSession API integration for Lock Screen / Wearables controls
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.title || 'Liofy Track',
+          artist: currentTrack.artist || 'Liofy Artist',
+          album: currentTrack.album || 'Liofy Single',
+          artwork: [
+            { src: currentTrack.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600', sizes: '512x512', type: 'image/jpeg' }
+          ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+        navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+        navigator.mediaSession.setActionHandler('previoustrack', () => playPrevTrack());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNextTrack());
+      } catch (e) {}
     }
   }, [currentTrack, isPlaying]);
 

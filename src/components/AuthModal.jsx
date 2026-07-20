@@ -45,7 +45,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
       tasteProfile: ['Pop', 'Electronic', 'Arab Pop']
     };
 
-    // Sync account to Railway MongoDB Atlas Database
+    // Sync account to Railway MongoDB Atlas Database with JWT Token Security
     try {
       const endpoint = isSignup ? '/api/auth/register' : '/api/auth/login';
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -56,6 +56,12 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
       const data = await res.json();
       if (data.success && data.user) {
         userData.id = data.user._id || userData.id;
+        if (data.token) {
+          localStorage.setItem('liofy_jwt_token', data.token);
+        }
+      } else if (data.error) {
+        alert(data.error);
+        return;
       }
     } catch(err) {
       console.warn('DB auth status:', err);
@@ -112,9 +118,13 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
                   const newAvatar = avatar || currentUser.avatar;
                   const updatedUser = { ...currentUser, avatar: newAvatar };
                   try {
+                    const token = localStorage.getItem('liofy_jwt_token');
                     await fetch(`${API_BASE_URL}/api/user/update-profile`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                      },
                       body: JSON.stringify(updatedUser)
                     });
                   } catch (err) {}
@@ -127,6 +137,7 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
               </button>
               <button
                 onClick={() => {
+                  localStorage.removeItem('liofy_jwt_token');
                   onLogout();
                   onClose();
                 }}

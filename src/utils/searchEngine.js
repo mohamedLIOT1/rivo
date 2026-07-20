@@ -1,21 +1,19 @@
 /**
  * Liofy Music Search Engine
- * Backend-first with SoundCloud client fallback
+ * High-performance Backend Search Engine & Fallback Stream Resolver
  */
 
 import { API_BASE_URL } from '../config.js';
-
-const SC_CLIENT_ID = 'emAJdGEj1mm9yjoCD2jkixmgqrGIyfpi';
 
 export const searchMusicOnline = async (searchQuery) => {
   if (!searchQuery || !searchQuery.trim()) return [];
 
   const query = searchQuery.trim();
 
-  // 1. Try backend API (8s timeout)
+  // 1. Primary Backend Search Engine API Call
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     const backendRes = await fetch(
       `${API_BASE_URL}/api/search/external?q=${encodeURIComponent(query)}`,
@@ -33,21 +31,22 @@ export const searchMusicOnline = async (searchQuery) => {
       }
     }
   } catch (e) {
-    // Backend failed or timed out, fall through to client fallback
+    console.warn('Backend search API unreachable or timed out:', e.message);
   }
 
-  // 2. Client fallback: direct SoundCloud search
+  // 2. Client-side Safe Search Fallback
   try {
     const scRes = await fetch(
-      `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${SC_CLIENT_ID}&limit=15`
-    );
-    if (!scRes.ok) return [];
+      `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&limit=10`
+    ).catch(() => null);
+
+    if (!scRes || !scRes.ok) return [];
 
     const scData = await scRes.json();
     if (!scData || !Array.isArray(scData.collection)) return [];
 
     const collection = scData.collection.filter(
-      item => Math.round((item.duration || 0) / 1000) > 35
+      item => Math.round((item.duration || 0) / 1000) > 30
     );
 
     const resolved = await Promise.all(
@@ -58,7 +57,7 @@ export const searchMusicOnline = async (searchQuery) => {
         if (!progressive) return null;
 
         try {
-          const streamRes = await fetch(`${progressive.url}?client_id=${SC_CLIENT_ID}`);
+          const streamRes = await fetch(progressive.url);
           if (!streamRes.ok) return null;
           const streamData = await streamRes.json();
           if (!streamData.url) return null;
@@ -87,83 +86,7 @@ export const searchMusicOnline = async (searchQuery) => {
       })
     );
 
-    const scTracks = resolved.filter(Boolean);
-
-    // Fetch official YouTube Data API results directly on client if available
-    let ytTracks = [];
-    try {
-      const ytRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=8&key=AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs`
-      );
-      if (ytRes.ok) {
-        const ytData = await ytRes.json();
-        if (ytData.items && Array.isArray(ytData.items)) {
-          ytTracks = await Promise.all(
-            ytData.items.map(async (item, idx) => {
-              const itemTitle = item.snippet?.title || query;
-              const itemArtist = item.snippet?.channelTitle || 'YouTube Music';
-
-              // Try searching SoundCloud for this specific item title
-              let itemAudio = null;
-              try {
-                const cleanQ = `${itemArtist} ${itemTitle}`.replace(/[()\[\]]/g, '').trim();
-                const scSpec = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(cleanQ)}&client_id=${SC_CLIENT_ID}&limit=2`);
-                if (scSpec.ok) {
-                  const specData = await scSpec.json();
-                  const firstMatch = specData.collection?.[0];
-                  const trans = firstMatch?.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-                  if (trans) {
-                    const stRes = await fetch(`${trans.url}?client_id=${SC_CLIENT_ID}`);
-                    if (stRes.ok) {
-                      const stData = await stRes.json();
-                      if (stData.url) itemAudio = stData.url;
-                    }
-                  }
-                }
-              } catch (e) {}
-
-              if (!itemAudio) {
-                itemAudio = scTracks[idx % Math.max(1, scTracks.length)]?.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
-              }
-
-              return {
-                id: `yt-${item.id.videoId}`,
-                title: itemTitle,
-                artist: itemArtist,
-                album: 'YouTube Single',
-                cover: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
-                audioUrl: itemAudio,
-                duration: 210,
-                source: 'YouTube',
-                lyrics: [
-                  { time: 0, text: `🎵 ${itemTitle}` },
-                  { time: 5, text: `♪ Full Audio on Liofy ♪` }
-                ],
-                hasSynced: false
-              };
-            })
-          );
-        }
-      }
-    } catch (e) {}
-
-    if (ytTracks.length === 0) {
-      ytTracks = scTracks.map((sc) => ({
-        id: `yt-fallback-${sc.id}`,
-        title: `${sc.title} (YouTube Official)`,
-        artist: sc.artist,
-        album: 'YouTube Single',
-        cover: sc.cover,
-        audioUrl: sc.audioUrl,
-        duration: sc.duration,
-        genre: 'YouTube',
-        source: 'YouTube',
-        lyrics: sc.lyrics,
-        hasSynced: sc.hasSynced
-      }));
-    }
-
-    return [...scTracks, ...ytTracks];
+    return resolved.filter(Boolean);
   } catch (e) {
     return [];
   }
