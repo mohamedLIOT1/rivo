@@ -127,7 +127,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, avatar } = req.body;
     let user = await User.findOne({ email });
     if (!user) {
       // Auto-register if first time login
@@ -135,11 +135,49 @@ app.post('/api/auth/login', async (req, res) => {
         name: email.split('@')[0],
         email,
         password: password || '123456',
+        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
         isPremium: true
       });
       await user.save();
+    } else if (avatar && avatar !== user.avatar) {
+      user.avatar = avatar;
+      await user.save();
     }
     res.json({ success: true, user });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update Profile & Avatar synced across all devices
+app.post('/api/user/update-profile', async (req, res) => {
+  try {
+    const { email, avatar, name } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    let user = await User.findOne({ email });
+    if (user) {
+      if (avatar) user.avatar = avatar;
+      if (name) user.name = name;
+      await user.save();
+    }
+    res.json({ success: true, user });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Full Real-time Sync Endpoint for User Profile & Global Songs
+app.get('/api/user/sync', async (req, res) => {
+  try {
+    const { email } = req.query;
+    let user = null;
+    if (email) {
+      user = await User.findOne({ email });
+    }
+    await Track.deleteMany({ audioUrl: { $regex: /itunes\.apple\.com|apple-assets/i } });
+    const dbTracks = await Track.find().sort({ createdAt: -1 });
+    res.json({ success: true, user, tracks: dbTracks });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

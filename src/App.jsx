@@ -144,41 +144,62 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Fetch synced tracks from Railway Backend on boot
+  // Live Real-Time Data & Account Sync across Web, Tablet, Phone
   useEffect(() => {
-    const fetchServerTracks = async () => {
+    const syncWithDatabase = async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/tracks`);
-        const data = await res.json();
-        if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
-          const formattedServerTracks = data.tracks
-            .filter(t => t.audioUrl && !t.audioUrl.includes('itunes.apple.com') && !t.audioUrl.includes('apple-assets'))
-            .map(t => ({
-              id: t._id || t.id,
-              title: t.title,
-              artist: t.artist,
-              album: t.album || 'Single',
-              cover: t.cover,
-              audioUrl: t.audioUrl,
-              lyrics: t.lyrics || [],
-              duration: t.duration || 240,
-              liked: true
-            }));
+        const email = currentUser?.email || '';
+        const url = email ? `${API_BASE_URL}/api/user/sync?email=${encodeURIComponent(email)}` : `${API_BASE_URL}/api/tracks`;
+        const res = await fetch(url);
+        if (!res.ok) return;
 
-          setTracks(prev => {
-            // Remove any old 30s preview tracks
-            const cleanedPrev = prev.filter(x => x.audioUrl && !x.audioUrl.includes('itunes.apple.com'));
-            const existingIds = new Set(cleanedPrev.map(x => x.id || x._id));
-            const newUnique = formattedServerTracks.filter(x => !existingIds.has(x.id));
-            return [...newUnique, ...cleanedPrev];
-          });
+        const data = await res.json();
+        if (data.success) {
+          // Sync User Avatar and Profile Details
+          if (data.user && currentUser) {
+            const serverAvatar = data.user.avatar;
+            const serverName = data.user.name;
+            if (serverAvatar && (serverAvatar !== currentUser.avatar || serverName !== currentUser.name)) {
+              setCurrentUser(prev => prev ? { ...prev, avatar: serverAvatar, name: serverName } : prev);
+            }
+          }
+
+          // Sync Global & User Uploaded Songs
+          if (Array.isArray(data.tracks) && data.tracks.length > 0) {
+            const formattedTracks = data.tracks
+              .filter(t => t.audioUrl && !t.audioUrl.includes('itunes.apple.com') && !t.audioUrl.includes('apple-assets'))
+              .map(t => ({
+                id: t._id || t.id,
+                title: t.title,
+                artist: t.artist,
+                album: t.album || 'Single',
+                cover: t.cover,
+                audioUrl: t.audioUrl,
+                lyrics: t.lyrics || [],
+                duration: t.duration || 240,
+                genre: t.genre || 'Pop',
+                source: t.source || 'Liofy',
+                liked: true
+              }));
+
+            setTracks(prev => {
+              const cleanedPrev = prev.filter(x => x.audioUrl && !x.audioUrl.includes('itunes.apple.com'));
+              const existingIds = new Set(cleanedPrev.map(x => String(x.id || x._id)));
+              const newUnique = formattedTracks.filter(x => !existingIds.has(String(x.id)));
+              if (newUnique.length === 0) return prev;
+              return [...newUnique, ...cleanedPrev];
+            });
+          }
         }
       } catch (err) {
-        console.warn('Backend server status:', err);
+        console.warn('Live sync status:', err);
       }
     };
-    fetchServerTracks();
-  }, []);
+
+    syncWithDatabase();
+    const syncInterval = setInterval(syncWithDatabase, 6000);
+    return () => clearInterval(syncInterval);
+  }, [currentUser?.email]);
 
   // Save currentUser to localStorage
   useEffect(() => {

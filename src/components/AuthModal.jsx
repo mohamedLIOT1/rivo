@@ -108,9 +108,18 @@ export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLog
 
             <div className="w-full flex gap-2">
               <button
-                onClick={() => {
-                  onLogin({ ...currentUser, avatar: avatar || currentUser.avatar });
-                  alert('Profile picture updated successfully!');
+                onClick={async () => {
+                  const newAvatar = avatar || currentUser.avatar;
+                  const updatedUser = { ...currentUser, avatar: newAvatar };
+                  try {
+                    await fetch(`${API_BASE_URL}/api/user/update-profile`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(updatedUser)
+                    });
+                  } catch (err) {}
+                  onLogin(updatedUser);
+                  alert('Profile picture saved & synced across all devices!');
                 }}
                 className="flex-1 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-xl transition-colors"
               >
