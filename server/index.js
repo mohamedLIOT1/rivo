@@ -227,7 +227,7 @@ async function scrapeYouTube(query, timeoutMs) {
 
 // YouTube API search (uses official Google API key if provided, or falls back to scraper)
 async function searchYouTube(query, timeoutMs) {
-  const apiKey = process.env.YOUTUBE_API_KEY;
+  const apiKey = process.env.YOUTUBE_API_KEY || 'AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs';
   if (apiKey) {
     try {
       const controller = new AbortController();
