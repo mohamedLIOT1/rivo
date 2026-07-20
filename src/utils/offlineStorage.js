@@ -3,6 +3,9 @@ const DB_NAME = 'LiofyOfflineDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'downloaded_tracks';
 
+// Maintain tracked Blob URLs to revoke when no longer needed
+const activeBlobUrls = new Map();
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -19,14 +22,19 @@ function openDB() {
 
 // Save downloaded audio blob & track info locally
 export async function saveTrackOffline(track) {
+  if (!track || !track.id) return null;
+  const trackId = String(track.id);
+
   try {
     const db = await openDB();
     let audioBlob = null;
 
     if (track.audioUrl && track.audioUrl.startsWith('http')) {
       try {
-        const response = await fetch(track.audioUrl);
-        audioBlob = await response.blob();
+        const response = await fetch(track.audioUrl, { mode: 'cors' });
+        if (response.ok) {
+          audioBlob = await response.blob();
+        }
       } catch (err) {
         console.warn('Direct fetch audio blob failed, storing metadata:', err);
       }
@@ -34,6 +42,7 @@ export async function saveTrackOffline(track) {
 
     const offlineTrack = {
       ...track,
+      id: trackId,
       downloaded: true,
       audioBlob: audioBlob,
       savedAt: Date.now()
@@ -52,18 +61,26 @@ export async function saveTrackOffline(track) {
   }
 }
 
-// Get offline saved track audio blob URL
+// Get offline saved track audio blob URL dynamically
 export async function getOfflineTrackAudioUrl(trackId) {
+  if (!trackId) return null;
+  const idStr = String(trackId);
+
   try {
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.get(trackId);
+      const req = store.get(idStr);
       req.onsuccess = () => {
         const item = req.result;
         if (item && item.audioBlob) {
+          // Revoke old URL for this track if exists
+          if (activeBlobUrls.has(idStr)) {
+            try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
+          }
           const blobUrl = URL.createObjectURL(item.audioBlob);
+          activeBlobUrls.set(idStr, blobUrl);
           resolve(blobUrl);
         } else {
           resolve(null);
@@ -76,6 +93,32 @@ export async function getOfflineTrackAudioUrl(trackId) {
   }
 }
 
+// Get all downloaded tracks with fresh Blob URLs
+export async function getOfflineTracks() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const items = req.result || [];
+        const formatted = items.map(item => {
+          let audioUrl = item.audioUrl;
+          if (item.audioBlob) {
+            audioUrl = URL.createObjectURL(item.audioBlob);
+          }
+          return { ...item, audioUrl, downloaded: true };
+        });
+        resolve(formatted);
+      };
+      req.onerror = () => resolve([]);
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
 // Get all offline downloaded track IDs
 export async function getOfflineTrackIds() {
   try {
@@ -84,7 +127,10 @@ export async function getOfflineTrackIds() {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAllKeys();
-      req.onsuccess = () => resolve(new Set(req.result || []));
+      req.onsuccess = () => {
+        const keys = (req.result || []).map(k => String(k));
+        resolve(new Set(keys));
+      };
       req.onerror = () => resolve(new Set());
     });
   } catch (err) {
@@ -94,12 +140,20 @@ export async function getOfflineTrackIds() {
 
 // Remove track from offline storage
 export async function removeTrackOffline(trackId) {
+  if (!trackId) return false;
+  const idStr = String(trackId);
+
+  if (activeBlobUrls.has(idStr)) {
+    try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
+    activeBlobUrls.delete(idStr);
+  }
+
   try {
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      store.delete(trackId);
+      store.delete(idStr);
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => resolve(false);
     });
@@ -107,3 +161,4 @@ export async function removeTrackOffline(trackId) {
     return false;
   }
 }
+

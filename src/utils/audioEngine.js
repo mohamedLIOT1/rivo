@@ -1,10 +1,13 @@
 /**
  * Spotify-Grade Web Audio API Engine & Real DSP Equalizer Node Cascade
+ * Includes Pre-Amp Gain & Master DynamicsCompressor to prevent digital distortion
  */
 
 let audioCtx = null;
 let sourceNode = null;
-let gainNode = null;
+let preAmpGainNode = null;
+let masterCompressorNode = null;
+let masterGainNode = null;
 let filters = {};
 let isInitialized = false;
 
@@ -30,10 +33,24 @@ export function initAudioEngine(audioElement) {
 
     audioCtx = new AudioContextClass();
     sourceNode = audioCtx.createMediaElementSource(audioElement);
-    gainNode = audioCtx.createGain();
+    
+    preAmpGainNode = audioCtx.createGain();
+    preAmpGainNode.gain.value = 1.0;
 
-    // Create 5-band BiquadFilterNodes
-    let previousNode = sourceNode;
+    masterGainNode = audioCtx.createGain();
+    masterGainNode.gain.value = 0.8;
+
+    // Spotify-Grade Master Dynamics Compressor to prevent clipping distortion
+    masterCompressorNode = audioCtx.createDynamicsCompressor();
+    masterCompressorNode.threshold.setValueAtTime(-12, audioCtx.currentTime);
+    masterCompressorNode.knee.setValueAtTime(30, audioCtx.currentTime);
+    masterCompressorNode.ratio.setValueAtTime(12, audioCtx.currentTime);
+    masterCompressorNode.attack.setValueAtTime(0.003, audioCtx.currentTime);
+    masterCompressorNode.release.setValueAtTime(0.25, audioCtx.currentTime);
+
+    // Pipeline: Source -> PreAmp -> EQ Filters (Cascade) -> MasterCompressor -> MasterGain -> Destination
+    sourceNode.connect(preAmpGainNode);
+    let previousNode = preAmpGainNode;
 
     BANDS.forEach(band => {
       const filter = audioCtx.createBiquadFilter();
@@ -47,12 +64,12 @@ export function initAudioEngine(audioElement) {
       previousNode = filter;
     });
 
-    // Connect last filter -> Master GainNode -> Destination
-    previousNode.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
+    previousNode.connect(masterCompressorNode);
+    masterCompressorNode.connect(masterGainNode);
+    masterGainNode.connect(audioCtx.destination);
 
     isInitialized = true;
-    console.log('✅ Real Web Audio API DSP Engine initialized successfully!');
+    console.log('✅ Spotify-Grade Web Audio API DSP Engine with Compressor initialized!');
   } catch (err) {
     console.warn('AudioContext initialization notice:', err.message);
   }
@@ -69,13 +86,16 @@ export function resumeAudioContext() {
 
 /**
  * Apply equalizer gain values (in dB) across frequency bands
- * @param {Object} bandGains Map of band name to gain value in dB (e.g. { '60Hz': 6, ... })
+ * Automatically compensates Pre-Amp gain to avoid distortion when boosting bass
+ * @param {Object} bandGains Map of band name to gain value in dB
  * @param {Boolean} enabled Whether equalizer processing is enabled
  */
 export function setEqualizerBands(bandGains, enabled = true) {
   if (!isInitialized || !filters) return;
 
   resumeAudioContext();
+
+  let maxBoost = 0;
 
   Object.keys(filters).forEach(bandName => {
     const filter = filters[bandName];
@@ -84,12 +104,22 @@ export function setEqualizerBands(bandGains, enabled = true) {
         ? bandGains[bandName]
         : 0;
       
+      if (dbGain > maxBoost) maxBoost = dbGain;
+
       // Smoothly transition gain to prevent digital clicks/pops
       const now = audioCtx ? audioCtx.currentTime : 0;
       filter.gain.cancelScheduledValues(now);
       filter.gain.setTargetAtTime(dbGain, now, 0.05);
     }
   });
+
+  // Dynamic Headroom Compensation for boosted EQ
+  if (preAmpGainNode && audioCtx) {
+    const headroomFactor = maxBoost > 0 ? Math.pow(10, -maxBoost / 40) : 1.0;
+    const now = audioCtx.currentTime;
+    preAmpGainNode.gain.cancelScheduledValues(now);
+    preAmpGainNode.gain.setTargetAtTime(headroomFactor, now, 0.05);
+  }
 }
 
 /**
@@ -98,13 +128,14 @@ export function setEqualizerBands(bandGains, enabled = true) {
  */
 export function setMasterVolume(volume) {
   const normVol = Math.max(0, Math.min(1, volume));
-  if (gainNode && audioCtx) {
+  if (masterGainNode && audioCtx) {
     const now = audioCtx.currentTime;
-    gainNode.gain.cancelScheduledValues(now);
-    gainNode.gain.setTargetAtTime(normVol, now, 0.02);
+    masterGainNode.gain.cancelScheduledValues(now);
+    masterGainNode.gain.setTargetAtTime(normVol, now, 0.02);
   }
 }
 
 export function isAudioEngineReady() {
   return isInitialized;
 }
+

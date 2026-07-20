@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
@@ -39,8 +39,9 @@ function AppContent() {
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo
   } = audio;
 
-  // Jam Session State
+  // Jam Session State & Echo Prevention Flag
   const [jamSession, setJamSession] = useState(null);
+  const isRemoteUpdateRef = useRef(false);
 
   // Screen Navigation State
   const [currentScreen, setCurrentScreen] = useState('home');
@@ -72,22 +73,29 @@ function AppContent() {
     }
   }, [currentUser]);
 
-  // Subscribe to Socket.io Jam Room events
+  // Subscribe to Socket.io Jam Room events safely (preventing echo loops)
   useEffect(() => {
     const unsubscribe = subscribeToJamRoom(
       (updatedRoom) => {
         setJamSession(updatedRoom);
       },
       ({ isPlaying: remoteIsPlaying, currentTrackId, currentTime: remoteTime }) => {
+        isRemoteUpdateRef.current = true;
         setIsPlaying(remoteIsPlaying);
-        if (remoteTime !== undefined) seekTo(remoteTime);
+        if (remoteTime !== undefined && Math.abs(currentTime - remoteTime) > 2) {
+          seekTo(remoteTime);
+        }
       }
     );
     return unsubscribe;
-  }, []);
+  }, [currentTime]);
 
-  // Sync state changes with active Jam session
+  // Sync state changes with active Jam session only if user initiated
   useEffect(() => {
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
     if (jamSession && jamSession.code) {
       syncJamPlayState(jamSession.code, isPlaying, currentTrack?.id, currentTime);
     }

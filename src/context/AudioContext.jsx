@@ -48,9 +48,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     initAudioEngine(audio);
 
+    let lastTimeUpdate = 0;
     const handleTimeUpdate = () => {
       if (audio && !isNaN(audio.currentTime)) {
-        setCurrentTime(audio.currentTime);
+        const now = Date.now();
+        // Throttle React state updates to every 250ms (~4Hz) instead of 60fps
+        if (now - lastTimeUpdate > 250) {
+          lastTimeUpdate = now;
+          setCurrentTime(audio.currentTime);
+        }
       }
     };
 
@@ -73,6 +79,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     const handleError = (e) => {
       console.warn('Audio playback handled safely:', e);
+      // If anonymous CORS fails, attempt fallback without crossOrigin setting
+      if (audio.crossOrigin) {
+        audio.crossOrigin = null;
+      }
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);

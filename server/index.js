@@ -84,6 +84,40 @@ const Track = mongoose.model('Track', TrackSchema);
 const User = mongoose.model('User', UserSchema);
 const Playlist = mongoose.model('Playlist', PlaylistSchema);
 
+// CORS Resilient Audio Proxy Streamer
+app.get('/api/proxy-audio', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url || !url.startsWith('http')) {
+      return res.status(400).json({ error: 'Valid audio URL required' });
+    }
+
+    const audioRes = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (!audioRes.ok) {
+      return res.status(audioRes.status).send('Failed to fetch remote audio stream');
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Content-Type', audioRes.headers.get('content-type') || 'audio/mpeg');
+
+    if (audioRes.headers.get('content-length')) {
+      res.setHeader('Content-Length', audioRes.headers.get('content-length'));
+    }
+
+    const arrayBuffer = await audioRes.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (err) {
+    console.error('Audio proxy stream error:', err.message);
+    res.status(500).json({ error: 'Proxy stream error' });
+  }
+});
+
 // Endpoint to fetch global shared tracks across all devices
 app.get('/api/tracks', async (req, res) => {
   try {
