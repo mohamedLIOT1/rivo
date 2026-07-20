@@ -3,14 +3,14 @@ const path = require('path');
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
-const DEFAULT_SEED_TRACKS = [
+const CLEAN_SEED_TRACKS = [
   {
     id: "track-seed-1",
     title: "Lege-Cy - El Neyya (ليجي-سي - النيه)",
     artist: "Lege-Cy",
     album: "El Neyya",
-    cover: "https://i.ytimg.com/vi/NEGYA_DEFAULT/hqdefault.jpg",
-    audioUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    cover: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
+    audioUrl: "https://www.youtube.com/watch?v=9bZkp7q19f0",
     duration: 210,
     genre: "Hip-Hop",
     source: "YouTube"
@@ -20,8 +20,8 @@ const DEFAULT_SEED_TRACKS = [
     title: "Amr Diab - Aref Habiby (عمرو دياب - عارف حبيبي)",
     artist: "Amr Diab",
     album: "Single",
-    cover: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
-    audioUrl: "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3",
+    cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     duration: 240,
     genre: "Arab Pop",
     source: "Liofy"
@@ -31,8 +31,8 @@ const DEFAULT_SEED_TRACKS = [
     title: "Lege-Cy - Placebo (بلاسبو)",
     artist: "Lege-Cy",
     album: "Placebo",
-    cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600",
-    audioUrl: "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73228.mp3",
+    cover: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
     duration: 195,
     genre: "Hip-Hop",
     source: "Liofy"
@@ -42,8 +42,8 @@ const DEFAULT_SEED_TRACKS = [
     title: "Lege-Cy x ISMAIL NOSRAT - LAW NASYA",
     artist: "Lege-Cy",
     album: "LAW NASYA",
-    cover: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600",
-    audioUrl: "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3",
+    cover: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
+    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
     duration: 220,
     genre: "Hip-Hop",
     source: "Liofy"
@@ -54,7 +54,7 @@ function initDb() {
   if (!fs.existsSync(DB_FILE)) {
     const initialData = {
       users: [],
-      tracks: DEFAULT_SEED_TRACKS,
+      tracks: CLEAN_SEED_TRACKS,
       playlists: []
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
@@ -66,13 +66,24 @@ function readDb() {
   try {
     const content = fs.readFileSync(DB_FILE, 'utf8');
     const parsed = JSON.parse(content);
+
+    // Clean out broken 403 pixabay or itunes 30s tracks
+    if (Array.isArray(parsed.tracks)) {
+      parsed.tracks = parsed.tracks.filter(t => 
+        t && t.audioUrl && 
+        !t.audioUrl.includes('pixabay.com') && 
+        !t.audioUrl.includes('itunes.apple.com') && 
+        !t.audioUrl.includes('apple-assets')
+      );
+    }
+
     if (!parsed.tracks || parsed.tracks.length === 0) {
-      parsed.tracks = DEFAULT_SEED_TRACKS;
+      parsed.tracks = CLEAN_SEED_TRACKS;
       writeDb(parsed);
     }
     return parsed;
   } catch (e) {
-    return { users: [], tracks: DEFAULT_SEED_TRACKS, playlists: [] };
+    return { users: [], tracks: CLEAN_SEED_TRACKS, playlists: [] };
   }
 }
 
@@ -101,10 +112,9 @@ module.exports = {
     
     const existing = index >= 0 ? db.users[index] : {};
     
-    // Preserve existing userTracks if new userTracks is empty
     let finalUserTracks = existing.userTracks || [];
     if (Array.isArray(userData.userTracks) && userData.userTracks.length > 0) {
-      finalUserTracks = userData.userTracks;
+      finalUserTracks = userData.userTracks.filter(t => t && t.audioUrl && !t.audioUrl.includes('pixabay.com'));
     }
 
     const updatedUser = {
@@ -126,11 +136,11 @@ module.exports = {
   },
   getTracks: () => {
     const db = readDb();
-    if (!db.tracks || db.tracks.length === 0) return DEFAULT_SEED_TRACKS;
+    if (!db.tracks || db.tracks.length === 0) return CLEAN_SEED_TRACKS;
     return db.tracks;
   },
   saveTrack: (trackData) => {
-    if (!trackData) return null;
+    if (!trackData || !trackData.title) return null;
     const db = readDb();
     db.tracks = db.tracks || [];
     const id = String(trackData.id || trackData._id || `track-${Date.now()}`);
@@ -141,7 +151,7 @@ module.exports = {
       title: trackData.title || 'Untitled Track',
       artist: trackData.artist || 'Unknown Artist',
       cover: trackData.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
-      audioUrl: trackData.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3'
+      audioUrl: trackData.audioUrl || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
     };
     if (index >= 0) {
       db.tracks[index] = trackObj;
