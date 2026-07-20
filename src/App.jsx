@@ -190,6 +190,16 @@ export default function App() {
               return [...newUnique, ...cleanedPrev];
             });
           }
+
+          // Sync User Playlists
+          if (Array.isArray(data.playlists) && data.playlists.length > 0) {
+            setPlaylists(prev => {
+              const existingIds = new Set(prev.map(p => String(p.id)));
+              const newPls = data.playlists.filter(p => !existingIds.has(String(p.id)));
+              if (newPls.length === 0) return prev;
+              return [...prev, ...newPls];
+            });
+          }
         }
       } catch (err) {
         console.warn('Live sync status:', err);
@@ -197,9 +207,30 @@ export default function App() {
     };
 
     syncWithDatabase();
-    const syncInterval = setInterval(syncWithDatabase, 6000);
+    const syncInterval = setInterval(syncWithDatabase, 5000);
     return () => clearInterval(syncInterval);
   }, [currentUser?.email]);
+
+  // Persist user account state to Railway MongoDB Atlas Database
+  useEffect(() => {
+    if (!currentUser?.email) return;
+    const saveTimer = setTimeout(() => {
+      try {
+        fetch(`${API_BASE_URL}/api/user/save-state`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: currentUser.email,
+            avatar: currentUser.avatar,
+            name: currentUser.name,
+            tracks,
+            playlists
+          })
+        }).catch(() => {});
+      } catch(e) {}
+    }, 1500);
+    return () => clearTimeout(saveTimer);
+  }, [currentUser?.email, currentUser?.avatar, tracks.length, playlists.length]);
 
   // Save currentUser to localStorage
   useEffect(() => {

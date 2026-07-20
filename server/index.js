@@ -52,17 +52,19 @@ const TrackSchema = new mongoose.Schema({
   lyrics: [{ time: Number, text: String }]
 }, { timestamps: true, strict: false });
 
-// User Schema
+// User Schema with full account data persistence
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   avatar: { type: String, default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80' },
   isPremium: { type: Boolean, default: true },
+  userTracks: [mongoose.Schema.Types.Mixed],
+  userPlaylists: [mongoose.Schema.Types.Mixed],
   topGenres: [{ type: String }],
   topArtistIds: [{ type: String }],
   likedTrackIds: [{ type: String }]
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 // Playlist Schema
 const PlaylistSchema = new mongoose.Schema({
@@ -107,6 +109,20 @@ app.post('/api/tracks/add', async (req, res) => {
     const newTrack = new Track(trackData);
     await newTrack.save();
 
+    // If userEmail is attached, save to User document
+    if (trackData.userEmail) {
+      const cleanEmail = trackData.userEmail.trim().toLowerCase();
+      let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+      if (user) {
+        user.userTracks = user.userTracks || [];
+        const exists = user.userTracks.some(t => String(t.id || t._id) === String(trackData.id || newTrack._id));
+        if (!exists) {
+          user.userTracks.unshift(trackData);
+          await user.save();
+        }
+      }
+    }
+
     // Broadcast new track to all online devices live!
     io.emit('track:broadcast_new', newTrack);
 
@@ -121,13 +137,14 @@ app.post('/api/tracks/add', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, avatar } = req.body;
-    let existingUser = await User.findOne({ email });
+    const cleanEmail = (email || '').trim().toLowerCase();
+    let existingUser = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
     if (existingUser) {
       return res.json({ success: true, user: existingUser });
     }
     const newUser = new User({
-      name: name || email.split('@')[0],
-      email,
+      name: name || cleanEmail.split('@')[0],
+      email: cleanEmail,
       password: password || '123456',
       avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
       isPremium: true
@@ -142,12 +159,13 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, avatar } = req.body;
-    let user = await User.findOne({ email });
+    const cleanEmail = (email || '').trim().toLowerCase();
+    let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
     if (!user) {
       // Auto-register if first time login
       user = new User({
-        name: email.split('@')[0],
-        email,
+        name: cleanEmail.split('@')[0],
+        email: cleanEmail,
         password: password || '123456',
         avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
         isPremium: true
@@ -169,12 +187,46 @@ app.post('/api/user/update-profile', async (req, res) => {
     const { email, avatar, name } = req.body;
     if (!email) return res.status(400).json({ error: 'Email required' });
 
-    let user = await User.findOne({ email });
+    const cleanEmail = email.trim().toLowerCase();
+    let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
     if (user) {
       if (avatar) user.avatar = avatar;
       if (name) user.name = name;
       await user.save();
     }
+    io.emit('user:profile_updated', { email: cleanEmail, avatar: avatar || user?.avatar, name: name || user?.name });
+    res.json({ success: true, user });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Save Full User Account State (Tracks, Playlists, Avatar)
+app.post('/api/user/save-state', async (req, res) => {
+  try {
+    const { email, avatar, name, tracks, playlists } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    const cleanEmail = email.trim().toLowerCase();
+    let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+
+    if (!user) {
+      user = new User({
+        name: name || cleanEmail.split('@')[0],
+        email: cleanEmail,
+        password: '123',
+        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400'
+      });
+    }
+
+    if (avatar) user.avatar = avatar;
+    if (name) user.name = name;
+    if (Array.isArray(tracks)) user.userTracks = tracks;
+    if (Array.isArray(playlists)) user.userPlaylists = playlists;
+
+    await user.save();
+    io.emit('user:state_updated', { email: cleanEmail, user });
+
     res.json({ success: true, user });
   } catch(e) {
     res.status(500).json({ error: e.message });
@@ -187,11 +239,25 @@ app.get('/api/user/sync', async (req, res) => {
     const { email } = req.query;
     let user = null;
     if (email) {
-      user = await User.findOne({ email });
+      const cleanEmail = email.trim().toLowerCase();
+      user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
     }
     await Track.deleteMany({ audioUrl: { $regex: /itunes\.apple\.com|apple-assets/i } });
     const dbTracks = await Track.find().sort({ createdAt: -1 });
-    res.json({ success: true, user, tracks: dbTracks });
+
+    const userTracks = user && Array.isArray(user.userTracks) ? user.userTracks : [];
+    const allTracksMap = new Map();
+    [...userTracks, ...dbTracks].forEach(t => {
+      const id = String(t.id || t._id);
+      if (!allTracksMap.has(id)) allTracksMap.set(id, t);
+    });
+
+    res.json({ 
+      success: true, 
+      user, 
+      tracks: Array.from(allTracksMap.values()),
+      playlists: user && Array.isArray(user.userPlaylists) ? user.userPlaylists : []
+    });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
