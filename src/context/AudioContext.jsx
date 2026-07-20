@@ -118,8 +118,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const audio = audioRef.current;
     if (!audio || !currentTrack || !currentTrack.audioUrl) return;
 
-    if (audio.src !== currentTrack.audioUrl) {
-      audio.src = currentTrack.audioUrl;
+    let targetUrl = currentTrack.audioUrl;
+    if (targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
+      const base = API_BASE_URL.replace(/\/$/, '');
+      targetUrl = `${base}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+    }
+
+    if (audio.src !== targetUrl) {
+      audio.src = targetUrl;
     }
 
     if (isPlaying) {
