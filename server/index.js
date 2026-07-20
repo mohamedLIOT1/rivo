@@ -35,6 +35,8 @@ mongoose.connect(MONGO_URI)
     console.log('ℹ️ Notice: MongoDB Atlas authentication sync in progress. Running in resilient mode.');
   });
 
+const dbEngine = require('./database');
+
 // Track Schema for global friend sharing
 const TrackSchema = new mongoose.Schema({
   title: { type: String, required: true },
@@ -84,9 +86,19 @@ const Playlist = mongoose.model('Playlist', PlaylistSchema);
 // Endpoint to fetch global shared tracks across all devices
 app.get('/api/tracks', async (req, res) => {
   try {
-    await Track.deleteMany({ audioUrl: { $regex: /itunes\.apple\.com|apple-assets/i } });
-    const dbTracks = await Track.find().sort({ createdAt: -1 });
-    res.json({ success: true, tracks: dbTracks });
+    const jsonTracks = dbEngine.getTracks();
+    let mongoTracks = [];
+    try {
+      mongoTracks = await Track.find().sort({ createdAt: -1 });
+    } catch(err) {}
+
+    const allTracksMap = new Map();
+    [...jsonTracks, ...mongoTracks].forEach(t => {
+      const id = String(t.id || t._id);
+      if (!allTracksMap.has(id)) allTracksMap.set(id, t);
+    });
+
+    res.json({ success: true, tracks: Array.from(allTracksMap.values()) });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -106,51 +118,48 @@ app.post('/api/tracks/add', async (req, res) => {
       trackData.cover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
     }
 
-    const newTrack = new Track(trackData);
-    await newTrack.save();
+    // Save to Database Engine
+    const savedTrack = dbEngine.saveTrack(trackData);
 
-    // If userEmail is attached, save to User document
-    if (trackData.userEmail) {
-      const cleanEmail = trackData.userEmail.trim().toLowerCase();
-      let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
-      if (user) {
-        user.userTracks = user.userTracks || [];
-        const exists = user.userTracks.some(t => String(t.id || t._id) === String(trackData.id || newTrack._id));
-        if (!exists) {
-          user.userTracks.unshift(trackData);
-          await user.save();
-        }
-      }
-    }
+    // Also try saving to Mongo if connected
+    try {
+      const newTrack = new Track(trackData);
+      await newTrack.save();
+    } catch(e) {}
 
     // Broadcast new track to all online devices live!
-    io.emit('track:broadcast_new', newTrack);
+    io.emit('track:broadcast_new', savedTrack);
 
-    res.json({ success: true, track: newTrack });
+    res.json({ success: true, track: savedTrack });
   } catch(e) {
     console.error('Track add error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// User Auth Endpoints (Register & Login synced with MongoDB)
+// User Auth Endpoints (Register & Login synced with Database Engine & MongoDB)
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, avatar } = req.body;
     const cleanEmail = (email || '').trim().toLowerCase();
-    let existingUser = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
-    if (existingUser) {
-      return res.json({ success: true, user: existingUser });
+    
+    let existingUser = dbEngine.getUserByEmail(cleanEmail);
+    if (!existingUser) {
+      existingUser = dbEngine.saveUser({
+        name: name || cleanEmail.split('@')[0],
+        email: cleanEmail,
+        password: password || '123456',
+        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+        isPremium: true
+      });
     }
-    const newUser = new User({
-      name: name || cleanEmail.split('@')[0],
-      email: cleanEmail,
-      password: password || '123456',
-      avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-      isPremium: true
-    });
-    await newUser.save();
-    res.json({ success: true, user: newUser });
+
+    try {
+      const newUser = new User(existingUser);
+      await newUser.save();
+    } catch(e) {}
+
+    res.json({ success: true, user: existingUser });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -160,21 +169,20 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password, avatar } = req.body;
     const cleanEmail = (email || '').trim().toLowerCase();
-    let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+    
+    let user = dbEngine.getUserByEmail(cleanEmail);
     if (!user) {
-      // Auto-register if first time login
-      user = new User({
+      user = dbEngine.saveUser({
         name: cleanEmail.split('@')[0],
         email: cleanEmail,
         password: password || '123456',
-        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
         isPremium: true
       });
-      await user.save();
     } else if (avatar && avatar !== user.avatar) {
-      user.avatar = avatar;
-      await user.save();
+      user = dbEngine.saveUser({ ...user, avatar });
     }
+
     res.json({ success: true, user });
   } catch(e) {
     res.status(500).json({ error: e.message });
@@ -188,14 +196,10 @@ app.post('/api/user/update-profile', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email required' });
 
     const cleanEmail = email.trim().toLowerCase();
-    let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
-    if (user) {
-      if (avatar) user.avatar = avatar;
-      if (name) user.name = name;
-      await user.save();
-    }
-    io.emit('user:profile_updated', { email: cleanEmail, avatar: avatar || user?.avatar, name: name || user?.name });
-    res.json({ success: true, user });
+    const updatedUser = dbEngine.saveUser({ email: cleanEmail, avatar, name });
+
+    io.emit('user:profile_updated', { email: cleanEmail, avatar: updatedUser.avatar, name: updatedUser.name });
+    res.json({ success: true, user: updatedUser });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -208,26 +212,18 @@ app.post('/api/user/save-state', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email required' });
 
     const cleanEmail = email.trim().toLowerCase();
-    let user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+    const updatedUser = dbEngine.saveUser({ email: cleanEmail, avatar, name, userTracks: tracks, userPlaylists: playlists });
 
-    if (!user) {
-      user = new User({
-        name: name || cleanEmail.split('@')[0],
-        email: cleanEmail,
-        password: '123',
-        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400'
-      });
+    if (Array.isArray(tracks)) {
+      tracks.forEach(t => dbEngine.saveTrack(t));
+    }
+    if (Array.isArray(playlists)) {
+      playlists.forEach(p => dbEngine.savePlaylist(p));
     }
 
-    if (avatar) user.avatar = avatar;
-    if (name) user.name = name;
-    if (Array.isArray(tracks)) user.userTracks = tracks;
-    if (Array.isArray(playlists)) user.userPlaylists = playlists;
+    io.emit('user:state_updated', { email: cleanEmail, user: updatedUser });
 
-    await user.save();
-    io.emit('user:state_updated', { email: cleanEmail, user });
-
-    res.json({ success: true, user });
+    res.json({ success: true, user: updatedUser });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -240,12 +236,13 @@ app.get('/api/user/sync', async (req, res) => {
     let user = null;
     if (email) {
       const cleanEmail = email.trim().toLowerCase();
-      user = await User.findOne({ email: new RegExp(`^${cleanEmail}$`, 'i') });
+      user = dbEngine.getUserByEmail(cleanEmail);
     }
-    await Track.deleteMany({ audioUrl: { $regex: /itunes\.apple\.com|apple-assets/i } });
-    const dbTracks = await Track.find().sort({ createdAt: -1 });
-
+    
+    const dbTracks = dbEngine.getTracks();
+    const dbPlaylists = dbEngine.getPlaylists();
     const userTracks = user && Array.isArray(user.userTracks) ? user.userTracks : [];
+    
     const allTracksMap = new Map();
     [...userTracks, ...dbTracks].forEach(t => {
       const id = String(t.id || t._id);
@@ -256,7 +253,7 @@ app.get('/api/user/sync', async (req, res) => {
       success: true, 
       user, 
       tracks: Array.from(allTracksMap.values()),
-      playlists: user && Array.isArray(user.userPlaylists) ? user.userPlaylists : []
+      playlists: user && Array.isArray(user.userPlaylists) ? user.userPlaylists : dbPlaylists
     });
   } catch(e) {
     res.status(500).json({ error: e.message });
