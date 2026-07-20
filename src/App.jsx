@@ -184,6 +184,7 @@ export default function App() {
 
             setTracks(prev => {
               const cleanedPrev = prev.filter(x => x.audioUrl && !x.audioUrl.includes('itunes.apple.com'));
+              if (cleanedPrev.length === 0) return formattedTracks;
               const existingIds = new Set(cleanedPrev.map(x => String(x.id || x._id)));
               const newUnique = formattedTracks.filter(x => !existingIds.has(String(x.id)));
               if (newUnique.length === 0) return prev;
@@ -194,6 +195,7 @@ export default function App() {
           // Sync User Playlists
           if (Array.isArray(data.playlists) && data.playlists.length > 0) {
             setPlaylists(prev => {
+              if (prev.length === 0) return data.playlists;
               const existingIds = new Set(prev.map(p => String(p.id)));
               const newPls = data.playlists.filter(p => !existingIds.has(String(p.id)));
               if (newPls.length === 0) return prev;
@@ -213,7 +215,7 @@ export default function App() {
 
   // Persist user account state to Railway MongoDB Atlas Database
   useEffect(() => {
-    if (!currentUser?.email) return;
+    if (!currentUser?.email || tracks.length === 0) return;
     const saveTimer = setTimeout(() => {
       try {
         fetch(`${API_BASE_URL}/api/user/save-state`, {
@@ -228,7 +230,7 @@ export default function App() {
           })
         }).catch(() => {});
       } catch(e) {}
-    }, 1500);
+    }, 2000);
     return () => clearTimeout(saveTimer);
   }, [currentUser?.email, currentUser?.avatar, tracks.length, playlists.length]);
 
