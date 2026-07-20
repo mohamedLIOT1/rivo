@@ -1,0 +1,21 @@
+{
+  "short_name": "Liofy",
+  "name": "Liofy - Music & Lyrics",
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "display": "standalone",
+  "orientation": "portrait"
+}
