@@ -41,8 +41,19 @@ export default function FullPlayerModal({
       })
     : -1;
 
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
+  const scrollTimeoutRef = useRef(null);
+
+  const handleUserScroll = () => {
+    setIsUserScrolling(true);
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsUserScrolling(false);
+    }, 4000);
+  };
+
   useEffect(() => {
-    if (isOpen && activeTab === 'lyrics' && activeLyricIndex !== -1 && lyricRefs.current[activeLyricIndex]) {
+    if (isOpen && activeTab === 'lyrics' && activeLyricIndex !== -1 && lyricRefs.current[activeLyricIndex] && !isUserScrolling) {
       try {
         lyricRefs.current[activeLyricIndex].scrollIntoView({
           behavior: 'smooth',
@@ -50,7 +61,7 @@ export default function FullPlayerModal({
         });
       } catch (err) {}
     }
-  }, [activeLyricIndex, activeTab, isOpen]);
+  }, [activeLyricIndex, activeTab, isOpen, isUserScrolling]);
 
   if (!isOpen || !currentTrack) return null;
 
@@ -204,7 +215,7 @@ export default function FullPlayerModal({
 
         {/* Timed Karaoke Lyrics Tab */}
         {activeTab === 'lyrics' && (
-          <div className="flex-1 bg-black/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/10 overflow-y-auto flex flex-col gap-6 my-2 scroll-smooth shadow-2xl">
+          <div onScroll={handleUserScroll} onTouchStart={handleUserScroll} className="flex-1 bg-black/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/10 overflow-y-auto flex flex-col gap-6 my-2 scroll-smooth shadow-2xl">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <h4 className="text-xs font-black uppercase tracking-wider text-[#1DB954] flex items-center gap-2">
                 <Sparkles size={16} />

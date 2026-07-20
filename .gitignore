@@ -5,3 +5,4 @@ extracted_apk/
 *.zip
 *.lnk
 .DS_Store
+.env
