@@ -98,25 +98,51 @@ export const searchMusicOnline = async (searchQuery) => {
       if (ytRes.ok) {
         const ytData = await ytRes.json();
         if (ytData.items && Array.isArray(ytData.items)) {
-          ytTracks = ytData.items.map((item, idx) => {
-            const scAudio = scTracks[idx % Math.max(1, scTracks.length)]?.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
-            return {
-              id: `yt-${item.id.videoId}`,
-              title: item.snippet?.title || query,
-              artist: item.snippet?.channelTitle || 'YouTube Music',
-              album: 'YouTube Single',
-              cover: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
-              audioUrl: scAudio,
-              duration: 210,
-              genre: 'YouTube',
-              source: 'YouTube',
-              lyrics: [
-                { time: 0, text: `🎵 ${item.snippet?.title || query}` },
-                { time: 5, text: `♪ Full Audio on Liofy ♪` }
-              ],
-              hasSynced: false
-            };
-          });
+          ytTracks = await Promise.all(
+            ytData.items.map(async (item, idx) => {
+              const itemTitle = item.snippet?.title || query;
+              const itemArtist = item.snippet?.channelTitle || 'YouTube Music';
+
+              // Try searching SoundCloud for this specific item title
+              let itemAudio = null;
+              try {
+                const cleanQ = `${itemArtist} ${itemTitle}`.replace(/[()\[\]]/g, '').trim();
+                const scSpec = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(cleanQ)}&client_id=${SC_CLIENT_ID}&limit=2`);
+                if (scSpec.ok) {
+                  const specData = await scSpec.json();
+                  const firstMatch = specData.collection?.[0];
+                  const trans = firstMatch?.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+                  if (trans) {
+                    const stRes = await fetch(`${trans.url}?client_id=${SC_CLIENT_ID}`);
+                    if (stRes.ok) {
+                      const stData = await stRes.json();
+                      if (stData.url) itemAudio = stData.url;
+                    }
+                  }
+                }
+              } catch (e) {}
+
+              if (!itemAudio) {
+                itemAudio = scTracks[idx % Math.max(1, scTracks.length)]?.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
+              }
+
+              return {
+                id: `yt-${item.id.videoId}`,
+                title: itemTitle,
+                artist: itemArtist,
+                album: 'YouTube Single',
+                cover: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
+                audioUrl: itemAudio,
+                duration: 210,
+                source: 'YouTube',
+                lyrics: [
+                  { time: 0, text: `🎵 ${itemTitle}` },
+                  { time: 5, text: `♪ Full Audio on Liofy ♪` }
+                ],
+                hasSynced: false
+              };
+            })
+          );
         }
       }
     } catch (e) {}

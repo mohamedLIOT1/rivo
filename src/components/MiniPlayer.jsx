@@ -1,11 +1,16 @@
 import React from 'react';
-import { Play, Pause, SkipForward, Heart, Maximize2, Sliders, Moon, PlusCircle } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Sliders, Moon, PlusCircle } from 'lucide-react';
 
 export default function MiniPlayer({
   currentTrack,
   isPlaying,
   togglePlay,
   playNext,
+  playPrev,
+  isShuffle,
+  toggleShuffle,
+  isRepeat,
+  toggleRepeat,
   toggleLike,
   openFullPlayer,
   openEqualizer,
@@ -48,40 +53,69 @@ export default function MiniPlayer({
           </div>
         </div>
 
-        {/* Center: Controls */}
-        <div className="flex items-center gap-2 md:gap-4 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleLike(currentTrack.id);
-            }}
-            className="p-2 text-zinc-400 hover:text-white transition-colors"
-          >
-            <Heart 
-              size={18} 
-              className={currentTrack.liked ? 'fill-[#1DB954] text-[#1DB954]' : ''} 
-            />
-          </button>
+        {/* Center: Transport Controls */}
+        <div className="flex items-center gap-1 md:gap-2.5 shrink-0">
+          {toggleShuffle && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleShuffle();
+              }}
+              className={`p-1.5 rounded-full transition-colors hidden sm:block ${isShuffle ? 'text-[#1DB954] bg-[#1DB954]/10' : 'text-zinc-400 hover:text-white'}`}
+              title="Shuffle"
+            >
+              <Shuffle size={16} />
+            </button>
+          )}
+
+          {playPrev && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                playPrev();
+              }}
+              className="p-1.5 text-zinc-300 hover:text-white transition-transform active:scale-95"
+              title="Previous Track"
+            >
+              <SkipBack size={18} fill="currentColor" />
+            </button>
+          )}
 
           <button
             onClick={(e) => {
               e.stopPropagation();
               togglePlay();
             }}
-            className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
+            className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
           >
             {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" className="ml-0.5" />}
           </button>
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              playNext();
-            }}
-            className="p-2 text-zinc-400 hover:text-white transition-colors hidden sm:block"
-          >
-            <SkipForward size={18} />
-          </button>
+          {playNext && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                playNext();
+              }}
+              className="p-1.5 text-zinc-300 hover:text-white transition-transform active:scale-95"
+              title="Next Track"
+            >
+              <SkipForward size={18} fill="currentColor" />
+            </button>
+          )}
+
+          {toggleRepeat && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleRepeat();
+              }}
+              className={`p-1.5 rounded-full transition-colors hidden sm:block ${isRepeat ? 'text-[#1DB954] bg-[#1DB954]/10' : 'text-zinc-400 hover:text-white'}`}
+              title="Repeat"
+            >
+              <Repeat size={16} />
+            </button>
+          )}
         </div>
 
         {/* Right: Tools & Expand */}

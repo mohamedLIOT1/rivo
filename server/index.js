@@ -340,7 +340,7 @@ app.get('/api/search/external', async (req, res) => {
 
     const scTracks = resolved.filter(Boolean);
 
-    // Process YouTube tracks with audio fallback guarantee
+    // Process YouTube tracks with specific audio stream resolution
     const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '');
     const ytTracks = [];
     const usedScIds = new Set();
@@ -366,9 +366,29 @@ app.get('/api/search/external', async (req, res) => {
         }
       }
 
-      const audioUrl = (bestMatch && bestMatch.audioUrl)
-        ? bestMatch.audioUrl
-        : (scTracks[0]?.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3');
+      let audioUrl = bestMatch ? bestMatch.audioUrl : null;
+      if (!audioUrl) {
+        try {
+          const cleanQ = `${yt.artist || ''} ${yt.title || ''}`.replace(/[()\[\]]/g, '').trim();
+          const specRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(cleanQ)}&client_id=${SC_CLIENT_ID}&limit=3`);
+          if (specRes.ok) {
+            const specData = await specRes.json();
+            const specItem = specData.collection?.[0];
+            const trans = specItem?.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+            if (trans) {
+              const streamRes = await fetch(`${trans.url}?client_id=${SC_CLIENT_ID}`);
+              if (streamRes.ok) {
+                const streamData = await streamRes.json();
+                if (streamData.url) audioUrl = streamData.url;
+              }
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!audioUrl) {
+        audioUrl = scTracks[ytTracks.length % Math.max(1, scTracks.length)]?.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
+      }
 
       if (bestMatch) usedScIds.add(bestMatch.id);
 

@@ -61,12 +61,25 @@ export default function App() {
   });
 
   const [currentTrack, setCurrentTrack] = useState(() => tracks[0] || null);
+  const [currentQueue, setCurrentQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(180);
   const [volume, setVolume] = useState(0.8);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
+
+  const isRepeatRef = useRef(isRepeat);
+  const isShuffleRef = useRef(isShuffle);
+  const currentQueueRef = useRef(currentQueue);
+  const tracksRef = useRef(tracks);
+  const currentTrackRef = useRef(currentTrack);
+
+  useEffect(() => { isRepeatRef.current = isRepeat; }, [isRepeat]);
+  useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
+  useEffect(() => { currentQueueRef.current = currentQueue; }, [currentQueue]);
+  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+  useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
 
   // Equalizer State
   const [eqEnabled, setEqEnabled] = useState(true);
@@ -206,7 +219,14 @@ export default function App() {
     };
 
     const handleEnded = () => {
-      playNextTrack();
+      if (isRepeatRef.current) {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        }
+      } else {
+        playNextTrack();
+      }
     };
 
     const handleError = (e) => {
@@ -329,44 +349,54 @@ export default function App() {
     setIsPlaying((prev) => !prev);
   };
 
-  const playTrack = (track) => {
+  const playTrack = (track, newQueue = null) => {
     if (!track) return;
     if (isOfflineMode && !track.downloaded) {
       alert('Offline mode is active! Download this song first to listen offline.');
       return;
     }
 
-    setTracks((prev) =>
-      prev.map((t) => (t.id === track.id ? { ...t, plays: (Number(t.plays) || 0) + 1 } : t))
-    );
+    if (newQueue && Array.isArray(newQueue) && newQueue.length > 0) {
+      setCurrentQueue(newQueue);
+    } else if (currentQueueRef.current.length === 0 && tracksRef.current.length > 0) {
+      setCurrentQueue(tracksRef.current);
+    }
+
+    setTracks((prev) => {
+      const exists = prev.some((t) => t.id === track.id);
+      if (!exists) return [track, ...prev];
+      return prev.map((t) => (t.id === track.id ? { ...t, plays: (Number(t.plays) || 0) + 1 } : t));
+    });
 
     setCurrentTrack(track);
     setIsPlaying(true);
   };
 
   const playNextTrack = () => {
-    if (!tracks || tracks.length === 0) return;
-    const activeTracks = isOfflineMode ? tracks.filter(t => t.downloaded) : tracks;
-    if (activeTracks.length === 0) return;
+    const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
+    if (!rawQueue || rawQueue.length === 0) return;
+    const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
+    if (activeList.length === 0) return;
 
-    if (isShuffle) {
-      const randomIdx = Math.floor(Math.random() * activeTracks.length);
-      playTrack(activeTracks[randomIdx]);
+    if (isShuffleRef.current) {
+      const randomIdx = Math.floor(Math.random() * activeList.length);
+      playTrack(activeList[randomIdx]);
     } else {
-      const currentIdx = activeTracks.findIndex((t) => t.id === (currentTrack ? currentTrack.id : ''));
-      const nextIdx = (currentIdx + 1) % activeTracks.length;
-      playTrack(activeTracks[nextIdx]);
+      const currentIdx = activeList.findIndex((t) => t.id === (currentTrackRef.current ? currentTrackRef.current.id : ''));
+      const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % activeList.length;
+      playTrack(activeList[nextIdx]);
     }
   };
 
   const playPrevTrack = () => {
-    if (!tracks || tracks.length === 0) return;
-    const activeTracks = isOfflineMode ? tracks.filter(t => t.downloaded) : tracks;
-    if (activeTracks.length === 0) return;
+    const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
+    if (!rawQueue || rawQueue.length === 0) return;
+    const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
+    if (activeList.length === 0) return;
 
-    const currentIdx = activeTracks.findIndex((t) => t.id === (currentTrack ? currentTrack.id : ''));
-    const prevIdx = (currentIdx - 1 + activeTracks.length) % activeTracks.length;
-    playTrack(activeTracks[prevIdx]);
+    const currentIdx = activeList.findIndex((t) => t.id === (currentTrackRef.current ? currentTrackRef.current.id : ''));
+    const prevIdx = currentIdx <= 0 ? activeList.length - 1 : currentIdx - 1;
+    playTrack(activeList[prevIdx]);
   };
 
   const toggleLike = (trackId) => {
@@ -667,6 +697,11 @@ export default function App() {
           isPlaying={isPlaying}
           togglePlay={togglePlay}
           playNext={playNextTrack}
+          playPrev={playPrevTrack}
+          isShuffle={isShuffle}
+          toggleShuffle={() => setIsShuffle((prev) => !prev)}
+          isRepeat={isRepeat}
+          toggleRepeat={() => setIsRepeat((prev) => !prev)}
           toggleLike={toggleLike}
           openFullPlayer={() => setIsFullPlayerOpen(true)}
           openEqualizer={() => setIsEqualizerOpen(true)}
