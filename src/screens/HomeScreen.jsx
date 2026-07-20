@@ -21,6 +21,16 @@ export default function HomeScreen({
     return 'Good evening';
   };
 
+  const displayTracks = React.useMemo(() => {
+    if (!tracks || tracks.length === 0) return [];
+    const shuffled = [...tracks];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }, [tracks]);
+
   return (
     <div className="flex-1 overflow-y-auto pb-32 select-none px-4 md:px-8 py-6">
       {/* Top Greeting Banner */}
@@ -39,7 +49,7 @@ export default function HomeScreen({
         <div className="flex flex-col gap-8">
           {/* Quick Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {tracks.slice(0, 6).map((track) => (
+            {displayTracks.slice(0, 6).map((track) => (
               <div
                 key={track.id}
                 onClick={() => onSelectTrack(track)}
@@ -74,11 +84,11 @@ export default function HomeScreen({
             ))}
           </div>
 
-          {/* All Songs Grid */}
+          {/* Suggested Songs (Randomly Shuffled) */}
           <section>
-            <h2 className="text-xl font-extrabold text-white mb-4">Your Songs ({tracks.length})</h2>
+            <h2 className="text-xl font-extrabold text-white mb-4">Suggested Songs - أغاني مقترحة ({tracks.length})</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {tracks.map((track) => (
+              {displayTracks.map((track) => (
                 <div
                   key={track.id}
                   onClick={() => onSelectTrack(track)}
