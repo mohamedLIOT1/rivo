@@ -23,6 +23,7 @@ import CarModeScreen from './screens/CarModeScreen';
 import MixesScreen from './screens/MixesScreen';
 import PlaylistScreen from './screens/PlaylistScreen';
 import { API_BASE_URL } from './config';
+import { saveTrackOffline, getOfflineTrackAudioUrl, removeTrackOffline } from './utils/offlineStorage';
 
 export default function App() {
   // User Account State (Prompt Sign Up / Login if null)
@@ -455,9 +456,14 @@ export default function App() {
     setIsPlaying((prev) => !prev);
   };
 
-  const playTrack = (track, newQueue = null) => {
+  const playTrack = async (track, newQueue = null) => {
     if (!track) return;
-    if (isOfflineMode && !track.downloaded) {
+
+    let trackToPlay = { ...track };
+    const offlineAudioUrl = await getOfflineTrackAudioUrl(track.id);
+    if (offlineAudioUrl) {
+      trackToPlay.audioUrl = offlineAudioUrl;
+    } else if (isOfflineMode && !track.downloaded) {
       alert('Offline mode is active! Download this song first to listen offline.');
       return;
     }
@@ -469,12 +475,12 @@ export default function App() {
     }
 
     setTracks((prev) => {
-      const exists = prev.some((t) => t.id === track.id);
-      if (!exists) return [track, ...prev];
-      return prev.map((t) => (t.id === track.id ? { ...t, plays: (Number(t.plays) || 0) + 1 } : t));
+      const exists = prev.some((t) => t.id === trackToPlay.id);
+      if (!exists) return [trackToPlay, ...prev];
+      return prev.map((t) => (t.id === trackToPlay.id ? { ...t, plays: (Number(t.plays) || 0) + 1 } : t));
     });
 
-    setCurrentTrack(track);
+    setCurrentTrack(trackToPlay);
     setIsPlaying(true);
   };
 
@@ -511,15 +517,22 @@ export default function App() {
     );
   };
 
-  const toggleDownload = (trackId) => {
-    setTracks((prev) =>
-      prev.map((t) => {
-        if (t.id === trackId) {
-          return { ...t, downloaded: !t.downloaded };
-        }
-        return t;
-      })
-    );
+  const toggleDownload = async (trackId) => {
+    const targetTrack = tracks.find((t) => t.id === trackId);
+    if (!targetTrack) return;
+
+    const isCurrentlyDownloaded = !!targetTrack.downloaded;
+    if (isCurrentlyDownloaded) {
+      await removeTrackOffline(trackId);
+      setTracks((prev) =>
+        prev.map((t) => (t.id === trackId ? { ...t, downloaded: false } : t))
+      );
+    } else {
+      await saveTrackOffline(targetTrack);
+      setTracks((prev) =>
+        prev.map((t) => (t.id === trackId ? { ...t, downloaded: true } : t))
+      );
+    }
   };
 
   const seekTo = (seconds) => {
