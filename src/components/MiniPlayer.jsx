@@ -24,7 +24,7 @@ export default function MiniPlayer({
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="fixed bottom-[56px] md:bottom-0 left-0 right-0 z-30 px-2 md:px-4 pb-2 md:pb-3 select-none pointer-events-none">
+    <div className="fixed bottom-[calc(60px+env(safe-area-inset-bottom))] md:bottom-0 left-0 right-0 z-30 px-2 md:px-4 pb-2 md:pb-3 select-none pointer-events-none">
       <div 
         onClick={openFullPlayer}
         className="pointer-events-auto max-w-7xl mx-auto glass-player rounded-xl p-2.5 md:p-3 flex items-center justify-between gap-3 shadow-2xl cursor-pointer hover:bg-zinc-900/90 transition-all border border-zinc-800/80 group"
