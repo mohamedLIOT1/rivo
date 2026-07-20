@@ -212,14 +212,24 @@ app.post('/api/user/save-state', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'Email required' });
 
     const cleanEmail = email.trim().toLowerCase();
-    const updatedUser = dbEngine.saveUser({ email: cleanEmail, avatar, name, userTracks: tracks, userPlaylists: playlists });
 
+    // Save all user added tracks into the global shared library for everyone
     if (Array.isArray(tracks)) {
-      tracks.forEach(t => dbEngine.saveTrack(t));
+      tracks.forEach(t => {
+        if (t && (t.title || t.artist)) {
+          dbEngine.saveTrack(t);
+        }
+      });
     }
     if (Array.isArray(playlists)) {
-      playlists.forEach(p => dbEngine.savePlaylist(p));
+      playlists.forEach(p => {
+        if (p && p.name) {
+          dbEngine.savePlaylist(p);
+        }
+      });
     }
+
+    const updatedUser = dbEngine.saveUser({ email: cleanEmail, avatar, name, userTracks: tracks, userPlaylists: playlists });
 
     io.emit('user:state_updated', { email: cleanEmail, user: updatedUser });
 
@@ -239,13 +249,15 @@ app.get('/api/user/sync', async (req, res) => {
       user = dbEngine.getUserByEmail(cleanEmail);
     }
     
-    const dbTracks = dbEngine.getTracks();
-    const dbPlaylists = dbEngine.getPlaylists();
+    const globalTracks = dbEngine.getTracks();
+    const globalPlaylists = dbEngine.getPlaylists();
     const userTracks = user && Array.isArray(user.userTracks) ? user.userTracks : [];
     
+    // Combine global shared library with user tracks so every user sees all added songs!
     const allTracksMap = new Map();
-    [...userTracks, ...dbTracks].forEach(t => {
-      const id = String(t.id || t._id);
+    [...globalTracks, ...userTracks].forEach(t => {
+      if (!t) return;
+      const id = String(t.id || t._id || t.title);
       if (!allTracksMap.has(id)) allTracksMap.set(id, t);
     });
 
@@ -253,7 +265,7 @@ app.get('/api/user/sync', async (req, res) => {
       success: true, 
       user, 
       tracks: Array.from(allTracksMap.values()),
-      playlists: user && Array.isArray(user.userPlaylists) ? user.userPlaylists : dbPlaylists
+      playlists: globalPlaylists
     });
   } catch(e) {
     res.status(500).json({ error: e.message });
