@@ -135,6 +135,7 @@ export default function App() {
   const [sleepTimer, setSleepTimer] = useState(0);
 
   const audioRef = useRef(null);
+  const ytIframeRef = useRef(null);
 
   // Prompt Auth modal on first boot if no user signed in
   useEffect(() => {
@@ -304,28 +305,79 @@ export default function App() {
     }
   }, [currentTrack?.id]);
 
-  // Single Unified Audio Playback Controller
+  const isYouTubeTrack = Boolean(
+    currentTrack && (
+      currentTrack.source === 'YouTube' ||
+      (currentTrack.id && String(currentTrack.id).startsWith('yt-')) ||
+      !!currentTrack.videoId
+    )
+  );
+
+  const ytVideoId = isYouTubeTrack
+    ? (currentTrack.videoId || String(currentTrack.id).replace(/^yt-/, '').replace(/^fallback-/, ''))
+    : null;
+
+  // Single Unified Audio & YouTube Playback Controller
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !currentTrack || !currentTrack.audioUrl) return;
+    if (!currentTrack) return;
 
-    if (audio.src !== currentTrack.audioUrl) {
-      audio.src = currentTrack.audioUrl;
+    if (isYouTubeTrack && ytVideoId) {
+      if (audio) audio.pause();
+
+      const iframe = ytIframeRef.current;
+      if (iframe) {
+        const targetSrc = `https://www.youtube.com/embed/${ytVideoId}?enablejsapi=1&autoplay=1&controls=0&origin=${window.location.origin}`;
+        if (!iframe.src || !iframe.src.includes(ytVideoId)) {
+          iframe.src = targetSrc;
+        } else {
+          const cmd = isPlaying ? 'playVideo' : 'pauseVideo';
+          iframe.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: cmd, args: [] }), '*');
+        }
+      }
+    } else if (audio && currentTrack.audioUrl) {
+      if (ytIframeRef.current && ytIframeRef.current.src) {
+        ytIframeRef.current.contentWindow?.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+      }
+
+      if (audio.src !== currentTrack.audioUrl) {
+        audio.src = currentTrack.audioUrl;
+      }
+
+      if (isPlaying) {
+        audio.play().catch((err) => console.warn('Safe audio playback:', err));
+      } else {
+        audio.pause();
+      }
     }
+  }, [currentTrack, isPlaying, isYouTubeTrack, ytVideoId]);
 
-    if (isPlaying) {
-      audio.play().catch((err) => {
-        console.warn('Safe audio playback handling:', err);
+  // YouTube progress timer
+  useEffect(() => {
+    if (!isYouTubeTrack || !isPlaying) return;
+    const interval = setInterval(() => {
+      setCurrentTime((prev) => {
+        const nextTime = prev + 1;
+        if (duration > 0 && nextTime >= duration) {
+          playNextTrack();
+          return 0;
+        }
+        return nextTime;
       });
-    } else {
-      audio.pause();
-    }
-  }, [currentTrack, isPlaying]);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isYouTubeTrack, isPlaying, duration]);
 
   // Sync Volume
   useEffect(() => {
+    const normVol = Math.max(0, Math.min(1, volume));
     if (audioRef.current) {
-      audioRef.current.volume = Math.max(0, Math.min(1, volume));
+      audioRef.current.volume = normVol;
+    }
+    if (ytIframeRef.current) {
+      ytIframeRef.current.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func: 'setVolume', args: [normVol * 100] }), '*'
+      );
     }
   }, [volume]);
 
@@ -417,9 +469,15 @@ export default function App() {
   };
 
   const seekTo = (seconds) => {
-    if (audioRef.current && !isNaN(seconds)) {
-      audioRef.current.currentTime = seconds;
+    if (!isNaN(seconds)) {
       setCurrentTime(seconds);
+      if (isYouTubeTrack && ytIframeRef.current) {
+        ytIframeRef.current.contentWindow?.postMessage(
+          JSON.stringify({ event: 'command', func: 'seekTo', args: [seconds, true] }), '*'
+        );
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = seconds;
+      }
     }
   };
 
@@ -829,6 +887,14 @@ export default function App() {
         onClose={() => setIsBlendOpen(false)}
         onCreateBlend={handleCreateBlend}
         currentUser={currentUser}
+      />
+
+      {/* Hidden YouTube Audio Player Iframe */}
+      <iframe
+        ref={ytIframeRef}
+        title="YouTube Player"
+        className="fixed -top-[9999px] -left-[9999px] w-1 h-1 opacity-0 pointer-events-none"
+        allow="autoplay"
       />
     </div>
   );
