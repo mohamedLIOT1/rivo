@@ -154,17 +154,16 @@ module.exports = {
   getPlaylists: () => readDb().playlists || [],
   savePlaylist: (playlistData) => {
     if (!playlistData) return null;
-    const db.playlists = readDb().playlists || [];
+    const dbData = readDb();
+    dbData.playlists = dbData.playlists || [];
     const id = String(playlistData.id || `pl-${Date.now()}`);
-    const index = db.playlists.findIndex(p => String(p.id) === id);
+    const index = dbData.playlists.findIndex(p => String(p.id) === id);
     const plObj = { ...playlistData, id };
     if (index >= 0) {
-      db.playlists[index] = plObj;
+      dbData.playlists[index] = plObj;
     } else {
-      db.playlists.unshift(plObj);
+      dbData.playlists.unshift(plObj);
     }
-    const dbData = readDb();
-    dbData.playlists = db.playlists;
     writeDb(dbData);
     return plObj;
   }
