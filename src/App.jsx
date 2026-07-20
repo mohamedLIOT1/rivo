@@ -504,15 +504,26 @@ export default function App() {
 
   const handleAddSong = async (newSong) => {
     if (!newSong) return;
-    setTracks((prev) => [newSong, ...prev]);
-    setCurrentTrack(newSong);
+    const songToSave = {
+      ...newSong,
+      userEmail: currentUser?.email || '',
+      cover: newSong.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      audioUrl: newSong.audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3'
+    };
+
+    setTracks((prev) => {
+      const exists = prev.some(x => x.id === songToSave.id);
+      if (exists) return prev;
+      return [songToSave, ...prev];
+    });
+    setCurrentTrack(songToSave);
     setIsPlaying(true);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/tracks/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSong)
+        body: JSON.stringify(songToSave)
       });
       const data = await response.json();
       if (data.success && data.track) {

@@ -40,13 +40,17 @@ const TrackSchema = new mongoose.Schema({
   title: { type: String, required: true },
   artist: { type: String, required: true },
   album: { type: String, default: 'Single' },
-  cover: { type: String },
-  audioUrl: { type: String, required: true },
+  cover: { type: String, default: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600' },
+  audioUrl: { type: String, default: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3' },
+  duration: { type: Number, default: 210 },
+  genre: { type: String, default: 'Pop' },
+  source: { type: String, default: 'Liofy' },
+  userEmail: { type: String, default: '' },
   bpm: { type: Number, default: 95 },
   key: { type: String, default: '2A' },
   transition: { type: String, default: 'Blend' },
   lyrics: [{ time: Number, text: String }]
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 // User Schema
 const UserSchema = new mongoose.Schema({
@@ -75,10 +79,9 @@ const Track = mongoose.model('Track', TrackSchema);
 const User = mongoose.model('User', UserSchema);
 const Playlist = mongoose.model('Playlist', PlaylistSchema);
 
-// Endpoint to fetch global shared tracks across all friends
+// Endpoint to fetch global shared tracks across all devices
 app.get('/api/tracks', async (req, res) => {
   try {
-    // Automatically purge old 30-second iTunes tracks from MongoDB Atlas
     await Track.deleteMany({ audioUrl: { $regex: /itunes\.apple\.com|apple-assets/i } });
     const dbTracks = await Track.find().sort({ createdAt: -1 });
     res.json({ success: true, tracks: dbTracks });
@@ -87,18 +90,29 @@ app.get('/api/tracks', async (req, res) => {
   }
 });
 
-// Endpoint to upload a track and broadcast to all connected friends
+// Endpoint to upload a track and broadcast to all connected devices live
 app.post('/api/tracks/add', async (req, res) => {
   try {
     const trackData = req.body;
+    if (!trackData.title || !trackData.artist) {
+      return res.status(400).json({ error: 'Title and artist required' });
+    }
+    if (!trackData.audioUrl) {
+      trackData.audioUrl = 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
+    }
+    if (!trackData.cover) {
+      trackData.cover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+    }
+
     const newTrack = new Track(trackData);
     await newTrack.save();
 
-    // Broadcast new track to all online friends live!
+    // Broadcast new track to all online devices live!
     io.emit('track:broadcast_new', newTrack);
 
     res.json({ success: true, track: newTrack });
   } catch(e) {
+    console.error('Track add error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
