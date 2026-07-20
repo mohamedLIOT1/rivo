@@ -725,7 +725,7 @@ export default function App() {
             tracks={tracks}
             onSelectTrack={playTrack}
             toggleLike={toggleLike}
-            onAddSong={handleAddSong}
+            onOpenAddSongModal={() => setIsAddSongOpen(true)}
           />
         )}
 
