@@ -3,58 +3,11 @@ const path = require('path');
 
 const DB_FILE = path.join(__dirname, 'db.json');
 
-const CLEAN_SEED_TRACKS = [
-  {
-    id: "track-seed-1",
-    title: "Lege-Cy - El Neyya (ليجي-سي - النيه)",
-    artist: "Lege-Cy",
-    album: "El Neyya",
-    cover: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
-    audioUrl: "https://www.youtube.com/watch?v=9bZkp7q19f0",
-    duration: 210,
-    genre: "Hip-Hop",
-    source: "YouTube"
-  },
-  {
-    id: "track-seed-2",
-    title: "Amr Diab - Aref Habiby (عمرو دياب - عارف حبيبي)",
-    artist: "Amr Diab",
-    album: "Single",
-    cover: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-    duration: 240,
-    genre: "Arab Pop",
-    source: "Liofy"
-  },
-  {
-    id: "track-seed-3",
-    title: "Lege-Cy - Placebo (بلاسبو)",
-    artist: "Lege-Cy",
-    album: "Placebo",
-    cover: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-    duration: 195,
-    genre: "Hip-Hop",
-    source: "Liofy"
-  },
-  {
-    id: "track-seed-4",
-    title: "Lege-Cy x ISMAIL NOSRAT - LAW NASYA",
-    artist: "Lege-Cy",
-    album: "LAW NASYA",
-    cover: "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600",
-    audioUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-    duration: 220,
-    genre: "Hip-Hop",
-    source: "Liofy"
-  }
-];
-
 function initDb() {
   if (!fs.existsSync(DB_FILE)) {
     const initialData = {
       users: [],
-      tracks: CLEAN_SEED_TRACKS,
+      tracks: [],
       playlists: []
     };
     fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
@@ -66,24 +19,9 @@ function readDb() {
   try {
     const content = fs.readFileSync(DB_FILE, 'utf8');
     const parsed = JSON.parse(content);
-
-    // Clean out broken 403 pixabay or itunes 30s tracks
-    if (Array.isArray(parsed.tracks)) {
-      parsed.tracks = parsed.tracks.filter(t => 
-        t && t.audioUrl && 
-        !t.audioUrl.includes('pixabay.com') && 
-        !t.audioUrl.includes('itunes.apple.com') && 
-        !t.audioUrl.includes('apple-assets')
-      );
-    }
-
-    if (!parsed.tracks || parsed.tracks.length === 0) {
-      parsed.tracks = CLEAN_SEED_TRACKS;
-      writeDb(parsed);
-    }
     return parsed;
   } catch (e) {
-    return { users: [], tracks: CLEAN_SEED_TRACKS, playlists: [] };
+    return { users: [], tracks: [], playlists: [] };
   }
 }
 
@@ -113,8 +51,8 @@ module.exports = {
     const existing = index >= 0 ? db.users[index] : {};
     
     let finalUserTracks = existing.userTracks || [];
-    if (Array.isArray(userData.userTracks) && userData.userTracks.length > 0) {
-      finalUserTracks = userData.userTracks.filter(t => t && t.audioUrl && !t.audioUrl.includes('pixabay.com'));
+    if (Array.isArray(userData.userTracks)) {
+      finalUserTracks = userData.userTracks;
     }
 
     const updatedUser = {
@@ -136,8 +74,7 @@ module.exports = {
   },
   getTracks: () => {
     const db = readDb();
-    if (!db.tracks || db.tracks.length === 0) return CLEAN_SEED_TRACKS;
-    return db.tracks;
+    return db.tracks || [];
   },
   saveTrack: (trackData) => {
     if (!trackData || !trackData.title) return null;
@@ -160,6 +97,30 @@ module.exports = {
     }
     writeDb(db);
     return trackObj;
+  },
+  deleteTrack: (trackId) => {
+    if (!trackId) return false;
+    const db = readDb();
+    const id = String(trackId);
+    db.tracks = (db.tracks || []).filter(t => String(t.id || t._id) !== id);
+    if (Array.isArray(db.users)) {
+      db.users.forEach(u => {
+        if (Array.isArray(u.userTracks)) {
+          u.userTracks = u.userTracks.filter(t => String(t.id || t._id) !== id);
+        }
+      });
+    }
+    writeDb(db);
+    return true;
+  },
+  wipeAllTracks: () => {
+    const db = readDb();
+    db.tracks = [];
+    if (Array.isArray(db.users)) {
+      db.users.forEach(u => { u.userTracks = []; });
+    }
+    writeDb(db);
+    return true;
   },
   getPlaylists: () => readDb().playlists || [],
   savePlaylist: (playlistData) => {

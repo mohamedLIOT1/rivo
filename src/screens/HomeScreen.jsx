@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Heart, Music, Plus, Edit3, Disc } from 'lucide-react';
+import { Play, Heart, Music, Plus, Edit3, Disc, Trash2 } from 'lucide-react';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -10,7 +10,8 @@ export default function HomeScreen({
   toggleLike, 
   onSelectArtist,
   openAddSongModal,
-  openEditSongModal
+  openEditSongModal,
+  onDeleteTrack
 }) {
   const defaultTrackCover = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231DB954"/><circle cx="150" cy="150" r="90" fill="%23121212"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="%231DB954" font-size="80">🎵</text></svg>`;
 
@@ -66,18 +67,32 @@ export default function HomeScreen({
                   <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
                 </div>
                 <div className="flex items-center gap-1 mr-2">
+                  {onDeleteTrack && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) {
+                          onDeleteTrack(track.id);
+                        }
+                      }}
+                      className="p-1.5 text-zinc-500 hover:text-red-400 rounded-full hover:bg-red-500/10"
+                      title="Delete Track"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
                       openEditSongModal(track);
                     }}
-                    className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800"
+                    className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800"
                     title="Edit Song & Lyrics"
                   >
-                    <Edit3 size={16} />
+                    <Edit3 size={15} />
                   </button>
-                  <button className="w-9 h-9 rounded-full bg-[#1DB954] text-black flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Play size={16} fill="black" className="ml-0.5" />
+                  <button className="w-8 h-8 rounded-full bg-[#1DB954] text-black flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play size={14} fill="black" className="ml-0.5" />
                   </button>
                 </div>
               </div>
@@ -110,16 +125,32 @@ export default function HomeScreen({
                       <h4 className="font-bold text-sm text-white truncate">{track.title}</h4>
                       <p className="text-xs text-zinc-400 truncate mt-0.5">{track.artist}</p>
                     </div>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditSongModal(track);
-                      }}
-                      className="p-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 shrink-0"
-                      title="Edit Song & Lyrics"
-                    >
-                      <Edit3 size={15} />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {onDeleteTrack && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) {
+                              onDeleteTrack(track.id);
+                            }
+                          }}
+                          className="p-1 text-zinc-500 hover:text-red-400 rounded-full hover:bg-red-500/10"
+                          title="Delete Track"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditSongModal(track);
+                        }}
+                        className="p-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 shrink-0"
+                        title="Edit Song & Lyrics"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -137,6 +137,35 @@ app.post('/api/tracks/add', async (req, res) => {
   }
 });
 
+// Endpoint to delete a track by ID
+app.delete('/api/tracks/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    dbEngine.deleteTrack(id);
+    try {
+      await Track.deleteOne({ $or: [{ _id: id }, { id: id }] });
+    } catch(err) {}
+    io.emit('track:deleted', { id });
+    res.json({ success: true, id });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint to wipe all tracks completely
+app.post('/api/tracks/wipe-all', async (req, res) => {
+  try {
+    dbEngine.wipeAllTracks();
+    try {
+      await Track.deleteMany({});
+    } catch(err) {}
+    io.emit('tracks:wiped');
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // User Auth Endpoints (Register & Login synced with Database Engine & MongoDB)
 app.post('/api/auth/register', async (req, res) => {
   try {

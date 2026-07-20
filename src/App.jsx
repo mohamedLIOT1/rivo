@@ -585,6 +585,18 @@ export default function App() {
     setIsEditSongOpen(true);
   };
 
+  const handleDeleteTrack = async (trackId) => {
+    if (!trackId) return;
+    setTracks((prev) => prev.filter((t) => String(t.id || t._id) !== String(trackId)));
+    if (currentTrack && String(currentTrack.id || currentTrack._id) === String(trackId)) {
+      setIsPlaying(false);
+      setCurrentTrack(null);
+    }
+    try {
+      await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}`, { method: 'DELETE' });
+    } catch (err) {}
+  };
+
   const handleUpdateSong = (updatedTrack) => {
     setTracks((prev) =>
       prev.map((t) => (t.id === updatedTrack.id ? updatedTrack : t))
@@ -752,6 +764,7 @@ export default function App() {
             onSelectArtist={handleSelectArtist}
             openAddSongModal={() => setIsAddSongOpen(true)}
             openEditSongModal={handleOpenEditSong}
+            onDeleteTrack={handleDeleteTrack}
           />
         )}
 
