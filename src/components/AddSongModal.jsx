@@ -1,550 +1,376 @@
 import React, { useState } from 'react';
-import { X, Plus, Music, Image, Mic, FileAudio, Clock, Trash2, Check, Search, Sparkles, Loader2 } from 'lucide-react';
-import { searchMusicOnline } from '../utils/searchEngine';
+import { X, Upload, Music, Image, Search, Loader2, Check, Plus, Trash2 } from 'lucide-react';
+import { API_BASE_URL } from '../config';
+
+const getToken = () => localStorage.getItem('liofy_token') || '';
 
 export default function AddSongModal({ isOpen, onClose, onAddSong }) {
-  const [activeTab, setActiveTab] = useState('auto'); // 'auto' | 'quick' | 'custom'
-  const [searchQuery, setSearchQuery] = useState('ليجي سي');
-  const [searchResults, setSearchResults] = useState([]);
+  const [tab, setTab] = useState('search'); // 'search' | 'upload'
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [addedTrackIds, setAddedTrackIds] = useState(new Set());
-  const [searchSourceFilter, setSearchSourceFilter] = useState('all'); // 'all' | 'soundcloud' | 'youtube'
+  const [addedIds, setAddedIds] = useState(new Set());
 
-  const [title, setTitle] = useState('');
+  // Upload form
+  const [title, setTitle]   = useState('');
   const [artist, setArtist] = useState('');
-  const [album, setAlbum] = useState('');
-  const [genre, setGenre] = useState('Pop');
-  const [coverUrl, setCoverUrl] = useState('');
-  const [audioUrl, setAudioUrl] = useState('');
-  const [coverFile, setCoverFile] = useState(null);
+  const [album, setAlbum]   = useState('');
+  const [genre, setGenre]   = useState('Pop');
   const [audioFile, setAudioFile] = useState(null);
-
-  const [lyricsLines, setLyricsLines] = useState([
-    { time: 0, text: 'Intro music playing...' },
-    { time: 10, text: 'First verse starts here...' },
-    { time: 25, text: 'Chorus soaring high...' }
-  ]);
-
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
-  React.useEffect(() => {
-    if (isOpen && activeTab === 'auto' && searchResults.length === 0 && !hasSearched) {
-      handleExternalSearch('ليجي سي');
-    }
-  }, [isOpen, activeTab]);
+  // Lyrics
+  const [lyrics, setLyrics] = useState([]);
 
-  const handleExternalSearch = async (queryToSearch) => {
-    const q = queryToSearch || searchQuery;
-    if (!q || !q.trim()) return;
+  if (!isOpen) return null;
 
+  // ── Search ────────────────────────────────────────
+  const handleSearch = async (e) => {
+    e?.preventDefault();
+    if (!query.trim()) return;
     setIsSearching(true);
-    setHasSearched(true);
+    setResults([]);
     try {
-      const results = await searchMusicOnline(q);
-      setSearchResults(results);
-    } catch (err) {
-      console.warn('External search error:', err);
+      const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query.trim())}`);
+      const data = await res.json();
+      setResults(data.tracks || []);
+    } catch {
+      setResults([]);
     }
     setIsSearching(false);
   };
 
-  const handleAddExternalTrack = async (track) => {
-    if (addedTrackIds.has(track.id)) return;
-
-    setAddedTrackIds((prev) => new Set(prev).add(track.id));
-
-    const newTrack = {
-      ...track,
-      id: `track-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      plays: "12,400",
-      liked: true,
-      downloaded: true
-    };
-
-    try {
-      await onAddSong(newTrack);
-    } catch (err) {}
+  const handleAddFromSearch = async (track) => {
+    if (addedIds.has(track.id)) return;
+    setAddedIds(p => new Set(p).add(track.id));
+    const newTrack = { ...track, liked: false };
+    await onAddSong(newTrack);
   };
 
-  if (!isOpen) return null;
-
-  const handleAddLyricLine = () => {
-    const lastTime = lyricsLines.length > 0 ? lyricsLines[lyricsLines.length - 1].time + 15 : 0;
-    setLyricsLines([...lyricsLines, { time: lastTime, text: '' }]);
+  // ── File Upload ───────────────────────────────────
+  const handleCoverChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCoverFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setCoverPreview(reader.result);
+    reader.readAsDataURL(file);
   };
 
-  const handleUpdateLyric = (index, field, value) => {
-    const updated = [...lyricsLines];
-    updated[index][field] = field === 'time' ? Number(value) || 0 : value;
-    setLyricsLines(updated);
+  const handleAudioChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAudioFile(file);
   };
 
-  const handleRemoveLyricLine = (index) => {
-    setLyricsLines(lyricsLines.filter((_, i) => i !== index));
-  };
-
-  const handleCoverFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setCoverFile(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setCoverUrl(event.target.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleAudioFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setAudioFile(file);
-      const reader = new FileReader();
-      reader.onload = (event) => setAudioUrl(event.target.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleSubmit = async (e) => {
+  const handleUpload = async (e) => {
     e.preventDefault();
-    if (!title || !artist) return;
+    if (!title || !artist) { setUploadError('Title and artist required'); return; }
+    if (!audioFile)         { setUploadError('Please select an MP3 file'); return; }
 
     setIsUploading(true);
-
-    const defaultCovers = [
-      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'
-    ];
-    const randomDefaultCover = defaultCovers[Math.floor(Math.random() * defaultCovers.length)];
-
-    const finalCover = coverUrl || randomDefaultCover;
-    const finalAudio = audioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
-
-    const sortedLyrics = [...lyricsLines]
-      .filter((l) => l.text.trim().length > 0)
-      .sort((a, b) => a.time - b.time);
-
-    const newTrack = {
-      id: `track-${Date.now()}`,
-      title,
-      artist,
-      album: album || title,
-      cover: finalCover,
-      audioUrl: finalAudio,
-      duration: 210,
-      plays: "1,200",
-      liked: true,
-      downloaded: true,
-      genre: genre || 'Pop',
-      color: "#1DB954",
-      lyrics: sortedLyrics.length > 0 ? sortedLyrics : [{ time: 0, text: `${title} - ${artist}` }]
-    };
+    setUploadError('');
 
     try {
-      await onAddSong(newTrack);
-    } catch(err) {}
+      const token = getToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+      // Upload audio
+      const audioForm = new FormData();
+      audioForm.append('audio', audioFile);
+      const audioRes = await fetch(`${API_BASE_URL}/api/upload/audio`, {
+        method: 'POST', headers, body: audioForm,
+      });
+      const audioData = await audioRes.json();
+      if (!audioData.success) throw new Error(audioData.error || 'Audio upload failed');
+
+      // Upload cover (optional)
+      let coverUrl = '';
+      if (coverFile) {
+        const coverForm = new FormData();
+        coverForm.append('cover', coverFile);
+        const coverRes = await fetch(`${API_BASE_URL}/api/upload/cover`, {
+          method: 'POST', headers, body: coverForm,
+        });
+        const coverData = await coverRes.json();
+        if (coverData.success) coverUrl = coverData.url;
+      }
+
+      // Save track to global library
+      const trackData = {
+        title, artist, album: album || 'Single', genre,
+        audioUrl: audioData.url,
+        cover: coverUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=1DB954&color=000&size=512&bold=true&format=svg`,
+        source: 'Upload',
+        lyrics,
+      };
+
+      const saveRes = await fetch(`${API_BASE_URL}/api/tracks/add`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(trackData),
+      });
+      const saveData = await saveRes.json();
+      if (!saveData.success) throw new Error(saveData.error || 'Save failed');
+
+      await onAddSong({ ...saveData.track, liked: false });
+      setUploadDone(true);
+
+      // Reset form
+      setTimeout(() => {
+        setTitle(''); setArtist(''); setAlbum(''); setGenre('Pop');
+        setAudioFile(null); setCoverFile(null); setCoverPreview('');
+        setLyrics([]); setUploadDone(false);
+      }, 2000);
+    } catch (err) {
+      setUploadError(err.message);
+    }
     setIsUploading(false);
-    onClose();
+  };
 
-    // Reset form
-    setTitle('');
-    setArtist('');
-    setAlbum('');
-    setCoverUrl('');
-    setAudioUrl('');
+  // ── Lyrics editor ─────────────────────────────────
+  const addLyricLine = () => {
+    const lastTime = lyrics.length > 0 ? lyrics[lyrics.length - 1].time + 15 : 0;
+    setLyrics([...lyrics, { time: lastTime, text: '' }]);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-lg flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-[#181818] border border-zinc-800 rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center font-black">
-              <Plus size={22} />
-            </div>
-            <div>
-              <h3 className="text-xl font-extrabold text-white">إضافة أغنية جديدة</h3>
-              <p className="text-xs text-zinc-400">Add songs quickly to your library and sync across all devices</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white rounded-full bg-zinc-900">
+    <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <h2 className="text-lg font-extrabold text-white">Add Song</h2>
+          <button onClick={onClose} className="p-1.5 text-[#b3b3b3] hover:text-white rounded-full hover:bg-white/10 transition-all">
             <X size={20} />
           </button>
         </div>
 
-        {/* Mode Toggle Switch */}
-        <div className="flex bg-zinc-900 p-1 rounded-xl my-3 border border-zinc-800 gap-1 overflow-x-auto">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('auto');
-              if (searchResults.length === 0) handleExternalSearch('ليجي سي');
-            }}
-            className={`flex-1 min-w-[140px] py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'auto' ? 'bg-[#1DB954] text-black shadow-lg' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <Sparkles size={14} />
-            <span>🔍 استيراد تلقائي</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('quick')}
-            className={`flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'quick' ? 'bg-[#1DB954] text-black shadow-lg' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <span>⚡ إضافة سريعة</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('custom')}
-            className={`flex-1 min-w-[120px] py-2 px-3 rounded-lg text-xs font-extrabold transition-all flex items-center justify-center gap-1.5 ${
-              activeTab === 'custom' ? 'bg-[#1DB954] text-black shadow-lg' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <span>🎛️ إضافة تفصيلية</span>
-          </button>
+        {/* Tabs */}
+        <div className="flex border-b border-white/10">
+          {[
+            { id: 'search', label: '🔍 Search Online' },
+            { id: 'upload', label: '⬆️ Upload MP3' },
+          ].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="flex-1 py-3 text-sm font-bold transition-all"
+              style={tab === t.id
+                ? { color: '#1DB954', borderBottom: '2px solid #1DB954' }
+                : { color: '#b3b3b3' }
+              }
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        {/* Tab 1: Auto Import View */}
-        {activeTab === 'auto' && (
-          <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-4">
-            {/* Search input bar */}
-            <div className="flex items-center gap-2">
-              <div className="flex-1 relative">
-                <Search size={16} className="absolute left-3 top-3 text-zinc-400" />
+        <div className="flex-1 overflow-y-auto p-5">
+
+          {/* ── SEARCH TAB ── */}
+          {tab === 'search' && (
+            <div>
+              <form onSubmit={handleSearch} className="flex gap-2 mb-5">
                 <input
-                  type="text"
-                  placeholder="ابحث عن اسم الفنان أو الأغنية (مثال: ليجي سي، ويجز...)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleExternalSearch()}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search YouTube, SoundCloud..."
+                  className="flex-1 bg-[#282828] text-white text-sm px-4 py-2.5 rounded-full border border-white/10 focus:outline-none focus:border-[#1DB954]"
                 />
-              </div>
-              <button
-                type="button"
-                onClick={() => handleExternalSearch()}
-                disabled={isSearching}
-                className="py-2.5 px-4 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-xl transition-all shadow-md shrink-0 flex items-center gap-1.5"
-              >
-                {isSearching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-                <span>بحث</span>
-              </button>
-            </div>
-
-            {/* Quick Suggestions Chips & Source Filter */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                <span className="text-zinc-500 text-[11px] shrink-0">مقترحات:</span>
-                {['ليجي سي', 'ويجز', 'مروان بابلو', 'The Weeknd', 'Drake', 'Travis Scott'].map((artistName) => (
-                  <button
-                    key={artistName}
-                    type="button"
-                    onClick={() => {
-                      setSearchQuery(artistName);
-                      handleExternalSearch(artistName);
-                    }}
-                    className="px-2.5 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-semibold shrink-0 text-[11px]"
-                  >
-                    {artistName}
-                  </button>
-                ))}
-              </div>
-
-              {/* Platform Filter Buttons */}
-              <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
-                <span className="text-zinc-400 text-xs font-bold">المصدر:</span>
                 <button
-                  type="button"
-                  onClick={() => setSearchSourceFilter('all')}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                    searchSourceFilter === 'all' ? 'bg-[#1DB954] text-black' : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                  }`}
+                  type="submit"
+                  disabled={isSearching}
+                  className="px-4 py-2.5 bg-[#1DB954] text-black text-sm font-bold rounded-full hover:bg-[#1ed760] transition-all disabled:opacity-50"
                 >
-                  🌐 الكل
+                  {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchSourceFilter('soundcloud')}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                    searchSourceFilter === 'soundcloud' ? 'bg-orange-500 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  🟠 SoundCloud
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSearchSourceFilter('youtube')}
-                  className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                    searchSourceFilter === 'youtube' ? 'bg-red-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  🔴 YouTube
-                </button>
-              </div>
-            </div>
+              </form>
 
-            {/* Results Grid */}
-            <div className="flex-1 overflow-y-auto max-h-[50vh] pr-1 flex flex-col gap-2">
-              {isSearching ? (
-                <div className="py-12 flex flex-col items-center justify-center text-zinc-400 gap-2">
-                  <Loader2 size={28} className="animate-spin text-[#1DB954]" />
-                  <span className="text-xs font-extrabold">جاري البحث على YouTube و SoundCloud...</span>
-                </div>
-              ) : searchResults.length > 0 ? (
-                searchResults
-                  .filter((t) => {
-                    if (searchSourceFilter === 'soundcloud') return t.source === 'SoundCloud';
-                    if (searchSourceFilter === 'youtube') return t.source === 'YouTube';
-                    return true;
-                  })
-                  .map((t) => {
-                    const isAdded = addedTrackIds.has(t.id);
-                    return (
-                      <div
-                        key={t.id}
-                        className="flex items-center justify-between bg-zinc-900/80 hover:bg-zinc-800/80 p-3 rounded-2xl border border-zinc-800 transition-all gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <img
-                            src={t.cover}
-                            alt={t.title}
-                            className="w-12 h-12 rounded-xl object-cover border border-zinc-700/50 shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-extrabold text-white truncate">{t.title}</h4>
-                            <p className="text-xs text-zinc-400 truncate flex items-center gap-2 mt-0.5">
-                              <span>{t.artist}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-black uppercase ${
-                                t.source === 'SoundCloud' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                              }`}>
-                                {t.source || 'Music'}
-                              </span>
-                              {t.hasSynced && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                                  <span>🎵 الليركس</span>
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Single simple "إضافة" button */}
-                        <button
-                          type="button"
-                          onClick={() => handleAddExternalTrack(t)}
-                          disabled={isAdded}
-                          className={`px-4 py-2 rounded-xl font-black text-xs transition-all shrink-0 flex items-center gap-1 ${
-                            isAdded
-                              ? 'bg-zinc-800 text-emerald-400 border border-emerald-500/30 cursor-default'
-                              : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-lg active:scale-95'
-                          }`}
-                        >
-                          {isAdded ? (
-                            <>
-                              <Check size={15} />
-                              <span>تمت الإضافة</span>
-                            </>
-                          ) : (
-                            <>
-                              <Plus size={15} />
-                              <span>إضافة</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    );
-                  })
-              ) : (
-                <div className="py-10 text-center text-zinc-400 text-xs font-semibold">
-                  {hasSearched ? 'لم نتمكن من العثور على أغاني بهذا الاسم. جرب البحث باسم فنان آخر 🎵' : 'ابحث عن اسم الفنان لعرض أغانيه من YouTube و SoundCloud مع الليركس متزامنة 🎵'}
+              {isSearching && (
+                <div className="text-center py-10">
+                  <Loader2 size={32} className="animate-spin text-[#1DB954] mx-auto" />
+                  <p className="text-sm text-[#b3b3b3] mt-3">Searching YouTube & SoundCloud...</p>
                 </div>
               )}
-            </div>
-          </div>
-        )}
 
-        {/* Tab 2 & 3: Manual / Quick Forms */}
-        {activeTab !== 'auto' && (
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto py-4 flex flex-col gap-6 pr-2">
-          {/* Metadata Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Song Title *</label>
-              <input
-                type="text"
-                placeholder="e.g. Starboy"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-              />
-            </div>
+              <div className="flex flex-col gap-2">
+                {results.map(track => (
+                  <div key={track.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#181818] hover:bg-[#282828] transition-colors border border-white/5">
+                    <img
+                      src={track.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(track.title)}&background=1DB954&color=000`}
+                      alt={track.title}
+                      className="w-12 h-12 rounded-lg object-cover shrink-0"
+                      onError={e => { e.target.src = `https://ui-avatars.com/api/?name=Music&background=1DB954&color=000`; }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">{track.title}</p>
+                      <p className="text-xs text-[#b3b3b3] truncate">{track.artist}</p>
+                      <span
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block"
+                        style={{
+                          background: track.source === 'YouTube' ? '#ff000020' : '#1DB95420',
+                          color: track.source === 'YouTube' ? '#ff4444' : '#1DB954',
+                        }}
+                      >
+                        {track.source}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleAddFromSearch(track)}
+                      disabled={addedIds.has(track.id)}
+                      className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all"
+                      style={{
+                        background: addedIds.has(track.id) ? '#1DB954' : '#282828',
+                        color: addedIds.has(track.id) ? 'black' : 'white',
+                      }}
+                    >
+                      {addedIds.has(track.id) ? <Check size={16} /> : <Plus size={16} />}
+                    </button>
+                  </div>
+                ))}
 
-            <div>
-              <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Artist Name *</label>
-              <input
-                type="text"
-                placeholder="e.g. The Weeknd"
-                value={artist}
-                onChange={(e) => setArtist(e.target.value)}
-                required
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-              />
-            </div>
-          </div>
+                {results.length === 0 && !isSearching && query && (
+                  <p className="text-center text-sm text-[#b3b3b3] py-8">No results found. Try a different search.</p>
+                )}
 
-          {activeTab === 'custom' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Album Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Starboy Album"
-                  value={album}
-                  onChange={(e) => setAlbum(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Genre</label>
-                <select
-                  value={genre}
-                  onChange={(e) => setGenre(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#1DB954]"
-                >
-                  <option value="Pop">Pop</option>
-                  <option value="Hip-Hop">Hip-Hop</option>
-                  <option value="Electronic">Electronic</option>
-                  <option value="Arab Pop">Arab Pop</option>
-                  <option value="Rock">Rock</option>
-                  <option value="Chill & Lofi">Chill & Lofi</option>
-                </select>
+                {results.length === 0 && !isSearching && !query && (
+                  <p className="text-center text-sm text-[#b3b3b3] py-8">
+                    Search for any song and add it to the shared library for everyone!
+                  </p>
+                )}
               </div>
             </div>
           )}
 
-          {/* Media Files Inputs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-            {/* Cover Image Upload / URL */}
-            <div>
-              <label className="text-xs uppercase font-extrabold text-zinc-400 flex items-center gap-1.5 mb-2">
-                <Image size={15} className="text-[#1DB954]" />
-                <span>غلاف الأغنية (اختياري)</span>
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleCoverFileChange}
-                className="text-xs text-zinc-400 mb-2 block file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#1DB954] file:text-black hover:file:bg-[#1ed760]"
-              />
-              <input
-                type="text"
-                placeholder="أو ضع رابط صورة (https://...)"
-                value={coverUrl}
-                onChange={(e) => setCoverUrl(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-              />
-              {coverUrl && (
-                <img src={coverUrl} alt="Preview" className="w-16 h-16 rounded-lg object-cover mt-2 border border-zinc-700" />
+          {/* ── UPLOAD TAB ── */}
+          {tab === 'upload' && (
+            <form onSubmit={handleUpload} className="flex flex-col gap-4">
+              {uploadError && (
+                <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-sm">
+                  {uploadError}
+                </div>
               )}
-            </div>
 
-            {/* Audio File Upload / URL */}
-            <div>
-              <label className="text-xs uppercase font-extrabold text-zinc-400 flex items-center gap-1.5 mb-2">
-                <FileAudio size={15} className="text-[#1DB954]" />
-                <span>الملف الصوتي MP3 (اختياري)</span>
-              </label>
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleAudioFileChange}
-                className="text-xs text-zinc-400 mb-2 block file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#1DB954] file:text-black hover:file:bg-[#1ed760]"
-              />
-              <input
-                type="text"
-                placeholder="أو ضع رابط MP3 (https://...)"
-                value={audioUrl}
-                onChange={(e) => setAudioUrl(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-              />
-            </div>
-          </div>
+              {uploadDone && (
+                <div className="p-3 bg-[#1DB954]/20 border border-[#1DB954]/40 rounded-xl text-[#1DB954] text-sm flex items-center gap-2">
+                  <Check size={16} /> Song uploaded and added to the shared library!
+                </div>
+              )}
 
-          {/* Timed Lyrics Editor (Advanced Mode Only) */}
-          {activeTab === 'custom' && (
-            <div className="bg-zinc-900/60 p-4 rounded-2xl border border-zinc-800">
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-xs uppercase font-extrabold text-zinc-400 flex items-center gap-1.5">
-                  <Mic size={15} className="text-[#1DB954]" />
-                  <span>Synced Timed Lyrics (Karaoke)</span>
+              {/* Cover + Audio */}
+              <div className="flex gap-3">
+                {/* Cover */}
+                <label className="w-24 h-24 rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center cursor-pointer hover:border-[#1DB954] transition-colors overflow-hidden shrink-0">
+                  {coverPreview ? (
+                    <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
+                  ) : (
+                    <>
+                      <Image size={24} className="text-[#b3b3b3]" />
+                      <span className="text-[10px] text-[#b3b3b3] mt-1">Cover</span>
+                    </>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
                 </label>
-                <button
-                  type="button"
-                  onClick={handleAddLyricLine}
-                  className="text-xs font-bold text-[#1DB954] hover:underline flex items-center gap-1"
-                >
-                  <Plus size={14} /> Add Line
-                </button>
+
+                {/* Audio File */}
+                <label className={`flex-1 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${audioFile ? 'border-[#1DB954] bg-[#1DB954]/10' : 'border-white/20 hover:border-[#1DB954]'}`}>
+                  {audioFile ? (
+                    <>
+                      <Music size={24} className="text-[#1DB954]" />
+                      <span className="text-xs text-[#1DB954] mt-1 font-bold text-center px-2 truncate max-w-full">{audioFile.name}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={24} className="text-[#b3b3b3]" />
+                      <span className="text-xs text-[#b3b3b3] mt-1">Upload MP3</span>
+                    </>
+                  )}
+                  <input type="file" accept="audio/*" onChange={handleAudioChange} className="hidden" />
+                </label>
               </div>
 
-              <div className="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
-                {lyricsLines.map((line, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-zinc-900 px-2 py-1 rounded-lg border border-zinc-700 shrink-0">
-                      <Clock size={12} className="text-zinc-400" />
-                      <input
-                        type="number"
-                        min="0"
-                        value={line.time}
-                        onChange={(e) => handleUpdateLyric(idx, 'time', e.target.value)}
-                        className="w-12 bg-transparent text-xs text-[#1DB954] font-bold text-center focus:outline-none"
-                      />
-                      <span className="text-[10px] text-zinc-500">sec</span>
-                    </div>
+              {/* Fields */}
+              {[
+                { label: 'Song Title *', value: title, setter: setTitle, placeholder: 'e.g. Blinding Lights' },
+                { label: 'Artist *', value: artist, setter: setArtist, placeholder: 'e.g. The Weeknd' },
+                { label: 'Album', value: album, setter: setAlbum, placeholder: 'e.g. After Hours' },
+              ].map(f => (
+                <div key={f.label}>
+                  <label className="text-xs font-bold text-[#b3b3b3] block mb-1">{f.label}</label>
+                  <input
+                    value={f.value}
+                    onChange={e => f.setter(e.target.value)}
+                    placeholder={f.placeholder}
+                    className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                  />
+                </div>
+              ))}
 
+              {/* Genre */}
+              <div>
+                <label className="text-xs font-bold text-[#b3b3b3] block mb-1">Genre</label>
+                <select
+                  value={genre}
+                  onChange={e => setGenre(e.target.value)}
+                  className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                >
+                  {['Pop', 'Hip-Hop', 'R&B', 'Electronic', 'Rock', 'Jazz', 'Classical', 'Arab Pop', 'Mahragan', 'Sha3bi', 'Other'].map(g => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Lyrics (optional) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-[#b3b3b3]">Synced Lyrics (optional)</label>
+                  <button type="button" onClick={addLyricLine} className="text-xs text-[#1DB954] font-bold">+ Add Line</button>
+                </div>
+                {lyrics.map((line, i) => (
+                  <div key={i} className="flex gap-2 mb-2">
                     <input
-                      type="text"
-                      placeholder={`Lyric line ${idx + 1}...`}
-                      value={line.text}
-                      onChange={(e) => handleUpdateLyric(idx, 'text', e.target.value)}
-                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
+                      type="number"
+                      value={line.time}
+                      onChange={e => setLyrics(prev => prev.map((l, idx) => idx === i ? { ...l, time: Number(e.target.value) } : l))}
+                      placeholder="0"
+                      className="w-16 bg-[#282828] text-white text-xs px-2 py-2 rounded-lg border border-white/10 focus:outline-none"
                     />
-
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveLyricLine(idx)}
-                      className="p-1.5 text-zinc-500 hover:text-red-400 rounded-lg"
-                    >
+                    <input
+                      value={line.text}
+                      onChange={e => setLyrics(prev => prev.map((l, idx) => idx === i ? { ...l, text: e.target.value } : l))}
+                      placeholder="Lyric line..."
+                      className="flex-1 bg-[#282828] text-white text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                    />
+                    <button type="button" onClick={() => setLyrics(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300">
                       <Trash2 size={14} />
                     </button>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={isUploading}
-            className="w-full py-3.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-xl transition-all shadow-xl text-sm mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {isUploading ? (
-              <span>⚡ جاري الحفظ والمزامنة المباشرة...</span>
-            ) : (
-              <span>{activeTab === 'quick' ? '⚡ إضافة سريعة وفورية' : 'حفظ الأغنية والكلمات المتزامنة'}</span>
-            )}
-          </button>
-        </form>
-      )}
+              <button
+                type="submit"
+                disabled={isUploading}
+                className="w-full py-3 bg-[#1DB954] text-black font-extrabold text-sm rounded-full hover:bg-[#1ed760] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isUploading ? (
+                  <><Loader2 size={16} className="animate-spin" /> Uploading...</>
+                ) : (
+                  <><Upload size={16} /> Upload & Share with Everyone</>
+                )}
+              </button>
+
+              <p className="text-xs text-center text-[#b3b3b3]">
+                Uploaded songs appear in the shared library for all users 🌍
+              </p>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

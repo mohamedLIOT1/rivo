@@ -1,18 +1,22 @@
 /**
- * Central API & Backend Configuration (Dynamic Host Resolution)
+ * Liofy config — API URL resolution (safe for all environments)
  */
 
-const getHostUrl = () => {
+export const API_BASE_URL = (() => {
+  // 1. Vite env variable (set at build time for production)
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
   }
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:5000';
+  // 2. Same origin (when served from the Express server itself on Railway)
+  if (typeof window !== 'undefined') {
+    const { hostname, protocol, host } = window.location;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    return `${protocol}//${host}`;
   }
-  return 'https://liofy-production.up.railway.app';
-};
-
-export const API_BASE_URL = getHostUrl();
+  return '';
+})();
 
 export const getApiUrl = (endpoint) => {
   const base = API_BASE_URL.replace(/\/$/, '');

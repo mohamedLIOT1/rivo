@@ -1,21 +1,28 @@
 {
   "short_name": "Liofy",
-  "name": "Liofy - Music & Lyrics",
+  "name": "Liofy — Music for Everyone",
+  "description": "Stream, discover and share music with your friends",
   "icons": [
     {
-      "src": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=192",
+      "src": "https://ui-avatars.com/api/?name=L&background=1DB954&color=000000&size=192&bold=true&font-size=0.7&format=png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=512",
+      "src": "https://ui-avatars.com/api/?name=L&background=1DB954&color=000000&size=512&bold=true&font-size=0.7&format=png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/",
-  "background_color": "#121212",
-  "theme_color": "#121212",
+  "scope": "/",
+  "background_color": "#000000",
+  "theme_color": "#1DB954",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "portrait-primary",
+  "categories": ["music", "entertainment"],
+  "screenshots": [],
+  "lang": "ar"
 }

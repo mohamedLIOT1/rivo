@@ -1,227 +1,187 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Mail, ShieldCheck, LogIn, UserPlus, Camera, Upload } from 'lucide-react';
-
+import { X, User, Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Camera, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { useUser } from '../context/UserContext';
 
-export default function AuthModal({ isOpen, onClose, currentUser, onLogin, onLogout }) {
-  const [isSignup, setIsSignup] = useState(false);
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+export default function AuthModal({ isOpen, onClose }) {
+  const { currentUser, login, logout } = useUser();
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [name, setName]         = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [avatar, setAvatar] = useState(currentUser?.avatar || '');
+  const [showPass, setShowPass] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError]       = useState('');
 
   if (!isOpen) return null;
 
-  const defaultAvatarSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100" height="100" fill="%231DB954"/><circle cx="50" cy="35" r="18" fill="%23000"/><path d="M20,85 C20,60 35,55 50,55 C65,55 80,60 80,85 Z" fill="%23000"/></svg>`;
-
-  const handleAvatarUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatar(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!navigator.onLine) {
-      alert('Network disconnected! Please connect to the internet to sign up / log in to your account.');
-      return;
-    }
-
-    if (!email || !password) return;
-
-    const userData = {
-      id: currentUser?.id || `user-${Date.now()}`,
-      name: name || currentUser?.name || email.split('@')[0],
-      email,
-      password,
-      avatar: avatar || currentUser?.avatar || defaultAvatarSvg,
-      isPremium: true,
-      tasteProfile: ['Pop', 'Electronic', 'Arab Pop']
-    };
-
-    // Sync account to Railway MongoDB Atlas Database with JWT Token Security
+    if (!email || !password) { setError('Email and password required'); return; }
+    setIsLoading(true);
+    setError('');
     try {
-      const endpoint = isSignup ? '/api/auth/register' : '/api/auth/login';
-      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
+      const body = mode === 'register' ? { name, email, password } : { email, password };
+      const res  = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success && data.user) {
-        userData.id = data.user._id || userData.id;
-        if (data.token) {
-          localStorage.setItem('liofy_jwt_token', data.token);
-        }
-      } else if (data.error) {
-        alert(data.error);
-        return;
-      }
-    } catch(err) {
-      console.warn('DB auth status:', err);
+      if (!data.success) { setError(data.error || 'Something went wrong'); return; }
+      login(data.user, data.token);
+      onClose();
+    } catch {
+      setError('Network error. Please try again.');
     }
+    setIsLoading(false);
+  };
 
-    onLogin(userData);
+  const handleLogout = () => {
+    logout();
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="bg-[#181818] border border-zinc-800 rounded-3xl max-w-sm w-full p-6 md:p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-full bg-[#1DB954] text-black flex items-center justify-center font-black">
-              <User size={20} />
+    <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center">
+              <User size={16} className="text-black" />
             </div>
-            <h3 className="text-lg font-bold text-white">{currentUser ? 'Your Profile' : (isSignup ? 'Create Account' : 'Sign In')}</h3>
+            <h2 className="text-base font-extrabold text-white">
+              {currentUser ? 'My Account' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            </h2>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white rounded-full">
-            <X size={20} />
+          <button onClick={onClose} className="p-1.5 text-[#b3b3b3] hover:text-white rounded-full hover:bg-white/10 transition-all">
+            <X size={18} />
           </button>
         </div>
 
-        {currentUser ? (
-          <div className="py-6 flex flex-col items-center text-center gap-4">
-            {/* Editable Profile Picture */}
-            <div className="relative group">
-              <img 
-                src={avatar || currentUser.avatar || defaultAvatarSvg} 
-                alt={currentUser.name} 
-                className="w-24 h-24 rounded-full object-cover shadow-2xl border-4 border-[#1DB954]" 
-              />
-              <label className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-                <Camera size={22} />
-                <span className="text-[10px] font-bold mt-1">Change</span>
-                <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-              </label>
-            </div>
+        <div className="p-5">
 
-            <div>
-              <h4 className="text-xl font-extrabold text-white">{currentUser.name}</h4>
-              <p className="text-xs text-zinc-400 mt-0.5">{currentUser.email}</p>
-            </div>
+          {/* ── Logged In View ── */}
+          {currentUser ? (
+            <div className="flex flex-col items-center gap-4 py-2">
+              {/* Avatar */}
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#1DB954] shadow-xl">
+                  {currentUser.avatar ? (
+                    <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#1DB954] to-[#169c46] flex items-center justify-center text-black text-3xl font-black">
+                      {(currentUser.name || currentUser.email)?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-            <div className="w-full bg-gradient-to-r from-emerald-950 to-zinc-900 p-3 rounded-2xl border border-emerald-500/30 flex items-center justify-center gap-2 text-emerald-400 text-xs font-black">
-              <ShieldCheck size={16} />
-              <span>Premium Plan Active</span>
-            </div>
+              <div className="text-center">
+                <p className="text-xl font-extrabold text-white">{currentUser.name}</p>
+                <p className="text-sm text-[#b3b3b3] mt-0.5">{currentUser.email}</p>
+              </div>
 
-            <div className="w-full flex gap-2">
-              <button
-                onClick={async () => {
-                  const newAvatar = avatar || currentUser.avatar;
-                  const updatedUser = { ...currentUser, avatar: newAvatar };
-                  try {
-                    const token = localStorage.getItem('liofy_jwt_token');
-                    await fetch(`${API_BASE_URL}/api/user/update-profile`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                      },
-                      body: JSON.stringify(updatedUser)
-                    });
-                  } catch (err) {}
-                  onLogin(updatedUser);
-                  alert('Profile picture saved & synced across all devices!');
-                }}
-                className="flex-1 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-xl transition-colors"
+              <div 
+                className="w-full text-center text-xs font-bold py-2 px-4 rounded-full"
+                style={{ background: '#1DB95420', color: '#1DB954', border: '1px solid #1DB95440' }}
               >
-                Save Photo
-              </button>
+                ✓ Synced across all devices
+              </div>
+
               <button
-                onClick={() => {
-                  localStorage.removeItem('liofy_jwt_token');
-                  onLogout();
-                  onClose();
-                }}
-                className="py-3 px-4 bg-red-600/20 hover:bg-red-600/40 text-red-400 font-extrabold text-xs rounded-xl border border-red-500/30 transition-colors"
+                onClick={handleLogout}
+                className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-bold text-red-400 border border-red-400/30 rounded-full hover:bg-red-400/10 transition-all"
               >
+                <LogOut size={16} />
                 Sign Out
               </button>
             </div>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 my-4">
-            {/* Signup Profile Picture Picker */}
-            {isSignup && (
-              <div className="flex flex-col items-center gap-2">
-                <label className="relative group cursor-pointer">
-                  <div className="w-20 h-20 rounded-full bg-zinc-900 border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center text-zinc-400 group-hover:border-[#1DB954] transition-colors overflow-hidden">
-                    {avatar ? (
-                      <img src={avatar} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        <Upload size={20} />
-                        <span className="text-[9px] font-bold mt-1">Add Photo</span>
-                      </>
-                    )}
-                  </div>
-                  <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
-                </label>
-              </div>
-            )}
 
-            {isSignup && (
+          ) : (
+
+            /* ── Auth Form ── */
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              {error && (
+                <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-sm text-center">
+                  {error}
+                </div>
+              )}
+
+              {mode === 'register' && (
+                <div>
+                  <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">Your Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g. Mohamed"
+                    className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                  />
+                </div>
+              )}
+
               <div>
-                <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Your Name</label>
+                <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">Email</label>
                 <input
-                  type="text"
-                  placeholder="e.g. Mohamed"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
                 />
               </div>
-            )}
 
-            <div>
-              <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Email Address</label>
-              <input
-                type="email"
-                placeholder="name@domain.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-              />
-            </div>
+              <div>
+                <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 pr-10 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(p => !p)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#b3b3b3] hover:text-white"
+                  >
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
 
-            <div>
-              <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954]"
-              />
-            </div>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-3 mt-2 bg-[#1DB954] text-black font-extrabold text-sm rounded-full hover:bg-[#1ed760] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {isLoading
+                  ? <Loader2 size={16} className="animate-spin" />
+                  : mode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />
+                }
+                {isLoading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              </button>
 
-            <button
-              type="submit"
-              className="w-full py-3.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-xl transition-all shadow-xl text-sm mt-2 flex items-center justify-center gap-2"
-            >
-              {isSignup ? <UserPlus size={18} /> : <LogIn size={18} />}
-              <span>{isSignup ? 'Sign Up' : 'Sign In'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsSignup(!isSignup)}
-              className="text-xs text-zinc-400 hover:text-white font-bold text-center mt-2"
-            >
-              {isSignup ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-            </button>
-          </form>
-        )}
+              <button
+                type="button"
+                onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
+                className="text-sm text-[#b3b3b3] hover:text-white text-center mt-1 font-medium"
+              >
+                {mode === 'login'
+                  ? "Don't have an account? Sign up"
+                  : 'Already have an account? Sign in'
+                }
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

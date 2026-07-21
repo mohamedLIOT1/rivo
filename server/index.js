@@ -1,911 +1,661 @@
 /**
- * Liofy Backend API Server (Node.js + Express + Mongoose + Socket.io)
- * Production-Grade Security & Performance Hardened Architecture
+ * Liofy Backend API Server — Full Rebuild
+ * ✅ Real user accounts with cross-device sync
+ * ✅ Global shared song library (all users see all songs)
+ * ✅ File upload (MP3 + cover) stored as base64 in MongoDB
+ * ✅ Per-user liked songs & playlists
+ * ✅ YouTube + SoundCloud search
+ * ✅ Offline support via Service Worker
+ * ❌ Removed: Jam, Blend, AI Mixes
  */
 
 const express = require('express');
 const http = require('http');
-const { Server } = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
 
 try {
   require('dotenv').config({ path: path.join(__dirname, '../.env') });
-} catch (e) {
-  // Environment variables injected directly by cloud provider (e.g. Railway / Docker)
-}
+} catch (e) {}
 
 const app = express();
 app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 // Serve Vite production build statically
 app.use(express.static(path.join(__dirname, '../dist')));
 
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
-});
 
-const { Readable } = require('stream');
+const JWT_SECRET = process.env.JWT_SECRET || 'liofy_secure_key_2025';
+const MONGO_URI = process.env.MONGO_URI || '';
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
+const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || '';
 
-// Secrets & Environment Variables (Safely read from process.env)
-const JWT_SECRET = process.env.JWT_SECRET || 'liofy_spotify_grade_secure_jwt_key_98374291847';
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://mohamedmustafat79_db_user:iFwmA2Yo9Atu04ph@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority&appName=Cluster0';
-const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || 'emAJdGEj1mm9yjoCD2jkixmgqrGIyfpi';
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs';
+// ══════════════════════════════════════════
+//  MongoDB Schemas
+// ══════════════════════════════════════════
 
-// Rate Limiter Memory Map (Prevents Brute-force & DoS Attacks)
-const rateLimitMap = new Map();
-function rateLimiter(maxRequests = 15, windowMs = 60000) {
-  return (req, res, next) => {
-    const ip = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
-    const now = Date.now();
-    const record = rateLimitMap.get(ip) || { count: 0, resetTime: now + windowMs };
-
-    if (now > record.resetTime) {
-      record.count = 1;
-      record.resetTime = now + windowMs;
-    } else {
-      record.count += 1;
-    }
-
-    rateLimitMap.set(ip, record);
-
-    if (record.count > maxRequests) {
-      return res.status(429).json({ error: 'Too many requests. Please try again later.' });
-    }
-    next();
-  };
-}
-
-// In-Memory Resilient Cache Store (Bounded size to prevent RAM Leaks)
-const MAX_IN_MEMORY_TRACKS = 200;
-const inMemoryStore = {
-  tracks: [],
-  playlists: [],
-  users: new Map()
-};
-
-function pushToInMemoryTracks(track) {
-  inMemoryStore.tracks.unshift(track);
-  if (inMemoryStore.tracks.length > MAX_IN_MEMORY_TRACKS) {
-    inMemoryStore.tracks.pop();
-  }
-}
-
-// ==========================================
-// 1. Mongoose MongoDB Connection Controller
-// ==========================================
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ Connected to MongoDB Atlas via Mongoose successfully!'))
-  .catch((err) => {
-    console.log('ℹ️ Notice: MongoDB Atlas authentication sync in progress. Running in resilient mode.', err.message);
-  });
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch(err => console.log('⚠️ MongoDB error:', err.message));
 
-// Track Schema for global friend sharing
+// Track Schema — global library shared by all users
 const TrackSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  artist: { type: String, required: true },
-  album: { type: String, default: 'Single' },
-  cover: { type: String, default: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600' },
-  audioUrl: { type: String, default: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3' },
-  duration: { type: Number, default: 210 },
-  genre: { type: String, default: 'Pop' },
-  source: { type: String, default: 'Liofy' },
-  userEmail: { type: String, default: '' },
-  bpm: { type: Number, default: 95 },
-  key: { type: String, default: '2A' },
-  transition: { type: String, default: 'Blend' },
-  lyrics: [{ time: Number, text: String }]
+  title:      { type: String, required: true },
+  artist:     { type: String, required: true },
+  album:      { type: String, default: 'Single' },
+  cover:      { type: String, default: '' },       // URL or base64
+  audioUrl:   { type: String, default: '' },       // URL or base64
+  duration:   { type: Number, default: 210 },
+  genre:      { type: String, default: 'Pop' },
+  source:     { type: String, default: 'Upload' }, // 'Upload' | 'YouTube' | 'SoundCloud'
+  addedBy:    { type: String, default: '' },       // user email who added it
+  lyrics:     [{ time: Number, text: String }],
+  color:      { type: String, default: '#1DB954' },
 }, { timestamps: true, strict: false });
 
-TrackSchema.index({ title: 'text', artist: 'text', genre: 1 });
-TrackSchema.index({ createdAt: -1 });
+TrackSchema.index({ title: 'text', artist: 'text' });
 
-// User Schema with Password Hashing & JWT Auth Helper
+// User Schema
 const UserSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true, index: true },
-  password: { type: String, required: true },
-  avatar: { type: String, default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80' },
-  isPremium: { type: Boolean, default: true },
-  userTracks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Track' }],
-  userPlaylists: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Playlist' }],
-  topGenres: [{ type: String }],
-  topArtistIds: [{ type: String }],
-  likedTrackIds: [{ type: String }]
-}, { timestamps: true, strict: false });
-
-// Playlist Schema
-const PlaylistSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  description: { type: String },
-  cover: { type: String },
-  ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  trackIds: [{ type: String }],
-  isBlend: { type: Boolean, default: false },
-  tasteMatchScore: { type: Number, default: 100 }
+  name:           { type: String, required: true },
+  email:          { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password:       { type: String, required: true },
+  avatar:         { type: String, default: '' },
+  likedTrackIds:  [{ type: String }],              // IDs of liked tracks
+  playlists:      [{                               // user's own playlists
+    id:           String,
+    name:         String,
+    description:  String,
+    cover:        String,
+    trackIds:     [String],
+    isLikedSongs: Boolean,
+    createdAt:    { type: Date, default: Date.now }
+  }],
 }, { timestamps: true });
 
 const Track = mongoose.model('Track', TrackSchema);
-const User = mongoose.model('User', UserSchema);
-const Playlist = mongoose.model('Playlist', PlaylistSchema);
+const User  = mongoose.model('User', UserSchema);
 
-// JWT Middleware helper
-function generateToken(user) {
+// ══════════════════════════════════════════
+//  Auth Helpers
+// ══════════════════════════════════════════
+
+function makeToken(user) {
   return jwt.sign(
     { id: user._id || user.id, email: user.email, name: user.name },
     JWT_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn: '90d' }
   );
 }
 
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
-    req.user = decoded;
+function authMiddleware(req, res, next) {
+  const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
+  if (!token) return res.status(401).json({ error: 'Token required' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
     next();
-  });
-}
-
-// Optional Auth middleware (populates req.user if token present)
-function optionalAuth(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (token) {
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-      if (!err) req.user = decoded;
-      next();
-    });
-  } else {
-    next();
+  } catch {
+    res.status(403).json({ error: 'Invalid token' });
   }
 }
 
-// CORS Resilient Audio Proxy Streamer (Direct Piping with Automatic Fallback for Expired Links)
+function optionalAuth(req, res, next) {
+  const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
+  if (token) {
+    try { req.user = jwt.verify(token, JWT_SECRET); } catch {}
+  }
+  next();
+}
+
+// Multer — memory storage for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
+});
+
+// ══════════════════════════════════════════
+//  1. AUTH ENDPOINTS
+// ══════════════════════════════════════════
+
+// Register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    const existing = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existing) return res.status(400).json({ error: 'This email is already registered' });
+
+    const hashed = await bcrypt.hash(password, 12);
+    const likedPlaylist = {
+      id: `liked-${Date.now()}`,
+      name: 'Liked Songs',
+      description: 'Songs you liked',
+      cover: '',
+      trackIds: [],
+      isLikedSongs: true,
+    };
+
+    const user = await new User({
+      name: name || email.split('@')[0],
+      email: email.toLowerCase().trim(),
+      password: hashed,
+      avatar: '',
+      likedTrackIds: [],
+      playlists: [likedPlaylist],
+    }).save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    const token = makeToken(userObj);
+
+    res.json({ success: true, user: userObj, token });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) return res.status(401).json({ error: 'No account found with this email' });
+
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) return res.status(401).json({ error: 'Wrong password' });
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    const token = makeToken(userObj);
+
+    res.json({ success: true, user: userObj, token });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get my profile + sync data
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ success: true, user });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Update avatar / name
+app.post('/api/auth/update-profile', authMiddleware, async (req, res) => {
+  try {
+    const { name, avatar } = req.body;
+    const updates = {};
+    if (name)   updates.name   = name;
+    if (avatar) updates.avatar = avatar;
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updates },
+      { new: true }
+    ).select('-password');
+
+    const token = makeToken(user.toObject());
+    res.json({ success: true, user, token });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════
+//  2. GLOBAL TRACKS (Shared Library)
+// ══════════════════════════════════════════
+
+// Get all tracks (shared library — everyone sees all songs)
+app.get('/api/tracks', optionalAuth, async (req, res) => {
+  try {
+    const tracks = await Track.find().sort({ createdAt: -1 }).limit(500).lean();
+    const formatted = tracks.map(t => ({
+      id:       String(t._id),
+      title:    t.title,
+      artist:   t.artist,
+      album:    t.album,
+      cover:    t.cover,
+      audioUrl: t.audioUrl,
+      duration: t.duration,
+      genre:    t.genre,
+      source:   t.source,
+      addedBy:  t.addedBy,
+      lyrics:   t.lyrics || [],
+      color:    t.color || '#1DB954',
+    }));
+    res.json({ success: true, tracks: formatted });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add a track to global library
+app.post('/api/tracks/add', optionalAuth, async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.title || !data.artist) {
+      return res.status(400).json({ error: 'Title and artist required' });
+    }
+    const track = await new Track({
+      ...data,
+      addedBy: req.user?.email || 'anonymous',
+    }).save();
+
+    res.json({ success: true, track: { ...track.toObject(), id: String(track._id) } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete a track (only the one who added it, or later: admin)
+app.delete('/api/tracks/:id', authMiddleware, async (req, res) => {
+  try {
+    const track = await Track.findById(req.params.id);
+    if (!track) return res.status(404).json({ error: 'Track not found' });
+    if (track.addedBy !== req.user.email) {
+      return res.status(403).json({ error: 'Only the uploader can delete this track' });
+    }
+    await Track.findByIdAndDelete(req.params.id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════
+//  3. FILE UPLOAD — MP3 + Cover → base64 → MongoDB
+// ══════════════════════════════════════════
+
+// Upload audio file
+app.post('/api/upload/audio', authMiddleware, upload.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    res.json({ success: true, url: base64 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Upload cover image
+app.post('/api/upload/cover', authMiddleware, upload.single('cover'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
+    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    res.json({ success: true, url: base64 });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════
+//  4. USER PLAYLISTS (per-user)
+// ══════════════════════════════════════════
+
+// Get my playlists
+app.get('/api/playlists', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('playlists likedTrackIds');
+    res.json({ success: true, playlists: user.playlists || [], likedTrackIds: user.likedTrackIds || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Create playlist
+app.post('/api/playlists/create', authMiddleware, async (req, res) => {
+  try {
+    const { name, description, cover } = req.body;
+    const newPl = {
+      id: `pl-${Date.now()}`,
+      name,
+      description: description || '',
+      cover: cover || '',
+      trackIds: [],
+      isLikedSongs: false,
+    };
+    await User.findByIdAndUpdate(req.user.id, { $push: { playlists: newPl } });
+    res.json({ success: true, playlist: newPl });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Add track to playlist
+app.post('/api/playlists/:id/add-track', authMiddleware, async (req, res) => {
+  try {
+    const { trackId } = req.body;
+    await User.findOneAndUpdate(
+      { _id: req.user.id, 'playlists.id': req.params.id },
+      { $addToSet: { 'playlists.$.trackIds': trackId } }
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Remove track from playlist
+app.post('/api/playlists/:id/remove-track', authMiddleware, async (req, res) => {
+  try {
+    const { trackId } = req.body;
+    await User.findOneAndUpdate(
+      { _id: req.user.id, 'playlists.id': req.params.id },
+      { $pull: { 'playlists.$.trackIds': trackId } }
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Delete playlist
+app.delete('/api/playlists/:id', authMiddleware, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user.id, {
+      $pull: { playlists: { id: req.params.id } }
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════
+//  5. LIKED SONGS (per-user)
+// ══════════════════════════════════════════
+
+// Toggle like
+app.post('/api/tracks/:id/like', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('likedTrackIds playlists');
+    const trackId = req.params.id;
+    const isLiked = user.likedTrackIds.includes(trackId);
+
+    if (isLiked) {
+      // Unlike
+      await User.findByIdAndUpdate(req.user.id, {
+        $pull: { likedTrackIds: trackId, 'playlists.$[pl].trackIds': trackId }
+      }, { arrayFilters: [{ 'pl.isLikedSongs': true }] });
+    } else {
+      // Like
+      await User.findByIdAndUpdate(req.user.id, {
+        $addToSet: { likedTrackIds: trackId }
+      });
+      // Also add to liked songs playlist
+      await User.findOneAndUpdate(
+        { _id: req.user.id, 'playlists.isLikedSongs': true },
+        { $addToSet: { 'playlists.$.trackIds': trackId } }
+      );
+    }
+
+    res.json({ success: true, liked: !isLiked });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ══════════════════════════════════════════
+//  6. AUDIO PROXY (for CORS issues)
+// ══════════════════════════════════════════
+
+const { Readable } = require('stream');
+
 app.get('/api/proxy-audio', async (req, res) => {
   try {
     const { url } = req.query;
     if (!url || !url.startsWith('http')) {
-      return res.status(400).json({ error: 'Valid audio URL required' });
+      return res.status(400).json({ error: 'Valid URL required' });
     }
-
-    let audioRes = null;
-    try {
-      audioRes = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-      });
-    } catch (e) {}
-
-    if (!audioRes || !audioRes.ok) {
-      console.warn('Proxy audio source link expired or failed, serving reliable audio stream:', url);
-      const fallbackUrl = 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
-      const fbRes = await fetch(fallbackUrl);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Headers', '*');
-      res.setHeader('Content-Type', 'audio/mpeg');
-      if (fbRes.body && typeof Readable.fromWeb === 'function') {
-        return Readable.fromWeb(fbRes.body).pipe(res);
-      } else {
-        const buf = await fbRes.arrayBuffer();
-        return res.send(Buffer.from(buf));
-      }
-    }
+    const audioRes = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (!audioRes.ok) return res.status(502).json({ error: 'Upstream error' });
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Content-Type', audioRes.headers.get('content-type') || 'audio/mpeg');
-
     if (audioRes.headers.get('content-length')) {
       res.setHeader('Content-Length', audioRes.headers.get('content-length'));
     }
 
-    if (audioRes.body) {
-      if (typeof Readable.fromWeb === 'function') {
-        Readable.fromWeb(audioRes.body).pipe(res);
-      } else {
-        const arrayBuffer = await audioRes.arrayBuffer();
-        res.send(Buffer.from(arrayBuffer));
-      }
+    if (typeof Readable.fromWeb === 'function') {
+      Readable.fromWeb(audioRes.body).pipe(res);
     } else {
-      res.status(500).json({ error: 'No audio body stream available' });
+      const buf = await audioRes.arrayBuffer();
+      res.send(Buffer.from(buf));
     }
-  } catch (err) {
-    console.error('Audio proxy stream error:', err.message);
-    res.status(500).json({ error: 'Proxy stream error' });
-  }
-});
-
-// Endpoint to fetch global shared tracks across all devices
-app.get('/api/tracks', async (req, res) => {
-  try {
-    let mongoTracks = [];
-    if (mongoose.connection.readyState === 1) {
-      mongoTracks = await Track.find().sort({ createdAt: -1 }).limit(100).lean();
-    }
-    const allTracksMap = new Map();
-    [...inMemoryStore.tracks, ...mongoTracks].forEach(t => {
-      const id = String(t.id || t._id);
-      if (!allTracksMap.has(id)) allTracksMap.set(id, t);
-    });
-
-    res.json({ success: true, tracks: Array.from(allTracksMap.values()) });
-  } catch(e) {
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Endpoint to upload a track and broadcast to all connected devices live
-app.post('/api/tracks/add', optionalAuth, async (req, res) => {
-  try {
-    const trackData = req.body;
-    if (!trackData.title || !trackData.artist) {
-      return res.status(400).json({ error: 'Title and artist required' });
-    }
-    if (!trackData.audioUrl) {
-      trackData.audioUrl = 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
-    }
-    if (!trackData.cover) {
-      trackData.cover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
-    }
+// ══════════════════════════════════════════
+//  7. SEARCH — YouTube + SoundCloud
+// ══════════════════════════════════════════
 
-    let savedTrack = { ...trackData, id: trackData.id || `track-${Date.now()}` };
-    pushToInMemoryTracks(savedTrack);
-
-    if (mongoose.connection.readyState === 1) {
-      try {
-        const newTrack = new Track(trackData);
-        const doc = await newTrack.save();
-        savedTrack = doc.toObject();
-        savedTrack.id = String(savedTrack._id);
-      } catch(e) {}
-    }
-
-    // Broadcast new track to all online devices live!
-    io.emit('track:broadcast_new', savedTrack);
-
-    res.json({ success: true, track: savedTrack });
-  } catch(e) {
-    console.error('Track add error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Endpoint to delete a track by ID
-app.delete('/api/tracks/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    inMemoryStore.tracks = inMemoryStore.tracks.filter(t => String(t.id || t._id) !== id);
-    if (mongoose.connection.readyState === 1) {
-      try {
-        await Track.deleteOne({ $or: [{ _id: id }, { id: id }] });
-      } catch(err) {}
-    }
-    io.emit('track:deleted', { id });
-    res.json({ success: true, id });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Endpoint to wipe all tracks completely (Requires Authentic User Token)
-app.post('/api/tracks/wipe-all', authenticateToken, async (req, res) => {
-  try {
-    inMemoryStore.tracks = [];
-    if (mongoose.connection.readyState === 1) {
-      try {
-        await Track.deleteMany({});
-      } catch(err) {}
-    }
-    io.emit('tracks:wiped');
-    res.json({ success: true });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// User Auth Endpoints (Register & Login with Rate Limiter, Bcrypt Password Hashing & JWT)
-app.post('/api/auth/register', rateLimiter(10, 60000), async (req, res) => {
-  try {
-    const { name, email, password, avatar } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
-    }
-    const cleanEmail = email.trim().toLowerCase();
-
-    // Check if user exists in Mongo
-    let existingUser = null;
-    if (mongoose.connection.readyState === 1) {
-      existingUser = await User.findOne({ email: cleanEmail });
-    } else {
-      existingUser = inMemoryStore.users.get(cleanEmail);
-    }
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'Account with this email already exists' });
-    }
-
-    // Hash password securely
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const userData = {
-      name: name || cleanEmail.split('@')[0],
-      email: cleanEmail,
-      password: hashedPassword,
-      avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
-      isPremium: true,
-      userTracks: [],
-      userPlaylists: []
-    };
-
-    let createdUser = userData;
-    if (mongoose.connection.readyState === 1) {
-      const newUser = new User(userData);
-      const savedDoc = await newUser.save();
-      createdUser = savedDoc.toObject();
-    } else {
-      inMemoryStore.users.set(cleanEmail, userData);
-    }
-
-    const { password: _, ...sanitizedUser } = createdUser;
-    const token = generateToken(sanitizedUser);
-
-    res.json({ success: true, user: sanitizedUser, token });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/auth/login', rateLimiter(10, 60000), async (req, res) => {
-  try {
-    const { email, password, avatar } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
-    }
-    const cleanEmail = email.trim().toLowerCase();
-
-    let user = null;
-    if (mongoose.connection.readyState === 1) {
-      user = await User.findOne({ email: cleanEmail });
-    } else {
-      user = inMemoryStore.users.get(cleanEmail);
-    }
-
-    if (!user) {
-      // Auto register for seamless UX if first time
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const userData = {
-        name: cleanEmail.split('@')[0],
-        email: cleanEmail,
-        password: hashedPassword,
-        avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
-        isPremium: true
-      };
-      if (mongoose.connection.readyState === 1) {
-        const newUser = new User(userData);
-        user = await newUser.save();
-      } else {
-        user = userData;
-        inMemoryStore.users.set(cleanEmail, user);
-      }
-    } else {
-      // Verify password
-      const isMatch = await bcrypt.compare(password, user.password).catch(() => false);
-      if (!isMatch && user.password !== password) {
-        return res.status(401).json({ error: 'Invalid credentials' });
-      }
-      if (!isMatch && user.password === password) {
-        // Upgrade legacy plaintext password to bcrypt hash on login
-        const newHashed = await bcrypt.hash(password, 10);
-        user.password = newHashed;
-        if (user.save) await user.save();
-      }
-    }
-
-    const userObj = user.toObject ? user.toObject() : { ...user };
-    delete userObj.password;
-    const token = generateToken(userObj);
-
-    res.json({ success: true, user: userObj, token });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Update Profile & Avatar synced across all devices
-app.post('/api/user/update-profile', optionalAuth, async (req, res) => {
-  try {
-    const { email, avatar, name } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
-
-    const cleanEmail = email.trim().toLowerCase();
-    let updatedUser = null;
-
-    if (mongoose.connection.readyState === 1) {
-      updatedUser = await User.findOneAndUpdate(
-        { email: cleanEmail },
-        { $set: { avatar, name } },
-        { new: true }
-      ).select('-password');
-    }
-
-    if (!updatedUser) {
-      const existing = inMemoryStore.users.get(cleanEmail) || { email: cleanEmail };
-      updatedUser = { ...existing, avatar: avatar || existing.avatar, name: name || existing.name };
-      inMemoryStore.users.set(cleanEmail, updatedUser);
-    }
-
-    io.emit('user:profile_updated', { email: cleanEmail, avatar: updatedUser.avatar, name: updatedUser.name });
-    res.json({ success: true, user: updatedUser });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Save Full User Account State (Tracks, Playlists, Avatar)
-app.post('/api/user/save-state', optionalAuth, async (req, res) => {
-  try {
-    const { email, avatar, name, tracks, playlists } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email required' });
-
-    const cleanEmail = email.trim().toLowerCase();
-
-    if (Array.isArray(tracks)) {
-      tracks.forEach(t => {
-        if (t && (t.title || t.artist)) {
-          inMemoryStore.tracks.unshift(t);
-        }
-      });
-    }
-
-    let updatedUser = null;
-    if (mongoose.connection.readyState === 1) {
-      updatedUser = await User.findOneAndUpdate(
-        { email: cleanEmail },
-        { $set: { avatar, name, userTracks: tracks, userPlaylists: playlists } },
-        { new: true }
-      ).select('-password');
-    }
-
-    if (!updatedUser) {
-      const existing = inMemoryStore.users.get(cleanEmail) || { email: cleanEmail };
-      updatedUser = { ...existing, avatar, name, userTracks: tracks, userPlaylists: playlists };
-      inMemoryStore.users.set(cleanEmail, updatedUser);
-    }
-
-    io.emit('user:state_updated', { email: cleanEmail, user: updatedUser });
-    res.json({ success: true, user: updatedUser });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Full Real-time Sync Endpoint for User Profile & Global Songs
-app.get('/api/user/sync', optionalAuth, async (req, res) => {
-  try {
-    const { email } = req.query;
-    let user = null;
-    if (email) {
-      const cleanEmail = email.trim().toLowerCase();
-      if (mongoose.connection.readyState === 1) {
-        user = await User.findOne({ email: cleanEmail }).select('-password').lean();
-      } else {
-        user = inMemoryStore.users.get(cleanEmail) || null;
-      }
-    }
-    
-    let mongoTracks = [];
-    if (mongoose.connection.readyState === 1) {
-      mongoTracks = await Track.find().sort({ createdAt: -1 }).lean();
-    }
-
-    const userTracks = user && Array.isArray(user.userTracks) ? user.userTracks : [];
-    const allTracksMap = new Map();
-    [...inMemoryStore.tracks, ...mongoTracks, ...userTracks].forEach(t => {
-      if (!t) return;
-      const id = String(t.id || t._id || t.title);
-      if (!allTracksMap.has(id)) allTracksMap.set(id, t);
-    });
-
-    res.json({ 
-      success: true, 
-      user, 
-      tracks: Array.from(allTracksMap.values()),
-      playlists: inMemoryStore.playlists
-    });
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Helper function to parse LRC format karaoke lyrics
-function parseLrcLyrics(lrcText) {
-  if (!lrcText || typeof lrcText !== 'string') return null;
-  const lines = lrcText.split('\n');
-  const result = [];
-  const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
-
-  for (const line of lines) {
-    const match = line.match(timeRegex);
-    if (match) {
-      const minutes = parseInt(match[1], 10);
-      const seconds = parseInt(match[2], 10);
-      const totalSeconds = minutes * 60 + seconds;
-      const text = match[4].trim();
-      if (text) {
-        result.push({ time: totalSeconds, text });
-      }
-    }
-  }
-  return result.length > 0 ? result : null;
-}
-
-// Bounded Search Cache (Max 100 items with LRU TTL eviction to prevent RAM leaks)
 const searchCache = new Map();
-const MAX_CACHE_SIZE = 100;
-const CACHE_TTL_MS = 300000; // 5 minutes
 
-function getCachedSearch(key) {
-  if (!searchCache.has(key)) return null;
-  const cached = searchCache.get(key);
-  if (Date.now() - cached.time > CACHE_TTL_MS) {
-    searchCache.delete(key);
-    return null;
-  }
-  return cached.tracks;
+function parseLrc(lrcText) {
+  if (!lrcText) return [];
+  return lrcText.split('\n').reduce((acc, line) => {
+    const m = line.match(/\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/);
+    if (m) {
+      const time = parseInt(m[1]) * 60 + parseInt(m[2]);
+      const text = m[4].trim();
+      if (text) acc.push({ time, text });
+    }
+    return acc;
+  }, []);
 }
 
-function setCachedSearch(key, tracks) {
-  if (searchCache.size >= MAX_CACHE_SIZE) {
-    // Evict oldest entry
-    const oldestKey = searchCache.keys().next().value;
-    if (oldestKey) searchCache.delete(oldestKey);
+async function searchYouTube(query) {
+  if (YOUTUBE_API_KEY) {
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items?.length) {
+          return data.items.map(item => ({
+            id: `yt-${item.id.videoId}`,
+            videoId: item.id.videoId,
+            title: item.snippet?.title || 'YouTube Track',
+            artist: item.snippet?.channelTitle || 'YouTube',
+            cover: item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
+            duration: 210,
+            source: 'YouTube',
+          }));
+        }
+      }
+    } catch {}
   }
-  searchCache.set(key, { time: Date.now(), tracks });
-}
 
-// YouTube scraper with strict timeout (never blocks response)
-async function scrapeYouTube(query, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Fallback: scrape
   try {
     const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8'
-      }
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US' }
     });
-    clearTimeout(timer);
-    if (!res.ok) return [];
     const html = await res.text();
-    let dataStr = null;
-    const m1 = html.match(/ytInitialData\s*=\s*({.*?});<\/script>/s);
-    if (m1) dataStr = m1[1];
-    else {
-      const m2 = html.match(/var ytInitialData\s*=\s*({.*?});/s);
-      if (m2) dataStr = m2[1];
-    }
-    if (!dataStr) return [];
-    const data = JSON.parse(dataStr);
-    const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-
+    const m = html.match(/ytInitialData\s*=\s*({.*?});<\/script>/s)
+           || html.match(/var ytInitialData\s*=\s*({.*?});/s);
+    if (!m) return [];
+    const data = JSON.parse(m[1]);
+    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
     const items = [];
-    for (const section of contents) {
-      const itemSection = section.itemSectionRenderer?.contents || [];
-      for (const item of itemSection) {
+    for (const s of sections) {
+      for (const item of (s.itemSectionRenderer?.contents || [])) {
         const v = item.videoRenderer;
-        if (v && v.videoId) {
-          const durationText = v.lengthText?.simpleText || v.thumbnailOverlays?.find(o => o.thumbnailOverlayTimeStatusRenderer)?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText || '3:30';
-          const parts = durationText.split(':').map(Number);
-          let dur = parts.length === 2 ? parts[0] * 60 + parts[1] : parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : 210;
+        if (v?.videoId) {
+          const dur = (() => {
+            const t = v.lengthText?.simpleText || '3:30';
+            const p = t.split(':').map(Number);
+            return p.length === 2 ? p[0]*60+p[1] : 210;
+          })();
           items.push({
             id: `yt-${v.videoId}`,
             videoId: v.videoId,
-            title: v.title?.runs?.[0]?.text || v.title?.simpleText || 'YouTube Track',
-            artist: v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || 'YouTube Music',
+            title: v.title?.runs?.[0]?.text || 'YouTube',
+            artist: v.ownerText?.runs?.[0]?.text || 'YouTube',
             cover: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
             duration: dur,
-            source: 'YouTube'
+            source: 'YouTube',
           });
         }
       }
     }
     return items.slice(0, 10);
-  } catch (e) {
-    clearTimeout(timer);
-    return [];
-  }
+  } catch { return []; }
 }
 
-// YouTube API search (uses official Google API key if provided, or falls back to scraper)
-async function searchYouTube(query, timeoutMs) {
-  if (YOUTUBE_API_KEY) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`;
-      const res = await fetch(url, { signal: controller.signal });
-      clearTimeout(timer);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.items && Array.isArray(data.items)) {
-          return data.items.map(item => ({
-            id: `yt-${item.id.videoId}`,
-            videoId: item.id.videoId,
-            title: item.snippet?.title || 'YouTube Track',
-            artist: item.snippet?.channelTitle || 'YouTube Music',
-            cover: item.snippet?.thumbnails?.high?.url || item.snippet?.thumbnails?.medium?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
-            duration: 210,
-            source: 'YouTube'
-          }));
-        }
-      }
-    } catch (e) {}
-  }
-  return scrapeYouTube(query, timeoutMs);
-}
-
-// External Music Search API — SoundCloud + YouTube + Synced Lyrics
-app.get('/api/search/external', async (req, res) => {
+async function searchSoundCloud(query) {
+  if (!SC_CLIENT_ID) return [];
   try {
-    const { q } = req.query;
-    if (!q || !q.trim()) return res.json({ success: true, tracks: [] });
+    const res = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${SC_CLIENT_ID}&limit=10`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = [];
+    for (const item of (data.collection || [])) {
+      if ((item.duration || 0) < 35000) continue;
+      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+      if (!prog) continue;
+      try {
+        const sRes = await fetch(`${prog.url}?client_id=${SC_CLIENT_ID}`);
+        if (!sRes.ok) continue;
+        const sData = await sRes.json();
+        if (!sData.url) continue;
+        items.push({
+          id: `sc-${item.id}`,
+          title: item.title || 'SoundCloud',
+          artist: item.user?.username || 'SoundCloud',
+          cover: item.artwork_url?.replace('-large', '-t500x500') || '',
+          audioUrl: sData.url,
+          duration: Math.round((item.duration || 180000) / 1000),
+          source: 'SoundCloud',
+        });
+      } catch {}
+    }
+    return items;
+  } catch { return []; }
+}
 
-    const cleanQuery = q.trim();
-    const cacheKey = cleanQuery.toLowerCase();
+app.get('/api/search', optionalAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json({ success: true, tracks: [] });
 
-    // Check bounded cache
-    const cached = getCachedSearch(cacheKey);
-    if (cached) {
-      return res.json({ success: true, tracks: cached });
+    const cacheKey = q.toLowerCase();
+    if (searchCache.has(cacheKey)) {
+      const c = searchCache.get(cacheKey);
+      if (Date.now() - c.time < 300000) {
+        return res.json({ success: true, tracks: c.tracks });
+      }
     }
 
-    // Fetch ALL sources in parallel
-    const [scRes, lrcRes, ytResults] = await Promise.all([
-      fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(cleanQuery)}&client_id=${SC_CLIENT_ID}&limit=15`).catch(() => null),
-      fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanQuery)}`).catch(() => null),
-      searchYouTube(cleanQuery, 4000)
+    // Fetch from DB first (global library)
+    const dbTracks = await Track.find({
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { artist: { $regex: q, $options: 'i' } },
+      ]
+    }).limit(20).lean();
+
+    const dbFormatted = dbTracks.map(t => ({
+      id: String(t._id),
+      title: t.title, artist: t.artist, cover: t.cover,
+      audioUrl: t.audioUrl, duration: t.duration, source: t.source || 'Liofy',
+      inLibrary: true,
+    }));
+
+    // Search external in parallel
+    const [ytTracks, scTracks] = await Promise.all([
+      searchYouTube(q),
+      searchSoundCloud(q),
     ]);
 
-    const scData = scRes && scRes.ok ? await scRes.json() : { collection: [] };
-    const lrcTracks = lrcRes && lrcRes.ok ? await lrcRes.json() : [];
-
-    const findLyrics = (title, artist) => {
-      let matchedLrc = Array.isArray(lrcTracks) ? lrcTracks.find(l =>
-        l.trackName && title &&
-        (l.trackName.toLowerCase().includes(title.toLowerCase()) || title.toLowerCase().includes(l.trackName.toLowerCase()))
-      ) : null;
-
-      if (matchedLrc && matchedLrc.syncedLyrics) {
-        const parsed = parseLrcLyrics(matchedLrc.syncedLyrics);
-        if (parsed) return { lyrics: parsed, hasSynced: true };
-      }
-      return {
-        lyrics: [
-          { time: 0, text: `🎵 ${title} - ${artist}` },
-          { time: 5, text: `♪ Synced Lyrics & Full Music on Liofy ♪` }
-        ],
-        hasSynced: false
-      };
-    };
-
-    // Resolve SoundCloud streams (full tracks only, >35s)
-    const rawCollection = (scData.collection || []).filter(item => Math.round((item.duration || 0) / 1000) > 35);
-
-    const resolved = await Promise.all(
-      rawCollection.map(async (item) => {
-        const progressive = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-        if (!progressive) return null;
-        try {
-          const streamRes = await fetch(`${progressive.url}?client_id=${SC_CLIENT_ID}`);
-          if (!streamRes.ok) return null;
-          const streamData = await streamRes.json();
-          if (!streamData.url) return null;
-
-          const title = item.title || 'SoundCloud Track';
-          const artist = item.user?.username || 'SoundCloud Artist';
-          const { lyrics, hasSynced } = findLyrics(title, artist);
-
-          return {
-            id: `sc-${item.id}`,
-            title,
-            artist,
-            album: 'SoundCloud Single',
-            cover: item.artwork_url ? item.artwork_url.replace('-large', '-t500x500') : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-            audioUrl: streamData.url,
-            duration: Math.round((item.duration || 180000) / 1000),
-            genre: 'SoundCloud',
-            source: 'SoundCloud',
-            lyrics,
-            hasSynced
-          };
-        } catch (e) {
-          return null;
-        }
-      })
-    );
-
-    const scTracks = resolved.filter(Boolean);
-
-    // Process YouTube tracks with accurate audio stream resolution (no random mismatch fallback)
-    const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '');
-    const ytTracks = [];
-    const usedScIds = new Set();
-
-    for (const yt of ytResults) {
-      const ytNorm = normalize(yt.title);
-      let bestMatch = null;
-      for (const sc of scTracks) {
-        if (usedScIds.has(sc.id)) continue;
-        const scNorm = normalize(sc.title);
-        if (ytNorm.includes(scNorm) || scNorm.includes(ytNorm)) {
-          bestMatch = sc;
-          break;
-        }
-      }
-
-      let audioUrl = bestMatch ? bestMatch.audioUrl : null;
-      if (!audioUrl) {
-        try {
-          const cleanQ = `${yt.artist || ''} ${yt.title || ''}`.replace(/[()\[\]]/g, '').trim();
-          const specRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(cleanQ)}&client_id=${SC_CLIENT_ID}&limit=2`);
-          if (specRes.ok) {
-            const specData = await specRes.json();
-            const specItem = specData.collection?.[0];
-            const trans = specItem?.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-            if (trans) {
-              const streamRes = await fetch(`${trans.url}?client_id=${SC_CLIENT_ID}`);
-              if (streamRes.ok) {
-                const streamData = await streamRes.json();
-                if (streamData.url) audioUrl = streamData.url;
-              }
-            }
-          }
-        } catch (e) {}
-      }
-
-      // Safe fallback audio URL if no stream matching was found (never use an unrelated song's audio!)
-      if (!audioUrl) {
-        audioUrl = 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3';
-      }
-
-      if (bestMatch) usedScIds.add(bestMatch.id);
-
-      const { lyrics, hasSynced } = findLyrics(yt.title, yt.artist);
-      ytTracks.push({
-        ...yt,
-        album: 'YouTube Single',
-        audioUrl,
-        genre: 'YouTube',
-        lyrics,
-        hasSynced
-      });
-    }
-
-    const tracks = [...scTracks, ...ytTracks];
-
-    if (tracks.length > 0) {
-      setCachedSearch(cacheKey, tracks);
-    }
-
-    res.json({ success: true, tracks });
-  } catch (err) {
-    console.error('Search error:', err.message);
-    res.json({ success: true, tracks: [] });
-  }
-});
-
-// ==========================================
-// 2. Spotify Blend Taste Matching Algorithm
-// ==========================================
-function calculateBlendTasteMatch(userA, userB) {
-  const genresA = new Set(userA.topGenres || []);
-  const genresB = new Set(userB.topGenres || []);
-
-  const sharedGenres = [...genresA].filter(g => genresB.has(g));
-  const unionGenres = new Set([...genresA, ...genresB]);
-
-  const similarityIndex = unionGenres.size > 0 
-    ? (sharedGenres.length / unionGenres.size) 
-    : 0.85;
-
-  const matchPercentage = Math.round(80 + (similarityIndex * 19));
-  return matchPercentage;
-}
-
-// Blend API Endpoint
-app.post('/api/blend/create', optionalAuth, async (req, res) => {
-  try {
-    const { userAId, userBId, playlistName } = req.body;
-    
-    let userA = { topGenres: ['Pop', 'Electronic'], likedTrackIds: ['track-1', 'track-2'] };
-    let userB = { topGenres: ['Pop', 'Arab Pop'], likedTrackIds: ['track-3', 'track-5'] };
-
+    // Fetch lyrics for external tracks
+    let lrcData = [];
     try {
-      if (mongoose.connection.readyState === 1) {
-        userA = await User.findById(userAId) || userA;
-        userB = await User.findById(userBId) || userB;
-      }
-    } catch(e){}
+      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
+      if (lrcRes.ok) lrcData = await lrcRes.json();
+    } catch {}
 
-    const tasteMatchScore = calculateBlendTasteMatch(userA, userB);
-    const mergedTrackIds = Array.from(new Set([...userA.likedTrackIds, ...userB.likedTrackIds]));
-
-    const blendPlaylist = {
-      id: `blend-${Date.now()}`,
-      name: playlistName || `Blend with Friend`,
-      description: `${tasteMatchScore}% Taste Match • Shared Blend`,
-      cover: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-      trackIds: mergedTrackIds,
-      isBlend: true,
-      tasteMatchScore
+    const findLyrics = (title) => {
+      const match = lrcData.find(l => l.trackName?.toLowerCase().includes(title.toLowerCase()));
+      if (match?.syncedLyrics) return parseLrc(match.syncedLyrics);
+      return [];
     };
 
-    res.json({ success: true, blendPlaylist, tasteMatchScore });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const externalTracks = [...scTracks, ...ytTracks].map(t => ({
+      ...t,
+      lyrics: findLyrics(t.title),
+      inLibrary: false,
+    }));
+
+    const all = [...dbFormatted, ...externalTracks];
+    searchCache.set(cacheKey, { time: Date.now(), tracks: all });
+
+    res.json({ success: true, tracks: all });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ==========================================
-// 3. Socket.io Real-time Jam Session Engine
-// ==========================================
-const jamRooms = {};
+// ══════════════════════════════════════════
+//  8. FULL USER SYNC (login from any device)
+// ══════════════════════════════════════════
 
-io.on('connection', (socket) => {
-  console.log('⚡ Client connected to Jam Socket:', socket.id);
+app.get('/api/sync', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  socket.on('jam:join_room', ({ roomCode, user }) => {
-    socket.join(roomCode);
-    if (!jamRooms[roomCode]) {
-      jamRooms[roomCode] = {
-        code: roomCode,
-        hostId: socket.id,
-        currentTrackId: 'track-1',
-        isPlaying: false,
-        currentTime: 0,
-        members: []
-      };
-    }
+    const allTracks = await Track.find().sort({ createdAt: -1 }).limit(500).lean();
+    const formatted = allTracks.map(t => ({
+      id:       String(t._id),
+      title:    t.title,
+      artist:   t.artist,
+      album:    t.album,
+      cover:    t.cover,
+      audioUrl: t.audioUrl,
+      duration: t.duration,
+      genre:    t.genre,
+      source:   t.source,
+      addedBy:  t.addedBy,
+      lyrics:   t.lyrics || [],
+      color:    t.color || '#1DB954',
+      liked:    user.likedTrackIds.includes(String(t._id)),
+    }));
 
-    const member = { ...user, socketId: socket.id, isHost: jamRooms[roomCode].hostId === socket.id };
-    jamRooms[roomCode].members.push(member);
-
-    io.to(roomCode).emit('jam:room_updated', jamRooms[roomCode]);
-  });
-
-  socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrackId, currentTime }) => {
-    if (jamRooms[roomCode]) {
-      jamRooms[roomCode].isPlaying = isPlaying;
-      jamRooms[roomCode].currentTrackId = currentTrackId;
-      jamRooms[roomCode].currentTime = currentTime;
-
-      socket.to(roomCode).emit('jam:on_play_state_changed', {
-        isPlaying,
-        currentTrackId,
-        currentTime
-      });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
+    res.json({
+      success: true,
+      user,
+      tracks: formatted,
+      playlists: user.playlists || [],
+      likedTrackIds: user.likedTrackIds || [],
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// Fallback route to serve index.html for client-side routing
+// ══════════════════════════════════════════
+//  Fallback SPA Route
+// ══════════════════════════════════════════
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   res.sendFile(path.join(__dirname, '../dist/index.html'));
@@ -913,5 +663,5 @@ app.get('*', (req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Liofy Backend Server running securely on http://localhost:${PORT}`);
+  console.log(`🚀 Liofy Server running on port ${PORT}`);
 });
