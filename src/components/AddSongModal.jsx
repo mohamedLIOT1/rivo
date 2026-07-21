@@ -35,6 +35,8 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     if (!q) return;
     setIsSearching(true);
     setResults([]);
+
+    // 1. Try Backend Search Engine
     try {
       const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
@@ -45,26 +47,55 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
       }
     } catch (err) {}
 
-    // Fallback: iTunes direct client-side search
-    try {
-      const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=20`);
-      if (itunesRes.ok) {
-        const itunesData = await itunesRes.json();
-        if (itunesData.results && Array.isArray(itunesData.results)) {
-          const formatted = itunesData.results.map(item => ({
-            id: `itunes-${item.trackId}`,
-            title: item.trackName || 'Track',
-            artist: item.artistName || 'Artist',
-            album: item.collectionName || 'Single',
-            cover: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
-            audioUrl: item.previewUrl || '',
-            duration: Math.round((item.trackTimeMillis || 180000) / 1000),
-            source: 'iTunes',
-          }));
-          setResults(formatted);
+    // 2. Direct SoundCloud HD Full Track Search Fallback
+    const SOUNDCLOUD_CLIENT_IDS = [
+      'emAJdGEj1mm9yjoCD2jkixmgqrGIyfpi',
+      'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi',
+      '2t9mstKWWiYskyqsqfVJ5zZZsEyeTKYd',
+      '02a2b475b0870932a326622d992f9d85'
+    ];
+
+    for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
+      try {
+        const scRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(q)}&client_id=${clientId}&limit=15`);
+        if (!scRes.ok) continue;
+        const scData = await scRes.json();
+        if (scData && Array.isArray(scData.collection) && scData.collection.length > 0) {
+          const items = [];
+          for (const item of scData.collection) {
+            if ((item.duration || 0) < 30000) continue;
+            const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+            if (!prog) continue;
+
+            try {
+              const streamRes = await fetch(`${prog.url}?client_id=${clientId}`);
+              if (!streamRes.ok) continue;
+              const streamData = await streamRes.json();
+              if (!streamData.url) continue;
+
+              items.push({
+                id: `sc-${item.id}`,
+                title: item.title || q,
+                artist: item.user?.username || 'Artist',
+                album: 'Single',
+                cover: item.artwork_url
+                  ? item.artwork_url.replace('-large', '-t500x500')
+                  : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
+                audioUrl: streamData.url,
+                duration: Math.round((item.duration || 180000) / 1000),
+                source: 'SoundCloud',
+              });
+            } catch (err) {}
+          }
+
+          if (items.length > 0) {
+            setResults(items);
+            setIsSearching(false);
+            return;
+          }
         }
-      }
-    } catch (e) {}
+      } catch (err) {}
+    }
 
     setIsSearching(false);
   };

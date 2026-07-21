@@ -572,27 +572,6 @@ async function searchSoundCloud(query) {
   return [];
 }
 
-async function searchITunes(query) {
-  try {
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=15`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!data.results || !Array.isArray(data.results)) return [];
-    return data.results.map(item => ({
-      id: `itunes-${item.trackId}`,
-      title: item.trackName || 'Music Track',
-      artist: item.artistName || 'Artist',
-      album: item.collectionName || 'Single',
-      cover: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
-      audioUrl: item.previewUrl || '',
-      duration: Math.round((item.trackTimeMillis || 180000) / 1000),
-      genre: item.primaryGenreName || 'Pop',
-      source: 'iTunes',
-      isFullSong: false,
-    }));
-  } catch { return []; }
-}
-
 app.get('/api/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -622,11 +601,10 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       isFullSong: true,
     }));
 
-    // Search external in parallel (SoundCloud full songs first, YouTube, then iTunes)
-    const [scTracks, ytTracks, itunesTracks] = await Promise.all([
+    // Search external in parallel (SoundCloud full songs + YouTube)
+    const [scTracks, ytTracks] = await Promise.all([
       searchSoundCloud(q),
       searchYouTube(q),
-      searchITunes(q),
     ]);
 
     // Fetch lyrics for external tracks
@@ -642,36 +620,18 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       return [];
     };
 
-    // Try to pair iTunes 30s previews with full SoundCloud audio streams if matching
-    const fullTracks = [...scTracks, ...ytTracks];
-    const resolvedItunesTracks = itunesTracks.map(it => {
-      const match = fullTracks.find(ft =>
-        ft.title.toLowerCase().includes(it.title.toLowerCase()) ||
-        it.title.toLowerCase().includes(ft.title.toLowerCase())
-      );
-      if (match && match.audioUrl) {
-        return { ...it, audioUrl: match.audioUrl, duration: match.duration, isFullSong: true };
-      }
-      return it;
-    });
-
-    const externalTracks = [...scTracks, ...ytTracks, ...resolvedItunesTracks].map(t => ({
+    const externalTracks = [...scTracks, ...ytTracks].map(t => ({
       ...t,
       lyrics: findLyrics(t.title),
       inLibrary: false,
     }));
 
-    // Deduplicate by title & artist (prefer full songs)
+    // Deduplicate by title & artist
     const seenMap = new Map();
     [...dbFormatted, ...externalTracks].forEach(t => {
-      const key = `${(t.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')}-${(t.artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+      const key = `${(t.title || '').toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '')}-${(t.artist || '').toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '')}`;
       if (!seenMap.has(key)) {
         seenMap.set(key, t);
-      } else {
-        const existing = seenMap.get(key);
-        if (!existing.isFullSong && t.isFullSong) {
-          seenMap.set(key, t);
-        }
       }
     });
 
