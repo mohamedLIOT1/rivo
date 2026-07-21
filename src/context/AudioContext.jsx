@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { initAudioEngine, setEqualizerBands, setMasterVolume, resumeAudioContext } from '../utils/audioEngine';
 import { getOfflineTrackAudioUrl, removeTrackOffline, saveTrackOffline } from '../utils/offlineStorage';
+import { API_BASE_URL } from '../config';
 
 const AudioPlayerContext = createContext(null);
 
