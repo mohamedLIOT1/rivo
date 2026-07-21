@@ -522,35 +522,54 @@ async function searchYouTube(query) {
   } catch { return []; }
 }
 
+const SOUNDCLOUD_CLIENT_IDS = [
+  process.env.SOUNDCLOUD_CLIENT_ID,
+  'emAJdGEj1mm9yjoCD2jkixmgqrGIyfpi',
+  'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi',
+  '2t9mstKWWiYskyqsqfVJ5zZZsEyeTKYd',
+  '02a2b475b0870932a326622d992f9d85',
+].filter(Boolean);
+
 async function searchSoundCloud(query) {
-  if (!SC_CLIENT_ID) return [];
-  try {
-    const res = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${SC_CLIENT_ID}&limit=10`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const items = [];
-    for (const item of (data.collection || [])) {
-      if ((item.duration || 0) < 35000) continue;
-      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-      if (!prog) continue;
-      try {
-        const sRes = await fetch(`${prog.url}?client_id=${SC_CLIENT_ID}`);
-        if (!sRes.ok) continue;
-        const sData = await sRes.json();
-        if (!sData.url) continue;
-        items.push({
-          id: `sc-${item.id}`,
-          title: item.title || 'SoundCloud',
-          artist: item.user?.username || 'SoundCloud',
-          cover: item.artwork_url?.replace('-large', '-t500x500') || '',
-          audioUrl: sData.url,
-          duration: Math.round((item.duration || 180000) / 1000),
-          source: 'SoundCloud',
-        });
-      } catch {}
-    }
-    return items;
-  } catch { return []; }
+  for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
+    try {
+      const res = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=15`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!data || !Array.isArray(data.collection)) continue;
+
+      const items = [];
+      for (const item of data.collection) {
+        if ((item.duration || 0) < 30000) continue;
+        const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+        if (!prog) continue;
+
+        try {
+          const sRes = await fetch(`${prog.url}?client_id=${clientId}`);
+          if (!sRes.ok) continue;
+          const sData = await sRes.json();
+          if (!sData.url) continue;
+
+          items.push({
+            id: `sc-${item.id}`,
+            title: item.title || 'SoundCloud Track',
+            artist: item.user?.username || 'SoundCloud Artist',
+            album: 'Single',
+            cover: item.artwork_url
+              ? item.artwork_url.replace('-large', '-t500x500')
+              : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
+            audioUrl: sData.url,
+            duration: Math.round((item.duration || 180000) / 1000),
+            source: 'SoundCloud',
+            isFullSong: true,
+          });
+        } catch {}
+      }
+
+      if (items.length > 0) return items;
+    } catch {}
+  }
+  return [];
 }
 
 async function searchITunes(query) {
@@ -569,6 +588,7 @@ async function searchITunes(query) {
       duration: Math.round((item.trackTimeMillis || 180000) / 1000),
       genre: item.primaryGenreName || 'Pop',
       source: 'iTunes',
+      isFullSong: false,
     }));
   } catch { return []; }
 }
@@ -599,12 +619,13 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       title: t.title, artist: t.artist, cover: t.cover,
       audioUrl: t.audioUrl, duration: t.duration, source: t.source || 'Liofy',
       inLibrary: true,
+      isFullSong: true,
     }));
 
-    // Search external in parallel (YouTube + SoundCloud + iTunes)
-    const [ytTracks, scTracks, itunesTracks] = await Promise.all([
-      searchYouTube(q),
+    // Search external in parallel (SoundCloud full songs first, YouTube, then iTunes)
+    const [scTracks, ytTracks, itunesTracks] = await Promise.all([
       searchSoundCloud(q),
+      searchYouTube(q),
       searchITunes(q),
     ]);
 
@@ -621,23 +642,40 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       return [];
     };
 
-    const externalTracks = [...scTracks, ...ytTracks, ...itunesTracks].map(t => ({
+    // Try to pair iTunes 30s previews with full SoundCloud audio streams if matching
+    const fullTracks = [...scTracks, ...ytTracks];
+    const resolvedItunesTracks = itunesTracks.map(it => {
+      const match = fullTracks.find(ft =>
+        ft.title.toLowerCase().includes(it.title.toLowerCase()) ||
+        it.title.toLowerCase().includes(ft.title.toLowerCase())
+      );
+      if (match && match.audioUrl) {
+        return { ...it, audioUrl: match.audioUrl, duration: match.duration, isFullSong: true };
+      }
+      return it;
+    });
+
+    const externalTracks = [...scTracks, ...ytTracks, ...resolvedItunesTracks].map(t => ({
       ...t,
       lyrics: findLyrics(t.title),
       inLibrary: false,
     }));
 
-    // Deduplicate by title & artist
-    const seen = new Set();
-    const all = [];
+    // Deduplicate by title & artist (prefer full songs)
+    const seenMap = new Map();
     [...dbFormatted, ...externalTracks].forEach(t => {
-      const key = `${(t.title || '').toLowerCase()}-${(t.artist || '').toLowerCase()}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        all.push(t);
+      const key = `${(t.title || '').toLowerCase().replace(/[^a-z0-9]/g, '')}-${(t.artist || '').toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+      if (!seenMap.has(key)) {
+        seenMap.set(key, t);
+      } else {
+        const existing = seenMap.get(key);
+        if (!existing.isFullSong && t.isFullSong) {
+          seenMap.set(key, t);
+        }
       }
     });
 
+    const all = Array.from(seenMap.values());
     searchCache.set(cacheKey, { time: Date.now(), tracks: all });
 
     res.json({ success: true, tracks: all });
