@@ -49,10 +49,8 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
 
     // 2. Direct SoundCloud HD Full Track Search Fallback
     const SOUNDCLOUD_CLIENT_IDS = [
-      'emAJdGEj1mm9yjoCD2jkixmgqrGIyfpi',
-      'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi',
-      '2t9mstKWWiYskyqsqfVJ5zZZsEyeTKYd',
-      '02a2b475b0870932a326622d992f9d85'
+      'Mxv2e5wxnWei6krLywjIXpztX7S0VCeK',
+      'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi'
     ];
 
     for (const clientId of SOUNDCLOUD_CLIENT_IDS) {

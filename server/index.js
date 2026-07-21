@@ -486,6 +486,115 @@ function parseLrc(lrcText) {
   }, []);
 }
 
+// Dynamic SoundCloud Client ID Management
+let cachedScClientId = null;
+let cachedScClientIdTime = 0;
+
+async function getSoundCloudClientId() {
+  if (SC_CLIENT_ID) return SC_CLIENT_ID;
+  if (cachedScClientId && (Date.now() - cachedScClientIdTime < 3600000)) {
+    return cachedScClientId;
+  }
+  try {
+    const res = await fetch('https://soundcloud.com', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+      }
+    });
+    const html = await res.text();
+    const scriptUrls = html.match(/https:\/\/a-v2\.sndcdn\.com\/assets\/[^\"]+\.js/g);
+    if (scriptUrls) {
+      for (let url of scriptUrls.reverse()) {
+        try {
+          const sRes = await fetch(url);
+          const js = await sRes.text();
+          const match = js.match(/client_id[:=]\s*["']([a-zA-Z0-9]{32})["']/);
+          if (match) {
+            cachedScClientId = match[1];
+            cachedScClientIdTime = Date.now();
+            return cachedScClientId;
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.warn('[Liofy Server] Failed to fetch SC homepage for client_id:', e.message);
+  }
+  return 'Mxv2e5wxnWei6krLywjIXpztX7S0VCeK';
+}
+
+async function searchSoundCloud(query) {
+  try {
+    const clientId = await getSoundCloudClientId();
+    if (!clientId) return [];
+
+    const res = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=15`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+      }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data || !Array.isArray(data.collection)) return [];
+
+    const items = [];
+    for (const item of data.collection) {
+      if ((item.duration || 0) < 30000) continue;
+      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+      if (!prog) continue;
+
+      try {
+        const sRes = await fetch(`${prog.url}?client_id=${clientId}`);
+        if (!sRes.ok) continue;
+        const sData = await sRes.json();
+        if (!sData.url) continue;
+
+        items.push({
+          id: `sc-${item.id}`,
+          title: item.title || 'SoundCloud Track',
+          artist: item.user?.username || 'SoundCloud Artist',
+          album: 'Single',
+          cover: item.artwork_url
+            ? item.artwork_url.replace('-large', '-t500x500')
+            : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
+          audioUrl: sData.url,
+          duration: Math.round((item.duration || 180000) / 1000),
+          source: 'SoundCloud',
+          isFullSong: true,
+        });
+      } catch {}
+    }
+    return items;
+  } catch (e) {
+    console.error('[Liofy Server] SoundCloud search error:', e.message);
+    return [];
+  }
+}
+
+async function resolveYoutubeAudioStream(videoId) {
+  try {
+    const pipedRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
+    if (pipedRes.ok) {
+      const data = await pipedRes.json();
+      if (data.audioStreams && data.audioStreams.length > 0) {
+        return data.audioStreams[0].url;
+      }
+    }
+  } catch {}
+  
+  try {
+    const pipedRes = await fetch(`https://pipedapi.adminforge.de/streams/${videoId}`);
+    if (pipedRes.ok) {
+      const data = await pipedRes.json();
+      if (data.audioStreams && data.audioStreams.length > 0) {
+        return data.audioStreams[0].url;
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
 async function searchYouTube(query) {
   if (YOUTUBE_API_KEY) {
     try {
@@ -500,98 +609,80 @@ async function searchYouTube(query) {
             title: item.snippet?.title || 'YouTube Track',
             artist: item.snippet?.channelTitle || 'YouTube',
             cover: item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
+            audioUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
             duration: 210,
             source: 'YouTube',
+            isFullSong: true,
           }));
         }
       }
     } catch {}
   }
 
-  // Fallback: scrape
+  // Fallback 1: scrape YouTube HTML
   try {
     const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US' }
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' 
+      }
     });
     const html = await res.text();
-    const m = html.match(/ytInitialData\s*=\s*({.*?});<\/script>/s)
-           || html.match(/var ytInitialData\s*=\s*({.*?});/s);
-    if (!m) return [];
-    const data = JSON.parse(m[1]);
-    const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-    const items = [];
-    for (const s of sections) {
-      for (const item of (s.itemSectionRenderer?.contents || [])) {
-        const v = item.videoRenderer;
-        if (v?.videoId) {
-          const dur = (() => {
-            const t = v.lengthText?.simpleText || '3:30';
-            const p = t.split(':').map(Number);
-            return p.length === 2 ? p[0]*60+p[1] : 210;
-          })();
-          items.push({
-            id: `yt-${v.videoId}`,
-            videoId: v.videoId,
-            title: v.title?.runs?.[0]?.text || 'YouTube',
-            artist: v.ownerText?.runs?.[0]?.text || 'YouTube',
-            cover: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-            duration: dur,
-            source: 'YouTube',
-          });
+    const match = html.match(/var ytInitialData = ({.*?});<\/script>/) || html.match(/ytInitialData\s*=\s*({.*?});<\/script>/);
+    if (match) {
+      const data = JSON.parse(match[1]);
+      const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+      const items = [];
+      for (const s of sections) {
+        for (const item of (s.itemSectionRenderer?.contents || [])) {
+          const v = item.videoRenderer;
+          if (v?.videoId) {
+            const dur = (() => {
+              const t = v.lengthText?.simpleText || '3:30';
+              const p = t.split(':').map(Number);
+              return p.length === 2 ? p[0]*60+p[1] : 210;
+            })();
+            items.push({
+              id: `yt-${v.videoId}`,
+              videoId: v.videoId,
+              title: v.title?.runs?.[0]?.text || 'YouTube',
+              artist: v.ownerText?.runs?.[0]?.text || 'YouTube',
+              cover: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+              audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
+              duration: dur,
+              source: 'YouTube',
+              isFullSong: true,
+            });
+          }
         }
       }
+      if (items.length > 0) return items.slice(0, 10);
     }
-    return items.slice(0, 10);
-  } catch { return []; }
-}
-
-const SOUNDCLOUD_CLIENT_IDS = [
-  process.env.SOUNDCLOUD_CLIENT_ID,
-  'emAJdGEj1mm9yjoCD2jkixmgqrGIyfpi',
-  'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi',
-  '2t9mstKWWiYskyqsqfVJ5zZZsEyeTKYd',
-  '02a2b475b0870932a326622d992f9d85',
-].filter(Boolean);
-
-async function searchSoundCloud(query) {
-  for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
-    try {
-      const res = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=15`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (!data || !Array.isArray(data.collection)) continue;
-
-      const items = [];
-      for (const item of data.collection) {
-        if ((item.duration || 0) < 30000) continue;
-        const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-        if (!prog) continue;
-
-        try {
-          const sRes = await fetch(`${prog.url}?client_id=${clientId}`);
-          if (!sRes.ok) continue;
-          const sData = await sRes.json();
-          if (!sData.url) continue;
-
-          items.push({
-            id: `sc-${item.id}`,
-            title: item.title || 'SoundCloud Track',
-            artist: item.user?.username || 'SoundCloud Artist',
-            album: 'Single',
-            cover: item.artwork_url
-              ? item.artwork_url.replace('-large', '-t500x500')
-              : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-            audioUrl: sData.url,
-            duration: Math.round((item.duration || 180000) / 1000),
-            source: 'SoundCloud',
-            isFullSong: true,
-          });
-        } catch {}
-      }
-
-      if (items.length > 0) return items;
-    } catch {}
+  } catch (e) {
+    console.error('[Liofy Server] YouTube scrape error:', e.message);
   }
+
+  // Fallback 2: Invidious API
+  try {
+    const invRes = await fetch(`https://inv.zoomerville.com/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
+    if (invRes.ok) {
+      const data = await invRes.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.slice(0, 10).map(item => ({
+          id: `yt-${item.videoId}`,
+          videoId: item.videoId,
+          title: item.title || 'YouTube Track',
+          artist: item.author || 'YouTube',
+          cover: item.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+          audioUrl: `https://www.youtube.com/watch?v=${item.videoId}`,
+          duration: item.lengthSeconds || 210,
+          source: 'YouTube',
+          isFullSong: true,
+        }));
+      }
+    }
+  } catch {}
+
   return [];
 }
 
