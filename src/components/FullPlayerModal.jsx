@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
-  Heart, Volume2, Sliders, Moon, PlusCircle, Share2, Download, Disc, Sparkles
+  Heart, Volume2, Sliders, Moon, PlusCircle, Download, Disc, Sparkles,
+  MoreHorizontal, Share2, ListMusic
 } from 'lucide-react';
 
 export default function FullPlayerModal({
@@ -72,156 +73,299 @@ export default function FullPlayerModal({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const trackColor = currentTrack.color || '#1DB954';
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#09090b] flex flex-col overflow-hidden animate-in fade-in duration-300 select-none">
-      {/* Background Dynamic Ambient Color Glow */}
+    <div 
+      className="fixed inset-0 z-[200] flex flex-col overflow-hidden select-none"
+      style={{ background: '#000' }}
+    >
+      {/* ── Dynamic Background Gradient ── */}
       <div 
-        className="absolute inset-0 opacity-60 blur-3xl transition-all duration-1000 pointer-events-none scale-125"
+        className="absolute inset-0 pointer-events-none"
         style={{
-          background: `radial-gradient(circle at 50% 30%, ${currentTrack.color || '#1DB954'}, #000000 80%)`
+          background: `linear-gradient(180deg, ${trackColor}33 0%, ${trackColor}0a 50%, #000 100%)`,
+          transition: 'background 1s ease',
         }}
       />
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-3xl pointer-events-none" />
+      <div 
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: 'rgba(0,0,0,0.5)' }}
+      />
 
-      {/* Top Header Bar */}
-      <div className="relative z-10 p-4 md:p-6 flex items-center justify-between border-b border-white/5">
+      {/* ── Top Bar ── */}
+      <div className="relative z-10 flex items-center justify-between px-4 py-3 pt-[max(12px,env(safe-area-inset-top))]">
         <button 
           onClick={onClose} 
-          className="p-2.5 text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full transition-all border border-white/10"
+          className="p-2 text-white hover:text-[#b3b3b3] transition-colors"
+          title="Minimize"
         >
           <ChevronDown size={24} />
         </button>
 
-        <div className="text-center truncate px-4">
-          <p className="text-[10px] uppercase font-black tracking-widest text-[#1DB954]">Playing From Library</p>
-          <h3 className="text-sm md:text-base font-extrabold text-white truncate mt-0.5">{currentTrack.album || currentTrack.title}</h3>
+        <div className="text-center flex-1 px-4 truncate">
+          <p className="text-xs font-bold tracking-widest uppercase" style={{ color: '#b3b3b3' }}>
+            Now Playing
+          </p>
+          <p className="text-sm font-bold text-white truncate mt-0.5">
+            {currentTrack.album || currentTrack.title}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsVinylMode(!isVinylMode)}
-            className={`p-2.5 rounded-full transition-all border ${
-              isVinylMode 
-                ? 'bg-[#1DB954] text-black border-[#1DB954] shadow-lg' 
-                : 'text-zinc-300 bg-white/5 hover:bg-white/10 border-white/10'
-            }`}
-            title="Vinyl Record Mode"
-          >
-            <Disc size={20} className={isPlaying && isVinylMode ? 'animate-spin-slow' : ''} />
-          </button>
-          <button 
-            onClick={openAddToPlaylist} 
-            className="p-2.5 text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 backdrop-blur-md rounded-full transition-all border border-white/10"
-            title="Add to Playlist"
-          >
-            <PlusCircle size={20} />
-          </button>
-        </div>
+        <button
+          className="p-2 text-white hover:text-[#b3b3b3] transition-colors"
+          title="Options"
+          onClick={openAddToPlaylist}
+        >
+          <MoreHorizontal size={24} />
+        </button>
       </div>
 
-      {/* Tab Selector Pill */}
-      <div className="relative z-10 flex justify-center gap-2 px-4 mt-4 mb-2">
-        <div className="bg-black/60 backdrop-blur-xl p-1.5 rounded-full border border-white/10 flex items-center gap-1 shadow-2xl">
+      {/* ── Tab Selector ── */}
+      <div className="relative z-10 flex justify-center gap-1 px-4 py-1">
+        {[
+          { id: 'player', label: 'Now Playing' },
+          { id: 'lyrics', label: 'Lyrics' },
+          { id: 'queue', label: `Queue` },
+        ].map((tab) => (
           <button
-            onClick={() => setActiveTab('player')}
-            className={`px-5 py-2 rounded-full text-xs font-black transition-all ${
-              activeTab === 'player' ? 'bg-[#1DB954] text-black shadow-lg scale-105' : 'text-zinc-400 hover:text-white'
-            }`}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className="px-4 py-1.5 text-xs font-bold rounded-full transition-all"
+            style={activeTab === tab.id
+              ? { background: 'rgba(255,255,255,0.15)', color: '#fff' }
+              : { color: '#b3b3b3' }
+            }
           >
-            Cover Art
+            {tab.label}
           </button>
-          <button
-            onClick={() => setActiveTab('lyrics')}
-            className={`px-5 py-2 rounded-full text-xs font-black transition-all ${
-              activeTab === 'lyrics' ? 'bg-[#1DB954] text-black shadow-lg scale-105' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Synced Lyrics 🎵
-          </button>
-          <button
-            onClick={() => setActiveTab('queue')}
-            className={`px-5 py-2 rounded-full text-xs font-black transition-all ${
-              activeTab === 'queue' ? 'bg-[#1DB954] text-black shadow-lg scale-105' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Queue ({queue.length})
-          </button>
-        </div>
+        ))}
       </div>
 
-      {/* Main Display Area */}
-      <div className="relative z-10 flex-1 flex flex-col justify-between max-w-2xl mx-auto w-full px-6 py-4 overflow-hidden">
+      {/* ── Main Content Area ── */}
+      <div className="relative z-10 flex-1 flex flex-col px-6 pt-2 pb-4 overflow-hidden max-w-lg mx-auto w-full">
+
+        {/* ─── PLAYER TAB ─── */}
         {activeTab === 'player' && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-8 my-auto w-full">
-            {/* Artwork Container with Glowing Vinyl Effect */}
-            <div className="relative group max-w-[280px] sm:max-w-[340px] md:max-w-[380px] w-full aspect-square flex items-center justify-center">
-              {isVinylMode ? (
-                /* Vinyl Disc View */
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <div className={`w-full h-full rounded-full bg-zinc-950 border-4 border-zinc-800 shadow-2xl flex items-center justify-center relative overflow-hidden ${isPlaying ? 'animate-spin-slow' : ''}`}>
-                    <div className="absolute inset-0 border-[16px] border-zinc-900/40 rounded-full" />
-                    <div className="absolute inset-0 border-[32px] border-zinc-900/30 rounded-full" />
-                    <div className="w-2/5 h-2/5 rounded-full overflow-hidden border-4 border-black shadow-xl">
+          <div className="flex-1 flex flex-col justify-between">
+            {/* Album Artwork */}
+            <div className="flex-1 flex items-center justify-center py-4">
+              <div className="relative w-full" style={{ maxWidth: 'min(360px, 80vw)', aspectRatio: '1' }}>
+                {isVinylMode ? (
+                  <div 
+                    className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden shadow-2xl ${isPlaying ? 'vinyl-spin' : ''}`}
+                    style={{ background: '#111' }}
+                  >
+                    <div className="absolute inset-0" style={{ 
+                      background: 'repeating-radial-gradient(circle at 50%, transparent 0, transparent 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 11px)'
+                    }}/>
+                    <div className="w-2/5 h-2/5 rounded-full overflow-hidden border-4 border-black shadow-xl z-10">
                       <img src={currentTrack.cover} alt={currentTrack.title} className="w-full h-full object-cover" />
                     </div>
-                    <div className="w-6 h-6 rounded-full bg-zinc-900 border-2 border-white/20 shadow-inner z-10" />
+                    <div className="absolute w-4 h-4 rounded-full bg-black border-2 border-white/20 z-20" />
                   </div>
-                </div>
-              ) : (
-                /* Sleek Album Cover View */
-                <div className="w-full h-full rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] border border-white/15 relative">
-                  <img 
-                    src={currentTrack.cover} 
-                    alt={currentTrack.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                  />
-                  {isPlaying && (
-                    <div className="absolute bottom-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 flex items-center gap-1.5 shadow-xl">
-                      <div className="w-1.5 h-4 bg-[#1DB954] rounded-full animate-bounce" />
-                      <div className="w-1.5 h-6 bg-[#1DB954] rounded-full animate-bounce delay-100" />
-                      <div className="w-1.5 h-3 bg-[#1DB954] rounded-full animate-bounce delay-200" />
-                    </div>
-                  )}
-                </div>
-              )}
+                ) : (
+                  <div className="w-full h-full rounded-lg overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)]"
+                    style={{ borderRadius: '8px' }}
+                  >
+                    <img 
+                      src={currentTrack.cover} 
+                      alt={currentTrack.title}
+                      className="w-full h-full object-cover"
+                      style={{ transition: 'transform 0.3s ease' }}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Song Title & Actions */}
-            <div className="w-full flex items-center justify-between px-2">
-              <div className="truncate">
-                <h2 className="text-2xl md:text-4xl font-black text-white truncate tracking-tight">{currentTrack.title}</h2>
-                <p className="text-sm md:text-base font-bold text-zinc-400 truncate mt-1">{currentTrack.artist}</p>
+            {/* Song Info + Actions */}
+            <div className="flex items-center justify-between mb-4 mt-2">
+              <div className="truncate flex-1 min-w-0">
+                <h2 className="text-2xl font-extrabold text-white truncate tracking-tight">
+                  {currentTrack.title}
+                </h2>
+                <p className="text-base font-semibold truncate mt-0.5" style={{ color: '#b3b3b3' }}>
+                  {currentTrack.artist}
+                </p>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <button 
-                  onClick={() => toggleDownload(currentTrack.id)} 
-                  className={`p-3 rounded-2xl transition-all ${
-                    currentTrack.downloaded ? 'text-[#1DB954] bg-[#1DB954]/10 border border-[#1DB954]/30' : 'text-zinc-400 hover:text-white bg-white/5'
-                  }`}
-                  title={currentTrack.downloaded ? 'Downloaded Offline' : 'Download Track'}
-                >
-                  <Download size={22} />
-                </button>
+
+              <div className="flex items-center gap-3 ml-4 shrink-0">
                 <button 
                   onClick={() => toggleLike(currentTrack.id)}
-                  className="p-3 text-zinc-400 hover:text-white bg-white/5 rounded-2xl transition-transform active:scale-125"
+                  className="transition-all hover:scale-110 active:scale-95"
+                  title={currentTrack.liked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
                 >
-                  <Heart size={24} className={currentTrack.liked ? 'fill-[#1DB954] text-[#1DB954]' : ''} />
+                  <Heart 
+                    size={28} 
+                    className={currentTrack.liked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
+                  />
                 </button>
+              </div>
+            </div>
+
+            {/* Seekbar */}
+            <div className="mb-4 group">
+              <div 
+                className="relative h-1 w-full rounded-full overflow-visible cursor-pointer"
+                style={{ background: 'rgba(255,255,255,0.2)' }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = e.clientX - rect.left;
+                  const pct = x / rect.width;
+                  seekTo(pct * duration);
+                }}
+              >
+                <div 
+                  className="absolute top-0 left-0 h-full rounded-full transition-all"
+                  style={{ 
+                    width: `${progressPercent}%`, 
+                    background: 'white',
+                    transition: 'width 0.1s linear'
+                  }}
+                />
+                {/* Thumb */}
+                <div 
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                  style={{ left: `calc(${progressPercent}% - 6px)` }}
+                />
+              </div>
+              <div className="flex justify-between mt-2">
+                <span className="text-xs tabular-nums" style={{ color: '#b3b3b3' }}>{formatTime(currentTime)}</span>
+                <span className="text-xs tabular-nums" style={{ color: '#b3b3b3' }}>{formatTime(duration)}</span>
+              </div>
+            </div>
+
+            {/* Transport Controls */}
+            <div className="flex items-center justify-between mb-4">
+              <button 
+                onClick={toggleShuffle} 
+                className="p-2 relative transition-all hover:scale-110"
+                title="Shuffle"
+              >
+                <Shuffle 
+                  size={22} 
+                  style={{ color: isShuffle ? '#1DB954' : '#b3b3b3' }}
+                />
+                {isShuffle && (
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
+                )}
+              </button>
+
+              <button 
+                onClick={playPrev} 
+                className="p-2 text-white hover:scale-110 active:scale-95 transition-transform"
+              >
+                <SkipBack size={32} fill="white" />
+              </button>
+
+              <button 
+                onClick={togglePlay} 
+                className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-2xl"
+              >
+                {isPlaying 
+                  ? <Pause size={28} fill="black" /> 
+                  : <Play size={28} fill="black" className="ml-1" />
+                }
+              </button>
+
+              <button 
+                onClick={playNext} 
+                className="p-2 text-white hover:scale-110 active:scale-95 transition-transform"
+              >
+                <SkipForward size={32} fill="white" />
+              </button>
+
+              <button 
+                onClick={toggleRepeat} 
+                className="p-2 relative transition-all hover:scale-110"
+                title="Repeat"
+              >
+                <Repeat 
+                  size={22} 
+                  style={{ color: isRepeat ? '#1DB954' : '#b3b3b3' }}
+                />
+                {isRepeat && (
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
+                )}
+              </button>
+            </div>
+
+            {/* Volume + Tools */}
+            <div className="flex items-center justify-between">
+              {/* Volume */}
+              <div className="flex items-center gap-2 flex-1 max-w-[160px]">
+                <Volume2 size={16} style={{ color: '#b3b3b3', flexShrink: 0 }} />
+                <div className="flex-1 group relative h-1 cursor-pointer">
+                  <div className="absolute inset-0 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                    <div 
+                      className="h-full rounded-full bg-white group-hover:bg-[#1DB954] transition-colors"
+                      style={{ width: `${(volume || 1) * 100}%` }}
+                    />
+                  </div>
+                  <input
+                    type="range" min="0" max="1" step="0.01" value={volume || 1}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer"
+                    style={{ height: '100%' }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => setIsVinylMode(!isVinylMode)}
+                  className="p-2 transition-all hover:scale-105"
+                  title="Vinyl Mode"
+                >
+                  <Disc size={18} style={{ color: isVinylMode ? '#1DB954' : '#b3b3b3' }} />
+                </button>
+                <button 
+                  onClick={openEqualizer}
+                  className="p-2 transition-all hover:scale-105"
+                  title="Equalizer"
+                >
+                  <Sliders size={18} style={{ color: '#b3b3b3' }} className="hover:text-white" />
+                </button>
+                <button 
+                  onClick={openSleepTimer}
+                  className="p-2 transition-all hover:scale-105"
+                  title="Sleep Timer"
+                >
+                  <Moon size={18} style={{ color: '#b3b3b3' }} />
+                </button>
+                {toggleDownload && (
+                  <button 
+                    onClick={() => toggleDownload(currentTrack.id)}
+                    className="p-2 transition-all hover:scale-105"
+                    title="Download"
+                  >
+                    <Download 
+                      size={18} 
+                      style={{ color: currentTrack.downloaded ? '#1DB954' : '#b3b3b3' }}
+                    />
+                  </button>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Timed Karaoke Lyrics Tab */}
+        {/* ─── LYRICS TAB ─── */}
         {activeTab === 'lyrics' && (
-          <div onScroll={handleUserScroll} onTouchStart={handleUserScroll} className="flex-1 bg-black/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/10 overflow-y-auto flex flex-col gap-6 my-2 scroll-smooth shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h4 className="text-xs font-black uppercase tracking-wider text-[#1DB954] flex items-center gap-2">
-                <Sparkles size={16} />
-                <span>Live Synced Karaoke Lyrics</span>
-              </h4>
-              <span className="text-[11px] text-zinc-400 font-semibold">Click line to jump</span>
+          <div 
+            onScroll={handleUserScroll} 
+            onTouchStart={handleUserScroll} 
+            className="flex-1 overflow-y-auto rounded-lg py-4 scroll-smooth"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            <div className="flex items-center gap-2 mb-6 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              <Sparkles size={14} style={{ color: '#1DB954' }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#1DB954' }}>
+                Live Synced Lyrics
+              </span>
             </div>
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {
@@ -231,140 +375,63 @@ export default function FullPlayerModal({
                     key={idx}
                     ref={(el) => (lyricRefs.current[idx] = el)}
                     onClick={() => seekTo(line.time)}
-                    className={`text-xl md:text-3xl font-black cursor-pointer transition-all duration-300 leading-snug py-2.5 px-4 rounded-2xl ${
-                      isActive 
-                        ? 'text-[#1DB954] bg-[#1DB954]/15 scale-105 origin-left shadow-xl border-l-4 border-[#1DB954]' 
-                        : 'text-zinc-500 hover:text-zinc-200 hover:bg-white/5'
-                    }`}
+                    className="cursor-pointer transition-all duration-300 py-2 leading-tight"
+                    style={{
+                      fontSize: isActive ? '2rem' : '1.5rem',
+                      fontWeight: 700,
+                      letterSpacing: '-0.02em',
+                      color: isActive ? '#fff' : 'rgba(255,255,255,0.3)',
+                      transform: isActive ? 'none' : 'none',
+                    }}
                   >
                     {line.text}
                   </p>
                 );
               })
             ) : (
-              <div className="text-center py-20 text-zinc-500 font-medium">No synced lyrics uploaded for this track yet.</div>
+              <div className="text-center py-20" style={{ color: '#b3b3b3' }}>
+                <ListMusic size={48} className="mx-auto mb-4 opacity-40" />
+                <p className="font-semibold">No lyrics available</p>
+                <p className="text-sm mt-1 opacity-60">Upload synced lyrics when adding the song</p>
+              </div>
             )}
           </div>
         )}
 
-        {/* Queue Tab */}
+        {/* ─── QUEUE TAB ─── */}
         {activeTab === 'queue' && (
-          <div className="flex-1 bg-black/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/10 overflow-y-auto flex flex-col gap-3 my-2 shadow-2xl">
-            <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400 pb-2 border-b border-white/10">Up Next Queue</h4>
-            {queue.map((track, i) => (
-              <div 
-                key={`${track.id}-${i}`}
-                onClick={() => seekTo(0)}
-                className={`flex items-center gap-3 p-3 rounded-2xl transition-all cursor-pointer ${
-                  track.id === currentTrack.id ? 'bg-zinc-800/90 border border-[#1DB954]/50' : 'hover:bg-white/5'
-                }`}
-              >
-                <img src={track.cover} alt={track.title} className="w-12 h-12 rounded-xl object-cover" />
-                <div className="flex-1 truncate">
-                  <p className={`text-sm font-extrabold truncate ${track.id === currentTrack.id ? 'text-[#1DB954]' : 'text-white'}`}>
-                    {track.title}
-                  </p>
-                  <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+          <div className="flex-1 overflow-y-auto">
+            <p className="text-xs font-bold uppercase tracking-wider mb-4 pb-3" 
+              style={{ color: '#b3b3b3', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              Now in queue — {queue.length} songs
+            </p>
+            {queue.map((track, i) => {
+              const isActive = track.id === currentTrack.id;
+              return (
+                <div 
+                  key={`${track.id}-${i}`}
+                  className="flex items-center gap-3 py-2 px-2 rounded-md cursor-pointer hover:bg-white/5 transition-colors"
+                  style={isActive ? { background: 'rgba(255,255,255,0.07)' } : {}}
+                >
+                  <img src={track.cover} alt={track.title} className="w-10 h-10 rounded object-cover shadow-md" />
+                  <div className="flex-1 truncate">
+                    <p className="text-sm font-semibold truncate" style={{ color: isActive ? '#1DB954' : 'white' }}>
+                      {track.title}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: '#b3b3b3' }}>{track.artist}</p>
+                  </div>
+                  {isActive && (
+                    <div className="flex items-end gap-0.5 h-4">
+                      <div className="sp-eq-bar" />
+                      <div className="sp-eq-bar" />
+                      <div className="sp-eq-bar" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-
-        {/* Bottom Player Controls Container */}
-        <div className="w-full bg-black/40 backdrop-blur-xl p-4 md:p-6 rounded-3xl border border-white/10 shadow-2xl mt-auto">
-          {/* Seekbar Slider */}
-          <div className="w-full group mb-4">
-            <input 
-              type="range"
-              min="0"
-              max={duration || 100}
-              value={currentTime || 0}
-              onChange={(e) => seekTo(Number(e.target.value))}
-              className="w-full accent-[#1DB954] cursor-pointer"
-              style={{
-                background: `linear-gradient(to right, #1DB954 ${duration > 0 ? (currentTime / duration) * 100 : 0}%, #27272a ${duration > 0 ? (currentTime / duration) * 100 : 0}%)`
-              }}
-            />
-            <div className="flex justify-between text-xs text-zinc-400 font-black mt-1">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
-
-          {/* Transport Controls */}
-          <div className="flex items-center justify-between w-full py-2">
-            <button 
-              onClick={toggleShuffle} 
-              className={`p-2.5 rounded-full transition-all ${isShuffle ? 'text-[#1DB954] bg-[#1DB954]/10' : 'text-zinc-400 hover:text-white'}`}
-              title="Shuffle"
-            >
-              <Shuffle size={20} />
-            </button>
-
-            <button 
-              onClick={playPrev} 
-              className="p-2 text-white hover:scale-110 active:scale-95 transition-transform"
-            >
-              <SkipBack size={28} fill="white" />
-            </button>
-
-            <button 
-              onClick={togglePlay} 
-              className="w-16 h-16 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_0_30px_rgba(29,185,84,0.4)]"
-            >
-              {isPlaying ? <Pause size={28} fill="black" /> : <Play size={28} fill="black" className="ml-1" />}
-            </button>
-
-            <button 
-              onClick={playNext} 
-              className="p-2 text-white hover:scale-110 active:scale-95 transition-transform"
-            >
-              <SkipForward size={28} fill="white" />
-            </button>
-
-            <button 
-              onClick={toggleRepeat} 
-              className={`p-2.5 rounded-full transition-all ${isRepeat ? 'text-[#1DB954] bg-[#1DB954]/10' : 'text-zinc-400 hover:text-white'}`}
-              title="Repeat"
-            >
-              <Repeat size={20} />
-            </button>
-          </div>
-
-          {/* Volume & Equalizer Tools */}
-          <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-3">
-            <div className="flex items-center gap-3 w-36">
-              <Volume2 size={16} className="text-zinc-400 shrink-0" />
-              <input 
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={(e) => setVolume(Number(e.target.value))}
-                className="w-full accent-[#1DB954] cursor-pointer"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={openEqualizer}
-                className="p-2 text-zinc-400 hover:text-[#1DB954] hover:bg-white/5 rounded-xl transition-colors"
-                title="Audio Equalizer"
-              >
-                <Sliders size={18} />
-              </button>
-              <button 
-                onClick={openSleepTimer}
-                className="p-2 text-zinc-400 hover:text-[#1DB954] hover:bg-white/5 rounded-xl transition-colors"
-                title="Sleep Timer"
-              >
-                <Moon size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

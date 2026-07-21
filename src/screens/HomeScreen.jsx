@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Heart, Music, Plus, Edit3, Disc, Trash2 } from 'lucide-react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause } from 'lucide-react';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -11,7 +11,9 @@ export default function HomeScreen({
   onSelectArtist,
   openAddSongModal,
   openEditSongModal,
-  onDeleteTrack
+  onDeleteTrack,
+  currentTrack,
+  isPlaying
 }) {
   const defaultTrackCover = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231DB954"/><circle cx="150" cy="150" r="90" fill="%23121212"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="%231DB954" font-size="80">🎵</text></svg>`;
 
@@ -32,151 +34,397 @@ export default function HomeScreen({
     return shuffled;
   }, [tracks]);
 
+  const quickItems = displayTracks.slice(0, 6);
+  const suggestedItems = displayTracks;
+  const recentItems = displayTracks.slice(0, 8);
+
   return (
-    <div className="flex-1 overflow-y-auto pb-32 select-none px-4 md:px-8 py-6">
-      {/* Top Greeting Banner */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight">{getGreeting()}</h1>
-        <button
-          onClick={openAddSongModal}
-          className="bg-gradient-to-r from-emerald-500 to-[#1DB954] text-black font-extrabold px-4 py-2 rounded-full text-xs flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all"
-        >
-          <Plus size={16} />
-          <span>+ Add Song & Synced Lyrics</span>
-        </button>
-      </div>
-
-      {tracks.length > 0 ? (
-        <div className="flex flex-col gap-8">
-          {/* Quick Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {displayTracks.slice(0, 6).map((track) => (
-              <div
-                key={track.id}
-                onClick={() => onSelectTrack(track)}
-                className="flex items-center gap-3 bg-zinc-900/80 hover:bg-zinc-800/80 rounded-xl overflow-hidden cursor-pointer transition-all border border-zinc-800/50 group"
-              >
-                <img 
-                  src={track.cover || defaultTrackCover} 
-                  onError={(e) => { e.target.src = defaultTrackCover; }}
-                  alt={track.title} 
-                  className="w-16 h-16 object-cover shrink-0" 
-                />
-                <div className="truncate flex-1">
-                  <h4 className="font-bold text-sm text-white truncate">{track.title}</h4>
-                  <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
-                </div>
-                <div className="flex items-center gap-1 mr-2">
-                  {onDeleteTrack && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) {
-                          onDeleteTrack(track.id);
-                        }
-                      }}
-                      className="p-1.5 text-zinc-500 hover:text-red-400 rounded-full hover:bg-red-500/10"
-                      title="Delete Track"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditSongModal(track);
-                    }}
-                    className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800"
-                    title="Edit Song & Lyrics"
-                  >
-                    <Edit3 size={15} />
-                  </button>
-                  <button className="w-8 h-8 rounded-full bg-[#1DB954] text-black flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Play size={14} fill="black" className="ml-0.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Suggested Songs (Randomly Shuffled) */}
-          <section>
-            <h2 className="text-xl font-extrabold text-white mb-4">Suggested Songs - أغاني مقترحة ({tracks.length})</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {displayTracks.map((track) => (
-                <div
-                  key={track.id}
-                  onClick={() => onSelectTrack(track)}
-                  className="bg-zinc-900/60 p-3 rounded-2xl border border-zinc-800/60 hover:bg-zinc-800/60 cursor-pointer group transition-all relative"
-                >
-                  <div className="relative aspect-square rounded-xl overflow-hidden mb-3 bg-zinc-950">
-                    <img 
-                      src={track.cover || defaultTrackCover} 
-                      onError={(e) => { e.target.src = defaultTrackCover; }}
-                      alt={track.title} 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                    />
-                    <button className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Play size={18} fill="black" className="ml-0.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-start justify-between">
-                    <div className="truncate flex-1">
-                      <h4 className="font-bold text-sm text-white truncate">{track.title}</h4>
-                      <p className="text-xs text-zinc-400 truncate mt-0.5">{track.artist}</p>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {onDeleteTrack && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) {
-                              onDeleteTrack(track.id);
-                            }
-                          }}
-                          className="p-1 text-zinc-500 hover:text-red-400 rounded-full hover:bg-red-500/10"
-                          title="Delete Track"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditSongModal(track);
-                        }}
-                        className="p-1 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 shrink-0"
-                        title="Edit Song & Lyrics"
-                      >
-                        <Edit3 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-      ) : (
-        /* Empty State Screen */
-        <div className="my-12 flex flex-col items-center justify-center text-center p-8 bg-zinc-900/40 rounded-3xl border border-zinc-800/80 max-w-xl mx-auto">
-          <div className="w-20 h-20 rounded-full bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-[#1DB954] mb-4 shadow-2xl">
-            <Disc size={40} className="animate-spin-slow" />
-          </div>
-          <h2 className="text-2xl font-black text-white">Your Music Library is Empty</h2>
-          <p className="text-xs md:text-sm text-zinc-400 mt-2 max-w-md">
-            Add your custom MP3 songs, cover artwork, and synced karaoke lyrics to start listening!
-          </p>
-
+    <div 
+      className="flex-1 overflow-y-auto select-none"
+      style={{ 
+        background: 'linear-gradient(180deg, #1a1a2e 0%, #121212 40%)',
+        paddingBottom: 'calc(var(--player-height) + 32px)',
+      }}
+    >
+      {/* ─────────────────────────────────────────
+          TOP GRADIENT HEADER
+          ───────────────────────────────────────── */}
+      <div 
+        className="relative px-4 md:px-6 pt-16 pb-6"
+        style={{
+          background: 'linear-gradient(180deg, rgba(29,185,84,0.25) 0%, transparent 100%)'
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+            {getGreeting()}
+          </h1>
           <button
             onClick={openAddSongModal}
-            className="mt-6 px-6 py-3.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-sm rounded-full shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+            className="flex items-center gap-2 text-sm font-bold text-[#b3b3b3] hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/10"
           >
-            <Plus size={18} />
-            <span>+ Add Your First Song & Lyrics</span>
+            <Plus size={16} />
+            <span className="hidden sm:inline">Add Song</span>
           </button>
         </div>
-      )}
+      </div>
+
+      <div className="px-4 md:px-6">
+        {tracks.length > 0 ? (
+          <>
+            {/* ─────────────────────────────────────────
+                QUICK GRID (Home shortcut items)
+                ───────────────────────────────────────── */}
+            {quickItems.length > 0 && (
+              <section className="mb-8">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {quickItems.map((track) => {
+                    const isCurrentAndPlaying = currentTrack?.id === track.id && isPlaying;
+                    return (
+                      <div
+                        key={track.id}
+                        onClick={() => onSelectTrack(track)}
+                        className="sp-quick-item"
+                        style={{ borderRadius: '4px', overflow: 'hidden' }}
+                      >
+                        <img 
+                          src={track.cover || defaultTrackCover} 
+                          onError={(e) => { e.target.src = defaultTrackCover; }}
+                          alt={track.title} 
+                          className="sp-quick-img"
+                        />
+                        <span className="sp-quick-label">{track.title}</span>
+                        <button
+                          className="sp-quick-play"
+                          onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                        >
+                          {isCurrentAndPlaying 
+                            ? <Pause size={18} fill="black" />
+                            : <Play size={18} fill="black" className="ml-0.5" />
+                          }
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ─────────────────────────────────────────
+                RECENTLY PLAYED
+                ───────────────────────────────────────── */}
+            {recentItems.length > 0 && (
+              <section className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="sp-section-title">Recently played</h2>
+                  <button className="sp-section-link">Show all</button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {recentItems.slice(0, 6).map((track) => {
+                    const isCurrentAndPlaying = currentTrack?.id === track.id && isPlaying;
+                    return (
+                      <div
+                        key={`recent-${track.id}`}
+                        onClick={() => onSelectTrack(track)}
+                        className="sp-card relative group"
+                      >
+                        <div className="relative aspect-square mb-3">
+                          <img 
+                            src={track.cover || defaultTrackCover} 
+                            onError={(e) => { e.target.src = defaultTrackCover; }}
+                            alt={track.title} 
+                            className="sp-card-img"
+                            style={{ marginBottom: 0, borderRadius: '4px' }}
+                          />
+                          <button
+                            className="sp-card-play"
+                            onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                          >
+                            {isCurrentAndPlaying 
+                              ? <Pause size={20} fill="black" />
+                              : <Play size={20} fill="black" className="ml-0.5" />
+                            }
+                          </button>
+                        </div>
+                        <p className="sp-card-title">{track.title}</p>
+                        <p className="sp-card-subtitle">{track.artist}</p>
+                        
+                        {/* Edit/Delete on hover */}
+                        <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1">
+                          {onDeleteTrack && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) onDeleteTrack(track.id);
+                              }}
+                              className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                          {openEditSongModal && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); openEditSongModal(track); }}
+                              className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-[#b3b3b3] hover:text-white transition-colors"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ─────────────────────────────────────────
+                MADE FOR YOU
+                ───────────────────────────────────────── */}
+            {suggestedItems.length > 6 && (
+              <section className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="sp-section-title">Made for you</h2>
+                  <button className="sp-section-link">Show all</button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {suggestedItems.slice(6, 12).map((track) => {
+                    const isCurrentAndPlaying = currentTrack?.id === track.id && isPlaying;
+                    return (
+                      <div
+                        key={`made-${track.id}`}
+                        onClick={() => onSelectTrack(track)}
+                        className="sp-card relative group"
+                      >
+                        <div className="relative aspect-square mb-3">
+                          <img 
+                            src={track.cover || defaultTrackCover} 
+                            onError={(e) => { e.target.src = defaultTrackCover; }}
+                            alt={track.title} 
+                            className="sp-card-img"
+                            style={{ marginBottom: 0, borderRadius: '4px' }}
+                          />
+                          <button
+                            className="sp-card-play"
+                            onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                          >
+                            {isCurrentAndPlaying 
+                              ? <Pause size={20} fill="black" />
+                              : <Play size={20} fill="black" className="ml-0.5" />
+                            }
+                          </button>
+                        </div>
+                        <p className="sp-card-title">{track.title}</p>
+                        <p className="sp-card-subtitle">{track.artist}</p>
+                        
+                        <div className="absolute top-2 right-2 hidden group-hover:flex items-center gap-1">
+                          {onDeleteTrack && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) onDeleteTrack(track.id);
+                              }}
+                              className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* ─────────────────────────────────────────
+                YOUR PLAYLISTS (if any)
+                ───────────────────────────────────────── */}
+            {playlists.length > 1 && (
+              <section className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="sp-section-title">Your playlists</h2>
+                  <button className="sp-section-link">Show all</button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                  {playlists.slice(1, 7).map((pl) => (
+                    <div
+                      key={pl.id}
+                      onClick={() => onSelectPlaylist(pl)}
+                      className="sp-card relative group"
+                    >
+                      <div className="relative aspect-square mb-3">
+                        {pl.isLikedSongs ? (
+                          <div 
+                            className="w-full h-full rounded flex items-center justify-center"
+                            style={{ background: 'linear-gradient(135deg, #450af5, #c4efd9)', borderRadius: '4px' }}
+                          >
+                            <Heart size={40} fill="white" className="text-white" />
+                          </div>
+                        ) : (
+                          <img 
+                            src={pl.cover} 
+                            alt={pl.name}
+                            className="sp-card-img"
+                            style={{ marginBottom: 0, borderRadius: '4px' }}
+                          />
+                        )}
+                        <button className="sp-card-play">
+                          <Play size={20} fill="black" className="ml-0.5" />
+                        </button>
+                      </div>
+                      <p className="sp-card-title">{pl.name}</p>
+                      <p className="sp-card-subtitle">{pl.description || `${(pl.trackIds||[]).length} songs`}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ─────────────────────────────────────────
+                ALL SONGS (Complete Collection)
+                ───────────────────────────────────────── */}
+            {suggestedItems.length > 0 && (
+              <section className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="sp-section-title">All songs ({tracks.length})</h2>
+                </div>
+                
+                {/* Track List — Spotify table style */}
+                <div className="flex flex-col">
+                  {/* Table Header (desktop) */}
+                  <div 
+                    className="hidden md:grid gap-4 px-4 mb-2"
+                    style={{ 
+                      gridTemplateColumns: '16px minmax(120px, 4fr) minmax(120px, 2fr) auto',
+                      borderBottom: '1px solid rgba(255,255,255,0.07)',
+                      paddingBottom: '8px',
+                    }}
+                  >
+                    <span style={{ color: '#b3b3b3', fontSize: '12px', fontWeight: 700 }}>#</span>
+                    <span style={{ color: '#b3b3b3', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Title</span>
+                    <span style={{ color: '#b3b3b3', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Artist</span>
+                    <span style={{ color: '#b3b3b3', fontSize: '12px', fontWeight: 700 }}></span>
+                  </div>
+
+                  {suggestedItems.map((track, idx) => {
+                    const isCurrentTrack = currentTrack?.id === track.id;
+                    const isCurrentAndPlaying = isCurrentTrack && isPlaying;
+                    return (
+                      <div
+                        key={`all-${track.id}`}
+                        onClick={() => onSelectTrack(track)}
+                        className="flex items-center gap-3 md:grid px-4 py-2 rounded-md cursor-pointer group transition-colors hover:bg-white/5"
+                        style={{ gridTemplateColumns: '16px minmax(120px, 4fr) minmax(120px, 2fr) auto' }}
+                      >
+                        {/* Track number / Equalizer */}
+                        <div className="hidden md:flex items-center justify-center w-4 shrink-0">
+                          {isCurrentAndPlaying ? (
+                            <div className="flex items-end gap-0.5 h-4">
+                              <div className="sp-eq-bar" style={{ height: '8px' }} />
+                              <div className="sp-eq-bar" style={{ height: '14px' }} />
+                              <div className="sp-eq-bar" style={{ height: '6px' }} />
+                            </div>
+                          ) : (
+                            <span className="text-sm group-hover:hidden" style={{ color: isCurrentTrack ? '#1DB954' : '#b3b3b3' }}>
+                              {idx + 1}
+                            </span>
+                          )}
+                          <Play 
+                            size={14} 
+                            fill="white" 
+                            className="hidden group-hover:block text-white" 
+                          />
+                        </div>
+
+                        {/* Title + Cover */}
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <img 
+                            src={track.cover || defaultTrackCover} 
+                            onError={(e) => { e.target.src = defaultTrackCover; }}
+                            alt={track.title}
+                            className="w-10 h-10 rounded object-cover shrink-0 shadow-md"
+                          />
+                          <div className="truncate">
+                            <p className="text-sm font-semibold truncate" style={{ color: isCurrentTrack ? '#1DB954' : 'white' }}>
+                              {track.title}
+                            </p>
+                            <p className="text-xs truncate md:hidden" style={{ color: '#b3b3b3' }}>{track.artist}</p>
+                          </div>
+                        </div>
+
+                        {/* Artist (desktop) */}
+                        <p className="hidden md:block text-sm truncate" style={{ color: '#b3b3b3' }}>
+                          {track.artist}
+                        </p>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleLike(track.id); }}
+                            className="p-1.5 transition-all"
+                            title="Like"
+                          >
+                            <Heart 
+                              size={15} 
+                              className={track.liked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
+                            />
+                          </button>
+                          {openEditSongModal && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); openEditSongModal(track); }}
+                              className="p-1.5 text-[#b3b3b3] hover:text-white transition-colors"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                          )}
+                          {onDeleteTrack && (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) onDeleteTrack(track.id);
+                              }}
+                              className="p-1.5 text-[#b3b3b3] hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </>
+        ) : (
+          /* ─────────────────────────────────────────
+              EMPTY STATE — Spotify Style
+              ───────────────────────────────────────── */
+          <div className="flex flex-col items-center justify-center text-center py-20 px-8 max-w-sm mx-auto">
+            <div 
+              className="w-24 h-24 rounded-full flex items-center justify-center mb-6"
+              style={{ background: 'linear-gradient(135deg, #450af5, #1DB954)' }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-12 h-12">
+                <path d="M9 3v10.55A4 4 0 1 0 11 17V7h4V3H9Z"/>
+              </svg>
+            </div>
+            <h2 className="text-2xl font-extrabold text-white mb-2">
+              Start listening
+            </h2>
+            <p className="text-sm mb-8" style={{ color: '#b3b3b3' }}>
+              Add your custom songs and synced lyrics to start your music journey.
+            </p>
+            <button
+              onClick={openAddSongModal}
+              className="sp-btn-primary"
+            >
+              Add your first song
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

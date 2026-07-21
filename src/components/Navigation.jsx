@@ -1,12 +1,12 @@
-import React from 'react';
-import { Home, Search, Library, Sparkles, Trophy, Plus, Heart, Music2, User, Radio, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Home, Search, Library, Sparkles, Trophy, Plus, Heart, Music2, User, Radio, Users, ChevronRight, Pin } from 'lucide-react';
 
 export default function Navigation({ 
   currentScreen = 'home', 
   setCurrentScreen = () => {}, 
   playlists = [], 
   openCreatePlaylistModal = () => {}, 
-  openSettings = () => {}, 
+  openSettings = () => {},
   openAddSongModal = () => {},
   openAuthModal = () => {},
   openJamModal = () => {},
@@ -14,147 +14,253 @@ export default function Navigation({
   currentUser,
   jamSession
 }) {
-  const navItems = [
+  const [libraryFilter, setLibraryFilter] = useState('all');
+
+  const mainNavItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'mixes', label: 'AI DJ & Mixes', icon: Sparkles },
+    { id: 'search', label: 'Search', icon: Search },
+  ];
+
+  const mobileNavItems = [
+    { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Your Library', icon: Library },
-    { id: 'stats', label: 'Weekly Leaderboard', icon: Trophy }
+    { id: 'mixes', label: 'AI DJ', icon: Sparkles },
+    { id: 'stats', label: 'Stats', icon: Trophy },
   ];
 
   const safePlaylists = Array.isArray(playlists) ? playlists : [];
 
   return (
     <>
-      {/* Desktop & Tablet Left Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-black p-4 gap-3 select-none shrink-0 h-full border-r border-zinc-900 overflow-y-auto">
-        {/* Brand & User Profile Header */}
-        <div className="flex items-center justify-between px-2 py-2">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1DB954] flex items-center justify-center font-black text-black text-xl tracking-wider shadow-lg">
+      {/* =============================================
+          DESKTOP LEFT SIDEBAR
+          ============================================= */}
+      <aside className="hidden md:flex flex-col h-full shrink-0 gap-2 p-2" style={{ width: 'var(--nav-width)' }}>
+        
+        {/* ── Top Nav Panel ── */}
+        <div className="bg-[#121212] rounded-lg p-3 flex flex-col gap-1">
+          {/* Logo */}
+          <div className="flex items-center gap-2 px-3 py-2 mb-1">
+            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center font-black text-black text-lg shadow-lg shrink-0">
               L
             </div>
-            <span className="text-2xl font-extrabold tracking-tight text-white">Liofy</span>
+            <span className="text-xl font-extrabold tracking-tight text-white">Liofy</span>
           </div>
 
-          <button
-            onClick={openAuthModal}
-            className="flex items-center gap-2 p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-full border border-zinc-800 transition-colors"
-            title="User Profile & Accounts"
-          >
-            {currentUser ? (
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-7 h-7 rounded-full object-cover" />
-            ) : (
-              <User size={18} className="text-zinc-300" />
-            )}
-          </button>
-        </div>
-
-        {/* Live Jam Room Button */}
-        <button
-          onClick={openJamModal}
-          className={`w-full py-2.5 px-3.5 rounded-xl text-xs font-black flex items-center justify-between transition-all border ${
-            jamSession 
-              ? 'bg-cyan-950 border-cyan-500 text-cyan-300 shadow-lg' 
-              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Radio size={16} className={jamSession ? 'text-cyan-400 animate-pulse' : ''} />
-            <span>{jamSession ? `Jam: ${jamSession.code}` : 'Start Jam Session'}</span>
-          </div>
-          {jamSession && <span className="text-[10px] bg-cyan-400 text-black px-2 py-0.5 rounded-full font-bold">Live</span>}
-        </button>
-
-        {/* Spotify Blend Button */}
-        <button
-          onClick={openBlendModal}
-          className="w-full bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/30 font-extrabold py-2 px-3 rounded-xl flex items-center justify-center gap-2 transition-all text-xs"
-        >
-          <Users size={16} />
-          <span>+ Create Friend Blend</span>
-        </button>
-
-        {/* Add Song & Timed Lyrics Studio Button */}
-        <button
-          onClick={openAddSongModal}
-          className="w-full bg-gradient-to-r from-emerald-600 to-[#1DB954] text-black font-extrabold py-2 px-3 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-95 transition-all text-xs"
-        >
-          <Music2 size={16} />
-          <span>+ Add Song & Lyrics</span>
-        </button>
-
-        <nav className="flex flex-col gap-1 bg-[#121212] p-2.5 rounded-xl border border-zinc-900">
-          {navItems.map((item) => {
+          {/* Main Nav Links */}
+          {mainNavItems.map((item) => {
             const Icon = item.icon;
             const active = currentScreen === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => setCurrentScreen(item.id)}
-                className={`flex items-center gap-4 px-3.5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                  active 
-                    ? 'text-white bg-zinc-800/90 shadow-md border-l-4 border-[#1DB954]' 
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800/40'
-                }`}
+                className="sp-nav-link"
+                style={active ? { color: '#fff' } : {}}
               >
-                <Icon size={19} className={active ? 'text-[#1DB954]' : ''} />
+                <Icon 
+                  size={24} 
+                  fill={active ? 'white' : 'none'}
+                  strokeWidth={active ? 0 : 2}
+                  style={{ color: active ? '#fff' : '#b3b3b3', flexShrink: 0 }}
+                />
                 <span>{item.label}</span>
               </button>
             );
           })}
-        </nav>
+        </div>
 
-        {/* Playlists List */}
-        <div className="flex-1 bg-[#121212] p-3 rounded-xl flex flex-col gap-2 overflow-hidden border border-zinc-900 min-h-[140px]">
-          <div className="flex items-center justify-between px-2 py-1 text-zinc-400 text-[11px] font-bold uppercase tracking-wider">
-            <span>Playlists</span>
-            <button 
-              onClick={openCreatePlaylistModal}
-              className="p-1 hover:text-white hover:bg-zinc-800 rounded-full transition-colors"
+        {/* ── Library Panel ── */}
+        <div className="sp-library-panel flex-1 min-h-0">
+          {/* Library Header */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <button
+              onClick={() => setCurrentScreen('library')}
+              className="flex items-center gap-3 group"
             >
-              <Plus size={16} />
+              <Library 
+                size={24} 
+                style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}
+                fill={currentScreen === 'library' ? 'white' : 'none'}
+                strokeWidth={currentScreen === 'library' ? 0 : 2}
+              />
+              <span className="font-bold text-sm" style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}>
+                Your Library
+              </span>
             </button>
-          </div>
-          <div className="flex-1 overflow-y-auto flex flex-col gap-1">
-            {safePlaylists.map((pl) => (
+
+            <div className="flex items-center gap-1">
               <button
-                key={pl.id || Math.random()}
-                onClick={() => setCurrentScreen(`playlist:${pl.id}`)}
-                className="flex items-center gap-3 p-2 rounded-lg text-left text-sm text-zinc-300 hover:text-white hover:bg-zinc-800/50 transition-colors group"
+                onClick={openAddSongModal}
+                title="Add Song"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white transition-all"
               >
-                {pl.isLikedSongs ? (
-                  <div className="w-8 h-8 rounded bg-gradient-to-br from-indigo-600 to-purple-800 flex items-center justify-center text-white shrink-0">
-                    <Heart size={14} fill="currentColor" />
-                  </div>
-                ) : (
-                  <img src={pl.cover} alt={pl.name} className="w-8 h-8 rounded object-cover shrink-0" />
-                )}
-                <div className="truncate flex-1">
-                  <p className="font-medium truncate text-xs">{pl.name}</p>
-                  <p className="text-[11px] text-zinc-500 truncate">{(pl.trackIds || []).length} tracks</p>
-                </div>
+                <Plus size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2 px-3 pb-2 overflow-x-auto">
+            {['All', 'Playlists', 'Artists'].map((f) => (
+              <button
+                key={f}
+                onClick={() => setLibraryFilter(f.toLowerCase())}
+                className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 transition-all ${
+                  libraryFilter === f.toLowerCase()
+                    ? 'bg-white text-black'
+                    : 'bg-[#2a2a2a] text-white hover:bg-[#3a3a3a]'
+                }`}
+              >
+                {f}
               </button>
             ))}
+          </div>
+
+          {/* Playlist List */}
+          <div className="flex-1 overflow-y-auto px-2 pb-2">
+            {safePlaylists.map((pl) => {
+              const isActive = currentScreen === `playlist:${pl.id}` || currentScreen === 'playlist';
+              return (
+                <button
+                  key={pl.id || Math.random()}
+                  onClick={() => setCurrentScreen(`playlist:${pl.id}`)}
+                  className={`w-full flex items-center gap-3 px-2 py-2 rounded-md text-left transition-all group ${
+                    isActive ? 'bg-white/10' : 'hover:bg-white/10'
+                  }`}
+                >
+                  {pl.isLikedSongs ? (
+                    <div className="w-10 h-10 rounded flex items-center justify-center shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #450af5, #c4efd9)' }}>
+                      <Heart size={16} fill="white" className="text-white" />
+                    </div>
+                  ) : (
+                    <img 
+                      src={pl.cover} 
+                      alt={pl.name} 
+                      className="w-10 h-10 rounded object-cover shrink-0 shadow-md" 
+                      onError={(e) => { e.target.style.display = 'none'; }}
+                    />
+                  )}
+                  <div className="truncate flex-1 min-w-0">
+                    <p className={`font-semibold text-sm truncate ${isActive ? 'text-white' : 'text-white'}`}>
+                      {pl.name}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: '#b3b3b3' }}>
+                      Playlist • {(pl.trackIds || []).length} songs
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+
+            {safePlaylists.length === 0 && (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm font-bold text-white mb-1">Create your first playlist</p>
+                <p className="text-xs mb-4" style={{ color: '#b3b3b3' }}>It's easy, we'll help you</p>
+                <button 
+                  onClick={openCreatePlaylistModal}
+                  className="px-4 py-2 bg-white text-black text-sm font-bold rounded-full hover:scale-105 transition-transform"
+                >
+                  Create playlist
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Buttons — Jam + Blend */}
+          <div className="px-3 pb-3 flex flex-col gap-2 border-t border-white/5 pt-3">
+            <button
+              onClick={openJamModal}
+              className={`w-full py-2 px-3 rounded-full text-xs font-bold flex items-center gap-2 transition-all border ${
+                jamSession 
+                  ? 'bg-cyan-900/60 border-cyan-500/50 text-cyan-300' 
+                  : 'border-white/20 text-[#b3b3b3] hover:text-white hover:border-white/40'
+              }`}
+            >
+              <Radio size={14} className={jamSession ? 'animate-pulse text-cyan-400' : ''} />
+              <span>{jamSession ? `Jam: ${jamSession.code}` : 'Start Jam Session'}</span>
+              {jamSession && <span className="ml-auto text-[10px] bg-cyan-400 text-black px-1.5 py-0.5 rounded-full font-black">Live</span>}
+            </button>
+
+            <button
+              onClick={openBlendModal}
+              className="w-full py-2 px-3 rounded-full text-xs font-bold flex items-center gap-2 border border-white/20 text-[#b3b3b3] hover:text-white hover:border-white/40 transition-all"
+            >
+              <Users size={14} />
+              <span>Create Friend Blend</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── User Profile (Bottom) ── */}
+        <div className="bg-[#121212] rounded-lg">
+          <button
+            onClick={openAuthModal}
+            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg transition-all group"
+          >
+            {currentUser ? (
+              <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full object-cover shadow-md" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-[#535353] flex items-center justify-center shrink-0">
+                <User size={16} className="text-white" />
+              </div>
+            )}
+            <span className="text-sm font-bold text-white truncate flex-1 text-left">
+              {currentUser ? currentUser.name : 'Log in'}
+            </span>
+          </button>
+
+          {/* Extra Nav - Mixes, Stats */}
+          <div className="px-3 pb-3 flex flex-col gap-0.5">
+            {[
+              { id: 'mixes', label: 'AI DJ & Mixes', icon: Sparkles },
+              { id: 'stats', label: 'Weekly Stats', icon: Trophy },
+            ].map((item) => {
+              const Icon = item.icon;
+              const active = currentScreen === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setCurrentScreen(item.id)}
+                  className="sp-nav-link text-xs"
+                  style={active ? { color: '#1DB954' } : {}}
+                >
+                  <Icon size={16} style={{ color: active ? '#1DB954' : '#b3b3b3' }} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </aside>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-zinc-950/95 backdrop-blur-xl border-t border-zinc-800/80 px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] flex items-center justify-around">
-        {navItems.map((item) => {
+      {/* =============================================
+          MOBILE BOTTOM NAVIGATION — Spotify Style
+          ============================================= */}
+      <nav className="md:hidden sp-mobile-nav">
+        {mobileNavItems.map((item) => {
           const Icon = item.icon;
           const active = currentScreen === item.id;
           return (
             <button
               key={item.id}
               onClick={() => setCurrentScreen(item.id)}
-              className={`flex flex-col items-center gap-1 text-[10px] font-medium transition-all ${
-                active ? 'text-[#1DB954] scale-105 font-bold' : 'text-zinc-400 hover:text-white'
-              }`}
+              className="flex flex-col items-center gap-1 transition-all px-2"
             >
-              <Icon size={19} />
-              <span>{item.label}</span>
+              <Icon 
+                size={22} 
+                fill={active ? 'white' : 'none'} 
+                strokeWidth={active ? 0 : 2}
+                style={{ color: active ? '#fff' : '#b3b3b3' }}
+              />
+              <span 
+                className="text-[10px] font-bold"
+                style={{ color: active ? '#fff' : '#b3b3b3' }}
+              >
+                {item.label}
+              </span>
             </button>
           );
         })}

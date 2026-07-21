@@ -301,7 +301,7 @@ function AppContent() {
   };
 
   return (
-    <div className="flex h-screen bg-[#121212] text-white overflow-hidden relative select-none">
+    <div className="flex text-white overflow-hidden relative select-none" style={{ height: '100dvh', background: '#000' }}>
       {/* Navigation Layout */}
       <Navigation
         currentScreen={currentScreen}
@@ -326,7 +326,7 @@ function AppContent() {
       />
 
       {/* Main Screen Content View */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#121212]">
+      <main className="flex-1 flex flex-col overflow-hidden" style={{ background: '#121212', paddingBottom: currentTrack ? 'var(--player-height)' : 0 }}>
         {currentScreen === 'home' && (
           <HomeScreen
             tracks={tracks}
@@ -339,8 +339,11 @@ function AppContent() {
             openAddSongModal={() => setIsAddSongOpen(true)}
             openEditSongModal={handleOpenEditSong}
             onDeleteTrack={handleDeleteTrack}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
           />
         )}
+
 
         {currentScreen === 'mixes' && (
           <MixesScreen

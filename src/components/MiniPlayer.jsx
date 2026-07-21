@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Sliders, Moon, PlusCircle } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Sliders, Moon, PlusCircle, Volume2, VolumeX, Laptop2 } from 'lucide-react';
 
 export default function MiniPlayer({
   currentTrack,
@@ -23,148 +23,230 @@ export default function MiniPlayer({
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  const formatTime = (secs) => {
+    if (!secs || isNaN(secs) || secs < 0) return '0:00';
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   return (
-    <div className="fixed bottom-[calc(60px+env(safe-area-inset-bottom))] md:bottom-0 left-0 right-0 z-30 px-2 md:px-4 pb-2 md:pb-3 select-none pointer-events-none">
+    /* ── Spotify Now Playing Bar ── */
+    <div 
+      className="fixed left-0 right-0 z-50 select-none"
+      style={{ 
+        bottom: 0,
+        height: 'var(--player-height)',
+        background: '#181818',
+        borderTop: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Progress Line at Top */}
       <div 
-        onClick={openFullPlayer}
-        className="pointer-events-auto max-w-7xl mx-auto glass-player rounded-xl p-2.5 md:p-3 flex items-center justify-between gap-3 shadow-2xl cursor-pointer hover:bg-zinc-900/90 transition-all border border-zinc-800/80 group"
-      >
-        {/* Left: Artwork + Track Info */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className="relative shrink-0">
+        className="absolute top-0 left-0 h-[2px] transition-all duration-200"
+        style={{ 
+          width: `${progressPercent}%`, 
+          background: 'linear-gradient(to right, #1DB954, #1ed760)',
+          boxShadow: '0 0 6px rgba(29,185,84,0.5)'
+        }} 
+      />
+
+      <div className="flex items-center h-full px-4 gap-4">
+        
+        {/* ─────────────────────────────────────────
+            LEFT: Track Info
+            ───────────────────────────────────────── */}
+        <div className="flex items-center gap-3 flex-1 min-w-0" style={{ maxWidth: '30%' }}>
+          {/* Album Art — click to open full player */}
+          <div 
+            className="relative shrink-0 cursor-pointer group"
+            onClick={openFullPlayer}
+          >
             <img 
               src={currentTrack.cover} 
               alt={currentTrack.title} 
-              className={`w-11 h-11 md:w-12 md:h-12 rounded-lg object-cover shadow-md transition-transform ${isPlaying ? 'scale-105' : 'scale-100'}`}
+              className={`w-14 h-14 object-cover rounded shadow-lg transition-all duration-300 ${isPlaying ? 'shadow-[0_0_12px_rgba(29,185,84,0.25)]' : ''}`}
             />
+            {/* Equalizer overlay when playing */}
             {isPlaying && (
-              <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center gap-0.5">
-                <div className="equalizer-bar"></div>
-                <div className="equalizer-bar"></div>
-                <div className="equalizer-bar"></div>
+              <div className="absolute inset-0 bg-black/30 rounded flex items-center justify-center gap-0.5">
+                <div className="sp-eq-bar" style={{ height: '10px' }} />
+                <div className="sp-eq-bar" style={{ height: '16px' }} />
+                <div className="sp-eq-bar" style={{ height: '8px' }} />
               </div>
             )}
           </div>
-          <div className="truncate">
-            <h4 className="text-sm font-semibold text-white truncate group-hover:text-[#1DB954] transition-colors">
+
+          {/* Track Title + Artist */}
+          <div className="truncate min-w-0 cursor-pointer" onClick={openFullPlayer}>
+            <p className="text-sm font-semibold text-white truncate hover:underline">
               {currentTrack.title}
-            </h4>
-            <p className="text-xs text-zinc-400 truncate">{currentTrack.artist}</p>
+            </p>
+            <p className="text-xs truncate hover:underline" style={{ color: '#b3b3b3' }}>
+              {currentTrack.artist}
+            </p>
           </div>
+
+          {/* Like Button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleLike(currentTrack.id); }}
+            className="shrink-0 transition-all hover:scale-110 active:scale-95 hidden sm:flex"
+            title={currentTrack.liked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+          >
+            <Heart 
+              size={16} 
+              className={currentTrack.liked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
+            />
+          </button>
         </div>
 
-        {/* Center: Transport Controls */}
-        <div className="flex items-center gap-1 md:gap-2.5 shrink-0">
-          {toggleShuffle && (
+        {/* ─────────────────────────────────────────
+            CENTER: Transport Controls + Seekbar
+            ───────────────────────────────────────── */}
+        <div className="flex flex-col items-center gap-1 flex-1" style={{ maxWidth: '40%' }}>
+          {/* Control Buttons */}
+          <div className="flex items-center gap-4">
+            {/* Shuffle */}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleShuffle();
-              }}
-              className={`p-1.5 rounded-full transition-colors hidden sm:block ${isShuffle ? 'text-[#1DB954] bg-[#1DB954]/10' : 'text-zinc-400 hover:text-white'}`}
+              onClick={(e) => { e.stopPropagation(); toggleShuffle?.(); }}
+              className={`hidden sm:flex transition-all hover:scale-105 active:scale-95 relative ${isShuffle ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
               title="Shuffle"
             >
               <Shuffle size={16} />
+              {isShuffle && (
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
+              )}
             </button>
-          )}
 
-          {playPrev && (
+            {/* Prev */}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                playPrev();
-              }}
-              className="p-1.5 text-zinc-300 hover:text-white transition-transform active:scale-95"
-              title="Previous Track"
+              onClick={(e) => { e.stopPropagation(); playPrev?.(); }}
+              className="text-[#b3b3b3] hover:text-white transition-all hover:scale-105 active:scale-95"
+              title="Previous"
             >
-              <SkipBack size={18} fill="currentColor" />
+              <SkipBack size={20} fill="currentColor" />
             </button>
-          )}
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePlay();
-            }}
-            className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg"
-          >
-            {isPlaying ? <Pause size={18} fill="black" /> : <Play size={18} fill="black" className="ml-0.5" />}
-          </button>
-
-          {playNext && (
+            {/* Play/Pause — Big Green Circle */}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                playNext();
-              }}
-              className="p-1.5 text-zinc-300 hover:text-white transition-transform active:scale-95"
-              title="Next Track"
+              onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+              className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-md"
+              title={isPlaying ? 'Pause' : 'Play'}
             >
-              <SkipForward size={18} fill="currentColor" />
+              {isPlaying 
+                ? <Pause size={16} fill="black" /> 
+                : <Play size={16} fill="black" className="ml-0.5" />
+              }
             </button>
-          )}
 
-          {toggleRepeat && (
+            {/* Next */}
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleRepeat();
-              }}
-              className={`p-1.5 rounded-full transition-colors hidden sm:block ${isRepeat ? 'text-[#1DB954] bg-[#1DB954]/10' : 'text-zinc-400 hover:text-white'}`}
+              onClick={(e) => { e.stopPropagation(); playNext?.(); }}
+              className="text-[#b3b3b3] hover:text-white transition-all hover:scale-105 active:scale-95"
+              title="Next"
+            >
+              <SkipForward size={20} fill="currentColor" />
+            </button>
+
+            {/* Repeat */}
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleRepeat?.(); }}
+              className={`hidden sm:flex transition-all hover:scale-105 active:scale-95 relative ${isRepeat ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
               title="Repeat"
             >
               <Repeat size={16} />
+              {isRepeat && (
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
+              )}
             </button>
-          )}
+          </div>
+
+          {/* Seekbar Row (Desktop) */}
+          <div className="hidden md:flex items-center gap-2 w-full max-w-sm">
+            <span className="text-[11px] shrink-0 tabular-nums" style={{ color: '#b3b3b3' }}>
+              {formatTime(currentTime)}
+            </span>
+            <div className="flex-1 group relative h-1 flex items-center">
+              <div className="absolute inset-0 rounded-full overflow-hidden" style={{ background: '#535353' }}>
+                <div 
+                  className="h-full bg-white group-hover:bg-[#1DB954] transition-colors rounded-full"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                value={currentTime || 0}
+                onChange={(e) => {}}
+                className="absolute inset-0 w-full opacity-0 cursor-pointer"
+                style={{ height: '100%' }}
+              />
+            </div>
+            <span className="text-[11px] shrink-0 tabular-nums" style={{ color: '#b3b3b3' }}>
+              {formatTime(duration)}
+            </span>
+          </div>
         </div>
 
-        {/* Right: Tools & Expand */}
-        <div className="hidden md:flex items-center gap-2 shrink-0 border-l border-zinc-800 pl-3">
+        {/* ─────────────────────────────────────────
+            RIGHT: Volume + Tools
+            ───────────────────────────────────────── */}
+        <div className="hidden md:flex items-center gap-2 flex-1 justify-end" style={{ maxWidth: '30%' }}>
+          {/* Add to Playlist */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              openAddToPlaylist();
-            }}
-            title="Add to Playlist"
-            className="p-2 text-zinc-400 hover:text-[#1DB954] transition-colors"
+            onClick={(e) => { e.stopPropagation(); openAddToPlaylist?.(); }}
+            className="p-2 rounded text-[#b3b3b3] hover:text-white transition-all hover:scale-105"
+            title="Add to playlist"
           >
-            <PlusCircle size={18} />
+            <PlusCircle size={16} />
           </button>
+
+          {/* Equalizer */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              openEqualizer();
-            }}
-            title="Audio Equalizer"
-            className="p-2 text-zinc-400 hover:text-[#1DB954] transition-colors"
+            onClick={(e) => { e.stopPropagation(); openEqualizer?.(); }}
+            className="p-2 rounded text-[#b3b3b3] hover:text-white transition-all hover:scale-105"
+            title="Equalizer"
           >
-            <Sliders size={17} />
+            <Sliders size={16} />
           </button>
+
+          {/* Sleep Timer */}
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              openSleepTimer();
-            }}
-            title="Sleep Timer"
-            className="p-2 text-zinc-400 hover:text-[#1DB954] transition-colors"
+            onClick={(e) => { e.stopPropagation(); openSleepTimer?.(); }}
+            className="p-2 rounded text-[#b3b3b3] hover:text-white transition-all hover:scale-105"
+            title="Sleep timer"
           >
-            <Moon size={17} />
+            <Moon size={16} />
           </button>
+
+          {/* Expand Full Player */}
           <button
             onClick={openFullPlayer}
-            title="Full Screen View"
-            className="p-2 text-zinc-400 hover:text-white transition-colors"
+            className="p-2 rounded text-[#b3b3b3] hover:text-white transition-all hover:scale-105"
+            title="Full screen player"
           >
-            <Maximize2 size={17} />
+            <Maximize2 size={16} />
           </button>
         </div>
 
-        {/* Bottom progress bar line */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800 rounded-b-xl overflow-hidden">
-          <div 
-            className="h-full bg-[#1DB954] transition-all duration-200"
-            style={{ width: `${progressPercent}%` }}
-          />
+        {/* Mobile-only: Expand + Play buttons */}
+        <div className="md:hidden flex items-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); togglePlay(); }}
+            className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-transform active:scale-95"
+          >
+            {isPlaying 
+              ? <Pause size={16} fill="black" /> 
+              : <Play size={16} fill="black" className="ml-0.5" />
+            }
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); playNext?.(); }}
+            className="text-white"
+          >
+            <SkipForward size={22} fill="currentColor" />
+          </button>
         </div>
       </div>
     </div>
