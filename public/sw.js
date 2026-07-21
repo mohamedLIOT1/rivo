@@ -1,6 +1,6 @@
-// Liofy Service Worker v5 — Offline Support
-const CACHE_VER = 'liofy-v5';
-const STATIC_ASSETS = ['/', '/index.html'];
+// Liofy Service Worker v6 — iOS PWA & Offline Support
+const CACHE_VER = 'liofy-v6';
+const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────
 self.addEventListener('install', event => {
@@ -20,26 +20,25 @@ self.addEventListener('activate', event => {
   );
 });
 
-// ── Fetch ────────────────────────────────────────────
+// ── Fetch Strategy ───────────────────────────────────
 self.addEventListener('fetch', event => {
   const { request } = event;
 
-  // Skip non-GET and cross-origin API requests
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // API calls — network first, no caching
+  // 1. API Calls — Network First, JSON fallback when offline
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request).catch(() => new Response(
-        JSON.stringify({ error: 'Offline — no network' }),
-        { headers: { 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'أنت غير متصل بالإنترنت حالياً (Offline Mode)', offline: true }),
+        { status: 503, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
       ))
     );
     return;
   }
 
-  // Audio files — cache first (for downloaded songs)
+  // 2. Audio & Media files — Cache First
   if (
     url.pathname.startsWith('/audio/') ||
     request.destination === 'audio' ||
@@ -56,20 +55,26 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // App shell — network first, fall back to cache
+  // 3. Static Assets & App Shell — Stale While Revalidate (Cache first, then network update)
   event.respondWith(
-    fetch(request)
-      .then(response => {
-        if (response.ok && url.origin === self.location.origin) {
-          caches.open(CACHE_VER).then(c => c.put(request, response.clone()));
+    caches.match(request).then(cachedResponse => {
+      const fetchPromise = fetch(request).then(networkResponse => {
+        if (networkResponse.ok && (url.origin === self.location.origin || request.destination === 'script' || request.destination === 'style' || request.destination === 'font' || request.destination === 'image')) {
+          caches.open(CACHE_VER).then(cache => cache.put(request, networkResponse.clone()));
         }
-        return response;
-      })
-      .catch(() => caches.match(request).then(c => c || caches.match('/index.html')))
+        return networkResponse;
+      }).catch(() => {
+        if (cachedResponse) return cachedResponse;
+        if (request.headers.get('accept')?.includes('text/html') || request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+      });
+
+      return cachedResponse || fetchPromise;
+    })
   );
 });
 
-// ── Background Sync (for offline track download queue) ──
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();

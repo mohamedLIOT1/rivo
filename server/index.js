@@ -41,9 +41,32 @@ const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || '';
 //  MongoDB Schemas
 // ══════════════════════════════════════════
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB connected'))
-  .catch(err => console.log('⚠️ MongoDB error:', err.message));
+mongoose.set('bufferCommands', false);
+
+if (MONGO_URI) {
+  mongoose.connect(MONGO_URI, {
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 10000,
+  })
+    .then(() => console.log('✅ MongoDB connected successfully'))
+    .catch(err => console.error('⚠️ MongoDB connection error:', err.message));
+} else {
+  console.warn('⚠️ MONGO_URI is missing in environment variables.');
+}
+
+// Middleware to prevent 10s buffering timeouts when DB is disconnected
+const checkDbConnection = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: 'قاعدة البيانات غير متصلة حالياً. يرجى التحقق من إعدادات MONGO_URI وإتاحة IP Access List (0.0.0.0/0) في MongoDB Atlas.'
+    });
+  }
+  next();
+};
+
+app.use('/api/auth/login', checkDbConnection);
+app.use('/api/auth/register', checkDbConnection);
+app.use('/api/auth/me', checkDbConnection);
 
 // Track Schema — global library shared by all users
 const TrackSchema = new mongoose.Schema({
