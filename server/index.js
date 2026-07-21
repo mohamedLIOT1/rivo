@@ -553,6 +553,26 @@ async function searchSoundCloud(query) {
   } catch { return []; }
 }
 
+async function searchITunes(query) {
+  try {
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&limit=15`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    if (!data.results || !Array.isArray(data.results)) return [];
+    return data.results.map(item => ({
+      id: `itunes-${item.trackId}`,
+      title: item.trackName || 'Music Track',
+      artist: item.artistName || 'Artist',
+      album: item.collectionName || 'Single',
+      cover: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+      audioUrl: item.previewUrl || '',
+      duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+      genre: item.primaryGenreName || 'Pop',
+      source: 'iTunes',
+    }));
+  } catch { return []; }
+}
+
 app.get('/api/search', optionalAuth, async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
@@ -581,10 +601,11 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       inLibrary: true,
     }));
 
-    // Search external in parallel
-    const [ytTracks, scTracks] = await Promise.all([
+    // Search external in parallel (YouTube + SoundCloud + iTunes)
+    const [ytTracks, scTracks, itunesTracks] = await Promise.all([
       searchYouTube(q),
       searchSoundCloud(q),
+      searchITunes(q),
     ]);
 
     // Fetch lyrics for external tracks
@@ -600,13 +621,23 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       return [];
     };
 
-    const externalTracks = [...scTracks, ...ytTracks].map(t => ({
+    const externalTracks = [...scTracks, ...ytTracks, ...itunesTracks].map(t => ({
       ...t,
       lyrics: findLyrics(t.title),
       inLibrary: false,
     }));
 
-    const all = [...dbFormatted, ...externalTracks];
+    // Deduplicate by title & artist
+    const seen = new Set();
+    const all = [];
+    [...dbFormatted, ...externalTracks].forEach(t => {
+      const key = `${(t.title || '').toLowerCase()}-${(t.artist || '').toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        all.push(t);
+      }
+    });
+
     searchCache.set(cacheKey, { time: Date.now(), tracks: all });
 
     res.json({ success: true, tracks: all });

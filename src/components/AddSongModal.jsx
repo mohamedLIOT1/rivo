@@ -31,16 +31,41 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
   // ── Search ────────────────────────────────────────
   const handleSearch = async (e) => {
     e?.preventDefault();
-    if (!query.trim()) return;
+    const q = query.trim();
+    if (!q) return;
     setIsSearching(true);
     setResults([]);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(query.trim())}`);
+      const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
-      setResults(data.tracks || []);
-    } catch {
-      setResults([]);
-    }
+      if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+        setResults(data.tracks);
+        setIsSearching(false);
+        return;
+      }
+    } catch (err) {}
+
+    // Fallback: iTunes direct client-side search
+    try {
+      const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&limit=20`);
+      if (itunesRes.ok) {
+        const itunesData = await itunesRes.json();
+        if (itunesData.results && Array.isArray(itunesData.results)) {
+          const formatted = itunesData.results.map(item => ({
+            id: `itunes-${item.trackId}`,
+            title: item.trackName || 'Track',
+            artist: item.artistName || 'Artist',
+            album: item.collectionName || 'Single',
+            cover: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : '',
+            audioUrl: item.previewUrl || '',
+            duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+            source: 'iTunes',
+          }));
+          setResults(formatted);
+        }
+      }
+    } catch (e) {}
+
     setIsSearching(false);
   };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Library, Sparkles, Trophy, Plus, Heart, Music2, User, Radio, Users, ChevronRight, Pin } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, User, Trophy } from 'lucide-react';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -9,10 +9,7 @@ export default function Navigation({
   openSettings = () => {},
   openAddSongModal = () => {},
   openAuthModal = () => {},
-  openJamModal = () => {},
-  openBlendModal = () => {},
   currentUser,
-  jamSession
 }) {
   const [libraryFilter, setLibraryFilter] = useState('all');
 
@@ -25,7 +22,6 @@ export default function Navigation({
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Your Library', icon: Library },
-    { id: 'mixes', label: 'AI DJ', icon: Sparkles },
     { id: 'stats', label: 'Stats', icon: Trophy },
   ];
 
@@ -144,7 +140,7 @@ export default function Navigation({
                     />
                   )}
                   <div className="truncate flex-1 min-w-0">
-                    <p className={`font-semibold text-sm truncate ${isActive ? 'text-white' : 'text-white'}`}>
+                    <p className="font-semibold text-sm truncate text-white">
                       {pl.name}
                     </p>
                     <p className="text-xs truncate" style={{ color: '#b3b3b3' }}>
@@ -168,30 +164,6 @@ export default function Navigation({
               </div>
             )}
           </div>
-
-          {/* Bottom Buttons — Jam + Blend */}
-          <div className="px-3 pb-3 flex flex-col gap-2 border-t border-white/5 pt-3">
-            <button
-              onClick={openJamModal}
-              className={`w-full py-2 px-3 rounded-full text-xs font-bold flex items-center gap-2 transition-all border ${
-                jamSession 
-                  ? 'bg-cyan-900/60 border-cyan-500/50 text-cyan-300' 
-                  : 'border-white/20 text-[#b3b3b3] hover:text-white hover:border-white/40'
-              }`}
-            >
-              <Radio size={14} className={jamSession ? 'animate-pulse text-cyan-400' : ''} />
-              <span>{jamSession ? `Jam: ${jamSession.code}` : 'Start Jam Session'}</span>
-              {jamSession && <span className="ml-auto text-[10px] bg-cyan-400 text-black px-1.5 py-0.5 rounded-full font-black">Live</span>}
-            </button>
-
-            <button
-              onClick={openBlendModal}
-              className="w-full py-2 px-3 rounded-full text-xs font-bold flex items-center gap-2 border border-white/20 text-[#b3b3b3] hover:text-white hover:border-white/40 transition-all"
-            >
-              <Users size={14} />
-              <span>Create Friend Blend</span>
-            </button>
-          </div>
         </div>
 
         {/* ── User Profile (Bottom) ── */}
@@ -211,28 +183,6 @@ export default function Navigation({
               {currentUser ? currentUser.name : 'Log in'}
             </span>
           </button>
-
-          {/* Extra Nav - Mixes, Stats */}
-          <div className="px-3 pb-3 flex flex-col gap-0.5">
-            {[
-              { id: 'mixes', label: 'AI DJ & Mixes', icon: Sparkles },
-              { id: 'stats', label: 'Weekly Stats', icon: Trophy },
-            ].map((item) => {
-              const Icon = item.icon;
-              const active = currentScreen === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setCurrentScreen(item.id)}
-                  className="sp-nav-link text-xs"
-                  style={active ? { color: '#1DB954' } : {}}
-                >
-                  <Icon size={16} style={{ color: active ? '#1DB954' : '#b3b3b3' }} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
         </div>
       </aside>
 
