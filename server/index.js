@@ -33,7 +33,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 const server = http.createServer(app);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'liofy_secure_key_2025';
-const MONGO_URI = process.env.MONGO_URI || '';
+const MONGO_URI = (process.env.MONGO_URI || 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority').trim();
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || '';
 
@@ -45,8 +45,8 @@ mongoose.set('bufferCommands', false);
 
 if (MONGO_URI) {
   mongoose.connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 15000,
   })
     .then(() => console.log('✅ MongoDB connected successfully'))
     .catch(err => console.error('⚠️ MongoDB connection error:', err.message));
@@ -56,12 +56,21 @@ if (MONGO_URI) {
 
 // Middleware to prevent 10s buffering timeouts when DB is disconnected
 const checkDbConnection = (req, res, next) => {
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({
-      error: 'قاعدة البيانات غير متصلة حالياً. يرجى التحقق من إعدادات MONGO_URI وإتاحة IP Access List (0.0.0.0/0) في MongoDB Atlas.'
-    });
-  }
-  next();
+  if (mongoose.connection.readyState === 1) return next();
+  let attempts = 0;
+  const interval = setInterval(() => {
+    attempts++;
+    if (mongoose.connection.readyState === 1) {
+      clearInterval(interval);
+      return next();
+    }
+    if (attempts >= 15) {
+      clearInterval(interval);
+      return res.status(503).json({
+        error: 'قاعدة البيانات غير متصلة حالياً. يرجى التحقق من إعدادات MONGO_URI وإتاحة IP Access List (0.0.0.0/0) في MongoDB Atlas.'
+      });
+    }
+  }, 200);
 };
 
 app.use('/api/auth/login', checkDbConnection);
@@ -699,21 +708,28 @@ app.get('/api/search', optionalAuth, async (req, res) => {
       }
     }
 
-    // Fetch from DB first (global library)
-    const dbTracks = await Track.find({
-      $or: [
-        { title: { $regex: q, $options: 'i' } },
-        { artist: { $regex: q, $options: 'i' } },
-      ]
-    }).limit(20).lean();
+    // Fetch from DB first (global library) safely
+    let dbFormatted = [];
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const dbTracks = await Track.find({
+          $or: [
+            { title: { $regex: q, $options: 'i' } },
+            { artist: { $regex: q, $options: 'i' } },
+          ]
+        }).limit(20).lean();
 
-    const dbFormatted = dbTracks.map(t => ({
-      id: String(t._id),
-      title: t.title, artist: t.artist, cover: t.cover,
-      audioUrl: t.audioUrl, duration: t.duration, source: t.source || 'Liofy',
-      inLibrary: true,
-      isFullSong: true,
-    }));
+        dbFormatted = dbTracks.map(t => ({
+          id: String(t._id),
+          title: t.title, artist: t.artist, cover: t.cover,
+          audioUrl: t.audioUrl, duration: t.duration, source: t.source || 'Liofy',
+          inLibrary: true,
+          isFullSong: true,
+        }));
+      }
+    } catch (dbErr) {
+      console.warn('[Liofy Server] DB search skipped:', dbErr.message);
+    }
 
     // Search external in parallel (SoundCloud full songs + YouTube)
     const [scTracks, ytTracks] = await Promise.all([
