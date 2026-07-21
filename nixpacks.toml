@@ -1,0 +1,8 @@
+[providers]
+providers = ['node']
+
+[build]
+cmds = ['npm install', 'npm run build']
+
+[start]
+cmd = 'node server/index.js'
