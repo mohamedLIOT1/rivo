@@ -443,19 +443,61 @@ app.post('/api/tracks/:id/like', authMiddleware, async (req, res) => {
 });
 
 // ══════════════════════════════════════════
-//  6. AUDIO PROXY (for CORS issues)
+//  6. AUDIO PROXY (for CORS & YouTube Streams)
 // ══════════════════════════════════════════
 
+const { exec } = require('child_process');
 const { Readable } = require('stream');
+
+function resolveYoutubeAudioStream(videoUrlOrId) {
+  return new Promise((resolve) => {
+    if (!videoUrlOrId) return resolve(null);
+    const match = videoUrlOrId.match(/(?:v=|\/|embed\/|shorts\/|^yt-)([a-zA-Z0-9_-]{11})/);
+    const videoId = match ? match[1] : (videoUrlOrId.length === 11 ? videoUrlOrId : null);
+    if (!videoId) return resolve(null);
+
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const isWin = process.platform === 'win32';
+    const cmd = `${isWin ? 'yt-dlp.exe' : 'yt-dlp'} -g -f bestaudio/best --no-playlist --extractor-args "youtube:player_client=android,ios,mweb,web_embedded,tv,android_vr" "${url}"`;
+    exec(cmd, { timeout: 12000 }, (err, stdout) => {
+      if (!err && stdout) {
+        const streamUrl = stdout.trim().split('\n')[0];
+        if (streamUrl && streamUrl.startsWith('http')) {
+          return resolve(streamUrl);
+        }
+      }
+      fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`)
+        .then(r => r.json())
+        .then(d => {
+          const audio = d.audioStreams?.find(s => s.mimeType?.includes('audio/mp4')) || d.audioStreams?.[0];
+          if (audio?.url) resolve(audio.url);
+          else resolve(null);
+        })
+        .catch(() => resolve(null));
+    });
+  });
+}
 
 app.get('/api/proxy-audio', async (req, res) => {
   try {
-    const { url } = req.query;
-    if (!url || !url.startsWith('http')) {
+    let { url } = req.query;
+    if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'Valid URL required' });
     }
+
+    if (url.includes('youtube.com') || url.includes('youtu.be') || url.startsWith('yt-')) {
+      const realAudioUrl = await resolveYoutubeAudioStream(url);
+      if (realAudioUrl) {
+        url = realAudioUrl;
+      } else {
+        return res.status(502).json({ error: 'Failed to resolve YouTube audio stream' });
+      }
+    }
+
     const audioRes = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+      }
     });
     if (!audioRes.ok) return res.status(502).json({ error: 'Upstream error' });
 
