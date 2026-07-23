@@ -89,6 +89,18 @@ export function UserProvider({ children }) {
     try { localStorage.setItem('liofy_liked', JSON.stringify(likedTrackIds)); } catch {}
   }, [likedTrackIds]);
 
+  const deduplicateTracks = (trackList) => {
+    if (!Array.isArray(trackList)) return [];
+    const map = new Map();
+    trackList.forEach(t => {
+      const key = (t.title || '').trim().toLowerCase();
+      if (!map.has(key) || (t.lyrics && t.lyrics.length > (map.get(key)?.lyrics?.length || 0))) {
+        map.set(key, t);
+      }
+    });
+    return Array.from(map.values());
+  };
+
   // ── Full sync from server ────────────────────────────
   const syncFromServer = useCallback(async () => {
     if (!getToken()) {
@@ -96,7 +108,7 @@ export function UserProvider({ children }) {
       try {
         const data = await api.get('/api/tracks');
         if (data.success && Array.isArray(data.tracks)) {
-          setTracks(data.tracks);
+          setTracks(deduplicateTracks(data.tracks));
         }
       } catch {}
       return;
@@ -112,7 +124,7 @@ export function UserProvider({ children }) {
         if (Array.isArray(data.tracks)) {
           const liked = new Set(data.likedTrackIds || []);
           const formatted = data.tracks.map(t => ({ ...t, liked: liked.has(t.id) }));
-          setTracks(formatted);
+          setTracks(deduplicateTracks(formatted));
         }
         if (Array.isArray(data.playlists)) {
           setPlaylists(data.playlists);
