@@ -673,6 +673,9 @@ async function resolveWithPlayDl(videoId) {
       quality: 2,
       htmldata: false,
       discordPlayerCompatibility: true
+    }).catch(err => {
+      console.warn(`[play-dl] stream catch:`, err.message?.substring(0, 80));
+      return null;
     });
     if (info?.url) {
       console.log(`[play-dl] ✅ Resolved audio stream for ${videoId}`);
@@ -1909,10 +1912,13 @@ async function transcribeWithGroqWhisper(audioUrl) {
     const audioRes = await fetch(targetUrl, {
       signal: AbortSignal.timeout(45000),
       headers: { 'User-Agent': 'Mozilla/5.0' }
+    }).catch(err => {
+      console.warn('[Groq Whisper] fetch error:', err.message);
+      return null;
     });
 
-    if (!audioRes.ok) {
-      console.warn(`[Groq Whisper] Proxy audio fetch failed with status ${audioRes.status}`);
+    if (!audioRes || !audioRes.ok) {
+      console.warn(`[Groq Whisper] Proxy audio fetch failed`);
       return [];
     }
 
