@@ -1957,6 +1957,24 @@ app.post('/api/tracks/update-lyrics', async (req, res) => {
   }
 });
 
+// Clear wrong/cached lyrics from DB for a track
+app.post('/api/tracks/clear-lyrics', async (req, res) => {
+  try {
+    const { trackId } = req.body;
+    if (!trackId) return res.status(400).json({ error: 'trackId required' });
+    if (mongoose.Types.ObjectId.isValid(trackId)) {
+      await Track.findByIdAndUpdate(trackId, { lyrics: [] });
+    } else {
+      await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics: [] });
+    }
+    console.log(`[Clear Lyrics] Cleared lyrics for track ${trackId}`);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
 // AI Mood Recommendations
 app.post('/api/ai/recommend-mood', async (req, res) => {
   try {

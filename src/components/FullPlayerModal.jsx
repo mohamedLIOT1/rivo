@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, ListMusic, Mic
+  MoreHorizontal, ListMusic, Mic, Trash2
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -125,6 +125,7 @@ export default function FullPlayerModal({
 
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isClearingLyrics, setIsClearingLyrics] = useState(false);
 
   const isYouTubeTrack = currentTrack?.audioUrl?.includes('youtube') || currentTrack?.audioUrl?.includes('youtu.be') || currentTrack?.source === 'YouTube';
 
@@ -140,7 +141,7 @@ export default function FullPlayerModal({
           title: currentTrack.title,
           artist: currentTrack.artist,
           duration: currentTrack.duration || 180,
-          audioUrl: currentTrack.audioUrl  // sent so server can try Groq Whisper
+          audioUrl: currentTrack.audioUrl
         })
       });
       const data = await res.json();
@@ -180,6 +181,26 @@ export default function FullPlayerModal({
       console.warn('Transcribe audio error:', e);
     }
     setIsTranscribing(false);
+  };
+
+  // Clear wrong/cached lyrics from MongoDB immediately
+  const handleClearLyrics = async () => {
+    if (!currentTrack || !rawLyrics.length) return;
+    if (!window.confirm('مسح الكلمات الغلط دي نهائياً؟')) return;
+    setIsClearingLyrics(true);
+    try {
+      await fetch(`${API_BASE_URL}/api/tracks/clear-lyrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackId: currentTrack.id })
+      });
+      currentTrack.lyrics = [];
+      setTranslatedLyrics(null);
+      setShowTranslation(false);
+    } catch (e) {
+      console.warn('Clear lyrics error:', e);
+    }
+    setIsClearingLyrics(false);
   };
 
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -508,6 +529,18 @@ export default function FullPlayerModal({
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                {/* Clear wrong lyrics button — only shown when lyrics exist */}
+                {rawLyrics.length > 0 && (
+                  <button
+                    onClick={handleClearLyrics}
+                    disabled={isClearingLyrics}
+                    className="flex items-center gap-1 px-2 py-1.5 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-full text-xs font-bold text-red-400 transition-all active:scale-95 disabled:opacity-50"
+                    title="مسح الكلمات الغلط من قاعدة البيانات"
+                  >
+                    {isClearingLyrics ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    <span>Clear</span>
+                  </button>
+                )}
                 <button
                   onClick={handleGenerateLyrics}
                   disabled={isGeneratingLyrics}
