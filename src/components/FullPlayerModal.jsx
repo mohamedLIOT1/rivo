@@ -148,20 +148,18 @@ export default function FullPlayerModal({
 
   return (
     <div 
-      className={`fixed inset-0 z-50 transition-all duration-300 flex flex-col ${
+      className={`fixed inset-0 z-[300] bg-[#121212] transition-all duration-300 flex flex-col overflow-hidden select-none ${
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
       style={{
-        background: currentTrack?.color 
-          ? `linear-gradient(180deg, ${currentTrack.color}44 0%, #121212 100%)`
-          : 'linear-gradient(180deg, #1e3a5f 0%, #121212 100%)'
+        background: '#121212'
       }}
     >
       {/* ── Dynamic Background Gradient ── */}
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `linear-gradient(180deg, ${trackColor}33 0%, ${trackColor}0a 50%, #000 100%)`,
+          background: `linear-gradient(180deg, ${trackColor}66 0%, ${trackColor}15 45%, #121212 100%)`,
           transition: 'background 1s ease',
         }}
       />
