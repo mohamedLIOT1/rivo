@@ -1912,77 +1912,78 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
 // Free tier: 7200 seconds of audio/day at console.groq.com
 // ──────────────────────────────────────────────────────────
 async function transcribeWithGroqWhisper(audioUrl) {
-  if (!GROQ_API_KEY || !audioUrl) return [];
+  const apiKey = (GROQ_API_KEY || '').trim();
+  if (!apiKey || !audioUrl) {
+    console.warn('[Groq Whisper] GROQ_API_KEY is not configured or audioUrl is missing');
+    return [];
+  }
 
   try {
     let targetUrl = audioUrl;
-    // Proxy YouTube or external audio to get raw stream bytes for Groq
     if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be') || !targetUrl.includes('/api/proxy-audio')) {
       const port = process.env.PORT || 5000;
-      const baseUrl = `http://127.0.0.1:${port}`;
-      targetUrl = `${baseUrl}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+      targetUrl = `http://127.0.0.1:${port}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
     }
 
-    console.log('[Groq Whisper] Downloading audio stream for transcription...');
+    console.log(`[Groq Whisper] Downloading audio stream from ${targetUrl.slice(0, 100)}...`);
     const audioRes = await fetch(targetUrl, {
       signal: AbortSignal.timeout(45000),
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
-    if (!audioRes.ok) return [];
 
-    const audioBuffer = await audioRes.arrayBuffer();
-    if (audioBuffer.byteLength < 1000) return [];
-    if (audioBuffer.byteLength > 25 * 1024 * 1024) {
-      console.log('[Groq Whisper] File too large (>25MB limit), skipping');
+    if (!audioRes.ok) {
+      console.warn(`[Groq Whisper] Proxy audio fetch failed with status ${audioRes.status}`);
       return [];
     }
 
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+    const contentTypeHeader = audioRes.headers.get('content-type') || 'audio/mp4';
+    let ext = 'mp4';
+    if (contentTypeHeader.includes('webm')) ext = 'webm';
+    else if (contentTypeHeader.includes('mpeg') || contentTypeHeader.includes('mp3')) ext = 'mp3';
+    else if (contentTypeHeader.includes('ogg')) ext = 'ogg';
 
-    const { FormData } = await import('node:buffer').then(() => ({ FormData: globalThis.FormData })).catch(() => ({}));
-    // Use native FormData if available, otherwise build manually
-    let body, contentType;
-    if (typeof globalThis.FormData !== 'undefined') {
-      const fd = new globalThis.FormData();
-      fd.append('file', audioBlob, 'audio.mp3');
-      fd.append('model', 'whisper-large-v3-turbo');
-      fd.append('response_format', 'verbose_json');
-      fd.append('timestamp_granularities[]', 'segment');
-      body = fd;
-      contentType = undefined; // let fetch set boundary
-    } else {
-      // Fallback: manual multipart/form-data
-      const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
-      const bufArr = Buffer.from(audioBuffer);
-      const header = [
-        `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3-turbo`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="timestamp_granularities[]"\r\n\r\nsegment`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.mp3"\r\nContent-Type: audio/mpeg\r\n`,
-      ].join('\r\n') + '\r\n';
-      const footer = `\r\n--${boundary}--\r\n`;
-      body = Buffer.concat([Buffer.from(header), bufArr, Buffer.from(footer)]);
-      contentType = `multipart/form-data; boundary=${boundary}`;
+    const audioBuffer = await audioRes.arrayBuffer();
+    console.log(`[Groq Whisper] Downloaded ${audioBuffer.byteLength} bytes (mime: ${contentTypeHeader})`);
+
+    if (audioBuffer.byteLength < 1000) {
+      console.warn('[Groq Whisper] Audio buffer too small, skipping');
+      return [];
+    }
+    if (audioBuffer.byteLength > 25 * 1024 * 1024) {
+      console.warn('[Groq Whisper] File exceeds 25MB Groq limit');
+      return [];
     }
 
+    const audioBlob = new Blob([audioBuffer], { type: contentTypeHeader });
+    const filename = `audio.${ext}`;
+
+    const fd = new globalThis.FormData();
+    fd.append('file', audioBlob, filename);
+    fd.append('model', 'whisper-large-v3-turbo');
+    fd.append('response_format', 'verbose_json');
+    fd.append('timestamp_granularities[]', 'segment');
+    fd.append('language', 'ar');
+
+    console.log(`[Groq Whisper] Sending ${filename} to Groq Speech-to-Text API...`);
     const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
-        ...(contentType ? { 'Content-Type': contentType } : {})
+        'Authorization': `Bearer ${apiKey}`
       },
-      body,
+      body: fd,
       signal: AbortSignal.timeout(60000)
     });
 
     if (!groqRes.ok) {
-      const err = await groqRes.text();
-      console.warn('[Groq Whisper] API error:', err.slice(0, 200));
+      const errText = await groqRes.text();
+      console.warn(`[Groq Whisper] Groq API error (${groqRes.status}):`, errText);
       return [];
     }
 
     const data = await groqRes.json();
     const segments = data.segments || [];
+    console.log(`[Groq Whisper] Received ${segments.length} raw audio segments from Groq`);
+
     if (segments.length === 0) return [];
 
     const lyrics = segments
@@ -1993,10 +1994,10 @@ async function transcribeWithGroqWhisper(audioUrl) {
       }))
       .filter(l => l.text.length > 0);
 
-    console.log(`[Groq Whisper] ✅ Transcribed ${lyrics.length} segments from actual audio`);
+    console.log(`[Groq Whisper] ✅ Successfully transcribed ${lyrics.length} synced lyric lines!`);
     return lyrics;
   } catch (err) {
-    console.warn('[Groq Whisper] error:', err.message);
+    console.warn('[Groq Whisper] Exception during transcription:', err.message);
     return [];
   }
 }
