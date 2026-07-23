@@ -13,7 +13,7 @@
     "@capacitor/android": "^6.0.0",
     "@capacitor/cli": "^6.0.0",
     "@capacitor/core": "^6.0.0",
-    "@distube/ytdl-core": "^4.16.15",
+    "@distube/ytdl-core": "^4.16.12",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",
