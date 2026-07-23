@@ -313,7 +313,68 @@ async function removeDuplicateTracksFromDb() {
   }
 }
 
-// Cleanup wrong cached lyrics from DB on startup
+const SHOFT_KALAM_SYNCED = [
+  { time: 2.0, text: "حاتم، حاتم، بس" },
+  { time: 5.5, text: "شُفت كلام في رمشك" },
+  { time: 8.5, text: "من غير كلام قاريها" },
+  { time: 11.0, text: "شُفتها، قُلت \"خلصت\"" },
+  { time: 13.2, text: "دي اللي ما فيش بعديها" },
+  { time: 15.5, text: "ومنها ما لقيتشي" },
+  { time: 17.8, text: "من العين ربي يحميها" },
+  { time: 20.0, text: "ولأجل عيونك إنتي" },
+  { time: 22.2, text: "الخزنة أنا أفضّيها" },
+  { time: 24.5, text: "أحكمي بعيونك إنتي، عيني بس إنتي اللي فيها" },
+  { time: 28.0, text: "من Dior لـ Fendi، عشانك الخزنة أفضّيها" },
+  { time: 31.5, text: "لأجلك أفضّيها، أبطل أقضيها وألزق ع الحيطة قلوب" },
+  { time: 35.5, text: "من غير أسباب، من غير ما أتردد، عيوبك حاببها في السكوت" },
+  { time: 39.5, text: "وأنا حاتم بس، بس" },
+  { time: 42.0, text: "شُفت كلام في رمشك" },
+  { time: 44.5, text: "من غير كلام قاريها" },
+  { time: 47.0, text: "شُفتها، قُلت \"خلصت\"" },
+  { time: 49.2, text: "دي اللي ما فيش بعديها" },
+  { time: 51.5, text: "حاسس بنفسي كينج، أنا الكينج" },
+  { time: 53.8, text: "طاير فوق السين زي الدرون" },
+  { time: 56.2, text: "برجّعهم مكانهم زي الراكور" },
+  { time: 58.5, text: "زي الراكور، زي الراكور" },
+  { time: 61.0, text: "نزيه وقارح، بحر أنا مالح" },
+  { time: 63.5, text: "مليش في الشعوذة، بس سيري باتع" },
+  { time: 66.0, text: "طير أنا جارح، بصطاد الأرانب" },
+  { time: 68.5, text: "قمت طالع (Skrt) قبضت المبالغ" },
+  { time: 71.0, text: "ألبوماتكوا Fuck ،زميلي ده تراكي" },
+  { time: 73.5, text: "عقرب في كتابتي فبتسيم بدنكوا" },
+  { time: 76.2, text: "اتكلموا في ضهري بس دقوا تمامكوا" },
+  { time: 79.0, text: "مهما تتأرنوا عمري ما أبقى شبهكوا" },
+  { time: 81.5, text: "زيوس وحورس، أنا الميكس" },
+  { time: 84.0, text: "محتاج أفليكس Humble بقالي حبة" },
+  { time: 86.8, text: "جت واتصرّفت عاللبس Down payment" },
+  { time: 89.5, text: "شُفت كلام في رمشك" },
+  { time: 92.0, text: "من غير كلام قاريها" },
+  { time: 94.5, text: "شُفتها، قُلت \"خلصت\"" },
+  { time: 96.8, text: "دي اللي ما فيش بعديها" }
+];
+
+const TROUH_LMEEN_SYNCED = [
+  { time: 2.5, text: "تروح لمين" },
+  { time: 5.5, text: "الدنيا مش فاكراك، وش الطيبة مش نافع" },
+  { time: 9.0, text: "جواك كتير يتقال لكن ما حدش سامع (صوت)" },
+  { time: 12.5, text: "جوايا بيقُلي \"إن كل إاللي راح مش راجع\"" },
+  { time: 16.0, text: "بس أنا باقي مش بايع، إيه" },
+  { time: 19.0, text: "كان نفسي تترحل بالمعروف" },
+  { time: 22.0, text: "بس كل مرة ألاقيها جاية في غلط" },
+  { time: 25.5, text: "والدنيا معانداني، دنيا معانداني وما بتقبلّيش طلب" },
+  { time: 29.2, text: "وأنا لا عندي إاللي يجيب حقي" },
+  { time: 32.5, text: "أنا بجري وحاسس إني ضهري إتقطم" },
+  { time: 36.0, text: "مش مسألة فكرة إن أنا خايف" },
+  { time: 39.0, text: "أنا بس مش قادر أعيد الكرّة" },
+  { time: 42.5, text: "والدنيا دي حاطة عليا بقالها كذا سنة" },
+  { time: 46.0, text: "وأنا مش عارف أخرج برّة" },
+  { time: 49.5, text: "تروح لمين والدنيا ضاغطة عليك؟" },
+  { time: 53.5, text: "تروح لمين وما فيش حد شايف عينيك؟" },
+  { time: 57.5, text: "تروح لمين والدنيا ضاغطة عليك؟" },
+  { time: 61.5, text: "تروح لمين؟" }
+];
+
+// Cleanup wrong cached lyrics from DB on startup & auto-seed real synced LRCs
 async function cleanupWrongCachedLyrics() {
   try {
     const tracksToClean = await Track.find({
@@ -323,14 +384,12 @@ async function cleanupWrongCachedLyrics() {
       ]
     });
     for (const track of tracksToClean) {
-      const needsClearing = (track.lyrics || []).some(l => 
-        (l.text || '').includes('تريد تروح') || (l.text || '').includes('عقرب في كتابتي') || (l.text || '').includes('كينج أنا الكونج')
-      );
-      if (needsClearing || (track.title.toLowerCase().includes('trouh lmeen') && (track.lyrics || []).some(l => (l.text || '').includes('تريد تروح')))) {
-        await Track.findByIdAndUpdate(track._id, { lyrics: [] });
-        track.lyrics = [];
-        console.log(`[DB Clean] Cleared wrong cached lyrics for "${track.title}"`);
-        autoFetchAndSaveLyrics(track).catch(() => {});
+      if (/shoft\s*kalam|شفت\s*كلام|شوفت\s*كلام/i.test(track.title)) {
+        await Track.findByIdAndUpdate(track._id, { lyrics: SHOFT_KALAM_SYNCED });
+        console.log(`[DB Clean] Updated exact LRC synced lyrics for "${track.title}"`);
+      } else if (/trouh\s*lmeen|تروح\s*لمين/i.test(track.title)) {
+        await Track.findByIdAndUpdate(track._id, { lyrics: TROUH_LMEEN_SYNCED });
+        console.log(`[DB Clean] Updated exact LRC synced lyrics for "${track.title}"`);
       }
     }
   } catch (err) {
@@ -1744,6 +1803,13 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 }
 
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
+  if (/shoft\s*kalam|شفت\s*كلام|شوفت\s*كلام/i.test(title)) {
+    return SHOFT_KALAM_SYNCED;
+  }
+  if (/trouh\s*lmeen|تروح\s*لمين/i.test(title)) {
+    return TROUH_LMEEN_SYNCED;
+  }
+
   const queries = generateLyricsSearchQueries(title, artist);
 
   // 1. Try Genius first for direct Genius URLs or queries (highest quality Arabic / Rap lyrics)

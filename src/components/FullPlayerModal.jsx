@@ -614,55 +614,6 @@ export default function FullPlayerModal({
               </div>
             </div>
 
-            {rawLyrics.length > 0 && (
-              <div className="flex items-center justify-between mb-4 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs">
-                <div className="flex items-center gap-1.5 text-zinc-300">
-                  <SlidersHorizontal size={13} className="text-[#1DB954]" />
-                  <span className="font-semibold">ضبط التزامن اللحظي:</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setSyncOffset(o => Math.round((o - 1.0) * 10) / 10)}
-                    className="px-2 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-xs font-bold text-white transition-all"
-                    title="تقديم الكلمات ثانية واحدة"
-                  >
-                    -1s
-                  </button>
-                  <button
-                    onClick={() => setSyncOffset(o => Math.round((o - 0.5) * 10) / 10)}
-                    className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-[11px] font-bold text-white transition-all"
-                    title="تقديم الكلمات نصف ثانية"
-                  >
-                    -0.5s
-                  </button>
-                  <span className="px-2 py-0.5 font-bold text-[#1DB954] min-w-[45px] text-center bg-black/30 rounded border border-[#1DB954]/30">
-                    {syncOffset > 0 ? `+${syncOffset}s` : `${syncOffset}s`}
-                  </span>
-                  <button
-                    onClick={() => setSyncOffset(o => Math.round((o + 0.5) * 10) / 10)}
-                    className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-[11px] font-bold text-white transition-all"
-                    title="تأخير الكلمات نصف ثانية"
-                  >
-                    +0.5s
-                  </button>
-                  <button
-                    onClick={() => setSyncOffset(o => Math.round((o + 1.0) * 10) / 10)}
-                    className="px-2 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-xs font-bold text-white transition-all"
-                    title="تأخير الكلمات ثانية واحدة"
-                  >
-                    +1s
-                  </button>
-                  {syncOffset !== 0 && (
-                    <button
-                      onClick={() => setSyncOffset(0)}
-                      className="ml-2 px-2 py-0.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-md text-[10px] font-bold transition-all"
-                    >
-                      إعادة ضبط
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
 
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {
