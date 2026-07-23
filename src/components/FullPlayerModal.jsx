@@ -136,6 +136,7 @@ export default function FullPlayerModal({
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
+  const [, forceUpdate] = useState({});
 
   const isYouTubeTrack = currentTrack?.audioUrl?.includes('youtube') || currentTrack?.audioUrl?.includes('youtu.be') || currentTrack?.source === 'YouTube';
 
@@ -159,6 +160,7 @@ export default function FullPlayerModal({
         currentTrack.lyrics = data.lyrics;
         setTranslatedLyrics(null);
         setShowTranslation(false);
+        forceUpdate({});
       }
     } catch (e) {
       console.warn('AI Generate Lyrics error:', e);
@@ -180,7 +182,8 @@ export default function FullPlayerModal({
           trackId: currentTrack.id,
           audioUrl: targetAudio,
           title: currentTrack.title,
-          artist: currentTrack.artist
+          artist: currentTrack.artist,
+          duration: currentTrack.duration || 180
         })
       });
       const data = await res.json();
@@ -188,6 +191,7 @@ export default function FullPlayerModal({
         currentTrack.lyrics = data.lyrics;
         setTranslatedLyrics(null);
         setShowTranslation(false);
+        forceUpdate({});
       }
     } catch (e) {
       console.warn('Transcribe audio error:', e);

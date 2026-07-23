@@ -1935,22 +1935,23 @@ async function transcribeWithGroqWhisper(audioUrl) {
   }
 }
 
-// Endpoint: transcribe audio directly via Groq Whisper
+// Endpoint: transcribe audio directly via Groq Whisper with automatic fallback
 app.post('/api/ai/transcribe-audio', async (req, res) => {
   try {
-    const { audioUrl, trackId, title, artist } = req.body;
-    if (!audioUrl) return res.status(400).json({ error: 'audioUrl required' });
-    if (!GROQ_API_KEY) return res.status(400).json({ error: 'GROQ_API_KEY not configured' });
+    const { audioUrl, trackId, title, artist, duration = 180 } = req.body;
+    let lyrics = [];
 
-    // Build the proxied audio URL if needed
-    let targetUrl = audioUrl;
-    if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio') && !targetUrl.includes('youtube')) {
-      targetUrl = `${process.env.VITE_API_URL || 'http://localhost:5000'}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+    if (GROQ_API_KEY && audioUrl) {
+      lyrics = await transcribeWithGroqWhisper(audioUrl);
     }
 
-    const lyrics = await transcribeWithGroqWhisper(targetUrl);
+    // Fallback: If Groq Whisper key is missing or returns empty, fetch real lyrics from Genius/LRCLIB
+    if (lyrics.length === 0 && (title || audioUrl)) {
+      const searchTitle = title || (audioUrl || '').split('/').pop() || 'Song';
+      lyrics = await fetchRealLyricsFromLrclib(searchTitle, artist, duration);
+    }
 
-    // Save to DB if we got results
+    // Save to DB permanently if we got results
     if (lyrics.length > 0 && trackId) {
       try {
         if (mongoose.Types.ObjectId.isValid(trackId)) {
@@ -1958,10 +1959,10 @@ app.post('/api/ai/transcribe-audio', async (req, res) => {
         } else {
           await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
         }
-      } catch (dbErr) { console.warn('[Groq Whisper] DB save error:', dbErr.message); }
+      } catch (dbErr) { console.warn('[Transcribe] DB save error:', dbErr.message); }
     }
 
-    res.json({ success: lyrics.length > 0, lyrics, source: 'groq-whisper' });
+    res.json({ success: lyrics.length > 0, lyrics, source: lyrics.length > 0 ? 'transcribe-sync' : 'none' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
