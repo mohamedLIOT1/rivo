@@ -6,6 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",

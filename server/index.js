@@ -443,41 +443,156 @@ app.post('/api/tracks/:id/like', authMiddleware, async (req, res) => {
 });
 
 // ══════════════════════════════════════════
-//  6. AUDIO PROXY (for CORS & YouTube Streams)
+//  6. AUDIO PROXY — YouTube Full Audio (ytdl-core + Piped fallbacks)
 // ══════════════════════════════════════════
 
-const { exec } = require('child_process');
 const { Readable } = require('stream');
 
-function resolveYoutubeAudioStream(videoUrlOrId) {
-  return new Promise((resolve) => {
-    if (!videoUrlOrId) return resolve(null);
-    const match = videoUrlOrId.match(/(?:v=|\/|embed\/|shorts\/|^yt-)([a-zA-Z0-9_-]{11})/);
-    const videoId = match ? match[1] : (videoUrlOrId.length === 11 ? videoUrlOrId : null);
-    if (!videoId) return resolve(null);
-
-    const url = `https://www.youtube.com/watch?v=${videoId}`;
-    const isWin = process.platform === 'win32';
-    const cmd = `${isWin ? 'yt-dlp.exe' : 'yt-dlp'} -g -f bestaudio/best --no-playlist --extractor-args "youtube:player_client=android,ios,mweb,web_embedded,tv,android_vr" "${url}"`;
-    exec(cmd, { timeout: 12000 }, (err, stdout) => {
-      if (!err && stdout) {
-        const streamUrl = stdout.trim().split('\n')[0];
-        if (streamUrl && streamUrl.startsWith('http')) {
-          return resolve(streamUrl);
-        }
-      }
-      fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`)
-        .then(r => r.json())
-        .then(d => {
-          const audio = d.audioStreams?.find(s => s.mimeType?.includes('audio/mp4')) || d.audioStreams?.[0];
-          if (audio?.url) resolve(audio.url);
-          else resolve(null);
-        })
-        .catch(() => resolve(null));
-    });
-  });
+// Try to load @distube/ytdl-core (best YouTube support)
+let ytdl = null;
+try {
+  ytdl = require('@distube/ytdl-core');
+  console.log('✅ @distube/ytdl-core loaded');
+} catch {
+  try {
+    ytdl = require('ytdl-core');
+    console.log('✅ ytdl-core loaded');
+  } catch {
+    console.warn('⚠️ No ytdl library — will use Piped API fallbacks');
+  }
 }
 
+// Multiple Piped API instances for fallback
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.adminforge.de',
+  'https://piped-api.garudalinux.org',
+  'https://api.piped.projectsegfau.lt',
+  'https://pipedapi.tokhmi.xyz',
+];
+
+// Cache for resolved YouTube URLs (TTL: 5 hours)
+const ytUrlCache = new Map();
+const YT_CACHE_TTL = 5 * 60 * 60 * 1000;
+
+function extractVideoId(urlOrId) {
+  if (!urlOrId) return null;
+  const match = urlOrId.match(/(?:v=|\/|embed\/|shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : (urlOrId.length === 11 ? urlOrId : null);
+}
+
+async function resolveWithYtdl(videoId) {
+  if (!ytdl) return null;
+  try {
+    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
+      requestOptions: {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120',
+          'Accept-Language': 'en-US,en;q=0.9',
+        }
+      }
+    });
+    // Pick best audio-only format
+    const format = ytdl.chooseFormat(info.formats, {
+      quality: 'highestaudio',
+      filter: 'audioonly',
+    });
+    return format?.url || null;
+  } catch (e) {
+    console.warn(`[ytdl] Failed for ${videoId}:`, e.message?.substring(0, 80));
+    return null;
+  }
+}
+
+async function resolveWithPiped(videoId) {
+  for (const base of PIPED_INSTANCES) {
+    try {
+      const res = await fetch(`${base}/streams/${videoId}`, {
+        signal: AbortSignal.timeout(8000),
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!data.audioStreams?.length) continue;
+
+      // Prefer opus/mp4 audio
+      const audio =
+        data.audioStreams.find(s => s.mimeType?.includes('audio/mp4') && s.quality?.includes('160')) ||
+        data.audioStreams.find(s => s.mimeType?.includes('audio/mp4')) ||
+        data.audioStreams.find(s => s.mimeType?.includes('opus')) ||
+        data.audioStreams[0];
+
+      if (audio?.url) {
+        console.log(`[Piped] Resolved via ${base}`);
+        return audio.url;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function resolveWithInvidious(videoId) {
+  const instances = [
+    'https://inv.zoomerville.com',
+    'https://invidious.slipfox.xyz',
+    'https://yt.artemislena.eu',
+  ];
+  for (const base of instances) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const formats = data.adaptiveFormats || [];
+      const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+      if (audio?.url) {
+        console.log(`[Invidious] Resolved via ${base}`);
+        return audio.url;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function resolveYouTubeAudio(videoId) {
+  // Check cache
+  const cached = ytUrlCache.get(videoId);
+  if (cached && Date.now() - cached.time < YT_CACHE_TTL) {
+    return cached.url;
+  }
+
+  console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
+
+  // Try all methods in order
+  let audioUrl = await resolveWithYtdl(videoId);
+  if (!audioUrl) audioUrl = await resolveWithPiped(videoId);
+  if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
+
+  if (audioUrl) {
+    ytUrlCache.set(videoId, { url: audioUrl, time: Date.now() });
+    console.log(`[Audio] ✅ Resolved ${videoId}`);
+  } else {
+    console.warn(`[Audio] ❌ All methods failed for ${videoId}`);
+  }
+
+  return audioUrl;
+}
+
+// /api/yt-resolve — returns just the URL (for client-side redirect)
+app.get('/api/yt-resolve', async (req, res) => {
+  try {
+    const { id } = req.query;
+    if (!id) return res.status(400).json({ error: 'Video ID required' });
+    const audioUrl = await resolveYouTubeAudio(id);
+    if (!audioUrl) return res.status(502).json({ error: 'Could not resolve audio stream' });
+    res.json({ success: true, url: audioUrl });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// /api/proxy-audio — streams audio with range support
 app.get('/api/proxy-audio', async (req, res) => {
   try {
     let { url } = req.query;
@@ -485,27 +600,68 @@ app.get('/api/proxy-audio', async (req, res) => {
       return res.status(400).json({ error: 'Valid URL required' });
     }
 
-    if (url.includes('youtube.com') || url.includes('youtu.be') || url.startsWith('yt-')) {
-      const realAudioUrl = await resolveYoutubeAudioStream(url);
-      if (realAudioUrl) {
-        url = realAudioUrl;
-      } else {
-        return res.status(502).json({ error: 'Failed to resolve YouTube audio stream' });
+    // Resolve YouTube URLs
+    if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      const videoId = extractVideoId(url);
+      if (!videoId) return res.status(400).json({ error: 'Invalid YouTube URL' });
+
+      // If ytdl is available, stream directly without proxy
+      if (ytdl && ytdl.validateID(videoId)) {
+        try {
+          const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
+          const format = ytdl.chooseFormat(info.formats, {
+            quality: 'highestaudio',
+            filter: 'audioonly',
+          });
+          if (format) {
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Content-Type', format.mimeType || 'audio/mp4');
+            if (format.contentLength) res.setHeader('Content-Length', format.contentLength);
+            res.setHeader('Accept-Ranges', 'bytes');
+
+            const stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
+              format,
+              highWaterMark: 64 * 1024,
+            });
+            stream.pipe(res);
+            stream.on('error', (e) => {
+              console.warn('[ytdl stream error]', e.message);
+              if (!res.headersSent) res.status(500).end();
+            });
+            return;
+          }
+        } catch (e) {
+          console.warn('[ytdl direct stream failed, falling back to URL]', e.message?.substring(0, 80));
+        }
       }
+
+      // Fallback: resolve URL and proxy it
+      const audioUrl = await resolveYouTubeAudio(videoId);
+      if (!audioUrl) {
+        return res.status(502).json({ error: 'Failed to resolve YouTube audio. Please try again.' });
+      }
+      url = audioUrl;
     }
 
-    const audioRes = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-      }
-    });
-    if (!audioRes.ok) return res.status(502).json({ error: 'Upstream error' });
+    // Proxy the resolved URL (with Range support for seeking)
+    const rangeHeader = req.headers.range;
+    const fetchHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120',
+      'Referer': 'https://www.youtube.com/',
+    };
+    if (rangeHeader) fetchHeaders['Range'] = rangeHeader;
+
+    const audioRes = await fetch(url, { headers: fetchHeaders });
+    if (!audioRes.ok && audioRes.status !== 206) {
+      return res.status(502).json({ error: `Upstream error: ${audioRes.status}` });
+    }
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', audioRes.headers.get('content-type') || 'audio/mpeg');
-    if (audioRes.headers.get('content-length')) {
-      res.setHeader('Content-Length', audioRes.headers.get('content-length'));
-    }
+    res.setHeader('Content-Type', audioRes.headers.get('content-type') || 'audio/mp4');
+    if (audioRes.headers.get('content-length')) res.setHeader('Content-Length', audioRes.headers.get('content-length'));
+    if (audioRes.headers.get('content-range')) res.setHeader('Content-Range', audioRes.headers.get('content-range'));
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.status(audioRes.status === 206 ? 206 : 200);
 
     if (typeof Readable.fromWeb === 'function') {
       Readable.fromWeb(audioRes.body).pipe(res);
@@ -514,7 +670,8 @@ app.get('/api/proxy-audio', async (req, res) => {
       res.send(Buffer.from(buf));
     }
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('[proxy-audio error]', e.message);
+    if (!res.headersSent) res.status(500).json({ error: e.message });
   }
 });
 
@@ -853,6 +1010,176 @@ app.get('/api/sync', authMiddleware, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// ══════════════════════════════════════════
+//  9. AUTO-SEED — يملأ DB بأغاني YouTube تلقائياً لو DB فاضي
+// ══════════════════════════════════════════
+
+// قائمة أغاني YouTube الأصلية للـ auto-seed
+const AUTO_SEED_SONGS = [
+  // 🇪🇬 Arab
+  { q: 'عمرو دياب نور العين official', artist: 'عمرو دياب', genre: 'Arab Pop' },
+  { q: 'عمرو دياب وأنا عشت official', artist: 'عمرو دياب', genre: 'Arab Pop' },
+  { q: 'عمرو دياب تملي معاك official', artist: 'عمرو دياب', genre: 'Arab Pop' },
+  { q: 'محمد حماقي بحبك official audio', artist: 'محمد حماقي', genre: 'Arab Pop' },
+  { q: 'محمد حماقي أنسى official', artist: 'محمد حماقي', genre: 'Arab Pop' },
+  { q: 'تامر حسني اتعلمت official', artist: 'تامر حسني', genre: 'Arab Pop' },
+  { q: 'أنغام فارقني official', artist: 'أنغام', genre: 'Arab Pop' },
+  { q: 'نانسي عجرم أه ونص official', artist: 'نانسي عجرم', genre: 'Arab Pop' },
+  { q: 'اليسا بتحبني ليه official', artist: 'اليسا', genre: 'Arab Pop' },
+  { q: 'وائل كفوري ما بعرف official', artist: 'وائل كفوري', genre: 'Arab Pop' },
+  { q: 'سعد لمجرد ya nass official', artist: 'سعد لمجرد', genre: 'Arab Pop' },
+  { q: 'حسن شاكوش روتين official', artist: 'حسن شاكوش', genre: 'Mahragan' },
+  { q: 'عمر كمال دلع official', artist: 'عمر كمال', genre: 'Mahragan' },
+  { q: 'حكيم والاه زمان official', artist: 'حكيم', genre: 'Sha3bi' },
+  // 🌍 International
+  { q: 'The Weeknd Blinding Lights official audio', artist: 'The Weeknd', genre: 'Pop' },
+  { q: 'The Weeknd Save Your Tears official audio', artist: 'The Weeknd', genre: 'Pop' },
+  { q: 'The Weeknd Starboy official audio', artist: 'The Weeknd', genre: 'Pop' },
+  { q: 'Ed Sheeran Shape of You official audio', artist: 'Ed Sheeran', genre: 'Pop' },
+  { q: 'Ed Sheeran Perfect official audio', artist: 'Ed Sheeran', genre: 'Pop' },
+  { q: 'Taylor Swift Anti-Hero official audio', artist: 'Taylor Swift', genre: 'Pop' },
+  { q: 'Dua Lipa Levitating official audio', artist: 'Dua Lipa', genre: 'Pop' },
+  { q: 'Billie Eilish bad guy official audio', artist: 'Billie Eilish', genre: 'Pop' },
+  { q: 'Ariana Grande 7 rings official audio', artist: 'Ariana Grande', genre: 'Pop' },
+  { q: 'Bruno Mars Uptown Funk official audio', artist: 'Bruno Mars', genre: 'Pop' },
+  { q: 'Harry Styles As It Was official audio', artist: 'Harry Styles', genre: 'Pop' },
+  { q: 'Drake God\'s Plan official audio', artist: 'Drake', genre: 'Hip-Hop' },
+  { q: 'Eminem Lose Yourself official audio', artist: 'Eminem', genre: 'Hip-Hop' },
+  { q: 'Coldplay Yellow official audio', artist: 'Coldplay', genre: 'Rock' },
+  { q: 'Imagine Dragons Believer official audio', artist: 'Imagine Dragons', genre: 'Rock' },
+  { q: 'Avicii Wake Me Up official audio', artist: 'Avicii', genre: 'Electronic' },
+];
+
+const SEED_GENRE_COLORS = {
+  'Arab Pop': '#C9A84C', 'Mahragan': '#E94560', 'Sha3bi': '#F5A623',
+  'Pop': '#1DB954', 'Hip-Hop': '#9B59B6', 'R&B': '#E74C3C',
+  'Rock': '#E67E22', 'Electronic': '#3498DB',
+};
+
+async function seedYouTubeTrack({ q, artist, genre }) {
+  // Try YouTube official API
+  if (YOUTUBE_API_KEY) {
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&videoCategoryId=10&maxResults=3&key=${YOUTUBE_API_KEY}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items?.length) {
+          const item = data.items[0];
+          const videoId = item.id.videoId;
+          const exists = await Track.findOne({ audioUrl: { $regex: videoId } });
+          if (exists) return false;
+          const cleanTitle = item.snippet.title
+            .replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '')
+            .replace(/\s*-\s*(official\s*)?(audio|video)/gi, '').trim();
+          await new Track({
+            title: cleanTitle || q,
+            artist,
+            album: 'Single',
+            cover: item.snippet.thumbnails.high?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            duration: 210,
+            genre,
+            source: 'YouTube',
+            addedBy: 'auto-seed',
+            color: SEED_GENRE_COLORS[genre] || '#FF0000',
+          }).save();
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback: Invidious
+  const INVIDIOUS = ['https://inv.zoomerville.com', 'https://invidious.slipfox.xyz'];
+  for (const base of INVIDIOUS) {
+    try {
+      const res = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(q)}&type=video&page=1`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data) || !data.length) continue;
+      const v = data.find(x => x.type === 'video' && x.lengthSeconds > 60 && x.lengthSeconds < 600);
+      if (!v) continue;
+      const exists = await Track.findOne({ audioUrl: { $regex: v.videoId } });
+      if (exists) return false;
+      const cleanTitle = v.title
+        .replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '')
+        .replace(/\s*-\s*(official\s*)?(audio|video)/gi, '').trim();
+      await new Track({
+        title: cleanTitle || q,
+        artist,
+        album: 'Single',
+        cover: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+        audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
+        duration: v.lengthSeconds || 210,
+        genre,
+        source: 'YouTube',
+        addedBy: 'auto-seed',
+        color: SEED_GENRE_COLORS[genre] || '#FF0000',
+      }).save();
+      return true;
+    } catch {}
+  }
+  return false;
+}
+
+// Endpoint to trigger seeding (can be called from frontend or manually)
+app.post('/api/auto-seed', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'DB not connected' });
+    }
+    const count = await Track.countDocuments();
+    if (count >= 20) {
+      return res.json({ success: true, message: `DB already has ${count} tracks`, seeded: 0 });
+    }
+
+    res.json({ success: true, message: 'Seeding started in background...', currentCount: count });
+
+    // Run seeding in background (non-blocking)
+    (async () => {
+      let added = 0;
+      for (const song of AUTO_SEED_SONGS) {
+        try {
+          const ok = await seedYouTubeTrack(song);
+          if (ok) added++;
+          await new Promise(r => setTimeout(r, 600));
+        } catch {}
+      }
+      console.log(`🌱 Auto-seed complete: added ${added} YouTube tracks`);
+    })();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Auto-seed on server startup if DB is empty
+async function autoSeedOnStartup() {
+  try {
+    await new Promise(r => setTimeout(r, 5000)); // Wait for DB connection
+    if (mongoose.connection.readyState !== 1) return;
+    const count = await Track.countDocuments();
+    if (count > 0) {
+      console.log(`📦 DB has ${count} tracks — skipping auto-seed`);
+      return;
+    }
+    console.log('🌱 DB is empty — starting auto-seed from YouTube...');
+    let added = 0;
+    for (const song of AUTO_SEED_SONGS) {
+      try {
+        const ok = await seedYouTubeTrack(song);
+        if (ok) { added++; process.stdout.write(`🎵 +${added} `); }
+        await new Promise(r => setTimeout(r, 700));
+      } catch {}
+    }
+    console.log(`\n✅ Auto-seed done: ${added} tracks added!`);
+  } catch (e) {
+    console.warn('⚠️ Auto-seed error:', e.message);
+  }
+}
+
+autoSeedOnStartup();
 
 // ══════════════════════════════════════════
 //  Fallback SPA Route
