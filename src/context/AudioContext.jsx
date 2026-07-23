@@ -6,10 +6,15 @@ import { API_BASE_URL } from '../config';
 const AudioPlayerContext = createContext(null);
 
 // ── Extract YouTube video ID from URL ─────────────────────────────
-function extractYtId(url) {
-  if (!url) return null;
-  const m = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
+function extractYtId(input) {
+  if (!input || typeof input !== 'string') return null;
+  const str = input.trim();
+  const urlMatch = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  if (urlMatch && urlMatch[1] && urlMatch[1].length === 11) return urlMatch[1];
+  const prefixMatch = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+  if (prefixMatch && prefixMatch[1] && prefixMatch[1].length === 11) return prefixMatch[1];
+  if (str.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  return null;
 }
 
 // ── Load YouTube IFrame API script once ───────────────────────────

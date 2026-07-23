@@ -66,12 +66,27 @@ function dataURItoBlob(dataURI) {
 
 // Extract YouTube video ID from URL or track ID reliably
 function extractYtId(input) {
-  if (!input) return null;
-  const str = String(input);
-  const m = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/|yt-?|yt_?|^)([a-zA-Z0-9_-]{11})/i);
-  if (m && m[1] && m[1].length === 11) return m[1];
-  const match11 = str.match(/[a-zA-Z0-9_-]{11}/);
-  return match11 ? match11[0] : null;
+  if (!input || typeof input !== 'string') return null;
+  const str = input.trim();
+  
+  // 1. YouTube URL with v= parameter, shorts, embed, or youtu.be
+  const urlMatch = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  if (urlMatch && urlMatch[1] && urlMatch[1].length === 11) {
+    return urlMatch[1];
+  }
+  
+  // 2. String starting with yt- or yt_ or yt
+  const prefixMatch = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+  if (prefixMatch && prefixMatch[1] && prefixMatch[1].length === 11) {
+    return prefixMatch[1];
+  }
+
+  // 3. String that is EXACTLY 11 characters long and strictly valid base64url characters
+  if (str.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(str)) {
+    return str;
+  }
+  
+  return null;
 }
 
 // Save downloaded audio blob & track info locally in app private storage (IndexedDB)

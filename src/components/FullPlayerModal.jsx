@@ -396,9 +396,12 @@ export default function FullPlayerModal({
     if (!currentTrack || isDownloading) return;
     setIsDownloading(true);
     try {
-      if (toggleDownload) await toggleDownload(currentTrack.id);
-    } catch {}
-    setTimeout(() => setIsDownloading(false), 1200);
+      if (toggleDownload) await toggleDownload(currentTrack.id || currentTrack._id);
+    } catch (e) {
+      console.error('Download click error:', e);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   if (!isOpen || !currentTrack) return null;
