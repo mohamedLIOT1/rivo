@@ -669,7 +669,11 @@ try {
 async function resolveWithPlayDl(videoId) {
   if (!playDl) return null;
   try {
-    const info = await playDl.stream(`https://www.youtube.com/watch?v=${videoId}`, { quality: 2 });
+    const info = await playDl.stream(`https://www.youtube.com/watch?v=${videoId}`, {
+      quality: 2,
+      htmldata: false,
+      discordPlayerCompatibility: true
+    });
     if (info?.url) {
       console.log(`[play-dl] ✅ Resolved audio stream for ${videoId}`);
       return info.url;
