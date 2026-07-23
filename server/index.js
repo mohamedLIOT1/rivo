@@ -290,6 +290,29 @@ async function autoFetchAndSaveLyrics(track) {
   }
 }
 
+// Remove duplicate tracks from DB on startup
+async function removeDuplicateTracksFromDb() {
+  try {
+    const allTracks = await Track.find({}).sort({ createdAt: 1 });
+    const seenTitles = new Set();
+    const idsToDelete = [];
+    for (const t of allTracks) {
+      const key = (t.title || '').trim().toLowerCase();
+      if (seenTitles.has(key)) {
+        idsToDelete.push(t._id);
+      } else if (key) {
+        seenTitles.add(key);
+      }
+    }
+    if (idsToDelete.length > 0) {
+      await Track.deleteMany({ _id: { $in: idsToDelete } });
+      console.log(`[DB Clean] Cleaned ${idsToDelete.length} duplicate tracks from database.`);
+    }
+  } catch (err) {
+    console.warn('[DB Clean] Warning:', err.message);
+  }
+}
+
 // Cleanup wrong cached lyrics from DB on startup
 async function cleanupWrongCachedLyrics() {
   try {
