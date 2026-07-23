@@ -1638,7 +1638,11 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 
     if (cleanLines.length > 0) {
       console.log(`[Genius Scraper] Extracted ${cleanLines.length} clean lines from ${targetUrl}`);
-      return await syncLyricsWithGemini(cleanLines, targetTitle, '', duration);
+      // Genius gives real text but no timestamps.
+      // Groq Whisper (🎤 button) will transcribe the actual audio with real timestamps.
+      // We return empty here to avoid fake/wrong timestamp generation.
+      return [];
+
     }
   } catch (e) {
     console.warn('[Genius Lyrics] fetch error:', e.message);
@@ -1771,79 +1775,8 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
     }
   }
 
-  // 4. Gemini 2.0 Flash — ONLY if it genuinely knows the song (anti-hallucination)
-  if (GEMINI_API_KEY) {
-    try {
-      // Step 1: Ask Gemini if it actually knows this specific song
-      const confirmPrompt = `Do you know the EXACT real lyrics to the song "${title}" by "${artist}"?
-Answer with ONLY one of these two options:
-- YES_I_KNOW — if you are 100% certain you know the real lyrics
-- UNKNOWN_SONG — if you are not sure or don't know the song`;
-
-      const confirmRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: confirmPrompt }] }] }) }
-      );
-
-      if (confirmRes.ok) {
-        const confirmData = await confirmRes.json();
-        const confirmText = (confirmData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-        
-        // If Gemini says it doesn't know → return empty (don't hallucinate!)
-        if (confirmText.includes('UNKNOWN_SONG')) {
-          console.log(`[Gemini] Doesn't know "${title}" — returning empty to avoid hallucination`);
-          return [];
-        }
-
-        // Step 2: Gemini confirmed it knows → now get accurate lyrics
-        if (confirmText.includes('YES_I_KNOW')) {
-          const lyricsPrompt = `Provide the REAL, EXACT, ACCURATE line-by-line lyrics with LRC timestamp tags for the song "${title}" by "${artist}".
-Total song duration: ${duration} seconds.
-
-RULES (strictly follow):
-- Output ONLY lines in format [m:ss] lyric text
-- Start with realistic intro time (8-20 seconds before first vocal)
-- Space timestamps based on actual singing pace (NOT evenly spaced)
-- Arabic songs → output in Arabic script
-- NO [Verse], [Chorus], [اللازمة], or ANY bracketed section labels
-- NO extra commentary, ONLY timestamped lyric lines`;
-
-          const lyricsRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contents: [{ parts: [{ text: lyricsPrompt }] }] }) }
-          );
-
-          if (lyricsRes.ok) {
-            const lyricsData = await lyricsRes.json();
-            const responseText = lyricsData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const lyrics = [];
-            responseText.split('\n').forEach(line => {
-              const match = line.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-              if (match) {
-                const minutes = parseInt(match[1]);
-                const seconds = parseInt(match[2]);
-                const cs = match[3] ? parseInt(match[3].padEnd(2,'0').slice(0,2)) : 0;
-                const time = minutes * 60 + seconds + cs / 100;
-                const text = match[4].trim();
-                if (text && !/^[\[\(]/.test(text) && !text.includes('Here are') && !text.includes('Lyrics:')) {
-                  lyrics.push({ time: Math.round(time * 100) / 100, text });
-                }
-              }
-            });
-            if (lyrics.length > 0) {
-              console.log(`[Gemini 2.0] Confirmed & generated ${lyrics.length} lines for "${title}"`);
-              return lyrics;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[Gemini 2.0 Lyrics] error:', err.message);
-    }
-  }
-
+  // No lyrics found from any source.
+  // Use the 🎤 Transcribe Audio button in the lyrics tab for Groq Whisper transcription.
   return [];
 }
 
