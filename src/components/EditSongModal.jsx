@@ -66,6 +66,32 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
     onClose();
   };
 
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+
+  const handleAiSyncTimestamps = async () => {
+    if (!lyricsText || !lyricsText.trim()) return;
+    setIsAutoSyncing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/sync-timestamps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rawText: lyricsText,
+          title,
+          artist,
+          duration: track?.duration || 180
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.timestampedText) {
+        setLyricsText(data.timestampedText);
+      }
+    } catch (e) {
+      console.warn('AI Sync Timestamps error:', e);
+    }
+    setIsAutoSyncing(false);
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
       <div className="bg-[#181818] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
@@ -135,15 +161,23 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
           </div>
 
           <div>
-            <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1 flex items-center justify-between">
-              <span>Synced Timed Lyrics</span>
-              <span className="text-[10px] text-[#1DB954]">Format: [0:15] Lyrics Line</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs uppercase font-extrabold text-zinc-400">Synced Timed Lyrics</label>
+              <button
+                type="button"
+                onClick={handleAiSyncTimestamps}
+                disabled={isAutoSyncing || !lyricsText.trim()}
+                className="text-[11px] font-bold text-[#1DB954] hover:text-[#1ed760] flex items-center gap-1 bg-[#1DB954]/10 hover:bg-[#1DB954]/20 px-2.5 py-1 rounded-full border border-[#1DB954]/30 transition-all disabled:opacity-40"
+              >
+                <Sparkles size={12} />
+                <span>{isAutoSyncing ? 'Syncing...' : '🪄 AI Sync Timestamps'}</span>
+              </button>
+            </div>
             <textarea
               rows="5"
               value={lyricsText}
               onChange={(e) => setLyricsText(e.target.value)}
-              placeholder="[0:00] First Line&#10;[0:15] Second Line"
+              placeholder="Paste plain lyrics text here and click 'AI Sync Timestamps' 🪄&#10;&#10;Or type manually:&#10;[0:00] First Line&#10;[0:15] Second Line"
               className="w-full bg-zinc-900 border border-zinc-700 rounded-xl p-3 text-xs text-white font-mono focus:outline-none focus:border-[#1DB954]"
             />
           </div>

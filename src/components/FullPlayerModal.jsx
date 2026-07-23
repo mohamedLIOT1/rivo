@@ -84,6 +84,34 @@ export default function FullPlayerModal({
     setIsTranslating(false);
   };
 
+  const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
+
+  const handleGenerateLyrics = async () => {
+    if (!currentTrack) return;
+    setIsGeneratingLyrics(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackId: currentTrack.id,
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          duration: currentTrack.duration || 180
+        })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
+        currentTrack.lyrics = data.lyrics;
+        setTranslatedLyrics(null);
+        setShowTranslation(false);
+      }
+    } catch (e) {
+      console.warn('AI Generate Lyrics error:', e);
+    }
+    setIsGeneratingLyrics(false);
+  };
+
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
 
@@ -120,8 +148,14 @@ export default function FullPlayerModal({
 
   return (
     <div 
-      className="fixed inset-0 z-[200] flex flex-col overflow-hidden select-none"
-      style={{ background: '#000' }}
+      className={`fixed inset-0 z-50 transition-all duration-300 flex flex-col ${
+        isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      }`}
+      style={{
+        background: currentTrack?.color 
+          ? `linear-gradient(180deg, ${currentTrack.color}44 0%, #121212 100%)`
+          : 'linear-gradient(180deg, #1e3a5f 0%, #121212 100%)'
+      }}
     >
       {/* ── Dynamic Background Gradient ── */}
       <div 
@@ -445,10 +479,29 @@ export default function FullPlayerModal({
                 );
               })
             ) : (
-              <div className="text-center py-20" style={{ color: '#b3b3b3' }}>
-                <ListMusic size={48} className="mx-auto mb-4 opacity-40" />
-                <p className="font-semibold">No lyrics available</p>
-                <p className="text-sm mt-1 opacity-60">Upload synced lyrics when adding the song</p>
+              <div className="text-center py-16 px-4" style={{ color: '#b3b3b3' }}>
+                <ListMusic size={48} className="mx-auto mb-4 text-[#1DB954] opacity-60" />
+                <p className="font-extrabold text-white text-base mb-1">No lyrics available for this song</p>
+                <p className="text-xs text-zinc-400 max-w-xs mx-auto mb-6">
+                  Click below to let AI search, generate & sync timed lyrics for "{currentTrack?.title}"
+                </p>
+                <button
+                  onClick={handleGenerateLyrics}
+                  disabled={isGeneratingLyrics}
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full shadow-lg shadow-[#1DB954]/25 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isGeneratingLyrics ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Generating & Syncing Lyrics...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      <span>🪄 Generate & Sync Lyrics with AI</span>
+                    </>
+                  )}
+                </button>
               </div>
             )}
           </div>

@@ -1232,6 +1232,152 @@ ${lyricsText}`;
   }
 });
 
+// AI Auto-Sync Timestamps for raw text lyrics
+app.post('/api/ai/sync-timestamps', async (req, res) => {
+  try {
+    const { rawText, title, artist, duration = 180 } = req.body;
+    if (!rawText || !rawText.trim()) {
+      return res.status(400).json({ error: 'rawText lyrics required' });
+    }
+
+    const cleanLines = rawText
+      .split('\n')
+      .map(l => l.replace(/\[\d+:\d+\]/, '').trim())
+      .filter(Boolean);
+
+    if (cleanLines.length === 0) {
+      return res.status(400).json({ error: 'No valid lyrics lines found' });
+    }
+
+    if (!GEMINI_API_KEY) {
+      // Fallback mathematical distribution
+      const step = duration / Math.max(cleanLines.length, 1);
+      const lyrics = cleanLines.map((line, idx) => ({
+        time: Math.round(idx * step),
+        text: line
+      }));
+      const formattedText = lyrics.map(l => {
+        const m = Math.floor(l.time / 60);
+        const s = Math.floor(l.time % 60);
+        return `[${m}:${s < 10 ? '0' : ''}${s}] ${l.text}`;
+      }).join('\n');
+
+      return res.json({ success: true, lyrics, timestampedText: formattedText });
+    }
+
+    const prompt = `You are an expert music lyric timer. Add accurate timestamp tags [m:ss] or [mm:ss] to the following lyrics lines for the song "${title || 'Song'}" by "${artist || 'Artist'}".
+The total song duration is ${duration} seconds.
+Distribute the timestamps naturally and evenly starting from [0:00] up to near the end of ${duration} seconds.
+Output ONLY the lyrics with timestamp tags at the beginning of each line.
+
+Lyrics lines:
+${cleanLines.join('\n')}`;
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      }
+    );
+
+    let lyrics = [];
+    let timestampedText = '';
+
+    if (geminiRes.ok) {
+      const data = await geminiRes.json();
+      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      const lines = responseText.split('\n');
+      lines.forEach((line, idx) => {
+        const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
+        if (match) {
+          const time = parseInt(match[1]) * 60 + parseInt(match[2]);
+          const text = match[3].trim();
+          if (text) lyrics.push({ time, text });
+        }
+      });
+      timestampedText = responseText;
+    }
+
+    if (lyrics.length === 0) {
+      const step = duration / Math.max(cleanLines.length, 1);
+      lyrics = cleanLines.map((line, idx) => ({
+        time: Math.round(idx * step),
+        text: line
+      }));
+      timestampedText = lyrics.map(l => {
+        const m = Math.floor(l.time / 60);
+        const s = Math.floor(l.time % 60);
+        return `[${m}:${s < 10 ? '0' : ''}${s}] ${l.text}`;
+      }).join('\n');
+    }
+
+    res.json({ success: true, lyrics, timestampedText });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// AI Auto-Generate Lyrics & Timestamps for any song without lyrics
+app.post('/api/ai/generate-song-lyrics', async (req, res) => {
+  try {
+    const { trackId, title, artist, duration = 180 } = req.body;
+    if (!title) return res.status(400).json({ error: 'Song title required' });
+
+    if (!GEMINI_API_KEY) {
+      return res.status(400).json({ error: 'Gemini API Key required for lyrics generation' });
+    }
+
+    const prompt = `You are a lyrics database. Provide the full lyrics for the song "${title}" by "${artist || 'Artist'}" with synced timestamps [m:ss] or [mm:ss] at the start of each line.
+If the song is Egyptian or Arabic, write the lyrics in Arabic.
+Distribute timestamps evenly across the song duration of ${duration} seconds.
+Output ONLY the lyrics with timestamp tags at the beginning of each line like:
+[0:00] First line
+[0:15] Second line`;
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      }
+    );
+
+    if (!geminiRes.ok) {
+      return res.status(502).json({ error: 'Gemini API failed' });
+    }
+
+    const data = await geminiRes.json();
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    const lyrics = [];
+    const lines = responseText.split('\n');
+    lines.forEach(line => {
+      const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
+      if (match) {
+        const time = parseInt(match[1]) * 60 + parseInt(match[2]);
+        const text = match[3].trim();
+        if (text) lyrics.push({ time, text });
+      }
+    });
+
+    if (lyrics.length > 0 && trackId) {
+      if (mongoose.Types.ObjectId.isValid(trackId)) {
+        await Track.findByIdAndUpdate(trackId, { lyrics });
+      } else {
+        await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
+      }
+    }
+
+    res.json({ success: true, lyrics });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // AI Mood Recommendations
 app.post('/api/ai/recommend-mood', async (req, res) => {
   try {
