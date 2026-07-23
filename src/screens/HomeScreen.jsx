@@ -442,7 +442,7 @@ export default function HomeScreen({
                           >
                             <Heart 
                               size={15} 
-                              className={track.liked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
+                              className={track.liked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
                             />
                           </button>
                           {openEditSongModal && (

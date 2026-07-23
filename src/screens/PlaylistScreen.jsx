@@ -155,7 +155,7 @@ export default function PlaylistScreen({
                       }}
                       className="p-1.5 text-zinc-400 hover:text-white"
                     >
-                      <Heart size={16} className={track.liked ? 'fill-[#1DB954] text-[#1DB954]' : ''} />
+                      <Heart size={16} className={track.liked ? 'fill-white text-white' : ''} />
                     </button>
                     {!playlist.isLikedSongs && (
                       <button

@@ -138,7 +138,7 @@ export default function SearchScreen({ tracks, onSelectTrack, toggleLike, onOpen
                             >
                               <Heart 
                                 size={16} 
-                                className={track.liked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
+                                className={track.liked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
                               />
                             </button>
                           </div>

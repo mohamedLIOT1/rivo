@@ -544,7 +544,7 @@ export default function FullPlayerModal({
                 >
                   <Heart 
                     size={28} 
-                    className={currentTrack.liked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
+                    className={currentTrack.liked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
                   />
                 </button>
               </div>
