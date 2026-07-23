@@ -280,32 +280,7 @@ app.get('/api/tracks', optionalAuth, async (req, res) => {
 async function autoFetchAndSaveLyrics(track) {
   if (!track || (Array.isArray(track.lyrics) && track.lyrics.length > 0)) return;
   try {
-    const q = cleanSongQuery(track.title, track.artist);
-    const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
-    let lyrics = [];
-    if (lrcRes.ok) {
-      const results = await lrcRes.json();
-      const match = Array.isArray(results) ? (results.find(r => r.syncedLyrics) || results[0]) : null;
-      if (match && match.syncedLyrics) {
-        const lines = match.syncedLyrics.split('\n');
-        lines.forEach(l => {
-          const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-          if (m) {
-            const time = parseInt(m[1]) * 60 + parseInt(m[2]);
-            const text = m[4].trim();
-            if (text) lyrics.push({ time, text });
-          }
-        });
-      } else if (match && match.plainLyrics) {
-        const lines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
-        const duration = track.duration || 180;
-        const step = duration / Math.max(lines.length, 1);
-        lyrics = lines.map((l, idx) => ({
-          time: Math.round(idx * step),
-          text: l
-        }));
-      }
-    }
+    const lyrics = await fetchRealLyricsFromLrclib(track.title, track.artist, track.duration);
     if (lyrics.length > 0 && track._id) {
       await Track.findByIdAndUpdate(track._id, { lyrics });
       console.log(`[AI Lyrics] Auto-saved ${lyrics.length} synced lyrics lines for "${track.title}"`);
@@ -1410,18 +1385,79 @@ ${cleanLines.join('\n')}`;
   }
 });
 
-// Helper to clean titles for lyrics search
-function cleanSongQuery(title, artist) {
-  let cleanTitle = (title || '')
-    .replace(/\(.*?\)/gi, '')
-    .replace(/\[.*?\]/gi, '')
-    .replace(/Official Music Video|Official Audio|Visualizer|Lyric Video|Audio|الكليب الرسمي|فيديو كليب/gi, '')
-    .replace(/[-_]/g, ' ')
+// Smart multi-query generator to extract clean titles for lyrics search
+function generateLyricsSearchQueries(title = '', artist = '') {
+  const queries = new Set();
+
+  let cleanedTitle = (title || '')
+    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
+    .replace(/Official\s*(Music\s*)?(Video|Audio|Lyric\s*Video|Visualizer)?/gi, '')
+    .replace(/الكليب\s*الرسمي|فيديو\s*كليب|فيديو|كلمات|أوديو|رسمي/gu, '')
+    .replace(/Sony Music.*|Rotana.*|Mazzika.*|YouTube.*|YouMusic.*/gi, '')
     .trim();
-  if (cleanTitle.includes('|')) {
-    cleanTitle = cleanTitle.split('|')[0].trim();
+
+  let cleanedArtist = (artist || '')
+    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
+    .replace(/Sony Music.*|Rotana.*|Mazzika.*|YouTube.*|YouMusic.*/gi, '')
+    .replace(/Official.*|Channel.*/gi, '')
+    .trim();
+
+  const titleParts = cleanedTitle.split(/[|–—\-]/).map(p => p.trim()).filter(Boolean);
+
+  if (titleParts[0]) {
+    if (cleanedArtist) queries.add(`${titleParts[0]} ${cleanedArtist}`.trim());
+    queries.add(titleParts[0]);
   }
-  return `${cleanTitle} ${artist || ''}`.trim();
+
+  if (titleParts[1]) {
+    if (cleanedArtist) queries.add(`${titleParts[1]} ${cleanedArtist}`.trim());
+    queries.add(titleParts[1]);
+  }
+
+  if (cleanedTitle) {
+    if (cleanedArtist) queries.add(`${cleanedTitle} ${cleanedArtist}`.trim());
+    queries.add(cleanedTitle);
+  }
+
+  return Array.from(queries).filter(q => q.length >= 2);
+}
+
+async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
+  const queries = generateLyricsSearchQueries(title, artist);
+  for (const q of queries) {
+    try {
+      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
+      if (lrcRes.ok) {
+        const results = await lrcRes.json();
+        if (Array.isArray(results) && results.length > 0) {
+          const match = results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || results[0];
+          if (match && match.syncedLyrics) {
+            const lines = match.syncedLyrics.split('\n');
+            const lyrics = [];
+            lines.forEach(l => {
+              const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
+              if (m) {
+                const time = parseInt(m[1]) * 60 + parseInt(m[2]);
+                const text = m[4].trim();
+                if (text) lyrics.push({ time, text });
+              }
+            });
+            if (lyrics.length > 0) return lyrics;
+          } else if (match && match.plainLyrics) {
+            const lines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+            if (lines.length > 0) {
+              const step = duration / Math.max(lines.length, 1);
+              return lines.map((l, idx) => ({
+                time: Math.round(idx * step),
+                text: l
+              }));
+            }
+          }
+        }
+      }
+    } catch (err) {}
+  }
+  return [];
 }
 
 // AI Auto-Generate Lyrics & Timestamps for any song without lyrics
@@ -1430,93 +1466,9 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
     const { trackId, title, artist, duration = 180 } = req.body;
     if (!title) return res.status(400).json({ error: 'Song title required' });
 
-    let lyrics = [];
+    let lyrics = await fetchRealLyricsFromLrclib(title, artist, duration);
 
-    // TIER 1: Search LRCLIB API for exact synced lyrics
-    try {
-      const q = cleanSongQuery(title, artist);
-      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
-      if (lrcRes.ok) {
-        const results = await lrcRes.json();
-        const match = Array.isArray(results) ? (results.find(r => r.syncedLyrics) || results[0]) : null;
-        
-        if (match && match.syncedLyrics) {
-          const lines = match.syncedLyrics.split('\n');
-          lines.forEach(l => {
-            const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-            if (m) {
-              const time = parseInt(m[1]) * 60 + parseInt(m[2]);
-              const text = m[4].trim();
-              if (text) lyrics.push({ time, text });
-            }
-          });
-        } else if (match && match.plainLyrics) {
-          const lines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
-          const step = duration / Math.max(lines.length, 1);
-          lyrics = lines.map((l, idx) => ({
-            time: Math.round(idx * step),
-            text: l
-          }));
-        }
-      }
-    } catch (lrcErr) {
-      console.warn('[AI Lyrics] LRCLIB search error:', lrcErr.message);
-    }
-
-    // TIER 2: Gemini AI fallback (testing multiple model aliases)
-    if (lyrics.length === 0 && GEMINI_API_KEY) {
-      const prompt = `Provide the full lyrics for the song "${title}" by "${artist || 'Artist'}" with synced timestamps [m:ss] at start of each line.
-If the song is Arabic or Egyptian, write lyrics in Arabic.
-Distribute timestamps evenly across duration of ${duration} seconds.
-Format:
-[0:00] First line
-[0:15] Second line`;
-
-      const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro'];
-      for (const model of modelsToTry) {
-        try {
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            }
-          );
-          if (geminiRes.ok) {
-            const data = await geminiRes.json();
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const lines = responseText.split('\n');
-            lines.forEach(line => {
-              const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
-              if (match) {
-                const time = parseInt(match[1]) * 60 + parseInt(match[2]);
-                const text = match[3].trim();
-                if (text) lyrics.push({ time, text });
-              }
-            });
-            if (lyrics.length > 0) break;
-          }
-        } catch (gErr) {}
-      }
-    }
-
-    // TIER 3: Universal Fallback so the button NEVER fails!
-    if (lyrics.length === 0) {
-      const defaultLines = [
-        `🎵 ${title} - ${artist || 'Liofy'}`,
-        `استمع واستمتع بأغنية ${title}`,
-        `كلمات الأغنية يتم تحديثها تلقائياً مع التشغيل`,
-        `استمتع بأفضل تجربة صوتية على Liofy 🎶`
-      ];
-      const step = duration / defaultLines.length;
-      lyrics = defaultLines.map((line, idx) => ({
-        time: Math.round(idx * step),
-        text: line
-      }));
-    }
-
-    // Save generated lyrics to MongoDB database permanently!
+    // Save real generated lyrics to MongoDB database permanently!
     if (lyrics.length > 0 && trackId) {
       try {
         if (mongoose.Types.ObjectId.isValid(trackId)) {
@@ -1529,7 +1481,7 @@ Format:
       }
     }
 
-    res.json({ success: true, lyrics });
+    res.json({ success: lyrics.length > 0, lyrics });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
