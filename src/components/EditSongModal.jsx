@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Music, AlignLeft, Edit3, Trash2 } from 'lucide-react';
+import { X, Music, AlignLeft, Edit3, Trash2, Sparkles } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, onDeleteSong }) {
   const [title, setTitle] = useState('');

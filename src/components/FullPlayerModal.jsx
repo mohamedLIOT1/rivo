@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
-  Heart, Volume2, PlusCircle, Download, Disc, Sparkles, Languages, Loader2,
+  Heart, Volume2, VolumeX, PlusCircle, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, Share2, ListMusic
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
