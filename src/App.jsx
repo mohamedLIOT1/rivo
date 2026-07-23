@@ -126,12 +126,13 @@ function AppContent() {
     handleDeleteTrack(trackId);
   };
 
-  const handleCreatePlaylist = async (name, description) => {
+  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true) => {
     const newPl = {
       id: `pl-${Date.now()}`,
       name,
       description: description || '',
-      cover: '',
+      cover: cover || '',
+      isPublic: isPublic !== false,
       trackIds: [],
     };
     setPlaylists(prev => [...prev, newPl]);
@@ -145,10 +146,39 @@ function AppContent() {
         await fetch(`${API_BASE_URL}/api/playlists/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name, description }),
+          body: JSON.stringify({ name, description, cover, isPublic }),
         });
       }
     } catch {}
+  };
+
+  const handleUpdatePlaylist = async (updatedPl) => {
+    setPlaylists(prev => prev.map(p => p.id === updatedPl.id ? updatedPl : p));
+    if (selectedPlaylist?.id === updatedPl.id) setSelectedPlaylist(updatedPl);
+
+    try {
+      const token = localStorage.getItem('liofy_token');
+      if (token) {
+        await fetch(`${API_BASE_URL}/api/playlists/${updatedPl.id}/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ 
+            name: updatedPl.name, 
+            description: updatedPl.description, 
+            cover: updatedPl.cover, 
+            isPublic: updatedPl.isPublic 
+          }),
+        });
+      }
+    } catch {}
+  };
+
+  const handleTogglePlaylistVisibility = async (playlistId) => {
+    const target = playlists.find(p => p.id === playlistId);
+    if (!target) return;
+    const newVisibility = target.isPublic === false ? true : false;
+    const updated = { ...target, isPublic: newVisibility };
+    await handleUpdatePlaylist(updated);
   };
 
   const handleAddTrackToPlaylist = async (trackId, playlistId) => {
@@ -304,6 +334,8 @@ function AppContent() {
             onBack={() => setCurrentScreen('library')}
             onAddTrackToPlaylist={handleAddTrackToPlaylist}
             onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
+            onUpdatePlaylist={handleUpdatePlaylist}
+            onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
           />
         )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal } from 'lucide-react';
+import { Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, Camera, Globe, Lock, Edit2, Loader2, Check } from 'lucide-react';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -8,9 +8,13 @@ export default function PlaylistScreen({
   toggleLike, 
   onBack,
   onAddTrackToPlaylist,
-  onRemoveTrackFromPlaylist
+  onRemoveTrackFromPlaylist,
+  onUpdatePlaylist = () => {},
+  onTogglePlaylistVisibility = () => {},
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isUpdatingCover, setIsUpdatingCover] = useState(false);
+  const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
 
   if (!playlist) return null;
 
@@ -33,6 +37,25 @@ export default function PlaylistScreen({
   };
 
   const isMixView = playlist.isMix || playlist.name.toUpperCase().includes('MIX');
+  const isPublic = playlist.isPublic !== false;
+
+  const handleCoverUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUpdatingCover(true);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      onUpdatePlaylist({ ...playlist, cover: reader.result });
+      setIsUpdatingCover(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleTogglePrivacy = async () => {
+    setIsTogglingPrivacy(true);
+    await onTogglePlaylistVisibility(playlist.id);
+    setIsTogglingPrivacy(false);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto pb-32 select-none">
@@ -45,21 +68,64 @@ export default function PlaylistScreen({
           <ArrowLeft size={20} />
         </button>
 
-        <div className="w-44 h-44 md:w-52 md:h-52 rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/10 mt-6 md:mt-0">
+        {/* Cover Art (With Upload Overlay for Custom Playlists) */}
+        <div className="w-44 h-44 md:w-52 md:h-52 rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-white/10 mt-6 md:mt-0 relative group">
           {playlist.isLikedSongs ? (
             <div className="w-full h-full bg-gradient-to-br from-indigo-600 via-purple-700 to-pink-700 flex items-center justify-center text-white">
               <Heart size={64} fill="white" />
             </div>
           ) : (
-            <img src={playlist.cover} alt={playlist.name} className="w-full h-full object-cover" />
+            <>
+              <img 
+                src={playlist.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=1DB954&color=000&size=512&bold=true&format=svg`} 
+                alt={playlist.name} 
+                className="w-full h-full object-cover" 
+              />
+              <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 cursor-pointer text-white">
+                {isUpdatingCover ? (
+                  <Loader2 size={24} className="animate-spin" />
+                ) : (
+                  <>
+                    <Camera size={28} />
+                    <span className="text-xs font-bold">تغيير الصورة</span>
+                  </>
+                )}
+                <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+              </label>
+            </>
           )}
         </div>
 
         <div className="flex-1">
-          <span className="text-xs font-black uppercase tracking-widest text-[#1DB954]">
-            {isMixView ? 'Public Playlist' : 'Playlist'}
-          </span>
-          <h1 className="text-4xl md:text-7xl font-black text-white tracking-tight mt-1 uppercase">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-black uppercase tracking-widest text-[#1DB954]">
+              {playlist.isLikedSongs ? 'قائمة المفضلات' : 'قائمة تشغيل'}
+            </span>
+
+            {/* Public/Private Badge & Toggle Button */}
+            {!playlist.isLikedSongs && (
+              <button
+                onClick={handleTogglePrivacy}
+                disabled={isTogglingPrivacy}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
+                  isPublic 
+                    ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/30' 
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                }`}
+                title="اضغط لتغيير ظهور القائمة بالبروفايل"
+              >
+                {isTogglingPrivacy ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : isPublic ? (
+                  <><Globe size={12} /><span>عامة (تظهر بالبروفايل)</span></>
+                ) : (
+                  <><Lock size={12} /><span>خاصة (مخفية)</span></>
+                )}
+              </button>
+            )}
+          </div>
+
+          <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight mt-1">
             {playlist.name}
           </h1>
           <p className="text-xs md:text-sm text-zinc-300 mt-2 font-medium">{playlist.description || 'Custom playlist'}</p>

@@ -538,6 +538,26 @@ app.post('/api/playlists/:id/toggle-visibility', authMiddleware, async (req, res
   }
 });
 
+// Update playlist details (cover, name, description, isPublic)
+app.post('/api/playlists/:id/update', authMiddleware, async (req, res) => {
+  try {
+    const { name, description, cover, isPublic } = req.body;
+    const updateFields = {};
+    if (name !== undefined) updateFields['playlists.$.name'] = name;
+    if (description !== undefined) updateFields['playlists.$.description'] = description;
+    if (cover !== undefined) updateFields['playlists.$.cover'] = cover;
+    if (isPublic !== undefined) updateFields['playlists.$.isPublic'] = isPublic;
+
+    await User.findOneAndUpdate(
+      { _id: req.user.id, 'playlists.id': req.params.id },
+      { $set: updateFields }
+    );
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Delete playlist
 app.delete('/api/playlists/:id', authMiddleware, async (req, res) => {
   try {
