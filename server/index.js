@@ -798,6 +798,26 @@ app.get('/api/yt-resolve', async (req, res) => {
   }
 });
 
+// /api/proxy-image — fetches any image server-side to bypass CORS for canvas color extraction
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) return res.status(400).json({ error: 'URL required' });
+    const imgRes = await fetch(decodeURIComponent(url), {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!imgRes.ok) return res.status(imgRes.status).end();
+    const ct = imgRes.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    imgRes.body.pipe(res);
+  } catch (e) {
+    res.status(500).end();
+  }
+});
+
 // /api/proxy-audio — streams audio with range support
 app.get('/api/proxy-audio', async (req, res) => {
   try {

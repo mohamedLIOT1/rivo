@@ -63,6 +63,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const tracksRef         = useRef(tracks);
   const currentTrackRef   = useRef(currentTrack);
   const volumeRef         = useRef(0.8);
+  const shouldPlayRef     = useRef(false); // Force autoplay on track change
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
@@ -231,7 +232,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
         try {
           ytPlayerRef.current.loadVideoById(ytId);
-          if (isPlaying) {
+          // Always play: either isPlaying was true, or shouldPlayRef forces it
+          if (isPlaying || shouldPlayRef.current) {
+            shouldPlayRef.current = false;
             ytPlayerRef.current.playVideo();
           } else {
             ytPlayerRef.current.pauseVideo();
@@ -284,7 +287,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (!audio) return;
         if (audio.src !== targetUrl) { audio.src = targetUrl; }
 
-        if (isPlaying) {
+        // Always play: either isPlaying was true, or shouldPlayRef forces autoplay
+        if (isPlaying || shouldPlayRef.current) {
+          shouldPlayRef.current = false;
           resumeAudioContext();
           audio.play().catch(e => console.warn('Audio play error:', e));
         } else {
@@ -358,6 +363,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       });
     }
 
+    // Signal that the next currentTrack change should autoplay
+    shouldPlayRef.current = true;
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
   }, []);

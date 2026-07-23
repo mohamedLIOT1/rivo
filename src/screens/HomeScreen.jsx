@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown } from 'lucide-react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings } from 'lucide-react';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -16,7 +16,8 @@ export default function HomeScreen({
   isPlaying,
   currentUser,
   logout = () => {},
-  openAuthModal = () => {}
+  openAuthModal = () => {},
+  openProfileScreen = () => {},
 }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
@@ -94,22 +95,36 @@ export default function HomeScreen({
 
               {/* Profile Dropdown Menu */}
               {isProfileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-[#282828] border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in duration-150">
+                <div className="absolute right-0 mt-2 w-52 bg-[#282828] border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in duration-150">
                   <div className="px-4 py-2 border-b border-white/10">
                     <p className="text-xs font-bold text-white truncate">{currentUser?.name || 'Liofy User'}</p>
                     <p className="text-[10px] text-zinc-400 truncate">{currentUser?.email || 'Guest Account'}</p>
                   </div>
                   {currentUser ? (
-                    <button
-                      onClick={() => {
-                        setIsProfileMenuOpen(false);
-                        logout();
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
-                    >
-                      <LogOut size={14} />
-                      <span>تسجيل خروج (Logout)</span>
-                    </button>
+                    <>
+                      {/* Profile button */}
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          openProfileScreen();
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-white hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <User size={14} className="text-[#1DB954]" />
+                        <span>بروفايلي (Profile)</span>
+                      </button>
+                      {/* Logout button */}
+                      <button
+                        onClick={() => {
+                          setIsProfileMenuOpen(false);
+                          logout();
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+                      >
+                        <LogOut size={14} />
+                        <span>تسجيل خروج (Logout)</span>
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => {

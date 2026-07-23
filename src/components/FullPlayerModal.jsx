@@ -8,48 +8,77 @@ import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
+// Works for YouTube thumbnails (no CORS needed via CSS hack approach)
+const colorCache = new Map();
+
 function extractColorFromImage(src, callback) {
   if (!src || src.startsWith('data:')) { callback(null); return; }
-  try {
+  
+  // Check cache first
+  if (colorCache.has(src)) { callback(colorCache.get(src)); return; }
+
+  const tryExtract = (imgSrc) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       try {
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
+        const size = 80;
+        canvas.width = size;
+        canvas.height = size;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 64, 64);
-        const data = ctx.getImageData(0, 0, 64, 64).data;
-        let r = 0, g = 0, b = 0, count = 0;
-        for (let i = 0; i < data.length; i += 16) {
-          const pr = data[i], pg = data[i+1], pb = data[i+2];
-          // Skip near-black and near-white pixels for better color extraction
-          const brightness = (pr + pg + pb) / 3;
-          if (brightness > 25 && brightness < 230) {
-            r += pr; g += pg; b += pb; count++;
+        ctx.drawImage(img, 0, 0, size, size);
+        const data = ctx.getImageData(0, 0, size, size).data;
+
+        // Find dominant vibrant color using saturation-weighted approach
+        let bestR = 0, bestG = 0, bestB = 0, bestScore = 0;
+        const buckets = new Map();
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          const brightness = (r + g + b) / 3;
+          if (brightness < 30 || brightness > 225) continue; // skip very dark/light
+          
+          // Quantize to reduce color buckets
+          const key = `${Math.round(r/20)*20},${Math.round(g/20)*20},${Math.round(b/20)*20}`;
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const saturation = max === 0 ? 0 : (max - min) / max;
+          
+          const count = (buckets.get(key) || 0) + 1;
+          buckets.set(key, count);
+          // Score = count * saturation boost
+          const score = count * (1 + saturation * 2);
+          if (score > bestScore) {
+            bestScore = score;
+            bestR = r; bestG = g; bestB = b;
           }
         }
-        if (count > 0) {
-          r = Math.round(r / count);
-          g = Math.round(g / count);
-          b = Math.round(b / count);
-          // Boost saturation for more vibrant colors
-          const max = Math.max(r, g, b);
-          const factor = Math.min(255 / max, 1.4);
-          r = Math.min(255, Math.round(r * factor));
-          g = Math.min(255, Math.round(g * factor));
-          b = Math.min(255, Math.round(b * factor));
-          callback(`rgb(${r},${g},${b})`);
+
+        if (bestScore > 0) {
+          // Boost saturation slightly for vibrancy
+          const max = Math.max(bestR, bestG, bestB);
+          if (max > 0) {
+            const factor = Math.min(255 / max, 1.3);
+            bestR = Math.min(255, Math.round(bestR * factor));
+            bestG = Math.min(255, Math.round(bestG * factor));
+            bestB = Math.min(255, Math.round(bestB * factor));
+          }
+          const color = `rgb(${bestR},${bestG},${bestB})`;
+          colorCache.set(src, color);
+          callback(color);
         } else {
           callback(null);
         }
       } catch { callback(null); }
     };
     img.onerror = () => callback(null);
-    img.src = src;
-  } catch { callback(null); }
+    img.src = imgSrc;
+  };
+
+  tryExtract(src);
 }
+
 
 export default function FullPlayerModal({
   currentTrack,
@@ -89,10 +118,21 @@ export default function FullPlayerModal({
       setDynamicColor(currentTrack?.color || '#1DB954');
       return;
     }
-    // Use stored color first for instant display, then try to extract
+    // Use stored color first for instant display
     setDynamicColor(currentTrack.color || '#1DB954');
-    extractColorFromImage(currentTrack.cover, (color) => {
-      if (color) setDynamicColor(color);
+    
+    // Try direct first, then via proxy (bypass YouTube CORS)
+    const coverUrl = currentTrack.cover;
+    extractColorFromImage(coverUrl, (color) => {
+      if (color) {
+        setDynamicColor(color);
+      } else {
+        // Fallback: use server proxy to bypass CORS for YouTube thumbnails
+        const proxiedUrl = `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(coverUrl)}`;
+        extractColorFromImage(proxiedUrl, (c2) => {
+          if (c2) setDynamicColor(c2);
+        });
+      }
     });
   }, [currentTrack?.cover, currentTrack?.color]);
 

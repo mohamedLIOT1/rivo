@@ -269,6 +269,7 @@ function AppContent() {
             currentUser={currentUser}
             logout={logout}
             openAuthModal={() => setIsAuthOpen(true)}
+            openProfileScreen={() => setCurrentScreen('profile')}
           />
         )}
 
