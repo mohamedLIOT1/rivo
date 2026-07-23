@@ -1,11 +1,55 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal
+  MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
+
+// ── Extract dominant color from an image URL using Canvas ──────────────
+function extractColorFromImage(src, callback) {
+  if (!src || src.startsWith('data:')) { callback(null); return; }
+  try {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 64, 64);
+        const data = ctx.getImageData(0, 0, 64, 64).data;
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < data.length; i += 16) {
+          const pr = data[i], pg = data[i+1], pb = data[i+2];
+          // Skip near-black and near-white pixels for better color extraction
+          const brightness = (pr + pg + pb) / 3;
+          if (brightness > 25 && brightness < 230) {
+            r += pr; g += pg; b += pb; count++;
+          }
+        }
+        if (count > 0) {
+          r = Math.round(r / count);
+          g = Math.round(g / count);
+          b = Math.round(b / count);
+          // Boost saturation for more vibrant colors
+          const max = Math.max(r, g, b);
+          const factor = Math.min(255 / max, 1.4);
+          r = Math.min(255, Math.round(r * factor));
+          g = Math.min(255, Math.round(g * factor));
+          b = Math.min(255, Math.round(b * factor));
+          callback(`rgb(${r},${g},${b})`);
+        } else {
+          callback(null);
+        }
+      } catch { callback(null); }
+    };
+    img.onerror = () => callback(null);
+    img.src = src;
+  } catch { callback(null); }
+}
 
 export default function FullPlayerModal({
   currentTrack,
@@ -27,19 +71,36 @@ export default function FullPlayerModal({
   isRepeat,
   toggleRepeat,
   queue = [],
-  openAddToPlaylist
+  openAddToPlaylist,
+  onPlayTrack,
 }) {
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
-  const { audioRef, isYtTrack } = useAudioPlayer();
+  const { audioRef, isYtTrack, playTrack } = useAudioPlayer();
 
   const [activeTab, setActiveTab] = useState('player');
   const [isVinylMode, setIsVinylMode] = useState(false);
   const lyricRefs = useRef({});
 
+  // ── Dynamic background color extracted from album art ──
+  const [dynamicColor, setDynamicColor] = useState(null);
+
+  useEffect(() => {
+    if (!currentTrack?.cover) {
+      setDynamicColor(currentTrack?.color || '#1DB954');
+      return;
+    }
+    // Use stored color first for instant display, then try to extract
+    setDynamicColor(currentTrack.color || '#1DB954');
+    extractColorFromImage(currentTrack.cover, (color) => {
+      if (color) setDynamicColor(color);
+    });
+  }, [currentTrack?.cover, currentTrack?.color]);
+
+  const trackColor = dynamicColor || currentTrack?.color || '#1DB954';
+
   // ── RAF-based live time for lyrics sync (reads audio directly at ~60fps) ──
   const [liveTime, setLiveTime] = useState(currentTime);
   const rafRef = useRef(null);
-  const ytPlayerRef = useRef(null); // reference to YT player via window
 
   useEffect(() => {
     if (!isOpen || activeTab !== 'lyrics') {
@@ -48,13 +109,12 @@ export default function FullPlayerModal({
     }
     const tick = () => {
       if (isYtTrack) {
-        // YT player: read via window reference
         try {
           const yt = window.__liofyYTPlayer;
           if (yt && typeof yt.getCurrentTime === 'function') {
             setLiveTime(yt.getCurrentTime() || 0);
           } else {
-            setLiveTime(t => t); // fallback: keep prop-based currentTime
+            setLiveTime(t => t);
           }
         } catch {}
       } else if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
@@ -81,6 +141,8 @@ export default function FullPlayerModal({
   useEffect(() => {
     setSyncOffset(0);
     setLocalLyrics(null);
+    setTranslatedLyrics(null);
+    setShowTranslation(false);
   }, [currentTrack?.id]);
 
   const rawLyrics = localLyrics || (currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : []);
@@ -139,8 +201,6 @@ export default function FullPlayerModal({
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
-
-  const isYouTubeTrack = currentTrack?.audioUrl?.includes('youtube') || currentTrack?.audioUrl?.includes('youtu.be') || currentTrack?.source === 'YouTube';
 
   const handleGenerateLyrics = async () => {
     if (!currentTrack) return;
@@ -216,9 +276,9 @@ export default function FullPlayerModal({
         })
       });
       currentTrack.lyrics = [];
+      setLocalLyrics([]);
       setTranslatedLyrics(null);
       setShowTranslation(false);
-      setLiveTime(t => (t === 0 ? 0.0001 : 0)); // force React re-render
     } catch (e) {
       console.warn('Clear lyrics error:', e);
     }
@@ -247,6 +307,18 @@ export default function FullPlayerModal({
     }
   }, [activeLyricIndex, activeTab, isOpen, isUserScrolling]);
 
+  // ── Download handler with visual feedback ──
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadClick = async () => {
+    if (!currentTrack || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      if (toggleDownload) await toggleDownload(currentTrack.id);
+    } catch {}
+    setTimeout(() => setIsDownloading(false), 1200);
+  };
+
   if (!isOpen || !currentTrack) return null;
 
   const formatTime = (secs) => {
@@ -257,28 +329,34 @@ export default function FullPlayerModal({
   };
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const trackColor = currentTrack.color || '#1DB954';
+
+  // Play a track from the queue
+  const handleQueueTrackClick = (track) => {
+    if (onPlayTrack) {
+      onPlayTrack(track, queue);
+    } else if (playTrack) {
+      playTrack(track, queue);
+    }
+  };
 
   return (
     <div 
-      className={`fixed inset-0 z-[300] bg-[#121212] transition-all duration-300 flex flex-col overflow-hidden select-none ${
+      className={`fixed inset-0 z-[300] transition-all duration-300 flex flex-col overflow-hidden select-none ${
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
-      style={{
-        background: '#121212'
-      }}
+      style={{ background: '#121212' }}
     >
       {/* ── Dynamic Background Gradient ── */}
       <div 
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: `linear-gradient(180deg, ${trackColor}66 0%, ${trackColor}15 45%, #121212 100%)`,
-          transition: 'background 1s ease',
+          background: `linear-gradient(180deg, ${trackColor}88 0%, ${trackColor}22 45%, #121212 100%)`,
+          transition: 'background 1.2s ease',
         }}
       />
       <div 
         className="absolute inset-0 pointer-events-none"
-        style={{ background: 'rgba(0,0,0,0.5)' }}
+        style={{ background: 'rgba(0,0,0,0.45)' }}
       />
 
       {/* ── Top Bar ── */}
@@ -353,14 +431,18 @@ export default function FullPlayerModal({
                     <div className="absolute w-4 h-4 rounded-full bg-black border-2 border-white/20 z-20" />
                   </div>
                 ) : (
-                  <div className="w-full h-full rounded-lg overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)]"
-                    style={{ borderRadius: '8px' }}
+                  <div 
+                    className="w-full h-full overflow-hidden shadow-[0_32px_64px_rgba(0,0,0,0.8)]"
+                    style={{ 
+                      borderRadius: '8px',
+                      transform: isPlaying ? 'scale(1)' : 'scale(0.95)',
+                      transition: 'transform 0.4s ease',
+                    }}
                   >
                     <img 
                       src={currentTrack.cover} 
                       alt={currentTrack.title}
                       className="w-full h-full object-cover"
-                      style={{ transition: 'transform 0.3s ease' }}
                     />
                   </div>
                 )}
@@ -405,7 +487,7 @@ export default function FullPlayerModal({
                 }}
               >
                 <div 
-                  className="absolute top-0 left-0 h-full rounded-full transition-all"
+                  className="absolute top-0 left-0 h-full rounded-full"
                   style={{ 
                     width: `${progressPercent}%`, 
                     background: 'white',
@@ -520,14 +602,17 @@ export default function FullPlayerModal({
                 </button>
                 {toggleDownload && (
                   <button 
-                    onClick={() => toggleDownload(currentTrack.id)}
-                    className="p-2 transition-all hover:scale-105"
-                    title="Download"
+                    onClick={handleDownloadClick}
+                    disabled={isDownloading}
+                    className="p-2 transition-all hover:scale-105 disabled:opacity-60"
+                    title={currentTrack.downloaded ? 'Downloaded ✓' : 'Download'}
                   >
-                    <Download 
-                      size={18} 
-                      style={{ color: currentTrack.downloaded ? '#1DB954' : '#b3b3b3' }}
-                    />
+                    {currentTrack.downloaded 
+                      ? <CheckCircle2 size={18} style={{ color: '#1DB954' }} />
+                      : isDownloading 
+                        ? <Loader2 size={18} className="animate-spin text-[#1DB954]" />
+                        : <Download size={18} style={{ color: '#b3b3b3' }} />
+                    }
                   </button>
                 )}
               </div>
@@ -631,7 +716,6 @@ export default function FullPlayerModal({
                       fontWeight: 700,
                       letterSpacing: '-0.02em',
                       color: isActive ? '#fff' : 'rgba(255,255,255,0.3)',
-                      transform: isActive ? 'none' : 'none',
                     }}
                   >
                     {line.text}
@@ -687,22 +771,30 @@ export default function FullPlayerModal({
               return (
                 <div 
                   key={`${track.id}-${i}`}
-                  className="flex items-center gap-3 py-2 px-2 rounded-md cursor-pointer hover:bg-white/5 transition-colors"
+                  onClick={() => !isActive && handleQueueTrackClick(track)}
+                  className="flex items-center gap-3 py-2 px-2 rounded-md cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors"
                   style={isActive ? { background: 'rgba(255,255,255,0.07)' } : {}}
                 >
-                  <img src={track.cover} alt={track.title} className="w-10 h-10 rounded object-cover shadow-md" />
+                  <div className="relative shrink-0">
+                    <img src={track.cover} alt={track.title} className="w-10 h-10 rounded object-cover shadow-md" />
+                    {isActive && (
+                      <div className="absolute inset-0 bg-black/40 rounded flex items-center justify-center">
+                        <div className="flex items-end gap-0.5 h-4">
+                          <div className="sp-eq-bar" />
+                          <div className="sp-eq-bar" />
+                          <div className="sp-eq-bar" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex-1 truncate">
                     <p className="text-sm font-semibold truncate" style={{ color: isActive ? '#1DB954' : 'white' }}>
                       {track.title}
                     </p>
                     <p className="text-xs truncate" style={{ color: '#b3b3b3' }}>{track.artist}</p>
                   </div>
-                  {isActive && (
-                    <div className="flex items-end gap-0.5 h-4">
-                      <div className="sp-eq-bar" />
-                      <div className="sp-eq-bar" />
-                      <div className="sp-eq-bar" />
-                    </div>
+                  {!isActive && (
+                    <Play size={14} className="text-zinc-500 shrink-0 opacity-0 group-hover:opacity-100" />
                   )}
                 </div>
               );

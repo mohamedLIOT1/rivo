@@ -16,6 +16,7 @@ import ArtistScreen from './screens/ArtistScreen';
 import StatsScreen from './screens/StatsScreen';
 import PlaylistScreen from './screens/PlaylistScreen';
 import PodcastsScreen from './screens/PodcastsScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 import { API_BASE_URL } from './config';
 import { saveTrackOffline, removeTrackOffline } from './utils/offlineStorage';
@@ -53,6 +54,15 @@ function AppContent() {
   const [isEditSongOpen,      setIsEditSongOpen]      = useState(false);
   const [editingTrack,        setEditingTrack]        = useState(null);
   const [isAuthOpen,          setIsAuthOpen]          = useState(false);
+
+  // Open profile screen instead of AuthModal when user is logged in
+  const handleUserAvatarClick = () => {
+    if (currentUser) {
+      setCurrentScreen('profile');
+    } else {
+      setIsAuthOpen(true);
+    }
+  };
 
   const [audioQuality, setAudioQuality] = useState('320');
   const [crossfade,    setCrossfade]    = useState(4);
@@ -230,7 +240,7 @@ function AppContent() {
         openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
         openSettings={() => setIsSettingsOpen(true)}
         openAddSongModal={() => setIsAddSongOpen(true)}
-        openAuthModal={() => setIsAuthOpen(true)}
+        openAuthModal={handleUserAvatarClick}
         currentUser={currentUser}
       />
 
@@ -310,6 +320,16 @@ function AppContent() {
         )}
 
         {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} />}
+
+        {currentScreen === 'profile' && (
+          <ProfileScreen
+            currentUser={currentUser}
+            playlists={playlists}
+            onBack={() => setCurrentScreen('home')}
+            logout={logout}
+            onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
+          />
+        )}
       </main>
 
       {/* ── Now Playing Bar ── */}
@@ -356,6 +376,7 @@ function AppContent() {
         toggleRepeat={() => setIsRepeat(p => !p)}
         queue={tracks}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
+        onPlayTrack={playTrack}
       />
 
       <CreatePlaylistModal

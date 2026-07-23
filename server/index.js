@@ -100,6 +100,7 @@ const UserSchema = new mongoose.Schema({
   email:          { type: String, required: true, unique: true, lowercase: true, trim: true },
   password:       { type: String, required: true },
   avatar:         { type: String, default: '' },
+  bio:            { type: String, default: '' },
   likedTrackIds:  [{ type: String }],              // IDs of liked tracks
   playlists:      [{                               // user's own playlists
     id:           String,
@@ -108,6 +109,7 @@ const UserSchema = new mongoose.Schema({
     cover:        String,
     trackIds:     [String],
     isLikedSongs: Boolean,
+    isPublic:     { type: Boolean, default: true }, // playlist visibility
     createdAt:    { type: Date, default: Date.now }
   }],
 }, { timestamps: true });
@@ -227,13 +229,14 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
-// Update avatar / name
+// Update avatar / name / bio
 app.post('/api/auth/update-profile', authMiddleware, async (req, res) => {
   try {
-    const { name, avatar } = req.body;
+    const { name, avatar, bio } = req.body;
     const updates = {};
-    if (name)   updates.name   = name;
-    if (avatar) updates.avatar = avatar;
+    if (name  !== undefined) updates.name   = name;
+    if (avatar !== undefined) updates.avatar = avatar;
+    if (bio   !== undefined) updates.bio    = bio;
 
     const user = await User.findByIdAndUpdate(
       req.user.id,
@@ -243,6 +246,67 @@ app.post('/api/auth/update-profile', authMiddleware, async (req, res) => {
 
     const token = makeToken(user.toObject());
     res.json({ success: true, user, token });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Search users by name or email (for profile discovery)
+app.get('/api/users/search', optionalAuth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) return res.json({ success: true, users: [] });
+    const users = await User.find({
+      $or: [
+        { name: { $regex: q, $options: 'i' } },
+        { email: { $regex: q, $options: 'i' } },
+      ]
+    }).select('name email avatar bio playlists').limit(20).lean();
+
+    const formatted = users.map(u => ({
+      id: String(u._id),
+      name: u.name,
+      email: u.email,
+      avatar: u.avatar || '',
+      bio: u.bio || '',
+      publicPlaylists: (u.playlists || []).filter(p => p.isPublic !== false).map(p => ({
+        id: p.id,
+        name: p.name,
+        cover: p.cover,
+        trackCount: (p.trackIds || []).length,
+        isLikedSongs: p.isLikedSongs,
+      })),
+    }));
+    res.json({ success: true, users: formatted });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get public profile of any user by ID
+app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('name email avatar bio playlists createdAt').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const publicPlaylists = (user.playlists || []).filter(p => p.isPublic !== false).map(p => ({
+      id: p.id,
+      name: p.name,
+      cover: p.cover,
+      trackCount: (p.trackIds || []).length,
+      isLikedSongs: p.isLikedSongs,
+    }));
+    res.json({
+      success: true,
+      user: {
+        id: String(user._id),
+        name: user.name,
+        avatar: user.avatar || '',
+        bio: user.bio || '',
+        joinedAt: user.createdAt,
+        publicPlaylists,
+        playlistCount: publicPlaylists.length,
+      }
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -313,17 +377,8 @@ async function removeDuplicateTracksFromDb() {
   }
 }
 
-// Cleanup & wipe all lyrics from DB on startup to start 100% fresh from scratch
-async function cleanupWrongCachedLyrics() {
-  try {
-    await Track.updateMany({}, { lyrics: [] });
-    console.log('[DB Clean] 🧹 Completely wiped all cached lyrics for all tracks in MongoDB to start 100% fresh!');
-  } catch (err) {
-    console.warn('[DB Clean Lyrics] Warning:', err.message);
-  }
-}
 setTimeout(removeDuplicateTracksFromDb, 3000);
-setTimeout(cleanupWrongCachedLyrics, 4000);
+// NOTE: cleanupWrongCachedLyrics intentionally removed — it was wiping all lyrics on every deploy!
 
 // Add a track to global library (preventing duplicates)
 app.post('/api/tracks/add', optionalAuth, async (req, res) => {
@@ -461,6 +516,23 @@ app.post('/api/playlists/:id/remove-track', authMiddleware, async (req, res) => 
       { $pull: { 'playlists.$.trackIds': trackId } }
     );
     res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Toggle playlist visibility (public/private)
+app.post('/api/playlists/:id/toggle-visibility', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('playlists');
+    const pl = (user.playlists || []).find(p => p.id === req.params.id);
+    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    const newVisibility = !pl.isPublic;
+    await User.findOneAndUpdate(
+      { _id: req.user.id, 'playlists.id': req.params.id },
+      { $set: { 'playlists.$.isPublic': newVisibility } }
+    );
+    res.json({ success: true, isPublic: newVisibility });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1903,9 +1975,25 @@ async function transcribeWithGroqWhisper(audioUrl) {
 
   try {
     let targetUrl = audioUrl;
-    if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be') || !targetUrl.includes('/api/proxy-audio')) {
-      const port = process.env.PORT || 5000;
-      targetUrl = `http://127.0.0.1:${port}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+
+    // For YouTube URLs, resolve a direct audio stream URL first via Piped (much more reliable)
+    if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
+      const ytId = extractVideoId(targetUrl);
+      if (ytId) {
+        console.log(`[Groq Whisper] Resolving YouTube audio for ${ytId}...`);
+        const resolvedUrl = await resolveYouTubeAudio(ytId);
+        if (resolvedUrl) {
+          targetUrl = resolvedUrl;
+          console.log(`[Groq Whisper] Resolved YouTube URL ✅`);
+        } else {
+          // Fallback to local proxy
+          const port = process.env.PORT || 5000;
+          targetUrl = `http://127.0.0.1:${port}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+        }
+      }
+    } else if (!targetUrl.startsWith('http')) {
+      console.warn('[Groq Whisper] Invalid audio URL');
+      return [];
     }
 
     console.log(`[Groq Whisper] Downloading audio stream from ${targetUrl.slice(0, 100)}...`);

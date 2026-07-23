@@ -373,6 +373,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const idx = activeList.findIndex(t => t.id === currentTrackRef.current?.id);
       playTrack(activeList[(idx + 1) % activeList.length]);
     }
+    // Force playing state so song starts automatically
+    setIsPlaying(true);
   }, [isOfflineMode, playTrack]);
 
   const playPrevTrack = useCallback(() => {
@@ -382,6 +384,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!activeList.length) return;
     const idx = activeList.findIndex(t => t.id === currentTrackRef.current?.id);
     playTrack(activeList[idx <= 0 ? activeList.length - 1 : idx - 1]);
+    // Force playing state so song starts automatically
+    setIsPlaying(true);
   }, [isOfflineMode, playTrack]);
 
   const seekTo = (seconds) => {
