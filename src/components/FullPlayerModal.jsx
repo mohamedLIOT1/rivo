@@ -713,82 +713,56 @@ export default function FullPlayerModal({
             className="flex-1 overflow-y-auto rounded-lg py-4 scroll-smooth relative"
             style={{ scrollbarWidth: 'none' }}
           >
-            {/* Header controls */}
-            <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/10 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Sparkles size={14} className="text-[#1DB954]" />
-                <span className="text-xs font-bold uppercase tracking-wider text-[#1DB954]">
-                  {showTranslation ? 'Synced Lyrics (Translated)' : 'Live Synced Lyrics'}
-                </span>
+            {/* Header controls — only shown when NO lyrics exist */}
+            {lyrics.length === 0 && (
+              <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-[#1DB954]" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#1DB954]">
+                    كلمات الأغنية
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Clear wrong lyrics button — only shown when lyrics exist */}
-                {rawLyrics.length > 0 && (
-                  <button
-                    onClick={() => setIsClearLyricsConfirmOpen(true)}
-                    disabled={isClearingLyrics}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-full text-xs font-bold text-red-400 transition-all active:scale-95 disabled:opacity-50"
-                    title="مسح الكلمات من قاعدة البيانات"
-                  >
-                    {isClearingLyrics ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    <span>مسح</span>
-                  </button>
-                )}
+            )}
 
-                {/* LRCLIB Search button */}
-                <button
-                  onClick={handleGenerateLyrics}
-                  disabled={isGeneratingLyrics}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
-                  title="بحث عن كلمات الأغنية من موقع LRCLIB.net"
-                >
-                  {isGeneratingLyrics ? (
-                    <Loader2 size={13} className="animate-spin" />
-                  ) : (
-                    <Search size={13} />
-                  )}
-                  <span>{isGeneratingLyrics ? 'جاري البحث...' : 'بحث LRCLIB 🎵'}</span>
-                </button>
-
-                {/* Manual Lyrics Edit button */}
-                <button
-                  onClick={openManualEdit}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-xs font-bold text-white transition-all active:scale-95"
-                  title="كتابة أو تعديل كلمات الأغنية يدويًا"
-                >
-                  <Edit3 size={13} className="text-amber-400" />
-                  <span>تعديل يدوي ✏️</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Lyrics content lines */}
+            {/* Lyrics content lines — Clean & Immersive Karaoke View */}
             {lyrics.length > 0 ? (
-              lyrics.map((line, idx) => {
-                const isActive = idx === activeLyricIndex;
-                return (
-                  <p 
-                    key={idx}
-                    ref={(el) => (lyricRefs.current[idx] = el)}
-                    onClick={() => seekTo(line.time)}
-                    className="cursor-pointer transition-all duration-300 py-2 leading-tight"
-                    style={{
-                      fontSize: isActive ? '2rem' : '1.5rem',
-                      fontWeight: 700,
-                      letterSpacing: '-0.02em',
-                      color: isActive ? '#fff' : 'rgba(255,255,255,0.3)',
-                    }}
-                  >
-                    {line.text}
-                  </p>
-                );
-              })
+              <div className="py-6 px-2 space-y-4">
+                {lyrics.map((line, idx) => {
+                  const isActive = idx === activeLyricIndex;
+                  return (
+                    <div 
+                      key={idx}
+                      ref={(el) => (lyricRefs.current[idx] = el)}
+                      onClick={() => seekTo(line.time)}
+                      className="cursor-pointer transition-all duration-300 py-1"
+                      style={{
+                        transform: isActive ? 'scale(1.03)' : 'scale(1)',
+                        transformOrigin: 'left center',
+                      }}
+                    >
+                      <p 
+                        className="transition-all duration-300 leading-snug"
+                        style={{
+                          fontSize: isActive ? '1.85rem' : '1.35rem',
+                          fontWeight: isActive ? 900 : 700,
+                          letterSpacing: '-0.02em',
+                          color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.28)',
+                          textShadow: isActive ? '0 0 16px rgba(29, 185, 84, 0.5), 0 0 4px rgba(255, 255, 255, 0.8)' : 'none',
+                        }}
+                      >
+                        {line.text}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="text-center py-12 px-4" style={{ color: '#b3b3b3' }}>
+              <div className="text-center py-16 px-4" style={{ color: '#b3b3b3' }}>
                 <ListMusic size={48} className="mx-auto mb-4 text-[#1DB954] opacity-60" />
                 <p className="font-extrabold text-white text-lg mb-1">لا توجد كلمات لهذه الأغنية</p>
                 <p className="text-xs text-zinc-400 max-w-xs mx-auto mb-6">
-                  يمكنك البحث عنها تلقائيًا من قاعدة بيانات LRCLIB.net أو إضافتها وتنسيق توقيتاتها يدويًا.
+                  يمكنك البحث عنها تلقائيًا من قاعدة البيانات أو كتابتها يدويًا.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <button
@@ -797,9 +771,9 @@ export default function FullPlayerModal({
                     className="inline-flex items-center gap-2 px-5 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full shadow-lg shadow-[#1DB954]/25 transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isGeneratingLyrics ? (
-                      <><Loader2 size={16} className="animate-spin" /><span>جاري البحث في LRCLIB...</span></>
+                      <><Loader2 size={16} className="animate-spin" /><span>جاري البحث...</span></>
                     ) : (
-                      <><Search size={16} /><span>🎵 بحث في LRCLIB.net</span></>
+                      <><Search size={16} /><span>🎵 بحث عن الكلمات</span></>
                     )}
                   </button>
 
@@ -808,7 +782,7 @@ export default function FullPlayerModal({
                     className="inline-flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-extrabold text-xs rounded-full shadow-lg transition-all active:scale-95"
                   >
                     <Edit3 size={16} className="text-amber-400" />
-                    <span>✏️ إضافة / تعديل الكلمات يدويًا</span>
+                    <span>✏️ كتابة الكلمات يدويًا</span>
                   </button>
                 </div>
               </div>
