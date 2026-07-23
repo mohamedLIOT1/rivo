@@ -106,6 +106,12 @@ export default function FullPlayerModal({
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
   const { audioRef, isYtTrack, playTrack } = useAudioPlayer();
 
+  // Detect if current track is a YouTube track (Groq doesn't support YouTube on Railway)
+  const isYouTubeTrack = Boolean(
+    currentTrack?.audioUrl &&
+    (currentTrack.audioUrl.includes('youtube.com') || currentTrack.audioUrl.includes('youtu.be'))
+  );
+
   const [activeTab, setActiveTab] = useState('player');
   const [isVinylMode, setIsVinylMode] = useState(false);
   const lyricRefs = useRef({});
@@ -702,24 +708,35 @@ export default function FullPlayerModal({
                   <span>{isGeneratingLyrics ? 'Syncing...' : 'AI Sync 🪄'}</span>
                 </button>
 
-                <button
-                  onClick={handleTranscribeAudio}
-                  disabled={isTranscribing || isGeneratingLyrics}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 rounded-full text-xs font-bold text-purple-300 transition-all active:scale-95 disabled:opacity-50"
-                  title="Groq AI listens directly to the song audio and generates frame-perfect Arabic speech lyrics & timestamps"
-                >
-                  {isTranscribing ? (
-                    <>
-                      <Loader2 size={13} className="animate-spin" />
-                      <span>Groq Listening...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Mic size={13} className="text-purple-300" />
-                      <span>Groq Listen 🎤</span>
-                    </>
-                  )}
-                </button>
+                {/* Groq: only for uploaded tracks — YouTube audio can't be fetched from Railway */}
+                {isYouTubeTrack ? (
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800/60 border border-zinc-700/40 rounded-full text-xs text-zinc-600 cursor-not-allowed select-none"
+                    title="Groq لا يدعم أغاني YouTube على السيرفر — استخدم AI Sync عوضاً"
+                  >
+                    <Mic size={13} className="text-zinc-700" />
+                    <span>Groq (YouTube ❌)</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleTranscribeAudio}
+                    disabled={isTranscribing || isGeneratingLyrics}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 rounded-full text-xs font-bold text-purple-300 transition-all active:scale-95 disabled:opacity-50"
+                    title="Groq AI يسمع ملف الأوديو المرفوع ويولد كلمات بـ timestamps دقيقة"
+                  >
+                    {isTranscribing ? (
+                      <>
+                        <Loader2 size={13} className="animate-spin" />
+                        <span>Groq Listening...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mic size={13} className="text-purple-300" />
+                        <span>Groq Listen 🎤</span>
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <button
                   onClick={handleTranslateLyrics}
@@ -782,17 +799,27 @@ export default function FullPlayerModal({
                     )}
                   </button>
 
-                  <button
-                    onClick={handleTranscribeAudio}
-                    disabled={isTranscribing || isGeneratingLyrics}
-                    className="inline-flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-full shadow-lg shadow-purple-600/30 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isTranscribing ? (
-                      <><Loader2 size={16} className="animate-spin" /><span>Groq AI Listening to Audio...</span></>
-                    ) : (
-                      <><Mic size={16} className="text-white" /><span>🎤 Groq AI Audio Transcribe (Frame-Perfect Sync)</span></>
-                    )}
-                  </button>
+                  {/* Groq button — only for uploaded audio, not YouTube */}
+                  {!isYouTubeTrack ? (
+                    <button
+                      onClick={handleTranscribeAudio}
+                      disabled={isTranscribing || isGeneratingLyrics}
+                      className="inline-flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-full shadow-lg shadow-purple-600/30 transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {isTranscribing ? (
+                        <><Loader2 size={16} className="animate-spin" /><span>Groq AI Listening to Audio...</span></>
+                      ) : (
+                        <><Mic size={16} className="text-white" /><span>🎤 Groq AI Audio Transcribe (Frame-Perfect Sync)</span></>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="text-center px-4 py-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl max-w-xs">
+                      <p className="text-xs text-zinc-500 font-medium">
+                        🎤 <span className="text-zinc-400">Groq</span> يعمل فقط مع الأغاني <span className="text-white font-bold">المرفوعة مباشرةً</span> — مش YouTube.
+                      </p>
+                      <p className="text-[11px] text-zinc-600 mt-1">استخدم "🪄 AI Sync" عوضاً — بيجيب الكلمات من Genius ويزامنها أوتوماتيك</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
