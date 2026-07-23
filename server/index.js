@@ -1426,76 +1426,95 @@ ${cleanLines.join('\n')}`;
   }
 });
 
-// Validate that returned search result actually matches target song title
-function isMatchValid(hitTitle, targetTitle) {
-  if (!hitTitle || !targetTitle) return true;
-  const cleanHit = hitTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ').trim();
-  const cleanTarget = targetTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ').trim();
-
-  if (cleanHit === cleanTarget) return true;
-
-  const targetWords = cleanTarget
-    .split(/\s+/)
-    .filter(w => w.length >= 2 && !['official', 'video', 'audio', 'lyric', 'music', 'كليب', 'فيديو', 'كلمات', 'أوديو', 'رسمي', 'channel', 'sony', 'rotana', 'feat', 'ft', 'prod'].includes(w));
-
-  if (targetWords.length === 0) return true;
-
-  const matchedWords = targetWords.filter(w => cleanHit.includes(w));
-  if (targetWords.length === 1) return matchedWords.length === 1;
-
-  // Require matching at least 2 target words (or all if target has 2 or fewer)
-  return matchedWords.length >= Math.min(targetWords.length, 2);
+// Clean text helper for title matching
+function cleanText(str = '') {
+  return (str || '')
+    .toLowerCase()
+    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
+    .replace(/[^\w\u0600-\u06FF]/g, ' ')
+    .trim();
 }
 
-// Smart multi-query generator to extract clean titles for lyrics search (handles multi-artist & YouTube noise)
-function generateLyricsSearchQueries(title = '', artist = '') {
-  const queries = new Set();
+// Extract core song title keywords (excluding artist names and video noise)
+function extractCoreSongKeywords(title = '', artist = '') {
+  const noiseWords = new Set([
+    'official', 'music', 'video', 'audio', 'lyric', 'lyrics', 'visualizer', 'full',
+    'كليب', 'فيديو', 'كلمات', 'أوديو', 'رسمي', 'جديد', 'channel', 'sony', 'rotana',
+    'feat', 'ft', 'featuring', 'with', 'prod', 'prodby', 'prod'
+  ]);
 
   let cleanTitle = (title || '')
     .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
     .replace(/Official\s*(Music\s*)?(Video|Audio|Lyric\s*Video|Visualizer)?/gi, '')
     .replace(/الكليب\s*الرسمي|فيديو\s*كليب|فيديو|كلمات|أوديو|رسمي|جديد/gu, '')
-    .replace(/Sony Music.*|Rotana.*|Mazzika.*|YouTube.*|YouMusic.*/gi, '')
     .trim();
 
-  let cleanArtist = (artist || '')
-    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
-    .replace(/Sony Music.*|Rotana.*|Mazzika.*|YouTube.*|YouMusic.*/gi, '')
-    .replace(/Official.*|Channel.*/gi, '')
-    .trim();
-
-  // Extract main artist (first artist before ft / x / & / comma / و)
-  const mainArtist = cleanArtist.split(/\s*[\,x\&\/\|]\s*|\s+(feat|ft|with|و)\s+/i)[0]?.trim() || '';
-
-  // Separate Arabic & English titles if separated by pipe | or slash /
   const pipeParts = cleanTitle.split(/[|\/]/).map(p => p.trim()).filter(Boolean);
+  const keywords = new Set();
 
   pipeParts.forEach(pipePart => {
-    // Split by dash - (e.g., "SHOFT KALAM - MARWAN PABLO x LEGE-CY")
     const dashParts = pipePart.split(/\s+[\-\–\—]\s+/).map(p => p.trim()).filter(Boolean);
-
-    dashParts.forEach(part => {
-      // Isolate clean song title by removing multi-artist list (x ..., ft ..., feat ..., و ...)
-      const cleanSongName = part
+    if (dashParts.length > 1) {
+      // The last part after dash is almost always the song title
+      const songPart = dashParts[dashParts.length - 1]
         .replace(/\b(feat|ft|featuring|with|prod|prod\.|x)\b.*/gi, '')
         .replace(/\b(و|مع)\s+[\u0600-\u06FF\s]+$/gu, '')
         .trim();
-
-      if (cleanSongName.length >= 2 && cleanSongName.length <= 40) {
-        if (mainArtist && !cleanSongName.toLowerCase().includes(mainArtist.toLowerCase())) {
-          queries.add(`${cleanSongName} ${mainArtist}`.trim());
-        }
-        if (cleanArtist && !cleanSongName.toLowerCase().includes(cleanArtist.toLowerCase())) {
-          queries.add(`${cleanSongName} ${cleanArtist}`.trim());
-        }
-        queries.add(cleanSongName);
-      }
-      queries.add(part);
-    });
+      
+      const words = cleanText(songPart).split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w));
+      words.forEach(w => keywords.add(w));
+    } else {
+      const pure = pipePart
+        .replace(/\b(feat|ft|featuring|with|prod|prod\.|x)\b.*/gi, '')
+        .replace(/\b(و|مع)\s+[\u0600-\u06FF\s]+$/gu, '')
+        .trim();
+      const words = cleanText(pure).split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w));
+      words.forEach(w => keywords.add(w));
+    }
   });
 
-  if (cleanTitle) queries.add(cleanTitle);
-  if (cleanTitle && mainArtist) queries.add(`${cleanTitle} ${mainArtist}`);
+  return Array.from(keywords);
+}
+
+// Validate that returned search result actually matches target song title
+function isMatchValid(hitTitle, targetTitle, targetArtist = '') {
+  if (!hitTitle || !targetTitle) return false;
+
+  const cleanHit = cleanText(hitTitle);
+  const coreKeywords = extractCoreSongKeywords(targetTitle, targetArtist);
+
+  if (coreKeywords.length === 0) {
+    const cleanTarget = cleanText(targetTitle);
+    return cleanHit.includes(cleanTarget) || cleanTarget.includes(cleanHit);
+  }
+
+  // Require matching AT LEAST ONE core song title keyword in the hit title
+  const matched = coreKeywords.filter(kw => cleanHit.includes(kw));
+  return matched.length > 0;
+}
+
+// Smart multi-query generator to extract clean titles for lyrics search
+function generateLyricsSearchQueries(title = '', artist = '') {
+  const queries = new Set();
+  const mainArtist = (artist || '')
+    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
+    .split(/\s*[\,x\&\/\|]\s*|\s+(feat|ft|with|و)\s+/i)[0]?.trim() || '';
+
+  const coreKeywords = extractCoreSongKeywords(title, artist);
+  
+  if (coreKeywords.length > 0) {
+    const songTitleStr = coreKeywords.join(' ');
+    if (mainArtist) {
+      queries.add(`${songTitleStr} ${mainArtist}`);
+    }
+    queries.add(songTitleStr);
+    coreKeywords.forEach(kw => {
+      if (kw.length >= 3) {
+        if (mainArtist) queries.add(`${kw} ${mainArtist}`);
+        queries.add(kw);
+      }
+    });
+  }
 
   // Known direct Genius URLs for popular multi-artist tracks
   if (/shoft\s*kalam|شفت\s*كلام/i.test(title)) {
@@ -1691,31 +1710,33 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
       if (lrcRes.ok) {
         const results = await lrcRes.json();
         if (Array.isArray(results) && results.length > 0) {
-          const validResults = results.filter(r => isMatchValid(r.trackName, title));
-          const match = validResults.find(r => r.syncedLyrics) || validResults.find(r => r.plainLyrics) || validResults[0];
-          
-          if (match && match.syncedLyrics) {
-            const lines = match.syncedLyrics.split('\n');
-            const lyrics = [];
-            lines.forEach(l => {
-              // LRC format: [mm:ss.xx] where xx = centiseconds
-              const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-              if (m) {
-                const minutes = parseInt(m[1]);
-                const seconds = parseInt(m[2]);
-                const centiseconds = m[3] ? parseInt(m[3].padEnd(2, '0').slice(0, 2)) : 0;
-                const time = minutes * 60 + seconds + centiseconds / 100;
-                const text = m[4].trim();
-                if (text) lyrics.push({ time: Math.round(time * 100) / 100, text });
+          const validResults = results.filter(r => isMatchValid(r.trackName, title, artist));
+          if (validResults.length > 0) {
+            const match = validResults.find(r => r.syncedLyrics) || validResults.find(r => r.plainLyrics) || validResults[0];
+            
+            if (match && match.syncedLyrics) {
+              const lines = match.syncedLyrics.split('\n');
+              const lyrics = [];
+              lines.forEach(l => {
+                // LRC format: [mm:ss.xx] where xx = centiseconds
+                const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
+                if (m) {
+                  const minutes = parseInt(m[1]);
+                  const seconds = parseInt(m[2]);
+                  const centiseconds = m[3] ? parseInt(m[3].padEnd(2, '0').slice(0, 2)) : 0;
+                  const time = minutes * 60 + seconds + centiseconds / 100;
+                  const text = m[4].trim();
+                  if (text) lyrics.push({ time: Math.round(time * 100) / 100, text });
+                }
+              });
+              if (lyrics.length > 0) return lyrics;
+            } else if (match && match.plainLyrics) {
+              const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+              if (plainLines.length > 0) {
+                // Use Gemini to sync plain lyrics instead of math distribution
+                const synced = await syncLyricsWithGemini(plainLines, title, artist, duration);
+                if (synced.length > 0) return synced;
               }
-            });
-            if (lyrics.length > 0) return lyrics;
-          } else if (match && match.plainLyrics) {
-            const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
-            if (plainLines.length > 0) {
-              // Use Gemini to sync plain lyrics instead of math distribution
-              const synced = await syncLyricsWithGemini(plainLines, title, artist, duration);
-              if (synced.length > 0) return synced;
             }
           }
         }
@@ -1733,8 +1754,9 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
       if (neteaseSearch.ok) {
         const neteaseData = await neteaseSearch.json();
         const songs = neteaseData?.result?.songs || [];
-        if (songs.length > 0) {
-          const songId = songs[0].id;
+        const matchingSong = songs.find(s => isMatchValid(s.name, title, artist));
+        if (matchingSong) {
+          const songId = matchingSong.id;
           const lrcRes = await fetch(
             `https://music.163.com/api/song/lyric?id=${songId}&lv=1&kv=1&tv=-1`,
             { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://music.163.com/' }, signal: AbortSignal.timeout(5000) }
@@ -1960,19 +1982,34 @@ app.post('/api/tracks/update-lyrics', async (req, res) => {
 // Clear wrong/cached lyrics from DB for a track
 app.post('/api/tracks/clear-lyrics', async (req, res) => {
   try {
-    const { trackId } = req.body;
-    if (!trackId) return res.status(400).json({ error: 'trackId required' });
-    if (mongoose.Types.ObjectId.isValid(trackId)) {
-      await Track.findByIdAndUpdate(trackId, { lyrics: [] });
-    } else {
-      await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics: [] });
+    const { trackId, title } = req.body;
+    const orConditions = [];
+
+    if (trackId) {
+      if (mongoose.Types.ObjectId.isValid(trackId)) {
+        orConditions.push({ _id: trackId });
+      }
+      orConditions.push({ id: trackId });
     }
-    console.log(`[Clear Lyrics] Cleared lyrics for track ${trackId}`);
+
+    if (title) {
+      const cleanTitleStr = title.replace(/[\(\[\{].*?[\)\]\}]/gu, '').replace(/Official.*|Visualizer.*/gi, '').trim();
+      if (cleanTitleStr) {
+        const escaped = cleanTitleStr.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
+        orConditions.push({ title: new RegExp(escaped, 'i') });
+      }
+    }
+
+    if (orConditions.length > 0) {
+      const result = await Track.updateMany({ $or: orConditions }, { lyrics: [] });
+      console.log(`[Clear Lyrics] Cleared lyrics for ${result.modifiedCount} tracks in DB`);
+    }
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
+
 
 
 // AI Mood Recommendations

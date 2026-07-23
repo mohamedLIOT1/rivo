@@ -192,11 +192,15 @@ export default function FullPlayerModal({
       await fetch(`${API_BASE_URL}/api/tracks/clear-lyrics`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackId: currentTrack.id })
+        body: JSON.stringify({ 
+          trackId: currentTrack.id,
+          title: currentTrack.title 
+        })
       });
       currentTrack.lyrics = [];
       setTranslatedLyrics(null);
       setShowTranslation(false);
+      setLiveTime(t => (t === 0 ? 0.0001 : 0)); // force React re-render
     } catch (e) {
       console.warn('Clear lyrics error:', e);
     }
