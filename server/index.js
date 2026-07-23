@@ -1422,8 +1422,52 @@ function generateLyricsSearchQueries(title = '', artist = '') {
   return Array.from(queries).filter(q => q.length >= 2);
 }
 
+async function fetchLyricsFromGenius(q, duration = 180) {
+  try {
+    const searchRes = await fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(q)}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
+    });
+    if (!searchRes.ok) return [];
+    const searchData = await searchRes.json();
+    const sections = searchData.response?.sections || [];
+    const songSection = sections.find(s => s.type === 'song') || sections[0];
+    const hit = songSection?.hits?.[0];
+    if (!hit) return [];
+
+    const pageRes = await fetch(hit.result.url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
+    });
+    if (!pageRes.ok) return [];
+    const html = await pageRes.text();
+
+    const cleanHtml = html.replace(/<br\s*\/?>/gi, '\n');
+    const matches = cleanHtml.match(/data-lyrics-container="true".*?>(.*?)<\/div>/gs);
+
+    if (matches) {
+      const rawText = matches.map(m => m.replace(/<[^>]+>/g, '')).join('\n');
+      const lines = rawText
+        .split('\n')
+        .map(l => l.replace(/data-lyrics-container.*?>/gi, '').replace(/\d+\s*Contributors?/gi, '').trim())
+        .filter(l => l && !l.startsWith('[') && !l.endsWith(']') && !l.includes('Embed'));
+
+      if (lines.length > 0) {
+        const step = Math.max((duration - 10) / lines.length, 3);
+        return lines.map((l, idx) => ({
+          time: Math.round(idx * step),
+          text: l
+        }));
+      }
+    }
+  } catch (e) {
+    console.warn('[Genius Lyrics] fetch error:', e.message);
+  }
+  return [];
+}
+
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
   const queries = generateLyricsSearchQueries(title, artist);
+
+  // 1. Try LRCLIB API (Synced / Plain)
   for (const q of queries) {
     try {
       const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
@@ -1446,7 +1490,7 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
           } else if (match && match.plainLyrics) {
             const lines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
             if (lines.length > 0) {
-              const step = duration / Math.max(lines.length, 1);
+              const step = Math.max((duration - 10) / lines.length, 3);
               return lines.map((l, idx) => ({
                 time: Math.round(idx * step),
                 text: l
@@ -1457,6 +1501,16 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
       }
     } catch (err) {}
   }
+
+  // 2. Try Genius.com API & Scraper
+  for (const q of queries) {
+    const geniusLyrics = await fetchLyricsFromGenius(q, duration);
+    if (geniusLyrics.length > 0) {
+      console.log(`[Genius Lyrics] Successfully fetched ${geniusLyrics.length} lines for "${q}"`);
+      return geniusLyrics;
+    }
+  }
+
   return [];
 }
 
