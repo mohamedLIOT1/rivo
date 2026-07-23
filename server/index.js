@@ -276,6 +276,45 @@ app.get('/api/tracks', optionalAuth, async (req, res) => {
   }
 });
 
+// Auto-fetch & save synced lyrics for any newly added track
+async function autoFetchAndSaveLyrics(track) {
+  if (!track || (Array.isArray(track.lyrics) && track.lyrics.length > 0)) return;
+  try {
+    const q = cleanSongQuery(track.title, track.artist);
+    const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
+    let lyrics = [];
+    if (lrcRes.ok) {
+      const results = await lrcRes.json();
+      const match = Array.isArray(results) ? (results.find(r => r.syncedLyrics) || results[0]) : null;
+      if (match && match.syncedLyrics) {
+        const lines = match.syncedLyrics.split('\n');
+        lines.forEach(l => {
+          const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
+          if (m) {
+            const time = parseInt(m[1]) * 60 + parseInt(m[2]);
+            const text = m[4].trim();
+            if (text) lyrics.push({ time, text });
+          }
+        });
+      } else if (match && match.plainLyrics) {
+        const lines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+        const duration = track.duration || 180;
+        const step = duration / Math.max(lines.length, 1);
+        lyrics = lines.map((l, idx) => ({
+          time: Math.round(idx * step),
+          text: l
+        }));
+      }
+    }
+    if (lyrics.length > 0 && track._id) {
+      await Track.findByIdAndUpdate(track._id, { lyrics });
+      console.log(`[AI Lyrics] Auto-saved ${lyrics.length} synced lyrics lines for "${track.title}"`);
+    }
+  } catch (err) {
+    console.warn(`[AI Lyrics] Auto-fetch error for "${track?.title}":`, err.message);
+  }
+}
+
 // Add a track to global library
 app.post('/api/tracks/add', optionalAuth, async (req, res) => {
   try {
@@ -287,6 +326,9 @@ app.post('/api/tracks/add', optionalAuth, async (req, res) => {
       ...data,
       addedBy: req.user?.email || 'anonymous',
     }).save();
+
+    // Trigger AI lyrics auto-generation in background
+    autoFetchAndSaveLyrics(track).catch(() => {});
 
     res.json({ success: true, track: { ...track.toObject(), id: String(track._id) } });
   } catch (e) {
@@ -1122,7 +1164,7 @@ async function seedYouTubeTrack({ q, artist, genre }) {
           const cleanTitle = item.snippet.title
             .replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '')
             .replace(/\s*-\s*(official\s*)?(audio|video)/gi, '').trim();
-          await new Track({
+          const newT = await new Track({
             title: cleanTitle || q,
             artist,
             album: 'Single',
@@ -1134,6 +1176,7 @@ async function seedYouTubeTrack({ q, artist, genre }) {
             addedBy: 'auto-seed',
             color: SEED_GENRE_COLORS[genre] || '#FF0000',
           }).save();
+          autoFetchAndSaveLyrics(newT).catch(() => {});
           return true;
         }
       }
