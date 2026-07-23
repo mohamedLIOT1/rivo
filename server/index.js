@@ -290,29 +290,32 @@ async function autoFetchAndSaveLyrics(track) {
   }
 }
 
-// Remove duplicate tracks from DB on startup
-async function removeDuplicateTracksFromDb() {
+// Cleanup wrong cached lyrics from DB on startup
+async function cleanupWrongCachedLyrics() {
   try {
-    const allTracks = await Track.find({}).sort({ createdAt: 1 });
-    const seenTitles = new Set();
-    const idsToDelete = [];
-    for (const t of allTracks) {
-      const key = (t.title || '').trim().toLowerCase();
-      if (seenTitles.has(key)) {
-        idsToDelete.push(t._id);
-      } else if (key) {
-        seenTitles.add(key);
+    const tracksToClean = await Track.find({
+      $or: [
+        { title: /shoft\s*kalam|شفت\s*كلام|شوفت\s*كلام/i },
+        { title: /trouh\s*lmeen|تروح\s*لمين/i }
+      ]
+    });
+    for (const track of tracksToClean) {
+      const needsClearing = (track.lyrics || []).some(l => 
+        (l.text || '').includes('تريد تروح') || (l.text || '').includes('عقرب في كتابتي') || (l.text || '').includes('كينج أنا الكونج')
+      );
+      if (needsClearing || (track.title.toLowerCase().includes('trouh lmeen') && (track.lyrics || []).some(l => (l.text || '').includes('تريد تروح')))) {
+        await Track.findByIdAndUpdate(track._id, { lyrics: [] });
+        track.lyrics = [];
+        console.log(`[DB Clean] Cleared wrong cached lyrics for "${track.title}"`);
+        autoFetchAndSaveLyrics(track).catch(() => {});
       }
     }
-    if (idsToDelete.length > 0) {
-      await Track.deleteMany({ _id: { $in: idsToDelete } });
-      console.log(`[DB Clean] Cleaned ${idsToDelete.length} duplicate tracks from database.`);
-    }
   } catch (err) {
-    console.warn('[DB Clean] Warning:', err.message);
+    console.warn('[DB Clean Lyrics] Warning:', err.message);
   }
 }
 setTimeout(removeDuplicateTracksFromDb, 3000);
+setTimeout(cleanupWrongCachedLyrics, 4000);
 
 // Add a track to global library (preventing duplicates)
 app.post('/api/tracks/add', optionalAuth, async (req, res) => {
@@ -1440,7 +1443,7 @@ function extractCoreSongKeywords(title = '', artist = '') {
   const noiseWords = new Set([
     'official', 'music', 'video', 'audio', 'lyric', 'lyrics', 'visualizer', 'full',
     'كليب', 'فيديو', 'كلمات', 'أوديو', 'رسمي', 'جديد', 'channel', 'sony', 'rotana',
-    'feat', 'ft', 'featuring', 'with', 'prod', 'prodby', 'prod'
+    'feat', 'ft', 'featuring', 'with', 'prod', 'prodby', 'prod', 'hd', '4k'
   ]);
 
   let cleanTitle = (title || '')
@@ -1455,13 +1458,24 @@ function extractCoreSongKeywords(title = '', artist = '') {
   pipeParts.forEach(pipePart => {
     const dashParts = pipePart.split(/\s+[\-\–\—]\s+/).map(p => p.trim()).filter(Boolean);
     if (dashParts.length > 1) {
-      // The last part after dash is almost always the song title
-      const songPart = dashParts[dashParts.length - 1]
+      let songPart = dashParts[dashParts.length - 1];
+      const p0 = dashParts[0].toLowerCase();
+      const p1 = dashParts[1].toLowerCase();
+      const artClean = cleanText(artist);
+
+      // Determine which side is title vs artist
+      if (/\b(x|\&|feat|ft|with|و)\b/i.test(p1) || (artClean && p1.includes(artClean))) {
+        songPart = dashParts[0];
+      } else if (/\b(x|\&|feat|ft|with|و)\b/i.test(p0) || (artClean && p0.includes(artClean))) {
+        songPart = dashParts[1];
+      }
+
+      const pure = songPart
         .replace(/\b(feat|ft|featuring|with|prod|prod\.|x)\b.*/gi, '')
         .replace(/\b(و|مع)\s+[\u0600-\u06FF\s]+$/gu, '')
         .trim();
       
-      const words = cleanText(songPart).split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w));
+      const words = cleanText(pure).split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w));
       words.forEach(w => keywords.add(w));
     } else {
       const pure = pipePart
@@ -1476,49 +1490,79 @@ function extractCoreSongKeywords(title = '', artist = '') {
   return Array.from(keywords);
 }
 
-// Validate that returned search result actually matches target song title
-function isMatchValid(hitTitle, targetTitle, targetArtist = '') {
+// Validate that returned search result actually matches target song title and artist
+function isMatchValid(hitTitle, targetTitle, targetArtist = '', hitArtist = '') {
   if (!hitTitle || !targetTitle) return false;
 
   const cleanHit = cleanText(hitTitle);
-  const coreKeywords = extractCoreSongKeywords(targetTitle, targetArtist);
+  const cleanHitArtist = cleanText(hitArtist);
+  const cleanTargetArtist = cleanText(targetArtist);
 
+  // If hitArtist and targetArtist are given and completely clash, reject
+  if (cleanHitArtist && cleanTargetArtist && cleanHitArtist.length >= 3 && cleanTargetArtist.length >= 3) {
+    const artistMatch = cleanHitArtist.includes(cleanTargetArtist) || cleanTargetArtist.includes(cleanHitArtist) ||
+      cleanTargetArtist.split(/\s+/).some(w => w.length >= 3 && cleanHitArtist.includes(w));
+    if (!artistMatch) {
+      return false;
+    }
+  }
+
+  const coreKeywords = extractCoreSongKeywords(targetTitle, targetArtist);
   if (coreKeywords.length === 0) {
     const cleanTarget = cleanText(targetTitle);
     return cleanHit.includes(cleanTarget) || cleanTarget.includes(cleanHit);
   }
 
-  // Require matching AT LEAST ONE core song title keyword in the hit title
-  const matched = coreKeywords.filter(kw => cleanHit.includes(kw));
-  return matched.length > 0;
+  // Require matching ALL or at least 80% of core title keywords in hitTitle!
+  const engKws = coreKeywords.filter(w => /^[a-z0-9]+$/i.test(w));
+  const araKws = coreKeywords.filter(w => /^[\u0600-\u06FF]+$/u.test(w));
+
+  const engMatched = engKws.length > 0 && engKws.every(kw => cleanHit.includes(kw));
+  const araMatched = araKws.length > 0 && araKws.every(kw => cleanHit.includes(kw));
+
+  if (engKws.length > 0 && engMatched) return true;
+  if (araKws.length > 0 && araMatched) return true;
+
+  const matchedCount = coreKeywords.filter(kw => cleanHit.includes(kw)).length;
+  if (coreKeywords.length <= 2) {
+    return matchedCount === coreKeywords.length;
+  }
+  return (matchedCount / coreKeywords.length) >= 0.8;
 }
 
 // Smart multi-query generator to extract clean titles for lyrics search
 function generateLyricsSearchQueries(title = '', artist = '') {
   const queries = new Set();
+  const cleanTitleStr = (title || '')
+    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
+    .replace(/Official\s*(Music\s*)?(Video|Audio|Lyric\s*Video|Visualizer)?/gi, '')
+    .replace(/الكليب\s*الرسمي|فيديو\s*كليب|فيديو|كلمات|أوديو|رسمي|جديد/gu, '')
+    .trim();
+
+  // Known direct Genius URLs for popular multi-artist tracks
+  if (/shoft\s*kalam|شفت\s*كلام|شوفت\s*كلام/i.test(title)) {
+    queries.add('https://genius.com/Marwan-pablo-lege-cy-and-hatembas-shoft-kalam-lyrics');
+  }
+  if (/trouh\s*lmeen|تروح\s*لمين/i.test(title)) {
+    queries.add('https://genius.com/Lege-cy-trouh-lmeen-lyrics');
+  }
+
+  const coreKeywords = extractCoreSongKeywords(title, artist);
   const mainArtist = (artist || '')
     .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
     .split(/\s*[\,x\&\/\|]\s*|\s+(feat|ft|with|و)\s+/i)[0]?.trim() || '';
 
-  const coreKeywords = extractCoreSongKeywords(title, artist);
-  
   if (coreKeywords.length > 0) {
     const songTitleStr = coreKeywords.join(' ');
     if (mainArtist) {
       queries.add(`${songTitleStr} ${mainArtist}`);
     }
     queries.add(songTitleStr);
-    coreKeywords.forEach(kw => {
-      if (kw.length >= 3) {
-        if (mainArtist) queries.add(`${kw} ${mainArtist}`);
-        queries.add(kw);
-      }
-    });
   }
 
-  // Known direct Genius URLs for popular multi-artist tracks
-  if (/shoft\s*kalam|شفت\s*كلام/i.test(title)) {
-    queries.add('https://genius.com/Marwan-pablo-lege-cy-and-hatembas-shoft-kalam-lyrics');
+  if (cleanTitleStr) {
+    queries.add(cleanTitleStr);
+    if (mainArtist) queries.add(`${cleanTitleStr} ${mainArtist}`);
   }
 
   return Array.from(queries).filter(q => q.length >= 2);
@@ -1593,8 +1637,14 @@ ${cleanLyricsLines.join('\n')}`;
     }
   }
 
-  // Return empty rather than wrong math-based timestamps
-  return [];
+  // Fallback: generate smooth time steps starting after intro
+  const intro = Math.min(15, Math.max(6, Math.floor(duration * 0.08)));
+  const availableDuration = Math.max(30, duration - intro - 10);
+  const step = availableDuration / cleanLyricsLines.length;
+  return cleanLyricsLines.map((line, idx) => ({
+    time: Math.round((intro + idx * step) * 100) / 100,
+    text: line
+  }));
 }
 
 async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
@@ -1613,7 +1663,7 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
       const hits = songSection?.hits || [];
       if (hits.length === 0) return [];
 
-      const hit = hits.find(h => isMatchValid(h.result?.full_title || h.result?.title, targetTitle)) || hits[0];
+      const hit = hits.find(h => isMatchValid(h.result?.full_title || h.result?.title, targetTitle, '', h.result?.primary_artist?.name)) || hits[0];
       if (!hit) return [];
       targetUrl = hit.result.url;
     }
@@ -1657,11 +1707,8 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 
     if (cleanLines.length > 0) {
       console.log(`[Genius Scraper] Extracted ${cleanLines.length} clean lines from ${targetUrl}`);
-      // Genius gives real text but no timestamps.
-      // Groq Whisper (🎤 button) will transcribe the actual audio with real timestamps.
-      // We return empty here to avoid fake/wrong timestamp generation.
-      return [];
-
+      const synced = await syncLyricsWithGemini(cleanLines, targetTitle, '', duration);
+      if (synced.length > 0) return synced;
     }
   } catch (e) {
     console.warn('[Genius Lyrics] fetch error:', e.message);
@@ -1672,14 +1719,23 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
   const queries = generateLyricsSearchQueries(title, artist);
 
-  // 1. Try LRCLIB API (Synced / Plain)
+  // 1. Try Genius first for direct Genius URLs or queries (highest quality Arabic / Rap lyrics)
+  for (const q of queries) {
+    const geniusLyrics = await fetchLyricsFromGenius(q, title, duration);
+    if (geniusLyrics.length > 0) {
+      console.log(`[Genius Lyrics] Successfully fetched & synced ${geniusLyrics.length} lines for "${title}"`);
+      return geniusLyrics;
+    }
+  }
+
+  // 2. Try LRCLIB API (Synced / Plain)
   for (const q of queries) {
     try {
       const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
       if (lrcRes.ok) {
         const results = await lrcRes.json();
         if (Array.isArray(results) && results.length > 0) {
-          const validResults = results.filter(r => isMatchValid(r.trackName, title, artist));
+          const validResults = results.filter(r => isMatchValid(r.trackName, title, artist, r.artistName));
           if (validResults.length > 0) {
             const match = validResults.find(r => r.syncedLyrics) || validResults.find(r => r.plainLyrics) || validResults[0];
             
@@ -1687,7 +1743,6 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
               const lines = match.syncedLyrics.split('\n');
               const lyrics = [];
               lines.forEach(l => {
-                // LRC format: [mm:ss.xx] where xx = centiseconds
                 const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
                 if (m) {
                   const minutes = parseInt(m[1]);
@@ -1702,7 +1757,6 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
             } else if (match && match.plainLyrics) {
               const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
               if (plainLines.length > 0) {
-                // Use Gemini to sync plain lyrics instead of math distribution
                 const synced = await syncLyricsWithGemini(plainLines, title, artist, duration);
                 if (synced.length > 0) return synced;
               }
@@ -1713,7 +1767,7 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
     } catch (err) {}
   }
 
-  // 2. Try NetEase Music (163.com) — free, huge library, good Arabic coverage
+  // 3. Try NetEase Music (163.com) — free, huge library, good Arabic coverage
   for (const q of queries.slice(0, 3)) {
     try {
       const neteaseSearch = await fetch(
@@ -1723,7 +1777,7 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
       if (neteaseSearch.ok) {
         const neteaseData = await neteaseSearch.json();
         const songs = neteaseData?.result?.songs || [];
-        const matchingSong = songs.find(s => isMatchValid(s.name, title, artist));
+        const matchingSong = songs.find(s => isMatchValid(s.name, title, artist, s.artists?.[0]?.name));
         if (matchingSong) {
           const songId = matchingSong.id;
           const lrcRes = await fetch(
@@ -1757,17 +1811,6 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
     } catch (err) { /* timeout or network error, skip */ }
   }
 
-  // 3. Try Genius.com API & Scraper with Title Validation
-  for (const q of queries) {
-    const geniusLyrics = await fetchLyricsFromGenius(q, title, duration);
-    if (geniusLyrics.length > 0) {
-      console.log(`[Genius Lyrics] Successfully fetched ${geniusLyrics.length} lines for "${q}"`);
-      return geniusLyrics;
-    }
-  }
-
-  // No lyrics found from any source.
-  // Use the 🎤 Transcribe Audio button in the lyrics tab for Groq Whisper transcription.
   return [];
 }
 
