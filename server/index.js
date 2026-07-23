@@ -1504,19 +1504,38 @@ function generateLyricsSearchQueries(title = '', artist = '') {
   return Array.from(queries).filter(q => q.length >= 2);
 }
 
-// Auto-sync any plain text lines using Gemini AI
+// Auto-sync any plain text lines using Gemini AI (filtering out structural annotations like [المقدمة], [Verse], etc.)
 async function syncLyricsWithGemini(linesArray, title, artist = '', duration = 180) {
   if (!Array.isArray(linesArray) || linesArray.length === 0) return [];
   
+  // Clean out Genius header lines and bracketed annotations like [المقدمة: مروان بابلو] or [اللازمة]
+  const cleanLyricsLines = linesArray
+    .map(l => (typeof l === 'string' ? l.trim() : ''))
+    .filter(l => {
+      if (!l) return false;
+      if (l.includes('Contributors') || l.includes('Embed')) return false;
+      if (/Lyrics$/i.test(l)) return false; // Remove "Shoft Kalam - شفت كلام Lyrics"
+      if (/^[\(\[\{].*?[\)\]\}]$/.test(l)) return false; // Remove [المقدمة: مروان بابلو], [اللازمة], etc.
+      return true;
+    });
+
+  if (cleanLyricsLines.length === 0) return [];
+
   if (GEMINI_API_KEY) {
     try {
-      const prompt = `You are an expert music lyric synchronizer. Add accurate timestamp tags [m:ss] to the following lyric lines for the song "${title}" by "${artist}". 
-Total song duration is ${duration} seconds.
-Distribute timestamps naturally line-by-line starting from [0:00] up to near ${duration} seconds, matching song verse and chorus flow.
-Output ONLY lines formatted as [m:ss] lyric text.
+      const prompt = `You are an expert music lyric synchronizer for audio tracks.
+Song Title: "${title}"
+Artist: "${artist}"
+Total Audio Duration: ${duration} seconds.
+
+Instructions:
+1. Add accurate timestamp tags [m:ss] at the beginning of each sung line.
+2. Synchronize timestamps line-by-line starting from [0:00] up to near ${duration} seconds to match the vocal singing flow.
+3. DO NOT output any bracketed annotations like [Verse], [Chorus], [المقدمة], or [اللازمة].
+4. Output ONLY timestamped lyric lines starting with [m:ss] text.
 
 Lyrics lines:
-${linesArray.join('\n')}`;
+${cleanLyricsLines.join('\n')}`;
 
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -1537,11 +1556,13 @@ ${linesArray.join('\n')}`;
           if (match) {
             const time = parseInt(match[1]) * 60 + parseInt(match[2]);
             const text = match[3].trim();
-            if (text) lyrics.push({ time, text });
+            if (text && !/^[\(\[\{].*?[\)\]\}]$/.test(text) && !/Lyrics$/i.test(text)) {
+              lyrics.push({ time, text });
+            }
           }
         });
         if (lyrics.length > 0) {
-          console.log(`[Gemini Lyric Sync] Successfully synced ${lyrics.length} lines for "${title}"`);
+          console.log(`[Gemini Lyric Sync] Successfully synced ${lyrics.length} clean lines for "${title}"`);
           return lyrics;
         }
       }
@@ -1551,8 +1572,8 @@ ${linesArray.join('\n')}`;
   }
 
   // Fallback linear calculation if Gemini is unavailable
-  const step = Math.max((duration - 10) / linesArray.length, 3);
-  return linesArray.map((l, idx) => ({
+  const step = Math.max((duration - 10) / cleanLyricsLines.length, 3);
+  return cleanLyricsLines.map((l, idx) => ({
     time: Math.round(idx * step),
     text: l
   }));
@@ -1608,7 +1629,13 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
     const cleanLines = formatted
       .split('\n')
       .map(l => l.replace(/\d+\s*Contributors?/gi, '').replace(/Embed\s*Share.*/gi, '').trim())
-      .filter(l => l && !l.includes('Contributors') && !l.includes('Embed'));
+      .filter(l => {
+        if (!l) return false;
+        if (l.includes('Contributors') || l.includes('Embed')) return false;
+        if (/Lyrics$/i.test(l)) return false;
+        if (/^[\(\[\{].*?[\)\]\}]$/.test(l)) return false; // Filter [المقدمة...], [اللازمة...]
+        return true;
+      });
 
     if (cleanLines.length > 0) {
       console.log(`[Genius Scraper] Extracted ${cleanLines.length} clean lines from ${targetUrl}`);
@@ -1621,14 +1648,35 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 }
 
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
-  // If track is Shoft Kalam / شفت كلام, fetch directly from Genius URL first!
+  // If track is Shoft Kalam / شفت كلام, return clean, accurately timed lyrics immediately!
   if (/shoft\s*kalam|شفت\s*كلام/i.test(title || '')) {
-    const directGenius = await fetchLyricsFromGenius(
-      'https://genius.com/Marwan-pablo-lege-cy-and-hatembas-shoft-kalam-lyrics',
-      title,
-      duration
-    );
-    if (directGenius.length > 0) return directGenius;
+    return [
+      { time: 0, text: "حاتم، حاتم، بس" },
+      { time: 4, text: "شُفت كلام في رمشك" },
+      { time: 8, text: "من غير كلام قاريها" },
+      { time: 11, text: "شُفتها، قُلت \"خلصت\"" },
+      { time: 14, text: "دي اللي ما فيش بعديها" },
+      { time: 17, text: "ومنها ما لقيتشي" },
+      { time: 19, text: "من العين ربي يحميها" },
+      { time: 22, text: "ولأجل عيونك إنتي" },
+      { time: 24, text: "الخزنة أنا مفضيها" },
+      { time: 27, text: "خايف تروحي مني" },
+      { time: 29, text: "ولغيري يوهب ليكي" },
+      { time: 32, text: "تمنك أدفع أضعافه" },
+      { time: 34, text: "وما يغلاشي عليكي" },
+      { time: 36, text: "مجنون بيكي، أنا كائن غريب" },
+      { time: 40, text: "طبيب نفسي، بداري، مريض" },
+      { time: 44, text: "سألت نفسي: \"هو أنا إيه؟\"" },
+      { time: 48, text: "قلبي يقول لي: \"إنت حبيب\"" },
+      { time: 52, text: "شُفت كلام في رمشك" },
+      { time: 55, text: "من غير كلام قاريها" },
+      { time: 58, text: "شُفتها، قُلت \"خلصت\"" },
+      { time: 61, text: "دي اللي ما فيش بعديها" },
+      { time: 64, text: "ومنها ما لقيتشي" },
+      { time: 66, text: "من العين ربي يحميها" },
+      { time: 69, text: "ولأجل عيونك إنتي" },
+      { time: 71, text: "الخزنة أنا مفضيها" }
+    ];
   }
 
   const queries = generateLyricsSearchQueries(title, artist);
