@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, Camera, Globe, Lock, Edit2, Loader2, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X } from 'lucide-react';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -10,11 +10,25 @@ export default function PlaylistScreen({
   onAddTrackToPlaylist,
   onRemoveTrackFromPlaylist,
   onUpdatePlaylist = () => {},
+  onDeletePlaylist = () => {},
   onTogglePlaylistVisibility = () => {},
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
+
+  // Edit Name & Description Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState(playlist?.name || '');
+  const [editDesc, setEditDesc] = useState(playlist?.description || '');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (playlist) {
+      setEditName(playlist.name || '');
+      setEditDesc(playlist.description || '');
+    }
+  }, [playlist?.id]);
 
   if (!playlist) return null;
 
@@ -59,6 +73,23 @@ export default function PlaylistScreen({
     setIsTogglingPrivacy(false);
   };
 
+  const handleSaveDetails = () => {
+    if (!editName.trim()) return;
+    onUpdatePlaylist({
+      ...playlist,
+      name: editName.trim(),
+      description: editDesc.trim(),
+    });
+    setIsEditModalOpen(false);
+  };
+
+  const handleDelete = () => {
+    if (window.confirm(`هل أنت تأكد من رغبتك في حذف قائمة "${playlist.name}"؟`)) {
+      setIsDeleting(true);
+      onDeletePlaylist(playlist.id);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto pb-32 select-none">
       {/* Header Banner */}
@@ -99,43 +130,132 @@ export default function PlaylistScreen({
         </div>
 
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs font-black uppercase tracking-widest text-[#1DB954]">
               {playlist.isLikedSongs ? 'قائمة المفضلات' : 'قائمة تشغيل'}
             </span>
 
-            {/* Public/Private Badge & Toggle Button */}
+            {/* Public/Private Badge & Action Buttons */}
+            {!playlist.isLikedSongs && (
+              <>
+                <button
+                  onClick={handleTogglePrivacy}
+                  disabled={isTogglingPrivacy}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
+                    isPublic 
+                      ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/30' 
+                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                  }`}
+                  title="اضغط لتغيير ظهور القائمة بالبروفايل"
+                >
+                  {isTogglingPrivacy ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : isPublic ? (
+                    <><Globe size={12} /><span>عامة (تظهر بالبروفايل)</span></>
+                  ) : (
+                    <><Lock size={12} /><span>خاصة (مخفية)</span></>
+                  )}
+                </button>
+
+                {/* Edit Button */}
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
+                  title="تعديل الاسم والوصف"
+                >
+                  <Edit2 size={12} />
+                  <span>تعديل</span>
+                </button>
+
+                {/* Delete Button */}
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/10 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all cursor-pointer"
+                  title="حذف القائمة"
+                >
+                  <Trash2 size={12} />
+                  <span>حذف</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight mt-1">
+              {playlist.name}
+            </h1>
             {!playlist.isLikedSongs && (
               <button
-                onClick={handleTogglePrivacy}
-                disabled={isTogglingPrivacy}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
-                  isPublic 
-                    ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/30' 
-                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                }`}
-                title="اضغط لتغيير ظهور القائمة بالبروفايل"
+                onClick={() => setIsEditModalOpen(true)}
+                className="p-2 text-zinc-400 hover:text-white transition-colors"
+                title="تعديل اسم القائمة"
               >
-                {isTogglingPrivacy ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : isPublic ? (
-                  <><Globe size={12} /><span>عامة (تظهر بالبروفايل)</span></>
-                ) : (
-                  <><Lock size={12} /><span>خاصة (مخفية)</span></>
-                )}
+                <Edit2 size={22} />
               </button>
             )}
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight mt-1">
-            {playlist.name}
-          </h1>
           <p className="text-xs md:text-sm text-zinc-300 mt-2 font-medium">{playlist.description || 'Custom playlist'}</p>
           <p className="text-xs text-zinc-400 mt-2 font-bold">
             Liofy • {playlistTracks.length} songs, <span className="text-zinc-500 font-medium">{formatDurationSum()}</span>
           </p>
         </div>
       </div>
+
+      {/* ── Edit Playlist Modal ── */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#181818] border border-zinc-800 rounded-3xl p-6 w-full max-w-md shadow-2xl relative">
+            <button
+              onClick={() => setIsEditModalOpen(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-xl font-extrabold text-white mb-4">تعديل قائمة التشغيل</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-400 mb-1">اسم القائمة</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#1DB954]"
+                  placeholder="اسم القائمة"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-400 mb-1">الوصف (اختياري)</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  rows={3}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#1DB954] resize-none"
+                  placeholder="وصف القائمة..."
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-5 py-2.5 rounded-full text-xs font-bold text-zinc-400 hover:text-white"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={handleSaveDetails}
+                  className="px-6 py-2.5 rounded-full text-xs font-extrabold bg-[#1DB954] text-black hover:scale-105 active:scale-95 transition-all"
+                >
+                  حفظ التعديلات
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Action Buttons & Search Row */}
       <div className="p-4 md:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

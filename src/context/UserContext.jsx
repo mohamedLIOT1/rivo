@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { getOfflineTracks } from '../utils/offlineStorage';
 
 const API = (() => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
@@ -118,15 +119,35 @@ export function UserProvider({ children }) {
 
   // ── Full sync from server ────────────────────────────
   const syncFromServer = useCallback(async () => {
+    let offlineTracks = [];
+    try {
+      offlineTracks = await getOfflineTracks();
+    } catch {}
+    const offlineMap = new Map(offlineTracks.map(t => [String(t.id), t]));
+
     const token = getToken();
     if (!token) {
       // No user logged in — just fetch public tracks
       try {
         const data = await api.get('/api/tracks');
         if (data && data.success && Array.isArray(data.tracks)) {
-          setTracks(deduplicateTracks(data.tracks));
+          const merged = data.tracks.map(t => {
+            const off = offlineMap.get(String(t.id));
+            return off ? { ...t, ...off, downloaded: true } : t;
+          });
+          // Add any offline tracks not in public list
+          const existingIds = new Set(merged.map(m => String(m.id)));
+          offlineTracks.forEach(o => {
+            if (!existingIds.has(String(o.id))) merged.push(o);
+          });
+          setTracks(deduplicateTracks(merged));
+          return;
         }
-      } catch {}
+      } catch (err) {
+        if (offlineTracks.length > 0) {
+          setTracks(offlineTracks);
+        }
+      }
       return;
     }
 
@@ -139,11 +160,21 @@ export function UserProvider({ children }) {
         }
         if (Array.isArray(data.tracks)) {
           const liked = new Set((data.likedTrackIds || []).map(String));
-          const formatted = data.tracks.map(t => ({ 
-            ...t, 
-            liked: liked.has(String(t.id)) || liked.has(String(t._id)) 
-          }));
-          setTracks(deduplicateTracks(formatted));
+          const merged = data.tracks.map(t => {
+            const cleanId = String(t.id || t._id);
+            const off = offlineMap.get(cleanId);
+            return {
+              ...t,
+              ...(off || {}),
+              liked: liked.has(cleanId),
+              downloaded: !!off
+            };
+          });
+          const existingIds = new Set(merged.map(m => String(m.id)));
+          offlineTracks.forEach(o => {
+            if (!existingIds.has(String(o.id))) merged.push(o);
+          });
+          setTracks(deduplicateTracks(merged));
         }
         if (Array.isArray(data.playlists)) {
           setPlaylists(data.playlists);
@@ -156,6 +187,9 @@ export function UserProvider({ children }) {
       }
     } catch (err) {
       console.warn('Sync failed (offline?):', err);
+      if (offlineTracks.length > 0) {
+        setTracks(offlineTracks);
+      }
     }
     setIsSyncing(false);
   }, [logout]);

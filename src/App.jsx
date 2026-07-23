@@ -181,6 +181,24 @@ function AppContent() {
     await handleUpdatePlaylist(updated);
   };
 
+  const handleDeletePlaylist = async (playlistId) => {
+    if (!playlistId) return;
+    setPlaylists(prev => prev.filter(p => p.id !== playlistId));
+    if (selectedPlaylist?.id === playlistId) {
+      setSelectedPlaylist(null);
+      setCurrentScreen('library');
+    }
+    try {
+      const token = localStorage.getItem('liofy_token');
+      if (token) {
+        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(playlistId)}`, {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+      }
+    } catch {}
+  };
+
   const handleAddTrackToPlaylist = async (trackId, playlistId) => {
     setPlaylists(prev => prev.map(pl => {
       if (pl.id !== playlistId) return pl;
@@ -236,15 +254,31 @@ function AppContent() {
     });
   };
 
+  const [toastMessage, setToastMessage] = useState('');
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => (prev === msg ? '' : prev));
+    }, 4000);
+  };
+
   const handleDownload = async (trackId) => {
-    const track = tracks.find(t => t.id === trackId);
+    const track = tracks.find(t => String(t.id || t._id) === String(trackId));
     if (!track) return;
     if (track.downloaded) {
       await removeTrackOffline(trackId);
-      setTracks(prev => prev.map(t => t.id === trackId ? { ...t, downloaded: false } : t));
+      setTracks(prev => prev.map(t => String(t.id || t._id) === String(trackId) ? { ...t, downloaded: false } : t));
+      showToast('تم إزالة الأغنية من التحميلات الأوفلاين');
     } else {
-      await saveTrackOffline(track);
-      setTracks(prev => prev.map(t => t.id === trackId ? { ...t, downloaded: true } : t));
+      showToast('جاري تحميل الأغنية لحفظها على مساحة التطبيق...');
+      const result = await saveTrackOffline(track);
+      if (result && result.audioBlob) {
+        setTracks(prev => prev.map(t => String(t.id || t._id) === String(trackId) ? { ...t, downloaded: true } : t));
+        showToast('تم تحميل الأغنية بنجاح على مساحة التطبيق للأوفلاين ✓');
+      } else {
+        showToast('تعذر تحميل الأغنية. يرجى التحقق من اتصال الإنترنت.');
+      }
     }
   };
 
@@ -335,6 +369,7 @@ function AppContent() {
             onAddTrackToPlaylist={handleAddTrackToPlaylist}
             onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
             onUpdatePlaylist={handleUpdatePlaylist}
+            onDeletePlaylist={handleDeletePlaylist}
             onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
           />
         )}
@@ -457,6 +492,23 @@ function AppContent() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
       />
+
+      {/* ── Toast Notification Banner (No Native Alert Dialogs!) ── */}
+      {toastMessage && (
+        <div 
+          className="fixed left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-xs font-black shadow-2xl flex items-center gap-2 border border-white/20 transition-all pointer-events-none"
+          style={{
+            bottom: currentTrack ? 'calc(var(--player-height) + 16px)' : '24px',
+            background: 'rgba(18, 18, 18, 0.95)',
+            backdropFilter: 'blur(12px)',
+            color: '#1DB954',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.9)'
+          }}
+        >
+          <span className="w-2 h-2 rounded-full bg-[#1DB954] shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

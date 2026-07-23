@@ -209,7 +209,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     if (!currentTrack || !currentTrack.audioUrl) return;
 
-    const ytId = extractYtId(currentTrack.audioUrl);
+    const isBlobUrl = currentTrack.audioUrl.startsWith('blob:') || currentTrack.audioUrl.startsWith('data:');
+    const ytId = !isBlobUrl ? extractYtId(currentTrack.audioUrl) : null;
 
     if (ytId) {
       // ── YouTube track ──────────────────────────────────────────
@@ -232,7 +233,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
         try {
           ytPlayerRef.current.loadVideoById(ytId);
-          // Always play: either isPlaying was true, or shouldPlayRef forces it
           if (isPlaying || shouldPlayRef.current) {
             shouldPlayRef.current = false;
             ytPlayerRef.current.playVideo();
@@ -247,7 +247,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       loadYt();
 
     } else {
-      // ── Regular audio (Upload / SoundCloud) ───────────────────
+      // ── Regular audio (Upload / Downloaded Blob / SoundCloud) ─
       isYtTrackRef.current = false;
       setIsYtTrack(false);
 
@@ -257,9 +257,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
 
-      // Build proxied URL
       let targetUrl = currentTrack.audioUrl;
-      const isSoundCloud = currentTrack.source === 'SoundCloud' || (targetUrl && (targetUrl.includes('sndcdn.com') || targetUrl.includes('soundcloud.com')));
+      const isSoundCloud = !isBlobUrl && (currentTrack.source === 'SoundCloud' || (targetUrl && (targetUrl.includes('sndcdn.com') || targetUrl.includes('soundcloud.com'))));
 
       if (isSoundCloud) {
         fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
@@ -279,7 +278,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           })
           .catch(err => console.warn('SoundCloud stream error:', err));
       } else {
-        if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
+        if (!isBlobUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
           targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
         }
 
@@ -287,7 +286,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (!audio) return;
         if (audio.src !== targetUrl) { audio.src = targetUrl; }
 
-        // Always play: either isPlaying was true, or shouldPlayRef forces autoplay
         if (isPlaying || shouldPlayRef.current) {
           shouldPlayRef.current = false;
           resumeAudioContext();
