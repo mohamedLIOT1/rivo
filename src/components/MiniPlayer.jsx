@@ -15,7 +15,9 @@ export default function MiniPlayer({
   openFullPlayer,
   openAddToPlaylist,
   currentTime,
-  duration
+  duration,
+  volume = 0.8,
+  setVolume = () => {}
 }) {
   if (!currentTrack) return null;
 
@@ -190,7 +192,33 @@ export default function MiniPlayer({
         {/* ─────────────────────────────────────────
             RIGHT: Volume + Tools
             ───────────────────────────────────────── */}
-        <div className="hidden md:flex items-center gap-2 flex-1 justify-end" style={{ maxWidth: '30%' }}>
+        <div className="hidden md:flex items-center gap-3 flex-1 justify-end" style={{ maxWidth: '35%' }}>
+          {/* Clear Volume Bar */}
+          <div className="flex items-center gap-2 max-w-[130px] flex-1">
+            <button 
+              onClick={(e) => { e.stopPropagation(); setVolume(volume > 0 ? 0 : 0.8); }}
+              className="text-[#b3b3b3] hover:text-white transition-colors p-1"
+              title={volume > 0 ? "Mute" : "Unmute"}
+            >
+              {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} className="text-red-400" />}
+            </button>
+            <div className="flex-1 group relative h-2 cursor-pointer flex items-center">
+              <div className="absolute inset-0 rounded-full bg-white/20 overflow-hidden">
+                <div 
+                  className="h-full rounded-full bg-[#1DB954] transition-all"
+                  style={{ width: `${(volume || 0) * 100}%` }}
+                />
+              </div>
+              <input
+                type="range" min="0" max="1" step="0.01" value={volume || 0}
+                onChange={(e) => { e.stopPropagation(); setVolume(Number(e.target.value)); }}
+                onClick={(e) => e.stopPropagation()}
+                className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                style={{ height: '100%' }}
+              />
+            </div>
+          </div>
+
           {/* Add to Playlist */}
           <button
             onClick={(e) => { e.stopPropagation(); openAddToPlaylist?.(); }}

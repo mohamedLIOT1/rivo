@@ -292,23 +292,32 @@ export default function FullPlayerModal({
 
             {/* Volume + Tools */}
             <div className="flex items-center justify-between">
-              {/* Volume */}
-              <div className="flex items-center gap-2 flex-1 max-w-[160px]">
-                <Volume2 size={16} style={{ color: '#b3b3b3', flexShrink: 0 }} />
-                <div className="flex-1 group relative h-1 cursor-pointer">
-                  <div className="absolute inset-0 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }}>
+              {/* Volume Slider */}
+              <div className="flex items-center gap-3 flex-1 max-w-[200px] bg-white/5 py-2 px-3 rounded-full border border-white/10">
+                <button 
+                  onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
+                  className="text-zinc-400 hover:text-white transition-colors shrink-0"
+                  title={volume > 0 ? "Mute" : "Unmute"}
+                >
+                  {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} className="text-red-400" />}
+                </button>
+                <div className="flex-1 group relative h-2.5 cursor-pointer flex items-center">
+                  <div className="absolute inset-0 rounded-full bg-white/20 overflow-hidden">
                     <div 
-                      className="h-full rounded-full bg-white group-hover:bg-[#1DB954] transition-colors"
-                      style={{ width: `${(volume || 1) * 100}%` }}
+                      className="h-full rounded-full bg-[#1DB954] transition-all"
+                      style={{ width: `${(volume || 0) * 100}%` }}
                     />
                   </div>
                   <input
-                    type="range" min="0" max="1" step="0.01" value={volume || 1}
+                    type="range" min="0" max="1" step="0.01" value={volume || 0}
                     onChange={(e) => setVolume(Number(e.target.value))}
-                    className="absolute inset-0 w-full opacity-0 cursor-pointer"
+                    className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
                     style={{ height: '100%' }}
                   />
                 </div>
+                <span className="text-[11px] font-bold text-zinc-400 w-8 text-right">
+                  {Math.round((volume || 0) * 100)}%
+                </span>
               </div>
 
               {/* Action Buttons */}

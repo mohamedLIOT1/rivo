@@ -3,6 +3,24 @@
   "appName": "Liofy",
   "webDir": "dist",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": [
+      "liofy-production.up.railway.app",
+      "*.up.railway.app",
+      "*.youtube.com",
+      "*.googlevideo.com",
+      "*.sndcdn.com",
+      "*.soundcloud.com"
+    ]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#000000",
+      "androidSplashResourceName": "splash",
+      "showSpinner": false
+    }
   }
 }

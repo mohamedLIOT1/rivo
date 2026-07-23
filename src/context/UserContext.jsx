@@ -5,13 +5,21 @@ const API = (() => {
     return import.meta.env.VITE_API_URL.replace(/\/$/, '');
   }
   if (typeof window !== 'undefined') {
-    const { hostname } = window.location;
+    const { hostname, protocol, host } = window.location;
+    if (
+      window.Capacitor ||
+      protocol === 'capacitor:' ||
+      protocol === 'file:' ||
+      (hostname === 'localhost' && !host.includes('5000'))
+    ) {
+      return 'https://liofy-production.up.railway.app';
+    }
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:5000';
     }
-    return `${window.location.protocol}//${window.location.host}`;
+    return `${protocol}//${host}`;
   }
-  return '';
+  return 'https://liofy-production.up.railway.app';
 })();
 
 export const API_BASE_URL = API;

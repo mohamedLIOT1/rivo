@@ -326,6 +326,8 @@ function AppContent() {
           openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
           currentTime={currentTime}
           duration={duration}
+          volume={volume}
+          setVolume={setVolume}
         />
       )}
 
