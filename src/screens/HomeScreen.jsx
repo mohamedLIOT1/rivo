@@ -1,5 +1,15 @@
-import React from 'react';
-import { Play, Heart, Plus, Edit3, Trash2, Pause } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause, Sparkles } from 'lucide-react';
+
+const MOODS = [
+  { id: 'all', label: 'الكل', emoji: '🌟' },
+  { id: 'workout', label: 'حماسي ورقص', emoji: '🔥', genres: ['Mahragan', 'Hip-Hop', 'Electronic', 'Rock'] },
+  { id: 'sad', label: 'حزين وستكانة', emoji: '😢', genres: ['R&B', 'Arab Pop', 'Rock'] },
+  { id: 'romantic', label: 'رومانسي هادي', emoji: '💖', genres: ['Arab Pop', 'R&B', 'Pop'] },
+  { id: 'happy', label: 'فرفشة وسعادة', emoji: '😊', genres: ['Arab Pop', 'Pop', 'Mahragan', 'Sha3bi'] },
+  { id: 'focus', label: 'تركيز ومذاكرة', emoji: '🧠', genres: ['Electronic', 'Pop', 'Rock'] },
+  { id: 'travel', label: 'سفر وطريق', emoji: '🚗', genres: ['Pop', 'Arab Pop', 'Rock', 'Electronic'] },
+];
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -15,6 +25,8 @@ export default function HomeScreen({
   currentTrack,
   isPlaying
 }) {
+  const [selectedMood, setSelectedMood] = useState('all');
+
   const defaultTrackCover = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231DB954"/><circle cx="150" cy="150" r="90" fill="%23121212"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="%231DB954" font-size="80">🎵</text></svg>`;
 
   const getGreeting = () => {
@@ -24,15 +36,18 @@ export default function HomeScreen({
     return 'Good evening';
   };
 
-  const displayTracks = React.useMemo(() => {
+  const filteredTracks = useMemo(() => {
     if (!tracks || tracks.length === 0) return [];
-    const shuffled = [...tracks];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }, [tracks]);
+    if (selectedMood === 'all') return tracks;
+    const moodObj = MOODS.find(m => m.id === selectedMood);
+    if (!moodObj || !moodObj.genres) return tracks;
+    const matching = tracks.filter(t => moodObj.genres.includes(t.genre));
+    return matching.length > 0 ? matching : tracks;
+  }, [tracks, selectedMood]);
+
+  const displayTracks = useMemo(() => {
+    return filteredTracks;
+  }, [filteredTracks]);
 
   const quickItems = displayTracks.slice(0, 6);
   const suggestedItems = displayTracks;
@@ -66,6 +81,28 @@ export default function HomeScreen({
             <Plus size={16} />
             <span className="hidden sm:inline">Add Song</span>
           </button>
+        </div>
+
+        {/* ── AI Mood Selector Bar ── */}
+        <div className="flex items-center gap-2 overflow-x-auto pt-4 pb-1 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex items-center gap-1 text-xs font-extrabold text-[#1DB954] bg-[#1DB954]/10 px-3 py-1.5 rounded-full border border-[#1DB954]/30 shrink-0">
+            <Sparkles size={13} />
+            <span>AI Mood</span>
+          </div>
+          {MOODS.map(m => (
+            <button
+              key={m.id}
+              onClick={() => setSelectedMood(m.id)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-200 border ${
+                selectedMood === m.id
+                  ? 'bg-[#1DB954] text-black border-[#1DB954] shadow-lg shadow-[#1DB954]/25 scale-105'
+                  : 'bg-white/5 text-zinc-300 hover:text-white border-white/10 hover:bg-white/10'
+              }`}
+            >
+              <span>{m.emoji}</span>
+              <span>{m.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 

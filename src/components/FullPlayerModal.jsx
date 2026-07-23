@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
-  Heart, Volume2, PlusCircle, Download, Disc, Sparkles,
+  Heart, Volume2, PlusCircle, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, Share2, ListMusic
 } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export default function FullPlayerModal({
   currentTrack,
@@ -31,7 +32,18 @@ export default function FullPlayerModal({
   const [isVinylMode, setIsVinylMode] = useState(false);
   const lyricRefs = useRef({});
 
-  const lyrics = currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : [];
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translatedLyrics, setTranslatedLyrics] = useState(null);
+  const [showTranslation, setShowTranslation] = useState(false);
+
+  // Reset translation when track changes
+  useEffect(() => {
+    setTranslatedLyrics(null);
+    setShowTranslation(false);
+  }, [currentTrack?.id]);
+
+  const rawLyrics = currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : [];
+  const lyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
 
   const activeLyricIndex = lyrics.length > 0
     ? lyrics.findIndex((line, idx) => {
@@ -39,6 +51,38 @@ export default function FullPlayerModal({
         return currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
       })
     : -1;
+
+  const handleTranslateLyrics = async () => {
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    if (translatedLyrics) {
+      setShowTranslation(true);
+      return;
+    }
+    if (!rawLyrics.length) return;
+    setIsTranslating(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/translate-lyrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lyrics: rawLyrics,
+          title: currentTrack?.title,
+          artist: currentTrack?.artist
+        })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.translatedLyrics)) {
+        setTranslatedLyrics(data.translatedLyrics);
+        setShowTranslation(true);
+      }
+    } catch (e) {
+      console.warn('AI Translate error:', e);
+    }
+    setIsTranslating(false);
+  };
 
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
@@ -354,11 +398,30 @@ export default function FullPlayerModal({
             className="flex-1 overflow-y-auto rounded-lg py-4 scroll-smooth"
             style={{ scrollbarWidth: 'none' }}
           >
-            <div className="flex items-center gap-2 mb-6 pb-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-              <Sparkles size={14} style={{ color: '#1DB954' }} />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#1DB954' }}>
-                Live Synced Lyrics
-              </span>
+            <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Sparkles size={14} className="text-[#1DB954]" />
+                <span className="text-xs font-bold uppercase tracking-wider text-[#1DB954]">
+                  {showTranslation ? 'Live Synced Lyrics (Arabic AI)' : 'Live Synced Lyrics'}
+                </span>
+              </div>
+              <button
+                onClick={handleTranslateLyrics}
+                disabled={isTranslating || !rawLyrics.length}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isTranslating ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Translating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Languages size={13} />
+                    <span>{showTranslation ? 'Original' : 'AI Translate 🪄'}</span>
+                  </>
+                )}
+              </button>
             </div>
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {

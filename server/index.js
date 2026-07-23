@@ -1156,6 +1156,125 @@ app.post('/api/auto-seed', async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════
+//  10. AI FEATURES — Gemini API Integration
+// ══════════════════════════════════════════
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+
+// AI Lyrics Translation using Gemini
+app.post('/api/ai/translate-lyrics', async (req, res) => {
+  try {
+    const { lyrics, title, artist } = req.body;
+    if (!Array.isArray(lyrics) || lyrics.length === 0) {
+      return res.status(400).json({ error: 'Lyrics array required' });
+    }
+
+    const lyricsText = lyrics.map(l => {
+      const m = Math.floor(l.time / 60);
+      const s = Math.floor(l.time % 60);
+      const timeStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+      return `[${timeStr}] ${l.text}`;
+    }).join('\n');
+
+    if (!GEMINI_API_KEY) {
+      return res.json({
+        success: true,
+        translatedLyrics: lyrics.map(l => ({ ...l, text: `[ترجمة] ${l.text}` }))
+      });
+    }
+
+    const prompt = `You are a professional music translator. Translate the lyrics of song "${title || 'Song'}" by "${artist || 'Artist'}" into natural, expressive, poetic Arabic line-by-line.
+IMPORTANT: You MUST keep the exact timestamp format like [0:15] or [1:02] at the start of each translated line. Do not omit any lines or timestamps.
+
+Lyrics:
+${lyricsText}`;
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      }
+    );
+
+    if (!geminiRes.ok) {
+      const errText = await geminiRes.text();
+      console.warn('[AI Translate] Gemini API error:', errText);
+      return res.status(502).json({ error: 'Gemini API translation failed' });
+    }
+
+    const data = await geminiRes.json();
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    const parsed = [];
+    const lines = responseText.split('\n');
+    lines.forEach((line, idx) => {
+      const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
+      if (match) {
+        const time = parseInt(match[1]) * 60 + parseInt(match[2]);
+        const text = match[3].trim();
+        if (text) parsed.push({ time, text });
+      } else if (line.trim() && lyrics[idx]) {
+        parsed.push({ time: lyrics[idx].time, text: line.trim() });
+      }
+    });
+
+    res.json({
+      success: true,
+      translatedLyrics: parsed.length > 0 ? parsed : lyrics
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// AI Mood Recommendations
+app.post('/api/ai/recommend-mood', async (req, res) => {
+  try {
+    const { mood } = req.body;
+    if (!mood) return res.status(400).json({ error: 'Mood parameter required' });
+
+    const allTracks = await Track.find().sort({ createdAt: -1 }).lean();
+
+    const moodGenreMap = {
+      workout: ['Mahragan', 'Hip-Hop', 'Electronic', 'Rock'],
+      sad: ['R&B', 'Arab Pop', 'Rock'],
+      romantic: ['Arab Pop', 'R&B', 'Pop'],
+      happy: ['Arab Pop', 'Pop', 'Mahragan', 'Sha3bi'],
+      focus: ['Electronic', 'Pop', 'Rock'],
+      travel: ['Pop', 'Arab Pop', 'Rock', 'Electronic'],
+    };
+
+    const targetGenres = moodGenreMap[mood] || ['Pop', 'Arab Pop'];
+    let filtered = allTracks.filter(t => targetGenres.includes(t.genre));
+
+    if (filtered.length < 5) filtered = allTracks;
+
+    const formatted = filtered.map(t => ({
+      id: String(t._id),
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      cover: t.cover,
+      audioUrl: t.audioUrl,
+      duration: t.duration,
+      genre: t.genre,
+      source: t.source,
+      addedBy: t.addedBy,
+      lyrics: t.lyrics || [],
+      color: t.color || '#1DB954',
+    }));
+
+    res.json({ success: true, mood, tracks: formatted });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Auto-seed on server startup if DB is empty
 async function autoSeedOnStartup() {
   try {
