@@ -29,44 +29,34 @@
     <style>
       #splash {
         position: fixed; inset: 0; z-index: 9999;
-        background: #09090b;
+        background: #000000;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        gap: 16px;
-        transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        padding: 24px;
-        text-align: center;
+        gap: 20px;
+        transition: opacity 0.5s ease;
       }
-      #splash .logo-container {
-        width: 100px; height: 100px;
-        border-radius: 28px;
-        box-shadow: 0 0 70px rgba(29, 185, 84, 0.45);
-        animation: pulse 1.6s ease-in-out infinite;
+      #splash .logo {
+        width: 96px; height: 96px; border-radius: 24px;
+        background: #1DB954;
         display: flex; align-items: center; justify-content: center;
-        background: linear-gradient(135deg, #1ed760 0%, #12833b 100%);
-      }
-      @media (min-width: 640px) {
-        #splash .logo-container {
-          width: 120px; height: 120px;
-          border-radius: 32px;
-        }
+        font-size: 60px; font-weight: 900; color: #000000;
+        font-family: 'Outfit', Arial, sans-serif;
+        box-shadow: 0 0 60px rgba(29, 185, 84, 0.4);
+        animation: pulse 1.5s ease-in-out infinite;
       }
       #splash h1 {
         color: #ffffff; font-size: 32px; font-weight: 900;
         font-family: 'Outfit', Arial, sans-serif;
-        letter-spacing: -0.5px; margin: 8px 0 0 0;
-      }
-      @media (min-width: 640px) {
-        #splash h1 { font-size: 38px; }
+        letter-spacing: -1px; margin: 0;
       }
       #splash p {
-        color: #a1a1aa; font-size: 14px; font-weight: 500;
+        color: #b3b3b3; font-size: 13px;
         font-family: 'Outfit', Arial, sans-serif;
         margin: 0;
       }
       @keyframes pulse {
         0%, 100% { transform: scale(1); box-shadow: 0 0 60px rgba(29, 185, 84, 0.4); }
-        50% { transform: scale(1.04); box-shadow: 0 0 90px rgba(29, 185, 84, 0.65); }
+        50% { transform: scale(1.05); box-shadow: 0 0 80px rgba(29, 185, 84, 0.7); }
       }
     </style>
   </head>
@@ -74,11 +64,7 @@
 
     <!-- Splash Screen -->
     <div id="splash">
-      <div class="logo-container">
-        <svg width="60%" height="60%" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 195 330 A 40 40 0 1 1 235 290 L 235 155 L 345 125 L 345 270 A 40 40 0 1 1 385 230 L 385 105 A 12 12 0 0 0 372 93 L 207 132 A 12 12 0 0 0 195 144 Z" fill="#000000" />
-        </svg>
-      </div>
+      <div class="logo">L</div>
       <h1>Liofy</h1>
       <p>Music for Everyone</p>
     </div>
