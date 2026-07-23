@@ -294,16 +294,18 @@ app.post('/api/tracks/add', optionalAuth, async (req, res) => {
   }
 });
 
-// Delete a track (only the one who added it, or later: admin)
-app.delete('/api/tracks/:id', authMiddleware, async (req, res) => {
+// Delete a track (from MongoDB shared library)
+app.delete('/api/tracks/:id', optionalAuth, async (req, res) => {
   try {
-    const track = await Track.findById(req.params.id);
-    if (!track) return res.status(404).json({ error: 'Track not found' });
-    if (track.addedBy !== req.user.email) {
-      return res.status(403).json({ error: 'Only the uploader can delete this track' });
+    const id = req.params.id;
+    let deleted = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      deleted = await Track.findByIdAndDelete(id);
     }
-    await Track.findByIdAndDelete(req.params.id);
-    res.json({ success: true });
+    if (!deleted) {
+      deleted = await Track.findOneAndDelete({ $or: [{ _id: id }, { id: id }] });
+    }
+    res.json({ success: true, deleted: !!deleted });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

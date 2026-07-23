@@ -88,11 +88,7 @@ export function UserProvider({ children }) {
       try {
         const data = await api.get('/api/tracks');
         if (data.success && Array.isArray(data.tracks)) {
-          setTracks(prev => {
-            const map = new Map(prev.map(t => [t.id, t]));
-            data.tracks.forEach(t => { if (!map.has(t.id)) map.set(t.id, t); });
-            return Array.from(map.values());
-          });
+          setTracks(data.tracks);
         }
       } catch {}
       return;

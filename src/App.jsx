@@ -126,8 +126,7 @@ function AppContent() {
   };
 
   const handleDeleteSong = (trackId) => {
-    setTracks(prev => prev.filter(t => t.id !== trackId));
-    if (currentTrack?.id === trackId) { setCurrentTrack(null); setIsPlaying(false); }
+    handleDeleteTrack(trackId);
   };
 
   const handleCreatePlaylist = async (name, description) => {
