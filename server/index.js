@@ -1801,6 +1801,24 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
   }
 });
 
+// Update Track Lyrics Calibration Endpoint
+app.post('/api/tracks/update-lyrics', async (req, res) => {
+  try {
+    const { trackId, lyrics } = req.body;
+    if (!trackId || !Array.isArray(lyrics)) {
+      return res.status(400).json({ error: 'trackId and lyrics array required' });
+    }
+    if (mongoose.Types.ObjectId.isValid(trackId)) {
+      await Track.findByIdAndUpdate(trackId, { lyrics });
+    } else {
+      await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
+    }
+    res.json({ success: true, lyrics });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // AI Mood Recommendations
 app.post('/api/ai/recommend-mood', async (req, res) => {
   try {

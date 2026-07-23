@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, PlusCircle, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, Share2, ListMusic
+  MoreHorizontal, Share2, ListMusic, Clock, Save
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
@@ -36,14 +36,26 @@ export default function FullPlayerModal({
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
   const [showTranslation, setShowTranslation] = useState(false);
 
-  // Reset translation when track changes
+  const [lyricOffset, setLyricOffset] = useState(0);
+  const [isSavingOffset, setIsSavingOffset] = useState(false);
+
+  // Reset translation and offset when track changes
   useEffect(() => {
     setTranslatedLyrics(null);
     setShowTranslation(false);
+    setLyricOffset(0);
   }, [currentTrack?.id]);
 
   const rawLyrics = currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : [];
-  const lyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
+  const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
+
+  const lyrics = React.useMemo(() => {
+    if (!lyricOffset) return baseLyrics;
+    return baseLyrics.map(l => ({
+      ...l,
+      time: Math.max(0, l.time + lyricOffset)
+    }));
+  }, [baseLyrics, lyricOffset]);
 
   const activeLyricIndex = lyrics.length > 0
     ? lyrics.findIndex((line, idx) => {
@@ -51,6 +63,29 @@ export default function FullPlayerModal({
         return currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
       })
     : -1;
+
+  const handleSaveLyricsOffset = async () => {
+    if (!currentTrack || !lyrics.length) return;
+    setIsSavingOffset(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackId: currentTrack.id,
+          lyrics: lyrics
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        currentTrack.lyrics = lyrics;
+        setLyricOffset(0);
+      }
+    } catch (e) {
+      console.warn('Save lyrics offset error:', e);
+    }
+    setIsSavingOffset(false);
+  };
 
   const handleTranslateLyrics = async () => {
     if (showTranslation) {
@@ -471,6 +506,75 @@ export default function FullPlayerModal({
                 </button>
               </div>
             </div>
+
+            {/* ── Timing Calibration Offset Bar ── */}
+            {rawLyrics.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-6 px-3.5 py-2.5 bg-white/5 rounded-xl border border-white/10 text-xs">
+                <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                  <Clock size={14} className="text-[#1DB954]" />
+                  <span>Timing Calibration:</span>
+                  <span className="font-bold text-white px-1.5 py-0.5 bg-white/10 rounded">
+                    {lyricOffset > 0 ? `+${lyricOffset}s` : `${lyricOffset}s`}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setLyricOffset(prev => prev - 2)}
+                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
+                    title="Delay lyrics by 2s (-2s)"
+                  >
+                    -2s
+                  </button>
+                  <button
+                    onClick={() => setLyricOffset(prev => prev - 1)}
+                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
+                    title="Delay lyrics by 1s (-1s)"
+                  >
+                    -1s
+                  </button>
+                  <button
+                    onClick={() => setLyricOffset(0)}
+                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-zinc-400 hover:text-white transition-all active:scale-95"
+                    title="Reset offset"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    onClick={() => setLyricOffset(prev => prev + 1)}
+                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
+                    title="Speed up lyrics by 1s (+1s)"
+                  >
+                    +1s
+                  </button>
+                  <button
+                    onClick={() => setLyricOffset(prev => prev + 2)}
+                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
+                    title="Speed up lyrics by 2s (+2s)"
+                  >
+                    +2s
+                  </button>
+                  <button
+                    onClick={() => setLyricOffset(prev => prev + 5)}
+                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
+                    title="Speed up lyrics by 5s (+5s)"
+                  >
+                    +5s
+                  </button>
+
+                  {lyricOffset !== 0 && (
+                    <button
+                      onClick={handleSaveLyricsOffset}
+                      disabled={isSavingOffset}
+                      className="ml-2 px-3 py-1 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-full transition-all active:scale-95 flex items-center gap-1"
+                    >
+                      {isSavingOffset ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                      <span>Save 💾</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {
                 const isActive = idx === activeLyricIndex;
