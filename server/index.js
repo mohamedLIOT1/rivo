@@ -1697,11 +1697,15 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
             const lines = match.syncedLyrics.split('\n');
             const lyrics = [];
             lines.forEach(l => {
+              // LRC format: [mm:ss.xx] where xx = centiseconds
               const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
               if (m) {
-                const time = parseInt(m[1]) * 60 + parseInt(m[2]);
+                const minutes = parseInt(m[1]);
+                const seconds = parseInt(m[2]);
+                const centiseconds = m[3] ? parseInt(m[3].padEnd(2, '0').slice(0, 2)) : 0;
+                const time = minutes * 60 + seconds + centiseconds / 100;
                 const text = m[4].trim();
-                if (text) lyrics.push({ time, text });
+                if (text) lyrics.push({ time: Math.round(time * 100) / 100, text });
               }
             });
             if (lyrics.length > 0) return lyrics;

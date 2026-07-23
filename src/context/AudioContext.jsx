@@ -48,6 +48,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isYtTrack, setIsYtTrack] = useState(false); // exposed for RAF-based lyrics sync
 
   // Equalizer State
   const [eqEnabled, setEqEnabled] = useState(true);
@@ -91,7 +92,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (isYtTrackRef.current) return; // YT handles its own time
       if (audio && !isNaN(audio.currentTime)) {
         const now = Date.now();
-        if (now - lastTimeUpdate > 250) {
+        if (now - lastTimeUpdate > 100) {  // 100ms for accurate lyrics sync
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
         }
@@ -146,6 +147,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           onReady: () => {
             isYtReadyRef.current = true;
             ytPlayerRef.current.setVolume(volumeRef.current * 100);
+            window.__liofyYTPlayer = ytPlayerRef.current; // expose for RAF-based lyrics sync
             console.log('[YT] Player ready');
           },
           onStateChange: (event) => {
@@ -153,14 +155,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
             if (event.data === YT.PlayerState.PLAYING) {
               setIsPlaying(true);
               setDuration(ytPlayerRef.current.getDuration() || 210);
-              // Poll currentTime every 500ms
+              // Poll currentTime every 200ms for accurate lyrics sync
               if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
               ytIntervalRef.current = setInterval(() => {
                 if (ytPlayerRef.current && isYtTrackRef.current) {
                   const t = ytPlayerRef.current.getCurrentTime() || 0;
                   setCurrentTime(t);
                 }
-              }, 500);
+              }, 200);
             } else if (event.data === YT.PlayerState.PAUSED) {
               setIsPlaying(false);
               if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
@@ -211,6 +213,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (ytId) {
       // ── YouTube track ──────────────────────────────────────────
       isYtTrackRef.current = true;
+      setIsYtTrack(true);
 
       // Pause HTML audio if playing
       if (audioRef.current) {
@@ -243,6 +246,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } else {
       // ── Regular audio (Upload / SoundCloud) ───────────────────
       isYtTrackRef.current = false;
+      setIsYtTrack(false);
 
       // Stop YouTube player
       if (ytPlayerRef.current && isYtReadyRef.current) {
@@ -410,6 +414,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isShuffle, setIsShuffle,
     isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
+    isYtTrack,
     eqEnabled, setEqEnabled,
     eqPreset, setEqPreset,
     eqBands, setEqBands,

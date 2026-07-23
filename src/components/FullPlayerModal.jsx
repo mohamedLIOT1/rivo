@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
-  Heart, Volume2, VolumeX, PlusCircle, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, Share2, ListMusic, Clock, Save
+  Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
+  MoreHorizontal, ListMusic
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { useAudioPlayer } from '../context/AudioContext';
 
 export default function FullPlayerModal({
   currentTrack,
@@ -28,64 +29,67 @@ export default function FullPlayerModal({
   queue = [],
   openAddToPlaylist
 }) {
+  // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
+  const { audioRef, isYtTrack } = useAudioPlayer();
+
   const [activeTab, setActiveTab] = useState('player');
   const [isVinylMode, setIsVinylMode] = useState(false);
   const lyricRefs = useRef({});
+
+  // ── RAF-based live time for lyrics sync (reads audio directly at ~60fps) ──
+  const [liveTime, setLiveTime] = useState(currentTime);
+  const rafRef = useRef(null);
+  const ytPlayerRef = useRef(null); // reference to YT player via window
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'lyrics') {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return;
+    }
+    const tick = () => {
+      if (isYtTrack) {
+        // YT player: read via window reference
+        try {
+          const yt = window.__liofyYTPlayer;
+          if (yt && typeof yt.getCurrentTime === 'function') {
+            setLiveTime(yt.getCurrentTime() || 0);
+          } else {
+            setLiveTime(t => t); // fallback: keep prop-based currentTime
+          }
+        } catch {}
+      } else if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
+        setLiveTime(audioRef.current.currentTime);
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [isOpen, activeTab, isYtTrack, audioRef]);
+
+  // Sync liveTime from prop when NOT on lyrics tab (so seekbar stays accurate)
+  useEffect(() => {
+    if (activeTab !== 'lyrics') setLiveTime(currentTime);
+  }, [currentTime, activeTab]);
 
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
   const [showTranslation, setShowTranslation] = useState(false);
 
-  const [lyricOffset, setLyricOffset] = useState(0);
-  const [isSavingOffset, setIsSavingOffset] = useState(false);
 
-  // Reset translation and offset when track changes
-  useEffect(() => {
-    setTranslatedLyrics(null);
-    setShowTranslation(false);
-    setLyricOffset(0);
-  }, [currentTrack?.id]);
 
   const rawLyrics = currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : [];
   const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
 
-  const lyrics = React.useMemo(() => {
-    if (!lyricOffset) return baseLyrics;
-    return baseLyrics.map(l => ({
-      ...l,
-      time: Math.max(0, l.time + lyricOffset)
-    }));
-  }, [baseLyrics, lyricOffset]);
+  const lyrics = baseLyrics;
 
+  // Use liveTime (from RAF at ~60fps) for frame-perfect lyrics sync
   const activeLyricIndex = lyrics.length > 0
     ? lyrics.findIndex((line, idx) => {
         const nextLine = lyrics[idx + 1];
-        return currentTime >= line.time && (!nextLine || currentTime < nextLine.time);
+        return liveTime >= line.time && (!nextLine || liveTime < nextLine.time);
       })
     : -1;
 
-  const handleSaveLyricsOffset = async () => {
-    if (!currentTrack || !lyrics.length) return;
-    setIsSavingOffset(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackId: currentTrack.id,
-          lyrics: lyrics
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        currentTrack.lyrics = lyrics;
-        setLyricOffset(0);
-      }
-    } catch (e) {
-      console.warn('Save lyrics offset error:', e);
-    }
-    setIsSavingOffset(false);
-  };
 
   const handleTranslateLyrics = async () => {
     if (showTranslation) {
@@ -507,74 +511,7 @@ export default function FullPlayerModal({
               </div>
             </div>
 
-            {/* ── Timing Calibration Offset Bar ── */}
-            {rawLyrics.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-6 px-3.5 py-2.5 bg-white/5 rounded-xl border border-white/10 text-xs">
-                <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
-                  <Clock size={14} className="text-[#1DB954]" />
-                  <span>Timing Calibration:</span>
-                  <span className="font-bold text-white px-1.5 py-0.5 bg-white/10 rounded">
-                    {lyricOffset > 0 ? `+${lyricOffset}s` : `${lyricOffset}s`}
-                  </span>
-                </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setLyricOffset(prev => prev - 2)}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
-                    title="Delay lyrics by 2s (-2s)"
-                  >
-                    -2s
-                  </button>
-                  <button
-                    onClick={() => setLyricOffset(prev => prev - 1)}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
-                    title="Delay lyrics by 1s (-1s)"
-                  >
-                    -1s
-                  </button>
-                  <button
-                    onClick={() => setLyricOffset(0)}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-zinc-400 hover:text-white transition-all active:scale-95"
-                    title="Reset offset"
-                  >
-                    Reset
-                  </button>
-                  <button
-                    onClick={() => setLyricOffset(prev => prev + 1)}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
-                    title="Speed up lyrics by 1s (+1s)"
-                  >
-                    +1s
-                  </button>
-                  <button
-                    onClick={() => setLyricOffset(prev => prev + 2)}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
-                    title="Speed up lyrics by 2s (+2s)"
-                  >
-                    +2s
-                  </button>
-                  <button
-                    onClick={() => setLyricOffset(prev => prev + 5)}
-                    className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded font-bold text-white transition-all active:scale-95"
-                    title="Speed up lyrics by 5s (+5s)"
-                  >
-                    +5s
-                  </button>
-
-                  {lyricOffset !== 0 && (
-                    <button
-                      onClick={handleSaveLyricsOffset}
-                      disabled={isSavingOffset}
-                      className="ml-2 px-3 py-1 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-full transition-all active:scale-95 flex items-center gap-1"
-                    >
-                      {isSavingOffset ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                      <span>Save 💾</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {
                 const isActive = idx === activeLyricIndex;
