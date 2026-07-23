@@ -18,9 +18,11 @@ export default function PlaylistScreen({
 
   if (!playlist) return null;
 
-  const playlistTrackIds = playlist.trackIds || [];
+  const playlistTrackIds = (playlist.trackIds || []).map(String);
   const playlistTracks = tracks.filter((t) => 
-    playlist.isLikedSongs ? t.liked : playlistTrackIds.includes(t.id)
+    playlist.isLikedSongs 
+      ? t.liked 
+      : (playlistTrackIds.includes(String(t.id)) || playlistTrackIds.includes(String(t._id)))
   );
 
   const availableTracks = tracks.filter((t) => !playlistTrackIds.includes(t.id));

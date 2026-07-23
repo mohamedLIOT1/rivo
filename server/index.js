@@ -291,8 +291,11 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
     const publicPlaylists = (user.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
       id: p.id,
       name: p.name,
-      cover: p.cover,
+      description: p.description || '',
+      cover: p.cover || '',
+      trackIds: (p.trackIds || []).map(String),
       trackCount: (p.trackIds || []).length,
+      isPublic: true,
       isLikedSongs: false,
     }));
     res.json({
