@@ -101,6 +101,21 @@ export function UserProvider({ children }) {
     return Array.from(map.values());
   };
 
+  // ── Login handler ────────────────────────────────────
+  const login = useCallback((user, token) => {
+    if (token) localStorage.setItem('liofy_token', token);
+    setCurrentUser(user);
+  }, []);
+
+  // ── Logout ───────────────────────────────────────────
+  const logout = useCallback(() => {
+    localStorage.removeItem('liofy_token');
+    setCurrentUser(null);
+    setLikedTrackIds([]);
+    setPlaylists([]);
+    setTracks([]);
+  }, []);
+
   // ── Full sync from server ────────────────────────────
   const syncFromServer = useCallback(async () => {
     const token = getToken();
@@ -149,21 +164,6 @@ export function UserProvider({ children }) {
   useEffect(() => {
     syncFromServer();
   }, [currentUser?.email]);
-
-  // ── Login handler ────────────────────────────────────
-  const login = useCallback((user, token) => {
-    if (token) localStorage.setItem('liofy_token', token);
-    setCurrentUser(user);
-  }, []);
-
-  // ── Logout ───────────────────────────────────────────
-  const logout = useCallback(() => {
-    localStorage.removeItem('liofy_token');
-    setCurrentUser(null);
-    setLikedTrackIds([]);
-    setPlaylists([]);
-    setTracks([]);
-  }, []);
 
   // ── Like / Unlike ────────────────────────────────────
   const toggleLike = useCallback(async (trackId) => {
