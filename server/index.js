@@ -1508,14 +1508,14 @@ function generateLyricsSearchQueries(title = '', artist = '') {
 async function syncLyricsWithGemini(linesArray, title, artist = '', duration = 180) {
   if (!Array.isArray(linesArray) || linesArray.length === 0) return [];
   
-  // Clean out Genius header lines and bracketed annotations like [المقدمة: مروان بابلو] or [اللازمة]
+  // Clean out header lines and bracketed annotations like [المقدمة: مروان بابلو] or [اللازمة]
   const cleanLyricsLines = linesArray
     .map(l => (typeof l === 'string' ? l.trim() : ''))
     .filter(l => {
       if (!l) return false;
       if (l.includes('Contributors') || l.includes('Embed')) return false;
-      if (/Lyrics$/i.test(l)) return false; // Remove "Shoft Kalam - شفت كلام Lyrics"
-      if (/^[\(\[\{].*?[\)\]\}]$/.test(l)) return false; // Remove [المقدمة: مروان بابلو], [اللازمة], etc.
+      if (/Lyrics$/i.test(l)) return false;
+      if (/^[\(\[\{].*?[\)\]\}]$/.test(l)) return false;
       return true;
     });
 
@@ -1529,16 +1529,16 @@ Artist: "${artist}"
 Total Audio Duration: ${duration} seconds.
 
 CRITICAL TIMING INSTRUCTIONS:
-1. Songs almost ALWAYS have an instrumental intro (8 to 22 seconds) before singing begins. DO NOT start line 1 at [0:00] or [0:01] unless the song starts with acapella singing immediately. Estimate realistic intro duration (usually 0:08 to 0:15) for line 1.
-2. Place timestamp tags [m:ss] at the beginning of each sung line to match real vocal delivery and pacing across ${duration} seconds.
+1. Songs almost ALWAYS have an instrumental intro (8 to 22 seconds) before singing begins. Estimate realistic intro duration.
+2. Place timestamp tags [m:ss.xx] at the beginning of each sung line matching real vocal delivery.
 3. DO NOT output any bracketed annotations like [Verse], [Chorus], [المقدمة], or [اللازمة].
 4. Output ONLY timestamped lyric lines starting with [m:ss] text.
 
-Lyrics lines:
+Lyrics lines to timestamp:
 ${cleanLyricsLines.join('\n')}`;
 
       const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1549,15 +1549,17 @@ ${cleanLyricsLines.join('\n')}`;
       if (geminiRes.ok) {
         const data = await geminiRes.json();
         const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const lines = responseText.split('\n');
         const lyrics = [];
-        lines.forEach(line => {
-          const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
+        responseText.split('\n').forEach(line => {
+          const match = line.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
           if (match) {
-            const time = parseInt(match[1]) * 60 + parseInt(match[2]);
-            const text = match[3].trim();
+            const minutes = parseInt(match[1]);
+            const seconds = parseInt(match[2]);
+            const cs = match[3] ? parseInt(match[3].padEnd(2,'0').slice(0,2)) : 0;
+            const time = minutes * 60 + seconds + cs / 100;
+            const text = match[4].trim();
             if (text && !/^[\(\[\{].*?[\)\]\}]$/.test(text) && !/Lyrics$/i.test(text)) {
-              lyrics.push({ time, text });
+              lyrics.push({ time: Math.round(time * 100) / 100, text });
             }
           }
         });
@@ -1571,14 +1573,8 @@ ${cleanLyricsLines.join('\n')}`;
     }
   }
 
-  // Fallback linear calculation with 10s intro offset if Gemini is unavailable
-  const startOffset = 10;
-  const availableDuration = Math.max(duration - startOffset - 5, 10);
-  const step = Math.max(availableDuration / cleanLyricsLines.length, 3);
-  return cleanLyricsLines.map((l, idx) => ({
-    time: Math.round(startOffset + idx * step),
-    text: l
-  }));
+  // Return empty rather than wrong math-based timestamps
+  return [];
 }
 
 async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
@@ -1710,13 +1706,11 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
             });
             if (lyrics.length > 0) return lyrics;
           } else if (match && match.plainLyrics) {
-            const lines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
-            if (lines.length > 0) {
-              const step = Math.max((duration - 10) / lines.length, 3);
-              return lines.map((l, idx) => ({
-                time: Math.round(idx * step),
-                text: l
-              }));
+            const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+            if (plainLines.length > 0) {
+              // Use Gemini to sync plain lyrics instead of math distribution
+              const synced = await syncLyricsWithGemini(plainLines, title, artist, duration);
+              if (synced.length > 0) return synced;
             }
           }
         }
@@ -1724,7 +1718,50 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
     } catch (err) {}
   }
 
-  // 2. Try Genius.com API & Scraper with Title Validation
+  // 2. Try NetEase Music (163.com) — free, huge library, good Arabic coverage
+  for (const q of queries.slice(0, 3)) {
+    try {
+      const neteaseSearch = await fetch(
+        `https://music.163.com/api/search/get?s=${encodeURIComponent(q)}&type=1&limit=5`,
+        { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://music.163.com/' }, signal: AbortSignal.timeout(5000) }
+      );
+      if (neteaseSearch.ok) {
+        const neteaseData = await neteaseSearch.json();
+        const songs = neteaseData?.result?.songs || [];
+        if (songs.length > 0) {
+          const songId = songs[0].id;
+          const lrcRes = await fetch(
+            `https://music.163.com/api/song/lyric?id=${songId}&lv=1&kv=1&tv=-1`,
+            { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://music.163.com/' }, signal: AbortSignal.timeout(5000) }
+          );
+          if (lrcRes.ok) {
+            const lrcData = await lrcRes.json();
+            const lrcText = lrcData?.lrc?.lyric || '';
+            if (lrcText) {
+              const neteaseLyrics = [];
+              lrcText.split('\n').forEach(l => {
+                const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
+                if (m) {
+                  const minutes = parseInt(m[1]);
+                  const seconds = parseInt(m[2]);
+                  const cs = m[3] ? parseInt(m[3].padEnd(2,'0').slice(0,2)) : 0;
+                  const time = minutes * 60 + seconds + cs / 100;
+                  const text = m[4].trim();
+                  if (text && !/^[\[\(]/.test(text)) neteaseLyrics.push({ time: Math.round(time * 100) / 100, text });
+                }
+              });
+              if (neteaseLyrics.length > 3) {
+                console.log(`[NetEase] Found ${neteaseLyrics.length} synced lines for "${q}"`);
+                return neteaseLyrics;
+              }
+            }
+          }
+        }
+      }
+    } catch (err) { /* timeout or network error, skip */ }
+  }
+
+  // 3. Try Genius.com API & Scraper with Title Validation
   for (const q of queries) {
     const geniusLyrics = await fetchLyricsFromGenius(q, title, duration);
     if (geniusLyrics.length > 0) {
@@ -1733,45 +1770,76 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
     }
   }
 
-  // 3. Fallback to Gemini AI to generate lyrics & timestamps if LRCLIB and Genius returned no results
+  // 4. Gemini 2.0 Flash — ONLY if it genuinely knows the song (anti-hallucination)
   if (GEMINI_API_KEY) {
     try {
-      const prompt = `You are an expert lyrics provider and audio synchronizer. Provide the accurate line-by-line lyrics with timestamp tags [m:ss] for the song "${title}" by "${artist}". 
-Total duration is ${duration} seconds.
-If the song is in Arabic, output the lyrics in original Arabic.
-Format: Output ONLY timestamped lines starting with [m:ss] or [mm:ss], with no conversational introduction or conclusion text.`;
+      // Step 1: Ask Gemini if it actually knows this specific song
+      const confirmPrompt = `Do you know the EXACT real lyrics to the song "${title}" by "${artist}"?
+Answer with ONLY one of these two options:
+- YES_I_KNOW — if you are 100% certain you know the real lyrics
+- UNKNOWN_SONG — if you are not sure or don't know the song`;
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        }
+      const confirmRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: confirmPrompt }] }] }) }
       );
 
-      if (geminiRes.ok) {
-        const data = await geminiRes.json();
-        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const lines = responseText.split('\n');
-        const lyrics = [];
-        lines.forEach(line => {
-          const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
-          if (match) {
-            const time = parseInt(match[1]) * 60 + parseInt(match[2]);
-            const text = match[3].trim();
-            if (text && !text.includes('Here are') && !text.includes('Lyrics:')) {
-              lyrics.push({ time, text });
+      if (confirmRes.ok) {
+        const confirmData = await confirmRes.json();
+        const confirmText = (confirmData.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        
+        // If Gemini says it doesn't know → return empty (don't hallucinate!)
+        if (confirmText.includes('UNKNOWN_SONG')) {
+          console.log(`[Gemini] Doesn't know "${title}" — returning empty to avoid hallucination`);
+          return [];
+        }
+
+        // Step 2: Gemini confirmed it knows → now get accurate lyrics
+        if (confirmText.includes('YES_I_KNOW')) {
+          const lyricsPrompt = `Provide the REAL, EXACT, ACCURATE line-by-line lyrics with LRC timestamp tags for the song "${title}" by "${artist}".
+Total song duration: ${duration} seconds.
+
+RULES (strictly follow):
+- Output ONLY lines in format [m:ss] lyric text
+- Start with realistic intro time (8-20 seconds before first vocal)
+- Space timestamps based on actual singing pace (NOT evenly spaced)
+- Arabic songs → output in Arabic script
+- NO [Verse], [Chorus], [اللازمة], or ANY bracketed section labels
+- NO extra commentary, ONLY timestamped lyric lines`;
+
+          const lyricsRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ parts: [{ text: lyricsPrompt }] }] }) }
+          );
+
+          if (lyricsRes.ok) {
+            const lyricsData = await lyricsRes.json();
+            const responseText = lyricsData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const lyrics = [];
+            responseText.split('\n').forEach(line => {
+              const match = line.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
+              if (match) {
+                const minutes = parseInt(match[1]);
+                const seconds = parseInt(match[2]);
+                const cs = match[3] ? parseInt(match[3].padEnd(2,'0').slice(0,2)) : 0;
+                const time = minutes * 60 + seconds + cs / 100;
+                const text = match[4].trim();
+                if (text && !/^[\[\(]/.test(text) && !text.includes('Here are') && !text.includes('Lyrics:')) {
+                  lyrics.push({ time: Math.round(time * 100) / 100, text });
+                }
+              }
+            });
+            if (lyrics.length > 0) {
+              console.log(`[Gemini 2.0] Confirmed & generated ${lyrics.length} lines for "${title}"`);
+              return lyrics;
             }
           }
-        });
-        if (lyrics.length > 0) {
-          console.log(`[Gemini AI Lyrics] Generated ${lyrics.length} synced lines for "${title}"`);
-          return lyrics;
         }
       }
     } catch (err) {
-      console.warn('[Gemini AI Lyrics] fetch error:', err.message);
+      console.warn('[Gemini 2.0 Lyrics] error:', err.message);
     }
   }
 
