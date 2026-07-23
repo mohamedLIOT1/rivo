@@ -300,6 +300,21 @@ export async function saveTrackOffline(track) {
       }
     }
 
+function blobToDataURI(blob) {
+  return new Promise((resolve) => {
+    if (!blob) { resolve(null); return; }
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
+}
+
+    let coverBase64 = null;
+    if (coverBlob) {
+      coverBase64 = await blobToDataURI(coverBlob);
+    }
+
     const db = await openDB();
     const offlineTrack = {
       ...track,
@@ -307,6 +322,8 @@ export async function saveTrackOffline(track) {
       downloaded: true,
       audioBlob: audioBlob,
       coverBlob: coverBlob,
+      coverBase64: coverBase64 || track.cover,
+      cover: coverBase64 || track.cover,
       savedAt: Date.now()
     };
 
@@ -367,7 +384,7 @@ export async function getOfflineTracks() {
         const items = req.result || [];
         const formatted = items.map(item => {
           let audioUrl = item.audioUrl;
-          let cover = item.cover;
+          let cover = item.coverBase64 || item.cover;
           const idStr = String(item.id);
 
           if (item.audioBlob) {
@@ -377,7 +394,7 @@ export async function getOfflineTracks() {
             audioUrl = URL.createObjectURL(item.audioBlob);
             activeBlobUrls.set(idStr, audioUrl);
           }
-          if (item.coverBlob) {
+          if (item.coverBlob && !item.coverBase64) {
             try { cover = URL.createObjectURL(item.coverBlob); } catch (e) {}
           }
           return { ...item, audioUrl, cover, downloaded: true };

@@ -704,30 +704,37 @@ async function resolveWithPiped(videoId) {
 }
 
 async function resolveWithCobalt(videoId) {
-  try {
-    const res = await fetch('https://api.cobalt.tools/api/json', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36'
-      },
-      body: JSON.stringify({
-        url: `https://www.youtube.com/watch?v=${videoId}`,
-        isAudioOnly: true,
-        aFormat: 'mp3'
-      }),
-      signal: AbortSignal.timeout(10000)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.url) {
-        console.log(`[Cobalt] ✅ Resolved YouTube stream for ${videoId}`);
-        return data.url;
+  const cobaltInstances = [
+    'https://co.wuk.sh/api/json',
+    'https://cobalt.stream/api/json',
+    'https://api.cobalt.tools/api/json',
+  ];
+  for (const endpoint of cobaltInstances) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36'
+        },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
+          isAudioOnly: true
+        }),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && (data.url || data.audio)) {
+          const url = data.url || data.audio;
+          console.log(`[Cobalt] ✅ Resolved YouTube stream via ${endpoint} for ${videoId}`);
+          return url;
+        }
       }
-    }
-  } catch (err) {
-    console.warn('[Cobalt] error:', err.message);
+    } catch (err) {}
   }
   return null;
 }
