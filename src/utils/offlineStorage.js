@@ -89,6 +89,84 @@ function extractYtId(input) {
   return null;
 }
 
+// Client-side YouTube Audio Stream Resolver via public Piped & Invidious mirrors
+async function resolveYouTubeAudioClientSide(videoId) {
+  if (!videoId) return null;
+  const pipedInstances = [
+    'https://pipedapi.kavin.rocks',
+    'https://api.piped.privacydev.net',
+    'https://pipedapi.adminforge.de',
+    'https://pipedapi.palvelu.org',
+    'https://piped-api.garudalinux.org',
+    'https://pipedapi.mha.fi'
+  ];
+  for (const base of pipedInstances) {
+    try {
+      const res = await fetch(`${base}/streams/${videoId}`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data && data.audioStreams && data.audioStreams.length > 0) {
+        const stream = data.audioStreams.find(s => s.mimeType && s.mimeType.includes('audio/mp4')) || data.audioStreams[0];
+        if (stream && stream.url) return stream.url;
+      }
+    } catch {}
+  }
+  
+  const invidiousInstances = [
+    'https://inv.zoomerville.com',
+    'https://invidious.slipfox.xyz',
+    'https://yt.artemislena.eu',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.projectsegfau.lt'
+  ];
+  for (const base of invidiousInstances) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data && data.adaptiveFormats) {
+        const audio = data.adaptiveFormats.find(f => f.type && f.type.includes('audio/mp4')) || data.adaptiveFormats.find(f => f.type && f.type.includes('audio'));
+        if (audio && audio.url) return audio.url;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// Generate lightweight fallback offline audio blob if external stream/proxy is unavailable
+function createFallbackAudioBlob() {
+  try {
+    const sampleRate = 44100;
+    const numChannels = 1;
+    const durationSec = 180;
+    const numSamples = sampleRate * durationSec;
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (v, offset, str) => {
+      for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
+    };
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * 2, true);
+    view.setUint16(32, numChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  } catch (e) {
+    return new Blob(['LIOFY_OFFLINE_AUDIO_CACHE'], { type: 'audio/mpeg' });
+  }
+}
+
 // Save downloaded audio blob & track info locally in app private storage (IndexedDB)
 export async function saveTrackOffline(track) {
   if (!track || (!track.id && !track._id)) return null;
@@ -111,7 +189,7 @@ export async function saveTrackOffline(track) {
       } catch (e) {}
     }
 
-    // 2. YouTube tracks: Proxy stream via backend proxy-audio or yt-resolve
+    // 2. YouTube tracks: Proxy stream via backend proxy-audio or yt-resolve or client side mirrors
     const ytId = extractYtId(targetUrl) || (track.source === 'YouTube' ? extractYtId(track.id || track._id) : null);
     if (!audioBlob && ytId) {
       // Method A: Direct proxy request with YouTube watch URL
@@ -132,6 +210,21 @@ export async function saveTrackOffline(track) {
           const resolveData = await resolveRes.json();
           if (resolveData.success && resolveData.url) {
             const streamRes = await fetch(resolveData.url);
+            const ct = streamRes.headers.get('content-type') || '';
+            if (streamRes.ok && !ct.includes('html')) {
+              const b = await streamRes.blob();
+              if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
+            }
+          }
+        } catch (e) {}
+      }
+
+      // Method C: Client-side stream resolution via Piped & Invidious mirrors
+      if (!audioBlob) {
+        try {
+          const directStreamUrl = await resolveYouTubeAudioClientSide(ytId);
+          if (directStreamUrl) {
+            const streamRes = await fetch(directStreamUrl);
             const ct = streamRes.headers.get('content-type') || '';
             if (streamRes.ok && !ct.includes('html')) {
               const b = await streamRes.blob();
@@ -182,55 +275,24 @@ export async function saveTrackOffline(track) {
       }
     }
 
-// Generate lightweight fallback offline audio blob if external stream/proxy is unavailable
-function createFallbackAudioBlob() {
-  try {
-    const sampleRate = 44100;
-    const numChannels = 1;
-    const durationSec = 180;
-    const numSamples = sampleRate * durationSec;
-    const buffer = new ArrayBuffer(44 + numSamples * 2);
-    const view = new DataView(buffer);
-
-    const writeString = (v, offset, str) => {
-      for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
-    };
-
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + numSamples * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * 2, true);
-    view.setUint16(32, numChannels * 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, numSamples * 2, true);
-
-    return new Blob([buffer], { type: 'audio/wav' });
-  } catch (e) {
-    return new Blob(['LIOFY_OFFLINE_AUDIO_CACHE'], { type: 'audio/mpeg' });
-  }
-}
-
     // Validation & Fallback: Guarantee audioBlob is always valid so download never fails
     if (!audioBlob || audioBlob.size < 1000 || audioBlob.type.includes('html')) {
       console.warn('Using fallback audio blob for offline track:', track.title);
       audioBlob = createFallbackAudioBlob();
     }
 
-    // Cover image blob handling
+    // Cover image blob handling (Direct + Proxy fallback)
     let coverBlob = null;
     if (track.cover) {
       if (track.cover.startsWith('data:')) {
         coverBlob = dataURItoBlob(track.cover);
       } else if (track.cover.startsWith('http')) {
         try {
-          const coverRes = await fetch(track.cover);
-          if (coverRes.ok) {
+          let coverRes = await fetch(track.cover).catch(() => null);
+          if (!coverRes || !coverRes.ok) {
+            coverRes = await fetch(`${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(track.cover)}`).catch(() => null);
+          }
+          if (coverRes && coverRes.ok) {
             const cb = await coverRes.blob();
             if (cb && !cb.type.includes('html')) coverBlob = cb;
           }
@@ -371,4 +433,3 @@ export async function removeTrackOffline(trackId) {
     return false;
   }
 }
-

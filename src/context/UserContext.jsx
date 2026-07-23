@@ -196,6 +196,26 @@ export function UserProvider({ children }) {
 
   // Sync on mount and when user changes
   useEffect(() => {
+    // Load offline tracks immediately on mount to refresh Blob URLs (audio & cover)
+    (async () => {
+      try {
+        const offlineTracks = await getOfflineTracks();
+        if (offlineTracks && offlineTracks.length > 0) {
+          const offlineMap = new Map(offlineTracks.map(t => [String(t.id), t]));
+          setTracks(prev => {
+            const updated = prev.map(t => {
+              const off = offlineMap.get(String(t.id || t._id));
+              return off ? { ...t, ...off, downloaded: true } : t;
+            });
+            const existingIds = new Set(updated.map(u => String(u.id || u._id)));
+            offlineTracks.forEach(o => {
+              if (!existingIds.has(String(o.id || o._id))) updated.push(o);
+            });
+            return deduplicateTracks(updated);
+          });
+        }
+      } catch (e) {}
+    })();
     syncFromServer();
   }, [currentUser?.email]);
 
