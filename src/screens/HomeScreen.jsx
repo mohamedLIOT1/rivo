@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Heart, Plus, Edit3, Trash2, Pause } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown } from 'lucide-react';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -13,8 +13,13 @@ export default function HomeScreen({
   openEditSongModal,
   onDeleteTrack,
   currentTrack,
-  isPlaying
+  isPlaying,
+  currentUser,
+  logout = () => {},
+  openAuthModal = () => {}
 }) {
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
   const defaultTrackCover = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231DB954"/><circle cx="150" cy="150" r="90" fill="%23121212"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="%231DB954" font-size="80">🎵</text></svg>`;
 
   const getGreeting = () => {
@@ -59,13 +64,68 @@ export default function HomeScreen({
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
             {getGreeting()}
           </h1>
-          <button
-            onClick={openAddSongModal}
-            className="flex items-center gap-2 text-sm font-bold text-[#b3b3b3] hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/10"
-          >
-            <Plus size={16} />
-            <span className="hidden sm:inline">Add Song</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openAddSongModal}
+              className="flex items-center gap-2 text-sm font-bold text-[#b3b3b3] hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/10"
+            >
+              <Plus size={16} />
+              <span className="hidden sm:inline">Add Song</span>
+            </button>
+
+            {/* Profile Avatar & Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                className="flex items-center gap-2 p-1 bg-black/50 hover:bg-black/80 border border-white/10 rounded-full transition-all cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center font-bold text-black text-sm uppercase overflow-hidden shrink-0">
+                  {currentUser?.avatar ? (
+                    <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    currentUser?.name?.[0] || 'U'
+                  )}
+                </div>
+                <span className="hidden md:inline text-xs font-bold text-white pr-1 max-w-[100px] truncate">
+                  {currentUser?.name || 'Account'}
+                </span>
+                <ChevronDown size={14} className="text-zinc-400 hidden md:inline mr-1" />
+              </button>
+
+              {/* Profile Dropdown Menu */}
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-[#282828] border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in duration-150">
+                  <div className="px-4 py-2 border-b border-white/10">
+                    <p className="text-xs font-bold text-white truncate">{currentUser?.name || 'Liofy User'}</p>
+                    <p className="text-[10px] text-zinc-400 truncate">{currentUser?.email || 'Guest Account'}</p>
+                  </div>
+                  {currentUser ? (
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        logout();
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <LogOut size={14} />
+                      <span>تسجيل خروج (Logout)</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        openAuthModal();
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-[#1DB954] hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <User size={14} />
+                      <span>تسجيل الدخول (Login)</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

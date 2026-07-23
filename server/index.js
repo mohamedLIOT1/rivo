@@ -1388,14 +1388,12 @@ ${cleanLines.join('\n')}`;
 // Validate that returned search result actually matches target song title
 function isMatchValid(hitTitle, targetTitle) {
   if (!hitTitle || !targetTitle) return true;
-  const cleanHit = hitTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, '');
-  
-  const targetWords = targetTitle
-    .toLowerCase()
-    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
-    .replace(/official|video|audio|lyric|music|كليب|فيديو|كلمات/gi, '')
-    .split(/[^\w\u0600-\u06FF]+/)
-    .filter(w => w.length >= 3 && !['amr', 'diab', 'wegz', 'lege', 'marwan', 'pablo', 'tamer', 'hosny', 'hamaki', 'sony', 'rotana', 'music', 'middle', 'east'].includes(w));
+  const cleanHit = hitTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ');
+  const cleanTarget = targetTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ');
+
+  const targetWords = cleanTarget
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !['official', 'video', 'audio', 'lyric', 'music', 'كليب', 'فيديو', 'كلمات', 'أوديو', 'رسمي', 'channel', 'sony', 'rotana'].includes(w));
 
   if (targetWords.length === 0) return true;
   return targetWords.some(w => cleanHit.includes(w));

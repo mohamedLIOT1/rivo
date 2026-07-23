@@ -256,6 +256,9 @@ function AppContent() {
             onDeleteTrack={handleDeleteTrack}
             currentTrack={currentTrack}
             isPlaying={isPlaying}
+            currentUser={currentUser}
+            logout={logout}
+            openAuthModal={() => setIsAuthOpen(true)}
           />
         )}
 
