@@ -1670,37 +1670,6 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 }
 
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
-  // If track is Shoft Kalam / شفت كلام, return clean, accurately timed lyrics immediately!
-  if (/shoft\s*kalam|شفت\s*كلام/i.test(title || '')) {
-    return [
-      { time: 7, text: "حاتم، حاتم، بس" },
-      { time: 13, text: "شُفت كلام في رمشك" },
-      { time: 17, text: "من غير كلام قاريها" },
-      { time: 20, text: "شُفتها، قُلت \"خلصت\"" },
-      { time: 23, text: "دي اللي ما فيش بعديها" },
-      { time: 26, text: "ومنها ما لقيتشي" },
-      { time: 28, text: "من العين ربي يحميها" },
-      { time: 31, text: "ولأجل عيونك إنتي" },
-      { time: 33, text: "الخزنة أنا مفضيها" },
-      { time: 36, text: "خايف تروحي مني" },
-      { time: 38, text: "ولغيري يوهب ليكي" },
-      { time: 41, text: "تمنك أدفع أضعافه" },
-      { time: 43, text: "وما يغلاشي عليكي" },
-      { time: 46, text: "مجنون بيكي، أنا كائن غريب" },
-      { time: 50, text: "طبيب نفسي، بداري، مريض" },
-      { time: 54, text: "سألت نفسي: \"هو أنا إيه؟\"" },
-      { time: 58, text: "قلبي يقول لي: \"إنت حبيب\"" },
-      { time: 62, text: "شُفت كلام في رمشك" },
-      { time: 65, text: "من غير كلام قاريها" },
-      { time: 68, text: "شُفتها، قُلت \"خلصت\"" },
-      { time: 71, text: "دي اللي ما فيش بعديها" },
-      { time: 74, text: "ومنها ما لقيتشي" },
-      { time: 76, text: "من العين ربي يحميها" },
-      { time: 79, text: "ولأجل عيونك إنتي" },
-      { time: 81, text: "الخزنة أنا مفضيها" }
-    ];
-  }
-
   const queries = generateLyricsSearchQueries(title, artist);
 
   // 1. Try LRCLIB API (Synced / Plain)
