@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
-import EqualizerModal from './components/EqualizerModal';
-import SleepTimerModal from './components/SleepTimerModal';
 import CreatePlaylistModal from './components/CreatePlaylistModal';
 import AddToPlaylistModal from './components/AddToPlaylistModal';
 import SettingsModal from './components/SettingsModal';
@@ -37,7 +35,7 @@ function AppContent() {
   const {
     currentTrack, setCurrentTrack, isPlaying, setIsPlaying, currentTime, duration,
     volume, setVolume, isShuffle, setIsShuffle, isRepeat, setIsRepeat,
-    isOfflineMode, setIsOfflineMode, eqEnabled, setEqEnabled, eqPreset, eqBands, setEqBands, applyEqPreset,
+    isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo
   } = audio;
 
@@ -48,8 +46,6 @@ function AppContent() {
 
   // Modals
   const [isFullPlayerOpen,    setIsFullPlayerOpen]    = useState(false);
-  const [isEqualizerOpen,     setIsEqualizerOpen]     = useState(false);
-  const [isSleepTimerOpen,    setIsSleepTimerOpen]    = useState(false);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [isAddToPlaylistOpen, setIsAddToPlaylistOpen] = useState(false);
   const [isSettingsOpen,      setIsSettingsOpen]      = useState(false);
@@ -58,7 +54,6 @@ function AppContent() {
   const [editingTrack,        setEditingTrack]        = useState(null);
   const [isAuthOpen,          setIsAuthOpen]          = useState(false);
 
-  const [sleepTimer,   setSleepTimer]   = useState(0);
   const [audioQuality, setAudioQuality] = useState('320');
   const [crossfade,    setCrossfade]    = useState(4);
 
@@ -66,14 +61,6 @@ function AppContent() {
   useEffect(() => {
     if (!currentUser) setIsAuthOpen(true);
   }, []);
-
-  // Sleep Timer
-  useEffect(() => {
-    if (sleepTimer > 0) {
-      const timer = setTimeout(() => { setIsPlaying(false); setSleepTimer(0); }, sleepTimer * 60 * 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [sleepTimer]);
 
   // ── Add song to global library ───────────────────────
   const handleAddSong = async (newSong) => {
@@ -336,8 +323,6 @@ function AppContent() {
           toggleRepeat={() => setIsRepeat(p => !p)}
           toggleLike={toggleLike}
           openFullPlayer={() => setIsFullPlayerOpen(true)}
-          openEqualizer={() => setIsEqualizerOpen(true)}
-          openSleepTimer={() => setIsSleepTimerOpen(true)}
           openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
           currentTime={currentTime}
           duration={duration}
@@ -365,27 +350,7 @@ function AppContent() {
         isRepeat={isRepeat}
         toggleRepeat={() => setIsRepeat(p => !p)}
         queue={tracks}
-        openEqualizer={() => setIsEqualizerOpen(true)}
-        openSleepTimer={() => setIsSleepTimerOpen(true)}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
-      />
-
-      <EqualizerModal
-        isOpen={isEqualizerOpen}
-        onClose={() => setIsEqualizerOpen(false)}
-        enabled={eqEnabled}
-        setEnabled={setEqEnabled}
-        preset={eqPreset}
-        applyPreset={applyEqPreset}
-        bands={eqBands}
-        setBands={setEqBands}
-      />
-
-      <SleepTimerModal
-        isOpen={isSleepTimerOpen}
-        onClose={() => setIsSleepTimerOpen(false)}
-        activeTimer={sleepTimer}
-        setSleepTimer={setSleepTimer}
       />
 
       <CreatePlaylistModal

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Sliders, Moon, PlusCircle, Volume2, VolumeX, Laptop2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2 } from 'lucide-react';
 
 export default function MiniPlayer({
   currentTrack,
@@ -13,8 +13,6 @@ export default function MiniPlayer({
   toggleRepeat,
   toggleLike,
   openFullPlayer,
-  openEqualizer,
-  openSleepTimer,
   openAddToPlaylist,
   currentTime,
   duration
@@ -200,24 +198,6 @@ export default function MiniPlayer({
             title="Add to playlist"
           >
             <PlusCircle size={16} />
-          </button>
-
-          {/* Equalizer */}
-          <button
-            onClick={(e) => { e.stopPropagation(); openEqualizer?.(); }}
-            className="p-2 rounded text-[#b3b3b3] hover:text-white transition-all hover:scale-105"
-            title="Equalizer"
-          >
-            <Sliders size={16} />
-          </button>
-
-          {/* Sleep Timer */}
-          <button
-            onClick={(e) => { e.stopPropagation(); openSleepTimer?.(); }}
-            className="p-2 rounded text-[#b3b3b3] hover:text-white transition-all hover:scale-105"
-            title="Sleep timer"
-          >
-            <Moon size={16} />
           </button>
 
           {/* Expand Full Player */}

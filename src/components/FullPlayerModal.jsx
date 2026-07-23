@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
-  Heart, Volume2, Sliders, Moon, PlusCircle, Download, Disc, Sparkles,
+  Heart, Volume2, PlusCircle, Download, Disc, Sparkles,
   MoreHorizontal, Share2, ListMusic
 } from 'lucide-react';
 
@@ -25,8 +25,6 @@ export default function FullPlayerModal({
   isRepeat,
   toggleRepeat,
   queue = [],
-  openEqualizer,
-  openSleepTimer,
   openAddToPlaylist
 }) {
   const [activeTab, setActiveTab] = useState('player');
@@ -321,20 +319,6 @@ export default function FullPlayerModal({
                   title="Vinyl Mode"
                 >
                   <Disc size={18} style={{ color: isVinylMode ? '#1DB954' : '#b3b3b3' }} />
-                </button>
-                <button 
-                  onClick={openEqualizer}
-                  className="p-2 transition-all hover:scale-105"
-                  title="Equalizer"
-                >
-                  <Sliders size={18} style={{ color: '#b3b3b3' }} className="hover:text-white" />
-                </button>
-                <button 
-                  onClick={openSleepTimer}
-                  className="p-2 transition-all hover:scale-105"
-                  title="Sleep Timer"
-                >
-                  <Moon size={18} style={{ color: '#b3b3b3' }} />
                 </button>
                 {toggleDownload && (
                   <button 
