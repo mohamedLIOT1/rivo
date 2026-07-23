@@ -1887,52 +1887,70 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
   const queries = generateLyricsSearchQueries(title, artist);
 
-  // 1. Try Genius first for direct Genius URLs or queries (highest quality Arabic / Rap lyrics)
+  // Helper to parse LRC format [mm:ss.xx] line
+  const parseLrcText = (lrcString) => {
+    if (!lrcString) return [];
+    const lines = lrcString.split('\n');
+    const lyrics = [];
+    lines.forEach(l => {
+      const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
+      if (m) {
+        const minutes = parseInt(m[1]);
+        const seconds = parseInt(m[2]);
+        const centiseconds = m[3] ? parseInt(m[3].padEnd(2, '0').slice(0, 2)) : 0;
+        const time = minutes * 60 + seconds + centiseconds / 100;
+        const text = m[4].trim();
+        if (text) lyrics.push({ time: Math.round(time * 100) / 100, text });
+      }
+    });
+    return lyrics;
+  };
+
+  // 1. Try LRCLIB API directly (https://lrclib.net/) - Primary Source!
+  for (const q of queries) {
+    try {
+      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`, {
+        headers: { 'User-Agent': 'LiofyApp/1.0 (https://github.com)' },
+        signal: AbortSignal.timeout(6000)
+      });
+      if (lrcRes.ok) {
+        const results = await lrcRes.json();
+        if (Array.isArray(results) && results.length > 0) {
+          // Find best match
+          const match = results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || results[0];
+          
+          if (match && match.syncedLyrics) {
+            const parsed = parseLrcText(match.syncedLyrics);
+            if (parsed.length > 0) {
+              console.log(`[LRCLIB] ✅ Found synced lyrics on lrclib.net for "${title}" (${parsed.length} lines)`);
+              return parsed;
+            }
+          } else if (match && match.plainLyrics) {
+            const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+            if (plainLines.length > 0) {
+              const step = Math.max(2, (duration - 10) / plainLines.length);
+              const lyrics = plainLines.map((text, i) => ({
+                time: Math.round((5 + i * step) * 100) / 100,
+                text
+              }));
+              console.log(`[LRCLIB] ✅ Found plain lyrics on lrclib.net for "${title}" (${lyrics.length} lines)`);
+              return lyrics;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[LRCLIB] fetch error:', err.message);
+    }
+  }
+
+  // 2. Try Genius as fallback
   for (const q of queries) {
     const geniusLyrics = await fetchLyricsFromGenius(q, title, duration);
     if (geniusLyrics.length > 0) {
       console.log(`[Genius Lyrics] Successfully fetched & synced ${geniusLyrics.length} lines for "${title}"`);
       return geniusLyrics;
     }
-  }
-
-  // 2. Try LRCLIB API (Synced / Plain)
-  for (const q of queries) {
-    try {
-      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
-      if (lrcRes.ok) {
-        const results = await lrcRes.json();
-        if (Array.isArray(results) && results.length > 0) {
-          const validResults = results.filter(r => isMatchValid(r.trackName, title, artist, r.artistName));
-          if (validResults.length > 0) {
-            const match = validResults.find(r => r.syncedLyrics) || validResults.find(r => r.plainLyrics) || validResults[0];
-            
-            if (match && match.syncedLyrics) {
-              const lines = match.syncedLyrics.split('\n');
-              const lyrics = [];
-              lines.forEach(l => {
-                const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-                if (m) {
-                  const minutes = parseInt(m[1]);
-                  const seconds = parseInt(m[2]);
-                  const centiseconds = m[3] ? parseInt(m[3].padEnd(2, '0').slice(0, 2)) : 0;
-                  const time = minutes * 60 + seconds + centiseconds / 100;
-                  const text = m[4].trim();
-                  if (text) lyrics.push({ time: Math.round(time * 100) / 100, text });
-                }
-              });
-              if (lyrics.length > 0) return lyrics;
-            } else if (match && match.plainLyrics) {
-              const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
-              if (plainLines.length > 0) {
-                const synced = await syncLyricsWithGemini(plainLines, title, artist, duration);
-                if (synced.length > 0) return synced;
-              }
-            }
-          }
-        }
-      }
-    } catch (err) {}
   }
 
   // 3. Try NetEase Music (163.com) — free, huge library, good Arabic coverage

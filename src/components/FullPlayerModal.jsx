@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2
+  MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
+  Edit3, Check, Search
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -245,8 +246,68 @@ export default function FullPlayerModal({
   };
 
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
+  const [isManualEditOpen, setIsManualEditOpen] = useState(false);
+  const [manualText, setManualText] = useState('');
+  const [isSavingManualLyrics, setIsSavingManualLyrics] = useState(false);
+
+  const openManualEdit = () => {
+    const formatted = rawLyrics
+      .map(line => {
+        const m = Math.floor(line.time / 60);
+        const s = Math.floor(line.time % 60);
+        const timeStr = `[${m}:${s < 10 ? '0' : ''}${s}]`;
+        return `${timeStr} ${line.text}`;
+      })
+      .join('\n');
+    setManualText(formatted);
+    setIsManualEditOpen(true);
+  };
+
+  const handleSaveManualLyrics = async () => {
+    if (!currentTrack) return;
+    setIsSavingManualLyrics(true);
+    try {
+      const lines = manualText
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+      const parsed = lines.map((line, idx) => {
+        const match = line.match(/\[?(\d+):(\d+)(?:\.(\d+))?\]?\s*(.*)/);
+        if (match) {
+          const m = parseInt(match[1]);
+          const s = parseInt(match[2]);
+          const cs = match[3] ? parseInt(match[3].padEnd(2, '0').slice(0, 2)) : 0;
+          const time = m * 60 + s + cs / 100;
+          return { time: Math.round(time * 100) / 100, text: match[4].trim() || line };
+        } else {
+          // Space lines evenly across song duration if no timestamp provided
+          const songDur = currentTrack.duration || 180;
+          const step = Math.max(2, (songDur - 10) / Math.max(1, lines.length));
+          return { time: Math.round((5 + idx * step) * 100) / 100, text: line };
+        }
+      });
+
+      await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackId: currentTrack.id,
+          lyrics: parsed
+        })
+      });
+
+      currentTrack.lyrics = parsed;
+      setLocalLyrics(parsed);
+      setTranslatedLyrics(null);
+      setShowTranslation(false);
+      setIsManualEditOpen(false);
+    } catch (e) {
+      console.warn('Save manual lyrics error:', e);
+    }
+    setIsSavingManualLyrics(false);
+  };
 
   const handleGenerateLyrics = async () => {
     if (!currentTrack) return;
@@ -271,40 +332,9 @@ export default function FullPlayerModal({
         setShowTranslation(false);
       }
     } catch (e) {
-      console.warn('AI Generate Lyrics error:', e);
+      console.warn('LRCLIB Lyrics error:', e);
     }
     setIsGeneratingLyrics(false);
-  };
-
-  // Groq Whisper: directly listen to audio soundwave and transcribe with frame-perfect timestamps
-  const handleTranscribeAudio = async () => {
-    if (!currentTrack) return;
-    const targetAudio = currentTrack.audioUrl || currentTrack.title;
-    if (!targetAudio) return;
-    setIsTranscribing(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/transcribe-audio`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          trackId: currentTrack.id,
-          audioUrl: targetAudio,
-          title: currentTrack.title,
-          artist: currentTrack.artist,
-          duration: currentTrack.duration || 180
-        })
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
-        currentTrack.lyrics = data.lyrics;
-        setLocalLyrics(data.lyrics);
-        setTranslatedLyrics(null);
-        setShowTranslation(false);
-      }
-    } catch (e) {
-      console.warn('Transcribe audio error:', e);
-    }
-    setIsTranscribing(false);
   };
 
   // Clear wrong/cached lyrics from MongoDB immediately
@@ -671,94 +701,74 @@ export default function FullPlayerModal({
           <div 
             onScroll={handleUserScroll} 
             onTouchStart={handleUserScroll} 
-            className="flex-1 overflow-y-auto rounded-lg py-4 scroll-smooth"
+            className="flex-1 overflow-y-auto rounded-lg py-4 scroll-smooth relative"
             style={{ scrollbarWidth: 'none' }}
           >
-            <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/10">
+            {/* Header controls */}
+            <div className="flex items-center justify-between mb-6 pb-3 border-b border-white/10 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-[#1DB954]" />
                 <span className="text-xs font-bold uppercase tracking-wider text-[#1DB954]">
-                  {showTranslation ? 'Live Synced Lyrics (Arabic AI)' : 'Live Synced Lyrics'}
+                  {showTranslation ? 'Synced Lyrics (Translated)' : 'Live Synced Lyrics'}
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {/* Clear wrong lyrics button — only shown when lyrics exist */}
                 {rawLyrics.length > 0 && (
                   <button
                     onClick={handleClearLyrics}
                     disabled={isClearingLyrics}
-                    className="flex items-center gap-1 px-2 py-1.5 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-full text-xs font-bold text-red-400 transition-all active:scale-95 disabled:opacity-50"
-                    title="مسح الكلمات الغلط من قاعدة البيانات"
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-full text-xs font-bold text-red-400 transition-all active:scale-95 disabled:opacity-50"
+                    title="مسح الكلمات من قاعدة البيانات"
                   >
                     {isClearingLyrics ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                    <span>Clear</span>
+                    <span>مسح</span>
                   </button>
                 )}
+
+                {/* LRCLIB Search button */}
                 <button
                   onClick={handleGenerateLyrics}
                   disabled={isGeneratingLyrics}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-50"
-                  title="Force AI to re-fetch & re-sync lyrics"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
+                  title="بحث عن كلمات الأغنية من موقع LRCLIB.net"
                 >
                   {isGeneratingLyrics ? (
                     <Loader2 size={13} className="animate-spin" />
                   ) : (
-                    <Sparkles size={13} className="text-[#1DB954]" />
+                    <Search size={13} />
                   )}
-                  <span>{isGeneratingLyrics ? 'Syncing...' : 'AI Sync 🪄'}</span>
+                  <span>{isGeneratingLyrics ? 'جاري البحث...' : 'بحث LRCLIB 🎵'}</span>
                 </button>
 
-                {/* Groq: only for uploaded tracks — YouTube audio can't be fetched from Railway */}
-                {isYouTubeTrack ? (
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800/60 border border-zinc-700/40 rounded-full text-xs text-zinc-600 cursor-not-allowed select-none"
-                    title="Groq لا يدعم أغاني YouTube على السيرفر — استخدم AI Sync عوضاً"
-                  >
-                    <Mic size={13} className="text-zinc-700" />
-                    <span>Groq (YouTube ❌)</span>
-                  </div>
-                ) : (
+                {/* Manual Lyrics Edit button */}
+                <button
+                  onClick={openManualEdit}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-xs font-bold text-white transition-all active:scale-95"
+                  title="كتابة أو تعديل كلمات الأغنية يدويًا"
+                >
+                  <Edit3 size={13} className="text-amber-400" />
+                  <span>تعديل يدوي ✏️</span>
+                </button>
+
+                {rawLyrics.length > 0 && (
                   <button
-                    onClick={handleTranscribeAudio}
-                    disabled={isTranscribing || isGeneratingLyrics}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 rounded-full text-xs font-bold text-purple-300 transition-all active:scale-95 disabled:opacity-50"
-                    title="Groq AI يسمع ملف الأوديو المرفوع ويولد كلمات بـ timestamps دقيقة"
+                    onClick={handleTranslateLyrics}
+                    disabled={isTranslating}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-full text-xs font-bold text-blue-300 transition-all active:scale-95 disabled:opacity-50"
                   >
-                    {isTranscribing ? (
-                      <>
-                        <Loader2 size={13} className="animate-spin" />
-                        <span>Groq Listening...</span>
-                      </>
+                    {isTranslating ? (
+                      <Loader2 size={13} className="animate-spin" />
                     ) : (
-                      <>
-                        <Mic size={13} className="text-purple-300" />
-                        <span>Groq Listen 🎤</span>
-                      </>
+                      <Languages size={13} />
                     )}
+                    <span>{showTranslation ? 'الأصلية' : 'ترجمة 🪄'}</span>
                   </button>
                 )}
-
-                <button
-                  onClick={handleTranslateLyrics}
-                  disabled={isTranslating || !rawLyrics.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isTranslating ? (
-                    <>
-                      <Loader2 size={13} className="animate-spin" />
-                      <span>Translating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Languages size={13} />
-                      <span>{showTranslation ? 'Original' : 'AI Translate 🪄'}</span>
-                    </>
-                  )}
-                </button>
               </div>
             </div>
 
-
+            {/* Lyrics content lines */}
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {
                 const isActive = idx === activeLyricIndex;
@@ -782,44 +792,76 @@ export default function FullPlayerModal({
             ) : (
               <div className="text-center py-12 px-4" style={{ color: '#b3b3b3' }}>
                 <ListMusic size={48} className="mx-auto mb-4 text-[#1DB954] opacity-60" />
-                <p className="font-extrabold text-white text-base mb-1">No lyrics available for this song</p>
+                <p className="font-extrabold text-white text-lg mb-1">لا توجد كلمات لهذه الأغنية</p>
                 <p className="text-xs text-zinc-400 max-w-xs mx-auto mb-6">
-                  Try AI search below, or use the microphone button to transcribe the actual audio.
+                  يمكنك البحث عنها تلقائيًا من قاعدة بيانات LRCLIB.net أو إضافتها وتنسيق توقيتاتها يدويًا.
                 </p>
-                <div className="flex flex-col items-center gap-3">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <button
                     onClick={handleGenerateLyrics}
-                    disabled={isGeneratingLyrics || isTranscribing}
+                    disabled={isGeneratingLyrics}
                     className="inline-flex items-center gap-2 px-5 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full shadow-lg shadow-[#1DB954]/25 transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isGeneratingLyrics ? (
-                      <><Loader2 size={16} className="animate-spin" /><span>Searching Lyrics...</span></>
+                      <><Loader2 size={16} className="animate-spin" /><span>جاري البحث في LRCLIB...</span></>
                     ) : (
-                      <><Sparkles size={16} /><span>🪄 AI Search & Sync Lyrics</span></>
+                      <><Search size={16} /><span>🎵 بحث في LRCLIB.net</span></>
                     )}
                   </button>
 
-                  {/* Groq button — only for uploaded audio, not YouTube */}
-                  {!isYouTubeTrack ? (
-                    <button
-                      onClick={handleTranscribeAudio}
-                      disabled={isTranscribing || isGeneratingLyrics}
-                      className="inline-flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-full shadow-lg shadow-purple-600/30 transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      {isTranscribing ? (
-                        <><Loader2 size={16} className="animate-spin" /><span>Groq AI Listening to Audio...</span></>
-                      ) : (
-                        <><Mic size={16} className="text-white" /><span>🎤 Groq AI Audio Transcribe (Frame-Perfect Sync)</span></>
-                      )}
-                    </button>
-                  ) : (
-                    <div className="text-center px-4 py-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl max-w-xs">
-                      <p className="text-xs text-zinc-500 font-medium">
-                        🎤 <span className="text-zinc-400">Groq</span> يعمل فقط مع الأغاني <span className="text-white font-bold">المرفوعة مباشرةً</span> — مش YouTube.
-                      </p>
-                      <p className="text-[11px] text-zinc-600 mt-1">استخدم "🪄 AI Sync" عوضاً — بيجيب الكلمات من Genius ويزامنها أوتوماتيك</p>
+                  <button
+                    onClick={openManualEdit}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-extrabold text-xs rounded-full shadow-lg transition-all active:scale-95"
+                  >
+                    <Edit3 size={16} className="text-amber-400" />
+                    <span>✏️ إضافة / تعديل الكلمات يدويًا</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Edit Lyrics Modal Overlay */}
+            {isManualEditOpen && (
+              <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="bg-[#181818] border border-white/15 rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-left">
+                  <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Edit3 size={20} className="text-amber-400" />
+                      <h3 className="text-base font-bold text-white">إضافة وتعديل الكلمات يدويًا</h3>
                     </div>
-                  )}
+                    <button onClick={() => setIsManualEditOpen(false)} className="text-zinc-400 hover:text-white">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-zinc-400 mb-2 leading-relaxed">
+                    اكتب أو الصق الكلمات هنا. يمكنك إضافة توقيتات مثل <code className="bg-white/10 px-1 py-0.5 rounded text-amber-300">[0:15]</code> قبل كل سطر، أو كتابة سطور عادية وسيقوم النظام بتوزيع التوقيتات تلقائيًا.
+                  </p>
+
+                  <textarea
+                    rows={10}
+                    value={manualText}
+                    onChange={(e) => setManualText(e.target.value)}
+                    placeholder="[0:00] السطر الأول&#10;[0:12] السطر الثاني&#10;أو اكتب سطورًا عادية بدون توقيت..."
+                    className="w-full bg-zinc-900 border border-white/15 rounded-2xl p-4 text-xs font-mono text-white focus:outline-none focus:border-[#1DB954] mb-4 resize-none leading-relaxed"
+                  />
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleSaveManualLyrics}
+                      disabled={isSavingManualLyrics}
+                      className="flex-1 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-full text-xs shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {isSavingManualLyrics ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                      <span>حفظ الكلمات والتوقيتات</span>
+                    </button>
+                    <button
+                      onClick={() => setIsManualEditOpen(false)}
+                      className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white font-extrabold rounded-full text-xs transition-all"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
