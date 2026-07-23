@@ -1,4 +1,6 @@
 import { API_BASE_URL } from '../config';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Capacitor } from '@capacitor/core';
 
 // IndexedDB Offline Audio & Cover Storage Manager for Liofy
 const DB_NAME = 'LiofyOfflineDB';
@@ -34,7 +36,35 @@ function openDB() {
   });
 }
 
-// Convert Base64 Data URI directly to Blob in pure JS (prevents WebView fetch('data:') network errors)
+// Ensure dedicated "Liofy" folder exists on device filesystem
+async function ensureLiofyDir() {
+  try {
+    if (Capacitor.isNativePlatform() || window.Capacitor) {
+      await Filesystem.mkdir({
+        path: 'Liofy',
+        directory: Directory.Data,
+        recursive: true,
+      });
+    }
+  } catch (e) {}
+}
+
+// Convert Blob to Base64
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    if (!blob) { resolve(''); return; }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const res = reader.result || '';
+      const base64 = typeof res === 'string' ? (res.split(',')[1] || res) : '';
+      resolve(base64);
+    };
+    reader.onerror = () => resolve('');
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Convert Base64 Data URI directly to Blob in pure JS
 function dataURItoBlob(dataURI) {
   try {
     if (!dataURI || typeof dataURI !== 'string' || !dataURI.startsWith('data:')) return null;
@@ -62,6 +92,16 @@ function dataURItoBlob(dataURI) {
     console.error('dataURItoBlob error:', e);
     return null;
   }
+}
+
+function blobToDataURI(blob) {
+  return new Promise((resolve) => {
+    if (!blob) { resolve(null); return; }
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(blob);
+  });
 }
 
 // Extract YouTube video ID from URL or track ID reliably
@@ -167,7 +207,7 @@ function createFallbackAudioBlob() {
   }
 }
 
-// Save downloaded audio blob & track info locally in app private storage (IndexedDB)
+// Save downloaded audio blob & track info locally in app private storage (IndexedDB + Native Filesystem Liofy folder)
 export async function saveTrackOffline(track) {
   if (!track || (!track.id && !track._id)) return null;
   const trackId = String(track.id || track._id);
@@ -300,19 +340,57 @@ export async function saveTrackOffline(track) {
       }
     }
 
-function blobToDataURI(blob) {
-  return new Promise((resolve) => {
-    if (!blob) { resolve(null); return; }
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(blob);
-  });
-}
-
     let coverBase64 = null;
     if (coverBlob) {
       coverBase64 = await blobToDataURI(coverBlob);
+    }
+
+    // Write to Native Device Filesystem under "Liofy" folder if on native Android / Capacitor
+    let nativeAudioUri = null;
+    let nativeCoverUri = null;
+    let fileAudioSrc = null;
+    let fileCoverSrc = null;
+
+    if (Capacitor.isNativePlatform() || window.Capacitor) {
+      try {
+        await ensureLiofyDir();
+        
+        // Write audio file to Liofy/<trackId>.mp3
+        const audioB64 = await blobToBase64(audioBlob);
+        if (audioB64) {
+          await Filesystem.writeFile({
+            path: `Liofy/${trackId}.mp3`,
+            data: audioB64,
+            directory: Directory.Data,
+          });
+          const uriRes = await Filesystem.getUri({
+            path: `Liofy/${trackId}.mp3`,
+            directory: Directory.Data,
+          });
+          nativeAudioUri = uriRes.uri;
+          fileAudioSrc = Capacitor.convertFileSrc(uriRes.uri);
+        }
+
+        // Write cover image to Liofy/<trackId>_cover.jpg
+        if (coverBlob) {
+          const coverB64 = await blobToBase64(coverBlob);
+          if (coverB64) {
+            await Filesystem.writeFile({
+              path: `Liofy/${trackId}_cover.jpg`,
+              data: coverB64,
+              directory: Directory.Data,
+            });
+            const coverUriRes = await Filesystem.getUri({
+              path: `Liofy/${trackId}_cover.jpg`,
+              directory: Directory.Data,
+            });
+            nativeCoverUri = coverUriRes.uri;
+            fileCoverSrc = Capacitor.convertFileSrc(coverUriRes.uri);
+          }
+        }
+      } catch (fileErr) {
+        console.warn('Native filesystem write warning:', fileErr);
+      }
     }
 
     const db = await openDB();
@@ -323,7 +401,10 @@ function blobToDataURI(blob) {
       audioBlob: audioBlob,
       coverBlob: coverBlob,
       coverBase64: coverBase64 || track.cover,
-      cover: coverBase64 || track.cover,
+      cover: fileCoverSrc || coverBase64 || track.cover,
+      audioUrl: fileAudioSrc || targetUrl,
+      nativeAudioUri: nativeAudioUri,
+      nativeCoverUri: nativeCoverUri,
       savedAt: Date.now()
     };
 
@@ -353,17 +434,22 @@ export async function getOfflineTrackAudioUrl(trackId) {
       const req = store.get(idStr);
       req.onsuccess = () => {
         const item = req.result;
-        if (item && item.audioBlob) {
-          // Revoke old URL for this track if exists
-          if (activeBlobUrls.has(idStr)) {
-            try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
+        if (item) {
+          if (item.nativeAudioUri && (Capacitor.isNativePlatform() || window.Capacitor)) {
+            resolve(Capacitor.convertFileSrc(item.nativeAudioUri));
+            return;
           }
-          const blobUrl = URL.createObjectURL(item.audioBlob);
-          activeBlobUrls.set(idStr, blobUrl);
-          resolve(blobUrl);
-        } else {
-          resolve(null);
+          if (item.audioBlob) {
+            if (activeBlobUrls.has(idStr)) {
+              try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
+            }
+            const blobUrl = URL.createObjectURL(item.audioBlob);
+            activeBlobUrls.set(idStr, blobUrl);
+            resolve(blobUrl);
+            return;
+          }
         }
+        resolve(null);
       };
       req.onerror = () => resolve(null);
     });
@@ -372,7 +458,7 @@ export async function getOfflineTrackAudioUrl(trackId) {
   }
 }
 
-// Get all downloaded tracks with fresh Blob URLs (safely tracked)
+// Get all downloaded tracks with fresh native FileSrc / Blob URLs
 export async function getOfflineTracks() {
   try {
     const db = await openDB();
@@ -387,16 +473,24 @@ export async function getOfflineTracks() {
           let cover = item.coverBase64 || item.cover;
           const idStr = String(item.id);
 
-          if (item.audioBlob) {
+          if (item.nativeAudioUri && (Capacitor.isNativePlatform() || window.Capacitor)) {
+            audioUrl = Capacitor.convertFileSrc(item.nativeAudioUri);
+          } else if (item.audioBlob) {
             if (activeBlobUrls.has(idStr)) {
               try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
             }
             audioUrl = URL.createObjectURL(item.audioBlob);
             activeBlobUrls.set(idStr, audioUrl);
           }
-          if (item.coverBlob && !item.coverBase64) {
+
+          if (item.nativeCoverUri && (Capacitor.isNativePlatform() || window.Capacitor)) {
+            cover = Capacitor.convertFileSrc(item.nativeCoverUri);
+          } else if (item.coverBase64) {
+            cover = item.coverBase64;
+          } else if (item.coverBlob) {
             try { cover = URL.createObjectURL(item.coverBlob); } catch (e) {}
           }
+
           return { ...item, audioUrl, cover, downloaded: true };
         });
         resolve(formatted);
@@ -427,7 +521,7 @@ export async function getOfflineTrackIds() {
   }
 }
 
-// Remove track from offline storage
+// Remove track from offline storage & native filesystem
 export async function removeTrackOffline(trackId) {
   if (!trackId) return false;
   const idStr = String(trackId);
@@ -435,6 +529,20 @@ export async function removeTrackOffline(trackId) {
   if (activeBlobUrls.has(idStr)) {
     try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
     activeBlobUrls.delete(idStr);
+  }
+
+  // Delete native files from Liofy folder
+  if (Capacitor.isNativePlatform() || window.Capacitor) {
+    try {
+      await Filesystem.deleteFile({
+        path: `Liofy/${idStr}.mp3`,
+        directory: Directory.Data,
+      }).catch(() => {});
+      await Filesystem.deleteFile({
+        path: `Liofy/${idStr}_cover.jpg`,
+        directory: Directory.Data,
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   try {
