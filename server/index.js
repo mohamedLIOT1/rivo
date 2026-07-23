@@ -781,6 +781,53 @@ async function searchSoundCloud(query) {
   }
 }
 
+// SoundCloud Stream Proxy — Resolves 100% fresh live MP3 stream URL on the fly
+app.get('/api/soundcloud/stream', async (req, res) => {
+  try {
+    const { url, id, title, artist } = req.query;
+    const clientId = await getSoundCloudClientId();
+
+    // 1. If we have a track ID or search query
+    const searchQ = (id && id.replace('sc-', '')) ? `track_id:${id.replace('sc-', '')}` : `${title || ''} ${artist || ''}`.trim();
+    if (searchQ) {
+      try {
+        const sRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(searchQ)}&client_id=${clientId}&limit=3`);
+        if (sRes.ok) {
+          const data = await sRes.json();
+          if (data.collection?.length > 0) {
+            const item = data.collection[0];
+            const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+            if (prog) {
+              const streamRes = await fetch(`${prog.url}?client_id=${clientId}`);
+              if (streamRes.ok) {
+                const streamData = await streamRes.json();
+                if (streamData.url) return res.json({ success: true, url: streamData.url });
+              }
+            }
+          }
+        }
+      } catch (err) {}
+    }
+
+    // 2. If url is direct progressive stream endpoint
+    if (url && url.includes('api-v2.soundcloud.com/media')) {
+      try {
+        const streamRes = await fetch(`${url}?client_id=${clientId}`);
+        if (streamRes.ok) {
+          const streamData = await streamRes.json();
+          if (streamData.url) return res.json({ success: true, url: streamData.url });
+        }
+      } catch (err) {}
+    }
+
+    // 3. Fallback to raw URL
+    if (url) return res.json({ success: true, url });
+    res.status(404).json({ error: 'SoundCloud stream not found' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 async function resolveYoutubeAudioStream(videoId) {
   try {
     const pipedRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);

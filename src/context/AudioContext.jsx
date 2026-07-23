@@ -252,19 +252,40 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       // Build proxied URL
       let targetUrl = currentTrack.audioUrl;
-      if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
-        targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
-      }
+      const isSoundCloud = currentTrack.source === 'SoundCloud' || (targetUrl && (targetUrl.includes('sndcdn.com') || targetUrl.includes('soundcloud.com')));
 
-      const audio = audioRef.current;
-      if (!audio) return;
-      if (audio.src !== targetUrl) { audio.src = targetUrl; }
-
-      if (isPlaying) {
-        resumeAudioContext();
-        audio.play().catch(e => console.warn('Audio play error:', e));
+      if (isSoundCloud) {
+        fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.success && data.url) {
+              const freshProxyUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(data.url)}`;
+              const audio = audioRef.current;
+              if (audio && audio.src !== freshProxyUrl) {
+                audio.src = freshProxyUrl;
+                if (isPlaying) {
+                  resumeAudioContext();
+                  audio.play().catch(e => console.warn('SoundCloud play error:', e));
+                }
+              }
+            }
+          })
+          .catch(err => console.warn('SoundCloud stream error:', err));
       } else {
-        audio.pause();
+        if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
+          targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+        }
+
+        const audio = audioRef.current;
+        if (!audio) return;
+        if (audio.src !== targetUrl) { audio.src = targetUrl; }
+
+        if (isPlaying) {
+          resumeAudioContext();
+          audio.play().catch(e => console.warn('Audio play error:', e));
+        } else {
+          audio.pause();
+        }
       }
     }
 
