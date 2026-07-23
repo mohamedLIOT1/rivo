@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, ListMusic, Mic, Trash2
+  MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -74,13 +74,23 @@ export default function FullPlayerModal({
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
   const [showTranslation, setShowTranslation] = useState(false);
+  const [syncOffset, setSyncOffset] = useState(0);
 
-
+  useEffect(() => {
+    setSyncOffset(0);
+  }, [currentTrack?.id]);
 
   const rawLyrics = currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : [];
   const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
 
-  const lyrics = baseLyrics;
+  const lyrics = useMemo(() => {
+    if (!baseLyrics || !baseLyrics.length) return [];
+    if (!syncOffset) return baseLyrics;
+    return baseLyrics.map(l => ({
+      ...l,
+      time: Math.max(0, Math.round((l.time + syncOffset) * 100) / 100)
+    }));
+  }, [baseLyrics, syncOffset]);
 
   // Use liveTime (from RAF at ~60fps) for frame-perfect lyrics sync
   const activeLyricIndex = lyrics.length > 0
@@ -579,6 +589,55 @@ export default function FullPlayerModal({
               </div>
             </div>
 
+            {rawLyrics.length > 0 && (
+              <div className="flex items-center justify-between mb-4 px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs">
+                <div className="flex items-center gap-1.5 text-zinc-300">
+                  <SlidersHorizontal size={13} className="text-[#1DB954]" />
+                  <span className="font-semibold">ضبط التزامن اللحظي:</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setSyncOffset(o => Math.round((o - 1.0) * 10) / 10)}
+                    className="px-2 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-xs font-bold text-white transition-all"
+                    title="تقديم الكلمات ثانية واحدة"
+                  >
+                    -1s
+                  </button>
+                  <button
+                    onClick={() => setSyncOffset(o => Math.round((o - 0.5) * 10) / 10)}
+                    className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-[11px] font-bold text-white transition-all"
+                    title="تقديم الكلمات نصف ثانية"
+                  >
+                    -0.5s
+                  </button>
+                  <span className="px-2 py-0.5 font-bold text-[#1DB954] min-w-[45px] text-center bg-black/30 rounded border border-[#1DB954]/30">
+                    {syncOffset > 0 ? `+${syncOffset}s` : `${syncOffset}s`}
+                  </span>
+                  <button
+                    onClick={() => setSyncOffset(o => Math.round((o + 0.5) * 10) / 10)}
+                    className="px-1.5 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-[11px] font-bold text-white transition-all"
+                    title="تأخير الكلمات نصف ثانية"
+                  >
+                    +0.5s
+                  </button>
+                  <button
+                    onClick={() => setSyncOffset(o => Math.round((o + 1.0) * 10) / 10)}
+                    className="px-2 py-0.5 bg-white/10 hover:bg-white/20 active:scale-95 rounded-md text-xs font-bold text-white transition-all"
+                    title="تأخير الكلمات ثانية واحدة"
+                  >
+                    +1s
+                  </button>
+                  {syncOffset !== 0 && (
+                    <button
+                      onClick={() => setSyncOffset(0)}
+                      className="ml-2 px-2 py-0.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-md text-[10px] font-bold transition-all"
+                    >
+                      إعادة ضبط
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {

@@ -1660,14 +1660,18 @@ ${cleanLyricsLines.join('\n')}`;
     }
   }
 
-  // Fallback: generate smooth time steps starting after intro
-  const intro = Math.min(15, Math.max(6, Math.floor(duration * 0.08)));
-  const availableDuration = Math.max(30, duration - intro - 10);
-  const step = availableDuration / cleanLyricsLines.length;
-  return cleanLyricsLines.map((line, idx) => ({
-    time: Math.round((intro + idx * step) * 100) / 100,
-    text: line
-  }));
+  // Universal Systemic Timing Engine for ALL songs (Character-Weighted Proportional Sync)
+  const intro = Math.min(4.5, Math.max(2.0, duration * 0.025));
+  const singingDuration = Math.max(20, duration - intro - 5.0);
+  const totalChars = cleanLyricsLines.reduce((sum, l) => sum + Math.max(1, l.length), 0);
+
+  let currentTimePointer = intro;
+  return cleanLyricsLines.map((line) => {
+    const time = Math.round(currentTimePointer * 100) / 100;
+    const lineDuration = (Math.max(1, line.length) / totalChars) * singingDuration;
+    currentTimePointer += lineDuration;
+    return { time, text: line };
+  });
 }
 
 async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
