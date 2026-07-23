@@ -298,7 +298,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
             </div>
 
             {/* Name */}
-            <div className="mb-2">
+            <div className="mb-3">
               {isEditingName ? (
                 <div className="flex items-center gap-2 justify-center">
                   <input
@@ -325,11 +325,8 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
               )}
             </div>
 
-            {/* Email */}
-            <p className="text-sm text-zinc-500 mb-4">{localUser?.email}</p>
-
             {/* Bio */}
-            <div className="max-w-xs mx-auto">
+            <div className="max-w-xs mx-auto mb-4">
               {isEditingBio ? (
                 <div className="flex flex-col gap-2">
                   <textarea
@@ -351,11 +348,11 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                   </div>
                 </div>
               ) : (
-                <button onClick={() => setIsEditingBio(true)} className="group flex items-start gap-1 text-center hover:opacity-80 transition-opacity">
-                  <p className="text-sm text-zinc-400 flex-1">
-                    {localUser?.bio || 'اضغط لإضافة نبذة...'}
+                <button onClick={() => setIsEditingBio(true)} className="group flex items-center gap-1.5 justify-center w-full hover:opacity-80 transition-opacity">
+                  <p className="text-base text-zinc-300 font-medium">
+                    {localUser?.bio || <span className="text-zinc-600 italic text-sm">اضغط لإضافة نبذة...</span>}
                   </p>
-                  <Edit2 size={12} className="text-zinc-600 group-hover:text-zinc-400 transition-colors mt-0.5 shrink-0" />
+                  <Edit2 size={13} className="text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0" />
                 </button>
               )}
             </div>
@@ -368,12 +365,12 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
               </div>
               <div className="w-px h-8 bg-white/10" />
               <div className="text-center">
-                <p className="text-2xl font-extrabold text-white">{publicPlaylists.length}</p>
+                <p className="text-2xl font-extrabold text-white">{publicPlaylists.filter(p => !p.isLikedSongs).length}</p>
                 <p className="text-xs text-zinc-500 mt-0.5">عامة</p>
               </div>
               <div className="w-px h-8 bg-white/10" />
               <div className="text-center">
-                <p className="text-2xl font-extrabold text-white">{privatePlaylists.length}</p>
+                <p className="text-2xl font-extrabold text-white">{privatePlaylists.filter(p => !p.isLikedSongs).length}</p>
                 <p className="text-xs text-zinc-500 mt-0.5">خاصة</p>
               </div>
             </div>
@@ -386,14 +383,14 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
               <p className="text-xs text-zinc-500">اضغط 👁 لتغيير الظهور</p>
             </div>
 
-            {localPlaylists.length === 0 ? (
+            {localPlaylists.filter(p => !p.isLikedSongs).length === 0 ? (
               <div className="text-center py-12">
                 <Music size={48} className="mx-auto mb-3 text-zinc-700" />
                 <p className="text-sm text-zinc-500">لا توجد قوائم تشغيل بعد</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {localPlaylists.map(pl => {
+                {localPlaylists.filter(p => !p.isLikedSongs).map(pl => {
                   const isPublic = pl.isPublic !== false;
                   const isToggling = togglingId === pl.id;
                   return (

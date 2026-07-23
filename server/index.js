@@ -1995,20 +1995,67 @@ async function transcribeWithGroqWhisper(audioUrl) {
 
   try {
     let targetUrl = audioUrl;
+    let resolvedViaInstance = false;
 
-    // For YouTube URLs, resolve a direct audio stream URL first via Piped (much more reliable)
+    // For YouTube URLs: try to get a direct streamable audio URL from Piped/Invidious
     if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
       const ytId = extractVideoId(targetUrl);
       if (ytId) {
         console.log(`[Groq Whisper] Resolving YouTube audio for ${ytId}...`);
-        const resolvedUrl = await resolveYouTubeAudio(ytId);
-        if (resolvedUrl) {
-          targetUrl = resolvedUrl;
-          console.log(`[Groq Whisper] Resolved YouTube URL ✅`);
-        } else {
-          // Fallback to local proxy
-          const port = process.env.PORT || 5000;
-          targetUrl = `http://127.0.0.1:${port}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+        
+        // Try Piped instances first (fastest)
+        for (const base of PIPED_INSTANCES) {
+          try {
+            const r = await fetch(`${base}/streams/${ytId}`, {
+              signal: AbortSignal.timeout(7000),
+              headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+            });
+            if (!r.ok) continue;
+            const d = await r.json();
+            if (!d.audioStreams?.length) continue;
+            const audioStream = 
+              d.audioStreams.find(s => s.mimeType?.includes('audio/mp4') && s.quality?.includes('128')) ||
+              d.audioStreams.find(s => s.mimeType?.includes('audio/mp4')) ||
+              d.audioStreams.find(s => s.mimeType?.includes('audio')) ||
+              d.audioStreams[0];
+            if (audioStream?.url) {
+              targetUrl = audioStream.url;
+              resolvedViaInstance = true;
+              console.log(`[Groq Whisper] ✅ Resolved via Piped: ${base}`);
+              break;
+            }
+          } catch {}
+        }
+
+        // If Piped failed, try Invidious instances
+        if (!resolvedViaInstance) {
+          const invidiousInstances = [
+            'https://inv.zoomerville.com', 'https://invidious.slipfox.xyz',
+            'https://yt.artemislena.eu', 'https://invidious.nerdvpn.de',
+            'https://invidious.projectsegfau.lt', 'https://invidious.flokinet.to'
+          ];
+          for (const base of invidiousInstances) {
+            try {
+              const r = await fetch(`${base}/api/v1/videos/${ytId}?fields=adaptiveFormats`, {
+                signal: AbortSignal.timeout(7000),
+              });
+              if (!r.ok) continue;
+              const d = await r.json();
+              const fmts = d.adaptiveFormats || [];
+              const fmt = fmts.find(f => f.type?.includes('audio/mp4')) || fmts.find(f => f.type?.includes('audio'));
+              if (fmt?.url) {
+                targetUrl = fmt.url;
+                resolvedViaInstance = true;
+                console.log(`[Groq Whisper] ✅ Resolved via Invidious: ${base}`);
+                break;
+              }
+            } catch {}
+          }
+        }
+
+        if (!resolvedViaInstance) {
+          console.warn(`[Groq Whisper] Could not resolve YouTube audio for ${ytId} — all instances failed`);
+          return [];
         }
       }
     } else if (!targetUrl.startsWith('http')) {
