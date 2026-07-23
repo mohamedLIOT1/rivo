@@ -196,26 +196,26 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
           {/* Public Playlists */}
           <div className="px-4 pb-8">
             <h3 className="text-base font-bold text-white mb-4">القوائم العامة</h3>
-            {viewingProfile.publicPlaylists?.length > 0 ? (
+            {viewingProfile.publicPlaylists?.filter(pl => !pl.isLikedSongs).length > 0 ? (
               <div className="space-y-2">
-                {viewingProfile.publicPlaylists.map(pl => (
-                  <div key={pl.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+                {viewingProfile.publicPlaylists.filter(pl => !pl.isLikedSongs).map(pl => (
+                  <div 
+                    key={pl.id} 
+                    onClick={() => onSelectPlaylist && onSelectPlaylist(pl)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-pointer group active:scale-[0.98]"
+                  >
                     <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-800 shrink-0 flex items-center justify-center">
-                      {pl.isLikedSongs ? (
-                        <div className="w-full h-full flex items-center justify-center"
-                          style={{ background: 'linear-gradient(135deg, #450af5, #c4efd9)' }}>
-                          <Heart size={18} fill="white" className="text-white" />
-                        </div>
-                      ) : pl.cover ? (
+                      {pl.cover ? (
                         <img src={pl.cover} alt={pl.name} className="w-full h-full object-cover" />
                       ) : (
                         <Music size={20} className="text-zinc-500" />
                       )}
                     </div>
                     <div className="flex-1 truncate">
-                      <p className="text-sm font-semibold text-white truncate">{pl.name}</p>
+                      <p className="text-sm font-semibold text-white truncate group-hover:text-[#1DB954] transition-colors">{pl.name}</p>
                       <p className="text-xs text-zinc-500">{pl.trackCount} أغنية</p>
                     </div>
+                    <ChevronRight size={16} className="text-zinc-600 group-hover:text-white shrink-0 transition-colors" />
                   </div>
                 ))}
               </div>

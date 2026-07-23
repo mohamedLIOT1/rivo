@@ -288,12 +288,12 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('name email avatar bio playlists createdAt').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
-    const publicPlaylists = (user.playlists || []).filter(p => p.isPublic !== false).map(p => ({
+    const publicPlaylists = (user.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
       id: p.id,
       name: p.name,
       cover: p.cover,
       trackCount: (p.trackIds || []).length,
-      isLikedSongs: p.isLikedSongs,
+      isLikedSongs: false,
     }));
     res.json({
       success: true,
@@ -497,9 +497,11 @@ app.post('/api/playlists/create', authMiddleware, async (req, res) => {
 app.post('/api/playlists/:id/add-track', authMiddleware, async (req, res) => {
   try {
     const { trackId } = req.body;
+    if (!trackId) return res.status(400).json({ error: 'trackId required' });
+    const cleanTrackId = String(trackId);
     await User.findOneAndUpdate(
       { _id: req.user.id, 'playlists.id': req.params.id },
-      { $addToSet: { 'playlists.$.trackIds': trackId } }
+      { $addToSet: { 'playlists.$.trackIds': cleanTrackId } }
     );
     res.json({ success: true });
   } catch (e) {
@@ -511,9 +513,11 @@ app.post('/api/playlists/:id/add-track', authMiddleware, async (req, res) => {
 app.post('/api/playlists/:id/remove-track', authMiddleware, async (req, res) => {
   try {
     const { trackId } = req.body;
+    if (!trackId) return res.status(400).json({ error: 'trackId required' });
+    const cleanTrackId = String(trackId);
     await User.findOneAndUpdate(
       { _id: req.user.id, 'playlists.id': req.params.id },
-      { $pull: { 'playlists.$.trackIds': trackId } }
+      { $pull: { 'playlists.$.trackIds': cleanTrackId } }
     );
     res.json({ success: true });
   } catch (e) {

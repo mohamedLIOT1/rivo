@@ -103,11 +103,12 @@ export function UserProvider({ children }) {
 
   // ── Full sync from server ────────────────────────────
   const syncFromServer = useCallback(async () => {
-    if (!getToken()) {
+    const token = getToken();
+    if (!token) {
       // No user logged in — just fetch public tracks
       try {
         const data = await api.get('/api/tracks');
-        if (data.success && Array.isArray(data.tracks)) {
+        if (data && data.success && Array.isArray(data.tracks)) {
           setTracks(deduplicateTracks(data.tracks));
         }
       } catch {}
@@ -117,27 +118,32 @@ export function UserProvider({ children }) {
     setIsSyncing(true);
     try {
       const data = await api.get('/api/sync');
-      if (data.success) {
+      if (data && data.success) {
         if (data.user) {
           setCurrentUser(prev => ({ ...prev, ...data.user }));
         }
         if (Array.isArray(data.tracks)) {
-          const liked = new Set(data.likedTrackIds || []);
-          const formatted = data.tracks.map(t => ({ ...t, liked: liked.has(t.id) }));
+          const liked = new Set((data.likedTrackIds || []).map(String));
+          const formatted = data.tracks.map(t => ({ 
+            ...t, 
+            liked: liked.has(String(t.id)) || liked.has(String(t._id)) 
+          }));
           setTracks(deduplicateTracks(formatted));
         }
         if (Array.isArray(data.playlists)) {
           setPlaylists(data.playlists);
         }
         if (Array.isArray(data.likedTrackIds)) {
-          setLikedTrackIds(data.likedTrackIds);
+          setLikedTrackIds(data.likedTrackIds.map(String));
         }
+      } else if (data && data.error && (data.error.includes('token') || data.error.includes('jwt') || data.error.includes('Unauthorized'))) {
+        logout();
       }
     } catch (err) {
       console.warn('Sync failed (offline?):', err);
     }
     setIsSyncing(false);
-  }, []);
+  }, [logout]);
 
   // Sync on mount and when user changes
   useEffect(() => {
