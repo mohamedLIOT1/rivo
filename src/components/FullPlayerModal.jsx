@@ -166,9 +166,11 @@ export default function FullPlayerModal({
     setIsGeneratingLyrics(false);
   };
 
-  // Groq Whisper: directly transcribe the audio file (non-YouTube only)
+  // Groq Whisper: directly listen to audio soundwave and transcribe with frame-perfect timestamps
   const handleTranscribeAudio = async () => {
-    if (!currentTrack?.audioUrl || isYouTubeTrack) return;
+    if (!currentTrack) return;
+    const targetAudio = currentTrack.audioUrl || currentTrack.title;
+    if (!targetAudio) return;
     setIsTranscribing(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/ai/transcribe-audio`, {
@@ -176,7 +178,7 @@ export default function FullPlayerModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           trackId: currentTrack.id,
-          audioUrl: currentTrack.audioUrl,
+          audioUrl: targetAudio,
           title: currentTrack.title,
           artist: currentTrack.artist
         })
@@ -570,6 +572,25 @@ export default function FullPlayerModal({
                 </button>
 
                 <button
+                  onClick={handleTranscribeAudio}
+                  disabled={isTranscribing || isGeneratingLyrics}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/40 rounded-full text-xs font-bold text-purple-300 transition-all active:scale-95 disabled:opacity-50"
+                  title="Groq AI listens directly to the song audio and generates frame-perfect Arabic speech lyrics & timestamps"
+                >
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Groq Listening...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mic size={13} className="text-purple-300" />
+                      <span>Groq Listen 🎤</span>
+                    </>
+                  )}
+                </button>
+
+                <button
                   onClick={handleTranslateLyrics}
                   disabled={isTranslating || !rawLyrics.length}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
@@ -680,19 +701,17 @@ export default function FullPlayerModal({
                     )}
                   </button>
 
-                  {!isYouTubeTrack && (
-                    <button
-                      onClick={handleTranscribeAudio}
-                      disabled={isTranscribing || isGeneratingLyrics}
-                      className="inline-flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-extrabold text-xs rounded-full transition-all active:scale-95 disabled:opacity-50"
-                    >
-                      {isTranscribing ? (
-                        <><Loader2 size={16} className="animate-spin" /><span>Listening to audio...</span></>
-                      ) : (
-                        <><Mic size={16} className="text-purple-400" /><span>🎤 Transcribe Audio (Perfect Sync)</span></>
-                      )}
-                    </button>
-                  )}
+                  <button
+                    onClick={handleTranscribeAudio}
+                    disabled={isTranscribing || isGeneratingLyrics}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white font-extrabold text-xs rounded-full shadow-lg shadow-purple-600/30 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {isTranscribing ? (
+                      <><Loader2 size={16} className="animate-spin" /><span>Groq AI Listening to Audio...</span></>
+                    ) : (
+                      <><Mic size={16} className="text-white" /><span>🎤 Groq AI Audio Transcribe (Frame-Perfect Sync)</span></>
+                    )}
+                  </button>
                 </div>
               </div>
             )}

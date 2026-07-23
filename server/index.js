@@ -1847,25 +1847,30 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
 // ──────────────────────────────────────────────────────────
 async function transcribeWithGroqWhisper(audioUrl) {
   if (!GROQ_API_KEY || !audioUrl) return [];
-  // Only works for direct audio URLs (not YouTube)
-  if (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be')) return [];
 
   try {
-    console.log('[Groq Whisper] Downloading audio for transcription...');
-    const audioRes = await fetch(audioUrl, {
-      signal: AbortSignal.timeout(30000),
+    let targetUrl = audioUrl;
+    // Proxy YouTube or external audio to get raw stream bytes for Groq
+    if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be') || !targetUrl.includes('/api/proxy-audio')) {
+      const port = process.env.PORT || 5000;
+      const baseUrl = process.env.VITE_API_URL || `http://localhost:${port}`;
+      targetUrl = `${baseUrl}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
+    }
+
+    console.log('[Groq Whisper] Downloading audio stream for transcription...');
+    const audioRes = await fetch(targetUrl, {
+      signal: AbortSignal.timeout(45000),
       headers: { 'User-Agent': 'Mozilla/5.0' }
     });
     if (!audioRes.ok) return [];
 
-    const contentLength = parseInt(audioRes.headers.get('content-length') || '0');
-    // Skip files over 25MB (Groq limit)
-    if (contentLength > 25 * 1024 * 1024) {
-      console.log('[Groq Whisper] File too large, skipping');
+    const audioBuffer = await audioRes.arrayBuffer();
+    if (audioBuffer.byteLength < 1000) return [];
+    if (audioBuffer.byteLength > 25 * 1024 * 1024) {
+      console.log('[Groq Whisper] File too large (>25MB limit), skipping');
       return [];
     }
 
-    const audioBuffer = await audioRes.arrayBuffer();
     const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
 
     const { FormData } = await import('node:buffer').then(() => ({ FormData: globalThis.FormData })).catch(() => ({}));
