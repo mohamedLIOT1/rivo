@@ -76,11 +76,14 @@ export default function FullPlayerModal({
   const [showTranslation, setShowTranslation] = useState(false);
   const [syncOffset, setSyncOffset] = useState(0);
 
+  const [localLyrics, setLocalLyrics] = useState(null);
+
   useEffect(() => {
     setSyncOffset(0);
+    setLocalLyrics(null);
   }, [currentTrack?.id]);
 
-  const rawLyrics = currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : [];
+  const rawLyrics = localLyrics || (currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : []);
   const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
 
   const lyrics = useMemo(() => {
@@ -136,7 +139,6 @@ export default function FullPlayerModal({
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
-  const [, forceUpdate] = useState({});
 
   const isYouTubeTrack = currentTrack?.audioUrl?.includes('youtube') || currentTrack?.audioUrl?.includes('youtu.be') || currentTrack?.source === 'YouTube';
 
@@ -158,9 +160,9 @@ export default function FullPlayerModal({
       const data = await res.json();
       if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
         currentTrack.lyrics = data.lyrics;
+        setLocalLyrics(data.lyrics);
         setTranslatedLyrics(null);
         setShowTranslation(false);
-        forceUpdate({});
       }
     } catch (e) {
       console.warn('AI Generate Lyrics error:', e);
@@ -189,9 +191,9 @@ export default function FullPlayerModal({
       const data = await res.json();
       if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
         currentTrack.lyrics = data.lyrics;
+        setLocalLyrics(data.lyrics);
         setTranslatedLyrics(null);
         setShowTranslation(false);
-        forceUpdate({});
       }
     } catch (e) {
       console.warn('Transcribe audio error:', e);
