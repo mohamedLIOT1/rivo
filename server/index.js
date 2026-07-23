@@ -1385,44 +1385,59 @@ ${cleanLines.join('\n')}`;
   }
 });
 
+// Validate that returned search result actually matches target song title
+function isMatchValid(hitTitle, targetTitle) {
+  if (!hitTitle || !targetTitle) return true;
+  const cleanHit = hitTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, '');
+  
+  const targetWords = targetTitle
+    .toLowerCase()
+    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
+    .replace(/official|video|audio|lyric|music|كليب|فيديو|كلمات/gi, '')
+    .split(/[^\w\u0600-\u06FF]+/)
+    .filter(w => w.length >= 3 && !['amr', 'diab', 'wegz', 'lege', 'marwan', 'pablo', 'tamer', 'hosny', 'hamaki', 'sony', 'rotana', 'music', 'middle', 'east'].includes(w));
+
+  if (targetWords.length === 0) return true;
+  return targetWords.some(w => cleanHit.includes(w));
+}
+
 // Smart multi-query generator to extract clean titles for lyrics search
 function generateLyricsSearchQueries(title = '', artist = '') {
   const queries = new Set();
 
-  let cleanedTitle = (title || '')
+  let cleanTitle = (title || '')
     .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
     .replace(/Official\s*(Music\s*)?(Video|Audio|Lyric\s*Video|Visualizer)?/gi, '')
     .replace(/الكليب\s*الرسمي|فيديو\s*كليب|فيديو|كلمات|أوديو|رسمي/gu, '')
     .replace(/Sony Music.*|Rotana.*|Mazzika.*|YouTube.*|YouMusic.*/gi, '')
     .trim();
 
-  let cleanedArtist = (artist || '')
+  let cleanArtist = (artist || '')
     .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
     .replace(/Sony Music.*|Rotana.*|Mazzika.*|YouTube.*|YouMusic.*/gi, '')
     .replace(/Official.*|Channel.*/gi, '')
     .trim();
 
-  const titleParts = cleanedTitle.split(/[|–—\-]/).map(p => p.trim()).filter(Boolean);
+  // Split by | or - or x
+  const parts = cleanTitle.split(/[|–—\-]/).map(p => p.trim()).filter(Boolean);
 
-  if (titleParts[0]) {
-    if (cleanedArtist) queries.add(`${titleParts[0]} ${cleanedArtist}`.trim());
-    queries.add(titleParts[0]);
-  }
+  // Filter out parts that are only artist names
+  const songTitleParts = parts.filter(p => {
+    const pLower = p.toLowerCase();
+    return !['amr diab', 'عمرو دياب', 'wegz', 'ويجز', 'lege-cy', 'ليجي سي', 'marwan pablo', 'مروan بابلو', 'tamer hosny', 'تامر حسني', 'hamaki', 'محمد حماقي', 'sony music', 'rotana'].includes(pLower);
+  });
 
-  if (titleParts[1]) {
-    if (cleanedArtist) queries.add(`${titleParts[1]} ${cleanedArtist}`.trim());
-    queries.add(titleParts[1]);
-  }
+  const songName = songTitleParts.join(' ').trim() || cleanTitle;
 
-  if (cleanedTitle) {
-    if (cleanedArtist) queries.add(`${cleanedTitle} ${cleanedArtist}`.trim());
-    queries.add(cleanedTitle);
+  if (songName) {
+    if (cleanArtist) queries.add(`${songName} ${cleanArtist}`.trim());
+    queries.add(songName);
   }
 
   return Array.from(queries).filter(q => q.length >= 2);
 }
 
-async function fetchLyricsFromGenius(q, duration = 180) {
+async function fetchLyricsFromGenius(q, targetTitle, duration = 180) {
   try {
     const searchRes = await fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(q)}`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
@@ -1431,7 +1446,10 @@ async function fetchLyricsFromGenius(q, duration = 180) {
     const searchData = await searchRes.json();
     const sections = searchData.response?.sections || [];
     const songSection = sections.find(s => s.type === 'song') || sections[0];
-    const hit = songSection?.hits?.[0];
+    const hits = songSection?.hits || [];
+
+    // Find hit that passes title validation
+    const hit = hits.find(h => isMatchValid(h.result?.full_title || h.result?.title, targetTitle));
     if (!hit) return [];
 
     const pageRes = await fetch(hit.result.url, {
@@ -1474,7 +1492,10 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
       if (lrcRes.ok) {
         const results = await lrcRes.json();
         if (Array.isArray(results) && results.length > 0) {
-          const match = results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || results[0];
+          // Filter results using title validator
+          const validResults = results.filter(r => isMatchValid(r.trackName, title));
+          const match = validResults.find(r => r.syncedLyrics) || validResults.find(r => r.plainLyrics) || validResults[0];
+          
           if (match && match.syncedLyrics) {
             const lines = match.syncedLyrics.split('\n');
             const lyrics = [];
@@ -1502,9 +1523,9 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
     } catch (err) {}
   }
 
-  // 2. Try Genius.com API & Scraper
+  // 2. Try Genius.com API & Scraper with Title Validation
   for (const q of queries) {
-    const geniusLyrics = await fetchLyricsFromGenius(q, duration);
+    const geniusLyrics = await fetchLyricsFromGenius(q, title, duration);
     if (geniusLyrics.length > 0) {
       console.log(`[Genius Lyrics] Successfully fetched ${geniusLyrics.length} lines for "${q}"`);
       return geniusLyrics;
