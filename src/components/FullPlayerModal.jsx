@@ -437,23 +437,39 @@ export default function FullPlayerModal({
                   {showTranslation ? 'Live Synced Lyrics (Arabic AI)' : 'Live Synced Lyrics'}
                 </span>
               </div>
-              <button
-                onClick={handleTranslateLyrics}
-                disabled={isTranslating || !rawLyrics.length}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isTranslating ? (
-                  <>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleGenerateLyrics}
+                  disabled={isGeneratingLyrics}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-xs font-bold text-white transition-all active:scale-95 disabled:opacity-50"
+                  title="Force AI to re-fetch & re-sync lyrics"
+                >
+                  {isGeneratingLyrics ? (
                     <Loader2 size={13} className="animate-spin" />
-                    <span>Translating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Languages size={13} />
-                    <span>{showTranslation ? 'Original' : 'AI Translate 🪄'}</span>
-                  </>
-                )}
-              </button>
+                  ) : (
+                    <Sparkles size={13} className="text-[#1DB954]" />
+                  )}
+                  <span>{isGeneratingLyrics ? 'Syncing...' : 'AI Sync 🪄'}</span>
+                </button>
+
+                <button
+                  onClick={handleTranslateLyrics}
+                  disabled={isTranslating || !rawLyrics.length}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1DB954]/20 hover:bg-[#1DB954]/30 border border-[#1DB954]/40 rounded-full text-xs font-bold text-[#1DB954] transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {isTranslating ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Translating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Languages size={13} />
+                      <span>{showTranslation ? 'Original' : 'AI Translate 🪄'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
             {lyrics.length > 0 ? (
               lyrics.map((line, idx) => {

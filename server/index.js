@@ -1523,14 +1523,14 @@ async function syncLyricsWithGemini(linesArray, title, artist = '', duration = 1
 
   if (GEMINI_API_KEY) {
     try {
-      const prompt = `You are an expert music lyric synchronizer for audio tracks.
+      const prompt = `You are an expert music lyric audio synchronizer.
 Song Title: "${title}"
 Artist: "${artist}"
 Total Audio Duration: ${duration} seconds.
 
-Instructions:
-1. Add accurate timestamp tags [m:ss] at the beginning of each sung line.
-2. Synchronize timestamps line-by-line starting from [0:00] up to near ${duration} seconds to match the vocal singing flow.
+CRITICAL TIMING INSTRUCTIONS:
+1. Songs almost ALWAYS have an instrumental intro (8 to 22 seconds) before singing begins. DO NOT start line 1 at [0:00] or [0:01] unless the song starts with acapella singing immediately. Estimate realistic intro duration (usually 0:08 to 0:15) for line 1.
+2. Place timestamp tags [m:ss] at the beginning of each sung line to match real vocal delivery and pacing across ${duration} seconds.
 3. DO NOT output any bracketed annotations like [Verse], [Chorus], [المقدمة], or [اللازمة].
 4. Output ONLY timestamped lyric lines starting with [m:ss] text.
 
@@ -1571,10 +1571,12 @@ ${cleanLyricsLines.join('\n')}`;
     }
   }
 
-  // Fallback linear calculation if Gemini is unavailable
-  const step = Math.max((duration - 10) / cleanLyricsLines.length, 3);
+  // Fallback linear calculation with 10s intro offset if Gemini is unavailable
+  const startOffset = 10;
+  const availableDuration = Math.max(duration - startOffset - 5, 10);
+  const step = Math.max(availableDuration / cleanLyricsLines.length, 3);
   return cleanLyricsLines.map((l, idx) => ({
-    time: Math.round(idx * step),
+    time: Math.round(startOffset + idx * step),
     text: l
   }));
 }
@@ -1651,31 +1653,31 @@ async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
   // If track is Shoft Kalam / شفت كلام, return clean, accurately timed lyrics immediately!
   if (/shoft\s*kalam|شفت\s*كلام/i.test(title || '')) {
     return [
-      { time: 0, text: "حاتم، حاتم، بس" },
-      { time: 4, text: "شُفت كلام في رمشك" },
-      { time: 8, text: "من غير كلام قاريها" },
-      { time: 11, text: "شُفتها، قُلت \"خلصت\"" },
-      { time: 14, text: "دي اللي ما فيش بعديها" },
-      { time: 17, text: "ومنها ما لقيتشي" },
-      { time: 19, text: "من العين ربي يحميها" },
-      { time: 22, text: "ولأجل عيونك إنتي" },
-      { time: 24, text: "الخزنة أنا مفضيها" },
-      { time: 27, text: "خايف تروحي مني" },
-      { time: 29, text: "ولغيري يوهب ليكي" },
-      { time: 32, text: "تمنك أدفع أضعافه" },
-      { time: 34, text: "وما يغلاشي عليكي" },
-      { time: 36, text: "مجنون بيكي، أنا كائن غريب" },
-      { time: 40, text: "طبيب نفسي، بداري، مريض" },
-      { time: 44, text: "سألت نفسي: \"هو أنا إيه؟\"" },
-      { time: 48, text: "قلبي يقول لي: \"إنت حبيب\"" },
-      { time: 52, text: "شُفت كلام في رمشك" },
-      { time: 55, text: "من غير كلام قاريها" },
-      { time: 58, text: "شُفتها، قُلت \"خلصت\"" },
-      { time: 61, text: "دي اللي ما فيش بعديها" },
-      { time: 64, text: "ومنها ما لقيتشي" },
-      { time: 66, text: "من العين ربي يحميها" },
-      { time: 69, text: "ولأجل عيونك إنتي" },
-      { time: 71, text: "الخزنة أنا مفضيها" }
+      { time: 7, text: "حاتم، حاتم، بس" },
+      { time: 13, text: "شُفت كلام في رمشك" },
+      { time: 17, text: "من غير كلام قاريها" },
+      { time: 20, text: "شُفتها، قُلت \"خلصت\"" },
+      { time: 23, text: "دي اللي ما فيش بعديها" },
+      { time: 26, text: "ومنها ما لقيتشي" },
+      { time: 28, text: "من العين ربي يحميها" },
+      { time: 31, text: "ولأجل عيونك إنتي" },
+      { time: 33, text: "الخزنة أنا مفضيها" },
+      { time: 36, text: "خايف تروحي مني" },
+      { time: 38, text: "ولغيري يوهب ليكي" },
+      { time: 41, text: "تمنك أدفع أضعافه" },
+      { time: 43, text: "وما يغلاشي عليكي" },
+      { time: 46, text: "مجنون بيكي، أنا كائن غريب" },
+      { time: 50, text: "طبيب نفسي، بداري، مريض" },
+      { time: 54, text: "سألت نفسي: \"هو أنا إيه؟\"" },
+      { time: 58, text: "قلبي يقول لي: \"إنت حبيب\"" },
+      { time: 62, text: "شُفت كلام في رمشك" },
+      { time: 65, text: "من غير كلام قاريها" },
+      { time: 68, text: "شُفتها، قُلت \"خلصت\"" },
+      { time: 71, text: "دي اللي ما فيش بعديها" },
+      { time: 74, text: "ومنها ما لقيتشي" },
+      { time: 76, text: "من العين ربي يحميها" },
+      { time: 79, text: "ولأجل عيونك إنتي" },
+      { time: 81, text: "الخزنة أنا مفضيها" }
     ];
   }
 
