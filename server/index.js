@@ -609,10 +609,13 @@ try {
 // Multiple Piped API instances for fallback
 const PIPED_INSTANCES = [
   'https://pipedapi.kavin.rocks',
+  'https://api.piped.privacydev.net',
+  'https://pipedapi.palvelu.org',
   'https://pipedapi.adminforge.de',
   'https://piped-api.garudalinux.org',
-  'https://api.piped.projectsegfau.lt',
-  'https://pipedapi.tokhmi.xyz',
+  'https://pipedapi.mha.fi',
+  'https://pipedapi.syra.net',
+  'https://pipedapi.tokhmi.xyz'
 ];
 
 // Cache for resolved YouTube URLs (TTL: 5 hours)
