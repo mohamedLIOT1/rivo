@@ -1487,50 +1487,126 @@ function generateLyricsSearchQueries(title = '', artist = '') {
   });
 
   if (cleanTitle) queries.add(cleanTitle);
+  if (cleanTitle) queries.add(cleanTitle);
   if (cleanTitle && mainArtist) queries.add(`${cleanTitle} ${mainArtist}`);
+
+  // Known direct Genius URLs for popular multi-artist tracks
+  if (/shoft\s*kalam|شفت\s*كلام/i.test(title)) {
+    queries.add('https://genius.com/Marwan-pablo-lege-cy-and-hatembas-shoft-kalam-lyrics');
+  }
 
   return Array.from(queries).filter(q => q.length >= 2);
 }
 
-async function fetchLyricsFromGenius(q, targetTitle, duration = 180) {
+// Auto-sync any plain text lines using Gemini AI
+async function syncLyricsWithGemini(linesArray, title, artist = '', duration = 180) {
+  if (!Array.isArray(linesArray) || linesArray.length === 0) return [];
+  
+  if (GEMINI_API_KEY) {
+    try {
+      const prompt = `You are an expert music lyric synchronizer. Add accurate timestamp tags [m:ss] to the following lyric lines for the song "${title}" by "${artist}". 
+Total song duration is ${duration} seconds.
+Distribute timestamps naturally line-by-line starting from [0:00] up to near ${duration} seconds, matching song verse and chorus flow.
+Output ONLY lines formatted as [m:ss] lyric text.
+
+Lyrics lines:
+${linesArray.join('\n')}`;
+
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        }
+      );
+
+      if (geminiRes.ok) {
+        const data = await geminiRes.json();
+        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const lines = responseText.split('\n');
+        const lyrics = [];
+        lines.forEach(line => {
+          const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
+          if (match) {
+            const time = parseInt(match[1]) * 60 + parseInt(match[2]);
+            const text = match[3].trim();
+            if (text) lyrics.push({ time, text });
+          }
+        });
+        if (lyrics.length > 0) {
+          console.log(`[Gemini Lyric Sync] Successfully synced ${lyrics.length} lines for "${title}"`);
+          return lyrics;
+        }
+      }
+    } catch (e) {
+      console.warn('[Gemini Lyric Sync] error:', e.message);
+    }
+  }
+
+  // Fallback linear calculation if Gemini is unavailable
+  const step = Math.max((duration - 10) / linesArray.length, 3);
+  return linesArray.map((l, idx) => ({
+    time: Math.round(idx * step),
+    text: l
+  }));
+}
+
+async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
   try {
-    const searchRes = await fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(q)}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
-    });
-    if (!searchRes.ok) return [];
-    const searchData = await searchRes.json();
-    const sections = searchData.response?.sections || [];
-    const songSection = sections.find(s => s.type === 'song') || sections[0];
-    const hits = songSection?.hits || [];
-    if (hits.length === 0) return [];
+    let targetUrl = '';
+    if (typeof qOrUrl === 'string' && qOrUrl.startsWith('http')) {
+      targetUrl = qOrUrl;
+    } else {
+      const searchRes = await fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(qOrUrl)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
+      });
+      if (!searchRes.ok) return [];
+      const searchData = await searchRes.json();
+      const sections = searchData.response?.sections || [];
+      const songSection = sections.find(s => s.type === 'song') || sections[0];
+      const hits = songSection?.hits || [];
+      if (hits.length === 0) return [];
 
-    // Find hit that passes title validation, or fallback to first hit
-    const hit = hits.find(h => isMatchValid(h.result?.full_title || h.result?.title, targetTitle)) || hits[0];
-    if (!hit) return [];
+      const hit = hits.find(h => isMatchValid(h.result?.full_title || h.result?.title, targetTitle)) || hits[0];
+      if (!hit) return [];
+      targetUrl = hit.result.url;
+    }
 
-    const pageRes = await fetch(hit.result.url, {
+    if (!targetUrl) return [];
+
+    const pageRes = await fetch(targetUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
     });
     if (!pageRes.ok) return [];
     const html = await pageRes.text();
 
-    const cleanHtml = html.replace(/<br\s*\/?>/gi, '\n');
-    const matches = cleanHtml.match(/data-lyrics-container="true".*?>(.*?)<\/div>/gs);
-
-    if (matches) {
-      const rawText = matches.map(m => m.replace(/<[^>]+>/g, '')).join('\n');
-      const lines = rawText
-        .split('\n')
-        .map(l => l.replace(/data-lyrics-container.*?>/gi, '').replace(/\d+\s*Contributors?/gi, '').trim())
-        .filter(l => l && !l.startsWith('[') && !l.endsWith(']') && !l.includes('Embed'));
-
-      if (lines.length > 0) {
-        const step = Math.max((duration - 10) / lines.length, 3);
-        return lines.map((l, idx) => ({
-          time: Math.round(idx * step),
-          text: l
-        }));
+    // Extract lyrics from Genius HTML properly across all containers
+    const parts = html.split(/data-lyrics-container="true"[^>]*>/i);
+    let fullRawText = '';
+    if (parts.length > 1) {
+      for (let i = 1; i < parts.length; i++) {
+        const block = parts[i].split(/<div[^>]*class="[^\"]*LyricsFooter|class="[^\"]*RightSidebar/i)[0];
+        fullRawText += '\n' + block;
       }
+    }
+
+    const formatted = fullRawText
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&#x27;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&');
+
+    const cleanLines = formatted
+      .split('\n')
+      .map(l => l.replace(/\d+\s*Contributors?/gi, '').replace(/Embed\s*Share.*/gi, '').trim())
+      .filter(l => l && !l.includes('Contributors') && !l.includes('Embed'));
+
+    if (cleanLines.length > 0) {
+      console.log(`[Genius Scraper] Extracted ${cleanLines.length} clean lines from ${targetUrl}`);
+      return await syncLyricsWithGemini(cleanLines, targetTitle, '', duration);
     }
   } catch (e) {
     console.warn('[Genius Lyrics] fetch error:', e.message);
