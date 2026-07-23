@@ -264,17 +264,26 @@ function AppContent() {
   };
 
   const handleDownload = async (trackId) => {
-    const track = tracks.find(t => String(t.id || t._id) === String(trackId));
+    const cleanId = String(trackId);
+    const track = tracks.find(t => String(t.id || t._id) === cleanId) || 
+                  (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId ? currentTrack : null);
     if (!track) return;
+
     if (track.downloaded) {
-      await removeTrackOffline(trackId);
-      setTracks(prev => prev.map(t => String(t.id || t._id) === String(trackId) ? { ...t, downloaded: false } : t));
+      await removeTrackOffline(cleanId);
+      setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, downloaded: false } : t));
+      if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
+        setCurrentTrack(prev => ({ ...prev, downloaded: false }));
+      }
       showToast('تم إزالة الأغنية من التحميلات الأوفلاين');
     } else {
       showToast('جاري تحميل الأغنية لحفظها على مساحة التطبيق...');
       const result = await saveTrackOffline(track);
-      if (result && result.audioBlob) {
-        setTracks(prev => prev.map(t => String(t.id || t._id) === String(trackId) ? { ...t, downloaded: true } : t));
+      if (result) {
+        setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...result, downloaded: true } : t));
+        if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
+          setCurrentTrack(prev => ({ ...prev, ...result, downloaded: true }));
+        }
         showToast('تم تحميل الأغنية بنجاح على مساحة التطبيق للأوفلاين ✓');
       } else {
         showToast('تعذر تحميل الأغنية. يرجى التحقق من اتصال الإنترنت.');
