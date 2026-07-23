@@ -1919,7 +1919,7 @@ async function transcribeWithGroqWhisper(audioUrl) {
     // Proxy YouTube or external audio to get raw stream bytes for Groq
     if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be') || !targetUrl.includes('/api/proxy-audio')) {
       const port = process.env.PORT || 5000;
-      const baseUrl = process.env.VITE_API_URL || `http://localhost:${port}`;
+      const baseUrl = `http://127.0.0.1:${port}`;
       targetUrl = `${baseUrl}/api/proxy-audio?url=${encodeURIComponent(audioUrl)}`;
     }
 
