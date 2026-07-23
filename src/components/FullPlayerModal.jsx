@@ -183,7 +183,7 @@ export default function FullPlayerModal({
             Now Playing
           </p>
           <p className="text-sm font-bold text-white truncate mt-0.5">
-            {currentTrack.album || currentTrack.title}
+            {currentTrack.title || 'Unknown Track'}
           </p>
         </div>
 

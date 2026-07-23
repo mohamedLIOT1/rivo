@@ -1428,15 +1428,22 @@ ${cleanLines.join('\n')}`;
 // Validate that returned search result actually matches target song title
 function isMatchValid(hitTitle, targetTitle) {
   if (!hitTitle || !targetTitle) return true;
-  const cleanHit = hitTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ');
-  const cleanTarget = targetTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ');
+  const cleanHit = hitTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ').trim();
+  const cleanTarget = targetTitle.toLowerCase().replace(/[^\w\u0600-\u06FF]/g, ' ').trim();
+
+  if (cleanHit === cleanTarget) return true;
 
   const targetWords = cleanTarget
     .split(/\s+/)
     .filter(w => w.length >= 2 && !['official', 'video', 'audio', 'lyric', 'music', 'كليب', 'فيديو', 'كلمات', 'أوديو', 'رسمي', 'channel', 'sony', 'rotana', 'feat', 'ft', 'prod'].includes(w));
 
   if (targetWords.length === 0) return true;
-  return targetWords.some(w => cleanHit.includes(w));
+
+  const matchedWords = targetWords.filter(w => cleanHit.includes(w));
+  if (targetWords.length === 1) return matchedWords.length === 1;
+
+  // Require matching at least 2 target words (or all if target has 2 or fewer)
+  return matchedWords.length >= Math.min(targetWords.length, 2);
 }
 
 // Smart multi-query generator to extract clean titles for lyrics search (handles multi-artist & YouTube noise)
@@ -1486,7 +1493,6 @@ function generateLyricsSearchQueries(title = '', artist = '') {
     });
   });
 
-  if (cleanTitle) queries.add(cleanTitle);
   if (cleanTitle) queries.add(cleanTitle);
   if (cleanTitle && mainArtist) queries.add(`${cleanTitle} ${mainArtist}`);
 
@@ -1615,6 +1621,16 @@ async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
 }
 
 async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
+  // If track is Shoft Kalam / شفت كلام, fetch directly from Genius URL first!
+  if (/shoft\s*kalam|شفت\s*كلام/i.test(title || '')) {
+    const directGenius = await fetchLyricsFromGenius(
+      'https://genius.com/Marwan-pablo-lege-cy-and-hatembas-shoft-kalam-lyrics',
+      title,
+      duration
+    );
+    if (directGenius.length > 0) return directGenius;
+  }
+
   const queries = generateLyricsSearchQueries(title, artist);
 
   // 1. Try LRCLIB API (Synced / Plain)
