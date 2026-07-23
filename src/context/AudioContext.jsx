@@ -266,11 +266,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
           .then(r => r.json())
           .then(data => {
             if (data.success && data.url) {
-              const freshProxyUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(data.url)}`;
+              const freshUrl = data.url;
               const audio = audioRef.current;
-              if (audio && audio.src !== freshProxyUrl) {
-                audio.src = freshProxyUrl;
-                if (isPlaying) {
+              if (audio && audio.src !== freshUrl) {
+                audio.src = freshUrl;
+                if (shouldPlayRef.current || isPlaying) {
                   resumeAudioContext();
                   audio.play().catch(e => console.warn('SoundCloud play error:', e));
                 }

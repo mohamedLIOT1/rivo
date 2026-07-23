@@ -35,18 +35,18 @@ export function initAudioEngine(audioElement) {
     sourceNode = audioCtx.createMediaElementSource(audioElement);
     
     preAmpGainNode = audioCtx.createGain();
-    preAmpGainNode.gain.value = 1.0;
+    preAmpGainNode.gain.value = 1.6; // Pre-Amp volume boost (+6dB gain for louder playback)
 
     masterGainNode = audioCtx.createGain();
-    masterGainNode.gain.value = 0.8;
+    masterGainNode.gain.value = 1.0;
 
     // Spotify-Grade Master Dynamics Compressor to prevent clipping distortion
     masterCompressorNode = audioCtx.createDynamicsCompressor();
-    masterCompressorNode.threshold.setValueAtTime(-12, audioCtx.currentTime);
-    masterCompressorNode.knee.setValueAtTime(30, audioCtx.currentTime);
-    masterCompressorNode.ratio.setValueAtTime(12, audioCtx.currentTime);
+    masterCompressorNode.threshold.setValueAtTime(-8, audioCtx.currentTime);
+    masterCompressorNode.knee.setValueAtTime(24, audioCtx.currentTime);
+    masterCompressorNode.ratio.setValueAtTime(8, audioCtx.currentTime);
     masterCompressorNode.attack.setValueAtTime(0.003, audioCtx.currentTime);
-    masterCompressorNode.release.setValueAtTime(0.25, audioCtx.currentTime);
+    masterCompressorNode.release.setValueAtTime(0.15, audioCtx.currentTime);
 
     // Pipeline: Source -> PreAmp -> EQ Filters (Cascade) -> MasterCompressor -> MasterGain -> Destination
     sourceNode.connect(preAmpGainNode);
@@ -69,7 +69,7 @@ export function initAudioEngine(audioElement) {
     masterGainNode.connect(audioCtx.destination);
 
     isInitialized = true;
-    console.log('✅ Spotify-Grade Web Audio API DSP Engine with Compressor initialized!');
+    console.log('✅ Volume Booster & DynamicsCompressor DSP Engine initialized!');
   } catch (err) {
     console.warn('AudioContext initialization notice:', err.message);
   }
@@ -115,7 +115,8 @@ export function setEqualizerBands(bandGains, enabled = true) {
 
   // Dynamic Headroom Compensation for boosted EQ
   if (preAmpGainNode && audioCtx) {
-    const headroomFactor = maxBoost > 0 ? Math.pow(10, -maxBoost / 40) : 1.0;
+    const boostMult = 1.6;
+    const headroomFactor = maxBoost > 0 ? Math.max(1.0, boostMult * Math.pow(10, -maxBoost / 40)) : boostMult;
     const now = audioCtx.currentTime;
     preAmpGainNode.gain.cancelScheduledValues(now);
     preAmpGainNode.gain.setTargetAtTime(headroomFactor, now, 0.05);
@@ -123,11 +124,11 @@ export function setEqualizerBands(bandGains, enabled = true) {
 }
 
 /**
- * Master Volume Gain Control
- * @param {Number} volume Level from 0.0 to 1.0
+ * Master Volume Gain Control (Supports Volume Boost up to 2.0 = 200%)
+ * @param {Number} volume Level from 0.0 to 2.0
  */
 export function setMasterVolume(volume) {
-  const normVol = Math.max(0, Math.min(1, volume));
+  const normVol = Math.max(0, Math.min(2.0, volume * 1.5));
   if (masterGainNode && audioCtx) {
     const now = audioCtx.currentTime;
     masterGainNode.gain.cancelScheduledValues(now);
