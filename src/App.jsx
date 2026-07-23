@@ -346,6 +346,7 @@ function AppContent() {
           isRepeat={isRepeat}
           toggleRepeat={() => setIsRepeat(p => !p)}
           toggleLike={toggleLike}
+          likedTrackIds={likedTrackIds}
           openFullPlayer={() => setIsFullPlayerOpen(true)}
           openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
           currentTime={currentTime}
@@ -363,6 +364,7 @@ function AppContent() {
         playNext={playNextTrack}
         playPrev={playPrevTrack}
         toggleLike={toggleLike}
+        likedTrackIds={likedTrackIds}
         toggleDownload={handleDownload}
         isOpen={isFullPlayerOpen}
         onClose={() => setIsFullPlayerOpen(false)}

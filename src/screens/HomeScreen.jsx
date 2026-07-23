@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -20,6 +21,7 @@ export default function HomeScreen({
   openProfileScreen = () => {},
 }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
 
   const defaultTrackCover = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%231DB954"/><circle cx="150" cy="150" r="90" fill="%23121212"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" fill="%231DB954" font-size="80">🎵</text></svg>`;
 
@@ -230,7 +232,7 @@ export default function HomeScreen({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) onDeleteTrack(track.id);
+                                setDeleteConfirmTrackId(track.id);
                               }}
                               className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
                             >
@@ -297,7 +299,7 @@ export default function HomeScreen({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) onDeleteTrack(track.id);
+                                setDeleteConfirmTrackId(track.id);
                               }}
                               className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
                             >
@@ -457,7 +459,7 @@ export default function HomeScreen({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm('هل أنت تأكد من حذف هذه الأغنية؟')) onDeleteTrack(track.id);
+                                setDeleteConfirmTrackId(track.id);
                               }}
                               className="p-1.5 text-[#b3b3b3] hover:text-red-400 transition-colors"
                             >
@@ -499,6 +501,21 @@ export default function HomeScreen({
             </button>
           </div>
         )}
+      {/* Custom Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deleteConfirmTrackId)}
+        title="هل أنت تأكد من حذف هذه الأغنية؟"
+        message="سيتم حذف هذه الأغنية نهائياً من المكتبة الخاصة بك."
+        confirmText="حذف الأغنية"
+        cancelText="إلغاء"
+        onConfirm={() => {
+          if (deleteConfirmTrackId && onDeleteTrack) {
+            onDeleteTrack(deleteConfirmTrackId);
+          }
+          setDeleteConfirmTrackId(null);
+        }}
+        onCancel={() => setDeleteConfirmTrackId(null)}
+      />
       </div>
     </div>
   );

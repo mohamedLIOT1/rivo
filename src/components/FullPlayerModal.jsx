@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
+import ConfirmModal from './ConfirmModal';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -88,6 +89,7 @@ export default function FullPlayerModal({
   playNext,
   playPrev,
   toggleLike,
+  likedTrackIds = [],
   toggleDownload,
   isOpen,
   onClose,
@@ -106,6 +108,8 @@ export default function FullPlayerModal({
 }) {
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
   const { audioRef, isYtTrack, playTrack } = useAudioPlayer();
+
+  const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
   // Detect if current track is a YouTube track (Groq doesn't support YouTube on Railway)
   const isYouTubeTrack = Boolean(
@@ -337,10 +341,11 @@ export default function FullPlayerModal({
     setIsGeneratingLyrics(false);
   };
 
+  const [isClearLyricsConfirmOpen, setIsClearLyricsConfirmOpen] = useState(false);
+
   // Clear wrong/cached lyrics from MongoDB immediately
-  const handleClearLyrics = async () => {
+  const executeClearLyrics = async () => {
     if (!currentTrack || !rawLyrics.length) return;
-    if (!window.confirm('مسح الكلمات الغلط دي نهائياً؟')) return;
     setIsClearingLyrics(true);
     try {
       await fetch(`${API_BASE_URL}/api/tracks/clear-lyrics`, {
@@ -359,6 +364,7 @@ export default function FullPlayerModal({
       console.warn('Clear lyrics error:', e);
     }
     setIsClearingLyrics(false);
+    setIsClearLyricsConfirmOpen(false);
   };
 
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -540,11 +546,11 @@ export default function FullPlayerModal({
                 <button 
                   onClick={() => toggleLike(currentTrack.id)}
                   className="transition-all hover:scale-110 active:scale-95"
-                  title={currentTrack.liked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                  title={isTrackLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
                 >
                   <Heart 
                     size={28} 
-                    className={currentTrack.liked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
+                    className={isTrackLiked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
                   />
                 </button>
               </div>
@@ -716,7 +722,7 @@ export default function FullPlayerModal({
                 {/* Clear wrong lyrics button — only shown when lyrics exist */}
                 {rawLyrics.length > 0 && (
                   <button
-                    onClick={handleClearLyrics}
+                    onClick={() => setIsClearLyricsConfirmOpen(true)}
                     disabled={isClearingLyrics}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-full text-xs font-bold text-red-400 transition-all active:scale-95 disabled:opacity-50"
                     title="مسح الكلمات من قاعدة البيانات"
@@ -750,21 +756,6 @@ export default function FullPlayerModal({
                   <Edit3 size={13} className="text-amber-400" />
                   <span>تعديل يدوي ✏️</span>
                 </button>
-
-                {rawLyrics.length > 0 && (
-                  <button
-                    onClick={handleTranslateLyrics}
-                    disabled={isTranslating}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-full text-xs font-bold text-blue-300 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isTranslating ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <Languages size={13} />
-                    )}
-                    <span>{showTranslation ? 'الأصلية' : 'ترجمة 🪄'}</span>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -911,6 +902,17 @@ export default function FullPlayerModal({
           </div>
         )}
       </div>
+
+      {/* Confirm Clear Lyrics Modal */}
+      <ConfirmModal
+        isOpen={isClearLyricsConfirmOpen}
+        title="مسح الكلمات المحفوظة؟"
+        message="سيتم حذف الكلمات الحالية لهذه الأغنية من قاعدة البيانات حتى تتمكن من إضافتها أو البحث عنها من جديد."
+        confirmText="مسح الكلمات"
+        cancelText="إلغاء"
+        onConfirm={executeClearLyrics}
+        onCancel={() => setIsClearLyricsConfirmOpen(false)}
+      />
     </div>
   );
 }

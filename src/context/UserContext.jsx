@@ -161,23 +161,32 @@ export function UserProvider({ children }) {
 
   // ── Like / Unlike ────────────────────────────────────
   const toggleLike = useCallback(async (trackId) => {
-    const wasLiked = likedTrackIds.includes(trackId);
-    // Optimistic update
-    setLikedTrackIds(prev => wasLiked ? prev.filter(id => id !== trackId) : [...prev, trackId]);
-    setTracks(prev => prev.map(t => t.id === trackId ? { ...t, liked: !wasLiked } : t));
+    if (!trackId) return;
+    const cleanId = String(trackId);
+    const wasLiked = likedTrackIds.some(id => String(id) === cleanId);
+    
+    setLikedTrackIds(prev => wasLiked 
+      ? prev.filter(id => String(id) !== cleanId) 
+      : [...prev, cleanId]
+    );
+    setTracks(prev => prev.map(t => 
+      (String(t.id) === cleanId || String(t._id) === cleanId) 
+        ? { ...t, liked: !wasLiked } 
+        : t
+    ));
     setPlaylists(prev => prev.map(pl => {
       if (!pl.isLikedSongs) return pl;
       return {
         ...pl,
         trackIds: wasLiked
-          ? (pl.trackIds || []).filter(id => id !== trackId)
-          : [...(pl.trackIds || []), trackId],
+          ? (pl.trackIds || []).filter(id => String(id) !== cleanId)
+          : [...(pl.trackIds || []), cleanId],
       };
     }));
 
     // Sync to server if logged in
     if (getToken()) {
-      try { await api.post(`/api/tracks/${trackId}/like`, {}); } catch {}
+      try { await api.post(`/api/tracks/${encodeURIComponent(cleanId)}/like`, {}); } catch {}
     }
   }, [likedTrackIds]);
 

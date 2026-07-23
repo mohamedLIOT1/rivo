@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Music, AlignLeft, Edit3, Trash2, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
+import ConfirmModal from './ConfirmModal';
+
 export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, onDeleteSong }) {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
@@ -9,6 +11,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
   const [cover, setCover] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [lyricsText, setLyricsText] = useState('');
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (track) {
@@ -192,12 +195,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (confirm(`Delete "${track.title}"?`)) {
-                  onDeleteSong(track.id);
-                  onClose();
-                }
-              }}
+              onClick={() => setIsDeleteConfirmOpen(true)}
               className="py-3 px-4 bg-red-600/20 hover:bg-red-600/40 text-red-400 font-extrabold text-xs rounded-xl border border-red-500/30 transition-colors flex items-center gap-1"
             >
               <Trash2 size={16} />
@@ -206,6 +204,20 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
           </div>
         </form>
       </div>
+
+      <ConfirmModal
+        isOpen={isDeleteConfirmOpen}
+        title={`حذف "${title}"؟`}
+        message="هل أنت تأكد من رغبتك في حذف هذه الأغنية؟ لا يمكن التراجع عن هذا الإجراء."
+        confirmText="حذف الأغنية"
+        cancelText="إلغاء"
+        onConfirm={() => {
+          setIsDeleteConfirmOpen(false);
+          onDeleteSong(track.id);
+          onClose();
+        }}
+        onCancel={() => setIsDeleteConfirmOpen(false)}
+      />
     </div>
   );
 }

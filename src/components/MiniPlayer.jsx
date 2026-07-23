@@ -12,6 +12,7 @@ export default function MiniPlayer({
   isRepeat,
   toggleRepeat,
   toggleLike,
+  likedTrackIds = [],
   openFullPlayer,
   openAddToPlaylist,
   currentTime,
@@ -21,6 +22,7 @@ export default function MiniPlayer({
 }) {
   if (!currentTrack) return null;
 
+  const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const formatTime = (secs) => {
@@ -91,11 +93,11 @@ export default function MiniPlayer({
           <button
             onClick={(e) => { e.stopPropagation(); toggleLike(currentTrack.id); }}
             className="shrink-0 transition-all hover:scale-110 active:scale-95 hidden sm:flex"
-            title={currentTrack.liked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+            title={isTrackLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           >
             <Heart 
               size={16} 
-              className={currentTrack.liked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
+              className={isTrackLiked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
             />
           </button>
         </div>
