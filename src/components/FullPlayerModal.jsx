@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, ListMusic
+  MoreHorizontal, ListMusic, Mic
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -124,6 +124,9 @@ export default function FullPlayerModal({
   };
 
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const isYouTubeTrack = currentTrack?.audioUrl?.includes('youtube') || currentTrack?.audioUrl?.includes('youtu.be') || currentTrack?.source === 'YouTube';
 
   const handleGenerateLyrics = async () => {
     if (!currentTrack) return;
@@ -136,7 +139,8 @@ export default function FullPlayerModal({
           trackId: currentTrack.id,
           title: currentTrack.title,
           artist: currentTrack.artist,
-          duration: currentTrack.duration || 180
+          duration: currentTrack.duration || 180,
+          audioUrl: currentTrack.audioUrl  // sent so server can try Groq Whisper
         })
       });
       const data = await res.json();
@@ -149,6 +153,33 @@ export default function FullPlayerModal({
       console.warn('AI Generate Lyrics error:', e);
     }
     setIsGeneratingLyrics(false);
+  };
+
+  // Groq Whisper: directly transcribe the audio file (non-YouTube only)
+  const handleTranscribeAudio = async () => {
+    if (!currentTrack?.audioUrl || isYouTubeTrack) return;
+    setIsTranscribing(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/transcribe-audio`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackId: currentTrack.id,
+          audioUrl: currentTrack.audioUrl,
+          title: currentTrack.title,
+          artist: currentTrack.artist
+        })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
+        currentTrack.lyrics = data.lyrics;
+        setTranslatedLyrics(null);
+        setShowTranslation(false);
+      }
+    } catch (e) {
+      console.warn('Transcribe audio error:', e);
+    }
+    setIsTranscribing(false);
   };
 
   const [isUserScrolling, setIsUserScrolling] = useState(false);
@@ -534,29 +565,39 @@ export default function FullPlayerModal({
                 );
               })
             ) : (
-              <div className="text-center py-16 px-4" style={{ color: '#b3b3b3' }}>
+              <div className="text-center py-12 px-4" style={{ color: '#b3b3b3' }}>
                 <ListMusic size={48} className="mx-auto mb-4 text-[#1DB954] opacity-60" />
                 <p className="font-extrabold text-white text-base mb-1">No lyrics available for this song</p>
                 <p className="text-xs text-zinc-400 max-w-xs mx-auto mb-6">
-                  Click below to let AI search, generate & sync timed lyrics for "{currentTrack?.title}"
+                  Try AI search below, or use the microphone button to transcribe the actual audio.
                 </p>
-                <button
-                  onClick={handleGenerateLyrics}
-                  disabled={isGeneratingLyrics}
-                  className="inline-flex items-center gap-2 px-5 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full shadow-lg shadow-[#1DB954]/25 transition-all active:scale-95 disabled:opacity-50"
-                >
-                  {isGeneratingLyrics ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Generating & Syncing Lyrics...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={16} />
-                      <span>🪄 Generate & Sync Lyrics with AI</span>
-                    </>
+                <div className="flex flex-col items-center gap-3">
+                  <button
+                    onClick={handleGenerateLyrics}
+                    disabled={isGeneratingLyrics || isTranscribing}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full shadow-lg shadow-[#1DB954]/25 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {isGeneratingLyrics ? (
+                      <><Loader2 size={16} className="animate-spin" /><span>Searching Lyrics...</span></>
+                    ) : (
+                      <><Sparkles size={16} /><span>🪄 AI Search & Sync Lyrics</span></>
+                    )}
+                  </button>
+
+                  {!isYouTubeTrack && (
+                    <button
+                      onClick={handleTranscribeAudio}
+                      disabled={isTranscribing || isGeneratingLyrics}
+                      className="inline-flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-extrabold text-xs rounded-full transition-all active:scale-95 disabled:opacity-50"
+                    >
+                      {isTranscribing ? (
+                        <><Loader2 size={16} className="animate-spin" /><span>Listening to audio...</span></>
+                      ) : (
+                        <><Mic size={16} className="text-purple-400" /><span>🎤 Transcribe Audio (Perfect Sync)</span></>
+                      )}
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             )}
           </div>

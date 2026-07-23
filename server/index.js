@@ -1266,6 +1266,7 @@ app.post('/api/auto-seed', async (req, res) => {
 // ══════════════════════════════════════════
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GROQ_API_KEY   = process.env.GROQ_API_KEY   || '';
 
 // AI Lyrics Translation using Gemini
 app.post('/api/ai/translate-lyrics', async (req, res) => {
@@ -1846,13 +1847,145 @@ RULES (strictly follow):
   return [];
 }
 
+// ──────────────────────────────────────────────────────────
+// Groq Whisper: Transcribe actual audio → perfect timestamps
+// Free tier: 7200 seconds of audio/day at console.groq.com
+// ──────────────────────────────────────────────────────────
+async function transcribeWithGroqWhisper(audioUrl) {
+  if (!GROQ_API_KEY || !audioUrl) return [];
+  // Only works for direct audio URLs (not YouTube)
+  if (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be')) return [];
+
+  try {
+    console.log('[Groq Whisper] Downloading audio for transcription...');
+    const audioRes = await fetch(audioUrl, {
+      signal: AbortSignal.timeout(30000),
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (!audioRes.ok) return [];
+
+    const contentLength = parseInt(audioRes.headers.get('content-length') || '0');
+    // Skip files over 25MB (Groq limit)
+    if (contentLength > 25 * 1024 * 1024) {
+      console.log('[Groq Whisper] File too large, skipping');
+      return [];
+    }
+
+    const audioBuffer = await audioRes.arrayBuffer();
+    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+
+    const { FormData } = await import('node:buffer').then(() => ({ FormData: globalThis.FormData })).catch(() => ({}));
+    // Use native FormData if available, otherwise build manually
+    let body, contentType;
+    if (typeof globalThis.FormData !== 'undefined') {
+      const fd = new globalThis.FormData();
+      fd.append('file', audioBlob, 'audio.mp3');
+      fd.append('model', 'whisper-large-v3-turbo');
+      fd.append('response_format', 'verbose_json');
+      fd.append('timestamp_granularities[]', 'segment');
+      body = fd;
+      contentType = undefined; // let fetch set boundary
+    } else {
+      // Fallback: manual multipart/form-data
+      const boundary = '----FormBoundary' + Math.random().toString(36).slice(2);
+      const bufArr = Buffer.from(audioBuffer);
+      const header = [
+        `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-large-v3-turbo`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\nverbose_json`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="timestamp_granularities[]"\r\n\r\nsegment`,
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.mp3"\r\nContent-Type: audio/mpeg\r\n`,
+      ].join('\r\n') + '\r\n';
+      const footer = `\r\n--${boundary}--\r\n`;
+      body = Buffer.concat([Buffer.from(header), bufArr, Buffer.from(footer)]);
+      contentType = `multipart/form-data; boundary=${boundary}`;
+    }
+
+    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        ...(contentType ? { 'Content-Type': contentType } : {})
+      },
+      body,
+      signal: AbortSignal.timeout(60000)
+    });
+
+    if (!groqRes.ok) {
+      const err = await groqRes.text();
+      console.warn('[Groq Whisper] API error:', err.slice(0, 200));
+      return [];
+    }
+
+    const data = await groqRes.json();
+    const segments = data.segments || [];
+    if (segments.length === 0) return [];
+
+    const lyrics = segments
+      .filter(s => s.text && s.text.trim())
+      .map(s => ({
+        time: Math.round(s.start * 100) / 100,
+        text: s.text.trim().replace(/^[\s,.-]+|[\s,.-]+$/g, '')
+      }))
+      .filter(l => l.text.length > 0);
+
+    console.log(`[Groq Whisper] ✅ Transcribed ${lyrics.length} segments from actual audio`);
+    return lyrics;
+  } catch (err) {
+    console.warn('[Groq Whisper] error:', err.message);
+    return [];
+  }
+}
+
+// Endpoint: transcribe audio directly via Groq Whisper
+app.post('/api/ai/transcribe-audio', async (req, res) => {
+  try {
+    const { audioUrl, trackId, title, artist } = req.body;
+    if (!audioUrl) return res.status(400).json({ error: 'audioUrl required' });
+    if (!GROQ_API_KEY) return res.status(400).json({ error: 'GROQ_API_KEY not configured' });
+
+    // Build the proxied audio URL if needed
+    let targetUrl = audioUrl;
+    if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio') && !targetUrl.includes('youtube')) {
+      targetUrl = `${process.env.VITE_API_URL || 'http://localhost:5000'}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+    }
+
+    const lyrics = await transcribeWithGroqWhisper(targetUrl);
+
+    // Save to DB if we got results
+    if (lyrics.length > 0 && trackId) {
+      try {
+        if (mongoose.Types.ObjectId.isValid(trackId)) {
+          await Track.findByIdAndUpdate(trackId, { lyrics });
+        } else {
+          await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
+        }
+      } catch (dbErr) { console.warn('[Groq Whisper] DB save error:', dbErr.message); }
+    }
+
+    res.json({ success: lyrics.length > 0, lyrics, source: 'groq-whisper' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // AI Auto-Generate Lyrics & Timestamps for any song without lyrics
 app.post('/api/ai/generate-song-lyrics', async (req, res) => {
   try {
-    const { trackId, title, artist, duration = 180 } = req.body;
+    const { trackId, title, artist, duration = 180, audioUrl } = req.body;
     if (!title) return res.status(400).json({ error: 'Song title required' });
 
     let lyrics = await fetchRealLyricsFromLrclib(title, artist, duration);
+
+    // If no lyrics from databases AND we have a direct audio URL → use Groq Whisper
+    if (lyrics.length === 0 && audioUrl && GROQ_API_KEY) {
+      console.log(`[Pipeline] Trying Groq Whisper transcription for "${title}"`);
+      let targetUrl = audioUrl;
+      if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio') && !targetUrl.includes('youtube')) {
+        targetUrl = `${process.env.VITE_API_URL || 'http://localhost:5000'}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+      }
+      lyrics = await transcribeWithGroqWhisper(targetUrl);
+      if (lyrics.length > 0) console.log(`[Pipeline] ✅ Groq Whisper got ${lyrics.length} lines for "${title}"`);
+    }
 
     // Save real generated lyrics to MongoDB database permanently!
     if (lyrics.length > 0 && trackId) {
