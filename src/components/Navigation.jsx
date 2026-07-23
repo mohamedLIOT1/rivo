@@ -37,9 +37,11 @@ export default function Navigation({
         {/* ── Top Nav Panel ── */}
         <div className="bg-[#121212] rounded-lg p-3 flex flex-col gap-1">
           {/* Logo */}
-          <div className="flex items-center gap-2 px-3 py-2 mb-1">
-            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center font-black text-black text-lg shadow-lg shrink-0">
-              L
+          <div className="flex items-center gap-3 px-3 py-2 mb-1">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#1ed760] to-[#12833b] flex items-center justify-center shadow-lg shadow-[#1DB954]/20 shrink-0">
+              <svg width="60%" height="60%" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M 195 330 A 40 40 0 1 1 235 290 L 235 155 L 345 125 L 345 270 A 40 40 0 1 1 385 230 L 385 105 A 12 12 0 0 0 372 93 L 207 132 A 12 12 0 0 0 195 144 Z" fill="#000000" />
+              </svg>
             </div>
             <span className="text-xl font-extrabold tracking-tight text-white">Liofy</span>
           </div>

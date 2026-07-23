@@ -4,15 +4,9 @@
   "description": "Stream, discover and share music with your friends",
   "icons": [
     {
-      "src": "https://ui-avatars.com/api/?name=L&background=1DB954&color=000000&size=192&bold=true&font-size=0.7&format=png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "https://ui-avatars.com/api/?name=L&background=1DB954&color=000000&size=512&bold=true&font-size=0.7&format=png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ],
@@ -21,8 +15,7 @@
   "background_color": "#000000",
   "theme_color": "#1DB954",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "categories": ["music", "entertainment"],
-  "screenshots": [],
   "lang": "ar"
 }

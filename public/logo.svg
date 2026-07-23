@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1ed760"/>
+      <stop offset="100%" stop-color="#12833b"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <!-- Sleek Musical Note Icon -->
+  <path d="M 195 330 A 40 40 0 1 1 235 290 L 235 155 L 345 125 L 345 270 A 40 40 0 1 1 385 230 L 385 105 A 12 12 0 0 0 372 93 L 207 132 A 12 12 0 0 0 195 144 Z" fill="#000000" />
+</svg>
