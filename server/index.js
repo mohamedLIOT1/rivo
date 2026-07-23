@@ -660,6 +660,26 @@ async function resolveWithInvidious(videoId) {
   return null;
 }
 
+let playDl = null;
+try {
+  playDl = require('play-dl');
+  console.log('✅ play-dl loaded');
+} catch (e) {}
+
+async function resolveWithPlayDl(videoId) {
+  if (!playDl) return null;
+  try {
+    const info = await playDl.stream(`https://www.youtube.com/watch?v=${videoId}`, { quality: 2 });
+    if (info?.url) {
+      console.log(`[play-dl] ✅ Resolved audio stream for ${videoId}`);
+      return info.url;
+    }
+  } catch (err) {
+    console.warn(`[play-dl] Failed for ${videoId}:`, err.message?.substring(0, 80));
+  }
+  return null;
+}
+
 async function resolveYouTubeAudio(videoId) {
   // Check cache
   const cached = ytUrlCache.get(videoId);
@@ -669,8 +689,9 @@ async function resolveYouTubeAudio(videoId) {
 
   console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
 
-  // Try all methods in order: ytdl -> Cobalt -> Piped -> Invidious
+  // Try all methods in order: ytdl -> play-dl -> Cobalt -> Piped -> Invidious
   let audioUrl = await resolveWithYtdl(videoId);
+  if (!audioUrl) audioUrl = await resolveWithPlayDl(videoId);
   if (!audioUrl) audioUrl = await resolveWithCobalt(videoId);
   if (!audioUrl) audioUrl = await resolveWithPiped(videoId);
   if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
@@ -1979,7 +2000,7 @@ app.post('/api/ai/transcribe-audio', async (req, res) => {
         if (mongoose.Types.ObjectId.isValid(trackId)) {
           await Track.findByIdAndUpdate(trackId, { lyrics });
         } else {
-          await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
+          await Track.findOneAndUpdate({ id: trackId }, { lyrics });
         }
       } catch (dbErr) { console.warn('[Transcribe] DB save error:', dbErr.message); }
     }
@@ -2015,7 +2036,7 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
         if (mongoose.Types.ObjectId.isValid(trackId)) {
           await Track.findByIdAndUpdate(trackId, { lyrics });
         } else {
-          await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
+          await Track.findOneAndUpdate({ id: trackId }, { lyrics });
         }
       } catch (dbErr) {
         console.warn('[AI Lyrics] MongoDB update warning:', dbErr.message);
@@ -2038,7 +2059,7 @@ app.post('/api/tracks/update-lyrics', async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(trackId)) {
       await Track.findByIdAndUpdate(trackId, { lyrics });
     } else {
-      await Track.findOneAndUpdate({ $or: [{ _id: trackId }, { id: trackId }] }, { lyrics });
+      await Track.findOneAndUpdate({ id: trackId }, { lyrics });
     }
     res.json({ success: true, lyrics });
   } catch (e) {
