@@ -678,11 +678,43 @@ async function resolveWithPiped(videoId) {
   return null;
 }
 
+async function resolveWithCobalt(videoId) {
+  try {
+    const res = await fetch('https://api.cobalt.tools/api/json', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0 Safari/537.36'
+      },
+      body: JSON.stringify({
+        url: `https://www.youtube.com/watch?v=${videoId}`,
+        isAudioOnly: true,
+        aFormat: 'mp3'
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.url) {
+        console.log(`[Cobalt] ✅ Resolved YouTube stream for ${videoId}`);
+        return data.url;
+      }
+    }
+  } catch (err) {
+    console.warn('[Cobalt] error:', err.message);
+  }
+  return null;
+}
+
 async function resolveWithInvidious(videoId) {
   const instances = [
     'https://inv.zoomerville.com',
     'https://invidious.slipfox.xyz',
     'https://yt.artemislena.eu',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.projectsegfau.lt',
+    'https://invidious.flokinet.to'
   ];
   for (const base of instances) {
     try {
@@ -694,7 +726,7 @@ async function resolveWithInvidious(videoId) {
       const formats = data.adaptiveFormats || [];
       const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
       if (audio?.url) {
-        console.log(`[Invidious] Resolved via ${base}`);
+        console.log(`[Invidious] ✅ Resolved via ${base}`);
         return audio.url;
       }
     } catch {}
@@ -711,8 +743,9 @@ async function resolveYouTubeAudio(videoId) {
 
   console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
 
-  // Try all methods in order
+  // Try all methods in order: ytdl -> Cobalt -> Piped -> Invidious
   let audioUrl = await resolveWithYtdl(videoId);
+  if (!audioUrl) audioUrl = await resolveWithCobalt(videoId);
   if (!audioUrl) audioUrl = await resolveWithPiped(videoId);
   if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
 
