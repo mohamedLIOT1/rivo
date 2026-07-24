@@ -694,23 +694,25 @@ function extractVideoId(urlOrId) {
   return match ? match[1] : (urlOrId.length === 11 ? urlOrId : null);
 }
 
+let ytdlAgent = null;
+try {
+  if (ytdl && typeof ytdl.createAgent === 'function') {
+    ytdlAgent = ytdl.createAgent([]);
+  }
+} catch (e) {}
+
 async function resolveWithYtdl(videoId) {
   if (!ytdl) return null;
   try {
-    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, {
-      requestOptions: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120',
-          'Accept-Language': 'en-US,en;q=0.9',
-        }
-      }
-    });
-    // Pick best audio-only format
-    const format = ytdl.chooseFormat(info.formats, {
-      quality: 'highestaudio',
-      filter: 'audioonly',
-    });
-    return format?.url || null;
+    const opts = ytdlAgent ? { agent: ytdlAgent } : {};
+    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, opts);
+    const formats = info.formats || [];
+    const format = formats.find(f => f.hasAudio && !f.hasVideo) || formats.find(f => f.hasAudio);
+    if (format?.url) {
+      console.log(`[ytdl] ✅ Successfully resolved direct stream for ${videoId}`);
+      return format.url;
+    }
+    return null;
   } catch (e) {
     console.warn(`[ytdl] Failed for ${videoId}:`, e.message?.substring(0, 80));
     return null;
