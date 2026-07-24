@@ -38,6 +38,22 @@ const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || '';
 
 // ══════════════════════════════════════════
+//  Global Error Handlers — CRITICAL
+//  Prevents play-dl/ytdl 429 errors from crashing the server
+//  and killing active login/API requests
+// ══════════════════════════════════════════
+process.on('uncaughtException', (err) => {
+  // Non-fatal: log but keep server running
+  console.warn('[uncaughtException] Caught, server stays alive:', err.message || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  // Non-fatal: log but keep server running  
+  console.warn('[unhandledRejection] Caught, server stays alive:', reason?.message || reason);
+});
+
+
+// ══════════════════════════════════════════
 //  MongoDB Schemas
 // ══════════════════════════════════════════
 
