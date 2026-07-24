@@ -54,25 +54,51 @@ process.on('unhandledRejection', (reason) => {
 
 
 // ══════════════════════════════════════════
-//  MongoDB Schemas
+//  MongoDB Schemas & Connection
 // ══════════════════════════════════════════
 
-mongoose.set('bufferCommands', false);
+const DEFAULT_MONGO_URI = 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority';
+const MONGO_URI = (process.env.MONGO_URI && process.env.MONGO_URI.trim()) || DEFAULT_MONGO_URI;
 
-if (MONGO_URI) {
-  mongoose.connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 8000,
-    connectTimeoutMS: 15000,
-  })
-    .then(() => console.log('✅ MongoDB connected successfully'))
-    .catch(err => console.error('⚠️ MongoDB connection error:', err.message));
-} else {
-  console.warn('⚠️ MONGO_URI is missing in environment variables.');
+let isConnecting = false;
+async function connectDB() {
+  if (mongoose.connection.readyState === 1 || isConnecting) return;
+  isConnecting = true;
+  try {
+    console.log('🔄 Connecting to MongoDB...');
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 15000,
+      family: 4,
+    });
+    console.log('✅ MongoDB connected successfully');
+  } catch (err) {
+    console.error('⚠️ MongoDB connection error:', err.message);
+  } finally {
+    isConnecting = false;
+  }
 }
 
-// Middleware to prevent 10s buffering timeouts when DB is disconnected
+connectDB();
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB disconnected! Retrying in 3 seconds...');
+  setTimeout(connectDB, 3000);
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('⚠️ MongoDB connection error event:', err.message);
+});
+
+// Middleware to ensure DB connection before executing auth routes
 const checkDbConnection = (req, res, next) => {
   if (mongoose.connection.readyState === 1) return next();
+
+  // If disconnected, trigger connection attempt immediately
+  if (mongoose.connection.readyState === 0) {
+    connectDB();
+  }
+
   let attempts = 0;
   const interval = setInterval(() => {
     attempts++;
@@ -80,7 +106,7 @@ const checkDbConnection = (req, res, next) => {
       clearInterval(interval);
       return next();
     }
-    if (attempts >= 15) {
+    if (attempts >= 25) { // Wait up to 5 seconds
       clearInterval(interval);
       return res.status(503).json({
         error: 'قاعدة البيانات غير متصلة حالياً. يرجى التحقق من إعدادات MONGO_URI وإتاحة IP Access List (0.0.0.0/0) في MongoDB Atlas.'
