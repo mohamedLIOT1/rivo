@@ -33,7 +33,6 @@ app.use(express.static(path.join(__dirname, '../dist')));
 const server = http.createServer(app);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'liofy_secure_key_2025';
-const MONGO_URI = (process.env.MONGO_URI || 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority').trim();
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
 const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || '';
 
