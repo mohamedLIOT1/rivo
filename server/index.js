@@ -11,12 +11,14 @@
 
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const axios = require('axios');
 
 try {
   require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -951,9 +953,6 @@ app.get('/api/proxy-image', async (req, res) => {
     res.status(500).end();
   }
 });
-
-const axios = require('axios');
-const https = require('https');
 
 // /api/proxy-audio — robust streaming proxy using axios
 app.get('/api/proxy-audio', async (req, res) => {

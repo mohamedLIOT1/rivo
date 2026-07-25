@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
+    "axios": "^1.7.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",
