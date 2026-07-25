@@ -19,6 +19,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const axios = require('axios');
+const { execFile } = require('child_process');
 
 try {
   require('dotenv').config({ path: path.join(__dirname, '../.env') });
@@ -894,6 +895,31 @@ async function resolveWithPlayDl(videoId) {
   return null;
 }
 
+async function resolveWithYtDlp(videoId) {
+  return new Promise((resolve) => {
+    const cmd = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
+    execFile(cmd, ['-g', '-f', 'bestaudio/best', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000 }, (error, stdout) => {
+      if (!error && stdout) {
+        const url = stdout.trim().split('\n')[0];
+        if (url && url.startsWith('http')) {
+          console.log(`[yt-dlp] ✅ Resolved audio stream for ${videoId}`);
+          return resolve(url);
+        }
+      }
+      execFile('yt-dlp', ['-g', '-f', 'bestaudio/best', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000 }, (err2, stdout2) => {
+        if (!err2 && stdout2) {
+          const url2 = stdout2.trim().split('\n')[0];
+          if (url2 && url2.startsWith('http')) {
+            console.log(`[yt-dlp fallback] ✅ Resolved audio stream for ${videoId}`);
+            return resolve(url2);
+          }
+        }
+        resolve(null);
+      });
+    });
+  });
+}
+
 async function resolveYouTubeAudio(videoId) {
   // Check cache
   const cached = ytUrlCache.get(videoId);
@@ -903,9 +929,9 @@ async function resolveYouTubeAudio(videoId) {
 
   console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
 
-  // Order: Cobalt -> Piped -> Invidious -> ytdl -> play-dl
-  // Cobalt and Piped are more likely to work on shared hosting like Railway
-  let audioUrl = await resolveWithCobalt(videoId);
+  // Order: yt-dlp -> Cobalt -> Piped -> Invidious -> ytdl -> play-dl
+  let audioUrl = await resolveWithYtDlp(videoId);
+  if (!audioUrl) audioUrl = await resolveWithCobalt(videoId);
   if (!audioUrl) audioUrl = await resolveWithPiped(videoId);
   if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
   if (!audioUrl) audioUrl = await resolveWithYtdl(videoId);
