@@ -1,0 +1,3 @@
+- [ ] Fix Gradle sync error in `ExpoModulesCorePlugin.gradle`
+    - [ ] Update `useExpoPublishing` to safely find `release` component
+- [ ] Verify changes

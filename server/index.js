@@ -65,14 +65,18 @@ async function connectDB() {
   isConnecting = true;
   try {
     console.log('🔄 Connecting to MongoDB...');
+    // Increased timeouts and added automatic retry
     await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 15000,
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
       family: 4,
     });
     console.log('✅ MongoDB connected successfully');
   } catch (err) {
     console.error('⚠️ MongoDB connection error:', err.message);
+    // Retry after 5 seconds
+    setTimeout(connectDB, 5000);
   } finally {
     isConnecting = false;
   }
@@ -461,6 +465,54 @@ app.post('/api/tracks/add', optionalAuth, async (req, res) => {
   }
 });
 
+// Import track from YouTube URL
+app.post('/api/tracks/youtube', optionalAuth, async (req, res) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL required' });
+
+    const videoId = extractVideoId(url);
+    if (!videoId) return res.status(400).json({ error: 'Invalid YouTube URL' });
+
+    // Check if already in DB
+    const existing = await Track.findOne({ audioUrl: { $regex: videoId } });
+    if (existing) {
+      return res.json({ success: true, track: { ...existing.toObject(), id: String(existing._id) }, alreadyExists: true });
+    }
+
+    // Resolve details using ytdl or fallback
+    let title = 'YouTube Track';
+    let artist = 'YouTube';
+    let cover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    let duration = 210;
+
+    if (ytdl) {
+      try {
+        const info = await ytdl.getBasicInfo(url);
+        title = info.videoDetails.title.replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '').trim();
+        artist = info.videoDetails.author.name;
+        duration = parseInt(info.videoDetails.lengthSeconds) || 210;
+      } catch (err) {
+        console.warn('[Import] ytdl info failed, using defaults');
+      }
+    }
+
+    const track = await new Track({
+      title,
+      artist,
+      cover,
+      audioUrl: url,
+      duration,
+      source: 'YouTube',
+      addedBy: req.user?.email || 'anonymous',
+    }).save();
+
+    res.json({ success: true, track: { ...track.toObject(), id: String(track._id) } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Delete a track (from MongoDB shared library)
 app.delete('/api/tracks/:id', optionalAuth, async (req, res) => {
   try {
@@ -681,7 +733,9 @@ const PIPED_INSTANCES = [
   'https://piped-api.garudalinux.org',
   'https://pipedapi.mha.fi',
   'https://pipedapi.syra.net',
-  'https://pipedapi.tokhmi.xyz'
+  'https://pipedapi.tokhmi.xyz',
+  'https://piped-api.us.v-cdn.net',
+  'https://piped-api.no-logs.com'
 ];
 
 // Cache for resolved YouTube URLs (TTL: 5 hours)
@@ -690,6 +744,7 @@ const YT_CACHE_TTL = 5 * 60 * 60 * 1000;
 
 function extractVideoId(urlOrId) {
   if (!urlOrId) return null;
+  // Handle complex URLs like watch?v=ID&list=...
   const match = urlOrId.match(/(?:v=|\/|embed\/|shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
   return match ? match[1] : (urlOrId.length === 11 ? urlOrId : null);
 }
@@ -751,6 +806,7 @@ async function resolveWithCobalt(videoId) {
     'https://co.wuk.sh/api/json',
     'https://cobalt.stream/api/json',
     'https://api.cobalt.tools/api/json',
+    'https://cobalt.bc0.me/api/json',
   ];
   for (const endpoint of cobaltInstances) {
     try {
@@ -759,7 +815,7 @@ async function resolveWithCobalt(videoId) {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
         },
         body: JSON.stringify({
           url: `https://www.youtube.com/watch?v=${videoId}`,
@@ -767,7 +823,7 @@ async function resolveWithCobalt(videoId) {
           audioFormat: 'mp3',
           isAudioOnly: true
         }),
-        signal: AbortSignal.timeout(8000)
+        signal: AbortSignal.timeout(6000)
       });
       if (res.ok) {
         const data = await res.json();
@@ -845,12 +901,13 @@ async function resolveYouTubeAudio(videoId) {
 
   console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
 
-  // Try all methods in order: ytdl -> play-dl -> Cobalt -> Piped -> Invidious
-  let audioUrl = await resolveWithYtdl(videoId);
-  if (!audioUrl) audioUrl = await resolveWithPlayDl(videoId);
-  if (!audioUrl) audioUrl = await resolveWithCobalt(videoId);
+  // Order: Cobalt -> Piped -> Invidious -> ytdl -> play-dl
+  // Cobalt and Piped are more likely to work on shared hosting like Railway
+  let audioUrl = await resolveWithCobalt(videoId);
   if (!audioUrl) audioUrl = await resolveWithPiped(videoId);
   if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
+  if (!audioUrl) audioUrl = await resolveWithYtdl(videoId);
+  if (!audioUrl) audioUrl = await resolveWithPlayDl(videoId);
 
   if (audioUrl) {
     ytUrlCache.set(videoId, { url: audioUrl, time: Date.now() });
@@ -895,7 +952,10 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
-// /api/proxy-audio — streams audio with range support
+const axios = require('axios');
+const https = require('https');
+
+// /api/proxy-audio — robust streaming proxy using axios
 app.get('/api/proxy-audio', async (req, res) => {
   try {
     let { url } = req.query;
@@ -903,78 +963,52 @@ app.get('/api/proxy-audio', async (req, res) => {
       return res.status(400).json({ error: 'Valid URL required' });
     }
 
-    // Resolve YouTube URLs
+    // Resolve YouTube WATCH URLs to direct streams if needed
     if (url.includes('youtube.com') || url.includes('youtu.be')) {
       const videoId = extractVideoId(url);
       if (!videoId) return res.status(400).json({ error: 'Invalid YouTube URL' });
 
-      // If ytdl is available, stream directly without proxy
-      if (ytdl && ytdl.validateID(videoId)) {
-        try {
-          const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`);
-          const format = ytdl.chooseFormat(info.formats, {
-            quality: 'highestaudio',
-            filter: 'audioonly',
-          });
-          if (format) {
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.setHeader('Content-Type', format.mimeType || 'audio/mp4');
-            if (format.contentLength) res.setHeader('Content-Length', format.contentLength);
-            res.setHeader('Accept-Ranges', 'bytes');
-
-            const stream = ytdl(`https://www.youtube.com/watch?v=${videoId}`, {
-              format,
-              highWaterMark: 64 * 1024,
-            });
-            stream.pipe(res);
-            stream.on('error', (e) => {
-              console.warn('[ytdl stream error]', e.message);
-              if (!res.headersSent) res.status(500).end();
-            });
-            return;
-          }
-        } catch (e) {
-          console.warn('[ytdl direct stream failed, falling back to URL]', e.message?.substring(0, 80));
-        }
-      }
-
-      // Fallback: resolve URL and proxy it
-      const audioUrl = await resolveYouTubeAudio(videoId);
-      if (!audioUrl) {
-        return res.status(502).json({ error: 'Failed to resolve YouTube audio. Please try again.' });
-      }
-      url = audioUrl;
+      const resolvedUrl = await resolveYouTubeAudio(videoId);
+      if (!resolvedUrl) return res.status(502).json({ error: 'Could not resolve YouTube audio' });
+      url = resolvedUrl;
     }
 
-    // Proxy the resolved URL (with Range support for seeking)
     const rangeHeader = req.headers.range;
-    const fetchHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120',
+    const axiosHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Referer': 'https://www.youtube.com/',
+      'Accept': '*/*',
     };
-    if (rangeHeader) fetchHeaders['Range'] = rangeHeader;
+    if (rangeHeader) axiosHeaders['Range'] = rangeHeader;
 
-    const audioRes = await fetch(url, { headers: fetchHeaders });
-    if (!audioRes.ok && audioRes.status !== 206) {
-      return res.status(502).json({ error: `Upstream error: ${audioRes.status}` });
-    }
+    const response = await axios({
+      method: 'get',
+      url: url,
+      headers: axiosHeaders,
+      responseType: 'stream',
+      timeout: 20000,
+    });
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', audioRes.headers.get('content-type') || 'audio/mp4');
-    if (audioRes.headers.get('content-length')) res.setHeader('Content-Length', audioRes.headers.get('content-length'));
-    if (audioRes.headers.get('content-range')) res.setHeader('Content-Range', audioRes.headers.get('content-range'));
+    res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mp4');
+    if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
+    if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
     res.setHeader('Accept-Ranges', 'bytes');
-    res.status(audioRes.status === 206 ? 206 : 200);
+    res.status(response.status);
 
-    if (typeof Readable.fromWeb === 'function') {
-      Readable.fromWeb(audioRes.body).pipe(res);
-    } else {
-      const buf = await audioRes.arrayBuffer();
-      res.send(Buffer.from(buf));
-    }
+    response.data.pipe(res);
+
+    response.data.on('error', (err) => {
+      console.error('[Axios Proxy] Stream error:', err.message);
+      res.end();
+    });
+
   } catch (e) {
-    console.error('[proxy-audio error]', e.message);
-    if (!res.headersSent) res.status(500).json({ error: e.message });
+    console.error('[Axios Proxy] Fatal error:', e.message);
+    if (!res.headersSent) {
+      const status = e.response?.status || 500;
+      res.status(status).json({ error: e.message });
+    }
   }
 });
 
@@ -1082,11 +1116,12 @@ async function searchSoundCloud(query) {
   }
 }
 
-// SoundCloud Stream Proxy — Resolves 100% fresh live MP3 stream URL on the fly
+// SoundCloud Stream Proxy — Resolves 100% fresh live MP3 stream URL on the fly and redirects to it
 app.get('/api/soundcloud/stream', async (req, res) => {
   try {
     const { url, id, title, artist } = req.query;
     const clientId = await getSoundCloudClientId();
+    let finalUrl = url;
 
     // 1. If we have a track ID or search query
     const searchQ = (id && id.replace('sc-', '')) ? `track_id:${id.replace('sc-', '')}` : `${title || ''} ${artist || ''}`.trim();
@@ -1102,7 +1137,7 @@ app.get('/api/soundcloud/stream', async (req, res) => {
               const streamRes = await fetch(`${prog.url}?client_id=${clientId}`);
               if (streamRes.ok) {
                 const streamData = await streamRes.json();
-                if (streamData.url) return res.json({ success: true, url: streamData.url });
+                if (streamData.url) finalUrl = streamData.url;
               }
             }
           }
@@ -1111,18 +1146,28 @@ app.get('/api/soundcloud/stream', async (req, res) => {
     }
 
     // 2. If url is direct progressive stream endpoint
-    if (url && url.includes('api-v2.soundcloud.com/media')) {
+    if (finalUrl && finalUrl.includes('api-v2.soundcloud.com/media')) {
       try {
-        const streamRes = await fetch(`${url}?client_id=${clientId}`);
+        const streamRes = await fetch(`${finalUrl}?client_id=${clientId}`);
         if (streamRes.ok) {
           const streamData = await streamRes.json();
-          if (streamData.url) return res.json({ success: true, url: streamData.url });
+          if (streamData.url) finalUrl = streamData.url;
         }
       } catch (err) {}
     }
 
-    // 3. Fallback to raw URL
-    if (url) return res.json({ success: true, url });
+    if (finalUrl) {
+      // Stream the audio via axios to bypass referer/IP issues on mobile
+      const response = await axios({
+        method: 'get',
+        url: finalUrl,
+        responseType: 'stream',
+        timeout: 15000,
+      });
+      res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
+      return response.data.pipe(res);
+    }
+
     res.status(404).json({ error: 'SoundCloud stream not found' });
   } catch (e) {
     res.status(500).json({ error: e.message });
