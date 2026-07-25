@@ -11,6 +11,38 @@ const AudioContext = createContext();
 // Temporary directory for playing base64 tracks
 const TEMP_PLAY_DIR = `${FileSystem.cacheDirectory}liofy_play/`;
 
+async function resolveYouTubeMobile(inputUrl) {
+  if (!inputUrl) return null;
+  const match = inputUrl.match(/(?:v=|\/|embed\/|shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  const videoId = match ? match[1] : (inputUrl.length === 11 ? inputUrl : null);
+  if (!videoId) return null;
+
+  const instances = [
+    'https://inv.zoomerville.com',
+    'https://invidious.slipfox.xyz',
+    'https://yt.artemislena.eu',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.flokinet.to'
+  ];
+
+  for (const base of instances) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const formats = data.adaptiveFormats || [];
+      const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+      if (audio?.url) {
+        console.log(`[Mobile Audio] Resolved YouTube stream via ${base}`);
+        return audio.url;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 export const AudioProvider = ({ children }) => {
   const soundRef = useRef(null);
 
@@ -145,7 +177,12 @@ export const AudioProvider = ({ children }) => {
 
       if (!isLocalFile && !isAlreadyProxied) {
         if (track.source === 'YouTube' || audioSourceUri.includes('youtube.com') || audioSourceUri.includes('youtu.be') || audioSourceUri.includes('googlevideo.com')) {
-          audioSourceUri = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(track.audioUrl || audioSourceUri)}`;
+          const directMobileStream = await resolveYouTubeMobile(track.audioUrl || audioSourceUri);
+          if (directMobileStream) {
+            audioSourceUri = directMobileStream;
+          } else {
+            audioSourceUri = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(track.audioUrl || audioSourceUri)}`;
+          }
         } else if (track.source === 'SoundCloud') {
           audioSourceUri = `${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(track.audioUrl || audioSourceUri)}`;
         }

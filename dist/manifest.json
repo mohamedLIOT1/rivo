@@ -1,0 +1,21 @@
+{
+  "short_name": "Liofy",
+  "name": "Liofy — Music for Everyone",
+  "description": "Stream, discover and share music with your friends",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#000000",
+  "theme_color": "#1DB954",
+  "display": "standalone",
+  "orientation": "any",
+  "categories": ["music", "entertainment"],
+  "lang": "ar"
+}
