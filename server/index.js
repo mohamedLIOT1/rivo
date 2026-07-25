@@ -929,13 +929,11 @@ async function resolveYouTubeAudio(videoId) {
 
   console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
 
-  // Order: yt-dlp -> Cobalt -> Piped -> Invidious -> ytdl -> play-dl
-  let audioUrl = await resolveWithYtDlp(videoId);
-  if (!audioUrl) audioUrl = await resolveWithCobalt(videoId);
-  if (!audioUrl) audioUrl = await resolveWithPiped(videoId);
-  if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
-  if (!audioUrl) audioUrl = await resolveWithYtdl(videoId);
+  // Order: ytdl (@distube/ytdl-core) -> play-dl -> Invidious -> yt-dlp
+  let audioUrl = await resolveWithYtdl(videoId);
   if (!audioUrl) audioUrl = await resolveWithPlayDl(videoId);
+  if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
+  if (!audioUrl) audioUrl = await resolveWithYtDlp(videoId);
 
   if (audioUrl) {
     ytUrlCache.set(videoId, { url: audioUrl, time: Date.now() });
