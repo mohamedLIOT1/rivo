@@ -49,15 +49,18 @@ async function ensureLiofyDir() {
   } catch (e) {}
 }
 
-// Convert Blob to Base64
+// Convert Blob to Base64 (with UI thread yielding to prevent app lag/stutter)
 function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     if (!blob) { resolve(''); return; }
     const reader = new FileReader();
     reader.onloadend = () => {
-      const res = reader.result || '';
-      const base64 = typeof res === 'string' ? (res.split(',')[1] || res) : '';
-      resolve(base64);
+      // Yield to main UI thread so animation/audio stays smooth
+      setTimeout(() => {
+        const res = reader.result || '';
+        const base64 = typeof res === 'string' ? (res.split(',')[1] || res) : '';
+        resolve(base64);
+      }, 0);
     };
     reader.onerror = () => resolve('');
     reader.readAsDataURL(blob);
@@ -115,30 +118,78 @@ function extractYtId(input) {
     return urlMatch[1];
   }
   
-  // 2. String starting with yt- or yt_ or yt
+  // 2. String starting with yt- or yt_
   const prefixMatch = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
   if (prefixMatch && prefixMatch[1] && prefixMatch[1].length === 11) {
     return prefixMatch[1];
   }
 
-  // 3. String that is EXACTLY 11 characters long and strictly valid base64url characters
-  if (str.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(str)) {
+  // 3. Only match 11 chars if explicit YouTube URL or youtube domain string
+  if ((str.includes('youtube.com') || str.includes('youtu.be')) && /^[a-zA-Z0-9_-]{11}$/.test(str)) {
     return str;
   }
   
   return null;
 }
 
-// Client-side YouTube Audio Stream Resolver via public Piped & Invidious mirrors
+// Client-side YouTube Audio Stream Resolver via public Cobalt, Piped & Invidious mirrors
 async function resolveYouTubeAudioClientSide(videoId) {
   if (!videoId) return null;
+
+  // 1. Cobalt APIs (Modern high-speed downloaders)
+  const cobaltEndpoints = [
+    'https://api.cobalt.tools/api/json',
+    'https://cobalt.stream/api/json',
+    'https://co.wuk.sh/api/json'
+  ];
+  for (const ep of cobaltEndpoints) {
+    try {
+      const res = await fetch(ep, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
+          isAudioOnly: true
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const streamUrl = data.url || data.audio || (data.picker && data.picker[0]?.url);
+        if (streamUrl) return streamUrl;
+      }
+    } catch {}
+  }
+
+  // 2. Invidious API v1 (Reliable fallback for 2026)
+  const invidiousInstances = [
+    'https://inv.nadeko.net',
+    'https://yewtu.be',
+    'https://yt.artemislena.eu',
+    'https://invidious.nerdvpn.de',
+    'https://inv.us.projectsegfau.lt'
+  ];
+  for (const base of invidiousInstances) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
+      if (res.ok) {
+        const data = await res.json();
+        const formats = data.adaptiveFormats || [];
+        const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+        if (audio?.url) return audio.url;
+      }
+    } catch {}
+  }
+
+  // 3. Piped API instances
   const pipedInstances = [
     'https://pipedapi.kavin.rocks',
     'https://api.piped.privacydev.net',
-    'https://pipedapi.adminforge.de',
-    'https://pipedapi.palvelu.org',
-    'https://piped-api.garudalinux.org',
-    'https://pipedapi.mha.fi'
+    'https://pipedapi.adminforge.de'
   ];
   for (const base of pipedInstances) {
     try {
@@ -151,60 +202,8 @@ async function resolveYouTubeAudioClientSide(videoId) {
       }
     } catch {}
   }
-  
-  const invidiousInstances = [
-    'https://inv.zoomerville.com',
-    'https://invidious.slipfox.xyz',
-    'https://yt.artemislena.eu',
-    'https://invidious.nerdvpn.de',
-    'https://invidious.projectsegfau.lt'
-  ];
-  for (const base of invidiousInstances) {
-    try {
-      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data && data.adaptiveFormats) {
-        const audio = data.adaptiveFormats.find(f => f.type && f.type.includes('audio/mp4')) || data.adaptiveFormats.find(f => f.type && f.type.includes('audio'));
-        if (audio && audio.url) return audio.url;
-      }
-    } catch {}
-  }
+
   return null;
-}
-
-// Generate lightweight fallback offline audio blob if external stream/proxy is unavailable
-function createFallbackAudioBlob() {
-  try {
-    const sampleRate = 44100;
-    const numChannels = 1;
-    const durationSec = 180;
-    const numSamples = sampleRate * durationSec;
-    const buffer = new ArrayBuffer(44 + numSamples * 2);
-    const view = new DataView(buffer);
-
-    const writeString = (v, offset, str) => {
-      for (let i = 0; i < str.length; i++) v.setUint8(offset + i, str.charCodeAt(i));
-    };
-
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + numSamples * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * 2, true);
-    view.setUint16(32, numChannels * 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, numSamples * 2, true);
-
-    return new Blob([buffer], { type: 'audio/wav' });
-  } catch (e) {
-    return new Blob(['LIOFY_OFFLINE_AUDIO_CACHE'], { type: 'audio/mpeg' });
-  }
 }
 
 // Save downloaded audio blob & track info locally in app private storage (IndexedDB + Native Filesystem Liofy folder)
@@ -224,101 +223,44 @@ export async function saveTrackOffline(track) {
         const res = await fetch(targetUrl);
         if (res.ok) {
           const b = await res.blob();
-          if (b && b.size > 2000) audioBlob = b;
+          if (b && b.size > 20000) audioBlob = b;
         }
       } catch (e) {}
     }
 
-    // 2. YouTube tracks: Proxy stream via backend proxy-audio or yt-resolve or client side mirrors
+    // 2. Direct audio / MP3 URLs
+    if (!audioBlob && targetUrl && !targetUrl.includes('youtube.com') && !targetUrl.includes('youtu.be')) {
+      try {
+        let directRes = await fetch(targetUrl).catch(() => null);
+        if (!directRes || !directRes.ok) {
+          directRes = await fetch(`${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`).catch(() => null);
+        }
+        if (directRes && directRes.ok) {
+          const ct = directRes.headers.get('content-type') || '';
+          if (!ct.includes('html') && !ct.includes('json')) {
+            const b = await directRes.blob();
+            if (b && b.size > 20000) audioBlob = b;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. YouTube tracks: Stream resolution & download without any timeout limit
     const ytId = extractYtId(targetUrl) || (track.source === 'YouTube' ? extractYtId(track.id || track._id) : null);
     if (!audioBlob && ytId) {
-      // Method A: Direct proxy request with YouTube watch URL
       try {
-        const ytWatchUrl = `https://www.youtube.com/watch?v=${ytId}`;
-        const proxyRes = await fetch(`${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(ytWatchUrl)}`);
-        const ct = proxyRes.headers.get('content-type') || '';
-        if (proxyRes.ok && !ct.includes('html')) {
-          const b = await proxyRes.blob();
-          if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
-        }
-      } catch (e) {}
-
-      // Method B: Resolve via /api/yt-resolve first then fetch audio stream
-      if (!audioBlob) {
-        try {
-          const resolveRes = await fetch(`${API_BASE_URL}/api/yt-resolve?id=${ytId}`);
-          const resolveData = await resolveRes.json();
-          if (resolveData.success && resolveData.url) {
-            const streamRes = await fetch(resolveData.url);
+        const directStreamUrl = await resolveYouTubeAudioClientSide(ytId);
+        if (directStreamUrl) {
+          const streamRes = await fetch(directStreamUrl).catch(() => null);
+          if (streamRes && streamRes.ok) {
             const ct = streamRes.headers.get('content-type') || '';
-            if (streamRes.ok && !ct.includes('html')) {
+            if (!ct.includes('html') && !ct.includes('json')) {
               const b = await streamRes.blob();
-              if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
+              if (b && b.size > 20000) audioBlob = b;
             }
           }
-        } catch (e) {}
-      }
-
-      // Method C: Client-side stream resolution via Piped & Invidious mirrors
-      if (!audioBlob) {
-        try {
-          const directStreamUrl = await resolveYouTubeAudioClientSide(ytId);
-          if (directStreamUrl) {
-            const streamRes = await fetch(directStreamUrl);
-            const ct = streamRes.headers.get('content-type') || '';
-            if (streamRes.ok && !ct.includes('html')) {
-              const b = await streamRes.blob();
-              if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
-            }
-          }
-        } catch (e) {}
-      }
-    }
-
-    // 3. SoundCloud tracks
-    if (!audioBlob && (track.source === 'SoundCloud' || (targetUrl && (targetUrl.includes('soundcloud') || targetUrl.includes('sndcdn'))))) {
-      try {
-        const scRes = await fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl)}&id=${trackId}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
-        const scData = await scRes.json();
-        if (scData.success && scData.url) {
-          const audioRes = await fetch(scData.url);
-          const ct = audioRes.headers.get('content-type') || '';
-          if (audioRes.ok && !ct.includes('html')) {
-            const b = await audioRes.blob();
-            if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
-          }
         }
       } catch (e) {}
-    }
-
-    // 4. Direct audio / MP3 URLs
-    if (!audioBlob && targetUrl) {
-      try {
-        const directRes = await fetch(targetUrl);
-        const ct = directRes.headers.get('content-type') || '';
-        if (directRes.ok && !ct.includes('html')) {
-          const b = await directRes.blob();
-          if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
-        }
-      } catch (e) {}
-
-      if (!audioBlob) {
-        try {
-          let proxyUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
-          const proxyRes = await fetch(proxyUrl);
-          const ct = proxyRes.headers.get('content-type') || '';
-          if (proxyRes.ok && !ct.includes('html')) {
-            const b = await proxyRes.blob();
-            if (b && b.size > 5000 && !b.type.includes('html')) audioBlob = b;
-          }
-        } catch (e) {}
-      }
-    }
-
-    // Validation & Fallback: Guarantee audioBlob is always valid so download never fails
-    if (!audioBlob || audioBlob.size < 1000 || audioBlob.type.includes('html')) {
-      console.warn('Using fallback audio blob for offline track:', track.title);
-      audioBlob = createFallbackAudioBlob();
     }
 
     // Cover image blob handling (Direct + Proxy fallback)
@@ -345,17 +287,15 @@ export async function saveTrackOffline(track) {
       coverBase64 = await blobToDataURI(coverBlob);
     }
 
-    // Write to Native Device Filesystem under "Liofy" folder if on native Android / Capacitor
+    // Write audio to Native Device Filesystem if binary blob is available
     let nativeAudioUri = null;
     let nativeCoverUri = null;
     let fileAudioSrc = null;
     let fileCoverSrc = null;
 
-    if (Capacitor.isNativePlatform() || window.Capacitor) {
+    if (audioBlob && (Capacitor.isNativePlatform() || window.Capacitor)) {
       try {
         await ensureLiofyDir();
-        
-        // Write audio file to Liofy/<trackId>.mp3
         const audioB64 = await blobToBase64(audioBlob);
         if (audioB64) {
           await Filesystem.writeFile({
@@ -370,39 +310,23 @@ export async function saveTrackOffline(track) {
           nativeAudioUri = uriRes.uri;
           fileAudioSrc = Capacitor.convertFileSrc(uriRes.uri);
         }
-
-        // Write cover image to Liofy/<trackId>_cover.jpg
-        if (coverBlob) {
-          const coverB64 = await blobToBase64(coverBlob);
-          if (coverB64) {
-            await Filesystem.writeFile({
-              path: `Liofy/${trackId}_cover.jpg`,
-              data: coverB64,
-              directory: Directory.Data,
-            });
-            const coverUriRes = await Filesystem.getUri({
-              path: `Liofy/${trackId}_cover.jpg`,
-              directory: Directory.Data,
-            });
-            nativeCoverUri = coverUriRes.uri;
-            fileCoverSrc = Capacitor.convertFileSrc(coverUriRes.uri);
-          }
-        }
       } catch (fileErr) {
         console.warn('Native filesystem write warning:', fileErr);
       }
     }
+
+    const isNative = Capacitor.isNativePlatform() || !!window.Capacitor;
 
     const db = await openDB();
     const offlineTrack = {
       ...track,
       id: trackId,
       downloaded: true,
-      audioBlob: audioBlob,
-      coverBlob: coverBlob,
-      coverBase64: coverBase64 || track.cover,
+      audioBlob: audioBlob || null,
+      coverBlob: coverBlob || null,
+      coverBase64: coverBase64 || null,
       cover: fileCoverSrc || coverBase64 || track.cover,
-      audioUrl: fileAudioSrc || targetUrl,
+      audioUrl: fileAudioSrc || (audioBlob ? URL.createObjectURL(audioBlob) : targetUrl),
       nativeAudioUri: nativeAudioUri,
       nativeCoverUri: nativeCoverUri,
       savedAt: Date.now()

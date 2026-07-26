@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   downloadProgressBox: {
     alignItems: 'center',
-    justify: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 4,
   },
   progressText: {

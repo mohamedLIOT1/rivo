@@ -123,25 +123,49 @@ export default function FullPlayerModal({
 
   // ── Dynamic background color extracted from album art ──
   const [dynamicColor, setDynamicColor] = useState(null);
+  const lastGoodColorRef = useRef(null); // Persists last successfully extracted color
 
   useEffect(() => {
     if (!currentTrack?.cover) {
-      setDynamicColor(currentTrack?.color || '#1DB954');
+      // No cover: use stored color or track.color, but keep lastGoodColor if available
+      setDynamicColor(lastGoodColorRef.current || currentTrack?.color || '#1DB954');
       return;
     }
-    // Use stored color first for instant display
-    setDynamicColor(currentTrack.color || '#1DB954');
-    
-    // Try direct first, then via proxy (bypass YouTube CORS)
+    // Use stored color first for instant display (but keep last good color if cover just changed to a native URI)
+    if (currentTrack.color) {
+      setDynamicColor(currentTrack.color);
+    } else if (lastGoodColorRef.current) {
+      // Keep showing last good color while we attempt extraction
+      setDynamicColor(lastGoodColorRef.current);
+    } else {
+      setDynamicColor('#1DB954');
+    }
+
     const coverUrl = currentTrack.cover;
+
+    // Skip native file URIs — they can't be loaded by canvas due to CORS/security restrictions
+    const isNativeUri = coverUrl.startsWith('capacitor://') || coverUrl.startsWith('file://') || coverUrl.startsWith('content://') || coverUrl.startsWith('/_capacitor_file_/');
+    if (isNativeUri) {
+      // Native cover: keep the last good color we extracted from the original URL
+      if (lastGoodColorRef.current) setDynamicColor(lastGoodColorRef.current);
+      return;
+    }
+
+    // Try direct first, then via proxy (bypass YouTube CORS)
     extractColorFromImage(coverUrl, (color) => {
       if (color) {
+        lastGoodColorRef.current = color;
         setDynamicColor(color);
       } else {
         // Fallback: use server proxy to bypass CORS for YouTube thumbnails
         const proxiedUrl = `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(coverUrl)}`;
         extractColorFromImage(proxiedUrl, (c2) => {
-          if (c2) setDynamicColor(c2);
+          if (c2) {
+            lastGoodColorRef.current = c2;
+            setDynamicColor(c2);
+          } else if (lastGoodColorRef.current) {
+            setDynamicColor(lastGoodColorRef.current);
+          }
         });
       }
     });
@@ -719,7 +743,7 @@ export default function FullPlayerModal({
                 <div className="flex items-center gap-2">
                   <Sparkles size={14} className="text-[#1DB954]" />
                   <span className="text-xs font-bold uppercase tracking-wider text-[#1DB954]">
-                    كلمات الأغنية
+                    Song Lyrics
                   </span>
                 </div>
               </div>
@@ -760,9 +784,9 @@ export default function FullPlayerModal({
             ) : (
               <div className="text-center py-16 px-4" style={{ color: '#b3b3b3' }}>
                 <ListMusic size={48} className="mx-auto mb-4 text-[#1DB954] opacity-60" />
-                <p className="font-extrabold text-white text-lg mb-1">لا توجد كلمات لهذه الأغنية</p>
+                <p className="font-extrabold text-white text-lg mb-1">No lyrics available for this song</p>
                 <p className="text-xs text-zinc-400 max-w-xs mx-auto mb-6">
-                  يمكنك البحث عنها تلقائيًا من قاعدة البيانات أو كتابتها يدويًا.
+                  You can search online or enter them manually.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                   <button
@@ -771,9 +795,9 @@ export default function FullPlayerModal({
                     className="inline-flex items-center gap-2 px-5 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full shadow-lg shadow-[#1DB954]/25 transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isGeneratingLyrics ? (
-                      <><Loader2 size={16} className="animate-spin" /><span>جاري البحث...</span></>
+                      <><Loader2 size={16} className="animate-spin" /><span>Searching...</span></>
                     ) : (
-                      <><Search size={16} /><span>🎵 بحث عن الكلمات</span></>
+                      <><Search size={16} /><span>🎵 Search Lyrics</span></>
                     )}
                   </button>
 
@@ -782,7 +806,7 @@ export default function FullPlayerModal({
                     className="inline-flex items-center gap-2 px-5 py-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-extrabold text-xs rounded-full shadow-lg transition-all active:scale-95"
                   >
                     <Edit3 size={16} className="text-amber-400" />
-                    <span>✏️ كتابة الكلمات يدويًا</span>
+                    <span>✏️ Enter Lyrics Manually</span>
                   </button>
                 </div>
               </div>
@@ -795,7 +819,7 @@ export default function FullPlayerModal({
                   <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4">
                     <div className="flex items-center gap-2">
                       <Edit3 size={20} className="text-amber-400" />
-                      <h3 className="text-base font-bold text-white">إضافة وتعديل الكلمات يدويًا</h3>
+                      <h3 className="text-base font-bold text-white">Add & Edit Lyrics Manually</h3>
                     </div>
                     <button onClick={() => setIsManualEditOpen(false)} className="text-zinc-400 hover:text-white">
                       <X size={20} />
@@ -803,14 +827,14 @@ export default function FullPlayerModal({
                   </div>
 
                   <p className="text-xs text-zinc-400 mb-2 leading-relaxed">
-                    اكتب أو الصق الكلمات هنا. يمكنك إضافة توقيتات مثل <code className="bg-white/10 px-1 py-0.5 rounded text-amber-300">[0:15]</code> قبل كل سطر، أو كتابة سطور عادية وسيقوم النظام بتوزيع التوقيتات تلقائيًا.
+                    Type or paste lyrics here. You can add timestamps like <code className="bg-white/10 px-1 py-0.5 rounded text-amber-300">[0:15]</code> before each line, or type plain lines for automatic timestamps.
                   </p>
 
                   <textarea
                     rows={10}
                     value={manualText}
                     onChange={(e) => setManualText(e.target.value)}
-                    placeholder="[0:00] السطر الأول&#10;[0:12] السطر الثاني&#10;أو اكتب سطورًا عادية بدون توقيت..."
+                    placeholder="[0:00] First Line&#10;[0:12] Second Line&#10;Or write plain lines without timestamps..."
                     className="w-full bg-zinc-900 border border-white/15 rounded-2xl p-4 text-xs font-mono text-white focus:outline-none focus:border-[#1DB954] mb-4 resize-none leading-relaxed"
                   />
 
@@ -821,13 +845,13 @@ export default function FullPlayerModal({
                       className="flex-1 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-full text-xs shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {isSavingManualLyrics ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                      <span>حفظ الكلمات والتوقيتات</span>
+                      <span>Save Lyrics & Timestamps</span>
                     </button>
                     <button
                       onClick={() => setIsManualEditOpen(false)}
                       className="px-5 py-3 bg-white/10 hover:bg-white/20 text-white font-extrabold rounded-full text-xs transition-all"
                     >
-                      إلغاء
+                      Cancel
                     </button>
                   </div>
                 </div>
@@ -883,10 +907,10 @@ export default function FullPlayerModal({
       {/* Confirm Clear Lyrics Modal */}
       <ConfirmModal
         isOpen={isClearLyricsConfirmOpen}
-        title="مسح الكلمات المحفوظة؟"
-        message="سيتم حذف الكلمات الحالية لهذه الأغنية من قاعدة البيانات حتى تتمكن من إضافتها أو البحث عنها من جديد."
-        confirmText="مسح الكلمات"
-        cancelText="إلغاء"
+        title="Clear Saved Lyrics?"
+        message="The current lyrics for this song will be removed so you can search or add them again."
+        confirmText="Clear Lyrics"
+        cancelText="Cancel"
         onConfirm={executeClearLyrics}
         onCancel={() => setIsClearLyricsConfirmOpen(false)}
       />

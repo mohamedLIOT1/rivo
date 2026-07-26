@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Play, Pause, SkipForward } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 

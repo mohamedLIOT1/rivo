@@ -188,14 +188,14 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
             )}
             <div className="flex items-center justify-center gap-4 mt-4">
               <span className="text-sm text-zinc-400">
-                <span className="text-white font-bold">{viewingProfile.playlistCount}</span> قائمة تشغيل عامة
+                <span className="text-white font-bold">{viewingProfile.playlistCount}</span> public playlists
               </span>
             </div>
           </div>
 
           {/* Public Playlists */}
           <div className="px-4 pb-8">
-            <h3 className="text-base font-bold text-white mb-4">القوائم العامة</h3>
+            <h3 className="text-base font-bold text-white mb-4">Public Playlists</h3>
             {viewingProfile.publicPlaylists?.filter(pl => !pl.isLikedSongs).length > 0 ? (
               <div className="space-y-2">
                 {viewingProfile.publicPlaylists.filter(pl => !pl.isLikedSongs).map(pl => (
@@ -213,14 +213,14 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                     </div>
                     <div className="flex-1 truncate">
                       <p className="text-sm font-semibold text-white truncate group-hover:text-[#1DB954] transition-colors">{pl.name}</p>
-                      <p className="text-xs text-zinc-500">{pl.trackCount} أغنية</p>
+                      <p className="text-xs text-zinc-500">{pl.trackCount} songs</p>
                     </div>
                     <ChevronRight size={16} className="text-zinc-600 group-hover:text-white shrink-0 transition-colors" />
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-zinc-500 text-center py-8">لا توجد قوائم تشغيل عامة</p>
+              <p className="text-sm text-zinc-500 text-center py-8">No public playlists found</p>
             )}
           </div>
         </div>
@@ -242,7 +242,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
               activeTab === 'profile' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
             }`}
           >
-            بروفايلي
+            My Profile
           </button>
           <button
             onClick={() => setActiveTab('search')}
@@ -250,16 +250,16 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
               activeTab === 'search' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
             }`}
           >
-            ابحث عن ناس
+            Find People
           </button>
         </div>
         <button
           onClick={logout}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/15 hover:bg-red-500/30 border border-red-500/30 rounded-full text-xs font-bold text-red-400 transition-all"
-          title="تسجيل الخروج"
+          title="Log Out"
         >
           <LogOut size={14} />
-          <span>خروج</span>
+          <span>Log Out</span>
         </button>
       </div>
 
@@ -361,17 +361,17 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
             <div className="flex items-center justify-center gap-8 mt-6">
               <div className="text-center">
                 <p className="text-2xl font-extrabold text-white">{localPlaylists.filter(p => !p.isLikedSongs).length}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">قوائم التشغيل</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Playlists</p>
               </div>
               <div className="w-px h-8 bg-white/10" />
               <div className="text-center">
                 <p className="text-2xl font-extrabold text-white">{publicPlaylists.filter(p => !p.isLikedSongs).length}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">عامة</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Public</p>
               </div>
               <div className="w-px h-8 bg-white/10" />
               <div className="text-center">
                 <p className="text-2xl font-extrabold text-white">{privatePlaylists.filter(p => !p.isLikedSongs).length}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">خاصة</p>
+                <p className="text-xs text-zinc-500 mt-0.5">Private</p>
               </div>
             </div>
           </div>
@@ -379,14 +379,14 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
           {/* ── Playlists Section ── */}
           <div className="px-4 pb-8">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-white">قوائم التشغيل</h2>
-              <p className="text-xs text-zinc-500">اضغط 👁 لتغيير الظهور</p>
+              <h2 className="text-base font-bold text-white">Playlists</h2>
+              <p className="text-xs text-zinc-500">Tap 👁 to toggle visibility</p>
             </div>
 
             {localPlaylists.filter(p => !p.isLikedSongs).length === 0 ? (
               <div className="text-center py-12">
                 <Music size={48} className="mx-auto mb-3 text-zinc-700" />
-                <p className="text-sm text-zinc-500">لا توجد قوائم تشغيل بعد</p>
+                <p className="text-sm text-zinc-500">No playlists created yet</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -417,7 +417,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                       {/* Info */}
                       <button onClick={() => onSelectPlaylist && onSelectPlaylist(pl)} className="flex-1 text-left truncate">
                         <p className="text-sm font-semibold text-white truncate">{pl.name}</p>
-                        <p className="text-xs text-zinc-500">{(pl.trackIds || []).length} أغنية</p>
+                        <p className="text-xs text-zinc-500">{(pl.trackIds || []).length} songs</p>
                       </button>
 
                       {/* Visibility toggle */}
@@ -428,7 +428,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                           className={`p-2 rounded-full transition-all hover:scale-110 active:scale-95 ${
                             isPublic ? 'text-[#1DB954] hover:text-[#1DB954]/80' : 'text-zinc-600 hover:text-zinc-400'
                           }`}
-                          title={isPublic ? 'عامة — اضغط لتخصيص' : 'خاصة — اضغط لعرض للعامة'}
+                          title={isPublic ? 'Public — Tap to make private' : 'Private — Tap to make public'}
                         >
                           {isToggling ? (
                             <Loader2 size={16} className="animate-spin" />
@@ -446,7 +446,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                           ? 'bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30'
                           : 'bg-white/5 text-zinc-500 border border-white/10'
                       }`}>
-                        {isPublic ? 'عام' : 'خاص'}
+                        {isPublic ? 'Public' : 'Private'}
                       </span>
 
                       <ChevronRight size={14} className="text-zinc-700 shrink-0" />
@@ -470,7 +470,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                 type="text"
                 value={searchQuery}
                 onChange={e => handleSearchChange(e.target.value)}
-                placeholder="ابحث بالاسم أو الإيميل..."
+                placeholder="Search by name or email..."
                 className="w-full bg-white/10 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954] transition-colors"
                 autoFocus
               />
@@ -485,12 +485,12 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
             {searchQuery.length < 2 ? (
               <div className="text-center py-16">
                 <Search size={48} className="mx-auto mb-3 text-zinc-700" />
-                <p className="text-sm text-zinc-500">ابحث عن أي مستخدم</p>
+                <p className="text-sm text-zinc-500">Search for any user</p>
               </div>
             ) : searchResults.length === 0 && !isSearching ? (
               <div className="text-center py-16">
                 <User size={48} className="mx-auto mb-3 text-zinc-700" />
-                <p className="text-sm text-zinc-500">لا توجد نتائج</p>
+                <p className="text-sm text-zinc-500">No results found</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -510,7 +510,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                     <div className="flex-1 truncate">
                       <p className="text-sm font-semibold text-white">{user.name}</p>
                       <p className="text-xs text-zinc-500 truncate">
-                        {user.publicPlaylists?.length || 0} قائمة عامة
+                        {user.publicPlaylists?.length || 0} public playlists
                         {user.bio ? ` • ${user.bio}` : ''}
                       </p>
                     </div>

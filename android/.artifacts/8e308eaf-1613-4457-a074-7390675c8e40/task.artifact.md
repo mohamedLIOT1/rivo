@@ -1,4 +1,0 @@
-- [ ] Create `BackgroundMediaService.java` to handle foreground notification
-- [ ] Update `MainActivity.java` with improved WebView settings and service logic
-- [ ] Update `AndroidManifest.xml` to register the service and add permissions
-- [ ] Verify build with `gradlew assembleDebug`

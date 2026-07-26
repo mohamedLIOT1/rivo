@@ -11,6 +11,21 @@ let masterGainNode = null;
 let filters = {};
 let isInitialized = false;
 
+// ── Global gesture listener: auto-resume AudioContext on first user interaction ──
+// This fixes the "must restart app after login" bug on Android WebView
+function setupGestureResumeListener() {
+  const resumeOnGesture = () => {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().then(() => {
+        console.log('[AudioEngine] AudioContext resumed via user gesture');
+      }).catch(() => {});
+    }
+    // Keep listener alive in case context gets suspended again
+  };
+  const events = ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
+  events.forEach(evt => document.addEventListener(evt, resumeOnGesture, { passive: true }));
+}
+
 // Frequency band definitions matching standard Graphic Equalizer
 const BANDS = [
   { name: '60Hz', type: 'lowshelf', frequency: 60 },
@@ -26,6 +41,7 @@ const BANDS = [
  */
 export function initAudioEngine(audioElement) {
   if (isInitialized || !audioElement) return;
+  setupGestureResumeListener();
 
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -79,7 +95,8 @@ export function initAudioEngine(audioElement) {
  * Ensure AudioContext is resumed upon user gesture
  */
 export function resumeAudioContext() {
-  if (audioCtx && audioCtx.state === 'suspended') {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     audioCtx.resume().catch(() => {});
   }
 }

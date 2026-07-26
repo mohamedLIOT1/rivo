@@ -102,6 +102,14 @@ export function UserProvider({ children }) {
     return Array.from(map.values());
   };
 
+  // Strip non-serializable blobs from track before storing in React state / localStorage
+  const stripBlobs = (t) => {
+    if (!t) return t;
+    // eslint-disable-next-line no-unused-vars
+    const { audioBlob, coverBlob, ...rest } = t;
+    return rest;
+  };
+
   // ── Login handler ────────────────────────────────────
   const login = useCallback((user, token) => {
     if (token) localStorage.setItem('liofy_token', token);
@@ -133,19 +141,23 @@ export function UserProvider({ children }) {
         if (data && data.success && Array.isArray(data.tracks)) {
           const merged = data.tracks.map(t => {
             const off = offlineMap.get(String(t.id));
-            return off ? { ...t, ...off, downloaded: true } : t;
+            if (off) {
+              const { audioBlob, coverBlob, ...cleanOff } = off;
+              return { ...t, ...cleanOff, downloaded: true };
+            }
+            return t;
           });
           // Add any offline tracks not in public list
           const existingIds = new Set(merged.map(m => String(m.id)));
           offlineTracks.forEach(o => {
-            if (!existingIds.has(String(o.id))) merged.push(o);
+            if (!existingIds.has(String(o.id))) merged.push(stripBlobs(o));
           });
           setTracks(deduplicateTracks(merged));
           return;
         }
       } catch (err) {
         if (offlineTracks.length > 0) {
-          setTracks(offlineTracks);
+          setTracks(offlineTracks.map(stripBlobs));
         }
       }
       return;
@@ -163,16 +175,24 @@ export function UserProvider({ children }) {
           const merged = data.tracks.map(t => {
             const cleanId = String(t.id || t._id);
             const off = offlineMap.get(cleanId);
+            if (off) {
+              const { audioBlob, coverBlob, ...cleanOff } = off;
+              return {
+                ...t,
+                ...cleanOff,
+                liked: liked.has(cleanId),
+                downloaded: true
+              };
+            }
             return {
               ...t,
-              ...(off || {}),
               liked: liked.has(cleanId),
-              downloaded: !!off
+              downloaded: false
             };
           });
           const existingIds = new Set(merged.map(m => String(m.id)));
           offlineTracks.forEach(o => {
-            if (!existingIds.has(String(o.id))) merged.push(o);
+            if (!existingIds.has(String(o.id))) merged.push(stripBlobs(o));
           });
           setTracks(deduplicateTracks(merged));
         }
@@ -188,7 +208,7 @@ export function UserProvider({ children }) {
     } catch (err) {
       console.warn('Sync failed (offline?):', err);
       if (offlineTracks.length > 0) {
-        setTracks(offlineTracks);
+        setTracks(offlineTracks.map(stripBlobs));
       }
     }
     setIsSyncing(false);
@@ -205,11 +225,15 @@ export function UserProvider({ children }) {
           setTracks(prev => {
             const updated = prev.map(t => {
               const off = offlineMap.get(String(t.id || t._id));
-              return off ? { ...t, ...off, downloaded: true } : t;
+              if (off) {
+                const { audioBlob, coverBlob, ...cleanOff } = off;
+                return { ...t, ...cleanOff, downloaded: true };
+              }
+              return t;
             });
             const existingIds = new Set(updated.map(u => String(u.id || u._id)));
             offlineTracks.forEach(o => {
-              if (!existingIds.has(String(o.id || o._id))) updated.push(o);
+              if (!existingIds.has(String(o.id || o._id))) updated.push(stripBlobs(o));
             });
             return deduplicateTracks(updated);
           });

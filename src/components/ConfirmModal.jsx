@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 
-export default function ConfirmModal({ isOpen, title, message, confirmText = 'حذف', cancelText = 'إلغاء', onConfirm, onCancel, isDanger = true }) {
+export default function ConfirmModal({ isOpen, title, message, confirmText = 'Delete', cancelText = 'Cancel', onConfirm, onCancel, isDanger = true }) {
   if (!isOpen) return null;
 
   return (
@@ -33,7 +33,7 @@ export default function ConfirmModal({ isOpen, title, message, confirmText = 'ح
 
         {/* Title & Message */}
         <h3 className="text-lg font-extrabold text-white mb-2 tracking-tight">
-          {title || 'هل أنت تأكد؟'}
+          {title || 'Are you sure?'}
         </h3>
         {message && (
           <p className="text-xs text-zinc-400 mb-6 leading-relaxed">

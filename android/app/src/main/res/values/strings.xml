@@ -1,7 +1,5 @@
-<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Liofy</string>
-    <string name="title_activity_main">Liofy</string>
-    <string name="package_name">com.liofy.app</string>
-    <string name="custom_url_scheme">com.liofy.app</string>
+  <string name="app_name">Liofy</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
 </resources>

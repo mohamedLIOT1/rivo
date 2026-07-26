@@ -6,3 +6,10 @@ extracted_apk/
 *.lnk
 .DS_Store
 .env
+*.log
+*-player-script.js
+*-watch.html
+.expo/
+*.apk
+android/.artifacts/
+

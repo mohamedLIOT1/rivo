@@ -40,7 +40,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
             <Plus className="text-[#1DB954]" size={22} />
-            <h3 className="text-lg font-bold text-white">إنشاء قائمة تشغيل (Create Playlist)</h3>
+            <h3 className="text-lg font-bold text-white">Create Playlist</h3>
           </div>
           <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white rounded-full">
             <X size={20} />
@@ -57,7 +57,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
               ) : (
                 <div className="flex flex-col items-center gap-1 text-zinc-500 group-hover:text-white transition-colors">
                   <Camera size={24} />
-                  <span className="text-[10px] font-bold">صورة الغلاف</span>
+                  <span className="text-[10px] font-bold">Cover Photo</span>
                 </div>
               )}
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -67,10 +67,10 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
             </label>
 
             <div className="flex-1">
-              <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">عنوان القائمة *</label>
+              <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Playlist Title *</label>
               <input
                 type="text"
-                placeholder="مثال: أغاني الروقان ☕"
+                placeholder="e.g. Chill Vibes ☕"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -80,9 +80,9 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
           </div>
 
           <div>
-            <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">وصف القائمة (اختياري)</label>
+            <label className="text-xs uppercase font-extrabold text-zinc-400 block mb-1">Description (optional)</label>
             <textarea
-              placeholder="اكتب وصفاً جزيلاً لقائمتك..."
+              placeholder="Write a great description for your playlist..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
@@ -95,8 +95,8 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
             <div className="flex items-center gap-2.5">
               {isPublic ? <Globe size={18} className="text-[#1DB954]" /> : <Lock size={18} className="text-amber-400" />}
               <div>
-                <p className="text-xs font-bold text-white">{isPublic ? 'عامة (ظاهرة بالبروفايل)' : 'خاصة (مخفية عن الآخرين)'}</p>
-                <p className="text-[10px] text-zinc-400">{isPublic ? 'يستطيع الآخرون رؤيتها في ملفك الشخصي' : 'فقط أنت من تستطيع رؤيتها'}</p>
+                <p className="text-xs font-bold text-white">{isPublic ? 'Public (visible on profile)' : 'Private (hidden)'}</p>
+                <p className="text-[10px] text-zinc-400">{isPublic ? 'Others can view this playlist on your profile' : 'Only you can view this playlist'}</p>
               </div>
             </div>
             <button
@@ -106,7 +106,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
                 isPublic ? 'bg-[#1DB954]/20 text-[#1DB954] border border-[#1DB954]/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
               }`}
             >
-              {isPublic ? 'عامة 👁️' : 'خاصة 🔒'}
+              {isPublic ? 'Public 👁️' : 'Private 🔒'}
             </button>
           </div>
 
@@ -114,7 +114,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist 
             type="submit"
             className="w-full py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-xl transition-all shadow-lg shadow-[#1DB954]/20 mt-1 cursor-pointer"
           >
-            إنشاء قائمة التشغيل
+            Create Playlist
           </button>
         </form>
       </div>

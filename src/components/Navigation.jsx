@@ -89,7 +89,7 @@ export default function Navigation({
             <div className="flex items-center gap-1">
               <button
                 onClick={openCreatePlaylistModal}
-                title="إنشاء قائمة تشغيل جديدة"
+                title="Create new playlist"
                 className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white transition-all cursor-pointer"
               >
                 <Plus size={20} />

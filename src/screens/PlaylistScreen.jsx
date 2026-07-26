@@ -84,7 +84,7 @@ export default function PlaylistScreen({
   };
 
   const handleDelete = () => {
-    if (window.confirm(`هل أنت تأكد من رغبتك في حذف قائمة "${playlist.name}"؟`)) {
+    if (window.confirm(`Are you sure you want to delete the playlist "${playlist.name}"?`)) {
       setIsDeleting(true);
       onDeletePlaylist(playlist.id);
     }
@@ -120,7 +120,7 @@ export default function PlaylistScreen({
                 ) : (
                   <>
                     <Camera size={28} />
-                    <span className="text-xs font-bold">تغيير الصورة</span>
+                    <span className="text-xs font-bold">Change Cover</span>
                   </>
                 )}
                 <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
@@ -132,7 +132,7 @@ export default function PlaylistScreen({
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="text-xs font-black uppercase tracking-widest text-[#1DB954]">
-              {playlist.isLikedSongs ? 'قائمة المفضلات' : 'قائمة تشغيل'}
+              {playlist.isLikedSongs ? 'Liked Songs Playlist' : 'Playlist'}
             </span>
 
             {/* Public/Private Badge & Action Buttons */}
@@ -146,14 +146,14 @@ export default function PlaylistScreen({
                       ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/30' 
                       : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
                   }`}
-                  title="اضغط لتغيير ظهور القائمة بالبروفايل"
+                  title="Tap to toggle profile visibility"
                 >
                   {isTogglingPrivacy ? (
                     <Loader2 size={12} className="animate-spin" />
                   ) : isPublic ? (
-                    <><Globe size={12} /><span>عامة (تظهر بالبروفايل)</span></>
+                    <><Globe size={12} /><span>Public (Visible)</span></>
                   ) : (
-                    <><Lock size={12} /><span>خاصة (مخفية)</span></>
+                    <><Lock size={12} /><span>Private (Hidden)</span></>
                   )}
                 </button>
 
@@ -161,10 +161,10 @@ export default function PlaylistScreen({
                 <button
                   onClick={() => setIsEditModalOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
-                  title="تعديل الاسم والوصف"
+                  title="Edit name & description"
                 >
                   <Edit2 size={12} />
-                  <span>تعديل</span>
+                  <span>Edit</span>
                 </button>
 
                 {/* Delete Button */}
@@ -172,10 +172,10 @@ export default function PlaylistScreen({
                   onClick={handleDelete}
                   disabled={isDeleting}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/10 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all cursor-pointer"
-                  title="حذف القائمة"
+                  title="Delete playlist"
                 >
                   <Trash2 size={12} />
-                  <span>حذف</span>
+                  <span>Delete</span>
                 </button>
               </>
             )}
@@ -189,7 +189,7 @@ export default function PlaylistScreen({
               <button
                 onClick={() => setIsEditModalOpen(true)}
                 className="p-2 text-zinc-400 hover:text-white transition-colors"
-                title="تعديل اسم القائمة"
+                title="Edit playlist name"
               >
                 <Edit2 size={22} />
               </button>
@@ -213,28 +213,28 @@ export default function PlaylistScreen({
             >
               <X size={20} />
             </button>
-            <h3 className="text-xl font-extrabold text-white mb-4">تعديل قائمة التشغيل</h3>
+            <h3 className="text-xl font-extrabold text-white mb-4">Edit Playlist</h3>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-zinc-400 mb-1">اسم القائمة</label>
+                <label className="block text-xs font-bold text-zinc-400 mb-1">Playlist Name</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#1DB954]"
-                  placeholder="اسم القائمة"
+                  placeholder="Playlist name..."
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-400 mb-1">الوصف (اختياري)</label>
+                <label className="block text-xs font-bold text-zinc-400 mb-1">Description (optional)</label>
                 <textarea
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
                   rows={3}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#1DB954] resize-none"
-                  placeholder="وصف القائمة..."
+                  placeholder="Playlist description..."
                 />
               </div>
 
@@ -243,13 +243,13 @@ export default function PlaylistScreen({
                   onClick={() => setIsEditModalOpen(false)}
                   className="px-5 py-2.5 rounded-full text-xs font-bold text-zinc-400 hover:text-white"
                 >
-                  إلغاء
+                  Cancel
                 </button>
                 <button
                   onClick={handleSaveDetails}
                   className="px-6 py-2.5 rounded-full text-xs font-extrabold bg-[#1DB954] text-black hover:scale-105 active:scale-95 transition-all"
                 >
-                  حفظ التعديلات
+                  Save Changes
                 </button>
               </div>
             </div>

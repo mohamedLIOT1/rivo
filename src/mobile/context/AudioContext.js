@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as Network from 'expo-network';
 import * as FileSystem from 'expo-file-system';
 import { Alert, ToastAndroid, Platform } from 'react-native';
@@ -17,28 +17,53 @@ async function resolveYouTubeMobile(inputUrl) {
   const videoId = match ? match[1] : (inputUrl.length === 11 ? inputUrl : null);
   if (!videoId) return null;
 
+  const cobaltEndpoints = [
+    'https://api.cobalt.tools/api/json',
+    'https://cobalt.stream/api/json',
+    'https://co.wuk.sh/api/json'
+  ];
+  for (const ep of cobaltEndpoints) {
+    try {
+      const res = await fetch(ep, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
+          isAudioOnly: true
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const streamUrl = data.url || data.audio || (data.picker && data.picker[0]?.url);
+        if (streamUrl) return streamUrl;
+      }
+    } catch (err) {}
+  }
+
   const instances = [
-    'https://inv.zoomerville.com',
-    'https://invidious.slipfox.xyz',
+    'https://inv.nadeko.net',
+    'https://yewtu.be',
     'https://yt.artemislena.eu',
     'https://invidious.nerdvpn.de',
-    'https://invidious.flokinet.to'
+    'https://inv.us.projectsegfau.lt'
   ];
 
   for (const base of instances) {
     try {
-      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, {
-        signal: AbortSignal.timeout(3000),
-      });
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`);
       if (!res.ok) continue;
       const data = await res.json();
-      const formats = data.adaptiveFormats || [];
-      const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
-      if (audio?.url) {
-        console.log(`[Mobile Audio] Resolved YouTube stream via ${base}`);
-        return audio.url;
-      }
-    } catch {}
+      const formats = data.adaptiveFormats || data.formatStreams || [];
+      const audio = formats.find(f => f.type?.includes('audio/mp4')) ||
+                    formats.find(f => f.type?.includes('audio')) ||
+                    formats.find(f => f.container === 'm4a');
+      if (audio?.url) return audio.url;
+    } catch (e) {}
   }
   return null;
 }
@@ -69,8 +94,8 @@ export const AudioProvider = ({ children }) => {
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         });
       } catch (err) {
         console.warn('Audio mode setup error:', err);
@@ -141,10 +166,10 @@ export const AudioProvider = ({ children }) => {
 
       // Check if track is downloaded locally
       const localRecord = downloadedTracks.find(t => (t._id || t.id) === (track._id || track.id));
-      let audioSourceUri = localRecord?.localAudioUri || track.localAudioUri || track.audioUrl;
+      let audioSourceUri = localRecord?.nativeAudioUri || localRecord?.localAudioUri || track.nativeAudioUri || track.localAudioUri || track.audioUrl;
 
       if (!audioSourceUri) {
-        throw new Error('رابط الأغنية غير موجود');
+        throw new Error('Song URL not found');
       }
 
       // ── CRITICAL FIX: Handle Base64 data strings for APK ──
@@ -198,10 +223,15 @@ export const AudioProvider = ({ children }) => {
         soundRef.current = null;
       }
 
-      // Create new sound instance
+      // Ensure audioSourceUri is not empty
+      if (!audioSourceUri || audioSourceUri === 'undefined') {
+        throw new Error('Invalid song URL');
+      }
+
+      // Create new sound instance with increased timeout for slow networks
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioSourceUri },
-        { shouldPlay: true, volume },
+        { shouldPlay: true, volume, androidImplementation: 'MediaPlayer' },
         onPlaybackStatusUpdate
       );
 
@@ -218,12 +248,8 @@ export const AudioProvider = ({ children }) => {
         console.log('[AudioPlayer] Attempting retry...');
         return playTrack(track, trackList, true);
       } else {
-        const errorMsg = 'تعذر تشغيل هذه الأغنية حالياً. قد يكون السيرفر مشغولاً أو الرابط غير متاح.';
-        if (Platform.OS === 'android') {
-          ToastAndroid.show(errorMsg, ToastAndroid.LONG);
-        } else {
-          Alert.alert('خطأ في التشغيل', errorMsg);
-        }
+        const errorMsg = `Could not play song. Please check internet connection and try again.\n(Error: ${err.message || 'Unknown'})`;
+        Alert.alert('Playback Error', errorMsg);
       }
     }
   };

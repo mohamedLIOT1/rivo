@@ -12,6 +12,21 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
   const [audioUrl, setAudioUrl] = useState('');
   const [lyricsText, setLyricsText] = useState('');
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
+
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const parseTimestamp = (str) => {
+    const match = str.match(/\[?(\d+):(\d+)\]?/);
+    if (match) {
+      return parseInt(match[1]) * 60 + parseInt(match[2]);
+    }
+    return 0;
+  };
 
   useEffect(() => {
     if (track) {
@@ -29,20 +44,6 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
   }, [track]);
 
   if (!isOpen || !track) return null;
-
-  const formatTime = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const parseTimestamp = (str) => {
-    const match = str.match(/\[?(\d+):(\d+)\]?/);
-    if (match) {
-      return parseInt(match[1]) * 60 + parseInt(match[2]);
-    }
-    return 0;
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -69,8 +70,6 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
     onUpdateSong(updated);
     onClose();
   };
-
-  const [isAutoSyncing, setIsAutoSyncing] = useState(false);
 
   const handleAiSyncTimestamps = async () => {
     if (!lyricsText || !lyricsText.trim()) return;
@@ -207,10 +206,10 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
 
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
-        title={`حذف "${title}"؟`}
-        message="هل أنت تأكد من رغبتك في حذف هذه الأغنية؟ لا يمكن التراجع عن هذا الإجراء."
-        confirmText="حذف الأغنية"
-        cancelText="إلغاء"
+        title={`Delete "${title}"?`}
+        message="Are you sure you want to delete this song? This action cannot be undone."
+        confirmText="Delete Song"
+        cancelText="Cancel"
         onConfirm={() => {
           setIsDeleteConfirmOpen(false);
           onDeleteSong(track.id);

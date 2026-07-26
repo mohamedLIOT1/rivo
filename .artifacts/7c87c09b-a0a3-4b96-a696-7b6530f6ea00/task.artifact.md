@@ -1,3 +1,10 @@
-- [ ] Fix Gradle sync error in `ExpoModulesCorePlugin.gradle`
-    - [ ] Update `useExpoPublishing` to safely find `release` component
-- [ ] Verify changes
+- [ ] **Fix FullPlayerModal.js (Critical)**
+    - [ ] Resolve "Rendered more hooks" error by moving conditional return
+    - [ ] Fix illegal hook call inside `renderItem`
+- [ ] **Fix Home Screen Animations**
+    - [ ] Re-write animation logic to ensure it triggers correctly
+- [ ] **Fix Connectivity (Login)**
+    - [ ] Add connectivity test to profile screen
+    - [ ] Ensure API URL fallback works
+- [ ] **Fix Icon Issue**
+    - [ ] Guide user to verify and replace `assets/icon.png`

@@ -1,32 +1,30 @@
-# Walkthrough - Fixed Gradle Sync Error
+# Walkthrough - Critical Crash Fix & Visual Polish
 
-I have resolved the `MissingPropertyException` that was occurring during Gradle sync.
+I have resolved the "main has not been registered" crash and updated the app's visual identity with a more robust Green color.
 
 ## Changes Made
 
-### expo-modules-core
+### 1. Crash Resolution (App Registration)
+#### [NEW] [index.js](file:///C:/Users/mohamed/Desktop/liofy/index.js)
+Created a new, standard entry point for the application. This explicitly registers the root component as `"main"`, which is what your Android `MainActivity.kt` expects. This fixes the red screen error.
 
-#### [MODIFY] [ExpoModulesCorePlugin.gradle](file:///C:/Users/mohamed/Desktop/liofy/node_modules/expo-modules-core/android/ExpoModulesCorePlugin.gradle)
+#### [MODIFY] [package.json](file:///C:/Users/mohamed/Desktop/liofy/package.json)
+Updated the app metadata to point to the new `index.js` as the starting file.
 
-Updated the `useExpoPublishing` logic to safely check for the existence of the `release` software component before attempting to use it for Maven publication. This prevents the "Could not get unknown property 'release'" error in projects where the component isn't yet available during the `afterEvaluate` phase.
+### 2. Visual Identity & Splash Fix
+#### [MODIFY] [colors.xml](file:///C:/Users/mohamed/Desktop/liofy/android/app/src/main/res/values/colors.xml)
+Changed the theme color from a bright green (which looked yellow on some screens) to a solid **Forest Green** (`#14833B`).
+- Updated the splash screen background.
+- Updated the icon background.
 
-```diff
-       publications {
-         release(MavenPublication) {
--          from components.release
-+          def releaseComponent = components.findByName("release")
-+          if (releaseComponent) {
-+            from releaseComponent
-+          }
-         }
-       }
-```
+#### [MODIFY] [app.json](file:///C:/Users/mohamed/Desktop/liofy/app.json)
+Synchronized the Expo configuration with the new green color to ensure consistency across the splash screen and adaptive icons.
 
-## Verification Results
+### 3. Smooth Animations
+#### [MODIFY] [HomeScreen.js](file:///C:/Users/mohamed/Desktop/liofy/src/mobile/screens/HomeScreen.js)
+Fixed the animation trigger logic. The app now performs its smooth fade-in and slide-up entrance animation immediately upon opening, ensuring a professional feel from the first second.
 
-### Manual Verification
-- The modification uses standard Gradle APIs (`findByName`) to avoid crashing when a property is missing.
-- You should now be able to **Sync Project with Gradle Files** in Android Studio without encountering this specific error.
-
-> [!TIP]
-> Since this change is inside `node_modules`, it will be overwritten if you run `npm install` or `yarn`. Use `npx patch-package expo-modules-core` to make this fix permanent.
+## Final Steps
+1.  **Stop Metro**: Close any running terminal windows for Metro/Expo.
+2.  **Clean & Rebuild**: In Android Studio, click `Build > Clean Project`, then click the **Run** button to install the fixed version.
+3.  **ADB Reverse**: Run `adb reverse tcp:5000 tcp:5000` to ensure login works.

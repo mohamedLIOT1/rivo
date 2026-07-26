@@ -19,7 +19,7 @@ import PodcastsScreen from './screens/PodcastsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
 import { API_BASE_URL } from './config';
-import { saveTrackOffline, removeTrackOffline } from './utils/offlineStorage';
+import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from './utils/offlineStorage';
 import { UserProvider, useUser } from './context/UserContext';
 import { AudioProvider, useAudioPlayer } from './context/AudioContext';
 
@@ -72,7 +72,36 @@ function AppContent() {
     if (!currentUser) setIsAuthOpen(true);
   }, []);
 
-  // ── Add song to global library ───────────────────────
+  // ── Auto-convert & cache track to local MP3 as soon as user plays it ──
+  useEffect(() => {
+    if (!currentTrack || currentTrack.downloaded || currentTrack.nativeAudioUri) return;
+    const cleanId = String(currentTrack.id || currentTrack._id || '');
+    if (!cleanId) return;
+
+    saveTrackOffline(currentTrack).then(async (result) => {
+      if (result) {
+        const freshAudioUrl = await getOfflineTrackAudioUrl(cleanId);
+        const patchFields = {
+          downloaded: true,
+          audioUrl: freshAudioUrl || result.audioUrl,
+          cover: currentTrack.cover || result.coverBase64 || null,
+          nativeAudioUri: result.nativeAudioUri || null,
+          nativeCoverUri: result.nativeCoverUri || null,
+        };
+
+        setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...patchFields } : t));
+
+        if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
+          setCurrentTrack(prev => prev ? ({
+            ...prev,
+            downloaded: true,
+            nativeAudioUri: result.nativeAudioUri || null,
+            nativeCoverUri: result.nativeCoverUri || null,
+          }) : prev);
+        }
+      }
+    }).catch(() => {});
+  }, [currentTrack?.id]);
   const handleAddSong = async (newSong) => {
     if (!newSong) return;
     setTracks(prev => {
@@ -275,18 +304,43 @@ function AppContent() {
       if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
         setCurrentTrack(prev => ({ ...prev, downloaded: false }));
       }
-      showToast('تم إزالة الأغنية من التحميلات الأوفلاين');
+      showToast('Song removed from offline downloads');
     } else {
-      showToast('جاري تحميل الأغنية لحفظها على مساحة التطبيق...');
+      showToast('Downloading song for offline playback...');
       const result = await saveTrackOffline(track);
       if (result) {
-        setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...result, downloaded: true } : t));
+        // Get a fresh playable audio URL (native file URI converted to http:// via Capacitor)
+        const freshAudioUrl = await getOfflineTrackAudioUrl(cleanId);
+
+        // Prefer original cover URL for color extraction — native URIs fail CORS canvas extraction
+        // Only use native cover as fallback if no original cover exists
+        const freshCover = track.cover || result.coverBase64 || null;
+
+        // Full patch for tracks list (for future plays)
+        const patchFields = {
+          downloaded: true,
+          audioUrl: freshAudioUrl || result.audioUrl,
+          cover: freshCover,
+          nativeAudioUri: result.nativeAudioUri || null,
+          nativeCoverUri: result.nativeCoverUri || null,
+        };
+
+        setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...patchFields } : t));
+
+        // For currently playing track: ONLY mark downloaded=true.
+        // Do NOT change audioUrl (would restart/interrupt playback)
+        // Do NOT change cover (would break dynamic background color extraction)
         if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
-          setCurrentTrack(prev => ({ ...prev, ...result, downloaded: true }));
+          setCurrentTrack(prev => ({
+            ...prev,
+            downloaded: true,
+            nativeAudioUri: result.nativeAudioUri || null,
+            nativeCoverUri: result.nativeCoverUri || null,
+          }));
         }
-        showToast('تم تحميل الأغنية بنجاح على مساحة التطبيق للأوفلاين ✓');
+        showToast('Song downloaded for offline playback ✓');
       } else {
-        showToast('تعذر تحميل الأغنية. يرجى التحقق من اتصال الإنترنت.');
+        showToast('Could not download song. Please check internet connection.');
       }
     }
   };

@@ -34,7 +34,7 @@ export default function FullPlayerModal({ visible, onClose }) {
   const [activeTab, setActiveTab] = useState('artwork'); // 'artwork', 'lyrics', 'queue'
   const lyricsScrollRef = useRef(null);
 
-  // Auto-scroll lyrics (Always define hooks at the top!)
+  // Auto-scroll lyrics
   useEffect(() => {
     if (visible && activeTab === 'lyrics' && currentTrack?.lyrics?.length > 0) {
       const activeIndex = currentTrack.lyrics.findIndex((l, i) => {

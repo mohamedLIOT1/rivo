@@ -124,7 +124,7 @@ export default function HomeScreen({
                         className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-400 hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
                       >
                         <LogOut size={14} />
-                        <span>تسجيل خروج (Logout)</span>
+                        <span>Log Out</span>
                       </button>
                     </>
                   ) : (
@@ -136,7 +136,7 @@ export default function HomeScreen({
                       className="w-full text-left px-4 py-2.5 text-xs font-bold text-[#1DB954] hover:bg-white/10 flex items-center gap-2 transition-colors cursor-pointer"
                     >
                       <User size={14} />
-                      <span>تسجيل الدخول (Login)</span>
+                      <span>Log In</span>
                     </button>
                   )}
                 </div>
@@ -504,10 +504,10 @@ export default function HomeScreen({
       {/* Custom Confirm Delete Modal */}
       <ConfirmModal
         isOpen={Boolean(deleteConfirmTrackId)}
-        title="هل أنت تأكد من حذف هذه الأغنية؟"
-        message="سيتم حذف هذه الأغنية نهائياً من المكتبة الخاصة بك."
-        confirmText="حذف الأغنية"
-        cancelText="إلغاء"
+        title="Are you sure you want to delete this song?"
+        message="This song will be permanently deleted from your library."
+        confirmText="Delete Song"
+        cancelText="Cancel"
         onConfirm={() => {
           if (deleteConfirmTrackId && onDeleteTrack) {
             onDeleteTrack(deleteConfirmTrackId);

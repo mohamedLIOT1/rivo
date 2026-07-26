@@ -13,7 +13,7 @@ function extractYtId(input) {
   if (urlMatch && urlMatch[1] && urlMatch[1].length === 11) return urlMatch[1];
   const prefixMatch = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
   if (prefixMatch && prefixMatch[1] && prefixMatch[1].length === 11) return prefixMatch[1];
-  if (str.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  if ((str.includes('youtube.com') || str.includes('youtu.be')) && /^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
   return null;
 }
 
@@ -69,6 +69,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const currentTrackRef   = useRef(currentTrack);
   const volumeRef         = useRef(0.8);
   const shouldPlayRef     = useRef(false); // Force autoplay on track change
+  const lastLoadedUrlRef  = useRef(null);  // Last URL loaded into audio element (prevents interruption on metadata-only changes)
+  const lastLoadedIdRef   = useRef(null);  // Last track ID loaded (detects actual track change vs metadata update)
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
@@ -95,10 +97,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     let lastTimeUpdate = 0;
     const handleTimeUpdate = () => {
-      if (isYtTrackRef.current) return; // YT handles its own time
+      if (isYtTrackRef.current) return;
       if (audio && !isNaN(audio.currentTime)) {
         const now = Date.now();
-        if (now - lastTimeUpdate > 100) {  // 100ms for accurate lyrics sync
+        if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
         }
@@ -112,15 +114,33 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (isRepeatRef.current) { audio.currentTime = 0; audio.play().catch(() => {}); }
       else playNextTrack();
     };
+    // ── Key fix: when audio actually starts playing, ensure AudioContext is running ──
+    // This fixes "timer runs but no sound" after app reopen — audio plays but pipeline is suspended
+    const handlePlaying = () => {
+      resumeAudioContext();
+    };
+    // If audio gets stuck/stalled, try to resume
+    const handleStalled = () => {
+      if (!isYtTrackRef.current) {
+        setTimeout(() => {
+          resumeAudioContext();
+          audio.play().catch(() => {});
+        }, 500);
+      }
+    };
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('playing', handlePlaying);
+    audio.addEventListener('stalled', handleStalled);
     audio.addEventListener('error', () => { audio.crossOrigin = null; });
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('playing', handlePlaying);
+      audio.removeEventListener('stalled', handleStalled);
       audio.pause();
     };
   }, []);
@@ -214,8 +234,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     if (!currentTrack || !currentTrack.audioUrl) return;
 
-    const isBlobUrl = currentTrack.audioUrl.startsWith('blob:') || currentTrack.audioUrl.startsWith('data:');
-    const ytId = !isBlobUrl ? extractYtId(currentTrack.audioUrl) : null;
+    const newId  = String(currentTrack.id || currentTrack._id || '');
+    const newUrl = currentTrack.audioUrl;
+
+    // Guard: if track ID and audioUrl haven't changed, this is a metadata-only update
+    // (e.g. downloaded:true, nativeAudioUri, cover update). Skip to avoid interrupting playback.
+    if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current) {
+      return;
+    }
+
+    lastLoadedIdRef.current  = newId;
+    lastLoadedUrlRef.current = newUrl;
+
+    const isBlobUrl = newUrl.startsWith('blob:') || newUrl.startsWith('data:');
+    const isLocalFile = newUrl.includes('/_capacitor_file_/') || newUrl.includes('capacitor://') || newUrl.startsWith('file://') || newUrl.startsWith('content://') || newUrl.endsWith('.mp3');
+    const isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
+
+    // Track is ONLY a YouTube online track if it's NOT a blob, NOT a local device file, and NOT marked as downloaded
+    const ytId = (!isBlobUrl && !isLocalFile && !isDownloaded) ? extractYtId(newUrl) : null;
 
     if (ytId) {
       // ── YouTube track ──────────────────────────────────────────
@@ -262,7 +298,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
 
-      let targetUrl = currentTrack.audioUrl;
+      let targetUrl = newUrl;
       const isSoundCloud = !isBlobUrl && (currentTrack.source === 'SoundCloud' || (targetUrl && (targetUrl.includes('sndcdn.com') || targetUrl.includes('soundcloud.com'))));
 
       if (isSoundCloud) {
@@ -283,7 +319,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
           })
           .catch(err => console.warn('SoundCloud stream error:', err));
       } else {
-        if (!isBlobUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
+        // Detect local native device file URLs (Capacitor) — must NOT go through remote proxy
+        // These are local URLs on the device that the remote server cannot access
+        const isLocalNativeUrl =
+          targetUrl.includes('/_capacitor_file_/') ||
+          targetUrl.includes('capacitor://') ||
+          targetUrl.startsWith('content://') ||
+          (targetUrl.startsWith('http://localhost') && !targetUrl.includes(':5000'));
+
+        if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
           targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
         }
 
@@ -294,7 +338,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (isPlaying || shouldPlayRef.current) {
           shouldPlayRef.current = false;
           resumeAudioContext();
-          audio.play().catch(e => console.warn('Audio play error:', e));
+          // Note: do NOT call audio.load() here — setting audio.src already triggers loading
+          // audio.load() causes lag/stutter by forcing a full audio element reset
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(e => {
+              console.warn('[Audio] play() blocked, will retry on next gesture:', e.name);
+              const retryPlay = () => {
+                resumeAudioContext();
+                audio.play().catch(() => {});
+                document.removeEventListener('touchstart', retryPlay);
+                document.removeEventListener('click', retryPlay);
+              };
+              document.addEventListener('touchstart', retryPlay, { once: true, passive: true });
+              document.addEventListener('click', retryPlay, { once: true });
+            });
+          }
         } else {
           audio.pause();
         }
@@ -352,7 +411,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     let trackToPlay = { ...track };
 
     const offlineAudioUrl = await getOfflineTrackAudioUrl(track.id);
-    if (offlineAudioUrl) trackToPlay.audioUrl = offlineAudioUrl;
+    if (offlineAudioUrl) {
+      trackToPlay.audioUrl = offlineAudioUrl;
+      trackToPlay.downloaded = true;
+      trackToPlay.nativeAudioUri = offlineAudioUrl;
+    }
 
     if (newQueue?.length > 0) setCurrentQueue(newQueue);
     else if (!currentQueueRef.current.length && tracksRef.current.length > 0)
