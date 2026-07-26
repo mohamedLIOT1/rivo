@@ -35,7 +35,8 @@ async function resolveYouTubeMobile(inputUrl) {
           downloadMode: 'audio',
           audioFormat: 'mp3',
           isAudioOnly: true
-        })
+        }),
+        signal: AbortSignal.timeout(3000)
       });
       if (res.ok) {
         const data = await res.json();
@@ -55,7 +56,9 @@ async function resolveYouTubeMobile(inputUrl) {
 
   for (const base of instances) {
     try {
-      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`);
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`, {
+        signal: AbortSignal.timeout(3000)
+      });
       if (!res.ok) continue;
       const data = await res.json();
       const formats = data.adaptiveFormats || data.formatStreams || [];
@@ -156,7 +159,13 @@ export const AudioProvider = ({ children }) => {
 
   // Play a specific track
   const playTrack = async (track, trackList = [], isRetry = false) => {
-    if (!track || isLoading) return;
+    if (!track) return;
+
+    const trackId = track._id || track.id;
+    // Don't block retry calls or switching tracks
+    if (!isRetry && isLoading && currentTrack && (currentTrack._id || currentTrack.id) === trackId) {
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -172,12 +181,16 @@ export const AudioProvider = ({ children }) => {
         throw new Error('Song URL not found');
       }
 
+      // Ensure relative paths have full API_BASE_URL
+      if (audioSourceUri.startsWith('/')) {
+        audioSourceUri = `${API_BASE_URL}${audioSourceUri}`;
+      }
+
       // ── CRITICAL FIX: Handle Base64 data strings for APK ──
       // Large base64 strings often fail in native Android URI parser.
       // We save them to a temporary file first.
       if (audioSourceUri.startsWith('data:audio')) {
         try {
-          const trackId = track._id || track.id;
           const tempFileUri = `${TEMP_PLAY_DIR}temp_${trackId}.mp3`;
 
           // Check if it already exists to avoid re-writing
@@ -192,7 +205,6 @@ export const AudioProvider = ({ children }) => {
           console.log('[AudioPlayer] Converted Base64 to temp file:', audioSourceUri);
         } catch (base64Err) {
           console.error('[AudioPlayer] Base64 conversion failed:', base64Err);
-          // fall back to original (might fail, but it's a last resort)
         }
       }
 
