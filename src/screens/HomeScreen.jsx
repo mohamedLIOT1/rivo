@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings, Radio, MessageSquare } from 'lucide-react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings, Radio, MessageSquare, Users } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 
@@ -24,6 +24,8 @@ export default function HomeScreen({
   jamSession = null,
   openChatModal = () => {},
   unreadChatCount = 0,
+  isActivityPanelOpen = false,
+  toggleActivityPanel = () => {},
 }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
@@ -148,6 +150,20 @@ export default function HomeScreen({
 
           {/* Action Buttons Row */}
           <div className="flex items-center gap-2">
+            {/* Listening Activity Button (Spotify Friend Activity) */}
+            <button
+              onClick={toggleActivityPanel}
+              className={`p-2 md:px-3.5 md:py-2 flex items-center gap-1.5 rounded-full border transition-all active:scale-95 shadow-sm cursor-pointer ${
+                isActivityPanelOpen
+                  ? 'bg-[#1DB954]/20 border-[#1DB954] text-[#1DB954]'
+                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-zinc-300 hover:text-white'
+              }`}
+              title="Friend Listening Activity"
+            >
+              <Users size={16} className={isActivityPanelOpen ? 'text-[#1DB954]' : 'text-zinc-300'} />
+              <span className="hidden sm:inline text-xs font-bold">Friends</span>
+            </button>
+
             {/* Messages Button */}
             <button
               onClick={openChatModal}

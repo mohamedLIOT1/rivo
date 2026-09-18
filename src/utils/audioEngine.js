@@ -125,6 +125,25 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
     };
   }
 
+  if (style === 'vinyl_brake') {
+    // Turntable Tape Stop: Track A holds volume until 60%, then decelerates down sharply like a vinyl motor brake,
+    // Track B hits hard on the drop
+    const gainA = p < 0.6 ? 1.0 : Math.max(0, 1 - Math.pow((p - 0.6) / 0.4, 2));
+    const gainB = p < 0.7 ? 0 : Math.min(1, Math.pow((p - 0.7) / 0.3, 0.7));
+    return { gainA, gainB };
+  }
+
+  if (style === 'echo_out') {
+    // Dub Echo / Reverb Out: Track A decays with an atmospheric echo trail,
+    // Track B emerges cleanly underneath
+    const gainA = Math.pow(1 - p, 1.6) * (0.8 + 0.2 * Math.sin(p * Math.PI * 6));
+    const gainB = Math.pow(p, 1.4);
+    return { 
+      gainA: Math.max(0, Math.min(1, gainA)), 
+      gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
   // Standard DJ Equal-Power Crossfade: cos & sin curve
   const angle = p * (Math.PI / 2);
   return {

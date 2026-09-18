@@ -168,6 +168,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { currentTimeRef.current = currentTime;  }, [currentTime]);
   useEffect(() => { jamSessionRef.current   = jamSession;  }, [jamSession]);
 
+  // Broadcast live listening activity to server for Friend Activity
+  useEffect(() => {
+    if (!currentTrack) return;
+    const token = localStorage.getItem('liofy_token');
+    if (!token) return;
+
+    const timeout = setTimeout(() => {
+      fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ track: currentTrack, isPlaying })
+      }).catch(() => {});
+    }, 1200);
+
+    return () => clearTimeout(timeout);
+  }, [currentTrack?.id || currentTrack?._id, isPlaying]);
+
   // ── Regular HTML Audio element (for uploaded/SoundCloud tracks) ──
   const audioRef = useRef(null);
   const secondaryAudioRef = useRef(null);

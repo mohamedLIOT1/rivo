@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare, Command } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare, Command, Users } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 
 export default function Navigation({ 
@@ -16,6 +16,8 @@ export default function Navigation({
   openShortcutsModal = () => {},
   unreadChatCount = 0,
   currentUser,
+  isActivityPanelOpen = false,
+  toggleActivityPanel = () => {},
 }) {
   const [libraryFilter, setLibraryFilter] = useState('all');
 
@@ -93,6 +95,15 @@ export default function Navigation({
                 {unreadChatCount}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={toggleActivityPanel}
+            className={`sp-nav-link ${isActivityPanelOpen ? 'active text-white' : 'text-zinc-300'} hover:text-white transition-colors relative`}
+            title="Friend Listening Activity"
+          >
+            <Users size={24} className={isActivityPanelOpen ? 'text-[#1DB954]' : 'text-[#b3b3b3] group-hover:text-white shrink-0'} strokeWidth={2} />
+            <span className="font-bold flex-1 text-left">Listening Activity</span>
           </button>
         </div>
 

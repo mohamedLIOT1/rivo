@@ -13,6 +13,7 @@ import JamRoomModal from './components/JamRoomModal';
 import ImportPlaylistModal from './components/ImportPlaylistModal';
 import ChatModal from './components/ChatModal';
 import ShortcutsModal from './components/ShortcutsModal';
+import ListeningActivityPanel from './components/ListeningActivityPanel';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 import HomeScreen from './screens/HomeScreen';
@@ -70,6 +71,24 @@ function AppContent() {
   const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
   const [isChatOpen,          setIsChatOpen]          = useState(false);
   const [isShortcutsOpen,     setIsShortcutsOpen]     = useState(false);
+  const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem('liofy_activity_panel_open');
+      if (saved !== null) return JSON.parse(saved);
+      return typeof window !== 'undefined' && window.innerWidth >= 1200;
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleActivityPanel = () => {
+    setIsActivityPanelOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem('liofy_activity_panel_open', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const [chatTargetUser,      setChatTargetUser]      = useState(null);
   const [unreadChatCount,     setUnreadChatCount]     = useState(0);
   const [socket,              setSocket]              = useState(null);
@@ -564,6 +583,8 @@ function AppContent() {
         openChatModal={() => handleOpenChat(null)}
         openShortcutsModal={() => setIsShortcutsOpen(true)}
         unreadChatCount={unreadChatCount}
+        isActivityPanelOpen={isActivityPanelOpen}
+        toggleActivityPanel={toggleActivityPanel}
       />
 
       {/* ── Main Content ── */}
@@ -596,6 +617,8 @@ function AppContent() {
             jamSession={jamSession}
             openChatModal={() => handleOpenChat(null)}
             unreadChatCount={unreadChatCount}
+            isActivityPanelOpen={isActivityPanelOpen}
+            toggleActivityPanel={toggleActivityPanel}
           />
         )}
 
@@ -671,6 +694,19 @@ function AppContent() {
           />
         )}
       </main>
+
+      {/* ── Listening Activity Panel (Spotify Friend Activity) ── */}
+      <ListeningActivityPanel
+        isOpen={isActivityPanelOpen}
+        onClose={() => {
+          setIsActivityPanelOpen(false);
+          try { localStorage.setItem('liofy_activity_panel_open', 'false'); } catch {}
+        }}
+        onSelectTrack={playTrack}
+        openProfileScreen={() => setCurrentScreen('profile')}
+        openChatModal={() => handleOpenChat(null)}
+        currentUser={currentUser}
+      />
 
       {/* ── Now Playing Bar ── */}
       {currentTrack && (
