@@ -792,18 +792,22 @@ app.post('/api/playlists/import', auth, async (req, res) => {
     for (const item of rawItems.slice(0, 50)) { // up to 50 tracks
       try {
         const duration = item.duration || 180;
+        const ytId = await searchYouTubeId(`${item.artist} - ${item.title}`);
         let trackCover = await fetchTrackCover(item.title, item.artist);
+        if (!trackCover && ytId) trackCover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
         if (!trackCover) trackCover = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+
+        const audioUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : '';
 
         const newTrack = await new Track({
           title: item.title,
           artist: item.artist,
           album: playlistTitle,
           cover: trackCover,
-          audioUrl: '',
+          audioUrl,
           duration,
           genre: 'Imported',
-          source: 'SoundCloud'
+          source: 'YouTube'
         }).save();
 
         const trackObj = {
@@ -813,10 +817,10 @@ app.post('/api/playlists/import', auth, async (req, res) => {
           artist: item.artist,
           album: playlistTitle,
           cover: trackCover,
-          audioUrl: '',
+          audioUrl,
           duration,
           genre: 'Imported',
-          source: 'SoundCloud'
+          source: 'YouTube'
         };
 
         trackIds.push(String(newTrack._id));
