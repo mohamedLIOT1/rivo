@@ -42,53 +42,8 @@ const BANDS = [
 export function initAudioEngine(audioElement) {
   if (isInitialized || !audioElement) return;
   setupGestureResumeListener();
-
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-
-    audioCtx = new AudioContextClass();
-    sourceNode = audioCtx.createMediaElementSource(audioElement);
-    
-    preAmpGainNode = audioCtx.createGain();
-    preAmpGainNode.gain.value = 1.6; // Pre-Amp volume boost (+6dB gain for louder playback)
-
-    masterGainNode = audioCtx.createGain();
-    masterGainNode.gain.value = 1.0;
-
-    // Spotify-Grade Master Dynamics Compressor to prevent clipping distortion
-    masterCompressorNode = audioCtx.createDynamicsCompressor();
-    masterCompressorNode.threshold.setValueAtTime(-8, audioCtx.currentTime);
-    masterCompressorNode.knee.setValueAtTime(24, audioCtx.currentTime);
-    masterCompressorNode.ratio.setValueAtTime(8, audioCtx.currentTime);
-    masterCompressorNode.attack.setValueAtTime(0.003, audioCtx.currentTime);
-    masterCompressorNode.release.setValueAtTime(0.15, audioCtx.currentTime);
-
-    // Pipeline: Source -> PreAmp -> EQ Filters (Cascade) -> MasterCompressor -> MasterGain -> Destination
-    sourceNode.connect(preAmpGainNode);
-    let previousNode = preAmpGainNode;
-
-    BANDS.forEach(band => {
-      const filter = audioCtx.createBiquadFilter();
-      filter.type = band.type;
-      filter.frequency.value = band.frequency;
-      if (band.Q) filter.Q.value = band.Q;
-      filter.gain.value = 0; // default flat
-
-      filters[band.name] = filter;
-      previousNode.connect(filter);
-      previousNode = filter;
-    });
-
-    previousNode.connect(masterCompressorNode);
-    masterCompressorNode.connect(masterGainNode);
-    masterGainNode.connect(audioCtx.destination);
-
-    isInitialized = true;
-    console.log('✅ Volume Booster & DynamicsCompressor DSP Engine initialized!');
-  } catch (err) {
-    console.warn('AudioContext initialization notice:', err.message);
-  }
+  isInitialized = true;
+  console.log('✅ Direct hardware audio output initialized');
 }
 
 /**

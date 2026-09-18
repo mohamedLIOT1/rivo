@@ -91,8 +91,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   // Create Audio element + EQ
   useEffect(() => {
     const audio = new Audio();
-    audio.crossOrigin = 'anonymous';
     audioRef.current = audio;
+    audio.volume = volumeRef.current;
     initAudioEngine(audio);
 
     let lastTimeUpdate = 0;
@@ -167,24 +167,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     const div = document.createElement('div');
     div.id = 'liofy-yt-player';
-    div.style.cssText = 'position:fixed;bottom:-9999px;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1';
+    div.style.cssText = 'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-1;';
     document.body.appendChild(div);
     ytContainerRef.current = div;
 
     // Load YouTube IFrame API
     onYtReady(() => {
       ytPlayerRef.current = new window.YT.Player('liofy-yt-player', {
-        height: '1',
-        width: '1',
+        height: '200',
+        width: '200',
         playerVars: {
-          autoplay: 0,
+          autoplay: 1,
           controls: 0,
           disablekb: 1,
           fs: 0,
-          iv_load_policy: 3,
-          modestbranding: 1,
-          rel: 0,
-          showinfo: 0,
+          playsinline: 1,
           origin: window.location.origin,
         },
         events: {
@@ -250,14 +247,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // ── Main track playback logic ──────────────────────────────────
   useEffect(() => {
-    if (!currentTrack || !currentTrack.audioUrl) return;
+    if (!currentTrack) return;
 
     const newId  = String(currentTrack.id || currentTrack._id || '');
-    const newUrl = currentTrack.audioUrl;
+    const newUrl = currentTrack.audioUrl || '';
 
     // Guard: if track ID and audioUrl haven't changed, this is a metadata-only update
-    // (e.g. downloaded:true, nativeAudioUri, cover update). Skip to avoid interrupting playback.
-    if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current) {
+    if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current && lastLoadedUrlRef.current) {
       return;
     }
 
@@ -393,8 +389,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 }
                 if (audio) {
                   audio.src = freshUrl;
+                  audio.volume = volumeRef.current;
                   if (shouldPlayRef.current || isPlaying) {
-                    resumeAudioContext();
                     audio.play().catch(e => console.warn('Stream play error:', e));
                   }
                 }
@@ -411,10 +407,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const audio = audioRef.current;
         if (!audio) return;
         if (audio.src !== targetUrl) { audio.src = targetUrl; }
+        audio.volume = volumeRef.current;
 
         if (isPlaying || shouldPlayRef.current) {
           shouldPlayRef.current = false;
-          resumeAudioContext();
           // Note: do NOT call audio.load() here — setting audio.src already triggers loading
           // audio.load() causes lag/stutter by forcing a full audio element reset
           const playPromise = audio.play();
