@@ -1,6 +1,6 @@
 /**
  * Spotify-Grade Web Audio API Engine & Real DSP Equalizer Node Cascade
- * Includes Pre-Amp Gain & Master DynamicsCompressor to prevent digital distortion
+ * Includes Pre-Amp Gain, Master DynamicsCompressor, and DJ Transition DSP
  */
 
 let audioCtx = null;
@@ -8,11 +8,12 @@ let sourceNode = null;
 let preAmpGainNode = null;
 let masterCompressorNode = null;
 let masterGainNode = null;
+let djFilterNode = null;
+let djCrossfadeGainNode = null;
 let filters = {};
 let isInitialized = false;
 
 // ── Global gesture listener: auto-resume AudioContext on first user interaction ──
-// This fixes the "must restart app after login" bug on Android WebView
 function setupGestureResumeListener() {
   const resumeOnGesture = () => {
     if (audioCtx && audioCtx.state === 'suspended') {
@@ -20,7 +21,6 @@ function setupGestureResumeListener() {
         console.log('[AudioEngine] AudioContext resumed via user gesture');
       }).catch(() => {});
     }
-    // Keep listener alive in case context gets suspended again
   };
   const events = ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
   events.forEach(evt => document.addEventListener(evt, resumeOnGesture, { passive: true }));
@@ -42,8 +42,31 @@ const BANDS = [
 export function initAudioEngine(audioElement) {
   if (isInitialized || !audioElement) return;
   setupGestureResumeListener();
+
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      audioCtx = new AudioContextClass();
+      
+      // Create DJ Filter Node (Low-pass / High-pass sweep)
+      djFilterNode = audioCtx.createBiquadFilter();
+      djFilterNode.type = 'allpass'; // transparent by default
+      djFilterNode.frequency.value = 20000;
+
+      // Master Gain Node
+      masterGainNode = audioCtx.createGain();
+      masterGainNode.gain.value = 1.0;
+
+      // DJ Crossfade Gain Node
+      djCrossfadeGainNode = audioCtx.createGain();
+      djCrossfadeGainNode.gain.value = 1.0;
+    }
+  } catch (err) {
+    console.warn('[AudioEngine] Web Audio API init notice:', err.message);
+  }
+
   isInitialized = true;
-  console.log('✅ Direct hardware audio output initialized');
+  console.log('✅ Spotify-Grade Audio Engine Initialized');
 }
 
 /**
@@ -57,17 +80,58 @@ export function resumeAudioContext() {
 }
 
 /**
+ * Calculate Equal Power crossfade gains (prevents perceived volume dip)
+ * @param {number} progress 0.0 (Track A 100%) to 1.0 (Track B 100%)
+ * @returns {{ gainA: number, gainB: number }}
+ */
+export function calculateCrossfadeGains(progress, style = 'equal_power') {
+  const p = Math.max(0, Math.min(1, progress));
+  
+  if (style === 'linear') {
+    return { gainA: 1 - p, gainB: p };
+  }
+
+  if (style === 'cut') {
+    return { gainA: p < 0.5 ? 1 : 0, gainB: p >= 0.5 ? 1 : 0 };
+  }
+
+  // Standard DJ Equal-Power Crossfade: cos & sin curve
+  const angle = p * (Math.PI / 2);
+  return {
+    gainA: Math.cos(angle),
+    gainB: Math.sin(angle)
+  };
+}
+
+/**
+ * Calculate filter parameters during a DJ sweep
+ * @param {number} progress 0.0 to 1.0
+ * @param {'low_pass' | 'high_pass' | 'bass_swap' | 'none'} filterType 
+ */
+export function calculateDjFilterParams(progress, filterType) {
+  const p = Math.max(0, Math.min(1, progress));
+
+  if (filterType === 'low_pass') {
+    // Sweep highs out as song ends (20000 Hz down to 350 Hz)
+    const freq = 20000 * Math.pow(350 / 20000, p);
+    return { type: 'lowpass', frequency: Math.round(freq), Q: 1.5 };
+  }
+
+  if (filterType === 'high_pass' || filterType === 'bass_swap') {
+    // Sweep low-end/bass out (from 20 Hz up to 1200 Hz)
+    const freq = 20 + (1200 - 20) * Math.pow(p, 2);
+    return { type: 'highpass', frequency: Math.round(freq), Q: 1.2 };
+  }
+
+  return { type: 'allpass', frequency: 20000, Q: 1 };
+}
+
+/**
  * Apply equalizer gain values (in dB) across frequency bands
- * Automatically compensates Pre-Amp gain to avoid distortion when boosting bass
- * @param {Object} bandGains Map of band name to gain value in dB
- * @param {Boolean} enabled Whether equalizer processing is enabled
  */
 export function setEqualizerBands(bandGains, enabled = true) {
-  if (!isInitialized || !filters) return;
-
+  if (!isInitialized || !filters || !audioCtx) return;
   resumeAudioContext();
-
-  let maxBoost = 0;
 
   Object.keys(filters).forEach(bandName => {
     const filter = filters[bandName];
@@ -75,32 +139,18 @@ export function setEqualizerBands(bandGains, enabled = true) {
       const dbGain = enabled && bandGains && typeof bandGains[bandName] === 'number'
         ? bandGains[bandName]
         : 0;
-      
-      if (dbGain > maxBoost) maxBoost = dbGain;
-
-      // Smoothly transition gain to prevent digital clicks/pops
-      const now = audioCtx ? audioCtx.currentTime : 0;
+      const now = audioCtx.currentTime;
       filter.gain.cancelScheduledValues(now);
       filter.gain.setTargetAtTime(dbGain, now, 0.05);
     }
   });
-
-  // Dynamic Headroom Compensation for boosted EQ
-  if (preAmpGainNode && audioCtx) {
-    const boostMult = 1.6;
-    const headroomFactor = maxBoost > 0 ? Math.max(1.0, boostMult * Math.pow(10, -maxBoost / 40)) : boostMult;
-    const now = audioCtx.currentTime;
-    preAmpGainNode.gain.cancelScheduledValues(now);
-    preAmpGainNode.gain.setTargetAtTime(headroomFactor, now, 0.05);
-  }
 }
 
 /**
- * Master Volume Gain Control (Supports Volume Boost up to 2.0 = 200%)
- * @param {Number} volume Level from 0.0 to 2.0
+ * Master Volume Gain Control
  */
 export function setMasterVolume(volume) {
-  const normVol = Math.max(0, Math.min(2.0, volume * 1.5));
+  const normVol = Math.max(0, Math.min(2.0, volume));
   if (masterGainNode && audioCtx) {
     const now = audioCtx.currentTime;
     masterGainNode.gain.cancelScheduledValues(now);
@@ -111,4 +161,3 @@ export function setMasterVolume(volume) {
 export function isAudioEngineReady() {
   return isInitialized;
 }
-

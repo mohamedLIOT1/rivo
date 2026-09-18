@@ -64,6 +64,31 @@ const TrackSchema = new mongoose.Schema({
 
 const Track = mongoose.model('Track', TrackSchema);
 
+// Universal Lyrics Collection (indexed by normalized trackKey and trackId)
+const LyricsSchema = new mongoose.Schema({
+  trackKey: { type: String, unique: true, index: true },
+  trackId: { type: String, index: true },
+  title: String,
+  artist: String,
+  lyrics: [{ time: Number, text: String }],
+  updatedBy: String,
+  source: { type: String, default: 'manual' }
+}, { timestamps: true });
+
+const SongLyrics = mongoose.model('SongLyrics', LyricsSchema);
+
+function getTrackKey(title, artist) {
+  const norm = (str) => (str || '')
+    .toLowerCase()
+    .replace(/[\[\(].*?[\]\)]/g, '')
+    .replace(/feat\..*|ft\..*/gi, '')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+  const t = norm(title);
+  const a = norm(artist);
+  return `${t}___${a}`;
+}
+
 // Clean up any dead/expired audio URLs so they resolve dynamically on play
 Track.updateMany(
   { $or: [{ audioUrl: { $regex: 'pixabay' } }, { audioUrl: { $regex: 'sndcdn.com' } }] },
@@ -104,7 +129,9 @@ const UserSchema = new mongoose.Schema({
     trackIds: [String],
     isLikedSongs: Boolean,
     isPublic: { type: Boolean, default: true },
-    description: String
+    description: String,
+    isMix: { type: Boolean, default: false },
+    transitions: { type: Object, default: {} }
   }]
 }, { timestamps: true });
 
@@ -735,6 +762,9 @@ app.get(['/api/search', '/api/search/external'], async (req, res) => {
       cover: t.cover,
       audioUrl: t.audioUrl,
       duration: t.duration || 180,
+      lyrics: t.lyrics || [],
+      bpm: t.bpm,
+      key: t.key,
       source: 'Liofy'
     }));
 
@@ -1463,13 +1493,45 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
 app.post('/api/ai/generate-song-lyrics', async (req, res) => {
   try {
     const { trackId, title, artist, duration } = req.body;
-    let lyrics = await fetchLrclibLyrics(title, artist, duration || 180);
-    if (lyrics && lyrics.length > 0 && trackId) {
-      try {
-        await Track.updateOne({ _id: trackId }, { $set: { lyrics } });
-      } catch {}
+    const trackKey = getTrackKey(title, artist);
+
+    // 1. Check DB first for manually saved or previously cached lyrics
+    if (trackKey && trackKey !== '___') {
+      const saved = await SongLyrics.findOne({ trackKey }).lean();
+      if (saved && saved.lyrics && saved.lyrics.length > 0) {
+        return res.json({ success: true, lyrics: saved.lyrics, isManual: saved.source === 'manual' });
+      }
     }
-    res.json({ success: true, lyrics });
+
+    if (trackId) {
+      const saved = await SongLyrics.findOne({ trackId: String(trackId) }).lean();
+      if (saved && saved.lyrics && saved.lyrics.length > 0) {
+        return res.json({ success: true, lyrics: saved.lyrics, isManual: saved.source === 'manual' });
+      }
+
+      if (mongoose.isValidObjectId(trackId)) {
+        const trk = await Track.findById(trackId).lean();
+        if (trk && trk.lyrics && trk.lyrics.length > 0) {
+          return res.json({ success: true, lyrics: trk.lyrics, isManual: true });
+        }
+      }
+    }
+
+    // 2. Fetch from LRCLIB / OVH
+    let lyrics = await fetchLrclibLyrics(title, artist, duration || 180);
+    if (lyrics && lyrics.length > 0) {
+      if (trackKey && trackKey !== '___') {
+        await SongLyrics.findOneAndUpdate(
+          { trackKey },
+          { $set: { trackKey, trackId: String(trackId || ''), title, artist, lyrics, source: 'synced' } },
+          { upsert: true }
+        ).catch(() => {});
+      }
+      if (trackId && mongoose.isValidObjectId(trackId)) {
+        await Track.updateOne({ _id: trackId }, { $set: { lyrics } }).catch(() => {});
+      }
+    }
+    res.json({ success: true, lyrics: lyrics || [] });
   } catch (e) {
     res.json({ success: false, lyrics: [] });
   }
@@ -1548,22 +1610,130 @@ app.get('/api/tracks/download', async (req, res) => {
 
 app.post('/api/tracks/update-lyrics', async (req, res) => {
   try {
-    const { trackId, lyrics } = req.body;
-    if (trackId && Array.isArray(lyrics)) {
-      await Track.updateOne({ _id: trackId }, { $set: { lyrics } });
+    const { trackId, title, artist, audioUrl, lyrics, updatedBy } = req.body;
+    if (!lyrics || !Array.isArray(lyrics)) {
+      return res.status(400).json({ error: 'Lyrics must be an array' });
     }
-    res.json({ success: true });
+
+    const trackKey = getTrackKey(title, artist);
+
+    // 1. Save / upsert into universal SongLyrics collection
+    if (trackKey && trackKey !== '___') {
+      await SongLyrics.findOneAndUpdate(
+        { trackKey },
+        {
+          $set: {
+            trackKey,
+            trackId: String(trackId || ''),
+            title: title || '',
+            artist: artist || '',
+            lyrics,
+            updatedBy: updatedBy || 'user',
+            source: 'manual'
+          }
+        },
+        { upsert: true, new: true }
+      );
+    }
+
+    // 2. Also index by trackId if available
+    if (trackId) {
+      await SongLyrics.findOneAndUpdate(
+        { trackId: String(trackId) },
+        {
+          $set: {
+            lyrics,
+            title: title || '',
+            artist: artist || '',
+            source: 'manual'
+          }
+        },
+        { upsert: true }
+      ).catch(() => {});
+
+      // 3. If MongoDB ObjectId, update Track collection as well
+      if (mongoose.isValidObjectId(trackId)) {
+        await Track.updateOne({ _id: trackId }, { $set: { lyrics } }).catch(() => {});
+      }
+    }
+
+    // 4. Real-time broadcast to all connected clients & Jam sessions
+    io.emit('lyrics:updated', {
+      trackKey,
+      trackId: String(trackId || ''),
+      title,
+      artist,
+      lyrics
+    });
+
+    console.log(`[Lyrics] Successfully saved & broadcasted manual lyrics for "${title}" by "${artist}"`);
+    res.json({ success: true, trackKey });
   } catch (e) {
+    console.error('Update lyrics error:', e.message);
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Dedicated lyrics fetch endpoint for any track (by trackId OR title+artist)
+app.get('/api/tracks/lyrics', async (req, res) => {
+  try {
+    const { trackId, title, artist } = req.query;
+    const trackKey = getTrackKey(title, artist);
+
+    // 1. Try trackKey in SongLyrics
+    if (trackKey && trackKey !== '___') {
+      const found = await SongLyrics.findOne({ trackKey }).lean();
+      if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
+        return res.json({ success: true, lyrics: found.lyrics, source: found.source || 'manual' });
+      }
+    }
+
+    // 2. Try trackId in SongLyrics
+    if (trackId) {
+      const found = await SongLyrics.findOne({ trackId: String(trackId) }).lean();
+      if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
+        return res.json({ success: true, lyrics: found.lyrics, source: found.source || 'manual' });
+      }
+
+      // 3. Try Track DB if valid ObjectId
+      if (mongoose.isValidObjectId(trackId)) {
+        const trk = await Track.findById(trackId).lean();
+        if (trk && Array.isArray(trk.lyrics) && trk.lyrics.length > 0) {
+          return res.json({ success: true, lyrics: trk.lyrics, source: 'manual' });
+        }
+      }
+    }
+
+    // 4. Fallback to LRCLIB / OVH if title exists
+    if (title) {
+      const lyrics = await fetchLrclibLyrics(title, artist, 180);
+      if (lyrics && lyrics.length > 0) {
+        return res.json({ success: true, lyrics, source: 'synced' });
+      }
+    }
+
+    res.json({ success: false, lyrics: [] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, lyrics: [] });
   }
 });
 
 app.post('/api/tracks/clear-lyrics', async (req, res) => {
   try {
-    const { trackId } = req.body;
-    if (trackId) {
-      await Track.updateOne({ _id: trackId }, { $set: { lyrics: [] } });
+    const { trackId, title, artist } = req.body;
+    const trackKey = getTrackKey(title, artist);
+
+    if (trackKey && trackKey !== '___') {
+      await SongLyrics.deleteOne({ trackKey }).catch(() => {});
     }
+    if (trackId) {
+      await SongLyrics.deleteOne({ trackId: String(trackId) }).catch(() => {});
+      if (mongoose.isValidObjectId(trackId)) {
+        await Track.updateOne({ _id: trackId }, { $set: { lyrics: [] } }).catch(() => {});
+      }
+    }
+
+    io.emit('lyrics:updated', { trackKey, trackId, lyrics: [] });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -1579,6 +1749,191 @@ app.post('/api/ai/translate-lyrics', async (req, res) => {
     res.json({ success: true, translatedLyrics: lyrics });
   } catch (e) {
     res.json({ success: false, translatedLyrics: req.body.lyrics || [] });
+  }
+});
+
+// ──────────────────────────────────────────
+// SPOTIFY MIX: PLAYLIST TRANSITIONS PERSISTENCE
+// ──────────────────────────────────────────
+app.post('/api/playlists/:id/transitions', auth, async (req, res) => {
+  try {
+    const { transitions, isMix } = req.body;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const pl = user.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+
+    if (transitions !== undefined) pl.transitions = transitions;
+    if (isMix !== undefined) pl.isMix = Boolean(isMix);
+    await user.save();
+
+    res.json({ success: true, transitions: pl.transitions, isMix: pl.isMix });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// AI SMART SHUFFLE & INTELLIGENT RECOMMENDATIONS
+// ──────────────────────────────────────────
+async function getGeminiMusicSuggestions(seedTracks, vibePrompt = '') {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const seeds = seedTracks.slice(0, 6).map(t => `"${t.title}" by ${t.artist}`).join(', ');
+    const prompt = `You are a world-class music DJ and recommendation algorithm.
+Given these seed tracks from a user's playlist: [${seeds}].
+${vibePrompt ? `User mood/vibe request: "${vibePrompt}".` : 'Recommend tracks that seamlessly blend with this mood, tempo, and genre for Smart Shuffle.'}
+Provide 6 song recommendations.
+Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason" (short 4-word reason like "Matching energy & tempo" or "Same vibe"). No markdown, no formatting.`;
+
+    const model = 'gemini-flash-latest';
+    const res = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
+      },
+      { timeout: 7000 }
+    );
+
+    const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch (err) {
+    console.warn('[Gemini AI] Smart Shuffle recommendations fallback:', err.message);
+  }
+  return null;
+}
+
+app.post('/api/ai/smart-shuffle', async (req, res) => {
+  try {
+    const { currentTrack, seedTracks = [], limit = 6 } = req.body;
+    const allSeeds = [currentTrack, ...seedTracks].filter(Boolean);
+
+    // 1. Try Gemini AI recommendations first if key exists
+    let aiRecs = await getGeminiMusicSuggestions(allSeeds);
+    let tracks = [];
+
+    if (aiRecs && aiRecs.length > 0) {
+      // Find matching songs from YouTube/SoundCloud/Local DB
+      for (const item of aiRecs.slice(0, limit)) {
+        try {
+          const q = `${item.title} ${item.artist}`;
+          const searchRes = await axios.get(`http://localhost:${PORT}/api/search?q=${encodeURIComponent(q)}`, { timeout: 4000 });
+          if (searchRes.data?.tracks?.length > 0) {
+            const first = searchRes.data.tracks[0];
+            tracks.push({
+              ...first,
+              isSmartShuffle: true,
+              smartReason: item.reason || 'AI Smart Vibe Match'
+            });
+          }
+        } catch {}
+      }
+    }
+
+    // 2. Fallback: Internal Musical Feature & Artist Similarity Algorithm
+    if (tracks.length < 3) {
+      const artists = [...new Set(allSeeds.map(t => t.artist).filter(Boolean))];
+      const titles = allSeeds.map(t => t.title).filter(Boolean);
+
+      // Search DB for tracks by similar artists
+      const dbMatches = await Track.find({
+        $or: [
+          { artist: { $in: artists } },
+          { genre: allSeeds[0]?.genre || 'Pop' }
+        ]
+      }).limit(10).lean();
+
+      const existingIds = new Set(allSeeds.map(t => String(t.id || t._id)));
+      for (const t of dbMatches) {
+        if (!existingIds.has(String(t._id)) && tracks.length < limit) {
+          tracks.push({
+            id: String(t._id),
+            title: t.title,
+            artist: t.artist,
+            album: t.album || 'Single',
+            cover: t.cover,
+            audioUrl: t.audioUrl,
+            duration: t.duration || 180,
+            isSmartShuffle: true,
+            smartReason: 'Matching Artist & Genre',
+            source: 'Liofy'
+          });
+        }
+      }
+
+      // If still need tracks, query popular related songs via search
+      if (tracks.length < 3 && artists.length > 0) {
+        try {
+          const topArtist = artists[0];
+          const extRes = await axios.get(`http://localhost:${PORT}/api/search?q=${encodeURIComponent(topArtist)}`, { timeout: 4000 });
+          if (extRes.data?.tracks?.length > 0) {
+            for (const t of extRes.data.tracks) {
+              if (!existingIds.has(String(t.id)) && !tracks.some(x => x.id === t.id) && tracks.length < limit) {
+                tracks.push({
+                  ...t,
+                  isSmartShuffle: true,
+                  smartReason: 'Artist Top Track'
+                });
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+
+    res.json({ success: true, tracks });
+  } catch (e) {
+    console.error('Smart Shuffle error:', e.message);
+    res.json({ success: false, tracks: [] });
+  }
+});
+
+// Playlist Recommendations endpoint (for AI Enhance Playlist)
+app.post('/api/ai/recommendations', async (req, res) => {
+  try {
+    const { playlistName, seedTracks = [], prompt = '' } = req.body;
+    let aiRecs = await getGeminiMusicSuggestions(seedTracks, prompt || `Songs that fit "${playlistName || 'My Playlist'}"`);
+    let recommendations = [];
+
+    if (aiRecs && aiRecs.length > 0) {
+      for (const item of aiRecs.slice(0, 6)) {
+        try {
+          const q = `${item.title} ${item.artist}`;
+          const searchRes = await axios.get(`http://localhost:${PORT}/api/search?q=${encodeURIComponent(q)}`, { timeout: 4000 });
+          if (searchRes.data?.tracks?.length > 0) {
+            recommendations.push({
+              ...searchRes.data.tracks[0],
+              aiReason: item.reason || 'Perfect match for playlist vibe'
+            });
+          }
+        } catch {}
+      }
+    }
+
+    if (recommendations.length === 0) {
+      // Internal heuristic fallback
+      const artists = [...new Set(seedTracks.map(t => t.artist).filter(Boolean))];
+      const dbTracks = await Track.find({ artist: { $in: artists } }).limit(6).lean();
+      recommendations = dbTracks.map(t => ({
+        id: String(t._id),
+        title: t.title,
+        artist: t.artist,
+        cover: t.cover,
+        audioUrl: t.audioUrl,
+        duration: t.duration || 180,
+        aiReason: 'Similar to artists in your playlist'
+      }));
+    }
+
+    res.json({ success: true, recommendations });
+  } catch (e) {
+    res.json({ success: false, recommendations: [] });
   }
 });
 
@@ -1702,9 +2057,13 @@ io.on('connection', (socket) => {
     const room = jamRooms[roomCode];
     // Avoid duplicate member
     room.members = room.members.filter(m => m.socketId !== socket.id && (!user?.id || m.id !== user.id));
+    const hasActiveHost = room.members.some(m => m.socketId === room.hostId);
     const isFirstMember = room.members.length === 0;
-    const isHost = room.hostId === socket.id || isFirstMember;
-    if (isHost) room.hostId = socket.id;
+    const isHost = isFirstMember || !hasActiveHost || room.hostId === socket.id;
+    if (isHost) {
+      room.hostId = socket.id;
+      room.members.forEach(m => { m.isHost = false; });
+    }
 
     const member = {
       ...user,
@@ -1843,6 +2202,32 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Jam: Host kicks a participant
+  socket.on('jam:kick_member', ({ roomCode, memberSocketId, memberId }) => {
+    const room = jamRooms[roomCode];
+    if (!room) return;
+    if (room.hostId !== socket.id) return; // Only host can kick
+
+    const target = room.members.find(m => m.socketId === memberSocketId || (memberId && (m.id === memberId || m._id === memberId)));
+    if (!target || target.socketId === room.hostId) return; // Cannot kick host
+
+    // Remove from room members
+    room.members = room.members.filter(m => m.socketId !== target.socketId);
+
+    // Notify kicked member
+    io.to(target.socketId).emit('jam:kicked', {
+      roomCode,
+      reason: 'You were removed from the Jam room by the host.'
+    });
+
+    const targetSocket = io.sockets.sockets.get(target.socketId);
+    if (targetSocket) {
+      targetSocket.leave(roomCode);
+    }
+
+    io.to(roomCode).emit('jam:room_updated', room);
+  });
+
   // Jam: Leave room
   socket.on('jam:leave_room', ({ roomCode }) => {
     socket.leave(roomCode);
@@ -1852,9 +2237,11 @@ io.on('connection', (socket) => {
       if (room.members.length === 0) {
         delete jamRooms[roomCode];
       } else {
-        if (room.hostId === socket.id) {
-          room.hostId = room.members[0].socketId;
-          room.members[0].isHost = true;
+        // If host left, pick a random remaining member to become the new host
+        if (room.hostId === socket.id || !room.members.some(m => m.socketId === room.hostId)) {
+          const randomIdx = Math.floor(Math.random() * room.members.length);
+          room.members.forEach((m, idx) => { m.isHost = (idx === randomIdx); });
+          room.hostId = room.members[randomIdx].socketId;
         }
         io.to(roomCode).emit('jam:room_updated', room);
       }
@@ -1871,9 +2258,11 @@ io.on('connection', (socket) => {
         if (room.members.length === 0) {
           delete jamRooms[code];
         } else {
-          if (room.hostId === socket.id) {
-            room.hostId = room.members[0].socketId;
-            room.members[0].isHost = true;
+          // If host left or refreshed, pick a random remaining member to take host
+          if (room.hostId === socket.id || !room.members.some(m => m.socketId === room.hostId)) {
+            const randomIdx = Math.floor(Math.random() * room.members.length);
+            room.members.forEach((m, idx) => { m.isHost = (idx === randomIdx); });
+            room.hostId = room.members[randomIdx].socketId;
           }
           io.to(code).emit('jam:room_updated', room);
         }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2, Radio } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2, Radio, Sparkles } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 
 export default function MiniPlayer({
@@ -116,12 +116,14 @@ export default function MiniPlayer({
             <button
               onClick={(e) => { e.stopPropagation(); toggleShuffle?.(); }}
               className={`flex transition-all hover:scale-105 active:scale-95 relative ${isShuffle ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
-              title="Shuffle"
+              title={isShuffle === 'smart' ? 'Smart Shuffle (AI ✨)' : isShuffle ? 'Shuffle On' : 'Shuffle Off'}
             >
               <Shuffle size={16} />
-              {isShuffle && (
+              {isShuffle === 'smart' ? (
+                <Sparkles size={9} className="absolute -top-1 -right-1 text-emerald-400 fill-emerald-400 animate-pulse" />
+              ) : isShuffle ? (
                 <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
-              )}
+              ) : null}
             </button>
 
             {/* Prev */}

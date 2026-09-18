@@ -50,10 +50,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(210);
   const [volume, setVolumeState] = useState(0.8);
-  const [isShuffle, setIsShuffle] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false); // false | 'shuffle' | 'smart'
   const [isRepeat, setIsRepeat] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [isYtTrack, setIsYtTrack] = useState(false); // exposed for RAF-based lyrics sync
+
+  // Spotify Mix DJ Mode
+  const [isMixMode, setIsMixMode] = useState(false);
+  const [activeTransitions, setActiveTransitions] = useState({});
 
   // Equalizer State
   const [eqEnabled, setEqEnabled] = useState(true);
@@ -66,6 +70,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const isRepeatRef       = useRef(isRepeat);
   const isShuffleRef      = useRef(isShuffle);
+  const isMixModeRef      = useRef(isMixMode);
+  const activeTransRef    = useRef(activeTransitions);
   const currentQueueRef   = useRef(currentQueue);
   const tracksRef         = useRef(tracks);
   const currentTrackRef   = useRef(currentTrack);
@@ -82,6 +88,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
+  useEffect(() => { isMixModeRef.current    = isMixMode;   }, [isMixMode]);
+  useEffect(() => { activeTransRef.current  = activeTransitions; }, [activeTransitions]);
   useEffect(() => { currentQueueRef.current = currentQueue;}, [currentQueue]);
   useEffect(() => { tracksRef.current       = tracks;      }, [tracks]);
   useEffect(() => { currentTrackRef.current = currentTrack;}, [currentTrack]);
@@ -713,7 +721,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
       try { ytPlayerRef.current.pauseVideo(); } catch {}
     }
 
-    if (isShuffleRef.current) {
+    const isSmart = isShuffleRef.current === 'smart';
+    if (isSmart) {
+      const cur = currentTrackRef.current;
+      const curId = String(cur?.id || cur?._id || '');
+      const candidates = activeList.filter(t => String(t.id || t._id) !== curId);
+      const smartCandidates = candidates.filter(t => t.isSmartShuffle);
+      const chosen = (smartCandidates.length > 0)
+        ? smartCandidates[0]
+        : (candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : activeList[0]);
+
+      if (candidates.length <= 3 && cur) {
+        fetchSmartShuffleTracks(cur, activeList);
+      }
+      playTrack(chosen, activeList);
+    } else if (isShuffleRef.current) {
       playTrack(activeList[Math.floor(Math.random() * activeList.length)], activeList);
     } else {
       const cur = currentTrackRef.current;
@@ -724,7 +746,45 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     // Force playing state so song starts automatically
     setIsPlaying(true);
-  }, [isOfflineMode, playTrack]);
+  }, [isOfflineMode, playTrack, fetchSmartShuffleTracks]);
+
+  const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
+    if (!seedTrack) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentTrack: seedTrack,
+          seedTracks: currentList.slice(0, 5),
+          limit: 6
+        })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+        setCurrentQueue(prev => {
+          const existingIds = new Set(prev.map(t => String(t.id || t._id)));
+          const fresh = data.tracks.filter(t => !existingIds.has(String(t.id || t._id)));
+          return [...prev, ...fresh];
+        });
+      }
+    } catch (err) {
+      console.warn('[Smart Shuffle] fetch error:', err);
+    }
+  }, []);
+
+  const toggleShuffle = useCallback(() => {
+    setIsShuffle(prev => {
+      if (!prev || prev === false) return 'shuffle';
+      if (prev === 'shuffle' || prev === true) {
+        if (currentTrackRef.current) {
+          fetchSmartShuffleTracks(currentTrackRef.current, currentQueueRef.current);
+        }
+        return 'smart';
+      }
+      return false;
+    });
+  }, [fetchSmartShuffleTracks]);
 
   const playPrevTrack = useCallback(() => {
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
@@ -872,9 +932,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
     currentTime, duration,
     volume, setVolume,
     isShuffle, setIsShuffle,
+    toggleShuffle,
     isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
     isYtTrack,
+    isMixMode, setIsMixMode,
+    activeTransitions, setActiveTransitions,
     eqEnabled, setEqEnabled,
     eqPreset, setEqPreset,
     eqBands, setEqBands,

@@ -44,7 +44,7 @@ function AppContent() {
   const {
     currentTrack, setCurrentTrack, isPlaying, setIsPlaying,
     currentTime, duration,
-    volume, setVolume, isShuffle, setIsShuffle, isRepeat, setIsRepeat,
+    volume, setVolume, isShuffle, setIsShuffle, toggleShuffle, isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
     setJamSync, syncRemotePlayState, addToJamQueue, removeFromJamQueue
@@ -341,6 +341,13 @@ function AppContent() {
       setJamSync({ socket: s, jamSession: room });
     });
 
+    s.on('jam:kicked', (data) => {
+      alert(data?.reason || 'You were kicked from the Jam room by the host.');
+      setJamSession(null);
+      setJamSync({ jamSession: null });
+      setIsJamOpen(false);
+    });
+
     s.on('jam:sync_play_state', (data) => {
       syncRemotePlayState(data);
     });
@@ -437,6 +444,17 @@ function AppContent() {
       setJamSession(null);
       setJamSync({ jamSession: null });
       showToast('Left Jam Session');
+    }
+  };
+
+  const handleKickMember = (member) => {
+    if (jamSession && socket && member) {
+      socket.emit('jam:kick_member', {
+        roomCode: jamSession.code,
+        memberSocketId: member.socketId,
+        memberId: member.id || member._id
+      });
+      showToast(`Kicked ${member.name} from Jam`);
     }
   };
 
@@ -651,7 +669,7 @@ function AppContent() {
           playNext={playNextTrack}
           playPrev={playPrevTrack}
           isShuffle={isShuffle}
-          toggleShuffle={() => setIsShuffle(p => !p)}
+          toggleShuffle={toggleShuffle}
           isRepeat={isRepeat}
           toggleRepeat={() => setIsRepeat(p => !p)}
           toggleLike={toggleLike}
@@ -686,7 +704,7 @@ function AppContent() {
         volume={volume}
         setVolume={setVolume}
         isShuffle={isShuffle}
-        toggleShuffle={() => setIsShuffle(p => !p)}
+        toggleShuffle={toggleShuffle}
         isRepeat={isRepeat}
         toggleRepeat={() => setIsRepeat(p => !p)}
         queue={jamSession?.queue?.length ? jamSession.queue : tracks}
@@ -755,6 +773,9 @@ function AppContent() {
         onAddToJamQueue={addToJamQueue}
         onRemoveFromJamQueue={removeFromJamQueue}
         onPlayTrack={playTrack}
+        currentUser={currentUser}
+        socket={socket}
+        onKickMember={handleKickMember}
       />
 
       <ImportPlaylistModal

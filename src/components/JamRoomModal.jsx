@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Radio, Users, Copy, Check, Play, Pause, Volume2, Plus, Trash2, Search, Music, Headphones } from 'lucide-react';
+import { X, Radio, Users, Copy, Check, Play, Pause, Volume2, Plus, Trash2, Search, Music, Headphones, UserMinus } from 'lucide-react';
 import { resumeAudioContext } from '../utils/audioEngine';
 import VerifiedBadge from './VerifiedBadge';
 
@@ -15,7 +15,10 @@ export default function JamRoomModal({
   tracks = [],
   onAddToJamQueue,
   onRemoveFromJamQueue,
-  onPlayTrack
+  onPlayTrack,
+  currentUser = null,
+  socket = null,
+  onKickMember = () => {}
 }) {
   const [inputCode, setInputCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -240,20 +243,43 @@ export default function JamRoomModal({
                 <span>Listeners in Room ({jamSession.members?.length || 1})</span>
               </h4>
               <div className="flex flex-col gap-2">
-                {(jamSession.members || []).map((m) => (
-                  <div key={m.id || m.socketId} className="flex items-center justify-between p-2.5 bg-zinc-900/60 rounded-xl border border-zinc-800 text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <img src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'} alt={m.name} className="w-7 h-7 rounded-full object-cover shadow" />
-                      <span className="font-bold text-white">{m.name}</span>
-                      <VerifiedBadge userOrName={m} size={13} />
+                {(() => {
+                  const myMember = (jamSession.members || []).find(m => m.socketId === socket?.id || (currentUser?.id && (m.id === currentUser.id || m._id === currentUser.id)));
+                  const isCurrentUserHost = Boolean(myMember?.isHost || jamSession.hostId === socket?.id);
+
+                  return (jamSession.members || []).map((m) => (
+                    <div key={m.id || m.socketId} className="flex items-center justify-between p-2.5 bg-zinc-900/60 rounded-xl border border-zinc-800 text-xs">
+                      <div className="flex items-center gap-2.5">
+                        <img src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'} alt={m.name} className="w-7 h-7 rounded-full object-cover shadow" />
+                        <span className="font-bold text-white">{m.name}</span>
+                        <VerifiedBadge userOrName={m} size={13} />
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {m.isHost && (
+                          <span className="text-[10px] font-black text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded-full border border-cyan-500/40">
+                            Host
+                          </span>
+                        )}
+
+                        {/* Kick Button for Host */}
+                        {isCurrentUserHost && !m.isHost && (
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Kick "${m.name}" from the Jam room?`)) {
+                                onKickMember?.(m);
+                              }
+                            }}
+                            className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title={`Kick ${m.name} from Jam`}
+                          >
+                            <UserMinus size={14} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {m.isHost && (
-                      <span className="text-[10px] font-black text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded-full border border-cyan-500/40">
-                        Host
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  ));
+                })()}
               </div>
             </div>
 

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
+import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
@@ -192,32 +193,67 @@ export default function FullPlayerModal({
     setTranslatedLyrics(null);
     setShowTranslation(false);
 
-    if (currentTrack && (!currentTrack.lyrics || currentTrack.lyrics.length === 0)) {
+    if (currentTrack) {
       const qTitle = currentTrack.title;
       const qArtist = currentTrack.artist;
       const tId = currentTrack.id || currentTrack._id;
       if (qTitle) {
-        fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            trackId: tId,
-            title: qTitle,
-            artist: qArtist,
-            duration: currentTrack.duration || 180,
+        // First check server for manually saved or cached lyrics
+        fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${encodeURIComponent(tId || '')}&title=${encodeURIComponent(qTitle || '')}&artist=${encodeURIComponent(qArtist || '')}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
+              setLocalLyrics(d.lyrics);
+              currentTrack.lyrics = d.lyrics;
+            } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
+              fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  trackId: tId,
+                  title: qTitle,
+                  artist: qArtist,
+                  duration: currentTrack.duration || 180,
+                })
+              })
+              .then(r => r.json())
+              .then(g => {
+                if (g.success && Array.isArray(g.lyrics) && g.lyrics.length > 0) {
+                  setLocalLyrics(g.lyrics);
+                  currentTrack.lyrics = g.lyrics;
+                }
+              })
+              .catch(() => {});
+            }
           })
-        })
-        .then(r => r.json())
-        .then(d => {
-          if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
-            setLocalLyrics(d.lyrics);
-            currentTrack.lyrics = d.lyrics;
-          }
-        })
-        .catch(() => {});
+          .catch(() => {});
       }
     }
-  }, [currentTrack?.id, currentTrack?._id]);
+  }, [currentTrack?.id, currentTrack?._id, currentTrack?.title]);
+
+  // Real-time socket listener for lyrics updates from ANY user
+  useEffect(() => {
+    const s = getJamSocket();
+    if (!s) return;
+    const onLyricsUpdated = (data) => {
+      if (!currentTrack) return;
+      const curTitle = (currentTrack.title || '').toLowerCase().trim();
+      const curId = String(currentTrack.id || currentTrack._id || '');
+
+      const matches =
+        (data.trackId && String(data.trackId) === curId) ||
+        (data.title && data.title.toLowerCase().trim() === curTitle);
+
+      if (matches && Array.isArray(data.lyrics)) {
+        setLocalLyrics(data.lyrics);
+        currentTrack.lyrics = data.lyrics;
+      }
+    };
+    s.on('lyrics:updated', onLyricsUpdated);
+    return () => {
+      s.off('lyrics:updated', onLyricsUpdated);
+    };
+  }, [currentTrack?.id, currentTrack?._id, currentTrack?.title]);
 
   const rawLyrics = localLyrics || (currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : []);
   const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
@@ -319,7 +355,10 @@ export default function FullPlayerModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trackId: currentTrack.id,
+          trackId: currentTrack.id || currentTrack._id,
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          audioUrl: currentTrack.audioUrl,
           lyrics: parsed
         })
       });
@@ -820,15 +859,17 @@ export default function FullPlayerModal({
             <button 
               onClick={toggleShuffle} 
               className="p-2 relative transition-all hover:scale-110"
-              title="Shuffle"
+              title={isShuffle === 'smart' ? 'Smart Shuffle (AI ✨)' : isShuffle ? 'Shuffle On' : 'Shuffle Off'}
             >
               <Shuffle 
                 size={20} 
                 style={{ color: isShuffle ? '#1DB954' : '#b3b3b3' }}
               />
-              {isShuffle && (
+              {isShuffle === 'smart' ? (
+                <Sparkles size={11} className="absolute -top-0.5 -right-0.5 text-emerald-400 fill-emerald-400 animate-pulse" />
+              ) : isShuffle ? (
                 <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
-              )}
+              ) : null}
             </button>
 
             <button 
