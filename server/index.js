@@ -671,10 +671,6 @@ app.get('/api/users/listening-activity', optionalAuth, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
 
 app.post('/api/users/listening-activity', auth, async (req, res) => {
   try {
