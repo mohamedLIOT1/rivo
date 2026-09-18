@@ -613,6 +613,7 @@ function AppContent() {
           <PlaylistScreen
             playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || selectedPlaylist}
             tracks={tracks}
+            currentUser={currentUser}
             onSelectTrack={playTrack}
             toggleLike={toggleLike}
             toggleDownload={handleDownload}

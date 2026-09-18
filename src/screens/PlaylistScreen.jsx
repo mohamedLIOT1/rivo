@@ -12,6 +12,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 export default function PlaylistScreen({ 
   playlist, 
   tracks = [], 
+  currentUser,
   onSelectTrack, 
   toggleLike, 
   onBack,
@@ -27,6 +28,16 @@ export default function PlaylistScreen({
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
   const [fetchedTracks, setFetchedTracks] = useState([]);
+
+  // Ownership verification: owner can edit, delete, add/remove tracks, change cover
+  const myId = String(currentUser?.id || currentUser?._id || '');
+  const isOwner = Boolean(
+    playlist?.isLikedSongs ||
+    (myId && (
+      String(playlist?.ownerId || playlist?.userId || playlist?.owner?._id || playlist?.owner?.id || playlist?.owner || '') === myId ||
+      (currentUser?.playlists || []).some(p => String(p?.id || p?._id || p) === String(playlist?.id || playlist?._id))
+    ))
+  );
 
   // Spotify Mix & DJ Transitions State
   const [isMixActive, setIsMixActive] = useState(Boolean(playlist?.isMix));
@@ -240,6 +251,14 @@ export default function PlaylistScreen({
     }
   };
 
+  const handlePlayPlaylistTrack = (track) => {
+    if (isMixActive) {
+      setIsMixMode?.(true);
+      setActiveTransitions?.(transitions);
+    }
+    onSelectTrack(track, filteredPlaylistTracks);
+  };
+
   return (
     <div className="flex-1 overflow-y-auto pb-32 select-none">
       {/* Header Banner */}
@@ -264,17 +283,19 @@ export default function PlaylistScreen({
                 alt={playlist.name} 
                 className="w-full h-full object-cover" 
               />
-              <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 cursor-pointer text-white">
-                {isUpdatingCover ? (
-                  <Loader2 size={24} className="animate-spin" />
-                ) : (
-                  <>
-                    <Camera size={28} />
-                    <span className="text-xs font-bold">Change Cover</span>
-                  </>
-                )}
-                <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
-              </label>
+              {isOwner && (
+                <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 cursor-pointer text-white">
+                  {isUpdatingCover ? (
+                    <Loader2 size={24} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Camera size={28} />
+                      <span className="text-xs font-bold">Change Cover</span>
+                    </>
+                  )}
+                  <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+                </label>
+              )}
             </>
           )}
         </div>
@@ -287,47 +308,54 @@ export default function PlaylistScreen({
 
             {/* Public/Private Badge & Action Buttons */}
             {!playlist.isLikedSongs && (
-              <>
-                <button
-                  onClick={handleTogglePrivacy}
-                  disabled={isTogglingPrivacy}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
-                    isPublic 
-                      ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/30' 
-                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-                  }`}
-                  title="Tap to toggle profile visibility"
-                >
-                  {isTogglingPrivacy ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : isPublic ? (
-                    <><Globe size={12} /><span>Public (Visible)</span></>
-                  ) : (
-                    <><Lock size={12} /><span>Private (Hidden)</span></>
-                  )}
-                </button>
+              isOwner ? (
+                <>
+                  <button
+                    onClick={handleTogglePrivacy}
+                    disabled={isTogglingPrivacy}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border transition-all cursor-pointer ${
+                      isPublic 
+                        ? 'bg-[#1DB954]/20 text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/30' 
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                    }`}
+                    title="Tap to toggle profile visibility"
+                  >
+                    {isTogglingPrivacy ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : isPublic ? (
+                      <><Globe size={12} /><span>Public (Visible)</span></>
+                    ) : (
+                      <><Lock size={12} /><span>Private (Hidden)</span></>
+                    )}
+                  </button>
 
-                {/* Edit Button */}
-                <button
-                  onClick={() => setIsEditModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
-                  title="Edit name & description"
-                >
-                  <Edit2 size={12} />
-                  <span>Edit</span>
-                </button>
+                  {/* Edit Button */}
+                  <button
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-white/10 hover:bg-white/20 text-white border border-white/20 transition-all cursor-pointer"
+                    title="Edit name & description"
+                  >
+                    <Edit2 size={12} />
+                    <span>Edit</span>
+                  </button>
 
-                {/* Delete Button */}
-                <button
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/10 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all cursor-pointer"
-                  title="Delete playlist"
-                >
-                  <Trash2 size={12} />
-                  <span>Delete</span>
-                </button>
-              </>
+                  {/* Delete Button */}
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-red-500/10 hover:bg-red-500/30 text-red-400 border border-red-500/30 transition-all cursor-pointer"
+                    title="Delete playlist"
+                  >
+                    <Trash2 size={12} />
+                    <span>Delete</span>
+                  </button>
+                </>
+              ) : (
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-zinc-800/80 text-zinc-300 border-zinc-700">
+                  {isPublic ? <Globe size={12} /> : <Lock size={12} />}
+                  <span>{isPublic ? 'Public' : 'Private'}</span>
+                </span>
+              )
             )}
           </div>
 
@@ -335,7 +363,7 @@ export default function PlaylistScreen({
             <h1 className="text-4xl md:text-6xl font-black text-white tracking-tight mt-1">
               {playlist.name}
             </h1>
-            {!playlist.isLikedSongs && (
+            {!playlist.isLikedSongs && isOwner && (
               <button
                 onClick={() => setIsEditModalOpen(true)}
                 className="p-2 text-zinc-400 hover:text-white transition-colors"
@@ -412,7 +440,7 @@ export default function PlaylistScreen({
         <div className="flex items-center flex-wrap gap-3">
           <button
             disabled={filteredPlaylistTracks.length === 0}
-            onClick={() => filteredPlaylistTracks.length > 0 && onSelectTrack(filteredPlaylistTracks[0], filteredPlaylistTracks)}
+            onClick={() => filteredPlaylistTracks.length > 0 && handlePlayPlaylistTrack(filteredPlaylistTracks[0])}
             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all ${
               filteredPlaylistTracks.length > 0
                 ? 'bg-[#1DB954] hover:bg-[#1ed760] text-black hover:scale-105 active:scale-95 cursor-pointer'
@@ -442,7 +470,7 @@ export default function PlaylistScreen({
           )}
 
           {/* Auto Mix All Button */}
-          {isMixActive && filteredPlaylistTracks.length > 1 && (
+          {isMixActive && isOwner && filteredPlaylistTracks.length > 1 && (
             <button
               onClick={handleAutoMixAll}
               disabled={isAutoMixingAll}
@@ -493,7 +521,7 @@ export default function PlaylistScreen({
                 return (
                   <React.Fragment key={track.id || track._id || i}>
                     <div
-                      onClick={() => onSelectTrack(track, filteredPlaylistTracks)}
+                      onClick={() => handlePlayPlaylistTrack(track)}
                       className="grid grid-cols-12 items-center p-3 rounded-xl hover:bg-zinc-900/80 cursor-pointer group transition-colors border border-transparent hover:border-zinc-800"
                     >
                       <span className="col-span-1 text-xs font-black text-zinc-500 text-center">{i + 1}</span>
@@ -536,7 +564,7 @@ export default function PlaylistScreen({
                         >
                           <Heart size={16} className={track.liked ? 'fill-white text-white' : ''} />
                         </button>
-                        {!playlist.isLikedSongs && (
+                        {!playlist.isLikedSongs && isOwner && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -548,7 +576,7 @@ export default function PlaylistScreen({
                             <Minus size={16} />
                           </button>
                         )}
-                        {onDeleteTrack && (
+                        {onDeleteTrack && isOwner && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -569,11 +597,14 @@ export default function PlaylistScreen({
                     {isMixActive && nextTrack && compatibility && (
                       <div
                         onClick={(e) => {
+                          if (!isOwner) return;
                           e.stopPropagation();
                           setActiveMixerPair({ trackA: track, trackB: nextTrack, pairKey });
                         }}
-                        className="my-1.5 mx-2 py-1.5 px-4 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/90 border border-dashed border-emerald-500/30 hover:border-emerald-500/80 flex items-center justify-between cursor-pointer transition-all group shadow-sm"
-                        title="Click to customize transition in Mini-Mixer"
+                        className={`my-1.5 mx-2 py-1.5 px-4 rounded-xl bg-zinc-900/50 border border-dashed border-emerald-500/30 flex items-center justify-between transition-all group shadow-sm ${
+                          isOwner ? 'hover:bg-zinc-800/90 hover:border-emerald-500/80 cursor-pointer' : 'cursor-default'
+                        }`}
+                        title={isOwner ? "Click to customize transition in Mini-Mixer" : "DJ Transition"}
                       >
                         <div className="flex items-center gap-2">
                           <Sliders size={13} className="text-[#1DB954]" />
@@ -584,10 +615,12 @@ export default function PlaylistScreen({
                             • {compatibility.badge}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-400 group-hover:text-emerald-300">
-                          <span>Edit Transition 🎛️</span>
-                          <ArrowRight size={12} />
-                        </div>
+                        {isOwner && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-black text-emerald-400 group-hover:text-emerald-300">
+                            <span>Edit Transition 🎛️</span>
+                            <ArrowRight size={12} />
+                          </div>
+                        )}
                       </div>
                     )}
                   </React.Fragment>
@@ -645,14 +678,16 @@ export default function PlaylistScreen({
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => onAddTrackToPlaylist(rec.id, playlist.id)}
-                    className="px-3 py-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full flex items-center gap-1 transition-all shadow-md shrink-0"
-                    title="Add to playlist"
-                  >
-                    <Plus size={14} />
-                    <span>Add</span>
-                  </button>
+                  {isOwner && (
+                    <button
+                      onClick={() => onAddTrackToPlaylist(rec.id, playlist.id)}
+                      className="px-3 py-1.5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-xs rounded-full flex items-center gap-1 transition-all shadow-md shrink-0"
+                      title="Add to playlist"
+                    >
+                      <Plus size={14} />
+                      <span>Add</span>
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -660,8 +695,8 @@ export default function PlaylistScreen({
         </section>
       )}
 
-      {/* Add Songs to Playlist Section */}
-      {!playlist.isLikedSongs && availableTracks.length > 0 && (
+      {/* Add Songs to Playlist Section (Owner Only) */}
+      {!playlist.isLikedSongs && isOwner && availableTracks.length > 0 && (
         <section className="px-4 md:px-8 pt-6 border-t border-zinc-800">
           <div className="flex items-center justify-between mb-4">
             <div>

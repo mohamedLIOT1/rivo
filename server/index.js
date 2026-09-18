@@ -442,14 +442,28 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const rawIdentifier = (req.body.identifier || req.body.email || req.body.username || '').trim();
+    const { password } = req.body;
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ error: 'Email or username and password are required' });
+    }
+
+    const escapedIdentifier = rawIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const user = await User.findOne({
+      $or: [
+        { email: rawIdentifier.toLowerCase() },
+        { name: { $regex: new RegExp(`^${escapedIdentifier}$`, 'i') } }
+      ]
+    });
+
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Invalid email/username or password' });
     }
     const userObj = user.toObject();
     delete userObj.password;
     userObj.isVerified = isVerifiedUser(userObj.name);
+    userObj.followersCount = (user.followers || []).length;
+    userObj.followingCount = (user.following || []).length;
     res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -465,6 +479,8 @@ app.get('/api/auth/me', auth, async (req, res) => {
     }
     const userObj = user.toObject ? user.toObject() : { ...user._doc };
     userObj.isVerified = isVerifiedUser(userObj.name);
+    userObj.followersCount = (user.followers || []).length;
+    userObj.followingCount = (user.following || []).length;
     res.json({ success: true, user: userObj });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -533,6 +549,8 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
     const isFollowing = currentUserId ? (target.followers || []).map(String).includes(String(currentUserId)) : false;
     const publicPlaylists = (target.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
       ...p,
+      ownerId: String(target._id),
+      ownerName: target.name,
       trackCount: (p.trackIds || []).length
     }));
 
@@ -614,6 +632,42 @@ app.get('/api/users/friends', auth, async (req, res) => {
         isVerified: isVerifiedUser(f.name)
       }))
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get user followers list
+app.get('/api/users/:id/followers', optionalAuth, async (req, res) => {
+  try {
+    const target = await User.findById(req.params.id).populate('followers', '_id name avatar bio').lean();
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const followers = (target.followers || []).map(f => ({
+      id: String(f._id),
+      name: f.name,
+      avatar: f.avatar,
+      bio: f.bio || '',
+      isVerified: isVerifiedUser(f.name)
+    }));
+    res.json({ success: true, followers, count: followers.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get user following list
+app.get('/api/users/:id/following', optionalAuth, async (req, res) => {
+  try {
+    const target = await User.findById(req.params.id).populate('following', '_id name avatar bio').lean();
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    const following = (target.following || []).map(f => ({
+      id: String(f._id),
+      name: f.name,
+      avatar: f.avatar,
+      bio: f.bio || '',
+      isVerified: isVerifiedUser(f.name)
+    }));
+    res.json({ success: true, following, count: following.length });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1214,8 +1268,9 @@ app.post('/api/playlists/create', auth, async (req, res) => {
 app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
-    const pl = u.playlists.find(p => String(p.id) === String(req.params.id));
-    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
     const trackIdStr = String(req.body.trackId);
     if (!pl.trackIds.map(String).includes(trackIdStr)) {
       pl.trackIds.push(trackIdStr);
@@ -1227,24 +1282,19 @@ app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
   }
 });
 
-// Remove track from playlist
+// Remove track from playlist (Strictly restricted to playlist owner)
 const removeTrackFromPlaylistHandler = async (req, res) => {
   try {
+    if (!req.user || !req.user.id) return res.status(401).json({ error: 'Unauthorized' });
     const playlistId = String(req.params.id || '');
     const trackIdStr = String(req.body.trackId || req.params.trackId || '');
     if (!trackIdStr) return res.status(400).json({ error: 'trackId required' });
 
-    let u = null;
-    if (req.user && req.user.id) {
-      u = await User.findById(req.user.id);
-    }
-    if (!u) {
-      u = await User.findOne({ 'playlists.id': playlistId });
-    }
-    if (!u) return res.status(404).json({ error: 'Playlist or user not found' });
+    const u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ error: 'User not found' });
 
-    const pl = u.playlists.find(p => String(p.id) === playlistId);
-    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    const pl = u.playlists.find(p => String(p.id || p._id) === playlistId);
+    if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
 
     pl.trackIds = (pl.trackIds || []).filter(id => String(id) !== trackIdStr);
     await u.save();
@@ -1253,15 +1303,15 @@ const removeTrackFromPlaylistHandler = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
-app.post('/api/playlists/:id/remove-track', optionalAuth, removeTrackFromPlaylistHandler);
-app.delete('/api/playlists/:id/tracks/:trackId', optionalAuth, removeTrackFromPlaylistHandler);
+app.post('/api/playlists/:id/remove-track', auth, removeTrackFromPlaylistHandler);
+app.delete('/api/playlists/:id/tracks/:trackId', auth, removeTrackFromPlaylistHandler);
 
 app.post('/api/playlists/:id/update', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
     const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
-    if (!pl) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
     if (req.body.name) pl.name = req.body.name;
     if (req.body.cover) pl.cover = req.body.cover;
     if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
@@ -1277,7 +1327,7 @@ app.post('/api/playlists/:id/toggle-visibility', auth, async (req, res) => {
     const u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
     const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
-    if (!pl) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
     pl.isPublic = pl.isPublic === false ? true : false;
     await u.save();
     res.json({ success: true, isPublic: pl.isPublic });
@@ -1289,7 +1339,12 @@ app.post('/api/playlists/:id/toggle-visibility', auth, async (req, res) => {
 app.delete('/api/playlists/:id', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
-    u.playlists = u.playlists.filter(p => String(p.id) !== String(req.params.id));
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    const initialLen = u.playlists.length;
+    u.playlists = u.playlists.filter(p => String(p.id || p._id) !== String(req.params.id));
+    if (u.playlists.length === initialLen) {
+      return res.status(403).json({ error: 'Playlist not found or not owned by you' });
+    }
     await u.save();
     res.json({ success: true });
   } catch (e) {
@@ -1762,7 +1817,7 @@ app.post('/api/playlists/:id/transitions', auth, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const pl = user.playlists.find(p => String(p.id || p._id) === String(req.params.id));
-    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
 
     if (transitions !== undefined) pl.transitions = transitions;
     if (isMix !== undefined) pl.isMix = Boolean(isMix);

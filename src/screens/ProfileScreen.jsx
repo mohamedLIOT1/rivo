@@ -38,10 +38,65 @@ export default function ProfileScreen({
   const [viewingProfile, setViewingProfile] = useState(null);
   const searchTimeoutRef = useRef(null);
 
+  // Social Followers / Following Modal State
+  const [socialModal, setSocialModal] = useState({
+    isOpen: false,
+    type: 'followers', // 'followers' | 'following'
+    title: '',
+    users: [],
+    loading: false
+  });
+
+  const handleOpenSocialModal = async (targetUserId, type, name = '') => {
+    if (!targetUserId) return;
+    const isFollowers = type === 'followers';
+    setSocialModal({
+      isOpen: true,
+      type,
+      title: isFollowers ? `Followers • ${name || 'User'}` : `Following • ${name || 'User'}`,
+      users: [],
+      loading: true
+    });
+
+    try {
+      const token = localStorage.getItem('liofy_token');
+      const res = await fetch(`${API_BASE_URL}/api/users/${targetUserId}/${type}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSocialModal(prev => ({
+          ...prev,
+          users: isFollowers ? (data.followers || []) : (data.following || []),
+          loading: false
+        }));
+      } else {
+        setSocialModal(prev => ({ ...prev, loading: false }));
+      }
+    } catch {
+      setSocialModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   useEffect(() => {
     setLocalUser(currentUser);
     setNameInput(currentUser?.name || '');
     setBioInput(currentUser?.bio || '');
+
+    // Fetch fresh profile with follower counts
+    const token = localStorage.getItem('liofy_token');
+    if (token) {
+      fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.user) {
+          setLocalUser(d.user);
+        }
+      })
+      .catch(() => {});
+    }
   }, [currentUser]);
 
   useEffect(() => {
@@ -265,15 +320,23 @@ export default function ProfileScreen({
                 <span className="text-xs text-zinc-400">Playlists</span>
               </div>
               <div className="w-px h-6 bg-white/10" />
-              <div className="text-center">
-                <span className="text-white font-extrabold text-base block">{viewingProfile.followersCount || 0}</span>
-                <span className="text-xs text-zinc-400">Followers</span>
-              </div>
+              <button
+                onClick={() => handleOpenSocialModal(viewingProfile.id, 'followers', viewingProfile.name)}
+                className="text-center hover:opacity-80 transition-opacity cursor-pointer group"
+                title="View followers"
+              >
+                <span className="text-white font-extrabold text-base block group-hover:text-[#1DB954] transition-colors">{viewingProfile.followersCount || 0}</span>
+                <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Followers</span>
+              </button>
               <div className="w-px h-6 bg-white/10" />
-              <div className="text-center">
-                <span className="text-white font-extrabold text-base block">{viewingProfile.followingCount || 0}</span>
-                <span className="text-xs text-zinc-400">Following</span>
-              </div>
+              <button
+                onClick={() => handleOpenSocialModal(viewingProfile.id, 'following', viewingProfile.name)}
+                className="text-center hover:opacity-80 transition-opacity cursor-pointer group"
+                title="View following"
+              >
+                <span className="text-white font-extrabold text-base block group-hover:text-[#1DB954] transition-colors">{viewingProfile.followingCount || 0}</span>
+                <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">Following</span>
+              </button>
             </div>
 
             {/* Actions Bar (Follow, Chat, Jam) */}
@@ -490,21 +553,33 @@ export default function ProfileScreen({
             </div>
 
             {/* Stats row */}
-            <div className="flex items-center justify-center gap-8 mt-6">
+            <div className="flex items-center justify-center gap-6 sm:gap-8 mt-6">
               <div className="text-center">
                 <p className="text-2xl font-extrabold text-white">{localPlaylists.filter(p => !p.isLikedSongs).length}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Playlists</p>
+                <p className="text-xs text-zinc-400 mt-0.5 font-bold">Playlists</p>
               </div>
               <div className="w-px h-8 bg-white/10" />
-              <div className="text-center">
-                <p className="text-2xl font-extrabold text-white">{publicPlaylists.filter(p => !p.isLikedSongs).length}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Public</p>
-              </div>
+              <button
+                onClick={() => handleOpenSocialModal(localUser?._id || localUser?.id, 'followers', localUser?.name)}
+                className="text-center hover:opacity-80 transition-opacity cursor-pointer group"
+                title="View your followers"
+              >
+                <p className="text-2xl font-extrabold text-white group-hover:text-[#1DB954] transition-colors">
+                  {localUser?.followersCount ?? (Array.isArray(localUser?.followers) ? localUser.followers.length : 0)}
+                </p>
+                <p className="text-xs text-zinc-400 mt-0.5 group-hover:text-white font-bold transition-colors">Followers</p>
+              </button>
               <div className="w-px h-8 bg-white/10" />
-              <div className="text-center">
-                <p className="text-2xl font-extrabold text-white">{privatePlaylists.filter(p => !p.isLikedSongs).length}</p>
-                <p className="text-xs text-zinc-500 mt-0.5">Private</p>
-              </div>
+              <button
+                onClick={() => handleOpenSocialModal(localUser?._id || localUser?.id, 'following', localUser?.name)}
+                className="text-center hover:opacity-80 transition-opacity cursor-pointer group"
+                title="View people you follow"
+              >
+                <p className="text-2xl font-extrabold text-white group-hover:text-[#1DB954] transition-colors">
+                  {localUser?.followingCount ?? (Array.isArray(localUser?.following) ? localUser.following.length : 0)}
+                </p>
+                <p className="text-xs text-zinc-400 mt-0.5 group-hover:text-white font-bold transition-colors">Following</p>
+              </button>
             </div>
           </div>
 
@@ -653,6 +728,75 @@ export default function ProfileScreen({
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Social Followers / Following List Modal ── */}
+      {socialModal.isOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[210] flex items-center justify-center p-4">
+          <div className="bg-[#181818] border border-zinc-800 rounded-3xl w-full max-w-sm max-h-[75vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+              <div className="flex items-center gap-2">
+                <User size={18} className="text-[#1DB954]" />
+                <h3 className="text-base font-extrabold text-white">{socialModal.title}</h3>
+              </div>
+              <button
+                onClick={() => setSocialModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1 text-zinc-400 hover:text-white rounded-full hover:bg-white/10"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content List */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {socialModal.loading ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-400">
+                  <Loader2 size={24} className="animate-spin text-[#1DB954]" />
+                  <span className="text-xs font-bold">Loading...</span>
+                </div>
+              ) : socialModal.users.length === 0 ? (
+                <div className="py-12 text-center text-zinc-500">
+                  <User size={36} className="mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-bold">
+                    {socialModal.type === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
+                  </p>
+                </div>
+              ) : (
+                socialModal.users.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => {
+                      setSocialModal(prev => ({ ...prev, isOpen: false }));
+                      handleViewUserProfile(u.id);
+                    }}
+                    className="flex items-center gap-3 p-2.5 rounded-2xl hover:bg-zinc-800/80 transition-all cursor-pointer group"
+                  >
+                    <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-800 border border-zinc-700 shrink-0 flex items-center justify-center">
+                      {u.avatar ? (
+                        <img src={u.avatar} alt={u.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={20} className="text-zinc-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-bold text-white truncate group-hover:text-[#1DB954] transition-colors">
+                          {u.name}
+                        </span>
+                        <VerifiedBadge userOrName={u} size={15} />
+                      </div>
+                      {u.bio && (
+                        <p className="text-xs text-zinc-400 truncate">{u.bio}</p>
+                      )}
+                    </div>
+                    <ChevronRight size={16} className="text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

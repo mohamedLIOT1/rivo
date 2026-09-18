@@ -18,12 +18,17 @@ export default function AuthModal({ isOpen, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) { setError('Email and password required'); return; }
+    if (!email || !password) {
+      setError(mode === 'register' ? 'Email and password required' : 'Email or Username and password required');
+      return;
+    }
     setIsLoading(true);
     setError('');
     try {
       const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
-      const body = mode === 'register' ? { name, email, password } : { email, password };
+      const body = mode === 'register'
+        ? { name, email, password }
+        : { identifier: email, email, username: email, password };
       const res  = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -129,12 +134,14 @@ export default function AuthModal({ isOpen, onClose }) {
               )}
 
               <div>
-                <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">Email</label>
+                <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">
+                  {mode === 'login' ? 'Email or Username' : 'Email'}
+                </label>
                 <input
-                  type="email"
+                  type={mode === 'login' ? 'text' : 'email'}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={mode === 'login' ? 'Username or email@example.com' : 'you@example.com'}
                   required
                   className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
                 />
