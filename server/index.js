@@ -1215,15 +1215,30 @@ app.delete('/api/playlists/:id/tracks/:trackId', optionalAuth, removeTrackFromPl
 app.post('/api/playlists/:id/update', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
-    const pl = u.playlists.find(p => String(p.id) === String(req.params.id));
-    if (!pl) return res.status(404).end();
+    if (!u) return res.status(404).json({ success: false, error: 'User not found' });
+    const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl) return res.status(404).json({ success: false, error: 'Playlist not found' });
     if (req.body.name) pl.name = req.body.name;
     if (req.body.cover) pl.cover = req.body.cover;
-    if (req.body.isPublic !== undefined) pl.isPublic = req.body.isPublic;
+    if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
     await u.save();
-    res.json({ success: true });
+    res.json({ success: true, isPublic: pl.isPublic });
   } catch (e) {
-    res.status(500).end();
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/playlists/:id/toggle-visibility', auth, async (req, res) => {
+  try {
+    const u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ success: false, error: 'User not found' });
+    const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl) return res.status(404).json({ success: false, error: 'Playlist not found' });
+    pl.isPublic = pl.isPublic === false ? true : false;
+    await u.save();
+    res.json({ success: true, isPublic: pl.isPublic });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

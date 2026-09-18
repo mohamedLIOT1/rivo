@@ -222,13 +222,16 @@ function AppContent() {
   };
 
   const handleUpdatePlaylist = async (updatedPl) => {
-    setPlaylists(prev => prev.map(p => p.id === updatedPl.id ? updatedPl : p));
-    if (selectedPlaylist?.id === updatedPl.id) setSelectedPlaylist(updatedPl);
+    const plId = String(updatedPl.id || updatedPl._id);
+    setPlaylists(prev => prev.map(p => String(p.id || p._id) === plId ? updatedPl : p));
+    if (selectedPlaylist && String(selectedPlaylist.id || selectedPlaylist._id) === plId) {
+      setSelectedPlaylist(updatedPl);
+    }
 
     try {
       const token = localStorage.getItem('liofy_token');
       if (token) {
-        await fetch(`${API_BASE_URL}/api/playlists/${updatedPl.id}/update`, {
+        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ 
@@ -243,7 +246,8 @@ function AppContent() {
   };
 
   const handleTogglePlaylistVisibility = async (playlistId) => {
-    const target = playlists.find(p => p.id === playlistId);
+    const cleanId = String(playlistId);
+    const target = playlists.find(p => String(p.id || p._id) === cleanId);
     if (!target) return;
     const newVisibility = target.isPublic === false ? true : false;
     const updated = { ...target, isPublic: newVisibility };
@@ -633,6 +637,7 @@ function AppContent() {
               handleStartJam();
               handleOpenChat(target);
             }}
+            onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
           />
         )}
       </main>

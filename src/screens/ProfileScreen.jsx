@@ -13,7 +13,8 @@ export default function ProfileScreen({
   logout, 
   onSelectPlaylist,
   onOpenChat,
-  onStartJamWithUser
+  onStartJamWithUser,
+  onTogglePlaylistVisibility
 }) {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'search'
   const [isEditingName, setIsEditingName] = useState(false);
@@ -120,21 +121,43 @@ export default function ProfileScreen({
 
   // ── Toggle playlist visibility ──
   const handleToggleVisibility = async (pl) => {
-    if (pl.isLikedSongs) return; // Can't toggle Liked Songs visibility
-    setTogglingId(pl.id);
+    if (!pl || pl.isLikedSongs) return;
+    const plId = String(pl.id || pl._id);
+    setTogglingId(plId);
+
+    const currentIsPublic = pl.isPublic !== false;
+    const targetIsPublic = !currentIsPublic;
+
+    // 1. Optimistic UI update locally immediately
+    setLocalPlaylists(prev => prev.map(p =>
+      String(p.id || p._id) === plId ? { ...p, isPublic: targetIsPublic } : p
+    ));
+
+    // 2. Call parent onTogglePlaylistVisibility if provided
+    if (onTogglePlaylistVisibility) {
+      try {
+        await onTogglePlaylistVisibility(plId);
+      } catch (err) {
+        console.warn('onTogglePlaylistVisibility error:', err);
+      }
+    }
+
+    // 3. Call server endpoint
     try {
       const token = localStorage.getItem('liofy_token');
-      const res = await fetch(`${API_BASE_URL}/api/playlists/${pl.id}/toggle-visibility`, {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/toggle-visibility`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
       const data = await res.json();
-      if (data.success) {
+      if (data.success && typeof data.isPublic === 'boolean') {
         setLocalPlaylists(prev => prev.map(p =>
-          p.id === pl.id ? { ...p, isPublic: data.isPublic } : p
+          String(p.id || p._id) === plId ? { ...p, isPublic: data.isPublic } : p
         ));
       }
-    } catch {}
+    } catch (err) {
+      console.warn('API toggle-visibility error:', err);
+    }
     setTogglingId(null);
   };
 
@@ -521,34 +544,33 @@ export default function ProfileScreen({
                         <p className="text-xs text-zinc-500">{(pl.trackIds || []).length} songs</p>
                       </button>
 
-                      {/* Visibility toggle */}
+                      {/* Visibility toggle button & badge */}
                       {!pl.isLikedSongs && (
                         <button
-                          onClick={() => handleToggleVisibility(pl)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleVisibility(pl);
+                          }}
                           disabled={isToggling}
-                          className={`p-2 rounded-full transition-all hover:scale-110 active:scale-95 ${
-                            isPublic ? 'text-[#1DB954] hover:text-[#1DB954]/80' : 'text-zinc-600 hover:text-zinc-400'
-                          }`}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full hover:bg-white/10 active:scale-95 transition-all cursor-pointer group/toggle"
                           title={isPublic ? 'Public — Tap to make private' : 'Private — Tap to make public'}
                         >
                           {isToggling ? (
-                            <Loader2 size={16} className="animate-spin" />
+                            <Loader2 size={16} className="animate-spin text-zinc-400" />
                           ) : isPublic ? (
-                            <Eye size={16} />
+                            <Eye size={16} className="text-[#1DB954]" />
                           ) : (
-                            <EyeOff size={16} />
+                            <EyeOff size={16} className="text-zinc-500" />
                           )}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                            isPublic
+                              ? 'bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30'
+                              : 'bg-white/5 text-zinc-500 border border-white/10'
+                          }`}>
+                            {isPublic ? 'Public' : 'Private'}
+                          </span>
                         </button>
                       )}
-
-                      {/* Badge */}
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                        isPublic
-                          ? 'bg-[#1DB954]/15 text-[#1DB954] border border-[#1DB954]/30'
-                          : 'bg-white/5 text-zinc-500 border border-white/10'
-                      }`}>
-                        {isPublic ? 'Public' : 'Private'}
-                      </span>
 
                       <ChevronRight size={14} className="text-zinc-700 shrink-0" />
                     </div>
