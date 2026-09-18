@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare } from 'lucide-react';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -11,6 +11,8 @@ export default function Navigation({
   openAuthModal = () => {},
   openImportPlaylistModal = () => {},
   openJamModal = () => {},
+  openChatModal = () => {},
+  unreadChatCount = 0,
   currentUser,
 }) {
   const [libraryFilter, setLibraryFilter] = useState('all');
@@ -24,6 +26,7 @@ export default function Navigation({
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Your Library', icon: Library },
+    { id: 'chat', label: 'Chat', icon: MessageSquare, badge: unreadChatCount },
     { id: 'stats', label: 'Stats', icon: Trophy },
   ];
 
@@ -75,6 +78,20 @@ export default function Navigation({
           >
             <Radio size={24} className="text-cyan-400 shrink-0" />
             <span className="font-bold text-cyan-400">Jam Session</span>
+          </button>
+
+          <button
+            onClick={openChatModal}
+            className="sp-nav-link text-zinc-300 hover:text-white transition-colors relative"
+            title="Direct Messages & Friends"
+          >
+            <MessageSquare size={24} className="text-[#b3b3b3] group-hover:text-white shrink-0" />
+            <span className="font-bold text-[#b3b3b3] group-hover:text-white flex-1 text-left">Messages</span>
+            {unreadChatCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full bg-[#1DB954] text-black text-[11px] font-black shadow-md animate-pulse">
+                {unreadChatCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -214,15 +231,28 @@ export default function Navigation({
           return (
             <button
               key={item.id}
-              onClick={() => setCurrentScreen(item.id)}
-              className="flex flex-col items-center gap-1 transition-all px-2"
+              onClick={() => {
+                if (item.id === 'chat') {
+                  openChatModal();
+                } else {
+                  setCurrentScreen(item.id);
+                }
+              }}
+              className="flex flex-col items-center gap-1 transition-all px-2 relative"
             >
-              <Icon 
-                size={22} 
-                fill={active ? 'white' : 'none'} 
-                strokeWidth={active ? 0 : 2}
-                style={{ color: active ? '#fff' : '#b3b3b3' }}
-              />
+              <div className="relative">
+                <Icon 
+                  size={22} 
+                  fill={active ? 'white' : 'none'} 
+                  strokeWidth={active ? 0 : 2}
+                  style={{ color: active ? '#fff' : '#b3b3b3' }}
+                />
+                {item.badge > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-4 px-1 rounded-full bg-[#1DB954] text-black font-black text-[9px] flex items-center justify-center shadow-md animate-pulse">
+                    {item.badge}
+                  </span>
+                )}
+              </div>
               <span 
                 className="text-[10px] font-bold"
                 style={{ color: active ? '#fff' : '#b3b3b3' }}

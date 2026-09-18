@@ -582,10 +582,67 @@ app.get('/api/users/friends', auth, async (req, res) => {
 // ──────────────────────────────────────────
 // DIRECT CHAT MESSAGES
 // ──────────────────────────────────────────
+app.get('/api/chat/conversations', auth, async (req, res) => {
+  try {
+    const myId = String(req.user.id);
+    const messages = await Message.find({
+      $or: [{ sender: myId }, { recipient: myId }]
+    })
+    .sort({ createdAt: -1 })
+    .limit(200)
+    .lean();
+
+    const conversationMap = new Map();
+    for (const msg of messages) {
+      const otherId = String(msg.sender) === myId ? String(msg.recipient) : String(msg.sender);
+      if (!conversationMap.has(otherId)) {
+        conversationMap.set(otherId, msg);
+      }
+    }
+
+    const otherUserIds = Array.from(conversationMap.keys());
+    const users = await User.find({ _id: { $in: otherUserIds } })
+      .select('_id name avatar bio')
+      .lean();
+
+    const conversations = users.map(u => ({
+      user: {
+        id: String(u._id),
+        name: u.name,
+        avatar: u.avatar || '',
+        bio: u.bio || ''
+      },
+      lastMessage: conversationMap.get(String(u._id))
+    }));
+
+    res.json({ success: true, conversations });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/chat/unread-count', auth, async (req, res) => {
+  try {
+    const count = await Message.countDocuments({
+      recipient: req.user.id,
+      read: false
+    });
+    res.json({ success: true, count });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/chat/:recipientId', auth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const recipientId = req.params.recipientId;
+
+    // Mark messages from this sender to current user as read
+    await Message.updateMany(
+      { sender: recipientId, recipient: currentUserId, read: false },
+      { $set: { read: true } }
+    ).catch(() => {});
 
     const messages = await Message.find({
       $or: [
@@ -608,6 +665,8 @@ app.post('/api/chat/send', auth, async (req, res) => {
     const { recipientId, text, track, jamInvite } = req.body;
     if (!recipientId) return res.status(400).json({ error: 'Recipient required' });
 
+    const sender = await User.findById(req.user.id).select('_id name avatar').lean();
+
     const msg = await new Message({
       sender: req.user.id,
       recipient: recipientId,
@@ -616,11 +675,17 @@ app.post('/api/chat/send', auth, async (req, res) => {
       jamInvite: jamInvite || null
     }).save();
 
-    // Broadcast via socket if available
-    io.to(`user:${recipientId}`).emit('chat:message', msg);
-    io.to(`user:${req.user.id}`).emit('chat:message', msg);
+    const payload = {
+      ...msg.toObject(),
+      senderName: sender?.name || 'Friend',
+      senderAvatar: sender?.avatar || ''
+    };
 
-    res.json({ success: true, message: msg });
+    // Broadcast via socket if available
+    io.to(`user:${recipientId}`).emit('chat:message', payload);
+    io.to(`user:${req.user.id}`).emit('chat:message', payload);
+
+    res.json({ success: true, message: payload });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

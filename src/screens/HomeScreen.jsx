@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings, Radio } from 'lucide-react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings, Radio, MessageSquare } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function HomeScreen({ 
@@ -21,6 +21,8 @@ export default function HomeScreen({
   openProfileScreen = () => {},
   openJamModal = () => {},
   jamSession = null,
+  openChatModal = () => {},
+  unreadChatCount = 0,
 }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
@@ -65,6 +67,21 @@ export default function HomeScreen({
             {getGreeting()}
           </h1>
           <div className="flex items-center gap-3">
+            {/* Messages Button */}
+            <button
+              onClick={openChatModal}
+              className="relative flex items-center gap-1.5 text-xs font-bold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 px-3.5 py-2 rounded-full border border-white/10 transition-all active:scale-95 shadow-md"
+              title="Direct Messages"
+            >
+              <MessageSquare size={15} className="text-[#1DB954]" />
+              <span className="hidden sm:inline">Messages</span>
+              {unreadChatCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-[#1DB954] text-black font-black text-[10px] animate-pulse">
+                  {unreadChatCount}
+                </span>
+              )}
+            </button>
+
             {/* Jam Session Button */}
             <button
               onClick={openJamModal}

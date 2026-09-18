@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
@@ -67,7 +67,42 @@ function AppContent() {
   const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
   const [isChatOpen,          setIsChatOpen]          = useState(false);
   const [chatTargetUser,      setChatTargetUser]      = useState(null);
+  const [unreadChatCount,     setUnreadChatCount]     = useState(0);
   const [socket,              setSocket]              = useState(null);
+
+  const isChatOpenRef = useRef(isChatOpen);
+  useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
+
+  const chatTargetUserRef = useRef(chatTargetUser);
+  useEffect(() => { chatTargetUserRef.current = chatTargetUser; }, [chatTargetUser]);
+
+  const handleOpenChat = (target = null) => {
+    setChatTargetUser(target);
+    setIsChatOpen(true);
+    setUnreadChatCount(0);
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  };
+
+  // Fetch initial unread count on login/mount
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const token = localStorage.getItem('liofy_token');
+        if (token && currentUser) {
+          const res = await fetch(`${API_BASE_URL}/api/chat/unread-count`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const data = await res.json();
+          if (data.success && typeof data.count === 'number') {
+            setUnreadChatCount(data.count);
+          }
+        }
+      } catch {}
+    };
+    fetchUnreadCount();
+  }, [currentUser]);
 
   // Open profile screen instead of AuthModal when user is logged in
   const handleUserAvatarClick = () => {
@@ -260,13 +295,13 @@ function AppContent() {
     });
   };
 
-  const [toastMessage, setToastMessage] = useState('');
+  const [toastMessage, setToastMessage] = useState(null);
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
-      setToastMessage(prev => (prev === msg ? '' : prev));
-    }, 4000);
+      setToastMessage(prev => (prev === msg ? null : prev));
+    }, 5000);
   };
 
   useEffect(() => {
@@ -294,7 +329,36 @@ function AppContent() {
     s.on('chat:message', (msg) => {
       const myId = String(currentUser?.id || currentUser?._id || '');
       if (myId && String(msg.recipient) === myId) {
-        showToast('💬 New message received from a friend');
+        const isOpenWithSender = isChatOpenRef.current && String(chatTargetUserRef.current?.id || chatTargetUserRef.current?._id) === String(msg.sender);
+        if (!isOpenWithSender) {
+          setUnreadChatCount(prev => prev + 1);
+
+          const senderName = msg.senderName || 'Someone';
+          const preview = msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment'));
+
+          showToast({
+            title: `💬 ${senderName}`,
+            body: preview,
+            sender: { id: msg.sender, name: senderName, avatar: msg.senderAvatar }
+          });
+
+          // Browser Desktop Push Notification
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              const notif = new Notification(`Liofy • Message from ${senderName}`, {
+                body: preview,
+                icon: msg.senderAvatar || '/favicon.ico',
+                tag: `liofy-chat-${msg.sender}`
+              });
+              notif.onclick = () => {
+                window.focus();
+                handleOpenChat({ id: msg.sender, name: senderName, avatar: msg.senderAvatar });
+              };
+            } catch (e) {
+              console.warn('Desktop notification error:', e);
+            }
+          }
+        }
       }
     });
 
@@ -432,6 +496,8 @@ function AppContent() {
         openAddSongModal={() => setIsAddSongOpen(true)}
         openAuthModal={handleUserAvatarClick}
         currentUser={currentUser}
+        openChatModal={() => handleOpenChat(null)}
+        unreadChatCount={unreadChatCount}
       />
 
       {/* ── Main Content ── */}
@@ -462,6 +528,8 @@ function AppContent() {
             openProfileScreen={() => setCurrentScreen('profile')}
             openJamModal={() => setIsJamOpen(true)}
             jamSession={jamSession}
+            openChatModal={() => handleOpenChat(null)}
+            unreadChatCount={unreadChatCount}
           />
         )}
 
@@ -526,13 +594,11 @@ function AppContent() {
             logout={logout}
             onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
             onOpenChat={(target) => {
-              setChatTargetUser(target);
-              setIsChatOpen(true);
+              handleOpenChat(target);
             }}
             onStartJamWithUser={(target) => {
               handleStartJam();
-              setChatTargetUser(target);
-              setIsChatOpen(true);
+              handleOpenChat(target);
             }}
           />
         )}
@@ -672,7 +738,10 @@ function AppContent() {
 
       <ChatModal
         isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
+        onClose={() => {
+          setIsChatOpen(false);
+          setChatTargetUser(null);
+        }}
         targetUser={chatTargetUser}
         currentUser={currentUser}
         socket={socket}
@@ -684,20 +753,45 @@ function AppContent() {
         }}
       />
 
-      {/* ── Toast Notification Banner (No Native Alert Dialogs!) ── */}
+      {/* ── Toast Notification Banner ── */}
       {toastMessage && (
         <div 
-          className="fixed left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-xs font-black shadow-2xl flex items-center gap-2 border border-white/20 transition-all pointer-events-none"
+          onClick={() => {
+            if (typeof toastMessage === 'object' && toastMessage?.sender) {
+              handleOpenChat(toastMessage.sender);
+              setToastMessage(null);
+            }
+          }}
+          className={`fixed left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-xs font-black shadow-2xl flex items-center gap-3 border border-white/20 transition-all ${
+            typeof toastMessage === 'object' && toastMessage?.sender ? 'cursor-pointer pointer-events-auto hover:scale-105 active:scale-95 text-white' : 'pointer-events-none'
+          }`}
           style={{
             bottom: currentTrack ? 'calc(var(--player-height) + 16px)' : '24px',
-            background: 'rgba(18, 18, 18, 0.95)',
+            background: typeof toastMessage === 'object' && toastMessage?.sender ? 'rgba(20, 20, 28, 0.96)' : 'rgba(18, 18, 18, 0.95)',
             backdropFilter: 'blur(12px)',
-            color: '#1DB954',
+            color: typeof toastMessage === 'object' && toastMessage?.sender ? '#fff' : '#1DB954',
             boxShadow: '0 10px 30px rgba(0,0,0,0.9)'
           }}
         >
-          <span className="w-2 h-2 rounded-full bg-[#1DB954] shrink-0" />
-          <span>{toastMessage}</span>
+          {typeof toastMessage === 'object' && toastMessage?.sender ? (
+            <>
+              {toastMessage.sender.avatar ? (
+                <img src={toastMessage.sender.avatar} alt="" className="w-6 h-6 rounded-full object-cover border border-[#1DB954]/50 shrink-0" />
+              ) : (
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1DB954] shrink-0 animate-pulse" />
+              )}
+              <div className="flex flex-col text-left">
+                <span className="font-extrabold text-[#1DB954] text-[11px]">{toastMessage.title}</span>
+                <span className="text-gray-300 font-medium text-[11px] max-w-[220px] truncate">{toastMessage.body}</span>
+              </div>
+              <span className="text-[10px] text-[#1DB954] font-bold ml-1 bg-white/10 px-2 py-0.5 rounded-full hover:bg-white/20">Open</span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 rounded-full bg-[#1DB954] shrink-0" />
+              <span>{typeof toastMessage === 'string' ? toastMessage : toastMessage?.text || ''}</span>
+            </>
+          )}
         </div>
       )}
     </div>
