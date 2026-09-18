@@ -656,97 +656,21 @@ app.get('/api/users/listening-activity', optionalAuth, async (req, res) => {
         friends = followedUsers.map(u => ({
           id: String(u._id),
           name: u.name,
-          avatar: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+          avatar: u.avatar || '',
           bio: u.bio || '',
           isVerified: isVerifiedUser(u.name),
           currentListening: u.currentListening || null,
-          lastActiveAt: u.lastActiveAt || u.updatedAt || new Date(Date.now() - 7200000),
+          lastActiveAt: u.lastActiveAt || u.updatedAt || null,
           isLive: Boolean(u.currentListening?.isPlaying && (Date.now() - new Date(u.currentListening?.updatedAt || u.lastActiveAt).getTime() < 300000))
         }));
       }
     }
 
-    // Default community active listeners if following list is small or empty (matching screenshot style)
-    const mockActivityDefaults = [
-      {
-        id: 'user_m_activity',
-        name: 'm',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-        bio: 'Music lover',
-        isVerified: true,
-        currentListening: {
-          title: 'Tamally Maak',
-          artist: 'Amr Diab',
-          cover: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300',
-          audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-          isPlaying: true,
-          updatedAt: new Date(Date.now() - 60000)
-        },
-        lastActiveAt: new Date(),
-        isLive: true
-      },
-      {
-        id: 'user_whooare_activity',
-        name: 'WhooAre_you',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-        bio: 'Night drives only',
-        isVerified: false,
-        currentListening: {
-          title: 'Easy',
-          artist: 'Karim Osama',
-          cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300',
-          audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-          isPlaying: false,
-          updatedAt: new Date(Date.now() - 7200000) // 2h ago
-        },
-        lastActiveAt: new Date(Date.now() - 7200000),
-        isLive: false
-      },
-      {
-        id: 'user_m4_activity',
-        name: 'M☘',
-        avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-        bio: 'Festival enthusiast',
-        isVerified: true,
-        currentListening: {
-          title: 'طب ب بحبك (عشان بحبك)',
-          artist: 'حمو المرشدي',
-          cover: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=300',
-          audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-          isPlaying: false,
-          updatedAt: new Date(Date.now() - 7200000) // 2h ago
-        },
-        lastActiveAt: new Date(Date.now() - 7200000),
-        isLive: false
-      },
-      {
-        id: 'user_rio_activity',
-        name: 'Rio',
-        avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
-        bio: 'Electronic & Bass',
-        isVerified: false,
-        currentListening: {
-          title: 'Alone, Pt. II',
-          artist: 'Alan Walker',
-          cover: 'https://images.unsplash.com/photo-1487180144351-b8472da7d491?w=300',
-          audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
-          isPlaying: false,
-          updatedAt: new Date(Date.now() - 172800000) // 2d ago
-        },
-        lastActiveAt: new Date(Date.now() - 172800000),
-        isLive: false
-      }
-    ];
-
-    const combined = [...friends];
-    const existingIds = new Set(friends.map(f => f.id));
-    for (const mock of mockActivityDefaults) {
-      if (!existingIds.has(mock.id) && combined.length < 10) {
-        combined.push(mock);
-      }
-    }
-
-    res.json({ success: true, activities: combined });
+    res.json({ success: true, activities: friends });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
