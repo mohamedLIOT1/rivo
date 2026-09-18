@@ -716,7 +716,7 @@ export default function MiniMixerModal({
             }`}
           >
             <Play size={13} fill="currentColor" />
-            <span>{isPreviewing ? `${Math.round(previewProgress * 100)}%` : 'Simulate Transition'}</span>
+            <span>{isPreviewing ? `Seeking to crossfade...` : '▶ Hear Real Crossfade'}</span>
           </button>
 
           <div className="flex items-center gap-1.5 md:gap-2 shrink-0">

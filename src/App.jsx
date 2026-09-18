@@ -24,6 +24,7 @@ import StatsScreen from './screens/StatsScreen';
 import PlaylistScreen from './screens/PlaylistScreen';
 import PodcastsScreen from './screens/PodcastsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import MixesScreen from './screens/MixesScreen';
 
 import { API_BASE_URL } from './config';
 import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from './utils/offlineStorage';
@@ -675,6 +676,10 @@ function AppContent() {
         )}
 
         {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} />}
+
+        {currentScreen === 'mixes' && (
+          <MixesScreen tracks={tracks} />
+        )}
 
         {currentScreen === 'profile' && (
           <ProfileScreen

@@ -262,7 +262,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     const allTransValues = Object.values(activeTransRef.current || {});
     const latestConfigured = allTransValues.length > 0 ? allTransValues[allTransValues.length - 1] : null;
-    const trans = customTrans || latestConfigured || { style: 'equal_power', duration: 8 };
+    // Default Spotify-style: 8s equal_power crossfade when no custom transition is set
+    const DEFAULT_TRANSITION = { style: 'equal_power', duration: 8 };
+    const trans = customTrans || latestConfigured || DEFAULT_TRANSITION;
     const transDuration = Math.min(30, Math.max(2, Number(trans.duration) || 8));
 
     // Handle smooth track fade-in on start (first 3 seconds)
@@ -323,7 +325,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           try { secPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolB)) * 100)); } catch {}
         }
       }
-      // ── Scenario 2: Direct Audio Files (Web Audio API / HTML5 Audio) ──
+      // ── Scenario 2: Non-YouTube — use HTML5 secondary audio element ──
       else {
         if (!isCurYt && audioRef.current) {
           audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
@@ -334,41 +336,42 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
         }
 
+        // Start secondary HTML5 audio element for next track
         if (transitionActiveTrackIdRef.current !== nextId) {
           transitionActiveTrackIdRef.current = nextId;
-          resolveTrackAudioUrl(nextTrack).then(async resolved => {
+          resolveTrackAudioUrl(nextTrack).then(resolved => {
             if (!resolved?.url) return;
-            const ctx = getAudioContext();
-            if (ctx) {
-              resumeAudioContext();
-              try {
-                const res = await fetch(resolved.url);
-                const ab = await res.arrayBuffer();
-                const buf = await ctx.decodeAudioData(ab);
-                const src = ctx.createBufferSource();
-                src.buffer = buf;
-                const g = ctx.createGain();
-                g.gain.setValueAtTime(0, ctx.currentTime);
-                src.connect(g).connect(ctx.destination);
-                src.start(0);
-                activeWebAudioMixRef.current = { source: src, gainNode: g, stop: () => { try { src.stop(); } catch {} } };
-              } catch {
-                if (!secondaryAudioRef.current) secondaryAudioRef.current = new Audio();
-                const sec = secondaryAudioRef.current;
-                sec.src = resolved.url;
-                sec.volume = 0;
-                sec.currentTime = 0;
-                sec.play().catch(() => {});
+            // Check if it resolved to YouTube after all
+            const resolvedYtId = resolved.ytId || extractYtId(resolved.url);
+            if (resolvedYtId) {
+              const secPlayer = getSecondaryYtPlayer();
+              if (secPlayer) {
+                try {
+                  secPlayer.unMute();
+                  secPlayer.setVolume(0);
+                  secPlayer.loadVideoById(resolvedYtId);
+                  secPlayer.playVideo();
+                } catch {}
               }
+            } else {
+              // Plain audio URL — use secondary HTML5 Audio element
+              if (!secondaryAudioRef.current) secondaryAudioRef.current = new Audio();
+              const sec = secondaryAudioRef.current;
+              sec.src = resolved.url;
+              sec.volume = 0;
+              sec.currentTime = 0;
+              sec.play().catch(() => {});
             }
           });
         }
 
-        if (activeWebAudioMixRef.current?.gainNode) {
-          const ctx = getAudioContext();
-          if (ctx) {
-            activeWebAudioMixRef.current.gainNode.gain.cancelScheduledValues(ctx.currentTime);
-            activeWebAudioMixRef.current.gainNode.gain.setValueAtTime(targetVolB, ctx.currentTime);
+        // Update secondary element volume every tick
+        const resolvedIsYt = transitionActiveTrackIdRef.current === nextId &&
+          Boolean(extractYtId(nextTrack.audioUrl));
+        if (resolvedIsYt) {
+          const secPlayer = getSecondaryYtPlayer();
+          if (secPlayer) {
+            try { secPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolB)) * 100)); } catch {}
           }
         } else if (secondaryAudioRef.current) {
           secondaryAudioRef.current.volume = Math.max(0, Math.min(1, targetVolB));
@@ -1410,178 +1413,92 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setEqBands(b);
   };
 
-  // ── Spotify Mix: Audition Transition in Real Time ───────────────
+  // ── Start DJ Mode: enable mix + set default transitions for all track pairs ──
+  const startDjMode = useCallback((trackList = null) => {
+    const list = trackList || tracksRef.current;
+    if (!list || list.length === 0) return;
+
+    // Build default transitions for every consecutive pair in the library
+    const defaultPairs = {};
+    for (let i = 0; i < list.length - 1; i++) {
+      const a = list[i];
+      const b = list[i + 1];
+      const key = `${String(a.id || a._id)}___${String(b.id || b._id)}`;
+      defaultPairs[key] = { style: 'equal_power', duration: 8 };
+    }
+    setActiveTransitions(prev => ({ ...defaultPairs, ...prev }));
+    activeTransRef.current = { ...defaultPairs, ...activeTransRef.current };
+    setIsMixMode(true);
+    isMixModeRef.current = true;
+
+    // Start playing from the first track with the full list as queue
+    isTransitionTriggeredRef.current = false;
+    playTrack(list[0], list);
+  }, [playTrack]);
+
+  // ── Stop DJ Mode ──────────────────────────────────────────────
+  const stopDjMode = useCallback(() => {
+    setIsMixMode(false);
+    isMixModeRef.current = false;
+    setActiveTransitions({});
+    activeTransRef.current = {};
+    try { localStorage.removeItem('liofy_active_transitions'); } catch {}
+  }, []);
+
+  // ── Spotify Mix: Real Preview = seek current track near its end ──────────
   const previewDjTransition = useCallback(async (tA, tB, transConfig = null) => {
     if (!tA || !tB) return;
     resumeAudioContext();
-    setIsMixMode(true);
-    isMixModeRef.current = true;
-    isTransitionTriggeredRef.current = false;
-    transitionActiveTrackIdRef.current = null;
-
-    if (audioRef.current) audioRef.current.pause();
-    [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
-      if (p) {
-        try { p.pauseVideo(); p.mute(); } catch {}
-      }
-    });
-    if (activeWebAudioMixRef.current) {
-      activeWebAudioMixRef.current.stop();
-      activeWebAudioMixRef.current = null;
-    }
 
     const dur = Math.min(30, Math.max(2, Number(transConfig?.duration) || 8));
     const style = transConfig?.style || 'equal_power';
     const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
 
-    const nextTrans = {
-      ...activeTransRef.current,
-      [pairKey]: { style, duration: dur, autoMatchBpm: true }
-    };
+    // 1. Save transition config so checkAndRunDjTransition picks it up
+    const nextTrans = { ...activeTransRef.current, [pairKey]: { style, duration: dur } };
     setActiveTransitions(nextTrans);
     activeTransRef.current = nextTrans;
+    setIsMixMode(true);
+    isMixModeRef.current = true;
+    isTransitionTriggeredRef.current = false;
+    transitionActiveTrackIdRef.current = null;
 
-    const [resA, resB] = await Promise.all([
-      resolveTrackAudioUrl(tA),
-      resolveTrackAudioUrl(tB)
-    ]);
+    // 2. Make sure tA is the currently playing track
+    const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+    const tAId = String(tA.id || tA._id || '');
 
-    if (!resA?.url || !resB?.url) return;
+    const doSeek = () => {
+      // Seek to 3s before the transition starts so user hears it immediately
+      const trackDur = isYtTrackRef.current
+        ? (getActiveYtPlayer()?.getDuration?.() || duration || 180)
+        : (audioRef.current?.duration || duration || 180);
+      const seekPoint = Math.max(0, trackDur - dur - 3);
 
-    const ytIdA = resA.ytId || extractYtId(resA.url);
-    const ytIdB = resB.ytId || extractYtId(resB.url);
-
-    if (ytIdA || ytIdB) {
-      // ── YouTube Dual-Deck Simulation ──
-      const deckA = ytPlayer1Ref.current;
-      const deckB = ytPlayer2Ref.current;
-      if (!deckA || !deckB) {
-        console.warn('[SpotifyMix] Dual YouTube decks not ready yet');
-        return;
+      if (isYtTrackRef.current) {
+        const actPlayer = getActiveYtPlayer();
+        if (actPlayer) {
+          try { actPlayer.seekTo(seekPoint, true); actPlayer.unMute(); actPlayer.playVideo(); } catch {}
+        }
+      } else if (audioRef.current) {
+        audioRef.current.currentTime = seekPoint;
+        audioRef.current.volume = volumeRef.current;
+        audioRef.current.play().catch(() => {});
       }
+      setCurrentTime(seekPoint);
+      setIsPlaying(true);
+    };
 
-      activeYtDeckRef.current = 1;
-      ytPlayerRef.current = deckA;
-      isYtTrackRef.current = true;
-      setIsYtTrack(true);
+    if (curId !== tAId) {
+      // Play tA first, then seek after load
+      shouldPlayRef.current = true;
       setCurrentTrack(tA);
       currentTrackRef.current = tA;
       setIsPlaying(true);
-
-      try {
-        deckA.unMute();
-        deckA.setVolume(Math.round(volumeRef.current * 100));
-        deckA.loadVideoById(ytIdA, 20);
-        deckA.playVideo();
-      } catch (e) {
-        console.warn('[SpotifyMix] Deck A load error:', e);
-      }
-
-      if (ytIdB) {
-        try {
-          deckB.unMute();
-          deckB.setVolume(0);
-          deckB.cueVideoById(ytIdB, 0);
-        } catch (e) {
-          console.warn('[SpotifyMix] Deck B cue error:', e);
-        }
-      }
-
-      let simInterval = null;
-      let deckBStarted = false;
-      let isStopped = false;
-
-      const stopSim = () => {
-        isStopped = true;
-        if (simInterval) clearInterval(simInterval);
-        try { deckA.pauseVideo(); deckA.mute(); } catch {}
-        try { deckB.pauseVideo(); deckB.mute(); } catch {}
-      };
-
-      activeWebAudioMixRef.current = { stop: stopSim };
-
-      const leadInMs = 1500;
-      const transMs = dur * 1000;
-      const tailMs = 1500;
-      const totalMs = leadInMs + transMs + tailMs;
-      const startTime = Date.now();
-
-      simInterval = setInterval(() => {
-        if (isStopped) return;
-        try {
-          const elapsed = Date.now() - startTime;
-
-          // Stage 1: Lead-in with Track A full
-          if (elapsed < leadInMs) {
-            deckA.setVolume(Math.round(volumeRef.current * 100));
-            if (ytIdB && deckB) deckB.setVolume(0);
-            return;
-          }
-
-          // Stage 2: Active DJ Transition Overlap
-          if (elapsed <= leadInMs + transMs) {
-            if (!deckBStarted && ytIdB) {
-              deckBStarted = true;
-              try {
-                deckB.unMute();
-                deckB.setVolume(0);
-                deckB.loadVideoById(ytIdB, 0);
-                deckB.playVideo();
-              } catch (e) {
-                console.warn('[SpotifyMix] Deck B start error:', e);
-              }
-            }
-
-            const p = Math.min(1, Math.max(0, (elapsed - leadInMs) / transMs));
-            const { gainA, gainB } = calculateCrossfadeGains(p, style);
-            deckA.setVolume(Math.round(volumeRef.current * gainA * 100));
-            if (ytIdB && deckB) {
-              deckB.setVolume(Math.round(volumeRef.current * gainB * 100));
-            }
-            return;
-          }
-
-          // Stage 3: Transition Complete, Track B takes over
-          deckA.pauseVideo();
-          deckA.mute();
-          if (ytIdB && deckB) {
-            deckB.setVolume(Math.round(volumeRef.current * 100));
-            activeYtDeckRef.current = 2;
-            ytPlayerRef.current = deckB;
-            setCurrentTrack(tB);
-            currentTrackRef.current = tB;
-          }
-
-          if (elapsed >= totalMs) {
-            clearInterval(simInterval);
-            setTimeout(() => {
-              if (activeWebAudioMixRef.current?.stop === stopSim) {
-                activeWebAudioMixRef.current = null;
-              }
-            }, 3000);
-          }
-        } catch (e) {
-          console.warn('[Simulate Transition] tick error:', e);
-        }
-      }, 50);
-
-      return;
+      setTimeout(doSeek, 3000); // wait for track to load
+    } else {
+      doSeek();
     }
-
-    // ── Direct Audio Files (Web Audio API) ──
-    const mix = await playTrueSpotifyMix({
-      songUrl1: resA.url,
-      songUrl2: resB.url,
-      transitionDuration: dur,
-      style,
-      previewOnly: true,
-      onEnd: () => {
-        activeWebAudioMixRef.current = null;
-      }
-    });
-
-    activeWebAudioMixRef.current = mix;
-  }, []);
+  }, [duration, getActiveYtPlayer]);
 
   const value = {
     currentTrack, setCurrentTrack,
@@ -1597,6 +1514,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isMixMode, setIsMixMode,
     activeTransitions, setActiveTransitions,
     previewDjTransition,
+    startDjMode, stopDjMode,
     eqEnabled, setEqEnabled,
     eqPreset, setEqPreset,
     eqBands, setEqBands,

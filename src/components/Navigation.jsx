@@ -29,8 +29,8 @@ export default function Navigation({
   const mobileNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Your Library', icon: Library },
-    { id: 'chat', label: 'Chat', icon: MessageSquare, badge: unreadChatCount },
+    { id: 'library', label: 'Library', icon: Library },
+    { id: 'mixes', label: 'DJ Mix', icon: Radio },
     { id: 'stats', label: 'Stats', icon: Trophy },
   ];
 
@@ -73,6 +73,15 @@ export default function Navigation({
               </button>
             );
           })}
+
+          <button
+            onClick={() => setCurrentScreen('mixes')}
+            className={`sp-nav-link ${currentScreen === 'mixes' ? 'active text-white' : ''}`}
+            title="AI DJ Mix"
+          >
+            <Radio size={24} className={currentScreen === 'mixes' ? 'text-emerald-400 shrink-0' : 'text-[#b3b3b3] shrink-0'} strokeWidth={2} />
+            <span className={`font-bold ${currentScreen === 'mixes' ? 'text-emerald-400' : ''}`}>DJ Mix</span>
+          </button>
 
           <button
             onClick={openJamModal}
