@@ -255,47 +255,53 @@ export default function MiniMixerModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex flex-col justify-end sm:items-center sm:justify-center p-0 sm:p-4 select-none">
+    <div 
+      className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex flex-col justify-end md:items-center md:justify-center p-0 md:p-4 select-none"
+      onClick={onClose}
+    >
       
       {/* Modal Card Shell: Mobile Bottom Sheet + Desktop Modal */}
-      <div className="bg-[#121212] border border-zinc-800 rounded-t-[28px] sm:rounded-3xl w-full sm:max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[88vh] relative animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#121212] border border-zinc-800 rounded-t-[28px] md:rounded-3xl w-full md:max-w-2xl shadow-2xl overflow-hidden flex flex-col h-[90vh] md:h-auto md:max-h-[85vh] relative animate-in slide-in-from-bottom-5 md:zoom-in-95 duration-200"
+      >
         
         {/* Mobile Drag Indicator */}
-        <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mt-2.5 mb-1 sm:hidden shrink-0" />
+        <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mt-2.5 mb-1 md:hidden shrink-0" />
 
         {/* ── Header ── */}
-        <div className="p-4 sm:p-5 border-b border-zinc-800 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-[#121212] shrink-0">
+        <div className="px-4 py-3 md:px-5 md:py-4 border-b border-zinc-800 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-[#121212] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1DB954] to-emerald-700 flex items-center justify-center text-black shadow-lg shrink-0">
-              <Sliders size={18} />
+            <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-br from-[#1DB954] to-emerald-700 flex items-center justify-center text-black shadow-lg shrink-0">
+              <Sliders size={16} />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+              <h3 className="text-sm md:text-base font-black text-white flex items-center gap-2">
                 Spotify DJ Mix
-                <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <span className="text-[9px] md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                   Smart Transition
                 </span>
               </h3>
-              <p className="text-[11px] text-zinc-400 truncate">Seamless beat & harmonic mix between songs</p>
+              <p className="text-[10px] md:text-[11px] text-zinc-400 truncate">Seamless beat & harmonic mix between songs</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+            className="p-1.5 md:p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* ── Dual DJ Decks (Responsive Card Layout) ── */}
-        <div className="p-3 sm:p-4 bg-zinc-900/60 border-b border-zinc-800 flex flex-col sm:flex-row items-center gap-2.5 shrink-0">
+        <div className="p-3 md:p-4 bg-zinc-900/60 border-b border-zinc-800 flex flex-col sm:flex-row items-center gap-2 md:gap-3 shrink-0">
           {/* Deck A (Outgoing) */}
-          <div className="flex-1 w-full flex items-center gap-3 p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 relative overflow-hidden">
+          <div className="flex-1 w-full flex items-center gap-2.5 md:gap-3 p-2 md:p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 relative overflow-hidden">
             <div className="relative shrink-0">
-              <img src={trackA.cover} alt={trackA.title} className="w-12 h-12 rounded-xl object-cover" />
+              <img src={trackA.cover} alt={trackA.title} className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-cover" />
               {/* Spinning Vinyl Badge */}
-              <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center ${isPreviewing && previewProgress < 0.85 ? 'animate-spin' : ''}`}>
-                <Disc size={12} className="text-[#1DB954]" />
+              <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center ${isPreviewing && previewProgress < 0.85 ? 'animate-spin' : ''}`}>
+                <Disc size={11} className="text-[#1DB954]" />
               </div>
             </div>
             <div className="min-w-0 flex-1">
@@ -304,7 +310,7 @@ export default function MiniMixerModal({
               </span>
               <h4 className="text-xs font-bold text-white truncate">{trackA.title}</h4>
               <p className="text-[10px] text-zinc-400 truncate">{trackA.artist}</p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] font-extrabold text-[#1DB954]">{dataA.bpm} BPM</span>
                 <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-emerald-400 font-bold border border-emerald-500/20">
                   {dataA.key}
@@ -314,19 +320,19 @@ export default function MiniMixerModal({
           </div>
 
           {/* Center Connector Indicator */}
-          <div className="flex items-center justify-center shrink-0">
+          <div className="hidden sm:flex items-center justify-center shrink-0">
             <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 shadow-md">
               <ArrowRight size={14} />
             </div>
           </div>
 
           {/* Deck B (Incoming) */}
-          <div className="flex-1 w-full flex items-center gap-3 p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 relative overflow-hidden">
+          <div className="flex-1 w-full flex items-center gap-2.5 md:gap-3 p-2 md:p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 relative overflow-hidden">
             <div className="relative shrink-0">
-              <img src={trackB.cover} alt={trackB.title} className="w-12 h-12 rounded-xl object-cover" />
+              <img src={trackB.cover} alt={trackB.title} className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-cover" />
               {/* Spinning Vinyl Badge */}
-              <div className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center ${isPreviewing && previewProgress > 0.15 ? 'animate-spin' : ''}`}>
-                <Disc size={12} className="text-emerald-400" />
+              <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center ${isPreviewing && previewProgress > 0.15 ? 'animate-spin' : ''}`}>
+                <Disc size={11} className="text-emerald-400" />
               </div>
             </div>
             <div className="min-w-0 flex-1">
@@ -335,7 +341,7 @@ export default function MiniMixerModal({
               </span>
               <h4 className="text-xs font-bold text-white truncate">{trackB.title}</h4>
               <p className="text-[10px] text-zinc-400 truncate">{trackB.artist}</p>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] font-extrabold text-[#1DB954]">{dataB.bpm} BPM</span>
                 <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-emerald-400 font-bold border border-emerald-500/20">
                   {dataB.key}
@@ -346,10 +352,10 @@ export default function MiniMixerModal({
         </div>
 
         {/* ── Segmented Navigation Tabs ── */}
-        <div className="px-3 pt-2 bg-zinc-950/80 border-b border-zinc-800 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0">
+        <div className="px-3 pt-1.5 bg-zinc-950/80 border-b border-zinc-800 flex items-center gap-1 overflow-x-auto scrollbar-none shrink-0">
           <button
             onClick={() => setActiveTab('fx')}
-            className={`px-3 py-2 text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'fx'
                 ? 'border-[#1DB954] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
@@ -361,7 +367,7 @@ export default function MiniMixerModal({
 
           <button
             onClick={() => setActiveTab('decks')}
-            className={`px-3 py-2 text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'decks'
                 ? 'border-[#1DB954] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
@@ -373,7 +379,7 @@ export default function MiniMixerModal({
 
           <button
             onClick={() => setActiveTab('harmony')}
-            className={`px-3 py-2 text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'harmony'
                 ? 'border-[#1DB954] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
@@ -385,7 +391,7 @@ export default function MiniMixerModal({
 
           <button
             onClick={() => setActiveTab('presets')}
-            className={`px-3 py-2 text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'presets'
                 ? 'border-[#1DB954] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
@@ -397,17 +403,17 @@ export default function MiniMixerModal({
         </div>
 
         {/* ── Scrollable Body Area ── */}
-        <div className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1">
+        <div className="p-3.5 md:p-5 space-y-4 md:space-y-5 overflow-y-auto flex-1">
 
           {/* TAB 1: TRANSITION FX & OVERLAP */}
           {activeTab === 'fx' && (
-            <div className="space-y-5">
+            <div className="space-y-4 md:space-y-5">
               {/* 6 Pro Transition FX Cards */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2.5">
+                <label className="block text-[11px] md:text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">
                   Select DJ Transition Style
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-2.5">
                   {TRANSITION_STYLES.map((st) => {
                     const Icon = st.icon;
                     const isSelected = style === st.id;
@@ -415,7 +421,7 @@ export default function MiniMixerModal({
                       <button
                         key={st.id}
                         onClick={() => setStyle(st.id)}
-                        className={`p-3 rounded-2xl text-left border transition-all flex items-start gap-3 cursor-pointer ${
+                        className={`p-2.5 md:p-3 rounded-2xl text-left border transition-all flex items-start gap-2.5 md:gap-3 cursor-pointer ${
                           isSelected
                             ? 'bg-emerald-500/10 border-[#1DB954] shadow-md shadow-[#1DB954]/10'
                             : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
@@ -424,14 +430,14 @@ export default function MiniMixerModal({
                         <div className={`p-2 rounded-xl shrink-0 ${isSelected ? 'bg-[#1DB954] text-black' : 'bg-zinc-800 text-zinc-400'}`}>
                           <Icon size={16} />
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 justify-between">
                             <span className="text-xs font-bold text-white truncate">{st.name}</span>
                             <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-white/5 text-zinc-400 shrink-0">
                               {st.badge}
                             </span>
                           </div>
-                          <p className="text-[11px] text-zinc-400 mt-1 leading-snug line-clamp-2">{st.desc}</p>
+                          <p className="text-[10px] md:text-[11px] text-zinc-400 mt-1 leading-snug line-clamp-2">{st.desc}</p>
                         </div>
                       </button>
                     );
@@ -699,30 +705,30 @@ export default function MiniMixerModal({
         </div>
 
         {/* ── Footer Action Buttons ── */}
-        <div className="p-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+        <div className="p-3 md:p-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-2 md:gap-3 shrink-0">
           <button
             onClick={handlePreview}
             disabled={isPreviewing}
-            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+            className={`flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-full text-xs font-bold transition-all shrink-0 ${
               isPreviewing
                 ? 'bg-zinc-800 text-zinc-400 cursor-wait'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer active:scale-95'
             }`}
           >
             <Play size={13} fill="currentColor" />
-            <span>{isPreviewing ? `Auditioning ${Math.round(previewProgress * 100)}%...` : 'Simulate Transition'}</span>
+            <span>{isPreviewing ? `${Math.round(previewProgress * 100)}%` : 'Simulate Transition'}</span>
           </button>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
             <button
               onClick={onClose}
-              className="px-3.5 py-2.5 rounded-full text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="px-3 md:px-3.5 py-2 md:py-2.5 rounded-full text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-5 sm:px-6 py-2.5 rounded-full text-xs font-extrabold bg-[#1DB954] hover:bg-[#1ed760] text-black hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
+              className="flex items-center gap-1.5 px-4 md:px-6 py-2 md:py-2.5 rounded-full text-xs font-extrabold bg-[#1DB954] hover:bg-[#1ed760] text-black hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
             >
               <Check size={14} />
               <span>Save Mix</span>
