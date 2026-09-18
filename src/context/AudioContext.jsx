@@ -41,6 +41,59 @@ function onYtReady(cb) {
   loadYouTubeApi();
 }
 
+async function resolveTrackAudioUrl(track) {
+  if (!track) return null;
+  let targetUrl = track.audioUrl;
+  const isBlobUrl = targetUrl?.startsWith('blob:');
+  const isDownloaded = Boolean(track.downloaded && targetUrl);
+  const isLocalNativeUrl =
+    targetUrl && (
+      targetUrl.includes('/_capacitor_file_/') ||
+      targetUrl.includes('capacitor://') ||
+      targetUrl.startsWith('file://') ||
+      targetUrl.startsWith('content://') ||
+      (targetUrl.startsWith('http://localhost') && !targetUrl.includes(':5000'))
+    );
+
+  const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
+    track.id?.toString().startsWith('sc-') ||
+    track.source === 'SoundCloud' ||
+    track.source === 'Import' ||
+    track.source === 'Spotify' ||
+    !targetUrl ||
+    targetUrl.includes('pixabay.com') ||
+    targetUrl.includes('sndcdn.com') ||
+    targetUrl.includes('soundcloud.com')
+  );
+
+  if (needsResolution) {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${track.id || track._id || ''}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
+      const data = await res.json();
+      if (data.success && data.url) {
+        return {
+          url: data.url,
+          ytId: extractYtId(data.url),
+          duration: data.duration || track.duration || 180,
+          cover: data.cover || track.cover
+        };
+      }
+    } catch (err) {
+      console.warn('Track resolution error:', err);
+    }
+  }
+
+  const ytId = extractYtId(targetUrl);
+  if (ytId) {
+    return { url: targetUrl, ytId, duration: track.duration || 240, cover: track.cover };
+  }
+
+  if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
+    targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+  }
+  return { url: targetUrl, ytId: null, duration: track.duration || 180, cover: track.cover };
+}
+
 // ──────────────────────────────────────────────────────────────────
 
 export function AudioProvider({ children, tracks, setTracks }) {
@@ -101,6 +154,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // ── Regular HTML Audio element (for uploaded/SoundCloud tracks) ──
   const audioRef = useRef(null);
+  const secondaryAudioRef = useRef(null);
+  const transitionActiveTrackIdRef = useRef(null);
 
   // ── YouTube IFrame Player ────────────────────────────────────────
   const ytPlayerRef       = useRef(null);   // YT.Player instance
@@ -129,12 +184,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     const activeQueue = idx < rawQueue.length ? rawQueue : tracksRef.current;
     const nextTrack = activeQueue[(idx + 1) % activeQueue.length];
-    const pairKey = `${curId}___${String(nextTrack.id || nextTrack._id || '')}`;
+    const nextId = String(nextTrack.id || nextTrack._id || '');
+    const pairKey = `${curId}___${nextId}`;
     const trans = activeTransRef.current[pairKey] || { style: 'equal_power', duration: 7 };
     const transDuration = Math.min(20, Math.max(2, Number(trans.duration) || 7));
 
     // Handle smooth track fade-in on start (first 3 seconds)
-    if (cTime < 3) {
+    if (cTime < 3 && !transitionActiveTrackIdRef.current) {
       const pIn = Math.min(1, Math.max(0, cTime / 3));
       const inVol = volumeRef.current * Math.sin(pIn * (Math.PI / 2));
       if (!isYtTrackRef.current && audioRef.current) {
@@ -148,13 +204,35 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Handle DJ Transition out window
     if (remaining <= transDuration && remaining >= 0) {
       const pOut = Math.min(1, Math.max(0, 1 - (remaining / transDuration)));
-      const { gainA } = calculateCrossfadeGains(pOut, trans.style || 'equal_power');
-      const targetVol = volumeRef.current * gainA;
+      const { gainA, gainB } = calculateCrossfadeGains(pOut, trans.style || 'equal_power');
+      const targetVolA = volumeRef.current * gainA;
+      const targetVolB = volumeRef.current * gainB;
 
+      // Primary deck fading out
       if (!isYtTrackRef.current && audioRef.current) {
-        audioRef.current.volume = Math.max(0, Math.min(1, targetVol));
+        audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
       } else if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
-        try { ytPlayerRef.current.setVolume(Math.round(Math.max(0, Math.min(1, targetVol)) * 100)); } catch {}
+        try { ytPlayerRef.current.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
+      }
+
+      // Preload & start secondary deck fading in simultaneously
+      if (transitionActiveTrackIdRef.current !== nextId) {
+        transitionActiveTrackIdRef.current = nextId;
+        resolveTrackAudioUrl(nextTrack).then(resolved => {
+          if (!resolved?.url) return;
+          if (!secondaryAudioRef.current) {
+            secondaryAudioRef.current = new Audio();
+          }
+          const sec = secondaryAudioRef.current;
+          sec.src = resolved.url;
+          sec.volume = 0;
+          sec.currentTime = 0;
+          sec.play().catch(() => {});
+        });
+      }
+
+      if (secondaryAudioRef.current) {
+        secondaryAudioRef.current.volume = Math.max(0, Math.min(1, targetVolB));
       }
 
       // Automatically trigger next track right at transition threshold
@@ -170,6 +248,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (!isYtTrackRef.current && audioRef.current && Math.abs(audioRef.current.volume - volumeRef.current) > 0.05) {
         audioRef.current.volume = volumeRef.current;
       }
+      if (secondaryAudioRef.current && transitionActiveTrackIdRef.current) {
+        secondaryAudioRef.current.pause();
+      }
+      transitionActiveTrackIdRef.current = null;
     }
   }, []);
 
@@ -727,6 +809,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const playTrack = useCallback(async (track, newQueue = null, isRemote = false) => {
     if (!track) return;
     isTransitionTriggeredRef.current = false;
+    transitionActiveTrackIdRef.current = null;
+    if (secondaryAudioRef.current) {
+      secondaryAudioRef.current.pause();
+      secondaryAudioRef.current.removeAttribute('src');
+    }
     resumeAudioContext();
 
     // Immediately stop previous audio synchronously to prevent overlap
@@ -818,8 +905,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const playNextTrack = useCallback(() => {
     // Advance shared room queue if active in Jam
     if (jamSessionRef.current && socketRef.current) {
-      socketRef.current.emit('jam:next_track', { roomCode: jamSessionRef.current.code });
-      return;
+      if (jamSessionRef.current.queue && jamSessionRef.current.queue.length > 0) {
+        socketRef.current.emit('jam:next_track', { roomCode: jamSessionRef.current.code });
+        return;
+      }
+      // If Jam room queue is empty: check if this client is the host
+      const myId = socketRef.current?.id;
+      const isHost = jamSessionRef.current.hostId === myId ||
+        jamSessionRef.current.members?.find(m => m.socketId === myId)?.isHost;
+      if (!isHost) {
+        // Guest: emit jam:next_track so server asks host to advance
+        socketRef.current.emit('jam:next_track', { roomCode: jamSessionRef.current.code });
+        return;
+      }
+      // Host: falls through to advance host's queue below and sync to all listeners!
     }
 
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
@@ -971,7 +1070,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, [playTrack, seekTo]);
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
-    if (socket !== undefined) socketRef.current = socket;
+    if (socket !== undefined) {
+      if (socketRef.current && socketRef.current !== socket) {
+        socketRef.current.off('jam:advance_host_queue');
+      }
+      socketRef.current = socket;
+      if (socket) {
+        socket.off('jam:advance_host_queue');
+        socket.on('jam:advance_host_queue', () => {
+          if (playNextTrackRef.current) {
+            playNextTrackRef.current();
+          }
+        });
+      }
+    }
     if (newJamSession !== undefined) {
       setJamSessionState(newJamSession);
       jamSessionRef.current = newJamSession;
@@ -1016,6 +1128,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setIsMixMode(true);
     isMixModeRef.current = true;
     isTransitionTriggeredRef.current = false;
+    transitionActiveTrackIdRef.current = null;
 
     const dur = Math.min(20, Math.max(2, Number(transConfig?.duration) || 8));
     const style = transConfig?.style || 'equal_power';

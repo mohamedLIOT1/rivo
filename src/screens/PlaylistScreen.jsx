@@ -23,7 +23,7 @@ export default function PlaylistScreen({
   onDeletePlaylist = () => {},
   onTogglePlaylistVisibility = () => {},
 }) {
-  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions } = useAudioPlayer();
+  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue } = useAudioPlayer();
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
@@ -118,6 +118,13 @@ export default function PlaylistScreen({
     t.artist.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Auto-fetch AI recommendations on load if playlist has tracks
+  useEffect(() => {
+    if (!playlist?.isLikedSongs && playlistTracks.length > 0 && aiRecommendations.length === 0 && !isLoadingRecs) {
+      handleFetchAiRecommendations();
+    }
+  }, [playlist?.id, playlistTracks.length]);
+
   const formatDurationSum = () => {
     const totalSecs = playlistTracks.reduce((acc, t) => acc + (t.duration || 180), 0);
     const mins = Math.floor(totalSecs / 60);
@@ -141,7 +148,7 @@ export default function PlaylistScreen({
 
   const handleTogglePrivacy = async () => {
     setIsTogglingPrivacy(true);
-    await onTogglePlaylistVisibility(playlist.id);
+    await onTogglePlaylistVisibility(playlist.id, !isPublic);
     setIsTogglingPrivacy(false);
   };
 
@@ -149,9 +156,7 @@ export default function PlaylistScreen({
     const nextState = !isMixActive;
     setIsMixActive(nextState);
     setIsMixMode?.(nextState);
-    if (nextState) {
-      setActiveTransitions?.(transitions);
-    }
+
     try {
       const token = localStorage.getItem('liofy_token');
       await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
@@ -164,27 +169,28 @@ export default function PlaylistScreen({
       });
     } catch {}
   };
+  const handleToggleMixMode = handleToggleMix;
 
   const handleAutoMixAll = async () => {
-    if (!filteredPlaylistTracks || filteredPlaylistTracks.length < 2) return;
     setIsAutoMixingAll(true);
     const updatedTransitions = { ...transitions };
 
-    for (let i = 0; i < filteredPlaylistTracks.length - 1; i++) {
-      const tA = filteredPlaylistTracks[i];
-      const tB = filteredPlaylistTracks[i + 1];
+    for (let i = 0; i < playlistTracks.length - 1; i++) {
+      const tA = playlistTracks[i];
+      const tB = playlistTracks[i + 1];
       const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
       const rec = getRecommendedTransition(tA, tB);
       updatedTransitions[pairKey] = {
         style: rec.style,
         duration: rec.duration,
-        autoMatchBpm: true,
-        name: rec.name
+        autoMatchBpm: true
       };
     }
 
     setTransitions(updatedTransitions);
     setActiveTransitions?.(updatedTransitions);
+    setIsMixActive(true);
+    setIsMixMode?.(true);
 
     try {
       const token = localStorage.getItem('liofy_token');
@@ -230,13 +236,22 @@ export default function PlaylistScreen({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          playlistName: playlist.name,
+          playlistName: playlist?.name || 'Playlist',
           seedTracks: playlistTracks.slice(0, 6)
         })
       });
       const data = await res.json();
-      if (data.success && Array.isArray(data.recommendations)) {
+      if (data.success && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
         setAiRecommendations(data.recommendations);
+        // Automatically add the recommendations to active playback queue
+        if (setCurrentQueue) {
+          setCurrentQueue(prev => {
+            const currentList = Array.isArray(prev) ? prev : [];
+            const existingIds = new Set(currentList.map(t => String(t.id || t._id)));
+            const newRecs = data.recommendations.filter(t => !existingIds.has(String(t.id || t._id)));
+            return [...currentList, ...newRecs];
+          });
+        }
       }
     } catch (err) {
       console.warn('AI recommendations error:', err);
@@ -266,7 +281,11 @@ export default function PlaylistScreen({
       setIsMixMode?.(true);
       setActiveTransitions?.(transitions);
     }
-    onSelectTrack(track, filteredPlaylistTracks);
+    const baseQueue = filteredPlaylistTracks;
+    const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
+    const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
+    const fullQueue = [...baseQueue, ...extraRecs];
+    onSelectTrack(track, fullQueue);
   };
 
   return (
@@ -676,7 +695,7 @@ export default function PlaylistScreen({
                   className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 transition-all"
                 >
                   <div 
-                    onClick={() => onSelectTrack(rec)}
+                    onClick={() => handlePlayPlaylistTrack(rec)}
                     className="flex items-center gap-3 flex-1 truncate cursor-pointer"
                   >
                     <img src={rec.cover} alt={rec.title} className="w-11 h-11 rounded-xl object-cover" />

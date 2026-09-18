@@ -43,6 +43,7 @@ function AppContent() {
   const audio = useAudioPlayer();
   const {
     currentTrack, setCurrentTrack, isPlaying, setIsPlaying,
+    currentQueue, setCurrentQueue,
     currentTime, duration,
     volume, setVolume, isShuffle, setIsShuffle, toggleShuffle, isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
@@ -708,7 +709,7 @@ function AppContent() {
         toggleShuffle={toggleShuffle}
         isRepeat={isRepeat}
         toggleRepeat={() => setIsRepeat(p => !p)}
-        queue={jamSession?.queue?.length ? jamSession.queue : tracks}
+        queue={jamSession?.queue?.length ? jamSession.queue : (currentQueue?.length > 0 ? currentQueue : (tracks?.length ? [currentTrack].filter(Boolean) : []))}
         jamSession={jamSession}
         onRemoveFromJamQueue={removeFromJamQueue}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}

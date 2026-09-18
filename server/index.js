@@ -787,16 +787,14 @@ app.post('/api/chat/send', auth, async (req, res) => {
 });
 
 // ──────────────────────────────────────────
-// FAST MUSIC SEARCH & STREAM RESOLVER (Cached)
-// ──────────────────────────────────────────
-app.get(['/api/search', '/api/search/external'], async (req, res) => {
-  const q = (req.query.q || '').trim();
-  if (!q) return res.json({ success: true, tracks: [] });
+async function searchTracksInternal(query) {
+  const q = (query || '').trim();
+  if (!q) return [];
 
   const cacheKey = q.toLowerCase();
   const cached = searchCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    return res.json({ success: true, tracks: cached.tracks });
+    return cached.tracks;
   }
 
   try {
@@ -905,11 +903,19 @@ app.get(['/api/search', '/api/search/external'], async (req, res) => {
 
     const allTracks = [...formattedDbTracks, ...ytTracks, ...scTracks];
     searchCache.set(cacheKey, { timestamp: Date.now(), tracks: allTracks });
-
-    res.json({ success: true, tracks: allTracks });
+    return allTracks;
   } catch (e) {
-    res.json({ success: true, tracks: [] });
+    return [];
   }
+}
+
+// FAST MUSIC SEARCH & STREAM RESOLVER (Cached)
+// ──────────────────────────────────────────
+app.get(['/api/search', '/api/search/external'], async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ success: true, tracks: [] });
+  const tracks = await searchTracksInternal(q);
+  res.json({ success: true, tracks });
 });
 
 function parseDurationFromLabel(label) {
@@ -1875,20 +1881,25 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
     let tracks = [];
 
     if (aiRecs && aiRecs.length > 0) {
-      // Find matching songs from YouTube/SoundCloud/Local DB
-      for (const item of aiRecs.slice(0, limit)) {
-        try {
+      // Find matching songs concurrently in-process without localhost HTTP loop
+      const settled = await Promise.allSettled(
+        aiRecs.slice(0, limit).map(async (item) => {
           const q = `${item.title} ${item.artist}`;
-          const searchRes = await axios.get(`http://localhost:${PORT}/api/search?q=${encodeURIComponent(q)}`, { timeout: 4000 });
-          if (searchRes.data?.tracks?.length > 0) {
-            const first = searchRes.data.tracks[0];
-            tracks.push({
-              ...first,
+          const searchResults = await searchTracksInternal(q);
+          if (searchResults && searchResults.length > 0) {
+            return {
+              ...searchResults[0],
               isSmartShuffle: true,
               smartReason: item.reason || 'AI Smart Vibe Match'
-            });
+            };
           }
-        } catch {}
+          return null;
+        })
+      );
+      for (const res of settled) {
+        if (res.status === 'fulfilled' && res.value) {
+          tracks.push(res.value);
+        }
       }
     }
 
@@ -1927,9 +1938,9 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
       if (tracks.length < 3 && artists.length > 0) {
         try {
           const topArtist = artists[0];
-          const extRes = await axios.get(`http://localhost:${PORT}/api/search?q=${encodeURIComponent(topArtist)}`, { timeout: 4000 });
-          if (extRes.data?.tracks?.length > 0) {
-            for (const t of extRes.data.tracks) {
+          const extTracks = await searchTracksInternal(topArtist);
+          if (extTracks && extTracks.length > 0) {
+            for (const t of extTracks) {
               if (!existingIds.has(String(t.id)) && !tracks.some(x => x.id === t.id) && tracks.length < limit) {
                 tracks.push({
                   ...t,
@@ -1958,17 +1969,23 @@ app.post('/api/ai/recommendations', async (req, res) => {
     let recommendations = [];
 
     if (aiRecs && aiRecs.length > 0) {
-      for (const item of aiRecs.slice(0, 6)) {
-        try {
+      const settled = await Promise.allSettled(
+        aiRecs.slice(0, 6).map(async (item) => {
           const q = `${item.title} ${item.artist}`;
-          const searchRes = await axios.get(`http://localhost:${PORT}/api/search?q=${encodeURIComponent(q)}`, { timeout: 4000 });
-          if (searchRes.data?.tracks?.length > 0) {
-            recommendations.push({
-              ...searchRes.data.tracks[0],
+          const searchResults = await searchTracksInternal(q);
+          if (searchResults && searchResults.length > 0) {
+            return {
+              ...searchResults[0],
               aiReason: item.reason || 'Perfect match for playlist vibe'
-            });
+            };
           }
-        } catch {}
+          return null;
+        })
+      );
+      for (const res of settled) {
+        if (res.status === 'fulfilled' && res.value) {
+          recommendations.push(res.value);
+        }
       }
     }
 
@@ -2243,17 +2260,10 @@ io.on('connection', (socket) => {
         });
         io.to(roomCode).emit('jam:room_updated', room);
       } else {
-        // Queue is empty: stop or keep current
-        room.isPlaying = false;
-        room.updatedAt = Date.now();
-        io.to(roomCode).emit('jam:on_play_state_changed', {
-          isPlaying: false,
-          currentTrack: room.currentTrack,
-          currentTime: room.currentTime,
-          updatedAt: room.updatedAt,
-          initiatorId: socket.id
-        });
-        io.to(roomCode).emit('jam:room_updated', room);
+        // Shared jam queue is empty: ask host to advance from host's local queue seamlessly
+        if (room.hostId) {
+          io.to(room.hostId).emit('jam:advance_host_queue', { roomCode });
+        }
       }
     }
   });
