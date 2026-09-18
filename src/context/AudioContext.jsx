@@ -344,20 +344,64 @@ export function AudioProvider({ children, tracks, setTracks }) {
           .then(data => {
             if (data.success && data.url) {
               const freshUrl = data.url;
-              const audio = audioRef.current;
-              if (data.duration && isFinite(data.duration) && data.duration > 0) {
-                setDuration(data.duration);
+              const ytId = extractYtId(freshUrl);
+
+              if (data.cover) {
+                setCurrentTrack(prev => prev ? { ...prev, cover: data.cover } : prev);
               }
-              if (audio) {
-                audio.src = freshUrl;
-                if (shouldPlayRef.current || isPlaying) {
-                  resumeAudioContext();
-                  audio.play().catch(e => console.warn('SoundCloud play error:', e));
+
+              if (ytId) {
+                // Switch seamlessly to YouTube player
+                isYtTrackRef.current = true;
+                setIsYtTrack(true);
+                if (audioRef.current) {
+                  audioRef.current.pause();
+                  audioRef.current.src = '';
+                }
+                if (data.duration && isFinite(data.duration) && data.duration > 0) {
+                  setDuration(data.duration);
+                }
+                const loadYt = () => {
+                  if (!ytPlayerRef.current || !isYtReadyRef.current) {
+                    setTimeout(loadYt, 300);
+                    return;
+                  }
+                  try {
+                    ytPlayerRef.current.loadVideoById(ytId);
+                    if (isPlaying || shouldPlayRef.current) {
+                      shouldPlayRef.current = false;
+                      ytPlayerRef.current.playVideo();
+                    } else {
+                      ytPlayerRef.current.pauseVideo();
+                    }
+                    ytPlayerRef.current.setVolume(volumeRef.current * 100);
+                  } catch (e) {
+                    console.warn('[YT] loadVideoById error:', e);
+                  }
+                };
+                loadYt();
+              } else {
+                // HTML5 Audio playback
+                isYtTrackRef.current = false;
+                setIsYtTrack(false);
+                if (ytPlayerRef.current && isYtReadyRef.current) {
+                  try { ytPlayerRef.current.stopVideo(); } catch {}
+                }
+                const audio = audioRef.current;
+                if (data.duration && isFinite(data.duration) && data.duration > 0) {
+                  setDuration(data.duration);
+                }
+                if (audio) {
+                  audio.src = freshUrl;
+                  if (shouldPlayRef.current || isPlaying) {
+                    resumeAudioContext();
+                    audio.play().catch(e => console.warn('Stream play error:', e));
+                  }
                 }
               }
             }
           })
-          .catch(err => console.warn('SoundCloud stream error:', err));
+          .catch(err => console.warn('Stream resolution error:', err));
       } else {
         // Detect local native device file URLs (Capacitor) — must NOT go through remote proxy
         if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
@@ -474,10 +518,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
     if (!activeList.length) return;
     if (isShuffleRef.current) {
-      playTrack(activeList[Math.floor(Math.random() * activeList.length)]);
+      playTrack(activeList[Math.floor(Math.random() * activeList.length)], activeList);
     } else {
-      const idx = activeList.findIndex(t => t.id === currentTrackRef.current?.id);
-      playTrack(activeList[(idx + 1) % activeList.length]);
+      const cur = currentTrackRef.current;
+      const curId = String(cur?.id || cur?._id || '');
+      const idx = activeList.findIndex(t => String(t.id || t._id) === curId);
+      const nextIdx = idx >= 0 ? (idx + 1) % activeList.length : 0;
+      playTrack(activeList[nextIdx], activeList);
     }
     // Force playing state so song starts automatically
     setIsPlaying(true);
@@ -488,8 +535,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!rawQueue?.length) return;
     const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
     if (!activeList.length) return;
-    const idx = activeList.findIndex(t => t.id === currentTrackRef.current?.id);
-    playTrack(activeList[idx <= 0 ? activeList.length - 1 : idx - 1]);
+    const cur = currentTrackRef.current;
+    const curId = String(cur?.id || cur?._id || '');
+    const idx = activeList.findIndex(t => String(t.id || t._id) === curId);
+    const prevIdx = idx > 0 ? idx - 1 : activeList.length - 1;
+    playTrack(activeList[prevIdx], activeList);
     // Force playing state so song starts automatically
     setIsPlaying(true);
   }, [isOfflineMode, playTrack]);

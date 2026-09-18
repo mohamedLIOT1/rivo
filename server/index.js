@@ -70,6 +70,24 @@ Track.updateMany(
   { $set: { audioUrl: '', source: 'SoundCloud' } }
 ).then(r => { if (r.modifiedCount > 0) console.log(`[DB] Cleaned ${r.modifiedCount} placeholder/expired tracks`); }).catch(() => {});
 
+// Background task: backfill real track covers for all imported tracks that currently share a playlist cover
+setTimeout(async () => {
+  try {
+    const tracks = await Track.find().limit(100);
+    for (const t of tracks) {
+      if (t.title && t.artist) {
+        const real = await fetchTrackCover(t.title, t.artist);
+        if (real && real !== t.cover) {
+          await Track.updateOne({ _id: t._id }, { $set: { cover: real } });
+        }
+      }
+    }
+    console.log('[DB] Finished backfilling real track covers');
+  } catch (err) {
+    console.warn('[DB] Cover backfill error:', err.message);
+  }
+}, 3000);
+
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, unique: true, lowercase: true, required: true },
@@ -185,6 +203,40 @@ async function resolveSoundCloudStream(url, clientId) {
   }
 }
 
+async function searchYouTubeId(query) {
+  if (!query || !query.trim()) return null;
+  try {
+    const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(query.trim())}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 5000
+    });
+    const matches = [...res.data.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map(m => m[1]);
+    const valid = matches.filter(id => id && id.length === 11);
+    return valid[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchTrackCover(title, artist) {
+  const q = `${artist || ''} ${title || ''}`.trim();
+  if (!q) return null;
+  // 1. iTunes (600x600 high-res)
+  try {
+    const res = await axios.get(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`, { timeout: 2500 });
+    const art = res.data?.results?.[0]?.artworkUrl100;
+    if (art) return art.replace('100x100bb', '600x600bb');
+  } catch {}
+  // 2. YouTube Thumbnail fallback
+  try {
+    const ytId = await searchYouTubeId(q);
+    if (ytId) return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+  } catch {}
+  return null;
+}
+
 async function resolveSoundCloudTrack(query) {
   if (!query || !query.trim()) return null;
   let clientId = await getSoundCloudClientId();
@@ -192,14 +244,14 @@ async function resolveSoundCloudTrack(query) {
     let res;
     try {
       res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-        params: { q: query.trim(), client_id: clientId, limit: 5 },
+        params: { q: query.trim(), client_id: clientId, limit: 6 },
         timeout: 5000
       });
     } catch (err) {
       if (err.response?.status === 401) {
         clientId = await getSoundCloudClientId(true);
         res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q: query.trim(), client_id: clientId, limit: 5 },
+          params: { q: query.trim(), client_id: clientId, limit: 6 },
           timeout: 5000
         });
       } else {
@@ -209,10 +261,12 @@ async function resolveSoundCloudTrack(query) {
 
     const collection = res.data?.collection || [];
     for (const item of collection) {
-      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+      // Reject 30-second snippets / preview-only tracks!
+      if (item.policy === 'SNIP' || (item.duration || 0) <= 35000) continue;
+      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive' && !t.snipped);
       if (prog) {
         const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
-        if (streamUrl) {
+        if (streamUrl && !streamUrl.includes('preview')) {
           return {
             streamUrl,
             duration: item.duration ? Math.round(item.duration / 1000) : 180,
@@ -226,6 +280,35 @@ async function resolveSoundCloudTrack(query) {
   } catch (e) {
     console.warn('[SoundCloud] resolveSoundCloudTrack error:', e.message);
   }
+  return null;
+}
+
+async function resolveTrackAudio(title, artist) {
+  const query = `${artist || ''} ${title || ''}`.trim();
+  if (!query) return null;
+
+  // 1. Try SoundCloud full progressive track first (must not be a 30s snippet)
+  try {
+    const sc = await resolveSoundCloudTrack(query);
+    if (sc && sc.streamUrl) return sc;
+  } catch {}
+
+  // 2. Fall back to YouTube (100% full song, full uninterrupted audio)
+  try {
+    const ytId = await searchYouTubeId(query);
+    if (ytId) {
+      return {
+        streamUrl: `https://www.youtube.com/watch?v=${ytId}`,
+        ytId,
+        duration: 240,
+        cover: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
+        title,
+        artist,
+        isYouTube: true
+      };
+    }
+  } catch {}
+
   return null;
 }
 
@@ -679,13 +762,14 @@ app.post('/api/playlists/import', auth, async (req, res) => {
     for (const item of rawItems.slice(0, 50)) { // up to 50 tracks
       try {
         const duration = item.duration || 180;
-        const coverUrl = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+        let trackCover = await fetchTrackCover(item.title, item.artist);
+        if (!trackCover) trackCover = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
 
         const newTrack = await new Track({
           title: item.title,
           artist: item.artist,
           album: playlistTitle,
-          cover: coverUrl,
+          cover: trackCover,
           audioUrl: '',
           duration,
           genre: 'Imported',
@@ -698,7 +782,7 @@ app.post('/api/playlists/import', auth, async (req, res) => {
           title: item.title,
           artist: item.artist,
           album: playlistTitle,
-          cover: coverUrl,
+          cover: trackCover,
           audioUrl: '',
           duration,
           genre: 'Imported',
@@ -779,21 +863,35 @@ app.post('/api/tracks/by-ids', async (req, res) => {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.json({ success: true, tracks: [] });
     const tracks = await Track.find({ _id: { $in: ids } }).lean();
-    res.json({
-      success: true,
-      tracks: tracks.map(t => ({
+    const formatted = await Promise.all(tracks.map(async (t) => {
+      let cover = t.cover;
+      // If cover is missing or generic unsplash, fetch real track artwork
+      if (t.title && (!cover || cover.includes('unsplash') || cover.includes('pixabay') || cover.includes('format=svg'))) {
+        const real = await fetchTrackCover(t.title, t.artist);
+        if (real) {
+          cover = real;
+          Track.updateOne({ _id: t._id }, { $set: { cover: real } }).exec().catch(() => {});
+        }
+      }
+
+      return {
         id: String(t._id),
         _id: String(t._id),
         title: t.title,
         artist: t.artist,
         album: t.album,
-        cover: t.cover,
-        audioUrl: t.audioUrl && !t.audioUrl.includes('pixabay.com') ? t.audioUrl : '',
+        cover: cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+        audioUrl: t.audioUrl && !t.audioUrl.includes('pixabay.com') && !t.audioUrl.includes('preview') ? t.audioUrl : '',
         duration: t.duration || 180,
         genre: t.genre,
         source: t.source || 'SoundCloud',
         lyrics: t.lyrics || []
-      }))
+      };
+    }));
+
+    res.json({
+      success: true,
+      tracks: formatted
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -926,36 +1024,28 @@ app.get('/api/soundcloud/stream', async (req, res) => {
   try {
     const { url, title, artist, id } = req.query;
 
-    // 1. Direct SoundCloud media/transcoding URL
-    if (url && (url.includes('api-v2.soundcloud.com/media') || url.includes('/transcodings/'))) {
+    // 1. Direct SoundCloud media/transcoding URL (only if not preview)
+    if (url && (url.includes('api-v2.soundcloud.com/media') || url.includes('/transcodings/')) && !url.includes('/preview/')) {
       const streamUrl = await resolveSoundCloudStream(url);
-      if (streamUrl) {
+      if (streamUrl && !streamUrl.includes('preview')) {
         return res.json({ success: true, url: streamUrl });
       }
     }
 
-    // 2. Search SoundCloud by title and artist
-    const searchQueries = [
-      artist && title ? `${artist} - ${title}` : null,
-      artist && title ? `${artist} ${title}` : null,
-      title || null,
-      artist || null
-    ].filter(Boolean);
-
-    for (const q of searchQueries) {
-      const result = await resolveSoundCloudTrack(q);
-      if (result && result.streamUrl) {
-        return res.json({
-          success: true,
-          url: result.streamUrl,
-          duration: result.duration,
-          cover: result.cover
-        });
-      }
+    // 2. Search full track audio (SoundCloud full or YouTube fallback)
+    const result = await resolveTrackAudio(title || '', artist || '');
+    if (result && result.streamUrl) {
+      return res.json({
+        success: true,
+        url: result.streamUrl,
+        duration: result.duration,
+        cover: result.cover,
+        isYouTube: Boolean(result.isYouTube)
+      });
     }
 
-    // 3. If url is already an accessible remote audio URL (not pixabay)
-    if (url && url.startsWith('http') && !url.includes('pixabay.com')) {
+    // 3. Fallback to existing audioUrl if valid and not a 30s preview snippet
+    if (url && url.startsWith('http') && !url.includes('pixabay.com') && !url.includes('preview')) {
       return res.json({ success: true, url });
     }
 

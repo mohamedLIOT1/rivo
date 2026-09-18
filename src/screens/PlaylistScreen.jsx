@@ -289,7 +289,7 @@ export default function PlaylistScreen({
         <div className="flex items-center gap-4">
           <button
             disabled={filteredPlaylistTracks.length === 0}
-            onClick={() => filteredPlaylistTracks.length > 0 && onSelectTrack(filteredPlaylistTracks[0])}
+            onClick={() => filteredPlaylistTracks.length > 0 && onSelectTrack(filteredPlaylistTracks[0], filteredPlaylistTracks)}
             className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-all ${
               filteredPlaylistTracks.length > 0
                 ? 'bg-[#1DB954] hover:bg-[#1ed760] text-black hover:scale-105 active:scale-95 cursor-pointer'
@@ -330,7 +330,7 @@ export default function PlaylistScreen({
               {filteredPlaylistTracks.map((track, i) => (
                 <div
                   key={track.id}
-                  onClick={() => onSelectTrack(track)}
+                  onClick={() => onSelectTrack(track, filteredPlaylistTracks)}
                   className="grid grid-cols-12 items-center p-3 rounded-xl hover:bg-zinc-900/80 cursor-pointer group transition-colors border border-transparent hover:border-zinc-800"
                 >
                   <span className="col-span-1 text-xs font-black text-zinc-500 text-center">{i + 1}</span>
