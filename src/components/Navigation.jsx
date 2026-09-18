@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare, Command } from 'lucide-react';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -12,6 +12,7 @@ export default function Navigation({
   openImportPlaylistModal = () => {},
   openJamModal = () => {},
   openChatModal = () => {},
+  openShortcutsModal = () => {},
   unreadChatCount = 0,
   currentUser,
 }) {
@@ -57,8 +58,7 @@ export default function Navigation({
               <button
                 key={item.id}
                 onClick={() => setCurrentScreen(item.id)}
-                className="sp-nav-link"
-                style={active ? { color: '#fff' } : {}}
+                className={`sp-nav-link ${active ? 'active text-white' : ''}`}
               >
                 <Icon 
                   size={24} 
@@ -73,10 +73,10 @@ export default function Navigation({
 
           <button
             onClick={openJamModal}
-            className="sp-nav-link text-cyan-400 hover:text-cyan-300 transition-colors"
+            className={`sp-nav-link ${currentScreen === 'jam' ? 'active' : ''}`}
             title="Start or Join Jam Session"
           >
-            <Radio size={24} className="text-cyan-400 shrink-0" />
+            <Radio size={24} className="text-cyan-400 shrink-0" strokeWidth={2} />
             <span className="font-bold text-cyan-400">Jam Session</span>
           </button>
 
@@ -85,7 +85,7 @@ export default function Navigation({
             className="sp-nav-link text-zinc-300 hover:text-white transition-colors relative"
             title="Direct Messages & Friends"
           >
-            <MessageSquare size={24} className="text-[#b3b3b3] group-hover:text-white shrink-0" />
+            <MessageSquare size={24} className="text-[#b3b3b3] group-hover:text-white shrink-0" strokeWidth={2} />
             <span className="font-bold text-[#b3b3b3] group-hover:text-white flex-1 text-left">Messages</span>
             {unreadChatCount > 0 && (
               <span className="min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-[#1DB954] text-black text-xs font-black shadow-lg shadow-[#1DB954]/30 tracking-tight ml-auto">
@@ -115,20 +115,20 @@ export default function Navigation({
               </span>
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <button
                 onClick={openImportPlaylistModal}
                 title="Import Spotify/YouTube/Apple playlist"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer hover:scale-105 active:scale-95"
               >
-                <DownloadCloud size={17} />
+                <DownloadCloud size={19} />
               </button>
               <button
                 onClick={openCreatePlaylistModal}
                 title="Create new playlist"
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer hover:scale-105 active:scale-95"
               >
-                <Plus size={19} />
+                <Plus size={22} />
               </button>
             </div>
           </div>
@@ -202,11 +202,11 @@ export default function Navigation({
           </div>
         </div>
 
-        {/* ── User Profile (Bottom) ── */}
-        <div className="bg-[#121212] rounded-lg">
+        {/* ── User Profile & Shortcuts (Bottom) ── */}
+        <div className="bg-[#121212] rounded-lg flex items-center justify-between p-1">
           <button
             onClick={openAuthModal}
-            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 rounded-lg transition-all group"
+            className="flex-1 flex items-center gap-3 px-3 py-2 hover:bg-white/10 rounded-lg transition-all group min-w-0"
           >
             {currentUser ? (
               <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full object-cover shadow-md" />
@@ -219,6 +219,15 @@ export default function Navigation({
               {currentUser ? currentUser.name : 'Log in'}
             </span>
           </button>
+          {openShortcutsModal && (
+            <button
+              onClick={openShortcutsModal}
+              title="Keyboard Shortcuts (?)"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-all mr-1 shrink-0"
+            >
+              <Command size={16} />
+            </button>
+          )}
         </div>
       </aside>
 

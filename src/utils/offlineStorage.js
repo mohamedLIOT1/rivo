@@ -263,6 +263,21 @@ export async function saveTrackOffline(track) {
       } catch (e) {}
     }
 
+    // 4. Server-Side Audio Resolver Fallback
+    if (!audioBlob) {
+      try {
+        const serverDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}`;
+        const serverRes = await fetch(serverDownloadUrl).catch(() => null);
+        if (serverRes && serverRes.ok) {
+          const ct = serverRes.headers.get('content-type') || '';
+          if (!ct.includes('html') && !ct.includes('json')) {
+            const b = await serverRes.blob();
+            if (b && b.size > 20000) audioBlob = b;
+          }
+        }
+      } catch (e) {}
+    }
+
     // Cover image blob handling (Direct + Proxy fallback)
     let coverBlob = null;
     if (track.cover) {

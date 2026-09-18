@@ -3,7 +3,7 @@ import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search
+  Edit3, Check, Search, X
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';

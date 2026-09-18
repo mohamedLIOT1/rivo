@@ -37,6 +37,13 @@ export default function HomeScreen({
     return 'Good evening';
   };
 
+  const isTrackActive = (t) => {
+    if (!currentTrack || !t) return false;
+    const curId = currentTrack.id || currentTrack._id;
+    const tId = t.id || t._id;
+    return Boolean(curId && tId && String(curId) === String(tId));
+  };
+
   const displayTracks = React.useMemo(() => {
     if (!tracks || tracks.length === 0) return [];
     if (activeFilter === 'podcasts') {
@@ -207,7 +214,7 @@ export default function HomeScreen({
               <section className="mb-6 md:mb-8">
                 <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-2.5">
                   {quickItems.map((track) => {
-                    const isCurrentAndPlaying = currentTrack?.id === track.id && isPlaying;
+                    const isCurrentAndPlaying = isTrackActive(track) && isPlaying;
                     return (
                       <div
                         key={track.id}
@@ -248,7 +255,7 @@ export default function HomeScreen({
                 </div>
                 <div className="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 scrollbar-none md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-4 md:mx-0 md:px-0">
                   {recentItems.slice(0, 8).map((track) => {
-                    const isCurrentAndPlaying = currentTrack?.id === track.id && isPlaying;
+                    const isCurrentAndPlaying = isTrackActive(track) && isPlaying;
                     return (
                       <div
                         key={`recent-${track.id}`}
@@ -316,7 +323,7 @@ export default function HomeScreen({
                 </div>
                 <div className="flex overflow-x-auto gap-3 pb-2 -mx-4 px-4 scrollbar-none md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 md:gap-4 md:mx-0 md:px-0">
                   {suggestedItems.slice(6, 14).map((track) => {
-                    const isCurrentAndPlaying = currentTrack?.id === track.id && isPlaying;
+                    const isCurrentAndPlaying = isTrackActive(track) && isPlaying;
                     return (
                       <div
                         key={`made-${track.id}`}
@@ -435,7 +442,7 @@ export default function HomeScreen({
                   </div>
 
                   {suggestedItems.map((track, idx) => {
-                    const isCurrentTrack = currentTrack?.id === track.id;
+                    const isCurrentTrack = isTrackActive(track);
                     const isCurrentAndPlaying = isCurrentTrack && isPlaying;
                     return (
                       <div

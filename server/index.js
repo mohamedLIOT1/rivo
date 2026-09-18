@@ -1373,23 +1373,61 @@ function parsePlain(plainString, duration = 180) {
   }));
 }
 
-async function fetchLrclibLyrics(title, artist, duration) {
+async function fetchLrclibLyrics(title, artist, duration = 180) {
   if (!title) return [];
-  const cleanTitle = (title || '').replace(/\(.*?\)|\[.*?\]|\|.*$/g, '').trim();
-  const cleanArtist = (artist || '').replace(/\(.*?\)|\[.*?\]/g, '').trim();
 
-  try {
-    const res = await axios.get('https://lrclib.net/api/search', {
-      params: { q: `${cleanArtist} ${cleanTitle}`.trim() },
-      headers: { 'User-Agent': 'LiofyApp/1.0 (https://github.com/mohamedLIOT1/liofy)' },
-      timeout: 4000
-    });
-    const items = res.data || [];
-    for (const item of items) {
-      if (item.syncedLyrics) return parseLrc(item.syncedLyrics);
-      if (item.plainLyrics) return parsePlain(item.plainLyrics, duration);
-    }
-  } catch {}
+  // Extract clean parts
+  const cleanTitle = (title || '')
+    .replace(/\(.*?\)|\[.*?\]|\|.*$/g, '')
+    .replace(/(?:ft\.?|feat\.?|featuring)\s+.*$/i, '')
+    .trim();
+  
+  // Extract primary artist (before pipes, slashes, or secondary language delimiters)
+  const primaryArtist = (artist || '')
+    .split(/[|/•,]/)[0]
+    .replace(/\(.*?\)|\[.*?\]/g, '')
+    .trim();
+
+  const fullCleanArtist = (artist || '')
+    .replace(/\(.*?\)|\[.*?\]/g, '')
+    .trim();
+
+  // Search variations in order of relevance
+  const queries = [
+    `${primaryArtist} ${cleanTitle}`.trim(),
+    `${fullCleanArtist} ${cleanTitle}`.trim(),
+    cleanTitle
+  ].filter(Boolean);
+
+  const uniqueQueries = [...new Set(queries)];
+
+  for (const q of uniqueQueries) {
+    try {
+      const res = await axios.get('https://lrclib.net/api/search', {
+        params: { q },
+        headers: { 'User-Agent': 'LiofyApp/1.0 (https://github.com/mohamedLIOT1/liofy)' },
+        timeout: 4500
+      });
+      const items = res.data || [];
+      for (const item of items) {
+        if (item.syncedLyrics) return parseLrc(item.syncedLyrics);
+        if (item.plainLyrics) return parsePlain(item.plainLyrics, duration);
+      }
+    } catch (err) {}
+  }
+
+  // Fallback: Try lyrics.ovh free public API for plain lyrics
+  if (primaryArtist && cleanTitle) {
+    try {
+      const ovhRes = await axios.get(`https://api.lyrics.ovh/v1/${encodeURIComponent(primaryArtist)}/${encodeURIComponent(cleanTitle)}`, {
+        timeout: 4000
+      });
+      if (ovhRes.data?.lyrics) {
+        return parsePlain(ovhRes.data.lyrics, duration);
+      }
+    } catch {}
+  }
+
   return [];
 }
 
@@ -1405,6 +1443,77 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
     res.json({ success: true, lyrics });
   } catch (e) {
     res.json({ success: false, lyrics: [] });
+  }
+});
+
+// Direct Audio Stream Downloader
+app.get('/api/tracks/download', async (req, res) => {
+  try {
+    const { url, title, artist, id } = req.query;
+    let streamUrl = null;
+
+    // 1. Direct audio/stream URL passed (mp3, wav, soundcloud progressive)
+    if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('youtube.com') && !url.includes('youtu.be')) {
+      streamUrl = url;
+    }
+
+    // 2. Resolve via SoundCloud (direct high-quality progressive MP3 stream)
+    if (!streamUrl && (title || artist)) {
+      const cleanArtist = (artist || '').split(/[|/•]/)[0].trim();
+      const cleanTitle = (title || '').replace(/\(.*?\)|\[.*?\]/g, '').trim();
+      const query = `${cleanArtist} ${cleanTitle}`.trim() || `${artist || ''} ${title || ''}`.trim();
+      const sc = await resolveSoundCloudTrack(query, cleanTitle, cleanArtist);
+      if (sc && sc.streamUrl) {
+        streamUrl = sc.streamUrl;
+      }
+    }
+
+    // 3. If YouTube URL or ID, attempt stream resolution
+    if (!streamUrl && url) {
+      const ytMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      const videoId = ytMatch ? ytMatch[1] : null;
+      if (videoId) {
+        for (const ep of ['https://api.cobalt.tools/api/json', 'https://co.wuk.sh/api/json']) {
+          try {
+            const cRes = await axios.post(ep, {
+              url: `https://www.youtube.com/watch?v=${videoId}`,
+              downloadMode: 'audio',
+              audioFormat: 'mp3'
+            }, {
+              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+              timeout: 6000
+            });
+            if (cRes.data?.url) {
+              streamUrl = cRes.data.url;
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+
+    if (!streamUrl) {
+      return res.status(404).json({ success: false, error: 'Could not resolve audio stream for download' });
+    }
+
+    const cleanFilename = `${(artist || 'Artist').split(/[|/]/)[0].trim()} - ${(title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim()}`;
+    const headRes = await axios({
+      method: 'get',
+      url: streamUrl,
+      responseType: 'stream',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      timeout: 30000
+    });
+
+    res.set({
+      'Content-Type': headRes.headers['content-type'] || 'audio/mpeg',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
+      'Access-Control-Allow-Origin': '*'
+    });
+    headRes.data.pipe(res);
+  } catch (e) {
+    console.error('Download audio error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

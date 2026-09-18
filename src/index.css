@@ -29,7 +29,7 @@
   --sp-border-subtle: rgba(255,255,255,0.05);
 
   /* Spotify Layout Dimensions */
-  --nav-width: 270px;
+  --nav-width: 285px;
   --player-height: 90px;
   --topbar-height: 64px;
 }
@@ -378,13 +378,13 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.875rem;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9375rem;
   font-weight: 700;
   color: var(--sp-text-secondary);
   cursor: pointer;
-  transition: color 0.1s ease, background 0.1s ease;
+  transition: all 0.15s ease;
   background: transparent;
   border: none;
   width: 100%;
@@ -392,9 +392,11 @@ body {
 }
 .sp-nav-link:hover {
   color: var(--sp-text-primary);
+  background: rgba(255, 255, 255, 0.06);
 }
 .sp-nav-link.active {
   color: var(--sp-text-primary);
+  background: rgba(255, 255, 255, 0.1);
 }
 .sp-nav-link.active svg {
   color: var(--sp-text-primary);
@@ -405,7 +407,7 @@ body {
   flex: 1;
   background-color: var(--sp-surface);
   border-radius: 8px;
-  margin: 8px 8px;
+  margin: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;

@@ -12,6 +12,8 @@ import AuthModal from './components/AuthModal';
 import JamRoomModal from './components/JamRoomModal';
 import ImportPlaylistModal from './components/ImportPlaylistModal';
 import ChatModal from './components/ChatModal';
+import ShortcutsModal from './components/ShortcutsModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -66,9 +68,26 @@ function AppContent() {
   const [jamSession,          setJamSession]          = useState(null);
   const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
   const [isChatOpen,          setIsChatOpen]          = useState(false);
+  const [isShortcutsOpen,     setIsShortcutsOpen]     = useState(false);
   const [chatTargetUser,      setChatTargetUser]      = useState(null);
   const [unreadChatCount,     setUnreadChatCount]     = useState(0);
   const [socket,              setSocket]              = useState(null);
+
+  useKeyboardShortcuts({
+    togglePlay,
+    playNextTrack,
+    playPrevTrack,
+    seekTo,
+    currentTime,
+    duration,
+    volume,
+    setVolume,
+    setIsShuffle,
+    setIsRepeat,
+    currentTrack,
+    toggleLike,
+    onToggleShortcutsModal: () => setIsShortcutsOpen((prev) => !prev),
+  });
 
   const isChatOpenRef = useRef(isChatOpen);
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
@@ -463,6 +482,19 @@ function AppContent() {
             nativeCoverUri: result.nativeCoverUri || null,
           }));
         }
+
+        // Also trigger browser file download on web platform
+        if (typeof window !== 'undefined' && !window.Capacitor) {
+          try {
+            const dlLink = document.createElement('a');
+            dlLink.href = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(cleanId)}`;
+            dlLink.setAttribute('download', `${track.artist || 'Track'} - ${track.title || 'Song'}.mp3`);
+            document.body.appendChild(dlLink);
+            dlLink.click();
+            document.body.removeChild(dlLink);
+          } catch (e) {}
+        }
+
         showToast('Song downloaded for offline playback ✓');
       } else {
         showToast('Could not download song. Please check internet connection.');
@@ -497,6 +529,7 @@ function AppContent() {
         openAuthModal={handleUserAvatarClick}
         currentUser={currentUser}
         openChatModal={() => handleOpenChat(null)}
+        openShortcutsModal={() => setIsShortcutsOpen(true)}
         unreadChatCount={unreadChatCount}
       />
 
@@ -753,6 +786,11 @@ function AppContent() {
         onPlayTrack={(track) => {
           playTrack(track);
         }}
+      />
+
+      <ShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
       />
 
       {/* ── Toast Notification Banner ── */}
