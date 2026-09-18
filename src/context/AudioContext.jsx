@@ -139,6 +139,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const lastLoadedUrlRef  = useRef(null);  // Last URL loaded into audio element (prevents interruption on metadata-only changes)
   const lastLoadedIdRef   = useRef(null);  // Last track ID loaded (detects actual track change vs metadata update)
   const isTransitionTriggeredRef = useRef(false);
+  const isSeamlessYtHandoffRef   = useRef(false);
   const playNextTrackRef  = useRef(null);
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
@@ -158,12 +159,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const transitionActiveTrackIdRef = useRef(null);
   const activeWebAudioMixRef = useRef(null);
 
-  // ── YouTube IFrame Player ────────────────────────────────────────
-  const ytPlayerRef       = useRef(null);   // YT.Player instance
-  const ytContainerRef    = useRef(null);   // DOM div for YT player
-  const ytIntervalRef     = useRef(null);   // polling interval for currentTime
-  const isYtTrackRef      = useRef(false);  // is current track a YouTube track?
-  const isYtReadyRef      = useRef(false);  // is YT player ready?
+  // ── Dual-Deck YouTube IFrame Players (Deck 1 & Deck 2 for seamless Spotify Mix) ──
+  const ytPlayerRef        = useRef(null);   // active player reference
+  const ytPlayer1Ref       = useRef(null);   // Deck 1
+  const ytPlayer2Ref       = useRef(null);   // Deck 2
+  const activeYtDeckRef    = useRef(1);      // 1 or 2
+  const isYtReady1Ref      = useRef(false);
+  const isYtReady2Ref      = useRef(false);
+  const ytIntervalRef      = useRef(null);   // polling interval for currentTime
+  const isYtTrackRef       = useRef(false);  // is current track a YouTube track?
+
+  const getActiveYtPlayer = useCallback(() => {
+    return activeYtDeckRef.current === 1 ? ytPlayer1Ref.current : ytPlayer2Ref.current;
+  }, []);
+
+  const getSecondaryYtPlayer = useCallback(() => {
+    return activeYtDeckRef.current === 1 ? ytPlayer2Ref.current : ytPlayer1Ref.current;
+  }, []);
+
+  const isCurrentYtReady = useCallback(() => {
+    return activeYtDeckRef.current === 1 ? isYtReady1Ref.current : isYtReady2Ref.current;
+  }, []);
 
   // ── Spotify Mix: Real Audio DJ Transition Execution Engine ───────
   const checkAndRunDjTransition = useCallback((cTime, dur) => {
@@ -201,8 +217,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const inVol = volumeRef.current * Math.sin(pIn * (Math.PI / 2));
       if (!isYtTrackRef.current && audioRef.current) {
         audioRef.current.volume = Math.max(0, Math.min(1, inVol));
-      } else if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
-        try { ytPlayerRef.current.setVolume(Math.round(Math.max(0, Math.min(1, inVol)) * 100)); } catch {}
+      } else if (isYtTrackRef.current) {
+        const actYt = getActiveYtPlayer();
+        if (actYt) {
+          try { actYt.setVolume(Math.round(Math.max(0, Math.min(1, inVol)) * 100)); } catch {}
+        }
       }
       return;
     }
@@ -214,59 +233,116 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const targetVolA = volumeRef.current * gainA;
       const targetVolB = volumeRef.current * gainB;
 
-      // Primary deck fading out
-      if (!isYtTrackRef.current && audioRef.current) {
-        audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
-      } else if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
-        try { ytPlayerRef.current.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
-      }
+      const nextYtId = extractYtId(nextTrack.audioUrl);
+      const isCurYt = isYtTrackRef.current;
 
-      // Preload & start secondary deck using Web Audio API buffer node to avoid autoplay blocks
-      if (transitionActiveTrackIdRef.current !== nextId) {
-        transitionActiveTrackIdRef.current = nextId;
-        resolveTrackAudioUrl(nextTrack).then(async resolved => {
-          if (!resolved?.url) return;
-          const ctx = getAudioContext();
-          if (ctx) {
-            resumeAudioContext();
+      // ── Scenario 1: YouTube to YouTube or YouTube involved ──
+      if (nextYtId) {
+        if (transitionActiveTrackIdRef.current !== nextId) {
+          transitionActiveTrackIdRef.current = nextId;
+          const secPlayer = getSecondaryYtPlayer();
+          if (secPlayer) {
             try {
-              const res = await fetch(resolved.url);
-              const ab = await res.arrayBuffer();
-              const buf = await ctx.decodeAudioData(ab);
-              const src = ctx.createBufferSource();
-              src.buffer = buf;
-              const g = ctx.createGain();
-              g.gain.setValueAtTime(0, ctx.currentTime);
-              src.connect(g).connect(ctx.destination);
-              src.start(0);
-              activeWebAudioMixRef.current = { source: src, gainNode: g, stop: () => { try { src.stop(); } catch {} } };
-            } catch {
-              if (!secondaryAudioRef.current) secondaryAudioRef.current = new Audio();
-              const sec = secondaryAudioRef.current;
-              sec.src = resolved.url;
-              sec.volume = 0;
-              sec.currentTime = 0;
-              sec.play().catch(() => {});
+              secPlayer.unMute();
+              secPlayer.setVolume(0);
+              secPlayer.loadVideoById(nextYtId);
+              secPlayer.playVideo();
+            } catch (err) {
+              console.warn('[YT Deck 2] Start error:', err);
             }
           }
-        });
-      }
-
-      // Update volume on whichever secondary player is running
-      if (activeWebAudioMixRef.current?.gainNode) {
-        const ctx = getAudioContext();
-        if (ctx) {
-          activeWebAudioMixRef.current.gainNode.gain.cancelScheduledValues(ctx.currentTime);
-          activeWebAudioMixRef.current.gainNode.gain.setValueAtTime(targetVolB, ctx.currentTime);
         }
-      } else if (secondaryAudioRef.current) {
-        secondaryAudioRef.current.volume = Math.max(0, Math.min(1, targetVolB));
+
+        // Adjust deck A (outgoing)
+        if (isCurYt) {
+          const actPlayer = getActiveYtPlayer();
+          if (actPlayer) {
+            try { actPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
+          }
+        } else if (audioRef.current) {
+          audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
+        }
+
+        // Adjust deck B (incoming)
+        const secPlayer = getSecondaryYtPlayer();
+        if (secPlayer && transitionActiveTrackIdRef.current === nextId) {
+          try { secPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolB)) * 100)); } catch {}
+        }
+      }
+      // ── Scenario 2: Direct Audio Files (Web Audio API / HTML5 Audio) ──
+      else {
+        if (!isCurYt && audioRef.current) {
+          audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
+        } else if (isCurYt) {
+          const actPlayer = getActiveYtPlayer();
+          if (actPlayer) {
+            try { actPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
+          }
+        }
+
+        if (transitionActiveTrackIdRef.current !== nextId) {
+          transitionActiveTrackIdRef.current = nextId;
+          resolveTrackAudioUrl(nextTrack).then(async resolved => {
+            if (!resolved?.url) return;
+            const ctx = getAudioContext();
+            if (ctx) {
+              resumeAudioContext();
+              try {
+                const res = await fetch(resolved.url);
+                const ab = await res.arrayBuffer();
+                const buf = await ctx.decodeAudioData(ab);
+                const src = ctx.createBufferSource();
+                src.buffer = buf;
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0, ctx.currentTime);
+                src.connect(g).connect(ctx.destination);
+                src.start(0);
+                activeWebAudioMixRef.current = { source: src, gainNode: g, stop: () => { try { src.stop(); } catch {} } };
+              } catch {
+                if (!secondaryAudioRef.current) secondaryAudioRef.current = new Audio();
+                const sec = secondaryAudioRef.current;
+                sec.src = resolved.url;
+                sec.volume = 0;
+                sec.currentTime = 0;
+                sec.play().catch(() => {});
+              }
+            }
+          });
+        }
+
+        if (activeWebAudioMixRef.current?.gainNode) {
+          const ctx = getAudioContext();
+          if (ctx) {
+            activeWebAudioMixRef.current.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+            activeWebAudioMixRef.current.gainNode.gain.setValueAtTime(targetVolB, ctx.currentTime);
+          }
+        } else if (secondaryAudioRef.current) {
+          secondaryAudioRef.current.volume = Math.max(0, Math.min(1, targetVolB));
+        }
       }
 
       // Automatically trigger next track right at transition threshold
       const threshold = trans.style === 'cut' ? 0.25 : 0.45;
       if (remaining <= threshold && !isTransitionTriggeredRef.current) {
         isTransitionTriggeredRef.current = true;
+
+        if (nextYtId) {
+          const actPlayer = getActiveYtPlayer();
+          const secPlayer = getSecondaryYtPlayer();
+          if (actPlayer) {
+            try { actPlayer.pauseVideo(); actPlayer.mute(); } catch {}
+          }
+          if (secPlayer) {
+            try { secPlayer.setVolume(Math.round(volumeRef.current * 100)); } catch {}
+          }
+          // Swap active deck seamlessly
+          activeYtDeckRef.current = activeYtDeckRef.current === 1 ? 2 : 1;
+          ytPlayerRef.current = getActiveYtPlayer();
+          isYtTrackRef.current = true;
+          setIsYtTrack(true);
+          isSeamlessYtHandoffRef.current = true;
+        }
+
         if (playNextTrackRef.current) {
           playNextTrackRef.current();
         }
@@ -275,6 +351,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Normal playback volume restored outside transition window
       if (!isYtTrackRef.current && audioRef.current && Math.abs(audioRef.current.volume - volumeRef.current) > 0.05) {
         audioRef.current.volume = volumeRef.current;
+      }
+      if (isYtTrackRef.current) {
+        const actPlayer = getActiveYtPlayer();
+        if (actPlayer) {
+          try { actPlayer.setVolume(Math.round(volumeRef.current * 100)); } catch {}
+        }
       }
       if (activeWebAudioMixRef.current) {
         activeWebAudioMixRef.current.stop();
@@ -285,20 +367,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       transitionActiveTrackIdRef.current = null;
     }
-  }, []);
+  }, [getActiveYtPlayer, getSecondaryYtPlayer]);
 
   // ── Bulletproof Silencers to PREVENT dual-playback ghost player ──
   const stopYouTube = useCallback(() => {
-    if (ytPlayerRef.current) {
-      try {
-        ytPlayerRef.current.mute();
-        ytPlayerRef.current.pauseVideo();
-        ytPlayerRef.current.stopVideo();
-        if (typeof ytPlayerRef.current.cueVideoById === 'function') {
-          ytPlayerRef.current.cueVideoById('');
-        }
-      } catch {}
-    }
+    [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
+      if (p) {
+        try {
+          p.mute();
+          p.pauseVideo();
+          p.stopVideo();
+          if (typeof p.cueVideoById === 'function') {
+            p.cueVideoById('');
+          }
+        } catch {}
+      }
+    });
     if (ytIntervalRef.current) {
       clearInterval(ytIntervalRef.current);
       ytIntervalRef.current = null;
@@ -395,93 +479,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
   }, [stopYouTube]);
 
-  // Create hidden YouTube IFrame player div
-  useEffect(() => {
-    let div = document.getElementById('liofy-yt-player');
-    if (!div) {
-      div = document.createElement('div');
-      div.id = 'liofy-yt-player';
-      div.style.cssText = 'position:fixed;bottom:-500px;right:-500px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
-      document.body.appendChild(div);
-    }
-    ytContainerRef.current = div;
-
-    // Load YouTube IFrame API
-    onYtReady(() => {
-      if (ytPlayerRef.current) return;
-      ytPlayerRef.current = new window.YT.Player('liofy-yt-player', {
-        height: '200',
-        width: '200',
-        playerVars: {
-          autoplay: 1,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
-          playsinline: 1,
-          origin: window.location.origin,
-        },
-        events: {
-          onReady: () => {
-            isYtReadyRef.current = true;
-            ytPlayerRef.current.setVolume(volumeRef.current * 100);
-            window.__liofyYTPlayer = ytPlayerRef.current;
-            console.log('[YT] Player ready');
-          },
-          onStateChange: (event) => {
-            const YT = window.YT;
-            if (event.data === YT.PlayerState.PLAYING) {
-              if (isYtTrackRef.current) {
-                // Ensure HTML audio cannot play at the same time
-                stopHtmlAudio();
-                setIsPlaying(true);
-                setDuration(ytPlayerRef.current.getDuration() || 210);
-                if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-                ytIntervalRef.current = setInterval(() => {
-                  if (ytPlayerRef.current && isYtTrackRef.current) {
-                    const t = ytPlayerRef.current.getCurrentTime() || 0;
-                    const d = ytPlayerRef.current.getDuration() || 0;
-                    setCurrentTime(t);
-                    if (d > 0) {
-                      checkAndRunDjTransition(t, d);
-                    }
-                  }
-                }, 150);
-              } else {
-                // YouTube played unexpectedly in the background while on HTML audio! Kill it immediately!
-                stopYouTube();
-              }
-            } else if (event.data === YT.PlayerState.PAUSED) {
-              if (isYtTrackRef.current) {
-                setIsPlaying(false);
-              }
-              if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-            } else if (event.data === YT.PlayerState.ENDED) {
-              if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-              if (isRepeatRef.current) {
-                ytPlayerRef.current.seekTo(0, true);
-                ytPlayerRef.current.playVideo();
-              } else {
-                playNextTrack();
-              }
-            }
-          },
-          onError: (event) => {
-            console.warn('[YT] Player error:', event.data);
-            const cur = currentTrackRef.current;
-            if (cur) fallbackToHtmlAudio(cur);
-          },
-        },
-      });
-    });
-
-    return () => {
-      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-      if (div && div.parentNode) div.parentNode.removeChild(div);
-      ytPlayerRef.current = null;
-      isYtReadyRef.current = false;
-    };
-  }, [stopHtmlAudio, stopYouTube]);
-
   const fallbackToHtmlAudio = useCallback(async (track) => {
     if (!track) return;
     isYtTrackRef.current = false;
@@ -508,6 +505,148 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, [stopYouTube]);
 
+  // Create hidden YouTube IFrame player divs (Deck 1 & Deck 2)
+  useEffect(() => {
+    let div1 = document.getElementById('liofy-yt-player-1');
+    if (!div1) {
+      div1 = document.createElement('div');
+      div1.id = 'liofy-yt-player-1';
+      div1.style.cssText = 'position:fixed;bottom:-500px;right:-500px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
+      document.body.appendChild(div1);
+    }
+    let div2 = document.getElementById('liofy-yt-player-2');
+    if (!div2) {
+      div2 = document.createElement('div');
+      div2.id = 'liofy-yt-player-2';
+      div2.style.cssText = 'position:fixed;bottom:-500px;right:-500px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
+      document.body.appendChild(div2);
+    }
+
+    const handleYtStateChange = (deckNum, event) => {
+      const YT = window.YT;
+      const player = deckNum === 1 ? ytPlayer1Ref.current : ytPlayer2Ref.current;
+      if (!player) return;
+
+      if (event.data === YT.PlayerState.PLAYING) {
+        if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
+          stopHtmlAudio();
+          setIsPlaying(true);
+          try {
+            const d = player.getDuration();
+            if (d > 0) setDuration(d);
+          } catch {}
+          if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+          ytIntervalRef.current = setInterval(() => {
+            const activeP = getActiveYtPlayer();
+            if (activeP && isYtTrackRef.current) {
+              const t = activeP.getCurrentTime() || 0;
+              const d = activeP.getDuration() || 0;
+              setCurrentTime(t);
+              if (d > 0) {
+                checkAndRunDjTransition(t, d);
+              }
+            }
+          }, 150);
+        } else if (!isYtTrackRef.current) {
+          try { player.pauseVideo(); player.mute(); } catch {}
+        }
+      } else if (event.data === YT.PlayerState.PAUSED) {
+        if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
+          setIsPlaying(false);
+          if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+        }
+      } else if (event.data === YT.PlayerState.ENDED) {
+        if (activeYtDeckRef.current === deckNum) {
+          if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+          if (isRepeatRef.current) {
+            try {
+              player.seekTo(0, true);
+              player.playVideo();
+            } catch {}
+          } else {
+            playNextTrack();
+          }
+        }
+      }
+    };
+
+    onYtReady(() => {
+      if (!ytPlayer1Ref.current) {
+        ytPlayer1Ref.current = new window.YT.Player('liofy-yt-player-1', {
+          height: '200',
+          width: '200',
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            playsinline: 1,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: () => {
+              isYtReady1Ref.current = true;
+              if (activeYtDeckRef.current === 1) {
+                ytPlayerRef.current = ytPlayer1Ref.current;
+                try { ytPlayer1Ref.current.setVolume(volumeRef.current * 100); } catch {}
+              }
+              console.log('[YT Deck 1] Ready');
+            },
+            onStateChange: (e) => handleYtStateChange(1, e),
+            onError: (e) => {
+              console.warn('[YT Deck 1] error:', e.data);
+              if (activeYtDeckRef.current === 1) {
+                const cur = currentTrackRef.current;
+                if (cur) fallbackToHtmlAudio(cur);
+              }
+            }
+          }
+        });
+      }
+
+      if (!ytPlayer2Ref.current) {
+        ytPlayer2Ref.current = new window.YT.Player('liofy-yt-player-2', {
+          height: '200',
+          width: '200',
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            disablekb: 1,
+            fs: 0,
+            playsinline: 1,
+            origin: window.location.origin,
+          },
+          events: {
+            onReady: () => {
+              isYtReady2Ref.current = true;
+              try { ytPlayer2Ref.current.setVolume(0); } catch {}
+              console.log('[YT Deck 2] Ready');
+            },
+            onStateChange: (e) => handleYtStateChange(2, e),
+            onError: (e) => {
+              console.warn('[YT Deck 2] error:', e.data);
+              if (activeYtDeckRef.current === 2) {
+                const cur = currentTrackRef.current;
+                if (cur) fallbackToHtmlAudio(cur);
+              }
+            }
+          }
+        });
+      }
+    });
+
+    return () => {
+      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+      if (div1 && div1.parentNode) div1.parentNode.removeChild(div1);
+      if (div2 && div2.parentNode) div2.parentNode.removeChild(div2);
+      ytPlayer1Ref.current = null;
+      ytPlayer2Ref.current = null;
+      ytPlayerRef.current = null;
+      isYtReady1Ref.current = false;
+      isYtReady2Ref.current = false;
+    };
+  }, [stopHtmlAudio, stopYouTube, checkAndRunDjTransition, fallbackToHtmlAudio, getActiveYtPlayer, playNextTrack]);
+
   // EQ sync
   useEffect(() => { setEqualizerBands(eqBands, eqEnabled); }, [eqBands, eqEnabled]);
 
@@ -516,8 +655,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setVolumeState(val);
     setMasterVolume(val);
     if (audioRef.current) audioRef.current.volume = val;
-    if (ytPlayerRef.current && isYtReadyRef.current) {
-      ytPlayerRef.current.setVolume(val * 100);
+    const actPlayer = getActiveYtPlayer();
+    if (actPlayer && isCurrentYtReady()) {
+      try { actPlayer.setVolume(val * 100); } catch {}
     }
   };
 
@@ -556,21 +696,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       let watchdog = null;
       const loadYt = () => {
-        if (!ytPlayerRef.current || !isYtReadyRef.current) {
+        const actPlayer = getActiveYtPlayer();
+        const secPlayer = getSecondaryYtPlayer();
+        if (secPlayer) {
+          try {
+            secPlayer.pauseVideo();
+            secPlayer.mute();
+          } catch {}
+        }
+        if (!actPlayer || !isCurrentYtReady()) {
           setTimeout(loadYt, 200);
           return;
         }
         try {
-          ytPlayerRef.current.setVolume(volumeRef.current * 100);
+          actPlayer.setVolume(volumeRef.current * 100);
           if (shouldPlayRef.current || isPlaying) {
             shouldPlayRef.current = false;
-            ytPlayerRef.current.unMute();
-            ytPlayerRef.current.loadVideoById(ytId);
-            ytPlayerRef.current.playVideo();
+            actPlayer.unMute();
+            actPlayer.loadVideoById(ytId);
+            actPlayer.playVideo();
             setIsPlaying(true);
           } else {
             // Do not autoplay on site load — prepare video paused
-            ytPlayerRef.current.cueVideoById(ytId);
+            actPlayer.cueVideoById(ytId);
             setIsPlaying(false);
           }
         } catch (e) {
@@ -585,9 +733,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Only arm watchdog if playback was actively requested
       if (shouldPlayRef.current || isPlaying) {
         watchdog = setTimeout(() => {
-          if (isYtTrackRef.current && ytPlayerRef.current) {
+          const actPlayer = getActiveYtPlayer();
+          if (isYtTrackRef.current && actPlayer) {
             try {
-              const state = ytPlayerRef.current.getPlayerState();
+              const state = actPlayer.getPlayerState();
               if (state !== 1 && state !== 3) {
                 console.warn('[YT] Watchdog: YouTube not playing after 6s, falling back to audio stream');
                 fallbackToHtmlAudio(currentTrack);
@@ -652,20 +801,28 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   setDuration(data.duration);
                 }
                 const loadYt = () => {
-                  if (!ytPlayerRef.current || !isYtReadyRef.current) {
+                  const actPlayer = getActiveYtPlayer();
+                  const secPlayer = getSecondaryYtPlayer();
+                  if (secPlayer) {
+                    try {
+                      secPlayer.pauseVideo();
+                      secPlayer.mute();
+                    } catch {}
+                  }
+                  if (!actPlayer || !isCurrentYtReady()) {
                     setTimeout(loadYt, 300);
                     return;
                   }
                   try {
-                    ytPlayerRef.current.setVolume(volumeRef.current * 100);
+                    actPlayer.setVolume(volumeRef.current * 100);
                     if (isPlaying || shouldPlayRef.current) {
                       shouldPlayRef.current = false;
-                      ytPlayerRef.current.unMute();
-                      ytPlayerRef.current.loadVideoById(ytId);
-                      ytPlayerRef.current.playVideo();
+                      actPlayer.unMute();
+                      actPlayer.loadVideoById(ytId);
+                      actPlayer.playVideo();
                       setIsPlaying(true);
                     } else {
-                      ytPlayerRef.current.cueVideoById(ytId);
+                      actPlayer.cueVideoById(ytId);
                       setIsPlaying(false);
                     }
                   } catch (e) {
@@ -737,10 +894,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         });
         navigator.mediaSession.setActionHandler('play', () => {
           resumeAudioContext();
-          if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
+          const actPlayer = getActiveYtPlayer();
+          if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
             try {
-              ytPlayerRef.current.unMute();
-              ytPlayerRef.current.playVideo();
+              actPlayer.unMute();
+              actPlayer.playVideo();
             } catch {}
           } else if (audioRef.current) {
             audioRef.current.play().catch(() => {});
@@ -748,9 +906,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setIsPlaying(true);
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-          if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
+          const actPlayer = getActiveYtPlayer();
+          if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
             try {
-              ytPlayerRef.current.pauseVideo();
+              actPlayer.pauseVideo();
             } catch {}
           } else if (audioRef.current) {
             audioRef.current.pause();
@@ -761,22 +920,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
         navigator.mediaSession.setActionHandler('nexttrack',     () => playNextTrack());
       } catch {}
     }
-  }, [currentTrack]);
+  }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
 
   // Sync play/pause state changes for YouTube (as safety backup)
   useEffect(() => {
     if (!isYtTrackRef.current) return;
-    if (!ytPlayerRef.current || !isYtReadyRef.current) return;
+    const actPlayer = getActiveYtPlayer();
+    if (!actPlayer || !isCurrentYtReady()) return;
     try {
-      const state = ytPlayerRef.current.getPlayerState();
+      const state = actPlayer.getPlayerState();
       if (isPlaying && state !== 1 && state !== 3) {
-        ytPlayerRef.current.unMute();
-        ytPlayerRef.current.playVideo();
+        actPlayer.unMute();
+        actPlayer.playVideo();
       } else if (!isPlaying && state === 1) {
-        ytPlayerRef.current.pauseVideo();
+        actPlayer.pauseVideo();
       }
     } catch {}
-  }, [isPlaying]);
+  }, [isPlaying, getActiveYtPlayer, isCurrentYtReady]);
 
   // Sync play/pause for HTML audio (as safety backup)
   useEffect(() => {
@@ -808,13 +968,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     if (isYtTrackRef.current) {
-      if (ytPlayerRef.current && isYtReadyRef.current) {
+      const actPlayer = getActiveYtPlayer();
+      if (actPlayer && isCurrentYtReady()) {
         try {
           if (nextPlaying) {
-            ytPlayerRef.current.unMute();
-            ytPlayerRef.current.playVideo();
+            actPlayer.unMute();
+            actPlayer.playVideo();
           } else {
-            ytPlayerRef.current.pauseVideo();
+            actPlayer.pauseVideo();
           }
         } catch (e) {
           console.warn('[YT] togglePlay error:', e);
@@ -836,31 +997,36 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }
     }
-  }, []);
+  }, [getActiveYtPlayer, isCurrentYtReady]);
 
   const playTrack = useCallback(async (track, newQueue = null, isRemote = false) => {
     if (!track) return;
+    const isSeamless = isSeamlessYtHandoffRef.current;
     isTransitionTriggeredRef.current = false;
     transitionActiveTrackIdRef.current = null;
     if (activeWebAudioMixRef.current) {
       activeWebAudioMixRef.current.stop();
       activeWebAudioMixRef.current = null;
     }
-    if (secondaryAudioRef.current) {
+    if (secondaryAudioRef.current && !isSeamless) {
       secondaryAudioRef.current.pause();
       secondaryAudioRef.current.removeAttribute('src');
     }
     resumeAudioContext();
 
-    // Immediately stop previous audio synchronously to prevent overlap
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    if (ytPlayerRef.current && isYtReadyRef.current) {
-      try {
-        ytPlayerRef.current.mute();
-        ytPlayerRef.current.pauseVideo();
-      } catch {}
+    if (!isSeamless) {
+      // Immediately stop previous audio synchronously to prevent overlap
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
+        if (p) {
+          try {
+            p.mute();
+            p.pauseVideo();
+          } catch {}
+        }
+      });
     }
 
     let trackToPlay = { ...track };
@@ -894,11 +1060,28 @@ export function AudioProvider({ children, tracks, setTracks }) {
       });
     }
 
+    if (isSeamless) {
+      isSeamlessYtHandoffRef.current = false;
+      lastLoadedIdRef.current = String(trackToPlay.id || trackToPlay._id || '');
+      lastLoadedUrlRef.current = trackToPlay.audioUrl || '';
+      currentTrackRef.current = trackToPlay;
+      setCurrentTrack(trackToPlay);
+      setIsPlaying(true);
+      const actPlayer = getActiveYtPlayer();
+      if (actPlayer) {
+        try {
+          const d = actPlayer.getDuration();
+          if (d > 0) setDuration(d);
+        } catch {}
+      }
+      return;
+    }
+
     // Signal that the next currentTrack change should autoplay
     shouldPlayRef.current = true;
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
-  }, [setTracks]);
+  }, [setTracks, getActiveYtPlayer]);
 
   const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
     if (!seedTrack) return;
@@ -962,10 +1145,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
     if (!activeList.length) return;
 
-    // Immediately stop current audio
-    if (audioRef.current) audioRef.current.pause();
-    if (ytPlayerRef.current && isYtReadyRef.current) {
-      try { ytPlayerRef.current.pauseVideo(); } catch {}
+    // Immediately stop current audio only if NOT a seamless handoff
+    if (!isSeamlessYtHandoffRef.current) {
+      if (audioRef.current) audioRef.current.pause();
+      const actPlayer = getActiveYtPlayer();
+      if (actPlayer && isCurrentYtReady()) {
+        try { actPlayer.pauseVideo(); } catch {}
+      }
     }
 
     const isSmart = isShuffleRef.current === 'smart';
@@ -993,7 +1179,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     // Force playing state so song starts automatically
     setIsPlaying(true);
-  }, [isOfflineMode, playTrack, fetchSmartShuffleTracks]);
+  }, [isOfflineMode, playTrack, fetchSmartShuffleTracks, getActiveYtPlayer, isCurrentYtReady]);
 
   useEffect(() => {
     playNextTrackRef.current = playNextTrack;
@@ -1001,6 +1187,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const playPrevTrack = useCallback(() => {
     isTransitionTriggeredRef.current = false;
+    isSeamlessYtHandoffRef.current = false;
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
     const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
@@ -1008,9 +1195,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // Immediately stop current audio
     if (audioRef.current) audioRef.current.pause();
-    if (ytPlayerRef.current && isYtReadyRef.current) {
-      try { ytPlayerRef.current.pauseVideo(); } catch {}
-    }
+    [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
+      if (p) {
+        try { p.pauseVideo(); } catch {}
+      }
+    });
 
     const cur = currentTrackRef.current;
     const curId = String(cur?.id || cur?._id || '');
@@ -1028,10 +1217,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setCurrentTime(s);
     currentTimeRef.current = s;
 
-    if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
+    const actPlayer = getActiveYtPlayer();
+    if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
       try {
-        ytPlayerRef.current.seekTo(s, true);
-        ytPlayerRef.current.setVolume(Math.round(volumeRef.current * 100));
+        actPlayer.seekTo(s, true);
+        actPlayer.setVolume(Math.round(volumeRef.current * 100));
       } catch {}
     } else if (audioRef.current) {
       audioRef.current.currentTime = s;
@@ -1051,7 +1241,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }, 150);
     }
-  }, []);
+  }, [getActiveYtPlayer, isCurrentYtReady]);
 
   const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt }) => {
     let targetTime = Number(syncTime) || 0;
@@ -1084,13 +1274,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Sync play/pause
       if (syncPlaying !== undefined && syncPlaying !== isPlayingRef.current) {
         setIsPlaying(syncPlaying);
-        if (isYtTrackRef.current && ytPlayerRef.current && isYtReadyRef.current) {
+        const actPlayer = getActiveYtPlayer();
+        if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
           try {
             if (syncPlaying) {
-              ytPlayerRef.current.unMute();
-              ytPlayerRef.current.playVideo();
+              actPlayer.unMute();
+              actPlayer.playVideo();
             } else {
-              ytPlayerRef.current.pauseVideo();
+              actPlayer.pauseVideo();
             }
           } catch {}
         } else if (audioRef.current) {
@@ -1103,7 +1294,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }
     }
-  }, [playTrack, seekTo]);
+  }, [playTrack, seekTo, getActiveYtPlayer, isCurrentYtReady]);
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
     if (socket !== undefined) {
@@ -1167,9 +1358,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     transitionActiveTrackIdRef.current = null;
 
     if (audioRef.current) audioRef.current.pause();
-    if (ytPlayerRef.current) {
-      try { ytPlayerRef.current.pauseVideo(); } catch {}
-    }
+    [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
+      if (p) {
+        try { p.pauseVideo(); p.mute(); } catch {}
+      }
+    });
     if (activeWebAudioMixRef.current) {
       activeWebAudioMixRef.current.stop();
       activeWebAudioMixRef.current = null;
@@ -1193,6 +1386,114 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     if (!resA?.url || !resB?.url) return;
 
+    const ytIdA = resA.ytId || extractYtId(resA.url);
+    const ytIdB = resB.ytId || extractYtId(resB.url);
+
+    if (ytIdA || ytIdB) {
+      // ── YouTube Dual-Deck Simulation ──
+      const deckA = ytPlayer1Ref.current;
+      const deckB = ytPlayer2Ref.current;
+      if (!deckA || !deckB) {
+        console.warn('[SpotifyMix] Dual YouTube decks not ready yet');
+        return;
+      }
+
+      activeYtDeckRef.current = 1;
+      ytPlayerRef.current = deckA;
+      isYtTrackRef.current = true;
+      setIsYtTrack(true);
+      setCurrentTrack(tA);
+      currentTrackRef.current = tA;
+      setIsPlaying(true);
+
+      const durA = Number(resA.duration) || 210;
+      const previewStartTimeA = Math.max(0, durA - dur - 3.5);
+
+      try {
+        deckA.unMute();
+        deckA.setVolume(Math.round(volumeRef.current * 100));
+        deckA.loadVideoById(ytIdA, previewStartTimeA);
+        deckA.playVideo();
+      } catch (e) {
+        console.warn('[SpotifyMix] Deck A load error:', e);
+      }
+
+      if (ytIdB) {
+        try {
+          deckB.unMute();
+          deckB.setVolume(0);
+          deckB.cueVideoById(ytIdB, 0);
+        } catch (e) {
+          console.warn('[SpotifyMix] Deck B cue error:', e);
+        }
+      }
+
+      let simInterval = null;
+      let deckBStarted = false;
+      let isStopped = false;
+
+      const stopSim = () => {
+        isStopped = true;
+        if (simInterval) clearInterval(simInterval);
+        try { deckA.pauseVideo(); deckA.mute(); } catch {}
+        try { deckB.pauseVideo(); deckB.mute(); } catch {}
+      };
+
+      activeWebAudioMixRef.current = { stop: stopSim };
+
+      simInterval = setInterval(() => {
+        if (isStopped) return;
+        try {
+          const tA_curr = deckA.getCurrentTime() || 0;
+          const remainingA = durA - tA_curr;
+
+          if (remainingA <= dur && remainingA >= 0) {
+            if (!deckBStarted && ytIdB) {
+              deckBStarted = true;
+              try {
+                deckB.unMute();
+                deckB.setVolume(0);
+                deckB.loadVideoById(ytIdB, 0);
+                deckB.playVideo();
+              } catch (e) {
+                console.warn('[SpotifyMix] Deck B start error:', e);
+              }
+            }
+
+            const pOut = Math.min(1, Math.max(0, 1 - (remainingA / dur)));
+            const { gainA, gainB } = calculateCrossfadeGains(pOut, style);
+            deckA.setVolume(Math.round(volumeRef.current * gainA * 100));
+            if (ytIdB) {
+              deckB.setVolume(Math.round(volumeRef.current * gainB * 100));
+            }
+          }
+
+          if (remainingA <= 0.4 || deckA.getPlayerState() === 0) {
+            deckA.pauseVideo();
+            deckA.mute();
+            if (ytIdB) {
+              deckB.setVolume(Math.round(volumeRef.current * 100));
+              activeYtDeckRef.current = 2;
+              ytPlayerRef.current = deckB;
+              setCurrentTrack(tB);
+              currentTrackRef.current = tB;
+            }
+            clearInterval(simInterval);
+            setTimeout(() => {
+              if (activeWebAudioMixRef.current?.stop === stopSim) {
+                activeWebAudioMixRef.current = null;
+              }
+            }, 4000);
+          }
+        } catch (e) {
+          console.warn('[Simulate Transition] tick error:', e);
+        }
+      }, 100);
+
+      return;
+    }
+
+    // ── Direct Audio Files (Web Audio API) ──
     const mix = await playTrueSpotifyMix({
       songUrl1: resA.url,
       songUrl2: resB.url,
