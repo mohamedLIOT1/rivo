@@ -88,7 +88,7 @@ export default function Navigation({
             <MessageSquare size={24} className="text-[#b3b3b3] group-hover:text-white shrink-0" />
             <span className="font-bold text-[#b3b3b3] group-hover:text-white flex-1 text-left">Messages</span>
             {unreadChatCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full bg-[#1DB954] text-black text-[11px] font-black shadow-md animate-pulse">
+              <span className="min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-[#1DB954] text-black text-xs font-black shadow-lg shadow-[#1DB954]/30 tracking-tight ml-auto">
                 {unreadChatCount}
               </span>
             )}
@@ -98,36 +98,37 @@ export default function Navigation({
         {/* ── Library Panel ── */}
         <div className="sp-library-panel flex-1 min-h-0">
           {/* Library Header */}
-          <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-3 gap-2">
             <button
               onClick={() => setCurrentScreen('library')}
-              className="flex items-center gap-3 group"
+              className="flex items-center gap-3 group shrink-0"
             >
               <Library 
                 size={24} 
                 style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}
                 fill={currentScreen === 'library' ? 'white' : 'none'}
                 strokeWidth={currentScreen === 'library' ? 0 : 2}
+                className="shrink-0"
               />
-              <span className="font-bold text-sm" style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}>
+              <span className="font-bold text-sm whitespace-nowrap" style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}>
                 Your Library
               </span>
             </button>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <button
                 onClick={openImportPlaylistModal}
                 title="Import Spotify/YouTube/Apple playlist"
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white transition-all cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
               >
-                <DownloadCloud size={18} />
+                <DownloadCloud size={17} />
               </button>
               <button
                 onClick={openCreatePlaylistModal}
                 title="Create new playlist"
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white transition-all cursor-pointer"
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-zinc-300 hover:text-white transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
               >
-                <Plus size={20} />
+                <Plus size={19} />
               </button>
             </div>
           </div>

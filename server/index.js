@@ -814,6 +814,16 @@ app.get(['/api/search', '/api/search/external'], async (req, res) => {
   }
 });
 
+function parseDurationFromLabel(label) {
+  if (!label) return 200;
+  const mMatch = label.match(/(\d+)\s+minute/);
+  const sMatch = label.match(/(\d+)\s+second/);
+  const minutes = mMatch ? parseInt(mMatch[1], 10) : 0;
+  const seconds = sMatch ? parseInt(sMatch[1], 10) : 0;
+  const total = minutes * 60 + seconds;
+  return total > 0 ? total : 200;
+}
+
 // ──────────────────────────────────────────
 // PLAYLIST IMPORT (Spotify, YouTube, Apple Music)
 // ──────────────────────────────────────────
@@ -869,26 +879,86 @@ app.post('/api/playlists/import', auth, async (req, res) => {
 
       try {
         const ytRes = await axios.get(`https://www.youtube.com/playlist?list=${listId}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          timeout: 10000
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9'
+          },
+          timeout: 12000
         });
         const html = ytRes.data;
-        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-        if (titleMatch) {
-          playlistTitle = titleMatch[1].replace(' - YouTube', '').trim();
-        }
-        // Extract video titles
-        const videoTitleMatches = [...html.matchAll(/"title":{"runs":\[{"text":"([^"]+)"}\]/g)];
-        const seen = new Set();
-        for (const m of videoTitleMatches) {
-          const t = m[1];
-          if (!seen.has(t) && t.length > 2 && !t.includes('YouTube') && seen.size < 50) {
-            seen.add(t);
-            rawItems.push({ title: t, artist: 'YouTube', duration: 200 });
+
+        // Try extracting ytInitialData
+        const initialDataMatch = html.match(/var ytInitialData = ({.*?});<\/script>/s) || html.match(/ytInitialData\s*=\s*({.+?});/);
+        if (initialDataMatch) {
+          try {
+            const data = JSON.parse(initialDataMatch[1]);
+            const headerTitle = data?.metadata?.playlistMetadataRenderer?.title;
+            if (headerTitle) playlistTitle = headerTitle;
+
+            const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs;
+            const sectionList = tabs?.[0]?.tabRenderer?.content?.sectionListRenderer;
+            const sectionContents = sectionList?.contents || [];
+
+            for (const sec of sectionContents) {
+              const itemContents = sec.itemSectionRenderer?.contents || [];
+              for (const it of itemContents) {
+                // 1. Modern lockupViewModel (current YouTube UI)
+                if (it.lockupViewModel && it.lockupViewModel.contentId) {
+                  const vm = it.lockupViewModel;
+                  const videoId = vm.contentId;
+                  const title = vm.metadata?.lockupMetadataViewModel?.title?.content || 'Unknown Track';
+                  const metadataRows = vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+                  const author = metadataRows[0]?.metadataParts?.[0]?.text?.content || 'Artist';
+                  const duration = parseDurationFromLabel(vm.rendererContext?.accessibilityContext?.label);
+                  const cover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+                  rawItems.push({
+                    title,
+                    artist: author,
+                    videoId,
+                    duration,
+                    cover,
+                    audioUrl: `https://www.youtube.com/watch?v=${videoId}`
+                  });
+                }
+                // 2. Classic playlistVideoRenderer
+                else if (it.playlistVideoRenderer && it.playlistVideoRenderer.videoId) {
+                  const p = it.playlistVideoRenderer;
+                  const videoId = p.videoId;
+                  const title = p.title?.runs?.[0]?.text || p.title?.simpleText || 'Unknown Track';
+                  const author = p.shortBylineText?.runs?.[0]?.text || 'Artist';
+                  const duration = p.lengthSeconds ? parseInt(p.lengthSeconds, 10) : 200;
+                  const cover = p.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+                  rawItems.push({
+                    title,
+                    artist: author,
+                    videoId,
+                    duration,
+                    cover,
+                    audioUrl: `https://www.youtube.com/watch?v=${videoId}`
+                  });
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('ytInitialData parse error:', e.message);
           }
         }
+
+        // Fallback: title from HTML tag
+        if (playlistTitle === 'Imported Playlist') {
+          const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+          if (titleMatch) {
+            playlistTitle = titleMatch[1].replace(' - YouTube', '').trim();
+          }
+        }
+
+        if (rawItems.length > 0 && rawItems[0].cover) {
+          playlistCover = rawItems[0].cover;
+        }
       } catch (err) {
-        console.warn('YouTube scrape failed:', err.message);
+        console.warn('YouTube playlist scrape failed:', err.message);
       }
     }
     // 3. Detect Apple Music Playlist
@@ -910,34 +980,43 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       return res.status(400).json({ error: 'Could not extract tracks from playlist. Please verify the link is public.' });
     }
 
-    // Save tracks to database with SoundCloud on-demand stream resolution
+    // Save tracks to database
     const trackIds = [];
     const createdTracks = [];
 
-    for (const item of rawItems.slice(0, 50)) { // up to 50 tracks
+    for (const item of rawItems.slice(0, 100)) { // up to 100 tracks
       try {
         const duration = item.duration || 180;
-        const ytId = await searchYouTubeId(`${item.artist} - ${item.title}`);
-        let trackCover = await fetchTrackCover(item.title, item.artist);
+        const ytId = item.videoId || await searchYouTubeId(`${item.artist} - ${item.title}`);
+        let trackCover = item.cover || (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : null);
+        if (!trackCover) trackCover = await fetchTrackCover(item.title, item.artist);
         if (!trackCover && ytId) trackCover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
         if (!trackCover) trackCover = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
 
-        const audioUrl = ytId ? `https://www.youtube.com/watch?v=${ytId}` : '';
+        const audioUrl = item.audioUrl || (ytId ? `https://www.youtube.com/watch?v=${ytId}` : '');
 
-        const newTrack = await new Track({
-          title: item.title,
-          artist: item.artist,
-          album: playlistTitle,
-          cover: trackCover,
-          audioUrl,
-          duration,
-          genre: 'Imported',
-          source: 'YouTube'
-        }).save();
+        let trackId = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        if (mongoose.connection.readyState === 1) {
+          try {
+            const newTrack = await new Track({
+              title: item.title,
+              artist: item.artist,
+              album: playlistTitle,
+              cover: trackCover,
+              audioUrl,
+              duration,
+              genre: 'Imported',
+              source: 'YouTube'
+            }).save();
+            if (newTrack?._id) trackId = String(newTrack._id);
+          } catch (dbErr) {
+            console.warn('Track DB save error, using fallback ID:', dbErr.message);
+          }
+        }
 
         const trackObj = {
-          id: String(newTrack._id),
-          _id: String(newTrack._id),
+          id: trackId,
+          _id: trackId,
           title: item.title,
           artist: item.artist,
           album: playlistTitle,
@@ -948,13 +1027,12 @@ app.post('/api/playlists/import', auth, async (req, res) => {
           source: 'YouTube'
         };
 
-        trackIds.push(String(newTrack._id));
+        trackIds.push(trackId);
         createdTracks.push(trackObj);
       } catch (err) {}
     }
 
     // Add new playlist to user
-    const user = await User.findById(req.user.id);
     const newPlaylist = {
       id: `pl-${Date.now()}`,
       name: playlistTitle,
@@ -965,8 +1043,17 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       description: `Imported from ${url.includes('spotify') ? 'Spotify' : url.includes('youtube') ? 'YouTube' : 'External'} (${trackIds.length} tracks)`
     };
 
-    user.playlists.push(newPlaylist);
-    await user.save();
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const user = await User.findById(req.user.id);
+        if (user) {
+          user.playlists.push(newPlaylist);
+          await user.save();
+        }
+      } catch (err) {
+        console.warn('Could not persist playlist to user document:', err.message);
+      }
+    }
 
     res.json({
       success: true,

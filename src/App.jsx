@@ -731,6 +731,8 @@ function AppContent() {
             });
           }
           setPlaylists(prev => [newPl, ...prev.filter(p => p.id !== newPl.id)]);
+          setSelectedPlaylist(newPl);
+          setCurrentScreen('playlist');
           showToast(`Imported "${newPl.name}" (${newPl.trackIds?.length || 0} songs)!`);
           syncFromServer();
         }}
