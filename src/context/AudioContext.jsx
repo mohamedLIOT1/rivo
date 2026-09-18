@@ -107,7 +107,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     };
     const handleLoadedMetadata = () => {
-      if (!isNaN(audio.duration) && audio.duration > 0) setDuration(audio.duration);
+      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
     };
     const handleEnded = () => {
       if (isYtTrackRef.current) return;
@@ -128,12 +128,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }, 500);
       }
     };
+    const handleError = () => {
+      audio.crossOrigin = null;
+      const cur = currentTrackRef.current;
+      if (cur && (cur.title || cur.artist) && !cur._retryDone) {
+        cur._retryDone = true;
+        fetch(`${API_BASE_URL}/api/soundcloud/stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.success && d.url && audio) {
+              audio.src = d.url;
+              resumeAudioContext();
+              audio.play().catch(() => {});
+            }
+          })
+          .catch(() => {});
+      }
+    };
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('stalled', handleStalled);
-    audio.addEventListener('error', () => { audio.crossOrigin = null; });
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('timeupdate', handleTimeUpdate);
@@ -141,6 +158,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('stalled', handleStalled);
+      audio.removeEventListener('error', handleError);
       audio.pause();
     };
   }, []);
@@ -299,16 +317,38 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
 
       let targetUrl = newUrl;
-      const isSoundCloud = !isBlobUrl && (currentTrack.source === 'SoundCloud' || (targetUrl && (targetUrl.includes('sndcdn.com') || targetUrl.includes('soundcloud.com'))));
+      const isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
+      const isLocalNativeUrl =
+        targetUrl && (
+          targetUrl.includes('/_capacitor_file_/') ||
+          targetUrl.includes('capacitor://') ||
+          targetUrl.startsWith('file://') ||
+          targetUrl.startsWith('content://') ||
+          (targetUrl.startsWith('http://localhost') && !targetUrl.includes(':5000'))
+        );
 
-      if (isSoundCloud) {
-        fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
+      const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
+        currentTrack.source === 'SoundCloud' ||
+        currentTrack.source === 'Import' ||
+        currentTrack.source === 'Spotify' ||
+        !targetUrl ||
+        targetUrl.includes('pixabay.com') ||
+        targetUrl.includes('sndcdn.com') ||
+        targetUrl.includes('soundcloud.com')
+      );
+
+      if (needsResolution) {
+        if (audioRef.current) audioRef.current.pause();
+        fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || currentTrack._id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
           .then(r => r.json())
           .then(data => {
             if (data.success && data.url) {
               const freshUrl = data.url;
               const audio = audioRef.current;
-              if (audio && audio.src !== freshUrl) {
+              if (data.duration && isFinite(data.duration) && data.duration > 0) {
+                setDuration(data.duration);
+              }
+              if (audio) {
                 audio.src = freshUrl;
                 if (shouldPlayRef.current || isPlaying) {
                   resumeAudioContext();
@@ -320,13 +360,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
           .catch(err => console.warn('SoundCloud stream error:', err));
       } else {
         // Detect local native device file URLs (Capacitor) — must NOT go through remote proxy
-        // These are local URLs on the device that the remote server cannot access
-        const isLocalNativeUrl =
-          targetUrl.includes('/_capacitor_file_/') ||
-          targetUrl.includes('capacitor://') ||
-          targetUrl.startsWith('content://') ||
-          (targetUrl.startsWith('http://localhost') && !targetUrl.includes(':5000'));
-
         if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
           targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
         }

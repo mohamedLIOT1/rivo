@@ -64,6 +64,12 @@ const TrackSchema = new mongoose.Schema({
 
 const Track = mongoose.model('Track', TrackSchema);
 
+// Clean up any dead/expired audio URLs so they resolve dynamically on play
+Track.updateMany(
+  { $or: [{ audioUrl: { $regex: 'pixabay' } }, { audioUrl: { $regex: 'sndcdn.com' } }] },
+  { $set: { audioUrl: '', source: 'SoundCloud' } }
+).then(r => { if (r.modifiedCount > 0) console.log(`[DB] Cleaned ${r.modifiedCount} placeholder/expired tracks`); }).catch(() => {});
+
 const UserSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, unique: true, lowercase: true, required: true },
@@ -124,24 +130,103 @@ function optionalAuth(req, res, next) {
 }
 
 // ──────────────────────────────────────────
-// In-Memory Search & Stream Cache
+// Dynamic SoundCloud Engine & Stream Cache
 // ──────────────────────────────────────────
 const searchCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-const SOUNDCLOUD_CLIENT_IDS = [
-  'Mxv2e5wxnWei6krLywjIXpztX7S0VCeK',
-  'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi',
-  '2t9loNfteI00aOFmOGUT8gahnev8pMrQ'
-];
+let cachedSoundCloudClientId = 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
+let lastSoundCloudIdFetch = Date.now();
+
+async function getSoundCloudClientId(forceRefresh = false) {
+  if (!forceRefresh && cachedSoundCloudClientId && (Date.now() - lastSoundCloudIdFetch < 2 * 60 * 60 * 1000)) {
+    return cachedSoundCloudClientId;
+  }
+  try {
+    const res = await axios.get('https://soundcloud.com', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 8000
+    });
+    const scriptUrls = [...res.data.matchAll(/<script[^>]+src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
+    for (const scriptUrl of scriptUrls.reverse()) {
+      try {
+        const jsRes = await axios.get(scriptUrl, { timeout: 6000 });
+        const match = jsRes.data.match(/client_id[:=]"([a-zA-Z0-9]{32})"/);
+        if (match) {
+          cachedSoundCloudClientId = match[1];
+          lastSoundCloudIdFetch = Date.now();
+          console.log('[SoundCloud] Fresh client ID obtained:', cachedSoundCloudClientId);
+          return cachedSoundCloudClientId;
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('[SoundCloud] Client ID refresh failed:', err.message);
+  }
+  return cachedSoundCloudClientId || 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
+}
 
 async function resolveSoundCloudStream(url, clientId) {
+  let cid = clientId || await getSoundCloudClientId();
   try {
-    const res = await axios.get(`${url}?client_id=${clientId}`, { timeout: 4000 });
+    const res = await axios.get(`${url}${url.includes('?') ? '&' : '?'}client_id=${cid}`, { timeout: 4000 });
     return res.data?.url || null;
-  } catch {
+  } catch (err) {
+    if (err.response?.status === 401) {
+      cid = await getSoundCloudClientId(true);
+      try {
+        const retryRes = await axios.get(`${url}${url.includes('?') ? '&' : '?'}client_id=${cid}`, { timeout: 4000 });
+        return retryRes.data?.url || null;
+      } catch {}
+    }
     return null;
   }
+}
+
+async function resolveSoundCloudTrack(query) {
+  if (!query || !query.trim()) return null;
+  let clientId = await getSoundCloudClientId();
+  try {
+    let res;
+    try {
+      res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+        params: { q: query.trim(), client_id: clientId, limit: 5 },
+        timeout: 5000
+      });
+    } catch (err) {
+      if (err.response?.status === 401) {
+        clientId = await getSoundCloudClientId(true);
+        res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+          params: { q: query.trim(), client_id: clientId, limit: 5 },
+          timeout: 5000
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    const collection = res.data?.collection || [];
+    for (const item of collection) {
+      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+      if (prog) {
+        const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
+        if (streamUrl) {
+          return {
+            streamUrl,
+            duration: item.duration ? Math.round(item.duration / 1000) : 180,
+            cover: item.artwork_url ? item.artwork_url.replace('-large', '-t500x500') : (item.user?.avatar_url || null),
+            title: item.title,
+            artist: item.user?.username
+          };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[SoundCloud] resolveSoundCloudTrack error:', e.message);
+  }
+  return null;
 }
 
 // ──────────────────────────────────────────
@@ -431,44 +516,55 @@ app.get(['/api/search', '/api/search/external'], async (req, res) => {
       source: 'Liofy'
     }));
 
-    // 2. Query SoundCloud with multi-client rotation
+    // 2. Query SoundCloud with dynamic client ID
     let scTracks = [];
-    for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
+    let clientId = await getSoundCloudClientId();
+    try {
+      let scRes;
       try {
-        const scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q, client_id: clientId, limit: 12 },
+        scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+          params: { q, client_id: clientId, limit: 15 },
           timeout: 4000
         });
-
-        if (scRes.data?.collection?.length > 0) {
-          const valid = scRes.data.collection.filter(item => (item.duration || 0) > 30000);
-          const resolved = await Promise.all(
-            valid.slice(0, 8).map(async (item) => {
-              const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-              if (!prog) return null;
-              const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
-              if (!streamUrl) return null;
-
-              return {
-                id: `sc-${item.id}`,
-                title: item.title || q,
-                artist: item.user?.username || 'Artist',
-                album: 'SoundCloud',
-                cover: item.artwork_url
-                  ? item.artwork_url.replace('-large', '-t500x500')
-                  : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-                audioUrl: streamUrl,
-                duration: Math.round((item.duration || 180000) / 1000),
-                source: 'SoundCloud'
-              };
-            })
-          );
-          scTracks = resolved.filter(Boolean);
-          if (scTracks.length > 0) break;
-        }
       } catch (err) {
-        // try next client_id
+        if (err.response?.status === 401) {
+          clientId = await getSoundCloudClientId(true);
+          scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+            params: { q, client_id: clientId, limit: 15 },
+            timeout: 4000
+          });
+        } else {
+          throw err;
+        }
       }
+
+      if (scRes?.data?.collection?.length > 0) {
+        const valid = scRes.data.collection.filter(item => (item.duration || 0) > 30000);
+        const resolved = await Promise.all(
+          valid.slice(0, 10).map(async (item) => {
+            const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+            if (!prog) return null;
+            const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
+            if (!streamUrl) return null;
+
+            return {
+              id: `sc-${item.id}`,
+              title: item.title || q,
+              artist: item.user?.username || 'Artist',
+              album: 'SoundCloud',
+              cover: item.artwork_url
+                ? item.artwork_url.replace('-large', '-t500x500')
+                : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
+              audioUrl: streamUrl,
+              duration: Math.round((item.duration || 180000) / 1000),
+              source: 'SoundCloud'
+            };
+          })
+        );
+        scTracks = resolved.filter(Boolean);
+      }
+    } catch (err) {
+      console.warn('[Search] SoundCloud search error:', err.message);
     }
 
     const allTracks = [...formattedDbTracks, ...scTracks];
@@ -576,42 +672,24 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       return res.status(400).json({ error: 'Could not extract tracks from playlist. Please verify the link is public.' });
     }
 
-    // Now resolve tracks into database or search stream so they are ready to play
+    // Save tracks to database with SoundCloud on-demand stream resolution
     const trackIds = [];
     const createdTracks = [];
-    const clientId = SOUNDCLOUD_CLIENT_IDS[0];
 
     for (const item of rawItems.slice(0, 50)) { // up to 50 tracks
       try {
-        let resolvedAudioUrl = '';
-        let coverUrl = playlistCover;
-        let duration = item.duration || 180;
-
-        try {
-          const scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-            params: { q: `${item.artist} ${item.title}`, client_id: clientId, limit: 1 },
-            timeout: 2500
-          });
-          const match = scRes.data?.collection?.[0];
-          if (match) {
-            const prog = match.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-            if (prog) {
-              resolvedAudioUrl = await resolveSoundCloudStream(prog.url, clientId) || '';
-            }
-            if (match.artwork_url) coverUrl = match.artwork_url.replace('-large', '-t500x500');
-            if (match.duration) duration = Math.round(match.duration / 1000);
-          }
-        } catch {}
+        const duration = item.duration || 180;
+        const coverUrl = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
 
         const newTrack = await new Track({
           title: item.title,
           artist: item.artist,
           album: playlistTitle,
           cover: coverUrl,
-          audioUrl: resolvedAudioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
+          audioUrl: '',
           duration,
           genre: 'Imported',
-          source: 'Import'
+          source: 'SoundCloud'
         }).save();
 
         const trackObj = {
@@ -621,10 +699,10 @@ app.post('/api/playlists/import', auth, async (req, res) => {
           artist: item.artist,
           album: playlistTitle,
           cover: coverUrl,
-          audioUrl: resolvedAudioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
+          audioUrl: '',
           duration,
           genre: 'Imported',
-          source: 'Import'
+          source: 'SoundCloud'
         };
 
         trackIds.push(String(newTrack._id));
@@ -710,10 +788,10 @@ app.post('/api/tracks/by-ids', async (req, res) => {
         artist: t.artist,
         album: t.album,
         cover: t.cover,
-        audioUrl: t.audioUrl,
+        audioUrl: t.audioUrl && !t.audioUrl.includes('pixabay.com') ? t.audioUrl : '',
         duration: t.duration || 180,
         genre: t.genre,
-        source: t.source,
+        source: t.source || 'SoundCloud',
         lyrics: t.lyrics || []
       }))
     });
@@ -809,16 +887,81 @@ app.post('/api/tracks/create', auth, async (req, res) => {
 
 app.get('/api/proxy-audio', async (req, res) => {
   try {
+    const url = req.query.url;
+    if (!url) return res.status(400).end();
+
+    const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
+    if (req.headers.range) {
+      headers['Range'] = req.headers.range;
+    }
+
     const r = await axios({
       method: 'get',
-      url: req.query.url,
+      url,
       responseType: 'stream',
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 25000
+      headers,
+      timeout: 25000,
+      validateStatus: (status) => status < 400
     });
+
+    res.set({
+      'Content-Type': r.headers['content-type'] || 'audio/mpeg',
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Allow-Origin': '*'
+    });
+    if (r.headers['content-length']) res.set('Content-Length', r.headers['content-length']);
+    if (r.headers['content-range']) res.set('Content-Range', r.headers['content-range']);
+    res.status(r.status);
+
     r.data.pipe(res);
   } catch (e) {
     res.status(500).end();
+  }
+});
+
+// ──────────────────────────────────────────
+// SOUNDCLOUD STREAM RESOLVER ENDPOINT
+// ──────────────────────────────────────────
+app.get('/api/soundcloud/stream', async (req, res) => {
+  try {
+    const { url, title, artist, id } = req.query;
+
+    // 1. Direct SoundCloud media/transcoding URL
+    if (url && (url.includes('api-v2.soundcloud.com/media') || url.includes('/transcodings/'))) {
+      const streamUrl = await resolveSoundCloudStream(url);
+      if (streamUrl) {
+        return res.json({ success: true, url: streamUrl });
+      }
+    }
+
+    // 2. Search SoundCloud by title and artist
+    const searchQueries = [
+      artist && title ? `${artist} - ${title}` : null,
+      artist && title ? `${artist} ${title}` : null,
+      title || null,
+      artist || null
+    ].filter(Boolean);
+
+    for (const q of searchQueries) {
+      const result = await resolveSoundCloudTrack(q);
+      if (result && result.streamUrl) {
+        return res.json({
+          success: true,
+          url: result.streamUrl,
+          duration: result.duration,
+          cover: result.cover
+        });
+      }
+    }
+
+    // 3. If url is already an accessible remote audio URL (not pixabay)
+    if (url && url.startsWith('http') && !url.includes('pixabay.com')) {
+      return res.json({ success: true, url });
+    }
+
+    res.status(404).json({ success: false, error: 'Could not resolve audio stream' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
