@@ -141,6 +141,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const isTransitionTriggeredRef = useRef(false);
   const isSeamlessYtHandoffRef   = useRef(false);
   const playNextTrackRef  = useRef(null);
+  const playPrevTrackRef  = useRef(null);
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
@@ -425,7 +426,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const handleEnded = () => {
       if (isYtTrackRef.current) return;
       if (isRepeatRef.current) { audio.currentTime = 0; audio.play().catch(() => {}); }
-      else playNextTrack();
+      else if (playNextTrackRef.current) playNextTrackRef.current();
     };
     // ── Key fix: when audio actually starts playing, ensure AudioContext is running & YouTube is killed ──
     const handlePlaying = () => {
@@ -564,7 +565,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
               player.playVideo();
             } catch {}
           } else {
-            playNextTrack();
+            if (playNextTrackRef.current) playNextTrackRef.current();
           }
         }
       }
@@ -645,7 +646,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       isYtReady1Ref.current = false;
       isYtReady2Ref.current = false;
     };
-  }, [stopHtmlAudio, stopYouTube, checkAndRunDjTransition, fallbackToHtmlAudio, getActiveYtPlayer, playNextTrack]);
+  }, [stopHtmlAudio, stopYouTube, checkAndRunDjTransition, fallbackToHtmlAudio, getActiveYtPlayer]);
 
   // EQ sync
   useEffect(() => { setEqualizerBands(eqBands, eqEnabled); }, [eqBands, eqEnabled]);
@@ -916,8 +917,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
           setIsPlaying(false);
         });
-        navigator.mediaSession.setActionHandler('previoustrack', () => playPrevTrack());
-        navigator.mediaSession.setActionHandler('nexttrack',     () => playNextTrack());
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          if (playPrevTrackRef.current) playPrevTrackRef.current();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          if (playNextTrackRef.current) playNextTrackRef.current();
+        });
       } catch {}
     }
   }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
@@ -1209,6 +1214,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Force playing state so song starts automatically
     setIsPlaying(true);
   }, [isOfflineMode, playTrack]);
+
+  useEffect(() => {
+    playPrevTrackRef.current = playPrevTrack;
+  }, [playPrevTrack]);
 
   const seekTo = useCallback((seconds, isRemote = false) => {
     if (isNaN(seconds)) return;
