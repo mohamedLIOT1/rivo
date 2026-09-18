@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2, Radio } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 
 export default function MiniPlayer({
@@ -18,12 +18,16 @@ export default function MiniPlayer({
   openAddToPlaylist,
   currentTime: propCurrentTime,
   duration: propDuration,
+  seekTo: propSeekTo,
   volume = 0.8,
-  setVolume = () => {}
+  setVolume = () => {},
+  jamSession,
+  openJamModal
 }) {
   const audio = useAudioPlayer();
   const currentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
   const duration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
+  const seekTo = propSeekTo || audio?.seekTo;
   if (!currentTrack) return null;
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
@@ -180,7 +184,10 @@ export default function MiniPlayer({
                 min="0"
                 max={duration || 100}
                 value={currentTime || 0}
-                onChange={(e) => {}}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  seekTo?.(Number(e.target.value));
+                }}
                 className="absolute inset-0 w-full opacity-0 cursor-pointer"
                 style={{ height: '100%' }}
               />
@@ -195,6 +202,18 @@ export default function MiniPlayer({
             RIGHT: Volume + Tools (DESKTOP ONLY)
             ───────────────────────────────────────── */}
         <div className="hidden md:flex items-center gap-3 flex-1 justify-end" style={{ maxWidth: '35%' }}>
+          {/* Jam Session Indicator on Desktop */}
+          {jamSession && (
+            <button
+              onClick={(e) => { e.stopPropagation(); openJamModal?.(); }}
+              className="px-2.5 py-1 rounded-full bg-gradient-to-r from-cyan-950 to-zinc-900 border border-cyan-500/40 text-cyan-300 text-xs font-bold flex items-center gap-1.5 hover:border-cyan-400 transition-colors shadow-md shrink-0"
+              title="Spotify Jam Active"
+            >
+              <Radio size={12} className="text-cyan-400 animate-pulse shrink-0" />
+              <span>Jam ({jamSession.members?.length || 1})</span>
+            </button>
+          )}
+
           {/* Clear Volume Bar */}
           <div className="flex items-center gap-2 max-w-[130px] flex-1">
             <button 
@@ -244,6 +263,15 @@ export default function MiniPlayer({
             MOBILE-ONLY: Play + Next Controls
             ───────────────────────────────────────── */}
         <div className="md:hidden flex items-center gap-2 shrink-0">
+          {jamSession && (
+            <button
+              onClick={(e) => { e.stopPropagation(); openJamModal?.(); }}
+              className="p-1.5 text-cyan-400 rounded-full hover:bg-white/10 active:scale-95"
+              title="Jam Session Active"
+            >
+              <Radio size={18} className="animate-pulse text-cyan-400" />
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); togglePlay(); }}
             className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center transition-transform active:scale-95 shadow-md cursor-pointer"

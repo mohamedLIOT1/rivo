@@ -105,6 +105,8 @@ export default function FullPlayerModal({
   queue = [],
   openAddToPlaylist,
   onPlayTrack,
+  jamSession,
+  onRemoveFromJamQueue
 }) {
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
   const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration } = useAudioPlayer();
@@ -574,43 +576,79 @@ export default function FullPlayerModal({
 
   const renderQueue = () => (
     <div className="flex-1 overflow-y-auto h-full pr-1">
-      <p className="text-xs font-bold uppercase tracking-wider mb-4 pb-3" 
-        style={{ color: '#b3b3b3', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        Now in queue — {queue.length} songs
-      </p>
-      {queue.map((track, i) => {
-        const isActive = track.id === currentTrack.id;
-        return (
-          <div 
-            key={`${track.id}-${i}`}
-            onClick={() => !isActive && handleQueueTrackClick(track)}
-            className="flex items-center gap-3 py-2.5 px-3 rounded-xl cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors group"
-            style={isActive ? { background: 'rgba(255,255,255,0.08)' } : {}}
-          >
-            <div className="relative shrink-0">
-              <img src={track.cover} alt={track.title} className="w-11 h-11 rounded-lg object-cover shadow-md" />
-              {isActive && (
-                <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
-                  <div className="flex items-end gap-0.5 h-4">
-                    <div className="sp-eq-bar" />
-                    <div className="sp-eq-bar" />
-                    <div className="sp-eq-bar" />
+      {jamSession ? (
+        <div className="mb-4 pb-3 border-b border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            <p className="text-xs font-bold uppercase tracking-wider text-cyan-400">
+              Jam Linked Queue — {queue.length} songs
+            </p>
+          </div>
+          <span className="text-[10px] font-black bg-cyan-950 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full">
+            {jamSession.code}
+          </span>
+        </div>
+      ) : (
+        <p className="text-xs font-bold uppercase tracking-wider mb-4 pb-3" 
+          style={{ color: '#b3b3b3', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+          Now in queue — {queue.length} songs
+        </p>
+      )}
+
+      {queue.length === 0 ? (
+        <div className="py-12 text-center text-zinc-500 text-xs">
+          <p>The queue is empty.</p>
+          <p className="mt-1 text-zinc-600">Add songs from the library or search to play next.</p>
+        </div>
+      ) : (
+        queue.map((track, i) => {
+          const isActive = String(track.id || track._id) === String(currentTrack?.id || currentTrack?._id);
+          return (
+            <div 
+              key={`${track.id || track._id}-${i}`}
+              onClick={() => !isActive && handleQueueTrackClick(track)}
+              className="flex items-center gap-3 py-2.5 px-3 rounded-xl cursor-pointer hover:bg-white/10 active:bg-white/15 transition-colors group"
+              style={isActive ? { background: 'rgba(255,255,255,0.08)' } : {}}
+            >
+              <div className="relative shrink-0">
+                <img src={track.cover} alt={track.title} className="w-11 h-11 rounded-lg object-cover shadow-md" />
+                {isActive && (
+                  <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
+                    <div className="flex items-end gap-0.5 h-4">
+                      <div className="sp-eq-bar" />
+                      <div className="sp-eq-bar" />
+                      <div className="sp-eq-bar" />
+                    </div>
                   </div>
-                </div>
+                )}
+              </div>
+              <div className="flex-1 truncate">
+                <p className="text-sm font-bold truncate" style={{ color: isActive ? '#1DB954' : 'white' }}>
+                  {track.title}
+                </p>
+                <p className="text-xs truncate text-zinc-400 mt-0.5">{track.artist}</p>
+              </div>
+
+              {jamSession && onRemoveFromJamQueue && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveFromJamQueue(i, track.id || track._id);
+                  }}
+                  className="p-1.5 text-zinc-500 hover:text-red-400 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                  title="Remove from Jam Queue"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
+
+              {!isActive && !jamSession && (
+                <Play size={14} className="text-zinc-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
               )}
             </div>
-            <div className="flex-1 truncate">
-              <p className="text-sm font-bold truncate" style={{ color: isActive ? '#1DB954' : 'white' }}>
-                {track.title}
-              </p>
-              <p className="text-xs truncate text-zinc-400 mt-0.5">{track.artist}</p>
-            </div>
-            {!isActive && (
-              <Play size={14} className="text-zinc-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            )}
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 

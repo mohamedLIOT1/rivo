@@ -24,6 +24,7 @@ import ProfileScreen from './screens/ProfileScreen';
 
 import { API_BASE_URL } from './config';
 import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from './utils/offlineStorage';
+import { resumeAudioContext } from './utils/audioEngine';
 import { UserProvider, useUser } from './context/UserContext';
 import { AudioProvider, useAudioPlayer } from './context/AudioContext';
 
@@ -43,7 +44,8 @@ function AppContent() {
     currentTime, duration,
     volume, setVolume, isShuffle, setIsShuffle, isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
-    togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo
+    togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
+    setJamSync, syncRemotePlayState, addToJamQueue, removeFromJamQueue
   } = audio;
 
   // Screen Navigation
@@ -278,14 +280,15 @@ function AppContent() {
 
     s.on('jam:room_updated', (room) => {
       setJamSession(room);
+      setJamSync({ socket: s, jamSession: room });
     });
 
-    s.on('jam:on_play_state_changed', ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime }) => {
-      if (syncPlaying !== undefined) setIsPlaying(syncPlaying);
-      if (syncTime !== undefined && Math.abs(syncTime - currentTime) > 2) seekTo(syncTime);
-      if (syncTrack && String(syncTrack.id) !== String(currentTrack?.id)) {
-        playTrack(syncTrack);
-      }
+    s.on('jam:sync_play_state', (data) => {
+      syncRemotePlayState(data);
+    });
+
+    s.on('jam:on_play_state_changed', (data) => {
+      syncRemotePlayState(data);
     });
 
     s.on('chat:message', (msg) => {
@@ -296,14 +299,25 @@ function AppContent() {
     });
 
     return () => s.disconnect();
-  }, [currentUser?.id, currentUser?._id]);
+  }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState]);
+
+  useEffect(() => {
+    if (socket) {
+      setJamSync({ socket, jamSession });
+    }
+  }, [socket, jamSession, setJamSync]);
 
   const handleStartJam = () => {
+    resumeAudioContext();
     const code = `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
-    if (socket && currentUser) {
+    const userPayload = currentUser 
+      ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+
+    if (socket) {
       socket.emit('jam:join_room', {
         roomCode: code,
-        user: { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+        user: userPayload
       });
       setIsJamOpen(true);
       showToast(`Jam Session created: ${code}`);
@@ -313,13 +327,20 @@ function AppContent() {
   };
 
   const handleJoinJam = (code) => {
-    if (socket && currentUser && code) {
+    if (!code) return;
+    resumeAudioContext();
+    const cleanCode = code.trim().toUpperCase();
+    const userPayload = currentUser 
+      ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+
+    if (socket) {
       socket.emit('jam:join_room', {
-        roomCode: code.trim().toUpperCase(),
-        user: { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+        roomCode: cleanCode,
+        user: userPayload
       });
       setIsJamOpen(true);
-      showToast(`Joined Jam: ${code}`);
+      showToast(`Joined Jam: ${cleanCode}`);
     }
   };
 
@@ -327,6 +348,7 @@ function AppContent() {
     if (jamSession && socket) {
       socket.emit('jam:leave_room', { roomCode: jamSession.code });
       setJamSession(null);
+      setJamSync({ jamSession: null });
       showToast('Left Jam Session');
     }
   };
@@ -438,6 +460,8 @@ function AppContent() {
             logout={logout}
             openAuthModal={() => setIsAuthOpen(true)}
             openProfileScreen={() => setCurrentScreen('profile')}
+            openJamModal={() => setIsJamOpen(true)}
+            jamSession={jamSession}
           />
         )}
 
@@ -534,6 +558,9 @@ function AppContent() {
           setVolume={setVolume}
           currentTime={currentTime}
           duration={duration}
+          seekTo={seekTo}
+          jamSession={jamSession}
+          openJamModal={() => setIsJamOpen(true)}
         />
       )}
 
@@ -558,7 +585,9 @@ function AppContent() {
         toggleShuffle={() => setIsShuffle(p => !p)}
         isRepeat={isRepeat}
         toggleRepeat={() => setIsRepeat(p => !p)}
-        queue={tracks}
+        queue={jamSession?.queue?.length ? jamSession.queue : tracks}
+        jamSession={jamSession}
+        onRemoveFromJamQueue={removeFromJamQueue}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
         onPlayTrack={playTrack}
       />
@@ -575,6 +604,8 @@ function AppContent() {
         track={currentTrack}
         playlists={playlists}
         onAddTrackToPlaylist={handleAddTrackToPlaylist}
+        jamSession={jamSession}
+        onAddToJamQueue={addToJamQueue}
       />
 
       <EditSongModal
@@ -616,6 +647,10 @@ function AppContent() {
         onLeaveJam={handleLeaveJam}
         currentTrack={currentTrack}
         isPlaying={isPlaying}
+        tracks={tracks}
+        onAddToJamQueue={addToJamQueue}
+        onRemoveFromJamQueue={removeFromJamQueue}
+        onPlayTrack={playTrack}
       />
 
       <ImportPlaylistModal

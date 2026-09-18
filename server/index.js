@@ -1394,6 +1394,7 @@ io.on('connection', (socket) => {
 
   // Jam: Host creates or joins room
   socket.on('jam:join_room', ({ roomCode, user }) => {
+    if (!roomCode) return;
     socket.join(roomCode);
     if (!jamRooms[roomCode]) {
       jamRooms[roomCode] = {
@@ -1402,37 +1403,153 @@ io.on('connection', (socket) => {
         currentTrack: null,
         isPlaying: false,
         currentTime: 0,
+        updatedAt: Date.now(),
+        queue: [],
         members: []
       };
     }
 
     const room = jamRooms[roomCode];
     // Avoid duplicate member
-    room.members = room.members.filter(m => m.socketId !== socket.id && m.id !== user?.id);
+    room.members = room.members.filter(m => m.socketId !== socket.id && (!user?.id || m.id !== user.id));
+    const isFirstMember = room.members.length === 0;
+    const isHost = room.hostId === socket.id || isFirstMember;
+    if (isHost) room.hostId = socket.id;
+
     const member = {
       ...user,
       socketId: socket.id,
-      isHost: room.hostId === socket.id || room.members.length === 0
+      isHost
     };
-    if (member.isHost) room.hostId = socket.id;
 
     room.members.push(member);
+
+    // Broadcast full room state (members, queue, currentTrack) to everyone in the room
     io.to(roomCode).emit('jam:room_updated', room);
+
+    // If a track is already set/playing, send immediate sync state to the new joiner
+    if (room.currentTrack) {
+      let liveTime = room.currentTime || 0;
+      if (room.isPlaying && room.updatedAt) {
+        const elapsed = (Date.now() - room.updatedAt) / 1000;
+        if (elapsed > 0 && elapsed < 3600) {
+          liveTime += elapsed;
+        }
+      }
+      socket.emit('jam:sync_play_state', {
+        isPlaying: room.isPlaying,
+        currentTrack: room.currentTrack,
+        currentTime: liveTime,
+        updatedAt: room.updatedAt,
+        initiatorId: 'server'
+      });
+    }
   });
 
-  // Jam: Host syncs play state (track, play/pause, seek)
-  socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime }) => {
+  // Jam: Any participant syncs play state (track, play/pause, seek)
+  socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId }) => {
     const room = jamRooms[roomCode];
     if (room) {
+      let trackChanged = false;
       if (isPlaying !== undefined) room.isPlaying = isPlaying;
-      if (currentTrack !== undefined) room.currentTrack = currentTrack;
+      if (currentTrack !== undefined && JSON.stringify(currentTrack) !== JSON.stringify(room.currentTrack)) {
+        room.currentTrack = currentTrack;
+        trackChanged = true;
+      }
       if (currentTime !== undefined) room.currentTime = currentTime;
+      room.updatedAt = Date.now();
 
+      // Broadcast play state to other participants
       socket.to(roomCode).emit('jam:on_play_state_changed', {
         isPlaying: room.isPlaying,
         currentTrack: room.currentTrack,
-        currentTime: room.currentTime
+        currentTime: room.currentTime,
+        updatedAt: room.updatedAt,
+        initiatorId: initiatorId || socket.id
       });
+
+      if (trackChanged) {
+        io.to(roomCode).emit('jam:room_updated', room);
+      }
+    }
+  });
+
+  // Jam: Add song to Linked Shared Queue
+  socket.on('jam:add_to_queue', ({ roomCode, track }) => {
+    const room = jamRooms[roomCode];
+    if (room && track) {
+      // If nothing is playing currently in room, immediately play this track
+      if (!room.currentTrack) {
+        room.currentTrack = track;
+        room.isPlaying = true;
+        room.currentTime = 0;
+        room.updatedAt = Date.now();
+
+        io.to(roomCode).emit('jam:on_play_state_changed', {
+          isPlaying: true,
+          currentTrack: track,
+          currentTime: 0,
+          updatedAt: room.updatedAt,
+          initiatorId: socket.id
+        });
+      } else {
+        // Append to shared queue
+        room.queue.push({
+          ...track,
+          queuedBy: socket.id,
+          queuedAt: Date.now()
+        });
+      }
+
+      io.to(roomCode).emit('jam:room_updated', room);
+    }
+  });
+
+  // Jam: Remove song from Linked Shared Queue
+  socket.on('jam:remove_from_queue', ({ roomCode, trackIndex, trackId }) => {
+    const room = jamRooms[roomCode];
+    if (room && room.queue) {
+      if (typeof trackIndex === 'number' && trackIndex >= 0 && trackIndex < room.queue.length) {
+        room.queue.splice(trackIndex, 1);
+      } else if (trackId) {
+        room.queue = room.queue.filter(t => String(t.id || t._id) !== String(trackId));
+      }
+      io.to(roomCode).emit('jam:room_updated', room);
+    }
+  });
+
+  // Jam: Skip / Play Next Track from Linked Queue
+  socket.on('jam:next_track', ({ roomCode }) => {
+    const room = jamRooms[roomCode];
+    if (room) {
+      if (room.queue && room.queue.length > 0) {
+        const nextTrack = room.queue.shift();
+        room.currentTrack = nextTrack;
+        room.currentTime = 0;
+        room.isPlaying = true;
+        room.updatedAt = Date.now();
+
+        io.to(roomCode).emit('jam:on_play_state_changed', {
+          isPlaying: true,
+          currentTrack: nextTrack,
+          currentTime: 0,
+          updatedAt: room.updatedAt,
+          initiatorId: socket.id
+        });
+        io.to(roomCode).emit('jam:room_updated', room);
+      } else {
+        // Queue is empty: stop or keep current
+        room.isPlaying = false;
+        room.updatedAt = Date.now();
+        io.to(roomCode).emit('jam:on_play_state_changed', {
+          isPlaying: false,
+          currentTrack: room.currentTrack,
+          currentTime: room.currentTime,
+          updatedAt: room.updatedAt,
+          initiatorId: socket.id
+        });
+        io.to(roomCode).emit('jam:room_updated', room);
+      }
     }
   });
 

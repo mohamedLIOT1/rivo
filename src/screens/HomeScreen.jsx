@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings } from 'lucide-react';
+import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings, Radio } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function HomeScreen({ 
@@ -19,6 +19,8 @@ export default function HomeScreen({
   logout = () => {},
   openAuthModal = () => {},
   openProfileScreen = () => {},
+  openJamModal = () => {},
+  jamSession = null,
 }) {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
@@ -63,6 +65,16 @@ export default function HomeScreen({
             {getGreeting()}
           </h1>
           <div className="flex items-center gap-3">
+            {/* Jam Session Button */}
+            <button
+              onClick={openJamModal}
+              className="flex items-center gap-1.5 text-xs font-bold text-cyan-400 bg-cyan-950/80 hover:bg-cyan-900 px-3.5 py-2 rounded-full border border-cyan-500/40 shadow-md transition-all active:scale-95"
+              title="Spotify Jam Session"
+            >
+              <Radio size={15} className={`text-cyan-400 ${jamSession ? 'animate-pulse' : ''}`} />
+              <span>{jamSession ? `Jam (${jamSession.code})` : 'Jam'}</span>
+            </button>
+
             <button
               onClick={openAddSongModal}
               className="flex items-center gap-2 text-sm font-bold text-[#b3b3b3] hover:text-white transition-colors bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full border border-white/10"
