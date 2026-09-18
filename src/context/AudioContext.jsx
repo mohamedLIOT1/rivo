@@ -110,7 +110,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // Spotify Mix DJ Mode
   const [isMixMode, setIsMixMode] = useState(false);
-  const [activeTransitions, setActiveTransitions] = useState({});
+  const [activeTransitions, setActiveTransitions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('liofy_active_transitions');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
   // Equalizer State
   const [eqEnabled, setEqEnabled] = useState(true);
@@ -146,7 +153,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
   useEffect(() => { isMixModeRef.current    = isMixMode;   }, [isMixMode]);
-  useEffect(() => { activeTransRef.current  = activeTransitions; }, [activeTransitions]);
+  useEffect(() => { 
+    activeTransRef.current = activeTransitions; 
+    try {
+      if (activeTransitions && typeof activeTransitions === 'object') {
+        localStorage.setItem('liofy_active_transitions', JSON.stringify(activeTransitions));
+      }
+    } catch {}
+  }, [activeTransitions]);
   useEffect(() => { currentQueueRef.current = currentQueue;}, [currentQueue]);
   useEffect(() => { tracksRef.current       = tracks;      }, [tracks]);
   useEffect(() => { currentTrackRef.current = currentTrack;}, [currentTrack]);
@@ -205,11 +219,30 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const nextId = String(nextTrack.id || nextTrack._id || '');
     const pairKey = `${curId}___${nextId}`;
 
-    const customTrans = activeTransRef.current[pairKey];
+    let customTrans = activeTransRef.current[pairKey];
+    if (!customTrans) {
+      const altKey1 = `${cur._id || cur.id}___${nextTrack._id || nextTrack.id}`;
+      const altKey2 = `${cur.id || cur._id}___${nextTrack.id || nextTrack._id}`;
+      customTrans = activeTransRef.current[altKey1] || activeTransRef.current[altKey2];
+    }
+    if (!customTrans) {
+      for (const [k, v] of Object.entries(activeTransRef.current || {})) {
+        const [kA, kB] = k.split('___');
+        const isA = kA === curId || (cur._id && kA === String(cur._id)) || (cur.title && kA.toLowerCase() === cur.title.toLowerCase());
+        const isB = kB === nextId || (nextTrack._id && kB === String(nextTrack._id)) || (nextTrack.title && kB.toLowerCase() === nextTrack.title.toLowerCase());
+        if (isA && isB) {
+          customTrans = v;
+          break;
+        }
+      }
+    }
+
     const isMixEnabled = isMixModeRef.current || Boolean(customTrans) || Object.keys(activeTransRef.current).length > 0;
     if (!isMixEnabled) return;
 
-    const trans = customTrans || { style: 'equal_power', duration: 8 };
+    const allTransValues = Object.values(activeTransRef.current || {});
+    const latestConfigured = allTransValues.length > 0 ? allTransValues[allTransValues.length - 1] : null;
+    const trans = customTrans || latestConfigured || { style: 'equal_power', duration: 8 };
     const transDuration = Math.min(30, Math.max(2, Number(trans.duration) || 8));
 
     // Handle smooth track fade-in on start (first 3 seconds)
@@ -1377,7 +1410,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       activeWebAudioMixRef.current = null;
     }
 
-    const dur = Math.min(30, Math.max(2, Number(transConfig?.duration) || 16));
+    const dur = Math.min(30, Math.max(2, Number(transConfig?.duration) || 8));
     const style = transConfig?.style || 'equal_power';
     const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
 
@@ -1415,13 +1448,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       currentTrackRef.current = tA;
       setIsPlaying(true);
 
-      const durA = Number(resA.duration) || 210;
-      const previewStartTimeA = Math.max(0, durA - dur - 3.5);
-
       try {
         deckA.unMute();
         deckA.setVolume(Math.round(volumeRef.current * 100));
-        deckA.loadVideoById(ytIdA, previewStartTimeA);
+        deckA.loadVideoById(ytIdA, 20);
         deckA.playVideo();
       } catch (e) {
         console.warn('[SpotifyMix] Deck A load error:', e);
@@ -1450,13 +1480,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       activeWebAudioMixRef.current = { stop: stopSim };
 
+      const leadInMs = 1500;
+      const transMs = dur * 1000;
+      const tailMs = 1500;
+      const totalMs = leadInMs + transMs + tailMs;
+      const startTime = Date.now();
+
       simInterval = setInterval(() => {
         if (isStopped) return;
         try {
-          const tA_curr = deckA.getCurrentTime() || 0;
-          const remainingA = durA - tA_curr;
+          const elapsed = Date.now() - startTime;
 
-          if (remainingA <= dur && remainingA >= 0) {
+          // Stage 1: Lead-in with Track A full
+          if (elapsed < leadInMs) {
+            deckA.setVolume(Math.round(volumeRef.current * 100));
+            if (ytIdB && deckB) deckB.setVolume(0);
+            return;
+          }
+
+          // Stage 2: Active DJ Transition Overlap
+          if (elapsed <= leadInMs + transMs) {
             if (!deckBStarted && ytIdB) {
               deckBStarted = true;
               try {
@@ -1469,35 +1512,38 @@ export function AudioProvider({ children, tracks, setTracks }) {
               }
             }
 
-            const pOut = Math.min(1, Math.max(0, 1 - (remainingA / dur)));
-            const { gainA, gainB } = calculateCrossfadeGains(pOut, style);
+            const p = Math.min(1, Math.max(0, (elapsed - leadInMs) / transMs));
+            const { gainA, gainB } = calculateCrossfadeGains(p, style);
             deckA.setVolume(Math.round(volumeRef.current * gainA * 100));
-            if (ytIdB) {
+            if (ytIdB && deckB) {
               deckB.setVolume(Math.round(volumeRef.current * gainB * 100));
             }
+            return;
           }
 
-          if (remainingA <= 0.4 || deckA.getPlayerState() === 0) {
-            deckA.pauseVideo();
-            deckA.mute();
-            if (ytIdB) {
-              deckB.setVolume(Math.round(volumeRef.current * 100));
-              activeYtDeckRef.current = 2;
-              ytPlayerRef.current = deckB;
-              setCurrentTrack(tB);
-              currentTrackRef.current = tB;
-            }
+          // Stage 3: Transition Complete, Track B takes over
+          deckA.pauseVideo();
+          deckA.mute();
+          if (ytIdB && deckB) {
+            deckB.setVolume(Math.round(volumeRef.current * 100));
+            activeYtDeckRef.current = 2;
+            ytPlayerRef.current = deckB;
+            setCurrentTrack(tB);
+            currentTrackRef.current = tB;
+          }
+
+          if (elapsed >= totalMs) {
             clearInterval(simInterval);
             setTimeout(() => {
               if (activeWebAudioMixRef.current?.stop === stopSim) {
                 activeWebAudioMixRef.current = null;
               }
-            }, 4000);
+            }, 3000);
           }
         } catch (e) {
           console.warn('[Simulate Transition] tick error:', e);
         }
-      }, 100);
+      }, 50);
 
       return;
     }

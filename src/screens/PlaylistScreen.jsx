@@ -152,10 +152,22 @@ export default function PlaylistScreen({
     setIsTogglingPrivacy(false);
   };
 
+  const getTransitionDisplayName = (st) => {
+    if (!st) return 'Equal Power Blend';
+    if (st === 'bass_swap') return 'Bass Swap';
+    if (st === 'low_pass') return 'Filter Sweep';
+    if (st === 'cut') return 'Instant Cut';
+    if (st === 'equal_power') return 'Equal Power Blend';
+    return st;
+  };
+
   const handleToggleMix = async () => {
     const nextState = !isMixActive;
     setIsMixActive(nextState);
     setIsMixMode?.(nextState);
+    if (nextState) {
+      setActiveTransitions?.(transitions);
+    }
 
     try {
       const token = localStorage.getItem('liofy_token');
@@ -193,6 +205,10 @@ export default function PlaylistScreen({
     setIsMixMode?.(true);
 
     try {
+      localStorage.setItem('liofy_active_transitions', JSON.stringify(updatedTransitions));
+    } catch {}
+
+    try {
       const token = localStorage.getItem('liofy_token');
       await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
         method: 'POST',
@@ -214,6 +230,10 @@ export default function PlaylistScreen({
     setActiveTransitions?.(updated);
     setIsMixActive(true);
     setIsMixMode?.(true);
+
+    try {
+      localStorage.setItem('liofy_active_transitions', JSON.stringify(updated));
+    } catch {}
 
     try {
       const token = localStorage.getItem('liofy_token');
@@ -564,7 +584,7 @@ export default function PlaylistScreen({
                             <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
                             {curTransition && (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
-                                🎛️ {curTransition.style || 'Blend'}
+                                🎛️ {getTransitionDisplayName(curTransition.style || curTransition.name)} ({curTransition.duration || 8}s)
                               </span>
                             )}
                           </div>
@@ -638,7 +658,7 @@ export default function PlaylistScreen({
                         <div className="flex items-center gap-2">
                           <Sliders size={13} className="text-[#1DB954]" />
                           <span className="text-[11px] font-extrabold text-white">
-                            {curTransition?.name || curTransition?.style || 'Equal Power Blend'} ({curTransition?.duration || 8}s)
+                            {getTransitionDisplayName(curTransition?.style || curTransition?.name)} ({curTransition?.duration || 8}s)
                           </span>
                           <span className="text-[10px] text-zinc-400 hidden sm:inline">
                             • {compatibility.badge}

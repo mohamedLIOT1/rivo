@@ -84,19 +84,29 @@ export default function MiniMixerModal({
     }
 
     const start = Date.now();
-    const totalMs = (duration + 3) * 1000;
+    const leadInMs = 1500;
+    const transMs = duration * 1000;
+    const tailMs = 1500;
+    const totalMs = leadInMs + transMs + tailMs;
+
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;
-      const prog = Math.min(1, elapsed / totalMs);
-      setPreviewProgress(prog);
-      if (prog >= 1) {
+      if (elapsed < leadInMs) {
+        setPreviewProgress(0);
+      } else if (elapsed <= leadInMs + transMs) {
+        setPreviewProgress((elapsed - leadInMs) / transMs);
+      } else {
+        setPreviewProgress(1);
+      }
+
+      if (elapsed >= totalMs) {
         clearInterval(interval);
         setTimeout(() => {
           setIsPreviewing(false);
           setPreviewProgress(0);
-        }, 500);
+        }, 300);
       }
-    }, 50);
+    }, 40);
   };
 
   const handleSave = () => {
@@ -119,23 +129,28 @@ export default function MiniMixerModal({
   for (let i = 0; i <= 20; i++) {
     const x = i * 15;
     const p = i / 20;
-    let yA, yB;
+    let gA, gB;
     if (style === 'equal_power') {
-      yA = 60 - Math.cos(p * Math.PI / 2) * 50;
-      yB = 60 - Math.sin(p * Math.PI / 2) * 50;
+      gA = Math.cos(p * Math.PI / 2);
+      gB = Math.sin(p * Math.PI / 2);
     } else if (style === 'linear') {
-      yA = 60 - (1 - p) * 50;
-      yB = 60 - p * 50;
+      gA = 1 - p;
+      gB = p;
     } else if (style === 'cut') {
-      yA = p < 0.5 ? 10 : 60;
-      yB = p >= 0.5 ? 10 : 60;
+      gA = p < 0.85 ? 1 : 0;
+      gB = p >= 0.85 ? 1 : 0;
+    } else if (style === 'bass_swap') {
+      gA = p < 0.45 ? 1 - 0.15 * Math.pow(p / 0.45, 2) : 0.85 * Math.pow((1 - p) / 0.55, 3);
+      gB = p < 0.45 ? 0.35 * Math.pow(p / 0.45, 1.8) : 0.35 + 0.65 * Math.pow((p - 0.45) / 0.55, 0.6);
     } else {
-      // Filter sweep
-      yA = 60 - Math.pow(1 - p, 1.8) * 50;
-      yB = 60 - Math.pow(p, 1.8) * 50;
+      // Filter sweep (low_pass)
+      gA = Math.pow(1 - p, 2.5);
+      gB = Math.pow(p, 1.8);
     }
-    curvePointsA.push(`${x},${yA}`);
-    curvePointsB.push(`${x},${yB}`);
+    const yA = 60 - Math.max(0, Math.min(1, gA)) * 50;
+    const yB = 60 - Math.max(0, Math.min(1, gB)) * 50;
+    curvePointsA.push(`${x},${yA.toFixed(1)}`);
+    curvePointsB.push(`${x},${yB.toFixed(1)}`);
   }
 
   return (
@@ -267,19 +282,39 @@ export default function MiniMixerModal({
               </label>
               <span className="text-sm font-extrabold text-[#1DB954]">{duration}s</span>
             </div>
-            <input
-              type="range"
-              min="2"
-              max="16"
-              step="1"
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#1DB954]"
-            />
+
+            <div className="relative flex items-center h-7 group my-1">
+              {/* Visible Track Background */}
+              <div className="w-full h-2 rounded-full bg-zinc-800 border border-zinc-700/80 overflow-hidden relative shadow-inner">
+                {/* Spotify Green Active Fill */}
+                <div 
+                  className="h-full bg-gradient-to-r from-emerald-500 to-[#1DB954] rounded-full transition-all duration-75"
+                  style={{ width: `${((duration - 2) / (16 - 2)) * 100}%` }}
+                />
+              </div>
+
+              {/* Range Input for seamless dragging/touch */}
+              <input
+                type="range"
+                min="2"
+                max="16"
+                step="1"
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+              />
+
+              {/* Crisp White Thumb */}
+              <div 
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-lg shadow-black/80 pointer-events-none transition-transform duration-75 group-hover:scale-125 z-10 border border-zinc-300"
+                style={{ left: `calc(${((duration - 2) / (16 - 2)) * 100}% - 8px)` }}
+              />
+            </div>
+
             <div className="flex justify-between text-[10px] text-zinc-500 font-bold mt-1">
-              <span>Quick (2s)</span>
-              <span>Standard (8s)</span>
-              <span>Long Mix (16s)</span>
+              <span className={duration <= 4 ? 'text-white' : ''}>Quick (2s)</span>
+              <span className={duration >= 6 && duration <= 10 ? 'text-[#1DB954]' : ''}>Standard (8s)</span>
+              <span className={duration >= 14 ? 'text-white' : ''}>Long Mix (16s)</span>
             </div>
           </div>
 

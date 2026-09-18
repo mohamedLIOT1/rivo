@@ -92,7 +92,37 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
   }
 
   if (style === 'cut') {
-    return { gainA: p < 0.5 ? 1 : 0, gainB: p >= 0.5 ? 1 : 0 };
+    // Sharp DJ Drop Cut: Track A stays at full volume until the drop (85%), then instantly cuts to 0, Track B drops at 100%
+    return { 
+      gainA: p < 0.85 ? 1 : 0, 
+      gainB: p >= 0.85 ? 1 : 0 
+    };
+  }
+
+  if (style === 'bass_swap') {
+    // Club DJ Bass Swap: Track A stays dominant and loud until swap point (~45-50%), then ducks sharply.
+    // Track B begins subtle and punches in hard to take over the low-end & beat.
+    const gainA = p < 0.45 
+      ? 1 - 0.15 * Math.pow(p / 0.45, 2) 
+      : 0.85 * Math.pow((1 - p) / 0.55, 3);
+    const gainB = p < 0.45 
+      ? 0.35 * Math.pow(p / 0.45, 1.8) 
+      : 0.35 + 0.65 * Math.pow((p - 0.45) / 0.55, 0.6);
+    return { 
+      gainA: Math.max(0, Math.min(1, gainA)), 
+      gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
+  if (style === 'low_pass') {
+    // Filter Sweep: Exponential fade-out of Track A (feels like filtering out highs/energy)
+    // and gradual dynamic swelling of Track B into the drop
+    const gainA = Math.pow(1 - p, 2.5);
+    const gainB = Math.pow(p, 1.8);
+    return { 
+      gainA: Math.max(0, Math.min(1, gainA)), 
+      gainB: Math.max(0, Math.min(1, gainB)) 
+    };
   }
 
   // Standard DJ Equal-Power Crossfade: cos & sin curve
@@ -225,8 +255,8 @@ export async function playTrueSpotifyMix({
     playerA.buffer = buffer1;
 
     const filterA = ctx.createBiquadFilter();
-    filterA.type = (style === 'bass_swap' || style === 'high_pass') ? 'highpass' : 'allpass';
-    filterA.frequency.setValueAtTime(20, now);
+    filterA.type = style === 'low_pass' ? 'lowpass' : (style === 'bass_swap' || style === 'high_pass') ? 'highpass' : 'allpass';
+    filterA.frequency.setValueAtTime(style === 'low_pass' ? 20000 : 20, now);
 
     const gainA = ctx.createGain();
     gainA.gain.setValueAtTime(1, now);
@@ -239,14 +269,14 @@ export async function playTrueSpotifyMix({
 
     const filterB = ctx.createBiquadFilter();
     filterB.type = (style === 'bass_swap' || style === 'low_pass') ? 'lowpass' : 'allpass';
-    filterB.frequency.setValueAtTime(style === 'low_pass' ? 300 : 20000, now);
+    filterB.frequency.setValueAtTime(style === 'low_pass' ? 350 : 20000, now);
 
     const gainB = ctx.createGain();
     gainB.gain.setValueAtTime(0, now);
 
     playerB.connect(filterB).connect(gainB).connect(ctx.destination);
 
-    // ── Equal Power Volume Curves ──
+    // ── Transition Volume Curves ──
     const steps = 30;
     const curveA = new Float32Array(steps);
     const curveB = new Float32Array(steps);
@@ -263,11 +293,13 @@ export async function playTrueSpotifyMix({
     // ── Filter Automation ──
     if (style === 'bass_swap' || style === 'high_pass') {
       filterA.frequency.setValueAtTime(20, transStartCtxTime);
-      filterA.frequency.linearRampToValueAtTime(1000, transEndCtxTime);
+      filterA.frequency.linearRampToValueAtTime(1200, transEndCtxTime);
       filterB.frequency.setValueAtTime(20000, transStartCtxTime);
     } else if (style === 'low_pass') {
-      filterB.frequency.setValueAtTime(300, transStartCtxTime);
-      filterB.frequency.linearRampToValueAtTime(20000, transEndCtxTime);
+      filterA.frequency.setValueAtTime(20000, transStartCtxTime);
+      filterA.frequency.exponentialRampToValueAtTime(350, transEndCtxTime);
+      filterB.frequency.setValueAtTime(350, transStartCtxTime);
+      filterB.frequency.exponentialRampToValueAtTime(20000, transEndCtxTime);
     }
 
     // ── Audio Clock Launch ──
