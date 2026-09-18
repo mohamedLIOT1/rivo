@@ -6,6 +6,9 @@ import { API_BASE_URL } from '../config';
 const UserContext = createContext();
 const TOKEN_KEY = '@liofy_auth_token_v1';
 const USER_KEY = '@liofy_current_user_v1';
+const CACHE_PLAYLISTS_KEY = '@liofy_cached_playlists_v1';
+const CACHE_LIKES_KEY = '@liofy_cached_likes_v1';
+const CACHE_TRACKS_KEY = '@liofy_cached_tracks_v1';
 
 export const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -42,10 +45,37 @@ export const UserProvider = ({ children }) => {
     };
   }, []);
 
+  // ── Persistence Effects ──
+  useEffect(() => {
+    if (playlists.length > 0) {
+      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(playlists));
+    }
+  }, [playlists]);
+
+  useEffect(() => {
+    if (likedTrackIds.length > 0) {
+      AsyncStorage.setItem(CACHE_LIKES_KEY, JSON.stringify(likedTrackIds));
+    }
+  }, [likedTrackIds]);
+
+  useEffect(() => {
+    if (tracks.length > 0) {
+      AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(tracks));
+    }
+  }, [tracks]);
+
   const loadStoredAuth = async () => {
     try {
       const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
       const storedUser = await AsyncStorage.getItem(USER_KEY);
+      const cachedPlaylists = await AsyncStorage.getItem(CACHE_PLAYLISTS_KEY);
+      const cachedLikes = await AsyncStorage.getItem(CACHE_LIKES_KEY);
+      const cachedTracks = await AsyncStorage.getItem(CACHE_TRACKS_KEY);
+
+      if (cachedPlaylists) setPlaylists(JSON.parse(cachedPlaylists));
+      if (cachedLikes) setLikedTrackIds(JSON.parse(cachedLikes));
+      if (cachedTracks) setTracks(JSON.parse(cachedTracks));
+
       if (storedToken && storedUser) {
         setToken(storedToken);
         setCurrentUser(JSON.parse(storedUser));
@@ -186,10 +216,58 @@ export const UserProvider = ({ children }) => {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
         });
+        await syncUserData(); // Refresh local playlists state
       } catch (err) {
         console.warn('Like sync error:', err);
       }
     }
+  };
+
+  const createPlaylist = async (name) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) await syncUserData();
+    } catch (e) {}
+  };
+
+  const addToPlaylist = async (playlistId, trackId) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ trackId }),
+      });
+      if (res.ok) await syncUserData();
+    } catch (e) {}
+  };
+
+  const updatePlaylist = async (playlistId, updates) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) await syncUserData();
+    } catch (e) {}
+  };
+
+  const deletePlaylist = async (playlistId) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) await syncUserData();
+    } catch (e) {}
   };
 
   return (
@@ -207,6 +285,10 @@ export const UserProvider = ({ children }) => {
       toggleLikeTrack,
       fetchPublicTracks,
       syncUserData,
+      createPlaylist,
+      addToPlaylist,
+      updatePlaylist,
+      deletePlaylist,
     }}>
       {children}
     </UserContext.Provider>

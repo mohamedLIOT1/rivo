@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Animated, FlatList, useWindowDimensions } from 'react-native';
 import { Wifi, WifiOff, Plus } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -9,6 +9,7 @@ import AddSongModal from '../components/AddSongModal';
 export default function HomeScreen({ navigation }) {
   const { tracks, fetchPublicTracks } = useUser();
   const { playTrack, downloadedTracks, isOfflineMode } = useAudioPlayer();
+  const { width } = useWindowDimensions();
   const [isAddSongVisible, setIsAddSongVisible] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -63,20 +64,23 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.bannerTitle}>Listen to your favorite songs anytime</Text>
       </View>
 
-      {downloadedTracks.length > 0 && (
+      {(downloadedTracks || []).length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Offline ({downloadedTracks.length})</Text>
+          <Text style={styles.sectionTitle}>Offline ({(downloadedTracks || []).length})</Text>
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
-            data={downloadedTracks}
+            data={downloadedTracks || []}
             keyExtractor={(t) => `dl-${t._id || t.id}`}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.card} onPress={() => playTrack(item, downloadedTracks)}>
-                <Image source={{ uri: item.coverUrl || item.cover || defaultCover }} style={styles.cardCover} />
-                <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-              </TouchableOpacity>
-            )}
+            renderItem={({ item }) => {
+              const cardWidth = width * 0.3; // Responsive width
+              return (
+                <TouchableOpacity style={[styles.card, { width: cardWidth }]} onPress={() => playTrack(item, downloadedTracks)}>
+                  <Image source={{ uri: item.coverUrl || item.cover || defaultCover }} style={[styles.cardCover, { width: cardWidth, height: cardWidth }]} />
+                  <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
+                </TouchableOpacity>
+              );
+            }}
           />
         </View>
       )}
@@ -131,8 +135,8 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 16, fontWeight: '800', color: '#ffffff', textAlign: 'center' },
   section: { marginBottom: 20 },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: '#ffffff', marginBottom: 12, textAlign: 'left' },
-  card: { width: 110, marginRight: 12 },
-  cardCover: { width: 110, height: 110, borderRadius: 12, backgroundColor: '#18181b' },
+  card: { marginRight: 12 },
+  cardCover: { borderRadius: 12, backgroundColor: '#18181b' },
   cardTitle: { fontSize: 12, fontWeight: 'bold', color: '#ffffff', marginTop: 6 },
   emptyBox: { padding: 40, alignItems: 'center' },
   emptyText: { color: '#71717a' },

@@ -1,40 +1,10 @@
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+import { resolveYouTubeStream } from './youtubeResolver';
 
 const OFFLINE_TRACKS_KEY = '@liofy_offline_tracks_v1';
 const TRACKS_DIR = `${FileSystem.documentDirectory}liofy_tracks/`;
-
-async function resolveYouTubeMobile(inputUrl) {
-  if (!inputUrl) return null;
-  const match = inputUrl.match(/(?:v=|\/|embed\/|shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  const videoId = match ? match[1] : (inputUrl.length === 11 ? inputUrl : null);
-  if (!videoId) return null;
-
-  const instances = [
-    'https://inv.nadeko.net',
-    'https://yewtu.be',
-    'https://yt.artemislena.eu',
-    'https://invidious.nerdvpn.de',
-    'https://inv.us.projectsegfau.lt',
-    'https://invidious.privacydev.net',
-    'https://invidious.tiekoetter.com'
-  ];
-
-  for (const base of instances) {
-    try {
-      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      const formats = data.adaptiveFormats || data.formatStreams || [];
-      const audio = formats.find(f => f.type?.includes('audio/mp4')) ||
-                    formats.find(f => f.type?.includes('audio')) ||
-                    formats.find(f => f.container === 'm4a');
-      if (audio?.url) return audio.url;
-    } catch {}
-  }
-  return null;
-}
 
 // Ensure directory exists
 const ensureDirExists = async () => {
@@ -65,8 +35,13 @@ export const downloadTrack = async (track, onProgress = null) => {
 
     // ── Resolve YouTube links before downloading ──
     if (audioUrl.includes('youtube.com') || audioUrl.includes('youtu.be') || track.source === 'YouTube') {
-      const resolved = await resolveYouTubeMobile(audioUrl || trackId);
-      if (resolved) audioUrl = resolved;
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/resolve-yt-mobile?id=${trackId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) audioUrl = data.url;
+        }
+      } catch (e) {}
     }
 
     // Use proxy for remote URLs if not already resolved to a direct stream

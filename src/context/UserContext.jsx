@@ -13,14 +13,14 @@ const API = (() => {
       protocol === 'file:' ||
       (hostname === 'localhost' && !host.includes('5000'))
     ) {
-      return 'https://liofy-production.up.railway.app';
+      return 'https://liofy-production-0f56.up.railway.app';
     }
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:5000';
     }
     return `${protocol}//${host}`;
   }
-  return 'https://liofy-production.up.railway.app';
+  return 'https://liofy-production-0f56.up.railway.app';
 })();
 
 export const API_BASE_URL = API;

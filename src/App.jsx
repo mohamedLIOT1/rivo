@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
@@ -8,6 +9,9 @@ import SettingsModal from './components/SettingsModal';
 import AddSongModal from './components/AddSongModal';
 import EditSongModal from './components/EditSongModal';
 import AuthModal from './components/AuthModal';
+import JamRoomModal from './components/JamRoomModal';
+import ImportPlaylistModal from './components/ImportPlaylistModal';
+import ChatModal from './components/ChatModal';
 
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -54,6 +58,12 @@ function AppContent() {
   const [isEditSongOpen,      setIsEditSongOpen]      = useState(false);
   const [editingTrack,        setEditingTrack]        = useState(null);
   const [isAuthOpen,          setIsAuthOpen]          = useState(false);
+  const [isJamOpen,           setIsJamOpen]           = useState(false);
+  const [jamSession,          setJamSession]          = useState(null);
+  const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
+  const [isChatOpen,          setIsChatOpen]          = useState(false);
+  const [chatTargetUser,      setChatTargetUser]      = useState(null);
+  const [socket,              setSocket]              = useState(null);
 
   // Open profile screen instead of AuthModal when user is logged in
   const handleUserAvatarClick = () => {
@@ -292,6 +302,70 @@ function AppContent() {
     }, 4000);
   };
 
+  useEffect(() => {
+    const s = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
+    setSocket(s);
+
+    if (currentUser?.id || currentUser?._id) {
+      const uid = currentUser.id || currentUser._id;
+      s.emit('user:online', { userId: uid });
+    }
+
+    s.on('jam:room_updated', (room) => {
+      setJamSession(room);
+    });
+
+    s.on('jam:on_play_state_changed', ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime }) => {
+      if (syncPlaying !== undefined) setIsPlaying(syncPlaying);
+      if (syncTime !== undefined && Math.abs(syncTime - currentTime) > 2) seekTo(syncTime);
+      if (syncTrack && String(syncTrack.id) !== String(currentTrack?.id)) {
+        playTrack(syncTrack);
+      }
+    });
+
+    s.on('chat:message', (msg) => {
+      const myId = String(currentUser?.id || currentUser?._id || '');
+      if (myId && String(msg.recipient) === myId) {
+        showToast('💬 New message received from a friend');
+      }
+    });
+
+    return () => s.disconnect();
+  }, [currentUser?.id, currentUser?._id]);
+
+  const handleStartJam = () => {
+    const code = `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
+    if (socket && currentUser) {
+      socket.emit('jam:join_room', {
+        roomCode: code,
+        user: { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+      });
+      setIsJamOpen(true);
+      showToast(`Jam Session created: ${code}`);
+    } else {
+      setIsJamOpen(true);
+    }
+  };
+
+  const handleJoinJam = (code) => {
+    if (socket && currentUser && code) {
+      socket.emit('jam:join_room', {
+        roomCode: code.trim().toUpperCase(),
+        user: { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+      });
+      setIsJamOpen(true);
+      showToast(`Joined Jam: ${code}`);
+    }
+  };
+
+  const handleLeaveJam = () => {
+    if (jamSession && socket) {
+      socket.emit('jam:leave_room', { roomCode: jamSession.code });
+      setJamSession(null);
+      showToast('Left Jam Session');
+    }
+  };
+
   const handleDownload = async (trackId) => {
     const cleanId = String(trackId);
     const track = tracks.find(t => String(t.id || t._id) === cleanId) || 
@@ -365,6 +439,8 @@ function AppContent() {
         setCurrentScreen={goToScreen}
         playlists={playlists}
         openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
+        openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
+        openJamModal={() => setIsJamOpen(true)}
         openSettings={() => setIsSettingsOpen(true)}
         openAddSongModal={() => setIsAddSongOpen(true)}
         openAuthModal={handleUserAvatarClick}
@@ -459,6 +535,15 @@ function AppContent() {
             onBack={() => setCurrentScreen('home')}
             logout={logout}
             onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
+            onOpenChat={(target) => {
+              setChatTargetUser(target);
+              setIsChatOpen(true);
+            }}
+            onStartJamWithUser={(target) => {
+              handleStartJam();
+              setChatTargetUser(target);
+              setIsChatOpen(true);
+            }}
           />
         )}
       </main>
@@ -554,6 +639,41 @@ function AppContent() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
+      />
+
+      <JamRoomModal
+        isOpen={isJamOpen}
+        onClose={() => setIsJamOpen(false)}
+        jamSession={jamSession}
+        onStartJam={handleStartJam}
+        onJoinJam={handleJoinJam}
+        onLeaveJam={handleLeaveJam}
+        currentTrack={currentTrack}
+        isPlaying={isPlaying}
+      />
+
+      <ImportPlaylistModal
+        isOpen={isImportPlaylistOpen}
+        onClose={() => setIsImportPlaylistOpen(false)}
+        onPlaylistImported={(newPl) => {
+          setPlaylists(prev => [newPl, ...prev]);
+          showToast(`Imported "${newPl.name}"!`);
+          syncFromServer();
+        }}
+      />
+
+      <ChatModal
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        targetUser={chatTargetUser}
+        currentUser={currentUser}
+        socket={socket}
+        onStartJamWithUser={() => {
+          handleStartJam();
+        }}
+        onPlayTrack={(track) => {
+          playTrack(track);
+        }}
       />
 
       {/* ── Toast Notification Banner (No Native Alert Dialogs!) ── */}

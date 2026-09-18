@@ -208,7 +208,7 @@ export default function ProfileScreen() {
   const getPlaylistTracks = (pl) => {
     if (!pl || !tracks) return [];
     const trackIdList = (pl.trackIds || pl.tracks || []).map(String);
-    return tracks.filter(t => trackIdList.includes(String(t._id || t.id)));
+    return (tracks || []).filter(t => trackIdList.includes(String(t._id || t.id)));
   };
 
   // Viewing specific playlist detail
@@ -233,7 +233,7 @@ export default function ProfileScreen() {
               )}
             </View>
             <Text style={styles.userName}>{selectedPlaylist.name || 'Untitled'}</Text>
-            <Text style={styles.publicPlCount}>{plTracks ? plTracks.length : 0} Songs</Text>
+            <Text style={styles.publicPlCount}>{(plTracks || []).length} Songs</Text>
           </View>
 
           <Text style={styles.sectionHeader}>Playlist Tracks</Text>
@@ -241,7 +241,7 @@ export default function ProfileScreen() {
             {(!plTracks || plTracks.length === 0) ? (
               <Text style={styles.emptyText}>No songs in this playlist</Text>
             ) : (
-              plTracks.map((track, idx) => (
+              (plTracks || []).map((track, idx) => (
                 <SongItem
                   key={track?._id || track?.id || `pl-track-${idx}`}
                   track={track}
@@ -440,8 +440,8 @@ export default function ProfileScreen() {
 
                 {/* User Playlists & Visibility Control */}
                 <Text style={styles.sectionHeader}>Your Playlists (Visibility 👁)</Text>
-                {localPlaylists.filter(p => !p.isLikedSongs).length > 0 ? (
-                  localPlaylists.filter(p => !p.isLikedSongs).map(pl => {
+                {(localPlaylists || []).filter(p => !p.isLikedSongs).length > 0 ? (
+                  (localPlaylists || []).filter(p => !p.isLikedSongs).map(pl => {
                     const isPublic = pl.isPublic !== false;
                     const isToggling = togglingId === pl.id;
                     return (

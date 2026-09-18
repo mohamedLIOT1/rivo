@@ -1,11 +1,20 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { DownloadCloud, Play, Trash2, HardDrive } from 'lucide-react-native';
+import { DownloadCloud, Play, Trash2, HardDrive, Trash } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useToast } from '../context/ToastContext';
 import SongItem from '../components/SongItem';
 
 export default function OfflineScreen() {
   const { downloadedTracks, playTrack, handleRemoveDownload } = useAudioPlayer();
+  const { showToast } = useToast();
+
+  const handleClearAll = async () => {
+    for (const t of downloadedTracks) {
+      await handleRemoveDownload(t._id || t.id);
+    }
+    showToast('Offline library cleared');
+  };
 
   return (
     <View style={styles.container}>
@@ -21,13 +30,23 @@ export default function OfflineScreen() {
           </Text>
 
           {downloadedTracks.length > 0 && (
-            <TouchableOpacity 
-              style={styles.playAllBtn} 
-              onPress={() => playTrack(downloadedTracks[0], downloadedTracks)}
-            >
-              <Play size={18} color="#000" fill="#000" />
-              <Text style={styles.playAllText}>Play All</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={styles.playAllBtn}
+                onPress={() => playTrack(downloadedTracks[0], downloadedTracks)}
+              >
+                <Play size={18} color="#000" fill="#000" />
+                <Text style={styles.playAllText}>Play All</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.playAllBtn, { backgroundColor: '#27272a' }]}
+                onPress={handleClearAll}
+              >
+                <Trash size={18} color="#ef4444" />
+                <Text style={[styles.playAllText, { color: '#ef4444' }]}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -36,7 +55,7 @@ export default function OfflineScreen() {
             <Text style={styles.sectionTitle}>Locally Stored Files ({downloadedTracks.length})</Text>
           </View>
 
-          {downloadedTracks.length === 0 ? (
+          {(downloadedTracks || []).length === 0 ? (
             <View style={styles.emptyContainer}>
               <HardDrive size={48} color="#3f3f46" />
               <Text style={styles.emptyTitle}>No downloaded songs</Text>
@@ -45,11 +64,12 @@ export default function OfflineScreen() {
               </Text>
             </View>
           ) : (
-            downloadedTracks.map((track) => (
+            (downloadedTracks || []).map((track) => (
               <SongItem 
                 key={track._id || track.id} 
                 track={track} 
                 onPlay={(t) => playTrack(t, downloadedTracks)} 
+                showDelete={true}
               />
             ))
           )}

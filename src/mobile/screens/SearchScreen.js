@@ -13,7 +13,7 @@ export default function SearchScreen() {
   const [query, setQuery] = useState('');
   const [isAddSongVisible, setIsAddSongVisible] = useState(false);
 
-  const filteredTracks = tracks.filter(track => {
+  const filteredTracks = (tracks || []).filter(track => {
     const q = query.toLowerCase();
     return (
       (track.title && track.title.toLowerCase().includes(q)) ||
@@ -58,7 +58,7 @@ export default function SearchScreen() {
             {query ? `Search Results (${filteredTracks.length})` : 'All Available Library'}
           </Text>
 
-          {filteredTracks.map((item) => (
+          {Array.isArray(filteredTracks) && filteredTracks.map((item) => (
             <SongItem key={item._id || item.id} track={item} onPlay={(t) => playTrack(t, filteredTracks)} />
           ))}
 

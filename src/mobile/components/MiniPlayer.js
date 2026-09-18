@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import { Play, Pause, SkipForward } from 'lucide-react-native';
-import { useAudioPlayer } from '../context/AudioContext';
+import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 
 export default function MiniPlayer({ onOpenFullPlayer }) {
-  const { currentTrack, isPlaying, isLoading, togglePlay, playNextTrack, currentTime, duration } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, playNextTrack } = useAudioPlayer();
+  const { currentTime, duration } = useAudioProgress();
 
   if (!currentTrack) return null;
 
@@ -59,10 +60,8 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 60,
-    left: 12,
-    right: 12,
+    marginHorizontal: 12,
+    marginBottom: 8,
     backgroundColor: '#18181b',
     borderRadius: 16,
     overflow: 'hidden',

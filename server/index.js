@@ -1,17 +1,9 @@
 /**
- * Liofy Backend API Server — Full Rebuild
- * ✅ Real user accounts with cross-device sync
- * ✅ Global shared song library (all users see all songs)
- * ✅ File upload (MP3 + cover) stored as base64 in MongoDB
- * ✅ Per-user liked songs & playlists
- * ✅ YouTube + SoundCloud search
- * ✅ Offline support via Service Worker
- * ❌ Removed: Jam, Blend, AI Mixes
+ * Liofy Backend API Server — FULL FEATURED & OPTIMIZED
  */
 
 const express = require('express');
 const http = require('http');
-const https = require('https');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
@@ -19,169 +11,104 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const axios = require('axios');
-const { execFile } = require('child_process');
+const { Server } = require('socket.io');
 
-try {
-  require('dotenv').config({ path: path.join(__dirname, '../.env') });
-} catch (e) {}
+try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch (e) {}
 
 const app = express();
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
-
-// Serve Vite production build statically
 app.use(express.static(path.join(__dirname, '../dist')));
 
 const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*', methods: ['GET', 'POST'] }
+});
 
 const JWT_SECRET = process.env.JWT_SECRET || 'liofy_secure_key_2025';
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
-const SC_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || '';
 
-// ══════════════════════════════════════════
-//  Global Error Handlers — CRITICAL
-//  Prevents play-dl/ytdl 429 errors from crashing the server
-//  and killing active login/API requests
-// ══════════════════════════════════════════
-process.on('uncaughtException', (err) => {
-  // Non-fatal: log but keep server running
-  console.warn('[uncaughtException] Caught, server stays alive:', err.message || err);
-});
+// Global Error Handlers
+process.on('uncaughtException', (err) => console.warn('[Uncaught]:', err.message));
+process.on('unhandledRejection', (reason) => console.warn('[Unhandled]:', reason?.message));
 
-process.on('unhandledRejection', (reason) => {
-  // Non-fatal: log but keep server running  
-  console.warn('[unhandledRejection] Caught, server stays alive:', reason?.message || reason);
-});
-
-
-// ══════════════════════════════════════════
-//  MongoDB Schemas & Connection
-// ══════════════════════════════════════════
-
-const DEFAULT_MONGO_URI = 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority';
-const MONGO_URI = (process.env.MONGO_URI && process.env.MONGO_URI.trim()) || DEFAULT_MONGO_URI;
-
-let isConnecting = false;
+// MongoDB Connection
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority';
 async function connectDB() {
-  if (mongoose.connection.readyState === 1 || isConnecting) return;
-  isConnecting = true;
-  try {
-    console.log('🔄 Connecting to MongoDB...');
-    // Increased timeouts and added automatic retry
-    await mongoose.connect(MONGO_URI, {
-      serverSelectionTimeoutMS: 30000,
-      connectTimeoutMS: 30000,
-      socketTimeoutMS: 45000,
-      family: 4,
-    });
-    console.log('✅ MongoDB connected successfully');
-  } catch (err) {
-    console.error('⚠️ MongoDB connection error:', err.message);
-    // Retry after 5 seconds
-    setTimeout(connectDB, 5000);
-  } finally {
-    isConnecting = false;
+  try { 
+    await mongoose.connect(MONGO_URI); 
+    console.log('✅ DB Connected'); 
+  } catch (err) { 
+    console.error('DB connect error:', err.message);
+    setTimeout(connectDB, 5000); 
   }
 }
-
 connectDB();
 
-mongoose.connection.on('disconnected', () => {
-  console.warn('⚠️ MongoDB disconnected! Retrying in 3 seconds...');
-  setTimeout(connectDB, 3000);
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('⚠️ MongoDB connection error event:', err.message);
-});
-
-// Middleware to ensure DB connection before executing auth routes
-const checkDbConnection = (req, res, next) => {
-  if (mongoose.connection.readyState === 1) return next();
-
-  // If disconnected, trigger connection attempt immediately
-  if (mongoose.connection.readyState === 0) {
-    connectDB();
-  }
-
-  let attempts = 0;
-  const interval = setInterval(() => {
-    attempts++;
-    if (mongoose.connection.readyState === 1) {
-      clearInterval(interval);
-      return next();
-    }
-    if (attempts >= 25) { // Wait up to 5 seconds
-      clearInterval(interval);
-      return res.status(503).json({
-        error: 'قاعدة البيانات غير متصلة حالياً. يرجى التحقق من إعدادات MONGO_URI وإتاحة IP Access List (0.0.0.0/0) في MongoDB Atlas.'
-      });
-    }
-  }, 200);
-};
-
-app.use('/api/auth/login', checkDbConnection);
-app.use('/api/auth/register', checkDbConnection);
-app.use('/api/auth/me', checkDbConnection);
-
-// Track Schema — global library shared by all users
+// ──────────────────────────────────────────
+// Schemas & Models
+// ──────────────────────────────────────────
 const TrackSchema = new mongoose.Schema({
-  title:      { type: String, required: true },
-  artist:     { type: String, required: true },
-  album:      { type: String, default: 'Single' },
-  cover:      { type: String, default: '' },       // URL or base64
-  audioUrl:   { type: String, default: '' },       // URL or base64
-  duration:   { type: Number, default: 210 },
-  genre:      { type: String, default: 'Pop' },
-  source:     { type: String, default: 'Upload' }, // 'Upload' | 'YouTube' | 'SoundCloud'
-  addedBy:    { type: String, default: '' },       // user email who added it
-  lyrics:     [{ time: Number, text: String }],
-  color:      { type: String, default: '#1DB954' },
+  title: String,
+  artist: String,
+  album: String,
+  cover: String,
+  audioUrl: String,
+  duration: Number,
+  genre: String,
+  source: String,
+  addedBy: String,
+  lyrics: [{ time: Number, text: String }],
+  color: String,
 }, { timestamps: true, strict: false });
 
-TrackSchema.index({ title: 'text', artist: 'text' });
+const Track = mongoose.model('Track', TrackSchema);
 
-// User Schema
 const UserSchema = new mongoose.Schema({
-  name:           { type: String, required: true },
-  email:          { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password:       { type: String, required: true },
-  avatar:         { type: String, default: '' },
-  bio:            { type: String, default: '' },
-  likedTrackIds:  [{ type: String }],              // IDs of liked tracks
-  playlists:      [{                               // user's own playlists
-    id:           String,
-    name:         String,
-    description:  String,
-    cover:        String,
-    trackIds:     [String],
+  name: { type: String, required: true },
+  email: { type: String, unique: true, lowercase: true, required: true },
+  password: { type: String, required: true },
+  avatar: String,
+  bio: { type: String, default: '' },
+  likedTrackIds: [String],
+  followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  playlists: [{
+    id: String,
+    name: String,
+    cover: String,
+    trackIds: [String],
     isLikedSongs: Boolean,
-    isPublic:     { type: Boolean, default: true }, // playlist visibility
-    createdAt:    { type: Date, default: Date.now }
-  }],
+    isPublic: { type: Boolean, default: true },
+    description: String
+  }]
 }, { timestamps: true });
 
-const Track = mongoose.model('Track', TrackSchema);
-const User  = mongoose.model('User', UserSchema);
+const User = mongoose.model('User', UserSchema);
 
-// ══════════════════════════════════════════
-//  Auth Helpers
-// ══════════════════════════════════════════
+const MessageSchema = new mongoose.Schema({
+  sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  text: { type: String, default: '' },
+  track: { type: Object, default: null },
+  jamInvite: { type: Object, default: null },
+  read: { type: Boolean, default: false }
+}, { timestamps: true });
 
-function makeToken(user) {
-  return jwt.sign(
-    { id: user._id || user.id, email: user.email, name: user.name },
-    JWT_SECRET,
-    { expiresIn: '90d' }
-  );
+const Message = mongoose.model('Message', MessageSchema);
+
+// ──────────────────────────────────────────
+// Auth Helpers
+// ──────────────────────────────────────────
+function makeToken(u) {
+  return jwt.sign({ id: u._id, email: u.email, name: u.name }, JWT_SECRET, { expiresIn: '90d' });
 }
 
-function authMiddleware(req, res, next) {
-  const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
-  if (!token) return res.status(401).json({ error: 'Token required' });
+function auth(req, res, next) {
+  const t = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!t) return res.status(401).json({ error: 'Auth required' });
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(t, JWT_SECRET);
     next();
   } catch {
     res.status(403).json({ error: 'Invalid token' });
@@ -189,173 +116,173 @@ function authMiddleware(req, res, next) {
 }
 
 function optionalAuth(req, res, next) {
-  const token = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
-  if (token) {
-    try { req.user = jwt.verify(token, JWT_SECRET); } catch {}
+  const t = (req.headers.authorization || '').replace('Bearer ', '');
+  if (t) {
+    try { req.user = jwt.verify(t, JWT_SECRET); } catch {}
   }
   next();
 }
 
-// Multer — memory storage for file uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
-});
+// ──────────────────────────────────────────
+// In-Memory Search & Stream Cache
+// ──────────────────────────────────────────
+const searchCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
-// ══════════════════════════════════════════
-//  1. AUTH ENDPOINTS
-// ══════════════════════════════════════════
+const SOUNDCLOUD_CLIENT_IDS = [
+  'Mxv2e5wxnWei6krLywjIXpztX7S0VCeK',
+  'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi',
+  '2t9loNfteI00aOFmOGUT8gahnev8pMrQ'
+];
 
-// Register
+async function resolveSoundCloudStream(url, clientId) {
+  try {
+    const res = await axios.get(`${url}?client_id=${clientId}`, { timeout: 4000 });
+    return res.data?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+// ──────────────────────────────────────────
+// AUTH ROUTES
+// ──────────────────────────────────────────
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email and password required' });
+    }
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) return res.status(400).json({ error: 'Email already registered' });
 
-    const existing = await User.findOne({ email: email.toLowerCase().trim() });
-    if (existing) return res.status(400).json({ error: 'This email is already registered' });
-
-    const hashed = await bcrypt.hash(password, 12);
-    const likedPlaylist = {
-      id: `liked-${Date.now()}`,
-      name: 'Liked Songs',
-      description: 'Songs you liked',
-      cover: '',
-      trackIds: [],
-      isLikedSongs: true,
-    };
+    const hashed = await bcrypt.hash(password, 10);
+    const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=1DB954&color=000&size=512&bold=true&format=png`;
 
     const user = await new User({
-      name: name || email.split('@')[0],
-      email: email.toLowerCase().trim(),
+      name,
+      email: email.toLowerCase(),
       password: hashed,
-      avatar: '',
+      avatar: defaultAvatar,
+      bio: '',
       likedTrackIds: [],
-      playlists: [likedPlaylist],
+      followers: [],
+      following: [],
+      playlists: [{ id: 'liked', name: 'Liked Songs', trackIds: [], isLikedSongs: true, isPublic: false }]
     }).save();
 
     const userObj = user.toObject();
     delete userObj.password;
-    const token = makeToken(userObj);
-
-    res.json({ success: true, user: userObj, token });
+    res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
-
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!user) return res.status(401).json({ error: 'No account found with this email' });
-
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ error: 'Wrong password' });
-
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
     const userObj = user.toObject();
     delete userObj.password;
-    const token = makeToken(userObj);
-
-    res.json({ success: true, user: userObj, token });
+    res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Get my profile + sync data
-app.get('/api/auth/me', authMiddleware, async (req, res) => {
+app.get('/api/auth/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.avatar && user.avatar.includes('format=svg')) {
+      user.avatar = user.avatar.replace('format=svg', 'format=png');
+    }
     res.json({ success: true, user });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Update avatar / name / bio
-app.post('/api/auth/update-profile', authMiddleware, async (req, res) => {
+app.post('/api/auth/update-profile', auth, async (req, res) => {
   try {
-    const { name, avatar, bio } = req.body;
-    const updates = {};
-    if (name  !== undefined) updates.name   = name;
-    if (avatar !== undefined) updates.avatar = avatar;
-    if (bio   !== undefined) updates.bio    = bio;
-
-    const user = await User.findByIdAndUpdate(
-      req.user.id,
-      { $set: updates },
-      { new: true }
-    ).select('-password');
-
-    const token = makeToken(user.toObject());
-    res.json({ success: true, user, token });
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (req.body.name) user.name = req.body.name;
+    if (req.body.bio !== undefined) user.bio = req.body.bio;
+    if (req.body.avatar) user.avatar = req.body.avatar;
+    await user.save();
+    const userObj = user.toObject();
+    delete userObj.password;
+    res.json({ success: true, user: userObj });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Search users by name or email (for profile discovery)
-app.get('/api/users/search', optionalAuth, async (req, res) => {
+// ──────────────────────────────────────────
+// USERS & SOCIAL (Follow, Profile, Chat)
+// PRIVACY: Email is NEVER exposed to other users!
+// ──────────────────────────────────────────
+app.get('/api/users/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
     if (!q || q.length < 2) return res.json({ success: true, users: [] });
-    const users = await User.find({
-      $or: [
-        { name: { $regex: q, $options: 'i' } },
-        { email: { $regex: q, $options: 'i' } },
-      ]
-    }).select('name email avatar bio playlists').limit(20).lean();
 
-    const formatted = users.map(u => ({
+    // Search ONLY by name, NEVER search or expose email
+    const users = await User.find({
+      name: { $regex: q, $options: 'i' }
+    })
+    .select('_id name avatar bio playlists followers following')
+    .limit(20)
+    .lean();
+
+    const sanitized = users.map(u => ({
       id: String(u._id),
       name: u.name,
-      email: u.email,
-      avatar: u.avatar || '',
+      avatar: u.avatar,
       bio: u.bio || '',
-      publicPlaylists: (u.playlists || []).filter(p => p.isPublic !== false).map(p => ({
-        id: p.id,
-        name: p.name,
-        cover: p.cover,
-        trackCount: (p.trackIds || []).length,
-        isLikedSongs: p.isLikedSongs,
-      })),
+      publicPlaylists: (u.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs),
+      followersCount: (u.followers || []).length,
+      followingCount: (u.following || []).length
     }));
-    res.json({ success: true, users: formatted });
+
+    res.json({ success: true, users: sanitized });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Get public profile of any user by ID
 app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('name email avatar bio playlists createdAt').lean();
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    const publicPlaylists = (user.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
-      id: p.id,
-      name: p.name,
-      description: p.description || '',
-      cover: p.cover || '',
-      trackIds: (p.trackIds || []).map(String),
-      trackCount: (p.trackIds || []).length,
-      isPublic: true,
-      isLikedSongs: false,
+    const target = await User.findById(req.params.id)
+      .select('_id name avatar bio playlists followers following createdAt')
+      .lean();
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const currentUserId = req.user?.id;
+    const isFollowing = currentUserId ? (target.followers || []).map(String).includes(String(currentUserId)) : false;
+    const publicPlaylists = (target.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
+      ...p,
+      trackCount: (p.trackIds || []).length
     }));
+
     res.json({
       success: true,
       user: {
-        id: String(user._id),
-        name: user.name,
-        avatar: user.avatar || '',
-        bio: user.bio || '',
-        joinedAt: user.createdAt,
+        id: String(target._id),
+        name: target.name,
+        avatar: target.avatar,
+        bio: target.bio || '',
+        createdAt: target.createdAt,
         publicPlaylists,
         playlistCount: publicPlaylists.length,
+        followersCount: (target.followers || []).length,
+        followingCount: (target.following || []).length,
+        isFollowing
       }
     });
   } catch (e) {
@@ -363,2150 +290,557 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
   }
 });
 
-// ══════════════════════════════════════════
-//  2. GLOBAL TRACKS (Shared Library)
-// ══════════════════════════════════════════
-
-// Get all tracks (shared library — everyone sees all songs)
-app.get('/api/tracks', optionalAuth, async (req, res) => {
+app.post('/api/users/:id/follow', auth, async (req, res) => {
   try {
-    const tracks = await Track.find().sort({ createdAt: -1 }).limit(500).lean();
-    const formatted = tracks.map(t => ({
-      id:       String(t._id),
-      title:    t.title,
-      artist:   t.artist,
-      album:    t.album,
-      cover:    t.cover,
-      audioUrl: t.audioUrl,
-      duration: t.duration,
-      genre:    t.genre,
-      source:   t.source,
-      addedBy:  t.addedBy,
-      lyrics:   t.lyrics || [],
-      color:    t.color || '#1DB954',
-    }));
-    res.json({ success: true, tracks: formatted });
+    const targetId = req.params.id;
+    const currentUserId = req.user.id;
+    if (targetId === currentUserId) return res.status(400).json({ error: 'Cannot follow yourself' });
+
+    await User.findByIdAndUpdate(targetId, { $addToSet: { followers: currentUserId } });
+    await User.findByIdAndUpdate(currentUserId, { $addToSet: { following: targetId } });
+
+    const updatedTarget = await User.findById(targetId);
+    res.json({
+      success: true,
+      isFollowing: true,
+      followersCount: (updatedTarget.followers || []).length
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Auto-fetch & save synced lyrics for any newly added track
-async function autoFetchAndSaveLyrics(track) {
-  if (!track || (Array.isArray(track.lyrics) && track.lyrics.length > 0)) return;
+app.post('/api/users/:id/unfollow', auth, async (req, res) => {
   try {
-    const lyrics = await fetchRealLyricsFromLrclib(track.title, track.artist, track.duration);
-    if (lyrics.length > 0 && track._id) {
-      await Track.findByIdAndUpdate(track._id, { lyrics });
-      console.log(`[AI Lyrics] Auto-saved ${lyrics.length} synced lyrics lines for "${track.title}"`);
-    }
-  } catch (err) {
-    console.warn(`[AI Lyrics] Auto-fetch error for "${track?.title}":`, err.message);
+    const targetId = req.params.id;
+    const currentUserId = req.user.id;
+
+    await User.findByIdAndUpdate(targetId, { $pull: { followers: currentUserId } });
+    await User.findByIdAndUpdate(currentUserId, { $pull: { following: targetId } });
+
+    const updatedTarget = await User.findById(targetId);
+    res.json({
+      success: true,
+      isFollowing: false,
+      followersCount: (updatedTarget.followers || []).length
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-}
+});
 
-// Remove duplicate tracks from DB on startup
-async function removeDuplicateTracksFromDb() {
+// Friends list (following or followers)
+app.get('/api/users/friends', auth, async (req, res) => {
   try {
-    const allTracks = await Track.find({}).sort({ createdAt: 1 });
-    const seenTitles = new Set();
-    const idsToDelete = [];
-    for (const t of allTracks) {
-      const key = (t.title || '').trim().toLowerCase();
-      if (seenTitles.has(key)) {
-        idsToDelete.push(t._id);
-      } else if (key) {
-        seenTitles.add(key);
-      }
-    }
-    if (idsToDelete.length > 0) {
-      await Track.deleteMany({ _id: { $in: idsToDelete } });
-      console.log(`[DB Clean] Cleaned ${idsToDelete.length} duplicate tracks from database.`);
-    }
-  } catch (err) {
-    console.warn('[DB Clean] Warning:', err.message);
+    const me = await User.findById(req.user.id).lean();
+    const friendIds = me.following || [];
+    const friends = await User.find({ _id: { $in: friendIds } })
+      .select('_id name avatar bio')
+      .lean();
+    res.json({
+      success: true,
+      friends: friends.map(f => ({
+        id: String(f._id),
+        name: f.name,
+        avatar: f.avatar,
+        bio: f.bio || ''
+      }))
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-}
+});
 
-setTimeout(removeDuplicateTracksFromDb, 3000);
-// NOTE: cleanupWrongCachedLyrics intentionally removed — it was wiping all lyrics on every deploy!
-
-// Add a track to global library (preventing duplicates)
-app.post('/api/tracks/add', optionalAuth, async (req, res) => {
+// ──────────────────────────────────────────
+// DIRECT CHAT MESSAGES
+// ──────────────────────────────────────────
+app.get('/api/chat/:recipientId', auth, async (req, res) => {
   try {
-    const data = req.body;
-    if (!data.title || !data.artist) {
-      return res.status(400).json({ error: 'Title and artist required' });
-    }
+    const currentUserId = req.user.id;
+    const recipientId = req.params.recipientId;
 
-    // Check if track already exists in database
-    const cleanTitleKey = (data.title || '').trim().toLowerCase();
-    const existing = await Track.findOne({
+    const messages = await Message.find({
       $or: [
-        { title: new RegExp(`^${cleanTitleKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
-        ...(data.audioUrl ? [{ audioUrl: data.audioUrl }] : []),
-        ...(data.youtubeId ? [{ youtubeId: data.youtubeId }] : [])
+        { sender: currentUserId, recipient: recipientId },
+        { sender: recipientId, recipient: currentUserId }
       ]
-    });
+    })
+    .sort({ createdAt: 1 })
+    .limit(100)
+    .lean();
 
-    if (existing) {
-      autoFetchAndSaveLyrics(existing).catch(() => {});
-      return res.json({ success: true, track: { ...existing.toObject(), id: String(existing._id) }, isDuplicate: true });
-    }
+    res.json({ success: true, messages });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    const track = await new Track({
-      ...data,
-      addedBy: req.user?.email || 'anonymous',
+app.post('/api/chat/send', auth, async (req, res) => {
+  try {
+    const { recipientId, text, track, jamInvite } = req.body;
+    if (!recipientId) return res.status(400).json({ error: 'Recipient required' });
+
+    const msg = await new Message({
+      sender: req.user.id,
+      recipient: recipientId,
+      text: text || '',
+      track: track || null,
+      jamInvite: jamInvite || null
     }).save();
 
-    // Trigger AI lyrics auto-generation in background
-    autoFetchAndSaveLyrics(track).catch(() => {});
+    // Broadcast via socket if available
+    io.to(`user:${recipientId}`).emit('chat:message', msg);
+    io.to(`user:${req.user.id}`).emit('chat:message', msg);
 
-    res.json({ success: true, track: { ...track.toObject(), id: String(track._id) } });
+    res.json({ success: true, message: msg });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Import track from YouTube URL
-app.post('/api/tracks/youtube', optionalAuth, async (req, res) => {
+// ──────────────────────────────────────────
+// FAST MUSIC SEARCH & STREAM RESOLVER (Cached)
+// ──────────────────────────────────────────
+app.get(['/api/search', '/api/search/external'], async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json({ success: true, tracks: [] });
+
+  const cacheKey = q.toLowerCase();
+  const cached = searchCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    return res.json({ success: true, tracks: cached.tracks });
+  }
+
+  try {
+    // 1. Check local DB tracks
+    const dbTracks = await Track.find({
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { artist: { $regex: q, $options: 'i' } }
+      ]
+    }).limit(10).lean();
+
+    const formattedDbTracks = dbTracks.map(t => ({
+      id: String(t._id),
+      title: t.title,
+      artist: t.artist,
+      album: t.album || 'Single',
+      cover: t.cover,
+      audioUrl: t.audioUrl,
+      duration: t.duration || 180,
+      source: 'Liofy'
+    }));
+
+    // 2. Query SoundCloud with multi-client rotation
+    let scTracks = [];
+    for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
+      try {
+        const scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+          params: { q, client_id: clientId, limit: 12 },
+          timeout: 4000
+        });
+
+        if (scRes.data?.collection?.length > 0) {
+          const valid = scRes.data.collection.filter(item => (item.duration || 0) > 30000);
+          const resolved = await Promise.all(
+            valid.slice(0, 8).map(async (item) => {
+              const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+              if (!prog) return null;
+              const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
+              if (!streamUrl) return null;
+
+              return {
+                id: `sc-${item.id}`,
+                title: item.title || q,
+                artist: item.user?.username || 'Artist',
+                album: 'SoundCloud',
+                cover: item.artwork_url
+                  ? item.artwork_url.replace('-large', '-t500x500')
+                  : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
+                audioUrl: streamUrl,
+                duration: Math.round((item.duration || 180000) / 1000),
+                source: 'SoundCloud'
+              };
+            })
+          );
+          scTracks = resolved.filter(Boolean);
+          if (scTracks.length > 0) break;
+        }
+      } catch (err) {
+        // try next client_id
+      }
+    }
+
+    const allTracks = [...formattedDbTracks, ...scTracks];
+    searchCache.set(cacheKey, { timestamp: Date.now(), tracks: allTracks });
+
+    res.json({ success: true, tracks: allTracks });
+  } catch (e) {
+    res.json({ success: true, tracks: [] });
+  }
+});
+
+// ──────────────────────────────────────────
+// PLAYLIST IMPORT (Spotify, YouTube, Apple Music)
+// ──────────────────────────────────────────
+app.post('/api/playlists/import', auth, async (req, res) => {
   try {
     const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'URL required' });
+    if (!url) return res.status(400).json({ error: 'Playlist URL is required' });
 
-    const videoId = extractVideoId(url);
-    if (!videoId) return res.status(400).json({ error: 'Invalid YouTube URL' });
+    let playlistTitle = 'Imported Playlist';
+    let playlistCover = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600';
+    let rawItems = [];
 
-    // Check if already in DB
-    const existing = await Track.findOne({ audioUrl: { $regex: videoId } });
-    if (existing) {
-      return res.json({ success: true, track: { ...existing.toObject(), id: String(existing._id) }, alreadyExists: true });
-    }
+    // 1. Detect Spotify Playlist
+    if (url.includes('spotify.com/playlist') || url.includes('spotify:playlist')) {
+      const match = url.match(/playlist\/([a-zA-Z0-9]+)/) || url.match(/spotify:playlist:([a-zA-Z0-9]+)/);
+      const playlistId = match ? match[1] : null;
 
-    // Resolve details using ytdl or fallback
-    let title = 'YouTube Track';
-    let artist = 'YouTube';
-    let cover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-    let duration = 210;
+      if (!playlistId) return res.status(400).json({ error: 'Invalid Spotify playlist link' });
 
-    if (ytdl) {
+      // Fetch Spotify Embed page which has embedded JSON metadata
       try {
-        const info = await ytdl.getBasicInfo(url);
-        title = info.videoDetails.title.replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '').trim();
-        artist = info.videoDetails.author.name;
-        duration = parseInt(info.videoDetails.lengthSeconds) || 210;
+        const embedRes = await axios.get(`https://open.spotify.com/embed/playlist/${playlistId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          timeout: 10000
+        });
+
+        const html = embedRes.data;
+        const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
+        if (nextDataMatch) {
+          const parsed = JSON.parse(nextDataMatch[1]);
+          const entity = parsed?.props?.pageProps?.state?.data?.entity;
+          if (entity) {
+            playlistTitle = entity.name || playlistTitle;
+            if (entity.coverArt?.sources?.[0]?.url) playlistCover = entity.coverArt.sources[0].url;
+
+            const trackList = entity.trackList || [];
+            rawItems = trackList.map(t => ({
+              title: t.title || t.name,
+              artist: t.subtitle || t.artists?.[0]?.name || 'Artist',
+              duration: Math.round((t.duration || 180000) / 1000)
+            }));
+          }
+        }
       } catch (err) {
-        console.warn('[Import] ytdl info failed, using defaults');
+        console.warn('Spotify embed fetch failed:', err.message);
       }
     }
+    // 2. Detect YouTube Playlist
+    else if (url.includes('youtube.com/playlist') || url.includes('list=')) {
+      const match = url.match(/list=([a-zA-Z0-9_-]+)/);
+      const listId = match ? match[1] : null;
+      if (!listId) return res.status(400).json({ error: 'Invalid YouTube playlist link' });
 
-    const track = await new Track({
-      title,
-      artist,
-      cover,
-      audioUrl: url,
-      duration,
-      source: 'YouTube',
-      addedBy: req.user?.email || 'anonymous',
-    }).save();
-
-    res.json({ success: true, track: { ...track.toObject(), id: String(track._id) } });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Delete a track (from MongoDB shared library)
-app.delete('/api/tracks/:id', optionalAuth, async (req, res) => {
-  try {
-    const id = req.params.id;
-    let deleted = null;
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      deleted = await Track.findByIdAndDelete(id);
+      try {
+        const ytRes = await axios.get(`https://www.youtube.com/playlist?list=${listId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          timeout: 10000
+        });
+        const html = ytRes.data;
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+        if (titleMatch) {
+          playlistTitle = titleMatch[1].replace(' - YouTube', '').trim();
+        }
+        // Extract video titles
+        const videoTitleMatches = [...html.matchAll(/"title":{"runs":\[{"text":"([^"]+)"}\]/g)];
+        const seen = new Set();
+        for (const m of videoTitleMatches) {
+          const t = m[1];
+          if (!seen.has(t) && t.length > 2 && !t.includes('YouTube') && seen.size < 50) {
+            seen.add(t);
+            rawItems.push({ title: t, artist: 'YouTube', duration: 200 });
+          }
+        }
+      } catch (err) {
+        console.warn('YouTube scrape failed:', err.message);
+      }
     }
-    if (!deleted) {
-      deleted = await Track.findOneAndDelete({ $or: [{ _id: id }, { id: id }] });
+    // 3. Detect Apple Music Playlist
+    else if (url.includes('music.apple.com')) {
+      try {
+        const appleRes = await axios.get(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          timeout: 10000
+        });
+        const html = appleRes.data;
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+        if (titleMatch) {
+          playlistTitle = titleMatch[1].replace(' - Apple Music', '').trim();
+        }
+      } catch (err) {}
     }
-    res.json({ success: true, deleted: !!deleted });
+
+    if (rawItems.length === 0) {
+      return res.status(400).json({ error: 'Could not extract tracks from playlist. Please verify the link is public.' });
+    }
+
+    // Now resolve tracks into database or search stream so they are ready to play
+    const trackIds = [];
+    const clientId = SOUNDCLOUD_CLIENT_IDS[0];
+
+    for (const item of rawItems.slice(0, 40)) { // limit to first 40 for speed
+      try {
+        let resolvedAudioUrl = '';
+        let coverUrl = playlistCover;
+        let duration = item.duration || 180;
+
+        try {
+          const scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+            params: { q: `${item.artist} ${item.title}`, client_id: clientId, limit: 1 },
+            timeout: 2500
+          });
+          const match = scRes.data?.collection?.[0];
+          if (match) {
+            const prog = match.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+            if (prog) {
+              resolvedAudioUrl = await resolveSoundCloudStream(prog.url, clientId) || '';
+            }
+            if (match.artwork_url) coverUrl = match.artwork_url.replace('-large', '-t500x500');
+            if (match.duration) duration = Math.round(match.duration / 1000);
+          }
+        } catch {}
+
+        const newTrack = await new Track({
+          title: item.title,
+          artist: item.artist,
+          album: playlistTitle,
+          cover: coverUrl,
+          audioUrl: resolvedAudioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
+          duration,
+          genre: 'Imported',
+          source: 'Import'
+        }).save();
+
+        trackIds.push(String(newTrack._id));
+      } catch (err) {}
+    }
+
+    // Add new playlist to user
+    const user = await User.findById(req.user.id);
+    const newPlaylist = {
+      id: `pl-${Date.now()}`,
+      name: playlistTitle,
+      cover: playlistCover,
+      trackIds,
+      isLikedSongs: false,
+      isPublic: true,
+      description: `Imported from ${url.includes('spotify') ? 'Spotify' : url.includes('youtube') ? 'YouTube' : 'External'} (${trackIds.length} tracks)`
+    };
+
+    user.playlists.push(newPlaylist);
+    await user.save();
+
+    res.json({
+      success: true,
+      playlist: newPlaylist,
+      trackCount: trackIds.length
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ══════════════════════════════════════════
-//  3. FILE UPLOAD — MP3 + Cover → base64 → MongoDB
-// ══════════════════════════════════════════
-
-// Upload audio file
-app.post('/api/upload/audio', authMiddleware, upload.single('audio'), async (req, res) => {
+// ──────────────────────────────────────────
+// PLAYLISTS CRUD
+// ──────────────────────────────────────────
+app.post('/api/playlists/create', auth, async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'No audio file uploaded' });
-    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-    res.json({ success: true, url: base64 });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Upload cover image
-app.post('/api/upload/cover', authMiddleware, upload.single('cover'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No image file uploaded' });
-    const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-    res.json({ success: true, url: base64 });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════
-//  4. USER PLAYLISTS (per-user)
-// ══════════════════════════════════════════
-
-// Get my playlists
-app.get('/api/playlists', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('playlists likedTrackIds');
-    res.json({ success: true, playlists: user.playlists || [], likedTrackIds: user.likedTrackIds || [] });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Create playlist
-app.post('/api/playlists/create', authMiddleware, async (req, res) => {
-  try {
-    const { name, description, cover } = req.body;
+    const u = await User.findById(req.user.id);
     const newPl = {
       id: `pl-${Date.now()}`,
-      name,
-      description: description || '',
-      cover: cover || '',
+      name: req.body.name,
+      cover: req.body.cover || '',
       trackIds: [],
       isLikedSongs: false,
+      isPublic: true
     };
-    await User.findByIdAndUpdate(req.user.id, { $push: { playlists: newPl } });
+    u.playlists.push(newPl);
+    await u.save();
     res.json({ success: true, playlist: newPl });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Add track to playlist
-app.post('/api/playlists/:id/add-track', authMiddleware, async (req, res) => {
+app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
   try {
-    const { trackId } = req.body;
-    if (!trackId) return res.status(400).json({ error: 'trackId required' });
-    const cleanTrackId = String(trackId);
-    await User.findOneAndUpdate(
-      { _id: req.user.id, 'playlists.id': req.params.id },
-      { $addToSet: { 'playlists.$.trackIds': cleanTrackId } }
-    );
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Remove track from playlist
-app.post('/api/playlists/:id/remove-track', authMiddleware, async (req, res) => {
-  try {
-    const { trackId } = req.body;
-    if (!trackId) return res.status(400).json({ error: 'trackId required' });
-    const cleanTrackId = String(trackId);
-    await User.findOneAndUpdate(
-      { _id: req.user.id, 'playlists.id': req.params.id },
-      { $pull: { 'playlists.$.trackIds': cleanTrackId } }
-    );
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Toggle playlist visibility (public/private)
-app.post('/api/playlists/:id/toggle-visibility', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('playlists');
-    const pl = (user.playlists || []).find(p => p.id === req.params.id);
+    const u = await User.findById(req.user.id);
+    const pl = u.playlists.find(p => p.id === req.params.id);
     if (!pl) return res.status(404).json({ error: 'Playlist not found' });
-    const newVisibility = !pl.isPublic;
-    await User.findOneAndUpdate(
-      { _id: req.user.id, 'playlists.id': req.params.id },
-      { $set: { 'playlists.$.isPublic': newVisibility } }
-    );
-    res.json({ success: true, isPublic: newVisibility });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Update playlist details (cover, name, description, isPublic)
-app.post('/api/playlists/:id/update', authMiddleware, async (req, res) => {
-  try {
-    const { name, description, cover, isPublic } = req.body;
-    const updateFields = {};
-    if (name !== undefined) updateFields['playlists.$.name'] = name;
-    if (description !== undefined) updateFields['playlists.$.description'] = description;
-    if (cover !== undefined) updateFields['playlists.$.cover'] = cover;
-    if (isPublic !== undefined) updateFields['playlists.$.isPublic'] = isPublic;
-
-    await User.findOneAndUpdate(
-      { _id: req.user.id, 'playlists.id': req.params.id },
-      { $set: updateFields }
-    );
+    if (!pl.trackIds.includes(req.body.trackId)) pl.trackIds.push(req.body.trackId);
+    await u.save();
     res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Delete playlist
-app.delete('/api/playlists/:id', authMiddleware, async (req, res) => {
-  try {
-    await User.findByIdAndUpdate(req.user.id, {
-      $pull: { playlists: { id: req.params.id } }
-    });
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════
-//  5. LIKED SONGS (per-user)
-// ══════════════════════════════════════════
-
-// Toggle like
-app.post('/api/tracks/:id/like', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('likedTrackIds playlists');
-    const trackId = req.params.id;
-    const isLiked = user.likedTrackIds.includes(trackId);
-
-    if (isLiked) {
-      // Unlike
-      await User.findByIdAndUpdate(req.user.id, {
-        $pull: { likedTrackIds: trackId, 'playlists.$[pl].trackIds': trackId }
-      }, { arrayFilters: [{ 'pl.isLikedSongs': true }] });
-    } else {
-      // Like
-      await User.findByIdAndUpdate(req.user.id, {
-        $addToSet: { likedTrackIds: trackId }
-      });
-      // Also add to liked songs playlist
-      await User.findOneAndUpdate(
-        { _id: req.user.id, 'playlists.isLikedSongs': true },
-        { $addToSet: { 'playlists.$.trackIds': trackId } }
-      );
-    }
-
-    res.json({ success: true, liked: !isLiked });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════
-//  6. AUDIO PROXY — YouTube Full Audio (ytdl-core + Piped fallbacks)
-// ══════════════════════════════════════════
-
-const { Readable } = require('stream');
-
-// Try to load @distube/ytdl-core (best YouTube support)
-let ytdl = null;
-try {
-  ytdl = require('@distube/ytdl-core');
-  console.log('✅ @distube/ytdl-core loaded');
-} catch {
-  try {
-    ytdl = require('ytdl-core');
-    console.log('✅ ytdl-core loaded');
-  } catch {
-    console.warn('⚠️ No ytdl library — will use Piped API fallbacks');
-  }
-}
-
-// Multiple Piped API instances for fallback
-const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://api.piped.privacydev.net',
-  'https://pipedapi.palvelu.org',
-  'https://pipedapi.adminforge.de',
-  'https://piped-api.garudalinux.org',
-  'https://pipedapi.mha.fi',
-  'https://pipedapi.syra.net',
-  'https://pipedapi.tokhmi.xyz',
-  'https://piped-api.us.v-cdn.net',
-  'https://piped-api.no-logs.com'
-];
-
-// Cache for resolved YouTube URLs (TTL: 5 hours)
-const ytUrlCache = new Map();
-const YT_CACHE_TTL = 5 * 60 * 60 * 1000;
-
-function extractVideoId(urlOrId) {
-  if (!urlOrId) return null;
-  // Handle complex URLs like watch?v=ID&list=...
-  const match = urlOrId.match(/(?:v=|\/|embed\/|shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : (urlOrId.length === 11 ? urlOrId : null);
-}
-
-let ytdlAgent = null;
-try {
-  if (ytdl && typeof ytdl.createAgent === 'function') {
-    ytdlAgent = ytdl.createAgent([]);
-  }
-} catch (e) {}
-
-async function resolveWithYtdl(videoId) {
-  if (!ytdl) return null;
-  try {
-    const opts = ytdlAgent ? { agent: ytdlAgent } : {};
-    const info = await ytdl.getInfo(`https://www.youtube.com/watch?v=${videoId}`, opts);
-    const formats = info.formats || [];
-    const format = formats.find(f => f.hasAudio && !f.hasVideo) || formats.find(f => f.hasAudio);
-    if (format?.url) {
-      console.log(`[ytdl] ✅ Successfully resolved direct stream for ${videoId}`);
-      return format.url;
-    }
-    return null;
-  } catch (e) {
-    console.warn(`[ytdl] Failed for ${videoId}:`, e.message?.substring(0, 80));
-    return null;
-  }
-}
-
-async function resolveWithPiped(videoId) {
-  for (const base of PIPED_INSTANCES) {
-    try {
-      const res = await fetch(`${base}/streams/${videoId}`, {
-        signal: AbortSignal.timeout(8000),
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (!data.audioStreams?.length) continue;
-
-      // Prefer opus/mp4 audio
-      const audio =
-        data.audioStreams.find(s => s.mimeType?.includes('audio/mp4') && s.quality?.includes('160')) ||
-        data.audioStreams.find(s => s.mimeType?.includes('audio/mp4')) ||
-        data.audioStreams.find(s => s.mimeType?.includes('opus')) ||
-        data.audioStreams[0];
-
-      if (audio?.url) {
-        console.log(`[Piped] Resolved via ${base}`);
-        return audio.url;
-      }
-    } catch {}
-  }
-  return null;
-}
-
-async function resolveWithCobalt(videoId) {
-  const cobaltInstances = [
-    'https://co.wuk.sh/api/json',
-    'https://cobalt.stream/api/json',
-    'https://api.cobalt.tools/api/json',
-    'https://cobalt.bc0.me/api/json',
-  ];
-  for (const endpoint of cobaltInstances) {
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-        },
-        body: JSON.stringify({
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          downloadMode: 'audio',
-          audioFormat: 'mp3',
-          isAudioOnly: true
-        }),
-        signal: AbortSignal.timeout(6000)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && (data.url || data.audio)) {
-          const url = data.url || data.audio;
-          console.log(`[Cobalt] ✅ Resolved YouTube stream via ${endpoint} for ${videoId}`);
-          return url;
-        }
-      }
-    } catch (err) {}
-  }
-  return null;
-}
-
-async function resolveWithInvidious(videoId) {
-  const instances = [
-    'https://inv.zoomerville.com',
-    'https://invidious.slipfox.xyz',
-    'https://yt.artemislena.eu',
-    'https://invidious.nerdvpn.de',
-    'https://invidious.projectsegfau.lt',
-    'https://invidious.flokinet.to'
-  ];
-  for (const base of instances) {
-    try {
-      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, {
-        signal: AbortSignal.timeout(8000),
-      });
-      if (!res.ok) continue;
-      const data = await res.json();
-      const formats = data.adaptiveFormats || [];
-      const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
-      if (audio?.url) {
-        console.log(`[Invidious] ✅ Resolved via ${base}`);
-        return audio.url;
-      }
-    } catch {}
-  }
-  return null;
-}
-
-let playDl = null;
-try {
-  playDl = require('play-dl');
-  console.log('✅ play-dl loaded');
-} catch (e) {}
-
-async function resolveWithPlayDl(videoId) {
-  if (!playDl) return null;
-  try {
-    const info = await playDl.stream(`https://www.youtube.com/watch?v=${videoId}`, {
-      quality: 2,
-      htmldata: false,
-      discordPlayerCompatibility: true
-    }).catch(err => {
-      console.warn(`[play-dl] stream catch:`, err.message?.substring(0, 80));
-      return null;
-    });
-    if (info?.url) {
-      console.log(`[play-dl] ✅ Resolved audio stream for ${videoId}`);
-      return info.url;
-    }
-  } catch (err) {
-    console.warn(`[play-dl] Failed for ${videoId}:`, err.message?.substring(0, 80));
-  }
-  return null;
-}
-
-async function resolveWithYtDlp(videoId) {
-  return new Promise((resolve) => {
-    const cmd = process.platform === 'win32' ? 'yt-dlp' : '/usr/local/bin/yt-dlp';
-    execFile(cmd, ['-g', '-f', 'bestaudio/best', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000 }, (error, stdout) => {
-      if (!error && stdout) {
-        const url = stdout.trim().split('\n')[0];
-        if (url && url.startsWith('http')) {
-          console.log(`[yt-dlp] ✅ Resolved audio stream for ${videoId}`);
-          return resolve(url);
-        }
-      }
-      execFile('yt-dlp', ['-g', '-f', 'bestaudio/best', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000 }, (err2, stdout2) => {
-        if (!err2 && stdout2) {
-          const url2 = stdout2.trim().split('\n')[0];
-          if (url2 && url2.startsWith('http')) {
-            console.log(`[yt-dlp fallback] ✅ Resolved audio stream for ${videoId}`);
-            return resolve(url2);
-          }
-        }
-        resolve(null);
-      });
-    });
-  });
-}
-
-async function resolveYouTubeAudio(videoId) {
-  // Check cache
-  const cached = ytUrlCache.get(videoId);
-  if (cached && Date.now() - cached.time < YT_CACHE_TTL) {
-    return cached.url;
-  }
-
-  console.log(`[Audio] Resolving YouTube audio for: ${videoId}`);
-
-  // Order: ytdl (@distube/ytdl-core) -> play-dl -> Invidious -> yt-dlp
-  let audioUrl = await resolveWithYtdl(videoId);
-  if (!audioUrl) audioUrl = await resolveWithPlayDl(videoId);
-  if (!audioUrl) audioUrl = await resolveWithInvidious(videoId);
-  if (!audioUrl) audioUrl = await resolveWithYtDlp(videoId);
-
-  if (audioUrl) {
-    ytUrlCache.set(videoId, { url: audioUrl, time: Date.now() });
-    console.log(`[Audio] ✅ Resolved ${videoId}`);
-  } else {
-    console.warn(`[Audio] ❌ All methods failed for ${videoId}`);
-  }
-
-  return audioUrl;
-}
-
-// /api/yt-resolve — returns just the URL (for client-side redirect)
-app.get('/api/yt-resolve', async (req, res) => {
-  try {
-    const { id } = req.query;
-    if (!id) return res.status(400).json({ error: 'Video ID required' });
-    const audioUrl = await resolveYouTubeAudio(id);
-    if (!audioUrl) return res.status(502).json({ error: 'Could not resolve audio stream' });
-    res.json({ success: true, url: audioUrl });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// /api/proxy-image — fetches any image server-side to bypass CORS for canvas color extraction
-app.get('/api/proxy-image', async (req, res) => {
-  try {
-    const { url } = req.query;
-    if (!url) return res.status(400).json({ error: 'URL required' });
-    const imgRes = await fetch(decodeURIComponent(url), {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!imgRes.ok) return res.status(imgRes.status).end();
-    const ct = imgRes.headers.get('content-type') || 'image/jpeg';
-    res.setHeader('Content-Type', ct);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    imgRes.body.pipe(res);
   } catch (e) {
     res.status(500).end();
   }
 });
 
-// /api/proxy-audio — robust streaming proxy using axios
-app.get('/api/proxy-audio', async (req, res) => {
+app.post('/api/playlists/:id/update', auth, async (req, res) => {
   try {
-    let { url } = req.query;
-    if (!url || typeof url !== 'string') {
-      return res.status(400).json({ error: 'Valid URL required' });
-    }
-
-    // Resolve YouTube WATCH URLs to direct streams if needed
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      const videoId = extractVideoId(url);
-      if (!videoId) return res.status(400).json({ error: 'Invalid YouTube URL' });
-
-      const resolvedUrl = await resolveYouTubeAudio(videoId);
-      if (!resolvedUrl) return res.status(502).json({ error: 'Could not resolve YouTube audio' });
-      url = resolvedUrl;
-    }
-
-    const rangeHeader = req.headers.range;
-    const axiosHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Referer': 'https://www.youtube.com/',
-      'Accept': '*/*',
-    };
-    if (rangeHeader) axiosHeaders['Range'] = rangeHeader;
-
-    const response = await axios({
-      method: 'get',
-      url: url,
-      headers: axiosHeaders,
-      responseType: 'stream',
-      timeout: 20000,
-    });
-
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mp4');
-    if (response.headers['content-length']) res.setHeader('Content-Length', response.headers['content-length']);
-    if (response.headers['content-range']) res.setHeader('Content-Range', response.headers['content-range']);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.status(response.status);
-
-    response.data.pipe(res);
-
-    response.data.on('error', (err) => {
-      console.error('[Axios Proxy] Stream error:', err.message);
-      res.end();
-    });
-
-  } catch (e) {
-    console.error('[Axios Proxy] Fatal error:', e.message);
-    if (!res.headersSent) {
-      const status = e.response?.status || 500;
-      res.status(status).json({ error: e.message });
-    }
-  }
-});
-
-// ══════════════════════════════════════════
-//  7. SEARCH — YouTube + SoundCloud
-// ══════════════════════════════════════════
-
-const searchCache = new Map();
-
-function parseLrc(lrcText) {
-  if (!lrcText) return [];
-  return lrcText.split('\n').reduce((acc, line) => {
-    const m = line.match(/\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/);
-    if (m) {
-      const time = parseInt(m[1]) * 60 + parseInt(m[2]);
-      const text = m[4].trim();
-      if (text) acc.push({ time, text });
-    }
-    return acc;
-  }, []);
-}
-
-// Dynamic SoundCloud Client ID Management
-let cachedScClientId = null;
-let cachedScClientIdTime = 0;
-
-async function getSoundCloudClientId() {
-  if (SC_CLIENT_ID) return SC_CLIENT_ID;
-  if (cachedScClientId && (Date.now() - cachedScClientIdTime < 3600000)) {
-    return cachedScClientId;
-  }
-  try {
-    const res = await fetch('https://soundcloud.com', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-      }
-    });
-    const html = await res.text();
-    const scriptUrls = html.match(/https:\/\/a-v2\.sndcdn\.com\/assets\/[^\"]+\.js/g);
-    if (scriptUrls) {
-      for (let url of scriptUrls.reverse()) {
-        try {
-          const sRes = await fetch(url);
-          const js = await sRes.text();
-          const match = js.match(/client_id[:=]\s*["']([a-zA-Z0-9]{32})["']/);
-          if (match) {
-            cachedScClientId = match[1];
-            cachedScClientIdTime = Date.now();
-            return cachedScClientId;
-          }
-        } catch {}
-      }
-    }
-  } catch (e) {
-    console.warn('[Liofy Server] Failed to fetch SC homepage for client_id:', e.message);
-  }
-  return 'Mxv2e5wxnWei6krLywjIXpztX7S0VCeK';
-}
-
-async function searchSoundCloud(query) {
-  try {
-    const clientId = await getSoundCloudClientId();
-    if (!clientId) return [];
-
-    const res = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=15`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
-      }
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (!data || !Array.isArray(data.collection)) return [];
-
-    const items = [];
-    for (const item of data.collection) {
-      if ((item.duration || 0) < 30000) continue;
-      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-      if (!prog) continue;
-
-      try {
-        const sRes = await fetch(`${prog.url}?client_id=${clientId}`);
-        if (!sRes.ok) continue;
-        const sData = await sRes.json();
-        if (!sData.url) continue;
-
-        items.push({
-          id: `sc-${item.id}`,
-          title: item.title || 'SoundCloud Track',
-          artist: item.user?.username || 'SoundCloud Artist',
-          album: 'Single',
-          cover: item.artwork_url
-            ? item.artwork_url.replace('-large', '-t500x500')
-            : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-          audioUrl: sData.url,
-          duration: Math.round((item.duration || 180000) / 1000),
-          source: 'SoundCloud',
-          isFullSong: true,
-        });
-      } catch {}
-    }
-    return items;
-  } catch (e) {
-    console.error('[Liofy Server] SoundCloud search error:', e.message);
-    return [];
-  }
-}
-
-// SoundCloud Stream Proxy — Resolves 100% fresh live MP3 stream URL on the fly and redirects to it
-app.get('/api/soundcloud/stream', async (req, res) => {
-  try {
-    const { url, id, title, artist } = req.query;
-    const clientId = await getSoundCloudClientId();
-    let finalUrl = url;
-
-    // 1. If we have a track ID or search query
-    const searchQ = (id && id.replace('sc-', '')) ? `track_id:${id.replace('sc-', '')}` : `${title || ''} ${artist || ''}`.trim();
-    if (searchQ) {
-      try {
-        const sRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(searchQ)}&client_id=${clientId}&limit=3`);
-        if (sRes.ok) {
-          const data = await sRes.json();
-          if (data.collection?.length > 0) {
-            const item = data.collection[0];
-            const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-            if (prog) {
-              const streamRes = await fetch(`${prog.url}?client_id=${clientId}`);
-              if (streamRes.ok) {
-                const streamData = await streamRes.json();
-                if (streamData.url) finalUrl = streamData.url;
-              }
-            }
-          }
-        }
-      } catch (err) {}
-    }
-
-    // 2. If url is direct progressive stream endpoint
-    if (finalUrl && finalUrl.includes('api-v2.soundcloud.com/media')) {
-      try {
-        const streamRes = await fetch(`${finalUrl}?client_id=${clientId}`);
-        if (streamRes.ok) {
-          const streamData = await streamRes.json();
-          if (streamData.url) finalUrl = streamData.url;
-        }
-      } catch (err) {}
-    }
-
-    if (finalUrl) {
-      // Stream the audio via axios to bypass referer/IP issues on mobile
-      const response = await axios({
-        method: 'get',
-        url: finalUrl,
-        responseType: 'stream',
-        timeout: 15000,
-      });
-      res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
-      return response.data.pipe(res);
-    }
-
-    res.status(404).json({ error: 'SoundCloud stream not found' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-async function resolveYoutubeAudioStream(videoId) {
-  try {
-    const pipedRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
-    if (pipedRes.ok) {
-      const data = await pipedRes.json();
-      if (data.audioStreams && data.audioStreams.length > 0) {
-        return data.audioStreams[0].url;
-      }
-    }
-  } catch {}
-  
-  try {
-    const pipedRes = await fetch(`https://pipedapi.adminforge.de/streams/${videoId}`);
-    if (pipedRes.ok) {
-      const data = await pipedRes.json();
-      if (data.audioStreams && data.audioStreams.length > 0) {
-        return data.audioStreams[0].url;
-      }
-    }
-  } catch {}
-
-  return null;
-}
-
-async function searchYouTube(query) {
-  if (YOUTUBE_API_KEY) {
-    try {
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=10&key=${YOUTUBE_API_KEY}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.items?.length) {
-          return data.items.map(item => ({
-            id: `yt-${item.id.videoId}`,
-            videoId: item.id.videoId,
-            title: item.snippet?.title || 'YouTube Track',
-            artist: item.snippet?.channelTitle || 'YouTube',
-            cover: item.snippet?.thumbnails?.high?.url || `https://i.ytimg.com/vi/${item.id.videoId}/hqdefault.jpg`,
-            audioUrl: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-            duration: 210,
-            source: 'YouTube',
-            isFullSong: true,
-          }));
-        }
-      }
-    } catch {}
-  }
-
-  // Fallback 1: scrape YouTube HTML
-  try {
-    const res = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-      headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
-        'Accept-Language': 'ar,en-US;q=0.9,en;q=0.8' 
-      }
-    });
-    const html = await res.text();
-    const match = html.match(/var ytInitialData = ({.*?});<\/script>/) || html.match(/ytInitialData\s*=\s*({.*?});<\/script>/);
-    if (match) {
-      const data = JSON.parse(match[1]);
-      const sections = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-      const items = [];
-      for (const s of sections) {
-        for (const item of (s.itemSectionRenderer?.contents || [])) {
-          const v = item.videoRenderer;
-          if (v?.videoId) {
-            const dur = (() => {
-              const t = v.lengthText?.simpleText || '3:30';
-              const p = t.split(':').map(Number);
-              return p.length === 2 ? p[0]*60+p[1] : 210;
-            })();
-            items.push({
-              id: `yt-${v.videoId}`,
-              videoId: v.videoId,
-              title: v.title?.runs?.[0]?.text || 'YouTube',
-              artist: v.ownerText?.runs?.[0]?.text || 'YouTube',
-              cover: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-              audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
-              duration: dur,
-              source: 'YouTube',
-              isFullSong: true,
-            });
-          }
-        }
-      }
-      if (items.length > 0) return items.slice(0, 10);
-    }
-  } catch (e) {
-    console.error('[Liofy Server] YouTube scrape error:', e.message);
-  }
-
-  // Fallback 2: Invidious API
-  try {
-    const invRes = await fetch(`https://inv.zoomerville.com/api/v1/search?q=${encodeURIComponent(query)}&type=video`);
-    if (invRes.ok) {
-      const data = await invRes.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return data.slice(0, 10).map(item => ({
-          id: `yt-${item.videoId}`,
-          videoId: item.videoId,
-          title: item.title || 'YouTube Track',
-          artist: item.author || 'YouTube',
-          cover: item.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
-          audioUrl: `https://www.youtube.com/watch?v=${item.videoId}`,
-          duration: item.lengthSeconds || 210,
-          source: 'YouTube',
-          isFullSong: true,
-        }));
-      }
-    }
-  } catch {}
-
-  return [];
-}
-
-app.get('/api/search', optionalAuth, async (req, res) => {
-  try {
-    const q = (req.query.q || '').trim();
-    if (!q) return res.json({ success: true, tracks: [] });
-
-    const cacheKey = q.toLowerCase();
-    if (searchCache.has(cacheKey)) {
-      const c = searchCache.get(cacheKey);
-      if (Date.now() - c.time < 300000) {
-        return res.json({ success: true, tracks: c.tracks });
-      }
-    }
-
-    // Fetch from DB first (global library) safely
-    let dbFormatted = [];
-    try {
-      if (mongoose.connection.readyState === 1) {
-        const dbTracks = await Track.find({
-          $or: [
-            { title: { $regex: q, $options: 'i' } },
-            { artist: { $regex: q, $options: 'i' } },
-          ]
-        }).limit(20).lean();
-
-        dbFormatted = dbTracks.map(t => ({
-          id: String(t._id),
-          title: t.title, artist: t.artist, cover: t.cover,
-          audioUrl: t.audioUrl, duration: t.duration, source: t.source || 'Liofy',
-          inLibrary: true,
-          isFullSong: true,
-        }));
-      }
-    } catch (dbErr) {
-      console.warn('[Liofy Server] DB search skipped:', dbErr.message);
-    }
-
-    // Search external in parallel (SoundCloud full songs + YouTube)
-    const [scTracks, ytTracks] = await Promise.all([
-      searchSoundCloud(q),
-      searchYouTube(q),
-    ]);
-
-    // Fetch lyrics for external tracks
-    let lrcData = [];
-    try {
-      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`);
-      if (lrcRes.ok) lrcData = await lrcRes.json();
-    } catch {}
-
-    const findLyrics = (title) => {
-      const match = lrcData.find(l => l.trackName?.toLowerCase().includes(title.toLowerCase()));
-      if (match?.syncedLyrics) return parseLrc(match.syncedLyrics);
-      return [];
-    };
-
-    const externalTracks = [...scTracks, ...ytTracks].map(t => ({
-      ...t,
-      lyrics: findLyrics(t.title),
-      inLibrary: false,
-    }));
-
-    // Deduplicate by title & artist
-    const seenMap = new Map();
-    [...dbFormatted, ...externalTracks].forEach(t => {
-      const key = `${(t.title || '').toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '')}-${(t.artist || '').toLowerCase().replace(/[^a-z0-9\u0600-\u06FF]/g, '')}`;
-      if (!seenMap.has(key)) {
-        seenMap.set(key, t);
-      }
-    });
-
-    const all = Array.from(seenMap.values());
-    searchCache.set(cacheKey, { time: Date.now(), tracks: all });
-
-    res.json({ success: true, tracks: all });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════
-//  8. FULL USER SYNC (login from any device)
-// ══════════════════════════════════════════
-
-app.get('/api/sync', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    if (!user) return res.status(404).json({ error: 'User not found' });
-
-    const allTracks = await Track.find().sort({ createdAt: -1 }).limit(500).lean();
-    const formatted = allTracks.map(t => ({
-      id:       String(t._id),
-      title:    t.title,
-      artist:   t.artist,
-      album:    t.album,
-      cover:    t.cover,
-      audioUrl: t.audioUrl,
-      duration: t.duration,
-      genre:    t.genre,
-      source:   t.source,
-      addedBy:  t.addedBy,
-      lyrics:   t.lyrics || [],
-      color:    t.color || '#1DB954',
-      liked:    user.likedTrackIds.includes(String(t._id)),
-    }));
-
-    res.json({
-      success: true,
-      user,
-      tracks: formatted,
-      playlists: user.playlists || [],
-      likedTrackIds: user.likedTrackIds || [],
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════
-//  9. AUTO-SEED — يملأ DB بأغاني YouTube تلقائياً لو DB فاضي
-// ══════════════════════════════════════════
-
-// قائمة أغاني YouTube الأصلية للـ auto-seed
-const AUTO_SEED_SONGS = [
-  // 🇪🇬 Arab
-  { q: 'عمرو دياب نور العين official', artist: 'عمرو دياب', genre: 'Arab Pop' },
-  { q: 'عمرو دياب وأنا عشت official', artist: 'عمرو دياب', genre: 'Arab Pop' },
-  { q: 'عمرو دياب تملي معاك official', artist: 'عمرو دياب', genre: 'Arab Pop' },
-  { q: 'محمد حماقي بحبك official audio', artist: 'محمد حماقي', genre: 'Arab Pop' },
-  { q: 'محمد حماقي أنسى official', artist: 'محمد حماقي', genre: 'Arab Pop' },
-  { q: 'تامر حسني اتعلمت official', artist: 'تامر حسني', genre: 'Arab Pop' },
-  { q: 'أنغام فارقني official', artist: 'أنغام', genre: 'Arab Pop' },
-  { q: 'نانسي عجرم أه ونص official', artist: 'نانسي عجرم', genre: 'Arab Pop' },
-  { q: 'اليسا بتحبني ليه official', artist: 'اليسا', genre: 'Arab Pop' },
-  { q: 'وائل كفوري ما بعرف official', artist: 'وائل كفوري', genre: 'Arab Pop' },
-  { q: 'سعد لمجرد ya nass official', artist: 'سعد لمجرد', genre: 'Arab Pop' },
-  { q: 'حسن شاكوش روتين official', artist: 'حسن شاكوش', genre: 'Mahragan' },
-  { q: 'عمر كمال دلع official', artist: 'عمر كمال', genre: 'Mahragan' },
-  { q: 'حكيم والاه زمان official', artist: 'حكيم', genre: 'Sha3bi' },
-  // 🌍 International
-  { q: 'The Weeknd Blinding Lights official audio', artist: 'The Weeknd', genre: 'Pop' },
-  { q: 'The Weeknd Save Your Tears official audio', artist: 'The Weeknd', genre: 'Pop' },
-  { q: 'The Weeknd Starboy official audio', artist: 'The Weeknd', genre: 'Pop' },
-  { q: 'Ed Sheeran Shape of You official audio', artist: 'Ed Sheeran', genre: 'Pop' },
-  { q: 'Ed Sheeran Perfect official audio', artist: 'Ed Sheeran', genre: 'Pop' },
-  { q: 'Taylor Swift Anti-Hero official audio', artist: 'Taylor Swift', genre: 'Pop' },
-  { q: 'Dua Lipa Levitating official audio', artist: 'Dua Lipa', genre: 'Pop' },
-  { q: 'Billie Eilish bad guy official audio', artist: 'Billie Eilish', genre: 'Pop' },
-  { q: 'Ariana Grande 7 rings official audio', artist: 'Ariana Grande', genre: 'Pop' },
-  { q: 'Bruno Mars Uptown Funk official audio', artist: 'Bruno Mars', genre: 'Pop' },
-  { q: 'Harry Styles As It Was official audio', artist: 'Harry Styles', genre: 'Pop' },
-  { q: 'Drake God\'s Plan official audio', artist: 'Drake', genre: 'Hip-Hop' },
-  { q: 'Eminem Lose Yourself official audio', artist: 'Eminem', genre: 'Hip-Hop' },
-  { q: 'Coldplay Yellow official audio', artist: 'Coldplay', genre: 'Rock' },
-  { q: 'Imagine Dragons Believer official audio', artist: 'Imagine Dragons', genre: 'Rock' },
-  { q: 'Avicii Wake Me Up official audio', artist: 'Avicii', genre: 'Electronic' },
-];
-
-const SEED_GENRE_COLORS = {
-  'Arab Pop': '#C9A84C', 'Mahragan': '#E94560', 'Sha3bi': '#F5A623',
-  'Pop': '#1DB954', 'Hip-Hop': '#9B59B6', 'R&B': '#E74C3C',
-  'Rock': '#E67E22', 'Electronic': '#3498DB',
-};
-
-async function seedYouTubeTrack({ q, artist, genre }) {
-  // Try YouTube official API
-  if (YOUTUBE_API_KEY) {
-    try {
-      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(q)}&type=video&videoCategoryId=10&maxResults=3&key=${YOUTUBE_API_KEY}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.items?.length) {
-          const item = data.items[0];
-          const videoId = item.id.videoId;
-          const exists = await Track.findOne({ audioUrl: { $regex: videoId } });
-          if (exists) return false;
-          const cleanTitle = item.snippet.title
-            .replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '')
-            .replace(/\s*-\s*(official\s*)?(audio|video)/gi, '').trim();
-          const newT = await new Track({
-            title: cleanTitle || q,
-            artist,
-            album: 'Single',
-            cover: item.snippet.thumbnails.high?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-            audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
-            duration: 210,
-            genre,
-            source: 'YouTube',
-            addedBy: 'auto-seed',
-            color: SEED_GENRE_COLORS[genre] || '#FF0000',
-          }).save();
-          autoFetchAndSaveLyrics(newT).catch(() => {});
-          return true;
-        }
-      }
-    } catch {}
-  }
-
-  // Fallback: Invidious
-  const INVIDIOUS = ['https://inv.zoomerville.com', 'https://invidious.slipfox.xyz'];
-  for (const base of INVIDIOUS) {
-    try {
-      const res = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(q)}&type=video&page=1`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (!Array.isArray(data) || !data.length) continue;
-      const v = data.find(x => x.type === 'video' && x.lengthSeconds > 60 && x.lengthSeconds < 600);
-      if (!v) continue;
-      const exists = await Track.findOne({ audioUrl: { $regex: v.videoId } });
-      if (exists) return false;
-      const cleanTitle = v.title
-        .replace(/\s*[\(\[](official\s*)?(audio|video|music video|lyric)[\)\]]/gi, '')
-        .replace(/\s*-\s*(official\s*)?(audio|video)/gi, '').trim();
-      await new Track({
-        title: cleanTitle || q,
-        artist,
-        album: 'Single',
-        cover: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-        audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
-        duration: v.lengthSeconds || 210,
-        genre,
-        source: 'YouTube',
-        addedBy: 'auto-seed',
-        color: SEED_GENRE_COLORS[genre] || '#FF0000',
-      }).save();
-      return true;
-    } catch {}
-  }
-  return false;
-}
-
-// Endpoint to trigger seeding (can be called from frontend or manually)
-app.post('/api/auto-seed', async (req, res) => {
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      return res.status(503).json({ error: 'DB not connected' });
-    }
-    const count = await Track.countDocuments();
-    if (count >= 20) {
-      return res.json({ success: true, message: `DB already has ${count} tracks`, seeded: 0 });
-    }
-
-    res.json({ success: true, message: 'Seeding started in background...', currentCount: count });
-
-    // Run seeding in background (non-blocking)
-    (async () => {
-      let added = 0;
-      for (const song of AUTO_SEED_SONGS) {
-        try {
-          const ok = await seedYouTubeTrack(song);
-          if (ok) added++;
-          await new Promise(r => setTimeout(r, 600));
-        } catch {}
-      }
-      console.log(`🌱 Auto-seed complete: added ${added} YouTube tracks`);
-    })();
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// ══════════════════════════════════════════
-//  10. AI FEATURES — Gemini API Integration
-// ══════════════════════════════════════════
-
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GROQ_API_KEY   = process.env.GROQ_API_KEY   || '';
-
-// AI Lyrics Translation using Gemini
-app.post('/api/ai/translate-lyrics', async (req, res) => {
-  try {
-    const { lyrics, title, artist } = req.body;
-    if (!Array.isArray(lyrics) || lyrics.length === 0) {
-      return res.status(400).json({ error: 'Lyrics array required' });
-    }
-
-    const lyricsText = lyrics.map(l => {
-      const m = Math.floor(l.time / 60);
-      const s = Math.floor(l.time % 60);
-      const timeStr = `${m}:${s < 10 ? '0' : ''}${s}`;
-      return `[${timeStr}] ${l.text}`;
-    }).join('\n');
-
-    if (!GEMINI_API_KEY) {
-      return res.json({
-        success: true,
-        translatedLyrics: lyrics.map(l => ({ ...l, text: `[ترجمة] ${l.text}` }))
-      });
-    }
-
-    const prompt = `You are a professional music translator. Translate the lyrics of song "${title || 'Song'}" by "${artist || 'Artist'}" into natural, expressive, poetic Arabic line-by-line.
-IMPORTANT: You MUST keep the exact timestamp format like [0:15] or [1:02] at the start of each translated line. Do not omit any lines or timestamps.
-
-Lyrics:
-${lyricsText}`;
-
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      }
-    );
-
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.warn('[AI Translate] Gemini API error:', errText);
-      return res.status(502).json({ error: 'Gemini API translation failed' });
-    }
-
-    const data = await geminiRes.json();
-    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    const parsed = [];
-    const lines = responseText.split('\n');
-    lines.forEach((line, idx) => {
-      const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
-      if (match) {
-        const time = parseInt(match[1]) * 60 + parseInt(match[2]);
-        const text = match[3].trim();
-        if (text) parsed.push({ time, text });
-      } else if (line.trim() && lyrics[idx]) {
-        parsed.push({ time: lyrics[idx].time, text: line.trim() });
-      }
-    });
-
-    res.json({
-      success: true,
-      translatedLyrics: parsed.length > 0 ? parsed : lyrics
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// AI Auto-Sync Timestamps for raw text lyrics
-app.post('/api/ai/sync-timestamps', async (req, res) => {
-  try {
-    const { rawText, title, artist, duration = 180 } = req.body;
-    if (!rawText || !rawText.trim()) {
-      return res.status(400).json({ error: 'rawText lyrics required' });
-    }
-
-    const cleanLines = rawText
-      .split('\n')
-      .map(l => l.replace(/\[\d+:\d+\]/, '').trim())
-      .filter(Boolean);
-
-    if (cleanLines.length === 0) {
-      return res.status(400).json({ error: 'No valid lyrics lines found' });
-    }
-
-    if (!GEMINI_API_KEY) {
-      // Fallback mathematical distribution
-      const step = duration / Math.max(cleanLines.length, 1);
-      const lyrics = cleanLines.map((line, idx) => ({
-        time: Math.round(idx * step),
-        text: line
-      }));
-      const formattedText = lyrics.map(l => {
-        const m = Math.floor(l.time / 60);
-        const s = Math.floor(l.time % 60);
-        return `[${m}:${s < 10 ? '0' : ''}${s}] ${l.text}`;
-      }).join('\n');
-
-      return res.json({ success: true, lyrics, timestampedText: formattedText });
-    }
-
-    const prompt = `You are an expert music lyric timer. Add accurate timestamp tags [m:ss] or [mm:ss] to the following lyrics lines for the song "${title || 'Song'}" by "${artist || 'Artist'}".
-The total song duration is ${duration} seconds.
-Distribute the timestamps naturally and evenly starting from [0:00] up to near the end of ${duration} seconds.
-Output ONLY the lyrics with timestamp tags at the beginning of each line.
-
-Lyrics lines:
-${cleanLines.join('\n')}`;
-
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-      }
-    );
-
-    let lyrics = [];
-    let timestampedText = '';
-
-    if (geminiRes.ok) {
-      const data = await geminiRes.json();
-      const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-      const lines = responseText.split('\n');
-      lines.forEach((line, idx) => {
-        const match = line.match(/\[(\d+):(\d+)\]\s*(.*)/);
-        if (match) {
-          const time = parseInt(match[1]) * 60 + parseInt(match[2]);
-          const text = match[3].trim();
-          if (text) lyrics.push({ time, text });
-        }
-      });
-      timestampedText = responseText;
-    }
-
-    if (lyrics.length === 0) {
-      const step = duration / Math.max(cleanLines.length, 1);
-      lyrics = cleanLines.map((line, idx) => ({
-        time: Math.round(idx * step),
-        text: line
-      }));
-      timestampedText = lyrics.map(l => {
-        const m = Math.floor(l.time / 60);
-        const s = Math.floor(l.time % 60);
-        return `[${m}:${s < 10 ? '0' : ''}${s}] ${l.text}`;
-      }).join('\n');
-    }
-
-    res.json({ success: true, lyrics, timestampedText });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Clean text helper for title matching
-function cleanText(str = '') {
-  return (str || '')
-    .toLowerCase()
-    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
-    .replace(/[^\w\u0600-\u06FF]/g, ' ')
-    .trim();
-}
-
-// Extract core song title keywords (excluding artist names and video noise)
-function extractCoreSongKeywords(title = '', artist = '') {
-  const noiseWords = new Set([
-    'official', 'music', 'video', 'audio', 'lyric', 'lyrics', 'visualizer', 'full',
-    'كليب', 'فيديو', 'كلمات', 'أوديو', 'رسمي', 'جديد', 'channel', 'sony', 'rotana',
-    'feat', 'ft', 'featuring', 'with', 'prod', 'prodby', 'prod', 'hd', '4k'
-  ]);
-
-  let cleanTitle = (title || '')
-    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
-    .replace(/Official\s*(Music\s*)?(Video|Audio|Lyric\s*Video|Visualizer)?/gi, '')
-    .replace(/الكليب\s*الرسمي|فيديو\s*كليب|فيديو|كلمات|أوديو|رسمي|جديد/gu, '')
-    .trim();
-
-  const pipeParts = cleanTitle.split(/[|\/]/).map(p => p.trim()).filter(Boolean);
-  const keywords = new Set();
-
-  pipeParts.forEach(pipePart => {
-    const dashParts = pipePart.split(/\s+[\-\–\—]\s+/).map(p => p.trim()).filter(Boolean);
-    if (dashParts.length > 1) {
-      let songPart = dashParts[dashParts.length - 1];
-      const p0 = dashParts[0].toLowerCase();
-      const p1 = dashParts[1].toLowerCase();
-      const artClean = cleanText(artist);
-
-      // Determine which side is title vs artist
-      if (/\b(x|\&|feat|ft|with|و)\b/i.test(p1) || (artClean && p1.includes(artClean))) {
-        songPart = dashParts[0];
-      } else if (/\b(x|\&|feat|ft|with|و)\b/i.test(p0) || (artClean && p0.includes(artClean))) {
-        songPart = dashParts[1];
-      }
-
-      const pure = songPart
-        .replace(/\b(feat|ft|featuring|with|prod|prod\.|x)\b.*/gi, '')
-        .replace(/\b(و|مع)\s+[\u0600-\u06FF\s]+$/gu, '')
-        .trim();
-      
-      const words = cleanText(pure).split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w));
-      words.forEach(w => keywords.add(w));
-    } else {
-      const pure = pipePart
-        .replace(/\b(feat|ft|featuring|with|prod|prod\.|x)\b.*/gi, '')
-        .replace(/\b(و|مع)\s+[\u0600-\u06FF\s]+$/gu, '')
-        .trim();
-      const words = cleanText(pure).split(/\s+/).filter(w => w.length >= 2 && !noiseWords.has(w));
-      words.forEach(w => keywords.add(w));
-    }
-  });
-
-  return Array.from(keywords);
-}
-
-// Validate that returned search result actually matches target song title and artist
-function isMatchValid(hitTitle, targetTitle, targetArtist = '', hitArtist = '') {
-  if (!hitTitle || !targetTitle) return false;
-
-  const cleanHit = cleanText(hitTitle);
-  const cleanHitArtist = cleanText(hitArtist);
-  const cleanTargetArtist = cleanText(targetArtist);
-
-  // If hitArtist and targetArtist are given and completely clash, reject
-  if (cleanHitArtist && cleanTargetArtist && cleanHitArtist.length >= 3 && cleanTargetArtist.length >= 3) {
-    const artistMatch = cleanHitArtist.includes(cleanTargetArtist) || cleanTargetArtist.includes(cleanHitArtist) ||
-      cleanTargetArtist.split(/\s+/).some(w => w.length >= 3 && cleanHitArtist.includes(w));
-    if (!artistMatch) {
-      return false;
-    }
-  }
-
-  const coreKeywords = extractCoreSongKeywords(targetTitle, targetArtist);
-  if (coreKeywords.length === 0) {
-    const cleanTarget = cleanText(targetTitle);
-    return cleanHit.includes(cleanTarget) || cleanTarget.includes(cleanHit);
-  }
-
-  // Require matching ALL or at least 80% of core title keywords in hitTitle!
-  const engKws = coreKeywords.filter(w => /^[a-z0-9]+$/i.test(w));
-  const araKws = coreKeywords.filter(w => /^[\u0600-\u06FF]+$/u.test(w));
-
-  const engMatched = engKws.length > 0 && engKws.every(kw => cleanHit.includes(kw));
-  const araMatched = araKws.length > 0 && araKws.every(kw => cleanHit.includes(kw));
-
-  if (engKws.length > 0 && engMatched) return true;
-  if (araKws.length > 0 && araMatched) return true;
-
-  const matchedCount = coreKeywords.filter(kw => cleanHit.includes(kw)).length;
-  if (coreKeywords.length <= 2) {
-    return matchedCount === coreKeywords.length;
-  }
-  return (matchedCount / coreKeywords.length) >= 0.8;
-}
-
-// Smart multi-query generator to extract clean titles for lyrics search
-function generateLyricsSearchQueries(title = '', artist = '') {
-  const queries = new Set();
-  const cleanTitleStr = (title || '')
-    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
-    .replace(/Official\s*(Music\s*)?(Video|Audio|Lyric\s*Video|Visualizer)?/gi, '')
-    .replace(/الكليب\s*الرسمي|فيديو\s*كليب|فيديو|كلمات|أوديو|رسمي|جديد/gu, '')
-    .trim();
-
-  // Known direct Genius URLs for popular multi-artist tracks
-  if (/shoft\s*kalam|شفت\s*كلام|شوفت\s*كلام/i.test(title)) {
-    queries.add('https://genius.com/Marwan-pablo-lege-cy-and-hatembas-shoft-kalam-lyrics');
-  }
-  if (/trouh\s*lmeen|تروح\s*لمين/i.test(title)) {
-    queries.add('https://genius.com/Lege-cy-trouh-lmeen-lyrics');
-  }
-
-  const coreKeywords = extractCoreSongKeywords(title, artist);
-  const mainArtist = (artist || '')
-    .replace(/[\(\[\{].*?[\)\]\}]/gu, '')
-    .split(/\s*[\,x\&\/\|]\s*|\s+(feat|ft|with|و)\s+/i)[0]?.trim() || '';
-
-  if (coreKeywords.length > 0) {
-    const songTitleStr = coreKeywords.join(' ');
-    if (mainArtist) {
-      queries.add(`${songTitleStr} ${mainArtist}`);
-    }
-    queries.add(songTitleStr);
-  }
-
-  if (cleanTitleStr) {
-    queries.add(cleanTitleStr);
-    if (mainArtist) queries.add(`${cleanTitleStr} ${mainArtist}`);
-  }
-
-  return Array.from(queries).filter(q => q.length >= 2);
-}
-
-// Auto-sync any plain text lines using Gemini AI (filtering out structural annotations like [المقدمة], [Verse], etc.)
-async function syncLyricsWithGemini(linesArray, title, artist = '', duration = 180) {
-  if (!Array.isArray(linesArray) || linesArray.length === 0) return [];
-  
-  // Clean out header lines and bracketed annotations like [المقدمة: مروان بابلو] or [اللازمة]
-  const cleanLyricsLines = linesArray
-    .map(l => (typeof l === 'string' ? l.trim() : ''))
-    .filter(l => {
-      if (!l) return false;
-      if (l.includes('Contributors') || l.includes('Embed')) return false;
-      if (/Lyrics$/i.test(l)) return false;
-      if (/^[\(\[\{].*?[\)\]\}]$/.test(l)) return false;
-      return true;
-    });
-
-  if (cleanLyricsLines.length === 0) return [];
-
-  if (GEMINI_API_KEY) {
-    try {
-      const prompt = `You are an expert music lyric audio synchronizer.
-Song Title: "${title}"
-Artist: "${artist}"
-Total Audio Duration: ${duration} seconds.
-
-CRITICAL TIMING INSTRUCTIONS:
-1. Songs almost ALWAYS have an instrumental intro (8 to 22 seconds) before singing begins. Estimate realistic intro duration.
-2. Place timestamp tags [m:ss.xx] at the beginning of each sung line matching real vocal delivery.
-3. DO NOT output any bracketed annotations like [Verse], [Chorus], [المقدمة], or [اللازمة].
-4. Output ONLY timestamped lyric lines starting with [m:ss] text.
-
-Lyrics lines to timestamp:
-${cleanLyricsLines.join('\n')}`;
-
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        }
-      );
-
-      if (geminiRes.ok) {
-        const data = await geminiRes.json();
-        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const lyrics = [];
-        responseText.split('\n').forEach(line => {
-          const match = line.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-          if (match) {
-            const minutes = parseInt(match[1]);
-            const seconds = parseInt(match[2]);
-            const cs = match[3] ? parseInt(match[3].padEnd(2,'0').slice(0,2)) : 0;
-            const time = minutes * 60 + seconds + cs / 100;
-            const text = match[4].trim();
-            if (text && !/^[\(\[\{].*?[\)\]\}]$/.test(text) && !/Lyrics$/i.test(text)) {
-              lyrics.push({ time: Math.round(time * 100) / 100, text });
-            }
-          }
-        });
-        if (lyrics.length > 0) {
-          console.log(`[Gemini Lyric Sync] Successfully synced ${lyrics.length} clean lines for "${title}"`);
-          return lyrics;
-        }
-      }
-    } catch (e) {
-      console.warn('[Gemini Lyric Sync] error:', e.message);
-    }
-  }
-
-  // Universal Systemic Timing Engine for ALL songs (Character-Weighted Proportional Sync)
-  const intro = Math.min(4.5, Math.max(2.0, duration * 0.025));
-  const singingDuration = Math.max(20, duration - intro - 5.0);
-  const totalChars = cleanLyricsLines.reduce((sum, l) => sum + Math.max(1, l.length), 0);
-
-  let currentTimePointer = intro;
-  return cleanLyricsLines.map((line) => {
-    const time = Math.round(currentTimePointer * 100) / 100;
-    const lineDuration = (Math.max(1, line.length) / totalChars) * singingDuration;
-    currentTimePointer += lineDuration;
-    return { time, text: line };
-  });
-}
-
-async function fetchLyricsFromGenius(qOrUrl, targetTitle, duration = 180) {
-  try {
-    let targetUrl = '';
-    if (typeof qOrUrl === 'string' && qOrUrl.startsWith('http')) {
-      targetUrl = qOrUrl;
-    } else {
-      const searchRes = await fetch(`https://genius.com/api/search/multi?q=${encodeURIComponent(qOrUrl)}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
-      });
-      if (!searchRes.ok) return [];
-      const searchData = await searchRes.json();
-      const sections = searchData.response?.sections || [];
-      const songSection = sections.find(s => s.type === 'song') || sections[0];
-      const hits = songSection?.hits || [];
-      if (hits.length === 0) return [];
-
-      const hit = hits.find(h => isMatchValid(h.result?.full_title || h.result?.title, targetTitle, '', h.result?.primary_artist?.name)) || hits[0];
-      if (!hit) return [];
-      targetUrl = hit.result.url;
-    }
-
-    if (!targetUrl) return [];
-
-    const pageRes = await fetch(targetUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120' }
-    });
-    if (!pageRes.ok) return [];
-    const html = await pageRes.text();
-
-    // Extract lyrics from Genius HTML properly across all containers
-    const parts = html.split(/data-lyrics-container="true"[^>]*>/i);
-    let fullRawText = '';
-    if (parts.length > 1) {
-      for (let i = 1; i < parts.length; i++) {
-        const block = parts[i].split(/<div[^>]*class="[^\"]*LyricsFooter|class="[^\"]*RightSidebar/i)[0];
-        fullRawText += '\n' + block;
-      }
-    }
-
-    const formatted = fullRawText
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&#x27;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&');
-
-    const cleanLines = formatted
-      .split('\n')
-      .map(l => l.replace(/\d+\s*Contributors?/gi, '').replace(/Embed\s*Share.*/gi, '').trim())
-      .filter(l => {
-        if (!l) return false;
-        if (l.includes('Contributors') || l.includes('Embed')) return false;
-        if (/Lyrics$/i.test(l)) return false;
-        if (/^[\(\[\{].*?[\)\]\}]$/.test(l)) return false; // Filter [المقدمة...], [اللازمة...]
-        return true;
-      });
-
-    if (cleanLines.length > 0) {
-      console.log(`[Genius Scraper] Extracted ${cleanLines.length} clean lines from ${targetUrl}`);
-      const synced = await syncLyricsWithGemini(cleanLines, targetTitle, '', duration);
-      if (synced.length > 0) return synced;
-    }
-  } catch (e) {
-    console.warn('[Genius Lyrics] fetch error:', e.message);
-  }
-  return [];
-}
-
-async function fetchRealLyricsFromLrclib(title, artist, duration = 180) {
-  const queries = generateLyricsSearchQueries(title, artist);
-
-  // Helper to parse LRC format [mm:ss.xx] line
-  const parseLrcText = (lrcString) => {
-    if (!lrcString) return [];
-    const lines = lrcString.split('\n');
-    const lyrics = [];
-    lines.forEach(l => {
-      const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-      if (m) {
-        const minutes = parseInt(m[1]);
-        const seconds = parseInt(m[2]);
-        const centiseconds = m[3] ? parseInt(m[3].padEnd(2, '0').slice(0, 2)) : 0;
-        const time = minutes * 60 + seconds + centiseconds / 100;
-        const text = m[4].trim();
-        if (text) lyrics.push({ time: Math.round(time * 100) / 100, text });
-      }
-    });
-    return lyrics;
-  };
-
-  // 1. Try LRCLIB API directly (https://lrclib.net/) - Primary Source!
-  for (const q of queries) {
-    try {
-      const lrcRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(q)}`, {
-        headers: { 'User-Agent': 'LiofyApp/1.0 (https://github.com)' },
-        signal: AbortSignal.timeout(6000)
-      });
-      if (lrcRes.ok) {
-        const results = await lrcRes.json();
-        if (Array.isArray(results) && results.length > 0) {
-          // Find best match
-          const match = results.find(r => r.syncedLyrics) || results.find(r => r.plainLyrics) || results[0];
-          
-          if (match && match.syncedLyrics) {
-            const parsed = parseLrcText(match.syncedLyrics);
-            if (parsed.length > 0) {
-              console.log(`[LRCLIB] ✅ Found synced lyrics on lrclib.net for "${title}" (${parsed.length} lines)`);
-              return parsed;
-            }
-          } else if (match && match.plainLyrics) {
-            const plainLines = match.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
-            if (plainLines.length > 0) {
-              const step = Math.max(2, (duration - 10) / plainLines.length);
-              const lyrics = plainLines.map((text, i) => ({
-                time: Math.round((5 + i * step) * 100) / 100,
-                text
-              }));
-              console.log(`[LRCLIB] ✅ Found plain lyrics on lrclib.net for "${title}" (${lyrics.length} lines)`);
-              return lyrics;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('[LRCLIB] fetch error:', err.message);
-    }
-  }
-
-  // 2. Try Genius as fallback
-  for (const q of queries) {
-    const geniusLyrics = await fetchLyricsFromGenius(q, title, duration);
-    if (geniusLyrics.length > 0) {
-      console.log(`[Genius Lyrics] Successfully fetched & synced ${geniusLyrics.length} lines for "${title}"`);
-      return geniusLyrics;
-    }
-  }
-
-  // 3. Try NetEase Music (163.com) — free, huge library, good Arabic coverage
-  for (const q of queries.slice(0, 3)) {
-    try {
-      const neteaseSearch = await fetch(
-        `https://music.163.com/api/search/get?s=${encodeURIComponent(q)}&type=1&limit=5`,
-        { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://music.163.com/' }, signal: AbortSignal.timeout(5000) }
-      );
-      if (neteaseSearch.ok) {
-        const neteaseData = await neteaseSearch.json();
-        const songs = neteaseData?.result?.songs || [];
-        const matchingSong = songs.find(s => isMatchValid(s.name, title, artist, s.artists?.[0]?.name));
-        if (matchingSong) {
-          const songId = matchingSong.id;
-          const lrcRes = await fetch(
-            `https://music.163.com/api/song/lyric?id=${songId}&lv=1&kv=1&tv=-1`,
-            { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://music.163.com/' }, signal: AbortSignal.timeout(5000) }
-          );
-          if (lrcRes.ok) {
-            const lrcData = await lrcRes.json();
-            const lrcText = lrcData?.lrc?.lyric || '';
-            if (lrcText) {
-              const neteaseLyrics = [];
-              lrcText.split('\n').forEach(l => {
-                const m = l.match(/\[(\d+):(\d+)(?:\.(\d+))?\]\s*(.*)/);
-                if (m) {
-                  const minutes = parseInt(m[1]);
-                  const seconds = parseInt(m[2]);
-                  const cs = m[3] ? parseInt(m[3].padEnd(2,'0').slice(0,2)) : 0;
-                  const time = minutes * 60 + seconds + cs / 100;
-                  const text = m[4].trim();
-                  if (text && !/^[\[\(]/.test(text)) neteaseLyrics.push({ time: Math.round(time * 100) / 100, text });
-                }
-              });
-              if (neteaseLyrics.length > 3) {
-                console.log(`[NetEase] Found ${neteaseLyrics.length} synced lines for "${q}"`);
-                return neteaseLyrics;
-              }
-            }
-          }
-        }
-      }
-    } catch (err) { /* timeout or network error, skip */ }
-  }
-
-  return [];
-}
-
-// ──────────────────────────────────────────────────────────
-// Groq Whisper: Transcribe actual audio → perfect timestamps
-// Free tier: 7200 seconds of audio/day at console.groq.com
-// ──────────────────────────────────────────────────────────
-async function transcribeWithGroqWhisper(audioUrl) {
-  const apiKey = (GROQ_API_KEY || '').trim();
-  if (!apiKey || !audioUrl) {
-    console.warn('[Groq Whisper] GROQ_API_KEY is not configured or audioUrl is missing');
-    return [];
-  }
-
-  try {
-    let targetUrl = audioUrl;
-    let resolvedViaInstance = false;
-
-    // For YouTube URLs: try to get a direct streamable audio URL from Piped/Invidious
-    if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
-      const ytId = extractVideoId(targetUrl);
-      if (ytId) {
-        console.log(`[Groq Whisper] Resolving YouTube audio for ${ytId}...`);
-        
-        // Try Piped instances first (fastest)
-        for (const base of PIPED_INSTANCES) {
-          try {
-            const r = await fetch(`${base}/streams/${ytId}`, {
-              signal: AbortSignal.timeout(7000),
-              headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
-            });
-            if (!r.ok) continue;
-            const d = await r.json();
-            if (!d.audioStreams?.length) continue;
-            const audioStream = 
-              d.audioStreams.find(s => s.mimeType?.includes('audio/mp4') && s.quality?.includes('128')) ||
-              d.audioStreams.find(s => s.mimeType?.includes('audio/mp4')) ||
-              d.audioStreams.find(s => s.mimeType?.includes('audio')) ||
-              d.audioStreams[0];
-            if (audioStream?.url) {
-              targetUrl = audioStream.url;
-              resolvedViaInstance = true;
-              console.log(`[Groq Whisper] ✅ Resolved via Piped: ${base}`);
-              break;
-            }
-          } catch {}
-        }
-
-        // If Piped failed, try Invidious instances
-        if (!resolvedViaInstance) {
-          const invidiousInstances = [
-            'https://inv.zoomerville.com', 'https://invidious.slipfox.xyz',
-            'https://yt.artemislena.eu', 'https://invidious.nerdvpn.de',
-            'https://invidious.projectsegfau.lt', 'https://invidious.flokinet.to'
-          ];
-          for (const base of invidiousInstances) {
-            try {
-              const r = await fetch(`${base}/api/v1/videos/${ytId}?fields=adaptiveFormats`, {
-                signal: AbortSignal.timeout(7000),
-              });
-              if (!r.ok) continue;
-              const d = await r.json();
-              const fmts = d.adaptiveFormats || [];
-              const fmt = fmts.find(f => f.type?.includes('audio/mp4')) || fmts.find(f => f.type?.includes('audio'));
-              if (fmt?.url) {
-                targetUrl = fmt.url;
-                resolvedViaInstance = true;
-                console.log(`[Groq Whisper] ✅ Resolved via Invidious: ${base}`);
-                break;
-              }
-            } catch {}
-          }
-        }
-
-        if (!resolvedViaInstance) {
-          console.warn(`[Groq Whisper] Could not resolve YouTube audio for ${ytId} — all instances failed`);
-          return [];
-        }
-      }
-    } else if (!targetUrl.startsWith('http')) {
-      console.warn('[Groq Whisper] Invalid audio URL');
-      return [];
-    }
-
-    console.log(`[Groq Whisper] Downloading audio stream from ${targetUrl.slice(0, 100)}...`);
-    const audioRes = await fetch(targetUrl, {
-      signal: AbortSignal.timeout(45000),
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    }).catch(err => {
-      console.warn('[Groq Whisper] fetch error:', err.message);
-      return null;
-    });
-
-    if (!audioRes || !audioRes.ok) {
-      console.warn(`[Groq Whisper] Proxy audio fetch failed`);
-      return [];
-    }
-
-    const contentTypeHeader = audioRes.headers.get('content-type') || 'audio/mp4';
-    let ext = 'mp4';
-    if (contentTypeHeader.includes('webm')) ext = 'webm';
-    else if (contentTypeHeader.includes('mpeg') || contentTypeHeader.includes('mp3')) ext = 'mp3';
-    else if (contentTypeHeader.includes('ogg')) ext = 'ogg';
-
-    const audioBuffer = await audioRes.arrayBuffer();
-    console.log(`[Groq Whisper] Downloaded ${audioBuffer.byteLength} bytes (mime: ${contentTypeHeader})`);
-
-    if (audioBuffer.byteLength < 1000) {
-      console.warn('[Groq Whisper] Audio buffer too small, skipping');
-      return [];
-    }
-    if (audioBuffer.byteLength > 25 * 1024 * 1024) {
-      console.warn('[Groq Whisper] File exceeds 25MB Groq limit');
-      return [];
-    }
-
-    const audioBlob = new Blob([audioBuffer], { type: contentTypeHeader });
-    const filename = `audio.${ext}`;
-
-    const fd = new globalThis.FormData();
-    fd.append('file', audioBlob, filename);
-    fd.append('model', 'whisper-large-v3-turbo');
-    fd.append('response_format', 'verbose_json');
-    fd.append('timestamp_granularities[]', 'segment');
-    fd.append('language', 'ar');
-
-    console.log(`[Groq Whisper] Sending ${filename} to Groq Speech-to-Text API...`);
-    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: fd,
-      signal: AbortSignal.timeout(60000)
-    });
-
-    if (!groqRes.ok) {
-      const errText = await groqRes.text();
-      console.warn(`[Groq Whisper] Groq API error (${groqRes.status}):`, errText);
-      return [];
-    }
-
-    const data = await groqRes.json();
-    const segments = data.segments || [];
-    console.log(`[Groq Whisper] Received ${segments.length} raw audio segments from Groq`);
-
-    if (segments.length === 0) return [];
-
-    const lyrics = segments
-      .filter(s => s.text && s.text.trim())
-      .map(s => ({
-        time: Math.round(s.start * 100) / 100,
-        text: s.text.trim().replace(/^[\s,.-]+|[\s,.-]+$/g, '')
-      }))
-      .filter(l => l.text.length > 0);
-
-    console.log(`[Groq Whisper] ✅ Successfully transcribed ${lyrics.length} synced lyric lines!`);
-    return lyrics;
-  } catch (err) {
-    console.warn('[Groq Whisper] Exception during transcription:', err.message);
-    return [];
-  }
-}
-
-// Endpoint: transcribe audio directly via Groq Whisper with automatic fallback
-app.post('/api/ai/transcribe-audio', async (req, res) => {
-  try {
-    const { audioUrl, trackId, title, artist, duration = 180 } = req.body;
-    let lyrics = [];
-
-    if (GROQ_API_KEY && audioUrl) {
-      lyrics = await transcribeWithGroqWhisper(audioUrl);
-    }
-
-    // Fallback: If Groq Whisper key is missing or returns empty, fetch real lyrics from Genius/LRCLIB
-    if (lyrics.length === 0 && (title || audioUrl)) {
-      const searchTitle = title || (audioUrl || '').split('/').pop() || 'Song';
-      lyrics = await fetchRealLyricsFromLrclib(searchTitle, artist, duration);
-    }
-
-    // Save to DB permanently if we got results
-    if (lyrics.length > 0 && trackId) {
-      try {
-        if (mongoose.Types.ObjectId.isValid(trackId)) {
-          await Track.findByIdAndUpdate(trackId, { lyrics });
-        } else {
-          await Track.findOneAndUpdate({ id: trackId }, { lyrics });
-        }
-      } catch (dbErr) { console.warn('[Transcribe] DB save error:', dbErr.message); }
-    }
-
-    res.json({ success: lyrics.length > 0, lyrics, source: lyrics.length > 0 ? 'transcribe-sync' : 'none' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// AI Auto-Generate Lyrics & Timestamps for any song without lyrics
-app.post('/api/ai/generate-song-lyrics', async (req, res) => {
-  try {
-    const { trackId, title, artist, duration = 180, audioUrl } = req.body;
-    if (!title) return res.status(400).json({ error: 'Song title required' });
-
-    let lyrics = await fetchRealLyricsFromLrclib(title, artist, duration);
-
-    // If no lyrics from databases AND we have a direct audio URL → use Groq Whisper
-    if (lyrics.length === 0 && audioUrl && GROQ_API_KEY) {
-      console.log(`[Pipeline] Trying Groq Whisper transcription for "${title}"`);
-      let targetUrl = audioUrl;
-      if (targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio') && !targetUrl.includes('youtube')) {
-        targetUrl = `${process.env.VITE_API_URL || 'http://localhost:5000'}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
-      }
-      lyrics = await transcribeWithGroqWhisper(targetUrl);
-      if (lyrics.length > 0) console.log(`[Pipeline] ✅ Groq Whisper got ${lyrics.length} lines for "${title}"`);
-    }
-
-    // Save real generated lyrics to MongoDB database permanently!
-    if (lyrics.length > 0 && trackId) {
-      try {
-        if (mongoose.Types.ObjectId.isValid(trackId)) {
-          await Track.findByIdAndUpdate(trackId, { lyrics });
-        } else {
-          await Track.findOneAndUpdate({ id: trackId }, { lyrics });
-        }
-      } catch (dbErr) {
-        console.warn('[AI Lyrics] MongoDB update warning:', dbErr.message);
-      }
-    }
-
-    res.json({ success: lyrics.length > 0, lyrics });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Update Track Lyrics Calibration Endpoint
-app.post('/api/tracks/update-lyrics', async (req, res) => {
-  try {
-    const { trackId, lyrics } = req.body;
-    if (!trackId || !Array.isArray(lyrics)) {
-      return res.status(400).json({ error: 'trackId and lyrics array required' });
-    }
-    if (mongoose.Types.ObjectId.isValid(trackId)) {
-      await Track.findByIdAndUpdate(trackId, { lyrics });
-    } else {
-      await Track.findOneAndUpdate({ id: trackId }, { lyrics });
-    }
-    res.json({ success: true, lyrics });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Clear wrong/cached lyrics from DB for a track
-app.post('/api/tracks/clear-lyrics', async (req, res) => {
-  try {
-    const { trackId, title } = req.body;
-    const orConditions = [];
-
-    if (trackId) {
-      if (mongoose.Types.ObjectId.isValid(trackId)) {
-        orConditions.push({ _id: trackId });
-      }
-      orConditions.push({ id: trackId });
-    }
-
-    if (title) {
-      const cleanTitleStr = title.replace(/[\(\[\{].*?[\)\]\}]/gu, '').replace(/Official.*|Visualizer.*/gi, '').trim();
-      if (cleanTitleStr) {
-        const escaped = cleanTitleStr.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&");
-        orConditions.push({ title: new RegExp(escaped, 'i') });
-      }
-    }
-
-    if (orConditions.length > 0) {
-      const result = await Track.updateMany({ $or: orConditions }, { lyrics: [] });
-      console.log(`[Clear Lyrics] Cleared lyrics for ${result.modifiedCount} tracks in DB`);
-    }
+    const u = await User.findById(req.user.id);
+    const pl = u.playlists.find(p => p.id === req.params.id);
+    if (!pl) return res.status(404).end();
+    if (req.body.name) pl.name = req.body.name;
+    if (req.body.cover) pl.cover = req.body.cover;
+    if (req.body.isPublic !== undefined) pl.isPublic = req.body.isPublic;
+    await u.save();
     res.json({ success: true });
   } catch (e) {
+    res.status(500).end();
+  }
+});
+
+app.delete('/api/playlists/:id', auth, async (req, res) => {
+  try {
+    const u = await User.findById(req.user.id);
+    u.playlists = u.playlists.filter(p => p.id !== req.params.id);
+    await u.save();
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).end();
+  }
+});
+
+// ──────────────────────────────────────────
+// TRACKS CRUD
+// ──────────────────────────────────────────
+app.get('/api/tracks', async (req, res) => {
+  try {
+    const tracks = await Track.find().sort({ createdAt: -1 }).limit(100);
+    res.json({ success: true, tracks });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-
-
-// AI Mood Recommendations
-app.post('/api/ai/recommend-mood', async (req, res) => {
+app.post('/api/tracks/create', auth, async (req, res) => {
   try {
-    const { mood } = req.body;
-    if (!mood) return res.status(400).json({ error: 'Mood parameter required' });
+    const newTrack = await new Track({
+      ...req.body,
+      addedBy: req.user.id
+    }).save();
+    res.json({ success: true, track: newTrack });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
-    const allTracks = await Track.find().sort({ createdAt: -1 }).lean();
+app.get('/api/proxy-audio', async (req, res) => {
+  try {
+    const r = await axios({
+      method: 'get',
+      url: req.query.url,
+      responseType: 'stream',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 25000
+    });
+    r.data.pipe(res);
+  } catch (e) {
+    res.status(500).end();
+  }
+});
 
-    const moodGenreMap = {
-      workout: ['Mahragan', 'Hip-Hop', 'Electronic', 'Rock'],
-      sad: ['R&B', 'Arab Pop', 'Rock'],
-      romantic: ['Arab Pop', 'R&B', 'Pop'],
-      happy: ['Arab Pop', 'Pop', 'Mahragan', 'Sha3bi'],
-      focus: ['Electronic', 'Pop', 'Rock'],
-      travel: ['Pop', 'Arab Pop', 'Rock', 'Electronic'],
+// ──────────────────────────────────────────
+// SOCKET.IO REAL-TIME JAM & CHAT ENGINE
+// ──────────────────────────────────────────
+const jamRooms = {};
+
+io.on('connection', (socket) => {
+  // User connects & registers their socket ID
+  socket.on('user:online', ({ userId }) => {
+    if (userId) socket.join(`user:${userId}`);
+  });
+
+  // Jam: Host creates or joins room
+  socket.on('jam:join_room', ({ roomCode, user }) => {
+    socket.join(roomCode);
+    if (!jamRooms[roomCode]) {
+      jamRooms[roomCode] = {
+        code: roomCode,
+        hostId: socket.id,
+        currentTrack: null,
+        isPlaying: false,
+        currentTime: 0,
+        members: []
+      };
+    }
+
+    const room = jamRooms[roomCode];
+    // Avoid duplicate member
+    room.members = room.members.filter(m => m.socketId !== socket.id && m.id !== user?.id);
+    const member = {
+      ...user,
+      socketId: socket.id,
+      isHost: room.hostId === socket.id || room.members.length === 0
     };
+    if (member.isHost) room.hostId = socket.id;
 
-    const targetGenres = moodGenreMap[mood] || ['Pop', 'Arab Pop'];
-    let filtered = allTracks.filter(t => targetGenres.includes(t.genre));
+    room.members.push(member);
+    io.to(roomCode).emit('jam:room_updated', room);
+  });
 
-    if (filtered.length < 5) filtered = allTracks;
+  // Jam: Host syncs play state (track, play/pause, seek)
+  socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime }) => {
+    const room = jamRooms[roomCode];
+    if (room) {
+      if (isPlaying !== undefined) room.isPlaying = isPlaying;
+      if (currentTrack !== undefined) room.currentTrack = currentTrack;
+      if (currentTime !== undefined) room.currentTime = currentTime;
 
-    const formatted = filtered.map(t => ({
-      id: String(t._id),
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      cover: t.cover,
-      audioUrl: t.audioUrl,
-      duration: t.duration,
-      genre: t.genre,
-      source: t.source,
-      addedBy: t.addedBy,
-      lyrics: t.lyrics || [],
-      color: t.color || '#1DB954',
-    }));
+      socket.to(roomCode).emit('jam:on_play_state_changed', {
+        isPlaying: room.isPlaying,
+        currentTrack: room.currentTrack,
+        currentTime: room.currentTime
+      });
+    }
+  });
 
-    res.json({ success: true, mood, tracks: formatted });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  // Jam: Leave room
+  socket.on('jam:leave_room', ({ roomCode }) => {
+    socket.leave(roomCode);
+    const room = jamRooms[roomCode];
+    if (room) {
+      room.members = room.members.filter(m => m.socketId !== socket.id);
+      if (room.members.length === 0) {
+        delete jamRooms[roomCode];
+      } else {
+        if (room.hostId === socket.id) {
+          room.hostId = room.members[0].socketId;
+          room.members[0].isHost = true;
+        }
+        io.to(roomCode).emit('jam:room_updated', room);
+      }
+    }
+  });
+
+  socket.on('disconnect', () => {
+    // Clean up user from all jam rooms
+    for (const code in jamRooms) {
+      const room = jamRooms[code];
+      const hadMember = room.members.some(m => m.socketId === socket.id);
+      if (hadMember) {
+        room.members = room.members.filter(m => m.socketId !== socket.id);
+        if (room.members.length === 0) {
+          delete jamRooms[code];
+        } else {
+          if (room.hostId === socket.id) {
+            room.hostId = room.members[0].socketId;
+            room.members[0].isHost = true;
+          }
+          io.to(code).emit('jam:room_updated', room);
+        }
+      }
+    }
+  });
 });
 
-// Auto-seed on server startup if DB is empty
-async function autoSeedOnStartup() {
-  try {
-    await new Promise(r => setTimeout(r, 5000)); // Wait for DB connection
-    if (mongoose.connection.readyState !== 1) return;
-    const count = await Track.countDocuments();
-    if (count > 0) {
-      console.log(`📦 DB has ${count} tracks — skipping auto-seed`);
-      return;
-    }
-    console.log('🌱 DB is empty — starting auto-seed from YouTube...');
-    let added = 0;
-    for (const song of AUTO_SEED_SONGS) {
-      try {
-        const ok = await seedYouTubeTrack(song);
-        if (ok) { added++; process.stdout.write(`🎵 +${added} `); }
-        await new Promise(r => setTimeout(r, 700));
-      } catch {}
-    }
-    console.log(`\n✅ Auto-seed done: ${added} tracks added!`);
-  } catch (e) {
-    console.warn('⚠️ Auto-seed error:', e.message);
-  }
-}
-
-autoSeedOnStartup();
-
-// ══════════════════════════════════════════
-//  Fallback SPA Route
-// ══════════════════════════════════════════
+// Fallback SPA routing
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Liofy Server running on port ${PORT}`);
-});
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));

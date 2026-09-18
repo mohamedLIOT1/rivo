@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Camera, Edit2, Check, X, Music, Heart, Globe, Lock,
-  Eye, EyeOff, Search, User, Calendar, LogOut, ChevronRight, Loader2
+  Eye, EyeOff, Search, User, Calendar, LogOut, ChevronRight, Loader2,
+  MessageSquare, UserPlus, UserCheck, Radio
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
-export default function ProfileScreen({ currentUser, playlists = [], onBack, logout, onSelectPlaylist }) {
+export default function ProfileScreen({ 
+  currentUser, 
+  playlists = [], 
+  onBack, 
+  logout, 
+  onSelectPlaylist,
+  onOpenChat,
+  onStartJamWithUser
+}) {
   const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'search'
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
@@ -145,13 +154,43 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
     }, 500);
   };
 
+  const [followLoading, setFollowLoading] = useState(false);
+
   // ── View another user's profile ──
   const handleViewUserProfile = async (userId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/users/${userId}/profile`);
+      const token = localStorage.getItem('liofy_token');
+      const res = await fetch(`${API_BASE_URL}/api/users/${userId}/profile`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       const data = await res.json();
       if (data.success) setViewingProfile(data.user);
     } catch {}
+  };
+
+  // ── Toggle Follow ──
+  const handleToggleFollow = async () => {
+    if (!viewingProfile || followLoading) return;
+    setFollowLoading(true);
+    const token = localStorage.getItem('liofy_token');
+    const isCurrentlyFollowing = viewingProfile.isFollowing;
+    const endpoint = isCurrentlyFollowing ? 'unfollow' : 'follow';
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users/${viewingProfile.id}/${endpoint}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setViewingProfile(prev => ({
+          ...prev,
+          isFollowing: data.isFollowing,
+          followersCount: data.followersCount
+        }));
+      }
+    } catch {}
+    setFollowLoading(false);
   };
 
   const joinedDate = localUser?.createdAt
@@ -163,6 +202,8 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
 
   // ── Viewing another user's profile ──
   if (viewingProfile) {
+    const isMe = String(viewingProfile.id) === String(currentUser?.id);
+
     return (
       <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#121212' }}>
         <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
@@ -174,7 +215,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
         <div className="flex-1 overflow-y-auto">
           {/* Profile Header */}
           <div className="px-6 py-8 text-center"
-            style={{ background: 'linear-gradient(180deg, #1DB95440 0%, transparent 100%)' }}>
+            style={{ background: 'linear-gradient(180deg, #1DB95430 0%, transparent 100%)' }}>
             <div className="w-28 h-28 rounded-full mx-auto mb-4 overflow-hidden border-4 border-white/20 shadow-2xl bg-zinc-800 flex items-center justify-center">
               {viewingProfile.avatar ? (
                 <img src={viewingProfile.avatar} alt={viewingProfile.name} className="w-full h-full object-cover" />
@@ -186,11 +227,71 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
             {viewingProfile.bio && (
               <p className="text-sm text-zinc-400 mt-2 max-w-xs mx-auto">{viewingProfile.bio}</p>
             )}
-            <div className="flex items-center justify-center gap-4 mt-4">
-              <span className="text-sm text-zinc-400">
-                <span className="text-white font-bold">{viewingProfile.playlistCount}</span> public playlists
-              </span>
+
+            {/* Social Stats */}
+            <div className="flex items-center justify-center gap-6 mt-4">
+              <div className="text-center">
+                <span className="text-white font-extrabold text-base block">{viewingProfile.playlistCount || 0}</span>
+                <span className="text-xs text-zinc-400">Playlists</span>
+              </div>
+              <div className="w-px h-6 bg-white/10" />
+              <div className="text-center">
+                <span className="text-white font-extrabold text-base block">{viewingProfile.followersCount || 0}</span>
+                <span className="text-xs text-zinc-400">Followers</span>
+              </div>
+              <div className="w-px h-6 bg-white/10" />
+              <div className="text-center">
+                <span className="text-white font-extrabold text-base block">{viewingProfile.followingCount || 0}</span>
+                <span className="text-xs text-zinc-400">Following</span>
+              </div>
             </div>
+
+            {/* Actions Bar (Follow, Chat, Jam) */}
+            {!isMe && (
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button
+                  onClick={handleToggleFollow}
+                  disabled={followLoading}
+                  className={`px-5 py-2 rounded-full font-bold text-xs flex items-center gap-2 transition-all active:scale-95 ${
+                    viewingProfile.isFollowing
+                      ? 'border border-zinc-500 text-white hover:border-white'
+                      : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-lg shadow-[#1DB954]/20'
+                  }`}
+                >
+                  {followLoading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : viewingProfile.isFollowing ? (
+                    <>
+                      <UserCheck size={14} />
+                      <span>Following</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={14} />
+                      <span>Follow</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => onOpenChat && onOpenChat(viewingProfile)}
+                  className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center gap-2 transition-all active:scale-95"
+                  title="Direct Message"
+                >
+                  <MessageSquare size={14} />
+                  <span>Message</span>
+                </button>
+
+                <button
+                  onClick={() => onStartJamWithUser && onStartJamWithUser(viewingProfile)}
+                  className="px-4 py-2 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/30 font-bold text-xs flex items-center gap-2 transition-all active:scale-95"
+                  title="Start Jam"
+                >
+                  <Radio size={14} />
+                  <span>Jam</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Public Playlists */}
@@ -470,7 +571,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                 type="text"
                 value={searchQuery}
                 onChange={e => handleSearchChange(e.target.value)}
-                placeholder="Search by name or email..."
+                placeholder="Search users by name..."
                 className="w-full bg-white/10 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954] transition-colors"
                 autoFocus
               />
@@ -490,7 +591,7 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
             ) : searchResults.length === 0 && !isSearching ? (
               <div className="text-center py-16">
                 <User size={48} className="mx-auto mb-3 text-zinc-700" />
-                <p className="text-sm text-zinc-500">No results found</p>
+                <p className="text-sm text-zinc-500">No users found</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -509,8 +610,8 @@ export default function ProfileScreen({ currentUser, playlists = [], onBack, log
                     </div>
                     <div className="flex-1 truncate">
                       <p className="text-sm font-semibold text-white">{user.name}</p>
-                      <p className="text-xs text-zinc-500 truncate">
-                        {user.publicPlaylists?.length || 0} public playlists
+                      <p className="text-xs text-zinc-400 truncate">
+                        {user.followersCount || 0} followers • {user.publicPlaylists?.length || 0} playlists
                         {user.bio ? ` • ${user.bio}` : ''}
                       </p>
                     </div>

@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
-import { Play, Pause, Heart, Download, CheckCircle, Trash2 } from 'lucide-react-native';
+import { Play, Pause, Heart, Download, CheckCircle, Trash2, Plus } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useToast } from '../context/ToastContext';
+import PlaylistPickerModal from './PlaylistPickerModal';
 
-export default React.memo(function SongItem({ track, onPlay }) {
+export default React.memo(function SongItem({ track, onPlay, showDelete = false }) {
   const { currentTrack, isPlaying, isLoading, togglePlay, handleDownloadTrack, handleRemoveDownload, downloadedTracks, downloadingIds } = useAudioPlayer();
-  const { likedTrackIds, toggleLikeTrack } = useUser();
+  const { likedTrackIds, toggleLikeTrack, addToPlaylist } = useUser();
+  const { showToast } = useToast();
+
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   const trackId = track._id || track.id;
   const isCurrent = (currentTrack?._id || currentTrack?.id) === trackId;
@@ -22,7 +27,10 @@ export default React.memo(function SongItem({ track, onPlay }) {
   return (
     <TouchableOpacity 
       style={[styles.container, isCurrent && styles.activeContainer]} 
-      onPress={() => onPlay ? onPlay(track) : null}
+      onPress={() => {
+        if (isCurrent) togglePlay();
+        else if (onPlay) onPlay(track);
+      }}
       activeOpacity={0.7}
     >
       <Image 
@@ -40,8 +48,35 @@ export default React.memo(function SongItem({ track, onPlay }) {
       </View>
 
       <View style={styles.actions}>
+        {/* Delete button (Specific for Offline/Playlists) */}
+        {showDelete && (
+          <TouchableOpacity
+            onPress={() => {
+              handleRemoveDownload(trackId);
+              showToast('Removed from Offline');
+            }}
+            style={styles.iconBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Trash2 size={20} color="#ef4444" />
+          </TouchableOpacity>
+        )}
+
+        {/* Add to Playlist */}
+        <TouchableOpacity
+          onPress={() => setIsPickerVisible(true)}
+          style={styles.iconBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Plus size={20} color="#a1a1aa" />
+        </TouchableOpacity>
+
         {/* Like Button */}
-        <TouchableOpacity onPress={() => toggleLikeTrack(trackId)} style={styles.iconBtn}>
+        <TouchableOpacity
+          onPress={() => toggleLikeTrack(trackId)}
+          style={styles.iconBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Heart size={20} color={isLiked ? '#ef4444' : '#a1a1aa'} fill={isLiked ? '#ef4444' : 'transparent'} />
         </TouchableOpacity>
 
@@ -62,10 +97,8 @@ export default React.memo(function SongItem({ track, onPlay }) {
         )}
 
         {/* Play/Pause / Loading Button */}
-        <TouchableOpacity 
-          onPress={() => isCurrent ? togglePlay() : onPlay(track)} 
+        <View
           style={[styles.playBtn, isCurrent && styles.activePlayBtn]}
-          disabled={isCurrent && isLoading}
         >
           {isCurrent && isLoading ? (
             <ActivityIndicator size="small" color="#000" />
@@ -74,8 +107,14 @@ export default React.memo(function SongItem({ track, onPlay }) {
           ) : (
             <Play size={18} color={isCurrent ? '#000' : '#fff'} style={{ marginLeft: 2 }} />
           )}
-        </TouchableOpacity>
+        </View>
       </View>
+
+      <PlaylistPickerModal
+        visible={isPickerVisible}
+        onClose={() => setIsPickerVisible(false)}
+        onSelect={(plId) => addToPlaylist(plId, trackId)}
+      />
     </TouchableOpacity>
   );
 });

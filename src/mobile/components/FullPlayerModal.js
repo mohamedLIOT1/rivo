@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions, ActivityIndicator, ScrollView, FlatList } from 'react-native';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Download, CheckCircle, ListMusic, AlignLeft } from 'lucide-react-native';
-import { useAudioPlayer } from '../context/AudioContext';
+import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import SongItem from './SongItem';
 
@@ -9,12 +9,11 @@ const { width, height } = Dimensions.get('window');
 
 export default function FullPlayerModal({ visible, onClose }) {
   const audio = useAudioPlayer();
+  const { currentTime, duration } = useAudioProgress();
   const {
     currentTrack,
     isPlaying,
     isLoading,
-    currentTime,
-    duration,
     isShuffle,
     isRepeat,
     togglePlay,

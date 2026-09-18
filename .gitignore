@@ -12,4 +12,6 @@ extracted_apk/
 .expo/
 *.apk
 android/.artifacts/
-
+android/.gradle_home/
+.idea/
+.artifacts/

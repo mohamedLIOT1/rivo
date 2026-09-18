@@ -17,15 +17,15 @@ export const API_BASE_URL = (() => {
       protocol === 'file:' ||
       hostname === 'localhost' && !host.includes('5000')
     ) {
-      return 'https://liofy-production.up.railway.app';
+      return 'http://192.168.42.128:5000';
     }
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:5000';
+      return 'http://192.168.42.128:5000';
     }
     return `${protocol}//${host}`;
   }
 
-  return 'https://liofy-production.up.railway.app';
+  return 'http://192.168.42.128:5000';
 })();
 
 export const getApiUrl = (endpoint) => {

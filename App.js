@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
-import { Home, Search, Library, CloudDownload, User } from 'lucide-react-native';
+import { StyleSheet, View, Text, TouchableOpacity, SafeAreaView, StatusBar, useWindowDimensions, Platform } from 'react-native';
+import { Home, Search, Library, DownloadCloud, User } from 'lucide-react-native';
 import { UserProvider } from './src/mobile/context/UserContext';
 import { AudioProvider } from './src/mobile/context/AudioContext';
+import { ToastProvider } from './src/mobile/context/ToastContext';
 
 import HomeScreen from './src/mobile/screens/HomeScreen';
 import SearchScreen from './src/mobile/screens/SearchScreen';
@@ -16,6 +17,7 @@ import FullPlayerModal from './src/mobile/components/FullPlayerModal';
 function MainNavigator() {
   const [currentTab, setCurrentTab] = useState('home');
   const [isFullPlayerVisible, setIsFullPlayerVisible] = useState(false);
+  const { height } = useWindowDimensions();
 
   const renderScreen = () => {
     switch (currentTab) {
@@ -74,7 +76,7 @@ function MainNavigator() {
           style={styles.tabItem} 
           onPress={() => setCurrentTab('offline')}
         >
-          <CloudDownload size={22} color={currentTab === 'offline' ? '#1DB954' : '#71717a'} />
+          <DownloadCloud size={22} color={currentTab === 'offline' ? '#1DB954' : '#71717a'} />
           <Text style={[styles.tabLabel, currentTab === 'offline' && styles.activeTabLabel]}>Offline</Text>
         </TouchableOpacity>
 
@@ -101,9 +103,11 @@ function MainNavigator() {
 export default function App() {
   return (
     <UserProvider>
-      <AudioProvider>
-        <MainNavigator />
-      </AudioProvider>
+      <ToastProvider>
+        <AudioProvider>
+          <MainNavigator />
+        </AudioProvider>
+      </ToastProvider>
     </UserProvider>
   );
 }
@@ -118,18 +122,16 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    height: 60,
+    height: Platform.OS === 'ios' ? 88 : 64,
     backgroundColor: '#09090b',
     borderTopWidth: 1,
     borderTopColor: '#18181b',
     justifyContent: 'space-around',
     alignItems: 'center',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,

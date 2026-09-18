@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Library, Plus, Heart, User, Trophy } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud } from 'lucide-react';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -9,6 +9,8 @@ export default function Navigation({
   openSettings = () => {},
   openAddSongModal = () => {},
   openAuthModal = () => {},
+  openImportPlaylistModal = () => {},
+  openJamModal = () => {},
   currentUser,
 }) {
   const [libraryFilter, setLibraryFilter] = useState('all');
@@ -65,6 +67,15 @@ export default function Navigation({
               </button>
             );
           })}
+
+          <button
+            onClick={openJamModal}
+            className="sp-nav-link text-cyan-400 hover:text-cyan-300 transition-colors"
+            title="Start or Join Jam Session"
+          >
+            <Radio size={24} className="text-cyan-400 shrink-0" />
+            <span className="font-bold text-cyan-400">Jam Session</span>
+          </button>
         </div>
 
         {/* ── Library Panel ── */}
@@ -87,6 +98,13 @@ export default function Navigation({
             </button>
 
             <div className="flex items-center gap-1">
+              <button
+                onClick={openImportPlaylistModal}
+                title="Import Spotify/YouTube/Apple playlist"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white transition-all cursor-pointer"
+              >
+                <DownloadCloud size={18} />
+              </button>
               <button
                 onClick={openCreatePlaylistModal}
                 title="Create new playlist"
