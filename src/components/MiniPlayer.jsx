@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2, Radio, Sparkles } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2, Radio, Sparkles, Sliders } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 
 export default function MiniPlayer({
@@ -165,6 +165,18 @@ export default function MiniPlayer({
               <Repeat size={16} />
               {isRepeat && (
                 <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
+              )}
+            </button>
+
+            {/* Spotify DJ Mix Toggle */}
+            <button
+              onClick={(e) => { e.stopPropagation(); audio?.setIsMixMode?.(prev => !prev); }}
+              className={`flex transition-all hover:scale-105 active:scale-95 relative ${audio?.isMixMode ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
+              title={audio?.isMixMode ? "Spotify DJ Mix ON (Auto Transitions Active)" : "Turn on Spotify DJ Mix (Auto Transitions)"}
+            >
+              <Sliders size={16} />
+              {audio?.isMixMode && (
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#1DB954] rounded-full shadow-[0_0_6px_#1DB954]" />
               )}
             </button>
           </div>

@@ -3,7 +3,7 @@ import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X
+  Edit3, Check, Search, X, Sliders
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -33,25 +33,22 @@ function extractColorFromImage(src, callback) {
         ctx.drawImage(img, 0, 0, size, size);
         const data = ctx.getImageData(0, 0, size, size).data;
 
-        // Find dominant vibrant color using saturation-weighted approach
         let bestR = 0, bestG = 0, bestB = 0, bestScore = 0;
         const buckets = new Map();
         
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i], g = data[i+1], b = data[i+2];
-          const brightness = (r + g + b) / 3;
-          if (brightness < 30 || brightness > 225) continue; // skip very dark/light
-          
-          // Quantize to reduce color buckets
-          const key = `${Math.round(r/20)*20},${Math.round(g/20)*20},${Math.round(b/20)*20}`;
-          const max = Math.max(r, g, b);
-          const min = Math.min(r, g, b);
-          const saturation = max === 0 ? 0 : (max - min) / max;
-          
+          // Skip very dark or near-white pixels
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          const lum = (max + min) / 2;
+          if (lum < 30 || lum > 225) continue;
+          const sat = max === 0 ? 0 : (max - min) / max;
+          if (sat < 0.25) continue; // Skip greys
+
+          const key = `${Math.round(r/32)*32},${Math.round(g/32)*32},${Math.round(b/32)*32}`;
           const count = (buckets.get(key) || 0) + 1;
           buckets.set(key, count);
-          // Score = count * saturation boost
-          const score = count * (1 + saturation * 2);
+          const score = count * sat;
           if (score > bestScore) {
             bestScore = score;
             bestR = r; bestG = g; bestB = b;
@@ -59,21 +56,15 @@ function extractColorFromImage(src, callback) {
         }
 
         if (bestScore > 0) {
-          // Boost saturation slightly for vibrancy
-          const max = Math.max(bestR, bestG, bestB);
-          if (max > 0) {
-            const factor = Math.min(255 / max, 1.3);
-            bestR = Math.min(255, Math.round(bestR * factor));
-            bestG = Math.min(255, Math.round(bestG * factor));
-            bestB = Math.min(255, Math.round(bestB * factor));
-          }
-          const color = `rgb(${bestR},${bestG},${bestB})`;
+          const color = `rgb(${bestR}, ${bestG}, ${bestB})`;
           colorCache.set(src, color);
           callback(color);
         } else {
           callback(null);
         }
-      } catch { callback(null); }
+      } catch {
+        callback(null);
+      }
     };
     img.onerror = () => callback(null);
     img.src = imgSrc;
@@ -107,10 +98,11 @@ export default function FullPlayerModal({
   openAddToPlaylist,
   onPlayTrack,
   jamSession,
+  onAddToJamQueue,
   onRemoveFromJamQueue
 }) {
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
-  const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration } = useAudioPlayer();
+  const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration, isMixMode, setIsMixMode } = useAudioPlayer();
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
@@ -907,6 +899,21 @@ export default function FullPlayerModal({
               />
               {isRepeat && (
                 <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1DB954] rounded-full" />
+              )}
+            </button>
+
+            {/* Spotify DJ Mix Toggle */}
+            <button 
+              onClick={() => setIsMixMode?.(prev => !prev)} 
+              className="p-2 relative transition-all hover:scale-110"
+              title={isMixMode ? "Spotify DJ Mix ON (Auto Transitions Active)" : "Turn on Spotify DJ Mix (Auto Transitions)"}
+            >
+              <Sliders 
+                size={20} 
+                style={{ color: isMixMode ? '#1DB954' : '#b3b3b3' }}
+              />
+              {isMixMode && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-[#1DB954] rounded-full shadow-[0_0_6px_#1DB954]" />
               )}
             </button>
           </div>

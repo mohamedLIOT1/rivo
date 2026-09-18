@@ -1821,6 +1821,7 @@ app.post('/api/playlists/:id/transitions', auth, async (req, res) => {
 
     if (transitions !== undefined) pl.transitions = transitions;
     if (isMix !== undefined) pl.isMix = Boolean(isMix);
+    user.markModified('playlists');
     await user.save();
 
     res.json({ success: true, transitions: pl.transitions, isMix: pl.isMix });

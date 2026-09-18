@@ -121,13 +121,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!rawQueue || rawQueue.length < 2) return;
 
     const curId = String(cur.id || cur._id || '');
-    const idx = rawQueue.findIndex(t => String(t.id || t._id) === curId);
+    let idx = rawQueue.findIndex(t => String(t.id || t._id) === curId || (t.title && cur.title && t.title.trim().toLowerCase() === cur.title.trim().toLowerCase()));
+    if (idx === -1 && tracksRef.current.length > 1) {
+      idx = tracksRef.current.findIndex(t => String(t.id || t._id) === curId || (t.title && cur.title && t.title.trim().toLowerCase() === cur.title.trim().toLowerCase()));
+    }
     if (idx === -1) return;
 
-    const nextTrack = rawQueue[(idx + 1) % rawQueue.length];
+    const activeQueue = idx < rawQueue.length ? rawQueue : tracksRef.current;
+    const nextTrack = activeQueue[(idx + 1) % activeQueue.length];
     const pairKey = `${curId}___${String(nextTrack.id || nextTrack._id || '')}`;
     const trans = activeTransRef.current[pairKey] || { style: 'equal_power', duration: 7 };
-    const transDuration = Math.min(15, Math.max(3, Number(trans.duration) || 7));
+    const transDuration = Math.min(20, Math.max(2, Number(trans.duration) || 7));
 
     // Handle smooth track fade-in on start (first 3 seconds)
     if (cTime < 3) {
@@ -1005,6 +1009,38 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setEqBands(b);
   };
 
+  // ── Spotify Mix: Audition Transition in Real Time ───────────────
+  const previewDjTransition = useCallback(async (tA, tB, transConfig = null) => {
+    if (!tA) return;
+    resumeAudioContext();
+    setIsMixMode(true);
+    isMixModeRef.current = true;
+    isTransitionTriggeredRef.current = false;
+
+    const dur = Math.min(20, Math.max(2, Number(transConfig?.duration) || 8));
+    const style = transConfig?.style || 'equal_power';
+    const pairKey = `${String(tA.id || tA._id)}___${String(tB?.id || tB?._id || '')}`;
+
+    const nextTrans = {
+      ...activeTransRef.current,
+      [pairKey]: { style, duration: dur, autoMatchBpm: true }
+    };
+    setActiveTransitions(nextTrans);
+    activeTransRef.current = nextTrans;
+
+    const queue = tB ? [tA, tB] : [tA];
+    setCurrentQueue(queue);
+    currentQueueRef.current = queue;
+
+    await playTrack(tA, queue);
+
+    setTimeout(() => {
+      const audioDur = audioRef.current?.duration || ytPlayerRef.current?.getDuration?.() || tA.duration || 180;
+      const startTime = Math.max(0, audioDur - dur - 2.5);
+      seekTo(startTime);
+    }, 450);
+  }, [playTrack, seekTo]);
+
   const value = {
     currentTrack, setCurrentTrack,
     currentQueue, setCurrentQueue,
@@ -1018,6 +1054,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isYtTrack,
     isMixMode, setIsMixMode,
     activeTransitions, setActiveTransitions,
+    previewDjTransition,
     eqEnabled, setEqEnabled,
     eqPreset, setEqPreset,
     eqBands, setEqBands,

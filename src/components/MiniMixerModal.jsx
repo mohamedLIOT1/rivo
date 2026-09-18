@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Sliders, Volume2, Wand2, Play, Check, Sparkles, Activity, Music2, ArrowRight } from 'lucide-react';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
+import { useAudioPlayer } from '../context/AudioContext';
 
 const TRANSITION_STYLES = [
   {
@@ -41,6 +42,7 @@ export default function MiniMixerModal({
   initialTransition = null,
   onSaveTransition
 }) {
+  const { previewDjTransition, setIsMixMode } = useAudioPlayer();
   const [style, setStyle] = useState(initialTransition?.style || 'equal_power');
   const [duration, setDuration] = useState(initialTransition?.duration || 8);
   const [autoMatchBpm, setAutoMatchBpm] = useState(initialTransition?.autoMatchBpm !== false);
@@ -75,8 +77,14 @@ export default function MiniMixerModal({
     if (isPreviewing) return;
     setIsPreviewing(true);
     setPreviewProgress(0);
+
+    // Play actual audio transition through AudioContext!
+    if (previewDjTransition) {
+      previewDjTransition(trackA, trackB, { style, duration, autoMatchBpm });
+    }
+
     const start = Date.now();
-    const totalMs = duration * 1000;
+    const totalMs = (duration + 3) * 1000;
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;
       const prog = Math.min(1, elapsed / totalMs);
@@ -92,6 +100,7 @@ export default function MiniMixerModal({
   };
 
   const handleSave = () => {
+    setIsMixMode?.(true);
     onSaveTransition({
       style,
       duration,

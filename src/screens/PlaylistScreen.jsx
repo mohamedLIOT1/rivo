@@ -59,10 +59,18 @@ export default function PlaylistScreen({
     if (playlist) {
       setEditName(playlist.name || '');
       setEditDesc(playlist.description || '');
-      setIsMixActive(Boolean(playlist.isMix));
-      setTransitions(playlist.transitions || {});
+      const mixOn = Boolean(playlist.isMix);
+      setIsMixActive(mixOn);
+      if (mixOn) {
+        setIsMixMode?.(true);
+      }
+      const t = playlist.transitions || {};
+      setTransitions(t);
+      if (Object.keys(t).length > 0) {
+        setActiveTransitions?.(t);
+      }
     }
-  }, [playlist?.id]);
+  }, [playlist?.id, playlist?.isMix]);
 
   const playlistTrackIds = (playlist?.trackIds || []).map(String);
 
@@ -198,6 +206,8 @@ export default function PlaylistScreen({
     const updated = { ...transitions, [pairKey]: settings };
     setTransitions(updated);
     setActiveTransitions?.(updated);
+    setIsMixActive(true);
+    setIsMixMode?.(true);
 
     try {
       const token = localStorage.getItem('liofy_token');
@@ -207,7 +217,7 @@ export default function PlaylistScreen({
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ isMix: isMixActive, transitions: updated })
+        body: JSON.stringify({ isMix: true, transitions: updated })
       });
     } catch {}
   };
