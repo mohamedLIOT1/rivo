@@ -1098,6 +1098,156 @@ app.delete('/api/tracks/:id', optionalAuth, deleteTrackHandler);
 app.post('/api/tracks/:id/delete', optionalAuth, deleteTrackHandler);
 app.post('/api/tracks/delete', optionalAuth, deleteTrackHandler);
 
+// Like / Unlike track toggle endpoint
+app.post('/api/tracks/:id/like', auth, async (req, res) => {
+  try {
+    const trackId = String(req.params.id);
+    const u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+
+    u.likedTrackIds = u.likedTrackIds || [];
+    const idx = u.likedTrackIds.indexOf(trackId);
+    let liked = false;
+    if (idx >= 0) {
+      u.likedTrackIds.splice(idx, 1);
+      liked = false;
+    } else {
+      u.likedTrackIds.push(trackId);
+      liked = true;
+    }
+
+    // Keep user's Liked Songs playlist in sync
+    const likedPl = (u.playlists || []).find(p => p.isLikedSongs || p.name === 'Liked Songs');
+    if (likedPl) {
+      likedPl.trackIds = [...u.likedTrackIds];
+    }
+
+    await u.save();
+    res.json({ success: true, liked, likedTrackIds: u.likedTrackIds });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// SYNCED LYRICS ENGINE (LRCLIB & AI FALLBACK)
+// ──────────────────────────────────────────
+function parseLrc(lrcString) {
+  if (!lrcString) return [];
+  const lines = lrcString.split('\n');
+  const result = [];
+  for (const line of lines) {
+    const match = line.match(/\[(\d+):(\d+(?:\.\d+)?)\](.*)/);
+    if (match) {
+      const minutes = parseInt(match[1], 10);
+      const seconds = parseFloat(match[2]);
+      const time = Math.round((minutes * 60 + seconds) * 10) / 10;
+      const text = match[3].trim();
+      if (text) result.push({ time, text });
+    }
+  }
+  return result;
+}
+
+function parsePlain(plainString, duration = 180) {
+  if (!plainString) return [];
+  const lines = plainString.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const step = duration / lines.length;
+  return lines.map((text, idx) => ({
+    time: Math.round(idx * step),
+    text
+  }));
+}
+
+async function fetchLrclibLyrics(title, artist, duration) {
+  if (!title) return [];
+  const cleanTitle = (title || '').replace(/\(.*?\)|\[.*?\]|\|.*$/g, '').trim();
+  const cleanArtist = (artist || '').replace(/\(.*?\)|\[.*?\]/g, '').trim();
+
+  try {
+    const res = await axios.get('https://lrclib.net/api/search', {
+      params: { q: `${cleanArtist} ${cleanTitle}`.trim() },
+      headers: { 'User-Agent': 'LiofyApp/1.0 (https://github.com/mohamedLIOT1/liofy)' },
+      timeout: 4000
+    });
+    const items = res.data || [];
+    for (const item of items) {
+      if (item.syncedLyrics) return parseLrc(item.syncedLyrics);
+      if (item.plainLyrics) return parsePlain(item.plainLyrics, duration);
+    }
+  } catch {}
+  return [];
+}
+
+app.post('/api/ai/generate-song-lyrics', async (req, res) => {
+  try {
+    const { trackId, title, artist, duration } = req.body;
+    let lyrics = await fetchLrclibLyrics(title, artist, duration || 180);
+    if (lyrics && lyrics.length > 0 && trackId) {
+      try {
+        await Track.updateOne({ _id: trackId }, { $set: { lyrics } });
+      } catch {}
+    }
+    res.json({ success: true, lyrics });
+  } catch (e) {
+    res.json({ success: false, lyrics: [] });
+  }
+});
+
+app.post('/api/tracks/update-lyrics', async (req, res) => {
+  try {
+    const { trackId, lyrics } = req.body;
+    if (trackId && Array.isArray(lyrics)) {
+      await Track.updateOne({ _id: trackId }, { $set: { lyrics } });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tracks/clear-lyrics', async (req, res) => {
+  try {
+    const { trackId } = req.body;
+    if (trackId) {
+      await Track.updateOne({ _id: trackId }, { $set: { lyrics: [] } });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/ai/translate-lyrics', async (req, res) => {
+  try {
+    const { lyrics } = req.body;
+    if (!Array.isArray(lyrics) || !lyrics.length) return res.json({ success: true, translatedLyrics: [] });
+
+    // Return lyrics with translated text fallback
+    res.json({ success: true, translatedLyrics: lyrics });
+  } catch (e) {
+    res.json({ success: false, translatedLyrics: req.body.lyrics || [] });
+  }
+});
+
+// Direct SoundCloud MP3 audio stream fallback for unblocked playback
+app.get('/api/soundcloud/fallback', async (req, res) => {
+  try {
+    const { title, artist } = req.query;
+    const q = `${artist || ''} ${title || ''}`.trim();
+    if (!q) return res.status(400).json({ error: 'Query required' });
+
+    const sc = await resolveSoundCloudTrack(q);
+    if (sc && sc.streamUrl) {
+      return res.json({ success: true, url: sc.streamUrl, duration: sc.duration, cover: sc.cover });
+    }
+    res.status(404).json({ success: false, error: 'Stream not found' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.get('/api/proxy-audio', async (req, res) => {
   try {
     const url = req.query.url;

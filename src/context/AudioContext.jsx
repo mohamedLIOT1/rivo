@@ -167,7 +167,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     const div = document.createElement('div');
     div.id = 'liofy-yt-player';
-    div.style.cssText = 'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-1;';
+    div.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1;';
     document.body.appendChild(div);
     ytContainerRef.current = div;
 
@@ -219,8 +219,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           },
           onError: (event) => {
             console.warn('[YT] Player error:', event.data);
-            // Try to play next track on error
-            setTimeout(() => playNextTrack(), 1000);
+            const cur = currentTrackRef.current;
+            if (cur) fallbackToHtmlAudio(cur);
           },
         },
       });
@@ -230,6 +230,34 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
       if (div.parentNode) div.parentNode.removeChild(div);
     };
+  }, []);
+
+  const fallbackToHtmlAudio = useCallback(async (track) => {
+    if (!track) return;
+    isYtTrackRef.current = false;
+    setIsYtTrack(false);
+    if (ytPlayerRef.current && isYtReadyRef.current) {
+      try { ytPlayerRef.current.stopVideo(); } catch {}
+    }
+    if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+
+    try {
+      const qTitle = encodeURIComponent(track.title || '');
+      const qArtist = encodeURIComponent(track.artist || '');
+      const res = await fetch(`${API_BASE_URL}/api/soundcloud/fallback?title=${qTitle}&artist=${qArtist}`);
+      const d = await res.json();
+      if (d.success && d.url && audioRef.current) {
+        audioRef.current.src = d.url;
+        audioRef.current.volume = volumeRef.current;
+        resumeAudioContext();
+        await audioRef.current.play();
+        setIsPlaying(true);
+        if (d.duration) setDuration(d.duration);
+        if (d.cover) setCurrentTrack(prev => prev ? { ...prev, cover: d.cover } : prev);
+      }
+    } catch (err) {
+      console.warn('Fallback play error:', err);
+    }
   }, []);
 
   // EQ sync
@@ -281,25 +309,40 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentTime(0);
       setDuration(currentTrack.duration || 210);
 
+      let watchdog = null;
       const loadYt = () => {
         if (!ytPlayerRef.current || !isYtReadyRef.current) {
-          setTimeout(loadYt, 300);
+          setTimeout(loadYt, 200);
           return;
         }
         try {
           ytPlayerRef.current.loadVideoById(ytId);
-          if (isPlaying || shouldPlayRef.current) {
-            shouldPlayRef.current = false;
-            ytPlayerRef.current.playVideo();
-          } else {
-            ytPlayerRef.current.pauseVideo();
-          }
           ytPlayerRef.current.setVolume(volumeRef.current * 100);
+          ytPlayerRef.current.playVideo();
+          setIsPlaying(true);
         } catch (e) {
           console.warn('[YT] loadVideoById error:', e);
+          fallbackToHtmlAudio(currentTrack);
         }
       };
       loadYt();
+
+      // Watchdog: If playback doesn't start in 3s (error 150, blocked by autoplay), fallback
+      watchdog = setTimeout(() => {
+        if (isYtTrackRef.current && ytPlayerRef.current) {
+          try {
+            const state = ytPlayerRef.current.getPlayerState();
+            if (state !== 1 && state !== 3) {
+              console.warn('[YT] Watchdog: YouTube not playing, falling back to audio stream');
+              fallbackToHtmlAudio(currentTrack);
+            }
+          } catch {}
+        }
+      }, 3000);
+
+      return () => {
+        if (watchdog) clearTimeout(watchdog);
+      };
 
     } else {
       // ── Regular audio (Upload / Downloaded Blob / SoundCloud) ─

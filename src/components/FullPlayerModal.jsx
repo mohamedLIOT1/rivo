@@ -219,7 +219,33 @@ export default function FullPlayerModal({
     setLocalLyrics(null);
     setTranslatedLyrics(null);
     setShowTranslation(false);
-  }, [currentTrack?.id]);
+
+    if (currentTrack && (!currentTrack.lyrics || currentTrack.lyrics.length === 0)) {
+      const qTitle = currentTrack.title;
+      const qArtist = currentTrack.artist;
+      const tId = currentTrack.id || currentTrack._id;
+      if (qTitle) {
+        fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackId: tId,
+            title: qTitle,
+            artist: qArtist,
+            duration: currentTrack.duration || 180,
+          })
+        })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
+            setLocalLyrics(d.lyrics);
+            currentTrack.lyrics = d.lyrics;
+          }
+        })
+        .catch(() => {});
+      }
+    }
+  }, [currentTrack?.id, currentTrack?._id]);
 
   const rawLyrics = localLyrics || (currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : []);
   const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;

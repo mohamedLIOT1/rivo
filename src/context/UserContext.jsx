@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getOfflineTracks } from '../utils/offlineStorage';
+import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
 
 const API = (() => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
@@ -216,7 +216,6 @@ export function UserProvider({ children }) {
     })));
 
     try {
-      const { removeTrackOffline } = await import('../utils/offlineStorage');
       await removeTrackOffline(cleanId);
     } catch {}
 
