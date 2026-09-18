@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { initAudioEngine, setEqualizerBands, setMasterVolume, resumeAudioContext, calculateCrossfadeGains } from '../utils/audioEngine';
+import { initAudioEngine, setEqualizerBands, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { API_BASE_URL } from '../config';
 
@@ -156,6 +156,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const audioRef = useRef(null);
   const secondaryAudioRef = useRef(null);
   const transitionActiveTrackIdRef = useRef(null);
+  const activeWebAudioMixRef = useRef(null);
 
   // ── YouTube IFrame Player ────────────────────────────────────────
   const ytPlayerRef       = useRef(null);   // YT.Player instance
@@ -166,7 +167,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // ── Spotify Mix: Real Audio DJ Transition Execution Engine ───────
   const checkAndRunDjTransition = useCallback((cTime, dur) => {
-    if (!isMixModeRef.current || !dur || dur <= 8 || isNaN(cTime)) return;
+    if (!dur || isNaN(cTime)) return;
 
     const remaining = dur - cTime;
     const cur = currentTrackRef.current;
@@ -186,8 +187,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const nextTrack = activeQueue[(idx + 1) % activeQueue.length];
     const nextId = String(nextTrack.id || nextTrack._id || '');
     const pairKey = `${curId}___${nextId}`;
-    const trans = activeTransRef.current[pairKey] || { style: 'equal_power', duration: 7 };
-    const transDuration = Math.min(20, Math.max(2, Number(trans.duration) || 7));
+
+    const customTrans = activeTransRef.current[pairKey];
+    const isMixEnabled = isMixModeRef.current || Boolean(customTrans) || Object.keys(activeTransRef.current).length > 0;
+    if (!isMixEnabled) return;
+
+    const trans = customTrans || { style: 'equal_power', duration: 8 };
+    const transDuration = Math.min(30, Math.max(2, Number(trans.duration) || 8));
 
     // Handle smooth track fade-in on start (first 3 seconds)
     if (cTime < 3 && !transitionActiveTrackIdRef.current) {
@@ -215,23 +221,45 @@ export function AudioProvider({ children, tracks, setTracks }) {
         try { ytPlayerRef.current.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
       }
 
-      // Preload & start secondary deck fading in simultaneously
+      // Preload & start secondary deck using Web Audio API buffer node to avoid autoplay blocks
       if (transitionActiveTrackIdRef.current !== nextId) {
         transitionActiveTrackIdRef.current = nextId;
-        resolveTrackAudioUrl(nextTrack).then(resolved => {
+        resolveTrackAudioUrl(nextTrack).then(async resolved => {
           if (!resolved?.url) return;
-          if (!secondaryAudioRef.current) {
-            secondaryAudioRef.current = new Audio();
+          const ctx = getAudioContext();
+          if (ctx) {
+            resumeAudioContext();
+            try {
+              const res = await fetch(resolved.url);
+              const ab = await res.arrayBuffer();
+              const buf = await ctx.decodeAudioData(ab);
+              const src = ctx.createBufferSource();
+              src.buffer = buf;
+              const g = ctx.createGain();
+              g.gain.setValueAtTime(0, ctx.currentTime);
+              src.connect(g).connect(ctx.destination);
+              src.start(0);
+              activeWebAudioMixRef.current = { source: src, gainNode: g, stop: () => { try { src.stop(); } catch {} } };
+            } catch {
+              if (!secondaryAudioRef.current) secondaryAudioRef.current = new Audio();
+              const sec = secondaryAudioRef.current;
+              sec.src = resolved.url;
+              sec.volume = 0;
+              sec.currentTime = 0;
+              sec.play().catch(() => {});
+            }
           }
-          const sec = secondaryAudioRef.current;
-          sec.src = resolved.url;
-          sec.volume = 0;
-          sec.currentTime = 0;
-          sec.play().catch(() => {});
         });
       }
 
-      if (secondaryAudioRef.current) {
+      // Update volume on whichever secondary player is running
+      if (activeWebAudioMixRef.current?.gainNode) {
+        const ctx = getAudioContext();
+        if (ctx) {
+          activeWebAudioMixRef.current.gainNode.gain.cancelScheduledValues(ctx.currentTime);
+          activeWebAudioMixRef.current.gainNode.gain.setValueAtTime(targetVolB, ctx.currentTime);
+        }
+      } else if (secondaryAudioRef.current) {
         secondaryAudioRef.current.volume = Math.max(0, Math.min(1, targetVolB));
       }
 
@@ -247,6 +275,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Normal playback volume restored outside transition window
       if (!isYtTrackRef.current && audioRef.current && Math.abs(audioRef.current.volume - volumeRef.current) > 0.05) {
         audioRef.current.volume = volumeRef.current;
+      }
+      if (activeWebAudioMixRef.current) {
+        activeWebAudioMixRef.current.stop();
+        activeWebAudioMixRef.current = null;
       }
       if (secondaryAudioRef.current && transitionActiveTrackIdRef.current) {
         secondaryAudioRef.current.pause();
@@ -810,6 +842,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!track) return;
     isTransitionTriggeredRef.current = false;
     transitionActiveTrackIdRef.current = null;
+    if (activeWebAudioMixRef.current) {
+      activeWebAudioMixRef.current.stop();
+      activeWebAudioMixRef.current = null;
+    }
     if (secondaryAudioRef.current) {
       secondaryAudioRef.current.pause();
       secondaryAudioRef.current.removeAttribute('src');
@@ -1123,16 +1159,25 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // ── Spotify Mix: Audition Transition in Real Time ───────────────
   const previewDjTransition = useCallback(async (tA, tB, transConfig = null) => {
-    if (!tA) return;
+    if (!tA || !tB) return;
     resumeAudioContext();
     setIsMixMode(true);
     isMixModeRef.current = true;
     isTransitionTriggeredRef.current = false;
     transitionActiveTrackIdRef.current = null;
 
-    const dur = Math.min(20, Math.max(2, Number(transConfig?.duration) || 8));
+    if (audioRef.current) audioRef.current.pause();
+    if (ytPlayerRef.current) {
+      try { ytPlayerRef.current.pauseVideo(); } catch {}
+    }
+    if (activeWebAudioMixRef.current) {
+      activeWebAudioMixRef.current.stop();
+      activeWebAudioMixRef.current = null;
+    }
+
+    const dur = Math.min(30, Math.max(2, Number(transConfig?.duration) || 16));
     const style = transConfig?.style || 'equal_power';
-    const pairKey = `${String(tA.id || tA._id)}___${String(tB?.id || tB?._id || '')}`;
+    const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
 
     const nextTrans = {
       ...activeTransRef.current,
@@ -1141,18 +1186,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setActiveTransitions(nextTrans);
     activeTransRef.current = nextTrans;
 
-    const queue = tB ? [tA, tB] : [tA];
-    setCurrentQueue(queue);
-    currentQueueRef.current = queue;
+    const [resA, resB] = await Promise.all([
+      resolveTrackAudioUrl(tA),
+      resolveTrackAudioUrl(tB)
+    ]);
 
-    await playTrack(tA, queue);
+    if (!resA?.url || !resB?.url) return;
 
-    setTimeout(() => {
-      const audioDur = audioRef.current?.duration || ytPlayerRef.current?.getDuration?.() || tA.duration || 180;
-      const startTime = Math.max(0, audioDur - dur - 2.5);
-      seekTo(startTime);
-    }, 450);
-  }, [playTrack, seekTo]);
+    const mix = await playTrueSpotifyMix({
+      songUrl1: resA.url,
+      songUrl2: resB.url,
+      transitionDuration: dur,
+      style,
+      previewOnly: true,
+      onEnd: () => {
+        activeWebAudioMixRef.current = null;
+      }
+    });
+
+    activeWebAudioMixRef.current = mix;
+  }, []);
 
   const value = {
     currentTrack, setCurrentTrack,

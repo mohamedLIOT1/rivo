@@ -402,6 +402,16 @@ function AppContent() {
     }
   }, [socket, jamSession, setJamSync]);
 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (jamSession?.code && socket) {
+        socket.emit('jam:leave_room', { roomCode: jamSession.code });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [jamSession?.code, socket]);
+
   const handleStartJam = () => {
     resumeAudioContext();
     const code = `JAM-${Math.floor(1000 + Math.random() * 9000)}`;

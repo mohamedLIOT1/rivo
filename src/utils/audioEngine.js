@@ -161,3 +161,139 @@ export function setMasterVolume(volume) {
 export function isAudioEngineReady() {
   return isInitialized;
 }
+
+export function getAudioContext() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      audioCtx = new AudioContextClass();
+    }
+  }
+  return audioCtx;
+}
+
+/**
+ * True Spotify Mix Web Audio API Engine
+ * Dual-buffer overlapping player with Equal Power crossfade curves,
+ * dynamic BiquadFilter sweeps (High-pass bass cutoff on A, Low-pass open on B),
+ * running on the sample-accurate hardware audio clock.
+ */
+export async function playTrueSpotifyMix({
+  songUrl1,
+  songUrl2,
+  transitionDuration = 16,
+  style = 'equal_power',
+  previewOnly = false,
+  startOffsetA = null,
+  onEnd = null
+}) {
+  const ctx = getAudioContext();
+  if (!ctx) return null;
+  resumeAudioContext();
+
+  try {
+    const [res1, res2] = await Promise.all([
+      fetch(songUrl1),
+      fetch(songUrl2)
+    ]);
+    const [ab1, ab2] = await Promise.all([
+      res1.arrayBuffer(),
+      res2.arrayBuffer()
+    ]);
+    const [buffer1, buffer2] = await Promise.all([
+      ctx.decodeAudioData(ab1),
+      ctx.decodeAudioData(ab2)
+    ]);
+
+    const duration1 = buffer1.duration;
+    const transDur = Math.min(Math.max(2, Number(transitionDuration) || 16), duration1 - 1);
+    const transitionStartTime = Math.max(0, duration1 - transDur);
+
+    // If previewing, start 3.5 seconds before transition so user immediately hears the mix!
+    const offsetA = (startOffsetA !== null && startOffsetA !== undefined)
+      ? Math.max(0, startOffsetA)
+      : (previewOnly ? Math.max(0, transitionStartTime - 3.5) : 0);
+
+    const now = ctx.currentTime;
+    const playerAStartTime = now;
+    const remainingUntilTrans = Math.max(0, transitionStartTime - offsetA);
+    const transStartCtxTime = playerAStartTime + remainingUntilTrans;
+    const transEndCtxTime = transStartCtxTime + transDur;
+
+    // ── Player A: Source + Filter + Gain ──
+    const playerA = ctx.createBufferSource();
+    playerA.buffer = buffer1;
+
+    const filterA = ctx.createBiquadFilter();
+    filterA.type = (style === 'bass_swap' || style === 'high_pass') ? 'highpass' : 'allpass';
+    filterA.frequency.setValueAtTime(20, now);
+
+    const gainA = ctx.createGain();
+    gainA.gain.setValueAtTime(1, now);
+
+    playerA.connect(filterA).connect(gainA).connect(ctx.destination);
+
+    // ── Player B: Source + Filter + Gain ──
+    const playerB = ctx.createBufferSource();
+    playerB.buffer = buffer2;
+
+    const filterB = ctx.createBiquadFilter();
+    filterB.type = (style === 'bass_swap' || style === 'low_pass') ? 'lowpass' : 'allpass';
+    filterB.frequency.setValueAtTime(style === 'low_pass' ? 300 : 20000, now);
+
+    const gainB = ctx.createGain();
+    gainB.gain.setValueAtTime(0, now);
+
+    playerB.connect(filterB).connect(gainB).connect(ctx.destination);
+
+    // ── Equal Power Volume Curves ──
+    const steps = 30;
+    const curveA = new Float32Array(steps);
+    const curveB = new Float32Array(steps);
+    for (let i = 0; i < steps; i++) {
+      const p = i / (steps - 1);
+      const { gainA: gA, gainB: gB } = calculateCrossfadeGains(p, style);
+      curveA[i] = gA;
+      curveB[i] = gB;
+    }
+
+    gainA.gain.setValueCurveAtTime(curveA, transStartCtxTime, transDur);
+    gainB.gain.setValueCurveAtTime(curveB, transStartCtxTime, transDur);
+
+    // ── Filter Automation ──
+    if (style === 'bass_swap' || style === 'high_pass') {
+      filterA.frequency.setValueAtTime(20, transStartCtxTime);
+      filterA.frequency.linearRampToValueAtTime(1000, transEndCtxTime);
+      filterB.frequency.setValueAtTime(20000, transStartCtxTime);
+    } else if (style === 'low_pass') {
+      filterB.frequency.setValueAtTime(300, transStartCtxTime);
+      filterB.frequency.linearRampToValueAtTime(20000, transEndCtxTime);
+    }
+
+    // ── Audio Clock Launch ──
+    playerA.start(playerAStartTime, offsetA);
+    playerB.start(transStartCtxTime, 0);
+
+    const timeoutMs = (remainingUntilTrans + transDur + (previewOnly ? 3.5 : buffer2.duration)) * 1000;
+    const endTimer = setTimeout(() => {
+      onEnd?.();
+    }, timeoutMs);
+
+    return {
+      playerA,
+      playerB,
+      gainA,
+      gainB,
+      stop: () => {
+        clearTimeout(endTimer);
+        try { playerA.stop(); } catch {}
+        try { playerB.stop(); } catch {}
+        try { playerA.disconnect(); } catch {}
+        try { playerB.disconnect(); } catch {}
+      }
+    };
+  } catch (err) {
+    console.warn('[SpotifyMix] Engine playback error:', err);
+    return null;
+  }
+}
