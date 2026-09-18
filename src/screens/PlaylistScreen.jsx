@@ -10,6 +10,7 @@ export default function PlaylistScreen({
   onBack,
   onAddTrackToPlaylist,
   onRemoveTrackFromPlaylist,
+  onDeleteTrack,
   onUpdatePlaylist = () => {},
   onDeletePlaylist = () => {},
   onTogglePlaylistVisibility = () => {},
@@ -36,7 +37,10 @@ export default function PlaylistScreen({
 
   // Dynamically fetch any tracks in playlist that are missing from global tracks state
   useEffect(() => {
-    if (!playlist || !playlist.trackIds || playlist.trackIds.length === 0) return;
+    if (!playlist || !playlist.trackIds || playlist.trackIds.length === 0) {
+      setFetchedTracks([]);
+      return;
+    }
     const knownIds = new Set(tracks.map(t => String(t.id || t._id)));
     const missing = playlist.trackIds.map(String).filter(id => !knownIds.has(id));
 
@@ -53,8 +57,10 @@ export default function PlaylistScreen({
         }
       })
       .catch(() => {});
+    } else {
+      setFetchedTracks(prev => prev.filter(t => playlist.trackIds.map(String).includes(String(t.id || t._id))));
     }
-  }, [playlist?.id, playlist?.trackIds, tracks.length]);
+  }, [playlist?.id, JSON.stringify(playlist?.trackIds || []), tracks.length]);
 
   if (!playlist) return null;
 
@@ -366,9 +372,10 @@ export default function PlaylistScreen({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleLike(track.id);
+                        toggleLike(track.id || track._id);
                       }}
                       className="p-1.5 text-zinc-400 hover:text-white"
+                      title="Like / Unlike"
                     >
                       <Heart size={16} className={track.liked ? 'fill-white text-white' : ''} />
                     </button>
@@ -376,12 +383,26 @@ export default function PlaylistScreen({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onRemoveTrackFromPlaylist(track.id, playlist.id);
+                          onRemoveTrackFromPlaylist(track.id || track._id, playlist.id);
                         }}
-                        className="p-1.5 text-zinc-400 hover:text-red-400 rounded-full hover:bg-zinc-800"
+                        className="p-1.5 text-zinc-400 hover:text-amber-400 rounded-full hover:bg-zinc-800"
                         title="Remove from playlist"
                       >
                         <Minus size={16} />
+                      </button>
+                    )}
+                    {onDeleteTrack && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete "${track.title}" permanently?`)) {
+                            onDeleteTrack(track.id || track._id);
+                          }
+                        }}
+                        className="p-1.5 text-zinc-400 hover:text-red-400 rounded-full hover:bg-zinc-800"
+                        title="Delete song permanently"
+                      >
+                        <Trash2 size={16} />
                       </button>
                     )}
                   </div>

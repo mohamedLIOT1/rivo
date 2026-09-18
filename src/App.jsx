@@ -142,14 +142,26 @@ function AppContent() {
 
   const handleDeleteTrack = async (trackId) => {
     if (!trackId) return;
-    setTracks(prev => prev.filter(t => String(t.id || t._id) !== String(trackId)));
-    if (currentTrack && String(currentTrack.id || currentTrack._id) === String(trackId)) {
+    const cleanId = String(trackId);
+    setTracks(prev => prev.filter(t => String(t.id || t._id) !== cleanId));
+    setPlaylists(prev => prev.map(pl => ({
+      ...pl,
+      trackIds: (pl.trackIds || []).filter(id => String(id) !== cleanId)
+    })));
+    setSelectedPlaylist(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        trackIds: (prev.trackIds || []).filter(id => String(id) !== cleanId)
+      };
+    });
+    if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
       setIsPlaying(false);
       setCurrentTrack(null);
     }
     try {
       const token = localStorage.getItem('liofy_token');
-      await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}`, {
+      await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(cleanId)}`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -259,18 +271,24 @@ function AppContent() {
   };
 
   const handleRemoveTrackFromPlaylist = async (trackId, playlistId) => {
+    const targetId = String(trackId);
     setPlaylists(prev => prev.map(pl => {
-      if (pl.id !== playlistId) return pl;
-      return { ...pl, trackIds: (pl.trackIds || []).filter(id => id !== trackId) };
+      if (String(pl.id) !== String(playlistId)) return pl;
+      return { ...pl, trackIds: (pl.trackIds || []).filter(id => String(id) !== targetId) };
     }));
+
+    setSelectedPlaylist(prev => {
+      if (!prev || String(prev.id) !== String(playlistId)) return prev;
+      return { ...prev, trackIds: (prev.trackIds || []).filter(id => String(id) !== targetId) };
+    });
 
     try {
       const token = localStorage.getItem('liofy_token');
       if (token) {
-        await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/remove-track`, {
+        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(playlistId)}/remove-track`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ trackId }),
+          body: JSON.stringify({ trackId: targetId }),
         });
       }
     } catch {}
@@ -499,7 +517,7 @@ function AppContent() {
 
         {currentScreen === 'playlist' && selectedPlaylist && (
           <PlaylistScreen
-            playlist={playlists.find(p => p.id === selectedPlaylist.id) || selectedPlaylist}
+            playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || selectedPlaylist}
             tracks={tracks}
             onSelectTrack={playTrack}
             toggleLike={toggleLike}
@@ -507,6 +525,7 @@ function AppContent() {
             onBack={() => setCurrentScreen('library')}
             onAddTrackToPlaylist={handleAddTrackToPlaylist}
             onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
+            onDeleteTrack={handleDeleteTrack}
             onUpdatePlaylist={handleUpdatePlaylist}
             onDeletePlaylist={handleDeletePlaylist}
             onTogglePlaylistVisibility={handleTogglePlaylistVisibility}

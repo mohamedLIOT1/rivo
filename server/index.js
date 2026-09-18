@@ -957,20 +957,42 @@ app.post('/api/playlists/create', auth, async (req, res) => {
 app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
-    const pl = u.playlists.find(p => p.id === req.params.id);
+    const pl = u.playlists.find(p => String(p.id) === String(req.params.id));
     if (!pl) return res.status(404).json({ error: 'Playlist not found' });
-    if (!pl.trackIds.includes(req.body.trackId)) pl.trackIds.push(req.body.trackId);
+    const trackIdStr = String(req.body.trackId);
+    if (!pl.trackIds.map(String).includes(trackIdStr)) {
+      pl.trackIds.push(trackIdStr);
+    }
     await u.save();
-    res.json({ success: true });
+    res.json({ success: true, trackIds: pl.trackIds });
   } catch (e) {
-    res.status(500).end();
+    res.status(500).json({ error: e.message });
   }
 });
+
+// Remove track from playlist
+const removeTrackFromPlaylistHandler = async (req, res) => {
+  try {
+    const u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    const pl = u.playlists.find(p => String(p.id) === String(req.params.id));
+    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    const trackIdStr = String(req.body.trackId || req.params.trackId || '');
+    if (!trackIdStr) return res.status(400).json({ error: 'trackId required' });
+    pl.trackIds = (pl.trackIds || []).filter(id => String(id) !== trackIdStr);
+    await u.save();
+    res.json({ success: true, trackIds: pl.trackIds });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+app.post('/api/playlists/:id/remove-track', auth, removeTrackFromPlaylistHandler);
+app.delete('/api/playlists/:id/tracks/:trackId', auth, removeTrackFromPlaylistHandler);
 
 app.post('/api/playlists/:id/update', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
-    const pl = u.playlists.find(p => p.id === req.params.id);
+    const pl = u.playlists.find(p => String(p.id) === String(req.params.id));
     if (!pl) return res.status(404).end();
     if (req.body.name) pl.name = req.body.name;
     if (req.body.cover) pl.cover = req.body.cover;
@@ -985,7 +1007,7 @@ app.post('/api/playlists/:id/update', auth, async (req, res) => {
 app.delete('/api/playlists/:id', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
-    u.playlists = u.playlists.filter(p => p.id !== req.params.id);
+    u.playlists = u.playlists.filter(p => String(p.id) !== String(req.params.id));
     await u.save();
     res.json({ success: true });
   } catch (e) {
@@ -1005,17 +1027,66 @@ app.get('/api/tracks', async (req, res) => {
   }
 });
 
-app.post('/api/tracks/create', auth, async (req, res) => {
+const createTrackHandler = async (req, res) => {
   try {
     const newTrack = await new Track({
       ...req.body,
-      addedBy: req.user.id
+      addedBy: req.user ? req.user.id : 'user'
     }).save();
     res.json({ success: true, track: newTrack });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
+};
+app.post('/api/tracks/create', optionalAuth, createTrackHandler);
+app.post('/api/tracks/add', optionalAuth, createTrackHandler);
+
+// Delete track permanently from database & remove from all playlists & likes
+const deleteTrackHandler = async (req, res) => {
+  try {
+    const trackId = String(req.params.id || req.body.trackId || '');
+    if (!trackId) return res.status(400).json({ error: 'Track ID required' });
+
+    // 1. Delete from Track collection
+    try {
+      await Track.deleteOne({ _id: trackId });
+    } catch {}
+
+    // 2. Remove from all users' playlists and likedTrackIds
+    const users = await User.find({
+      $or: [
+        { likedTrackIds: trackId },
+        { 'playlists.trackIds': trackId }
+      ]
+    });
+
+    for (const u of users) {
+      let changed = false;
+      if (u.likedTrackIds && u.likedTrackIds.includes(trackId)) {
+        u.likedTrackIds = u.likedTrackIds.filter(id => String(id) !== trackId);
+        changed = true;
+      }
+      if (u.playlists && u.playlists.length > 0) {
+        for (const pl of u.playlists) {
+          if (pl.trackIds && pl.trackIds.some(id => String(id) === trackId)) {
+            pl.trackIds = pl.trackIds.filter(id => String(id) !== trackId);
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        await u.save();
+      }
+    }
+
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+app.delete('/api/tracks/:id', optionalAuth, deleteTrackHandler);
+app.post('/api/tracks/:id/delete', optionalAuth, deleteTrackHandler);
+app.post('/api/tracks/delete', optionalAuth, deleteTrackHandler);
 
 app.get('/api/proxy-audio', async (req, res) => {
   try {

@@ -232,7 +232,7 @@ export default function HomeScreen({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteConfirmTrackId(track.id);
+                                setDeleteConfirmTrackId(track.id || track._id);
                               }}
                               className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
                             >
@@ -299,7 +299,7 @@ export default function HomeScreen({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteConfirmTrackId(track.id);
+                                setDeleteConfirmTrackId(track.id || track._id);
                               }}
                               className="w-7 h-7 rounded-full bg-black/70 flex items-center justify-center text-red-400 hover:text-red-300 transition-colors"
                             >
@@ -459,7 +459,7 @@ export default function HomeScreen({
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDeleteConfirmTrackId(track.id);
+                                setDeleteConfirmTrackId(track.id || track._id);
                               }}
                               className="p-1.5 text-[#b3b3b3] hover:text-red-400 transition-colors"
                             >

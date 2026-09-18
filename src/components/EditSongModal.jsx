@@ -212,7 +212,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
         cancelText="Cancel"
         onConfirm={() => {
           setIsDeleteConfirmOpen(false);
-          onDeleteSong(track.id);
+          onDeleteSong(track?.id || track?._id);
           onClose();
         }}
         onCancel={() => setIsDeleteConfirmOpen(false)}
