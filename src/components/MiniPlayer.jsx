@@ -39,17 +39,13 @@ export default function MiniPlayer({
   return (
     /* ── Spotify Now Playing Bar ── */
     <div 
-      className="fixed left-0 right-0 z-50 select-none"
-      style={{ 
-        bottom: 0,
-        height: 'var(--player-height)',
-        background: '#181818',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-      }}
+      className="fixed z-50 select-none transition-all duration-200
+        bottom-[68px] left-2 right-2 h-14 rounded-lg bg-[#212121]/95 backdrop-blur-md border border-white/10 shadow-2xl
+        md:bottom-0 md:left-0 md:right-0 md:h-[var(--player-height)] md:rounded-none md:bg-[#181818] md:border-t md:border-b-0 md:border-x-0 md:border-white/10"
     >
-      {/* Progress Line at Top */}
+      {/* Progress Line */}
       <div 
-        className="absolute top-0 left-0 h-[2px] transition-all duration-200"
+        className="absolute left-0 h-[2px] transition-all duration-200 bottom-0 rounded-b-lg md:bottom-auto md:top-0 md:rounded-none"
         style={{ 
           width: `${progressPercent}%`, 
           background: 'linear-gradient(to right, #1DB954, #1ed760)',
@@ -57,12 +53,12 @@ export default function MiniPlayer({
         }} 
       />
 
-      <div className="flex items-center h-full px-4 gap-4">
+      <div className="flex items-center h-full px-3 md:px-4 gap-2 md:gap-4">
         
         {/* ─────────────────────────────────────────
             LEFT: Track Info
             ───────────────────────────────────────── */}
-        <div className="flex items-center gap-3 flex-1 min-w-0" style={{ maxWidth: '30%' }}>
+        <div className="flex items-center gap-2.5 md:gap-3 flex-1 min-w-0 md:max-w-[30%]">
           {/* Album Art — click to open full player */}
           <div 
             className="relative shrink-0 cursor-pointer group"
@@ -71,51 +67,51 @@ export default function MiniPlayer({
             <img 
               src={currentTrack.cover} 
               alt={currentTrack.title} 
-              className={`w-14 h-14 object-cover rounded shadow-lg transition-all duration-300 ${isPlaying ? 'shadow-[0_0_12px_rgba(29,185,84,0.25)]' : ''}`}
+              className={`w-10 h-10 md:w-14 md:h-14 object-cover rounded shadow-lg transition-all duration-300 ${isPlaying ? 'shadow-[0_0_12px_rgba(29,185,84,0.25)]' : ''}`}
             />
             {/* Equalizer overlay when playing */}
             {isPlaying && (
               <div className="absolute inset-0 bg-black/30 rounded flex items-center justify-center gap-0.5">
-                <div className="sp-eq-bar" style={{ height: '10px' }} />
-                <div className="sp-eq-bar" style={{ height: '16px' }} />
                 <div className="sp-eq-bar" style={{ height: '8px' }} />
+                <div className="sp-eq-bar" style={{ height: '14px' }} />
+                <div className="sp-eq-bar" style={{ height: '6px' }} />
               </div>
             )}
           </div>
 
           {/* Track Title + Artist */}
-          <div className="truncate min-w-0 cursor-pointer" onClick={openFullPlayer}>
+          <div className="truncate min-w-0 cursor-pointer flex-1" onClick={openFullPlayer}>
             <p className="text-sm font-semibold text-white truncate hover:underline">
               {currentTrack.title}
             </p>
-            <p className="text-xs truncate hover:underline" style={{ color: '#b3b3b3' }}>
+            <p className="text-xs truncate hover:underline text-[#b3b3b3]">
               {currentTrack.artist}
             </p>
           </div>
 
           {/* Like Button */}
           <button
-            onClick={(e) => { e.stopPropagation(); toggleLike(currentTrack.id); }}
-            className="shrink-0 transition-all hover:scale-110 active:scale-95 hidden sm:flex"
+            onClick={(e) => { e.stopPropagation(); toggleLike(currentTrack.id || currentTrack._id); }}
+            className="shrink-0 p-1.5 transition-all hover:scale-110 active:scale-95"
             title={isTrackLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
           >
             <Heart 
-              size={16} 
-              className={isTrackLiked ? 'fill-white text-white' : 'text-[#b3b3b3] hover:text-white'}
+              size={18} 
+              className={isTrackLiked ? 'fill-[#1DB954] text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}
             />
           </button>
         </div>
 
         {/* ─────────────────────────────────────────
-            CENTER: Transport Controls + Seekbar
+            CENTER: Transport Controls + Seekbar (DESKTOP ONLY)
             ───────────────────────────────────────── */}
-        <div className="flex flex-col items-center gap-1 flex-1" style={{ maxWidth: '40%' }}>
+        <div className="hidden md:flex flex-col items-center gap-1 flex-1" style={{ maxWidth: '40%' }}>
           {/* Control Buttons */}
           <div className="flex items-center gap-4">
             {/* Shuffle */}
             <button
               onClick={(e) => { e.stopPropagation(); toggleShuffle?.(); }}
-              className={`hidden sm:flex transition-all hover:scale-105 active:scale-95 relative ${isShuffle ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
+              className={`flex transition-all hover:scale-105 active:scale-95 relative ${isShuffle ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
               title="Shuffle"
             >
               <Shuffle size={16} />
@@ -136,7 +132,7 @@ export default function MiniPlayer({
             {/* Play/Pause — Big Green Circle */}
             <button
               onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-              className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-md"
+              className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-md cursor-pointer"
               title={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying 
@@ -157,7 +153,7 @@ export default function MiniPlayer({
             {/* Repeat */}
             <button
               onClick={(e) => { e.stopPropagation(); toggleRepeat?.(); }}
-              className={`hidden sm:flex transition-all hover:scale-105 active:scale-95 relative ${isRepeat ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
+              className={`flex transition-all hover:scale-105 active:scale-95 relative ${isRepeat ? 'text-[#1DB954]' : 'text-[#b3b3b3] hover:text-white'}`}
               title="Repeat"
             >
               <Repeat size={16} />
@@ -168,12 +164,12 @@ export default function MiniPlayer({
           </div>
 
           {/* Seekbar Row (Desktop) */}
-          <div className="hidden md:flex items-center gap-2 w-full max-w-sm">
-            <span className="text-[11px] shrink-0 tabular-nums" style={{ color: '#b3b3b3' }}>
+          <div className="flex items-center gap-2 w-full max-w-sm">
+            <span className="text-[11px] shrink-0 tabular-nums text-[#b3b3b3]">
               {formatTime(currentTime)}
             </span>
             <div className="flex-1 group relative h-1 flex items-center">
-              <div className="absolute inset-0 rounded-full overflow-hidden" style={{ background: '#535353' }}>
+              <div className="absolute inset-0 rounded-full overflow-hidden bg-[#535353]">
                 <div 
                   className="h-full bg-white group-hover:bg-[#1DB954] transition-colors rounded-full"
                   style={{ width: `${progressPercent}%` }}
@@ -189,14 +185,14 @@ export default function MiniPlayer({
                 style={{ height: '100%' }}
               />
             </div>
-            <span className="text-[11px] shrink-0 tabular-nums" style={{ color: '#b3b3b3' }}>
+            <span className="text-[11px] shrink-0 tabular-nums text-[#b3b3b3]">
               {formatTime(duration)}
             </span>
           </div>
         </div>
 
         {/* ─────────────────────────────────────────
-            RIGHT: Volume + Tools
+            RIGHT: Volume + Tools (DESKTOP ONLY)
             ───────────────────────────────────────── */}
         <div className="hidden md:flex items-center gap-3 flex-1 justify-end" style={{ maxWidth: '35%' }}>
           {/* Clear Volume Bar */}
@@ -244,20 +240,24 @@ export default function MiniPlayer({
           </button>
         </div>
 
-        {/* Mobile-only: Expand + Play buttons */}
-        <div className="md:hidden flex items-center gap-2">
+        {/* ─────────────────────────────────────────
+            MOBILE-ONLY: Play + Next Controls
+            ───────────────────────────────────────── */}
+        <div className="md:hidden flex items-center gap-2 shrink-0">
           <button
             onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-            className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center transition-transform active:scale-95"
+            className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center transition-transform active:scale-95 shadow-md cursor-pointer"
+            title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying 
-              ? <Pause size={16} fill="black" /> 
-              : <Play size={16} fill="black" className="ml-0.5" />
+              ? <Pause size={18} fill="black" /> 
+              : <Play size={18} fill="black" className="ml-0.5" />
             }
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); playNext?.(); }}
-            className="text-white"
+            className="p-1.5 text-zinc-300 hover:text-white transition-all active:scale-95 cursor-pointer"
+            title="Next Track"
           >
             <SkipForward size={22} fill="currentColor" />
           </button>

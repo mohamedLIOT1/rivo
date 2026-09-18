@@ -472,7 +472,7 @@ input[type=range]:active::-webkit-slider-thumb {
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 30;
   background: #000;
   border-top: 1px solid rgba(255,255,255,0.08);
   padding-bottom: env(safe-area-inset-bottom);
@@ -480,6 +480,12 @@ input[type=range]:active::-webkit-slider-thumb {
   align-items: center;
   justify-content: space-around;
   height: 64px;
+}
+
+@media (min-width: 768px) {
+  .sp-mobile-nav {
+    display: none !important;
+  }
 }
 
 /* =============================================

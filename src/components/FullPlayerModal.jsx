@@ -175,7 +175,7 @@ export default function FullPlayerModal({
   const trackColor = dynamicColor || currentTrack?.color || '#1DB954';
 
   const activeTime = currentTime !== undefined ? currentTime : (audioCurrentTime || 0);
-  const activeDuration = duration !== undefined ? duration : (audioDuration || 210);
+  const activeDuration = (duration !== undefined && duration > 0) ? duration : (audioDuration || currentTrack?.duration || 210);
 
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
@@ -433,7 +433,7 @@ export default function FullPlayerModal({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercent = activeDuration > 0 ? (activeTime / activeDuration) * 100 : 0;
 
   // Play a track from the queue
   const handleQueueTrackClick = (track) => {
@@ -755,8 +755,8 @@ export default function FullPlayerModal({
               onClick={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 const x = e.clientX - rect.left;
-                const pct = x / rect.width;
-                seekTo(pct * duration);
+                const pct = Math.max(0, Math.min(1, x / rect.width));
+                seekTo(pct * activeDuration);
               }}
             >
               <div 
@@ -772,8 +772,8 @@ export default function FullPlayerModal({
               />
             </div>
             <div className="flex justify-between mt-2">
-              <span className="text-xs tabular-nums text-zinc-400">{formatTime(currentTime)}</span>
-              <span className="text-xs tabular-nums text-zinc-400">{formatTime(duration)}</span>
+              <span className="text-xs tabular-nums text-zinc-400">{formatTime(activeTime)}</span>
+              <span className="text-xs tabular-nums text-zinc-400">{formatTime(activeDuration)}</span>
             </div>
           </div>
 

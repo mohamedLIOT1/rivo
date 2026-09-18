@@ -7,7 +7,7 @@ export default function AddToPlaylistModal({ isOpen, onClose, track, playlists, 
   const customPlaylists = playlists.filter(p => !p.isLikedSongs);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
+    <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
       <div className="bg-[#181818] border border-zinc-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
           <h3 className="text-lg font-extrabold text-white">Add to Playlist</h3>

@@ -40,6 +40,7 @@ function AppContent() {
   const audio = useAudioPlayer();
   const {
     currentTrack, setCurrentTrack, isPlaying, setIsPlaying,
+    currentTime, duration,
     volume, setVolume, isShuffle, setIsShuffle, isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo
@@ -531,6 +532,8 @@ function AppContent() {
           openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
           volume={volume}
           setVolume={setVolume}
+          currentTime={currentTime}
+          duration={duration}
         />
       )}
 
@@ -546,6 +549,8 @@ function AppContent() {
         toggleDownload={handleDownload}
         isOpen={isFullPlayerOpen}
         onClose={() => setIsFullPlayerOpen(false)}
+        currentTime={currentTime}
+        duration={duration}
         seekTo={seekTo}
         volume={volume}
         setVolume={setVolume}
