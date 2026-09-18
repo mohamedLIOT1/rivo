@@ -703,6 +703,44 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setIsPlaying(true);
   }, [setTracks]);
 
+  const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
+    if (!seedTrack) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentTrack: seedTrack,
+          seedTracks: currentList.slice(0, 5),
+          limit: 6
+        })
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+        setCurrentQueue(prev => {
+          const existingIds = new Set(prev.map(t => String(t.id || t._id)));
+          const fresh = data.tracks.filter(t => !existingIds.has(String(t.id || t._id)));
+          return [...prev, ...fresh];
+        });
+      }
+    } catch (err) {
+      console.warn('[Smart Shuffle] fetch error:', err);
+    }
+  }, []);
+
+  const toggleShuffle = useCallback(() => {
+    setIsShuffle(prev => {
+      if (!prev || prev === false) return 'shuffle';
+      if (prev === 'shuffle' || prev === true) {
+        if (currentTrackRef.current) {
+          fetchSmartShuffleTracks(currentTrackRef.current, currentQueueRef.current);
+        }
+        return 'smart';
+      }
+      return false;
+    });
+  }, [fetchSmartShuffleTracks]);
+
   const playNextTrack = useCallback(() => {
     // Advance shared room queue if active in Jam
     if (jamSessionRef.current && socketRef.current) {
@@ -747,44 +785,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Force playing state so song starts automatically
     setIsPlaying(true);
   }, [isOfflineMode, playTrack, fetchSmartShuffleTracks]);
-
-  const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
-    if (!seedTrack) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentTrack: seedTrack,
-          seedTracks: currentList.slice(0, 5),
-          limit: 6
-        })
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
-        setCurrentQueue(prev => {
-          const existingIds = new Set(prev.map(t => String(t.id || t._id)));
-          const fresh = data.tracks.filter(t => !existingIds.has(String(t.id || t._id)));
-          return [...prev, ...fresh];
-        });
-      }
-    } catch (err) {
-      console.warn('[Smart Shuffle] fetch error:', err);
-    }
-  }, []);
-
-  const toggleShuffle = useCallback(() => {
-    setIsShuffle(prev => {
-      if (!prev || prev === false) return 'shuffle';
-      if (prev === 'shuffle' || prev === true) {
-        if (currentTrackRef.current) {
-          fetchSmartShuffleTracks(currentTrackRef.current, currentQueueRef.current);
-        }
-        return 'smart';
-      }
-      return false;
-    });
-  }, [fetchSmartShuffleTracks]);
 
   const playPrevTrack = useCallback(() => {
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
