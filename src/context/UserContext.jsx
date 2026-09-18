@@ -140,17 +140,12 @@ export function UserProvider({ children }) {
         const data = await api.get('/api/tracks');
         if (data && data.success && Array.isArray(data.tracks)) {
           const merged = data.tracks.map(t => {
-            const off = offlineMap.get(String(t.id));
+            const off = offlineMap.get(String(t.id || t._id));
             if (off) {
               const { audioBlob, coverBlob, ...cleanOff } = off;
               return { ...t, ...cleanOff, downloaded: true };
             }
             return t;
-          });
-          // Add any offline tracks not in public list
-          const existingIds = new Set(merged.map(m => String(m.id)));
-          offlineTracks.forEach(o => {
-            if (!existingIds.has(String(o.id))) merged.push(stripBlobs(o));
           });
           setTracks(deduplicateTracks(merged));
           return;
@@ -190,10 +185,6 @@ export function UserProvider({ children }) {
               downloaded: false
             };
           });
-          const existingIds = new Set(merged.map(m => String(m.id)));
-          offlineTracks.forEach(o => {
-            if (!existingIds.has(String(o.id))) merged.push(stripBlobs(o));
-          });
           setTracks(deduplicateTracks(merged));
         }
         if (Array.isArray(data.playlists)) {
@@ -213,6 +204,44 @@ export function UserProvider({ children }) {
     }
     setIsSyncing(false);
   }, [logout]);
+
+  const deleteTrack = useCallback(async (trackId) => {
+    if (!trackId) return;
+    const cleanId = String(trackId);
+    setTracks(prev => prev.filter(t => String(t.id || t._id) !== cleanId));
+    setLikedTrackIds(prev => prev.filter(id => String(id) !== cleanId));
+    setPlaylists(prev => prev.map(pl => ({
+      ...pl,
+      trackIds: (pl.trackIds || []).filter(id => String(id) !== cleanId)
+    })));
+
+    try {
+      const { removeTrackOffline } = await import('../utils/offlineStorage');
+      await removeTrackOffline(cleanId);
+    } catch {}
+
+    try {
+      await api.del(`/api/tracks/${encodeURIComponent(cleanId)}`);
+    } catch {}
+  }, []);
+
+  const removeTrackFromPlaylist = useCallback(async (trackId, playlistId) => {
+    if (!trackId || !playlistId) return;
+    const cleanTrackId = String(trackId);
+    const cleanPlaylistId = String(playlistId);
+
+    setPlaylists(prev => prev.map(pl => {
+      if (String(pl.id) !== cleanPlaylistId) return pl;
+      return {
+        ...pl,
+        trackIds: (pl.trackIds || []).filter(id => String(id) !== cleanTrackId)
+      };
+    }));
+
+    try {
+      await api.post(`/api/playlists/${encodeURIComponent(cleanPlaylistId)}/remove-track`, { trackId: cleanTrackId });
+    } catch {}
+  }, []);
 
   // Sync on mount and when user changes
   useEffect(() => {
@@ -280,6 +309,8 @@ export function UserProvider({ children }) {
     playlists, setPlaylists,
     likedTrackIds, setLikedTrackIds,
     toggleLike,
+    deleteTrack,
+    removeTrackFromPlaylist,
     isSyncing,
     syncFromServer,
     API_BASE_URL: API,

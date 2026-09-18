@@ -1,5 +1,5 @@
-// Liofy Service Worker v6 — iOS PWA & Offline Support
-const CACHE_VER = 'liofy-v6';
+// Liofy Service Worker v7 — iOS PWA & Offline Support
+const CACHE_VER = 'liofy-v7';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────
@@ -26,6 +26,20 @@ self.addEventListener('fetch', event => {
 
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+
+  // 0. Navigation / HTML requests — Network First, Cache Fallback
+  if (request.headers.get('accept')?.includes('text/html') || request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_VER).then(cache => cache.put(request, clone));
+        }
+        return response;
+      }).catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
 
   // 1. API Calls — Network First, JSON fallback when offline
   if (url.pathname.startsWith('/api/')) {

@@ -33,6 +33,7 @@ function AppContent() {
     tracks, setTracks,
     playlists, setPlaylists,
     likedTrackIds, toggleLike,
+    deleteTrack, removeTrackFromPlaylist,
     syncFromServer,
   } = useUser();
 
@@ -143,11 +144,10 @@ function AppContent() {
   const handleDeleteTrack = async (trackId) => {
     if (!trackId) return;
     const cleanId = String(trackId);
-    setTracks(prev => prev.filter(t => String(t.id || t._id) !== cleanId));
-    setPlaylists(prev => prev.map(pl => ({
-      ...pl,
-      trackIds: (pl.trackIds || []).filter(id => String(id) !== cleanId)
-    })));
+    if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
+      setIsPlaying(false);
+      setCurrentTrack(null);
+    }
     setSelectedPlaylist(prev => {
       if (!prev) return prev;
       return {
@@ -155,17 +155,7 @@ function AppContent() {
         trackIds: (prev.trackIds || []).filter(id => String(id) !== cleanId)
       };
     });
-    if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
-      setIsPlaying(false);
-      setCurrentTrack(null);
-    }
-    try {
-      const token = localStorage.getItem('liofy_token');
-      await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(cleanId)}`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-    } catch {}
+    await deleteTrack(cleanId);
   };
 
   const handleUpdateSong = (updatedTrack) => {
@@ -272,26 +262,11 @@ function AppContent() {
 
   const handleRemoveTrackFromPlaylist = async (trackId, playlistId) => {
     const targetId = String(trackId);
-    setPlaylists(prev => prev.map(pl => {
-      if (String(pl.id) !== String(playlistId)) return pl;
-      return { ...pl, trackIds: (pl.trackIds || []).filter(id => String(id) !== targetId) };
-    }));
-
     setSelectedPlaylist(prev => {
       if (!prev || String(prev.id) !== String(playlistId)) return prev;
       return { ...prev, trackIds: (prev.trackIds || []).filter(id => String(id) !== targetId) };
     });
-
-    try {
-      const token = localStorage.getItem('liofy_token');
-      if (token) {
-        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(playlistId)}/remove-track`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ trackId: targetId }),
-        });
-      }
-    } catch {}
+    await removeTrackFromPlaylist(trackId, playlistId);
   };
 
   const handleSelectArtist = (artist) => { setSelectedArtist(artist); setCurrentScreen('artist'); };

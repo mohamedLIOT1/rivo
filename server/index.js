@@ -973,12 +973,22 @@ app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
 // Remove track from playlist
 const removeTrackFromPlaylistHandler = async (req, res) => {
   try {
-    const u = await User.findById(req.user.id);
-    if (!u) return res.status(404).json({ error: 'User not found' });
-    const pl = u.playlists.find(p => String(p.id) === String(req.params.id));
-    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    const playlistId = String(req.params.id || '');
     const trackIdStr = String(req.body.trackId || req.params.trackId || '');
     if (!trackIdStr) return res.status(400).json({ error: 'trackId required' });
+
+    let u = null;
+    if (req.user && req.user.id) {
+      u = await User.findById(req.user.id);
+    }
+    if (!u) {
+      u = await User.findOne({ 'playlists.id': playlistId });
+    }
+    if (!u) return res.status(404).json({ error: 'Playlist or user not found' });
+
+    const pl = u.playlists.find(p => String(p.id) === playlistId);
+    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+
     pl.trackIds = (pl.trackIds || []).filter(id => String(id) !== trackIdStr);
     await u.save();
     res.json({ success: true, trackIds: pl.trackIds });
@@ -986,8 +996,8 @@ const removeTrackFromPlaylistHandler = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
-app.post('/api/playlists/:id/remove-track', auth, removeTrackFromPlaylistHandler);
-app.delete('/api/playlists/:id/tracks/:trackId', auth, removeTrackFromPlaylistHandler);
+app.post('/api/playlists/:id/remove-track', optionalAuth, removeTrackFromPlaylistHandler);
+app.delete('/api/playlists/:id/tracks/:trackId', optionalAuth, removeTrackFromPlaylistHandler);
 
 app.post('/api/playlists/:id/update', auth, async (req, res) => {
   try {
