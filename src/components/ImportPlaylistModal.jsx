@@ -41,7 +41,7 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
       setUrl('');
 
       if (onPlaylistImported) {
-        onPlaylistImported(data.playlist);
+        onPlaylistImported(data.playlist, data.tracks);
       }
 
       setTimeout(() => {

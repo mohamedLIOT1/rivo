@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -16,6 +17,7 @@ export default function PlaylistScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
+  const [fetchedTracks, setFetchedTracks] = useState([]);
 
   // Edit Name & Description Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -30,16 +32,41 @@ export default function PlaylistScreen({
     }
   }, [playlist?.id]);
 
+  const playlistTrackIds = (playlist?.trackIds || []).map(String);
+
+  // Dynamically fetch any tracks in playlist that are missing from global tracks state
+  useEffect(() => {
+    if (!playlist || !playlist.trackIds || playlist.trackIds.length === 0) return;
+    const knownIds = new Set(tracks.map(t => String(t.id || t._id)));
+    const missing = playlist.trackIds.map(String).filter(id => !knownIds.has(id));
+
+    if (missing.length > 0) {
+      fetch(`${API_BASE_URL}/api/tracks/by-ids`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: missing })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && Array.isArray(d.tracks) && d.tracks.length > 0) {
+          setFetchedTracks(d.tracks);
+        }
+      })
+      .catch(() => {});
+    }
+  }, [playlist?.id, playlist?.trackIds, tracks.length]);
+
   if (!playlist) return null;
 
-  const playlistTrackIds = (playlist.trackIds || []).map(String);
-  const playlistTracks = tracks.filter((t) => 
-    playlist.isLikedSongs 
-      ? t.liked 
-      : (playlistTrackIds.includes(String(t.id)) || playlistTrackIds.includes(String(t._id)))
-  );
+  const allAvailable = [...tracks, ...fetchedTracks];
+  const trackMap = new Map(allAvailable.map(t => [String(t.id || t._id), t]));
 
-  const availableTracks = tracks.filter((t) => !playlistTrackIds.includes(t.id));
+  // Preserve EXACT track order as stored in playlist.trackIds
+  const playlistTracks = playlist.isLikedSongs 
+    ? tracks.filter((t) => t.liked)
+    : playlistTrackIds.map(id => trackMap.get(id)).filter(Boolean);
+
+  const availableTracks = tracks.filter((t) => !playlistTrackIds.includes(String(t.id || t._id)));
 
   const filteredPlaylistTracks = playlistTracks.filter((t) => 
     t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

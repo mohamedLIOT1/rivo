@@ -655,9 +655,16 @@ function AppContent() {
       <ImportPlaylistModal
         isOpen={isImportPlaylistOpen}
         onClose={() => setIsImportPlaylistOpen(false)}
-        onPlaylistImported={(newPl) => {
-          setPlaylists(prev => [newPl, ...prev]);
-          showToast(`Imported "${newPl.name}"!`);
+        onPlaylistImported={(newPl, newTracks) => {
+          if (newTracks && newTracks.length > 0) {
+            setTracks(prev => {
+              const existingIds = new Set(prev.map(t => String(t.id || t._id)));
+              const uniqueNew = newTracks.filter(t => !existingIds.has(String(t.id || t._id)));
+              return [...uniqueNew, ...prev];
+            });
+          }
+          setPlaylists(prev => [newPl, ...prev.filter(p => p.id !== newPl.id)]);
+          showToast(`Imported "${newPl.name}" (${newPl.trackIds?.length || 0} songs)!`);
           syncFromServer();
         }}
       />

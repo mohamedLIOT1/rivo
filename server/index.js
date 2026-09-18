@@ -578,9 +578,10 @@ app.post('/api/playlists/import', auth, async (req, res) => {
 
     // Now resolve tracks into database or search stream so they are ready to play
     const trackIds = [];
+    const createdTracks = [];
     const clientId = SOUNDCLOUD_CLIENT_IDS[0];
 
-    for (const item of rawItems.slice(0, 40)) { // limit to first 40 for speed
+    for (const item of rawItems.slice(0, 50)) { // up to 50 tracks
       try {
         let resolvedAudioUrl = '';
         let coverUrl = playlistCover;
@@ -613,7 +614,21 @@ app.post('/api/playlists/import', auth, async (req, res) => {
           source: 'Import'
         }).save();
 
+        const trackObj = {
+          id: String(newTrack._id),
+          _id: String(newTrack._id),
+          title: item.title,
+          artist: item.artist,
+          album: playlistTitle,
+          cover: coverUrl,
+          audioUrl: resolvedAudioUrl || 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3',
+          duration,
+          genre: 'Imported',
+          source: 'Import'
+        };
+
         trackIds.push(String(newTrack._id));
+        createdTracks.push(trackObj);
       } catch (err) {}
     }
 
@@ -635,7 +650,72 @@ app.post('/api/playlists/import', auth, async (req, res) => {
     res.json({
       success: true,
       playlist: newPlaylist,
-      trackCount: trackIds.length
+      trackCount: trackIds.length,
+      tracks: createdTracks
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// FULL SYNC & BATCH TRACKS ENDPOINTS
+// ──────────────────────────────────────────
+app.get('/api/sync', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const allTracks = await Track.find().sort({ createdAt: -1 }).limit(1000).lean();
+    const formatted = allTracks.map(t => ({
+      id: String(t._id),
+      _id: String(t._id),
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      cover: t.cover,
+      audioUrl: t.audioUrl,
+      duration: t.duration || 180,
+      genre: t.genre,
+      source: t.source,
+      addedBy: t.addedBy,
+      lyrics: t.lyrics || [],
+      color: t.color || '#1DB954',
+      liked: (user.likedTrackIds || []).includes(String(t._id)),
+    }));
+
+    res.json({
+      success: true,
+      user,
+      tracks: formatted,
+      playlists: user.playlists || [],
+      likedTrackIds: user.likedTrackIds || [],
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/tracks/by-ids', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.json({ success: true, tracks: [] });
+    const tracks = await Track.find({ _id: { $in: ids } }).lean();
+    res.json({
+      success: true,
+      tracks: tracks.map(t => ({
+        id: String(t._id),
+        _id: String(t._id),
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        cover: t.cover,
+        audioUrl: t.audioUrl,
+        duration: t.duration || 180,
+        genre: t.genre,
+        source: t.source,
+        lyrics: t.lyrics || []
+      }))
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
