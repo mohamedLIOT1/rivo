@@ -287,13 +287,7 @@ async function resolveTrackAudio(title, artist) {
   const query = `${artist || ''} ${title || ''}`.trim();
   if (!query) return null;
 
-  // 1. Try SoundCloud full progressive track first (must not be a 30s snippet)
-  try {
-    const sc = await resolveSoundCloudTrack(query);
-    if (sc && sc.streamUrl) return sc;
-  } catch {}
-
-  // 2. Fall back to YouTube (100% full song, full uninterrupted audio)
+  // 1. Prioritize YouTube: Guaranteed official original version with full uninterrupted audio
   try {
     const ytId = await searchYouTubeId(query);
     if (ytId) {
@@ -307,6 +301,12 @@ async function resolveTrackAudio(title, artist) {
         isYouTube: true
       };
     }
+  } catch {}
+
+  // 2. Fallback to SoundCloud only if YouTube fails
+  try {
+    const sc = await resolveSoundCloudTrack(query);
+    if (sc && sc.streamUrl) return sc;
   } catch {}
 
   return null;
@@ -650,7 +650,37 @@ app.get(['/api/search', '/api/search/external'], async (req, res) => {
       console.warn('[Search] SoundCloud search error:', err.message);
     }
 
-    const allTracks = [...formattedDbTracks, ...scTracks];
+    // 3. Query YouTube for official releases
+    let ytTracks = [];
+    try {
+      const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 4000
+      });
+      const jsonMatch = ytRes.data.match(/var ytInitialData = ({.*?});<\/script>/s) || ytRes.data.match(/ytInitialData = ({.*?});<\/script>/s);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        const contents = parsed.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+        ytTracks = contents
+          .filter(c => c.videoRenderer && c.videoRenderer.videoId)
+          .slice(0, 8)
+          .map(c => {
+            const v = c.videoRenderer;
+            return {
+              id: `yt-${v.videoId}`,
+              title: v.title?.runs?.[0]?.text || q,
+              artist: v.ownerText?.runs?.[0]?.text || 'YouTube',
+              album: 'YouTube',
+              cover: v.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+              audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
+              duration: 240,
+              source: 'YouTube'
+            };
+          });
+      }
+    } catch {}
+
+    const allTracks = [...formattedDbTracks, ...ytTracks, ...scTracks];
     searchCache.set(cacheKey, { timestamp: Date.now(), tracks: allTracks });
 
     res.json({ success: true, tracks: allTracks });
