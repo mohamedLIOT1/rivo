@@ -237,21 +237,74 @@ async function fetchTrackCover(title, artist) {
   return null;
 }
 
-async function resolveSoundCloudTrack(query) {
+function rankSoundCloudTrack(item, title = '', artist = '') {
+  let score = 100;
+  const itemTitle = (item.title || '').toLowerCase();
+  const userName = (item.user?.username || '').toLowerCase();
+  const durSec = (item.duration || 0) / 1000;
+  const cleanTitle = (title || '').toLowerCase().trim();
+  const cleanArtist = (artist || '').toLowerCase().trim();
+
+  // 1. Duration scoring (normal tracks are between 1:15 and 6:30)
+  if (durSec < 60 || durSec > 660) score -= 100;
+  else if (durSec >= 110 && durSec <= 360) score += 25;
+
+  // 2. Artist match boost
+  if (cleanArtist && (itemTitle.includes(cleanArtist) || userName.includes(cleanArtist))) {
+    score += 45;
+  }
+
+  // 3. Title keywords match
+  const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
+  for (const w of words) {
+    if (itemTitle.includes(w)) score += 25;
+  }
+
+  // 4. Heavily penalize unwanted covers, remixes, karaoke, instrumental, full albums
+  const unwanted = [
+    { key: 'remix', ar: 'ريمكس' },
+    { key: 'cover', ar: 'كاور' },
+    { key: 'piano', ar: 'بيانو' },
+    { key: 'instrumental', ar: 'عزف' },
+    { key: 'slowed', ar: 'مبطأ' },
+    { key: 'sped', ar: 'مسرع' },
+    { key: 'album', ar: 'البوم' },
+    { key: 'live', ar: 'حفلة' },
+    { key: 'karaoke', ar: 'كاريوكي' }
+  ];
+
+  for (const u of unwanted) {
+    const requested = cleanTitle.includes(u.key) || cleanTitle.includes(u.ar);
+    if (!requested) {
+      if (itemTitle.includes(u.key) || itemTitle.includes(u.ar)) {
+        score -= 75;
+      }
+    }
+  }
+
+  // 5. Official audio indicators
+  if (item.user?.verified || itemTitle.includes('official') || itemTitle.includes('الأصلية') || itemTitle.includes('النسخة الأصلية')) {
+    score += 35;
+  }
+
+  return score;
+}
+
+async function resolveSoundCloudTrack(query, rawTitle = '', rawArtist = '') {
   if (!query || !query.trim()) return null;
   let clientId = await getSoundCloudClientId();
   try {
     let res;
     try {
       res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-        params: { q: query.trim(), client_id: clientId, limit: 6 },
+        params: { q: query.trim(), client_id: clientId, limit: 15 },
         timeout: 5000
       });
     } catch (err) {
       if (err.response?.status === 401) {
         clientId = await getSoundCloudClientId(true);
         res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q: query.trim(), client_id: clientId, limit: 6 },
+          params: { q: query.trim(), client_id: clientId, limit: 15 },
           timeout: 5000
         });
       } else {
@@ -259,10 +312,17 @@ async function resolveSoundCloudTrack(query) {
       }
     }
 
-    const collection = res.data?.collection || [];
-    for (const item of collection) {
-      // Reject 30-second snippets / preview-only tracks!
-      if (item.policy === 'SNIP' || (item.duration || 0) <= 35000) continue;
+    const rawCollection = res.data?.collection || [];
+    const validItems = rawCollection.filter(item => item.policy !== 'SNIP' && (item.duration || 0) > 45000);
+    if (validItems.length === 0) return null;
+
+    // Rank items to pick original version over random remixes/covers
+    const ranked = validItems.map(item => ({
+      item,
+      score: rankSoundCloudTrack(item, rawTitle || query, rawArtist)
+    })).sort((a, b) => b.score - a.score);
+
+    for (const { item } of ranked) {
       const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive' && !t.snipped);
       if (prog) {
         const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
@@ -287,7 +347,13 @@ async function resolveTrackAudio(title, artist) {
   const query = `${artist || ''} ${title || ''}`.trim();
   if (!query) return null;
 
-  // 1. Prioritize YouTube: Guaranteed official original version with full uninterrupted audio
+  // 1. First attempt to find native direct MP3 audio stream from SoundCloud (guaranteed HTML5 playback without iframe issues)
+  try {
+    const sc = await resolveSoundCloudTrack(query, title, artist);
+    if (sc && sc.streamUrl) return sc;
+  } catch {}
+
+  // 2. If direct stream not found, fallback to YouTube
   try {
     const ytId = await searchYouTubeId(query);
     if (ytId) {
@@ -301,12 +367,6 @@ async function resolveTrackAudio(title, artist) {
         isYouTube: true
       };
     }
-  } catch {}
-
-  // 2. Fallback to SoundCloud only if YouTube fails
-  try {
-    const sc = await resolveSoundCloudTrack(query);
-    if (sc && sc.streamUrl) return sc;
   } catch {}
 
   return null;
@@ -897,30 +957,31 @@ app.post('/api/tracks/by-ids', async (req, res) => {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.json({ success: true, tracks: [] });
     const tracks = await Track.find({ _id: { $in: ids } }).lean();
-    const formatted = await Promise.all(tracks.map(async (t) => {
-      let cover = t.cover;
-      // If cover is missing or generic unsplash, fetch real track artwork
-      if (t.title && (!cover || cover.includes('unsplash') || cover.includes('pixabay') || cover.includes('format=svg'))) {
-        const real = await fetchTrackCover(t.title, t.artist);
-        if (real) {
-          cover = real;
-          Track.updateOne({ _id: t._id }, { $set: { cover: real } }).exec().catch(() => {});
+
+    // Asynchronously backfill missing covers in background without blocking response
+    setImmediate(async () => {
+      for (const t of tracks) {
+        if (t.title && (!t.cover || t.cover.includes('unsplash') || t.cover.includes('pixabay') || t.cover.includes('format=svg'))) {
+          try {
+            const real = await fetchTrackCover(t.title, t.artist);
+            if (real) await Track.updateOne({ _id: t._id }, { $set: { cover: real } });
+          } catch {}
         }
       }
+    });
 
-      return {
-        id: String(t._id),
-        _id: String(t._id),
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        cover: cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
-        audioUrl: t.audioUrl && !t.audioUrl.includes('pixabay.com') && !t.audioUrl.includes('preview') ? t.audioUrl : '',
-        duration: t.duration || 180,
-        genre: t.genre,
-        source: t.source || 'SoundCloud',
-        lyrics: t.lyrics || []
-      };
+    const formatted = tracks.map((t) => ({
+      id: String(t._id),
+      _id: String(t._id),
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      cover: t.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      audioUrl: t.audioUrl && !t.audioUrl.includes('pixabay.com') && !t.audioUrl.includes('preview') ? t.audioUrl : '',
+      duration: t.duration || 180,
+      genre: t.genre,
+      source: t.source || 'SoundCloud',
+      lyrics: t.lyrics || []
     }));
 
     res.json({
@@ -1238,7 +1299,7 @@ app.get('/api/soundcloud/fallback', async (req, res) => {
     const q = `${artist || ''} ${title || ''}`.trim();
     if (!q) return res.status(400).json({ error: 'Query required' });
 
-    const sc = await resolveSoundCloudTrack(q);
+    const sc = await resolveSoundCloudTrack(q, title, artist);
     if (sc && sc.streamUrl) {
       return res.json({ success: true, url: sc.streamUrl, duration: sc.duration, cover: sc.cover });
     }

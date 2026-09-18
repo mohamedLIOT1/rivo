@@ -212,7 +212,7 @@ export default function LibraryScreen({ playlists, tracks, onSelectPlaylist, onS
               {downloadedTracks.map((track) => (
                 <div
                   key={track.id}
-                  onClick={() => onSelectTrack(track)}
+                  onClick={() => onSelectTrack(track, downloadedTracks)}
                   className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-white/10 transition-colors group"
                 >
                   <img src={track.cover} alt={track.title} className="w-12 h-12 rounded object-cover shadow-md shrink-0" />

@@ -39,7 +39,7 @@ function AppContent() {
 
   const audio = useAudioPlayer();
   const {
-    currentTrack, setCurrentTrack, isPlaying, setIsPlaying, currentTime, duration,
+    currentTrack, setCurrentTrack, isPlaying, setIsPlaying,
     volume, setVolume, isShuffle, setIsShuffle, isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo
@@ -83,36 +83,7 @@ function AppContent() {
     if (!currentUser) setIsAuthOpen(true);
   }, []);
 
-  // ── Auto-convert & cache track to local MP3 as soon as user plays it ──
-  useEffect(() => {
-    if (!currentTrack || currentTrack.downloaded || currentTrack.nativeAudioUri) return;
-    const cleanId = String(currentTrack.id || currentTrack._id || '');
-    if (!cleanId) return;
 
-    saveTrackOffline(currentTrack).then(async (result) => {
-      if (result) {
-        const freshAudioUrl = await getOfflineTrackAudioUrl(cleanId);
-        const patchFields = {
-          downloaded: true,
-          audioUrl: freshAudioUrl || result.audioUrl,
-          cover: currentTrack.cover || result.coverBase64 || null,
-          nativeAudioUri: result.nativeAudioUri || null,
-          nativeCoverUri: result.nativeCoverUri || null,
-        };
-
-        setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...patchFields } : t));
-
-        if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
-          setCurrentTrack(prev => prev ? ({
-            ...prev,
-            downloaded: true,
-            nativeAudioUri: result.nativeAudioUri || null,
-            nativeCoverUri: result.nativeCoverUri || null,
-          }) : prev);
-        }
-      }
-    }).catch(() => {});
-  }, [currentTrack?.id]);
   const handleAddSong = async (newSong) => {
     if (!newSong) return;
     setTracks(prev => {
@@ -558,8 +529,6 @@ function AppContent() {
           likedTrackIds={likedTrackIds}
           openFullPlayer={() => setIsFullPlayerOpen(true)}
           openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
-          currentTime={currentTime}
-          duration={duration}
           volume={volume}
           setVolume={setVolume}
         />
@@ -577,8 +546,6 @@ function AppContent() {
         toggleDownload={handleDownload}
         isOpen={isFullPlayerOpen}
         onClose={() => setIsFullPlayerOpen(false)}
-        currentTime={currentTime}
-        duration={duration}
         seekTo={seekTo}
         volume={volume}
         setVolume={setVolume}

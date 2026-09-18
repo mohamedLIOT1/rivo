@@ -34,12 +34,7 @@ export default function HomeScreen({
 
   const displayTracks = React.useMemo(() => {
     if (!tracks || tracks.length === 0) return [];
-    const shuffled = [...tracks];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
+    return [...tracks];
   }, [tracks]);
 
   const quickItems = displayTracks.slice(0, 6);
@@ -160,7 +155,7 @@ export default function HomeScreen({
                     return (
                       <div
                         key={track.id}
-                        onClick={() => onSelectTrack(track)}
+                        onClick={() => onSelectTrack(track, quickItems)}
                         className="sp-quick-item"
                         style={{ borderRadius: '4px', overflow: 'hidden' }}
                       >
@@ -173,7 +168,7 @@ export default function HomeScreen({
                         <span className="sp-quick-label">{track.title}</span>
                         <button
                           className="sp-quick-play"
-                          onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                          onClick={(e) => { e.stopPropagation(); onSelectTrack(track, quickItems); }}
                         >
                           {isCurrentAndPlaying 
                             ? <Pause size={18} fill="black" />
@@ -202,7 +197,7 @@ export default function HomeScreen({
                     return (
                       <div
                         key={`recent-${track.id}`}
-                        onClick={() => onSelectTrack(track)}
+                        onClick={() => onSelectTrack(track, recentItems)}
                         className="sp-card relative group"
                       >
                         <div className="relative aspect-square mb-3">
@@ -215,7 +210,7 @@ export default function HomeScreen({
                           />
                           <button
                             className="sp-card-play"
-                            onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                            onClick={(e) => { e.stopPropagation(); onSelectTrack(track, recentItems); }}
                           >
                             {isCurrentAndPlaying 
                               ? <Pause size={20} fill="black" />
@@ -270,7 +265,7 @@ export default function HomeScreen({
                     return (
                       <div
                         key={`made-${track.id}`}
-                        onClick={() => onSelectTrack(track)}
+                        onClick={() => onSelectTrack(track, suggestedItems)}
                         className="sp-card relative group"
                       >
                         <div className="relative aspect-square mb-3">
@@ -283,7 +278,7 @@ export default function HomeScreen({
                           />
                           <button
                             className="sp-card-play"
-                            onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                            onClick={(e) => { e.stopPropagation(); onSelectTrack(track, suggestedItems); }}
                           >
                             {isCurrentAndPlaying 
                               ? <Pause size={20} fill="black" />

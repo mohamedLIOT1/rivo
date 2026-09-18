@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, PlusCircle, Volume2, VolumeX, Laptop2 } from 'lucide-react';
+import { useAudioPlayer } from '../context/AudioContext';
 
 export default function MiniPlayer({
   currentTrack,
@@ -15,11 +16,14 @@ export default function MiniPlayer({
   likedTrackIds = [],
   openFullPlayer,
   openAddToPlaylist,
-  currentTime,
-  duration,
+  currentTime: propCurrentTime,
+  duration: propDuration,
   volume = 0.8,
   setVolume = () => {}
 }) {
+  const audio = useAudioPlayer();
+  const currentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
+  const duration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
   if (!currentTrack) return null;
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);

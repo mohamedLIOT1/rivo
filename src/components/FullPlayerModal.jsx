@@ -107,7 +107,7 @@ export default function FullPlayerModal({
   onPlayTrack,
 }) {
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
-  const { audioRef, isYtTrack, playTrack } = useAudioPlayer();
+  const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration } = useAudioPlayer();
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
@@ -174,38 +174,8 @@ export default function FullPlayerModal({
 
   const trackColor = dynamicColor || currentTrack?.color || '#1DB954';
 
-  // ── RAF-based live time for lyrics sync (reads audio directly at ~60fps) ──
-  const [liveTime, setLiveTime] = useState(currentTime);
-  const rafRef = useRef(null);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== 'lyrics') {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      return;
-    }
-    const tick = () => {
-      if (isYtTrack) {
-        try {
-          const yt = window.__liofyYTPlayer;
-          if (yt && typeof yt.getCurrentTime === 'function') {
-            setLiveTime(yt.getCurrentTime() || 0);
-          } else {
-            setLiveTime(t => t);
-          }
-        } catch {}
-      } else if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
-        setLiveTime(audioRef.current.currentTime);
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [isOpen, activeTab, isYtTrack, audioRef]);
-
-  // Sync liveTime from prop when NOT on lyrics tab (so seekbar stays accurate)
-  useEffect(() => {
-    if (activeTab !== 'lyrics') setLiveTime(currentTime);
-  }, [currentTime, activeTab]);
+  const activeTime = currentTime !== undefined ? currentTime : (audioCurrentTime || 0);
+  const activeDuration = duration !== undefined ? duration : (audioDuration || 210);
 
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
@@ -259,11 +229,10 @@ export default function FullPlayerModal({
     }));
   }, [baseLyrics, syncOffset]);
 
-  // Use liveTime (from RAF at ~60fps) for frame-perfect lyrics sync
   const activeLyricIndex = lyrics.length > 0
     ? lyrics.findIndex((line, idx) => {
         const nextLine = lyrics[idx + 1];
-        return liveTime >= line.time && (!nextLine || liveTime < nextLine.time);
+        return activeTime >= line.time && (!nextLine || activeTime < nextLine.time);
       })
     : -1;
 

@@ -30,7 +30,7 @@ export default function ArtistScreen({ artist, tracks, onSelectTrack, toggleLike
       {/* Action Buttons */}
       <div className="p-4 md:p-8 flex items-center gap-4">
         <button 
-          onClick={() => artistTracks.length > 0 && onSelectTrack(artistTracks[0])}
+          onClick={() => artistTracks.length > 0 && onSelectTrack(artistTracks[0], artistTracks)}
           className="w-14 h-14 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all"
         >
           <Play size={26} fill="black" className="ml-1" />
@@ -49,7 +49,7 @@ export default function ArtistScreen({ artist, tracks, onSelectTrack, toggleLike
           {artistTracks.map((track, i) => (
             <div
               key={track.id}
-              onClick={() => onSelectTrack(track)}
+              onClick={() => onSelectTrack(track, artistTracks)}
               className="flex items-center gap-4 p-3 rounded-xl hover:bg-zinc-900/80 cursor-pointer group transition-colors border border-transparent hover:border-zinc-800"
             >
               <span className="text-sm font-extrabold text-zinc-500 w-6 text-center">{i + 1}</span>

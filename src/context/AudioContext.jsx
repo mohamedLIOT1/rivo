@@ -167,7 +167,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     const div = document.createElement('div');
     div.id = 'liofy-yt-player';
-    div.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1;';
+    div.style.cssText = 'position:fixed;bottom:-500px;right:-500px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
     document.body.appendChild(div);
     ytContainerRef.current = div;
 
@@ -327,7 +327,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       };
       loadYt();
 
-      // Watchdog: If playback doesn't start in 3s (error 150, blocked by autoplay), fallback
+      // Watchdog: If playback doesn't start in 1.5s (error 150, blocked by autoplay), fallback immediately
       watchdog = setTimeout(() => {
         if (isYtTrackRef.current && ytPlayerRef.current) {
           try {
@@ -338,7 +338,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             }
           } catch {}
         }
-      }, 3000);
+      }, 1500);
 
       return () => {
         if (watchdog) clearTimeout(watchdog);

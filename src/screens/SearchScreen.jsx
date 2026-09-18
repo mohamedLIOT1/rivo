@@ -96,7 +96,7 @@ export default function SearchScreen({ tracks, onSelectTrack, toggleLike, onOpen
                   <div>
                     <p className="text-xl font-extrabold text-white mb-3">Top result</p>
                     <div 
-                      onClick={() => onSelectTrack(localFiltered[0])}
+                      onClick={() => onSelectTrack(localFiltered[0], localFiltered)}
                       className="p-5 rounded-lg cursor-pointer relative group h-48 flex flex-col justify-end hover:brightness-110 transition-all"
                       style={{ background: '#282828' }}
                     >
@@ -109,7 +109,7 @@ export default function SearchScreen({ tracks, onSelectTrack, toggleLike, onOpen
                       <p className="text-sm mt-1" style={{ color: '#b3b3b3' }}>{localFiltered[0].artist}</p>
                       <button 
                         className="absolute bottom-5 right-5 w-12 h-12 rounded-full bg-[#1DB954] text-black flex items-center justify-center shadow-2xl opacity-0 group-hover:opacity-100 transition-all hover:scale-105 hover:bg-[#1ed760]"
-                        onClick={(e) => { e.stopPropagation(); onSelectTrack(localFiltered[0]); }}
+                        onClick={(e) => { e.stopPropagation(); onSelectTrack(localFiltered[0], localFiltered); }}
                       >
                         <Play size={22} fill="black" className="ml-0.5" />
                       </button>
@@ -123,7 +123,7 @@ export default function SearchScreen({ tracks, onSelectTrack, toggleLike, onOpen
                       {localFiltered.slice(0, 4).map((track) => (
                         <div
                           key={track.id}
-                          onClick={() => onSelectTrack(track)}
+                          onClick={() => onSelectTrack(track, localFiltered)}
                           className="flex items-center gap-3 p-2 rounded-md cursor-pointer group transition-colors hover:bg-white/10"
                         >
                           <img src={track.cover} alt={track.title} className="w-11 h-11 rounded object-cover shrink-0" />
@@ -156,7 +156,7 @@ export default function SearchScreen({ tracks, onSelectTrack, toggleLike, onOpen
                       {localFiltered.map((track) => (
                         <div
                           key={`all-${track.id}`}
-                          onClick={() => onSelectTrack(track)}
+                          onClick={() => onSelectTrack(track, localFiltered)}
                           className="flex items-center gap-3 p-3 rounded-md cursor-pointer group transition-colors hover:bg-white/10"
                         >
                           <img src={track.cover} alt={track.title} className="w-12 h-12 rounded object-cover shrink-0" />
@@ -185,7 +185,7 @@ export default function SearchScreen({ tracks, onSelectTrack, toggleLike, onOpen
                               />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); onSelectTrack(track); }}
+                              onClick={(e) => { e.stopPropagation(); onSelectTrack(track, localFiltered); }}
                               className="w-8 h-8 rounded-full bg-[#1DB954] text-black flex items-center justify-center hover:bg-[#1ed760] transition-colors"
                             >
                               <Play size={14} fill="black" className="ml-0.5" />
