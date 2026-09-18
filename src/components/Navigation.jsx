@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare, Command } from 'lucide-react';
+import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -215,8 +216,9 @@ export default function Navigation({
                 <User size={16} className="text-white" />
               </div>
             )}
-            <span className="text-sm font-bold text-white truncate flex-1 text-left">
-              {currentUser ? currentUser.name : 'Log in'}
+            <span className="text-sm font-bold text-white truncate flex-1 text-left flex items-center gap-1">
+              <span className="truncate">{currentUser ? currentUser.name : 'Log in'}</span>
+              {currentUser && isUserVerified(currentUser) && <VerifiedBadge size={14} />}
             </span>
           </button>
           {openShortcutsModal && (

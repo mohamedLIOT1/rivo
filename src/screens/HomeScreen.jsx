@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Play, Heart, Plus, Edit3, Trash2, Pause, User, LogOut, ChevronDown, Settings, Radio, MessageSquare } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -92,6 +93,7 @@ export default function HomeScreen({
               <span className="hidden md:inline text-xs font-bold text-white pr-1 max-w-[100px] truncate">
                 {currentUser?.name || 'Account'}
               </span>
+              {currentUser && <VerifiedBadge userOrName={currentUser} size={13} />}
               <ChevronDown size={14} className="text-zinc-400 hidden md:inline mr-1" />
             </button>
 
@@ -99,7 +101,10 @@ export default function HomeScreen({
             {isProfileMenuOpen && (
               <div className="absolute left-0 mt-2 w-52 bg-[#282828] border border-white/10 rounded-xl shadow-2xl py-2 z-50 animate-in fade-in duration-150">
                 <div className="px-4 py-2 border-b border-white/10">
-                  <p className="text-xs font-bold text-white truncate">{currentUser?.name || 'Liofy User'}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-white truncate">{currentUser?.name || 'Liofy User'}</p>
+                    <VerifiedBadge userOrName={currentUser} size={13} />
+                  </div>
                   <p className="text-[10px] text-zinc-400 truncate">{currentUser?.email || 'Guest Account'}</p>
                 </div>
                 {currentUser ? (

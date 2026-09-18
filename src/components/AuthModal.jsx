@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, User, Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Camera, Loader2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
+import VerifiedBadge from './VerifiedBadge';
 
 export default function AuthModal({ isOpen, onClose }) {
   const { currentUser, login, logout } = useUser();
@@ -81,7 +82,10 @@ export default function AuthModal({ isOpen, onClose }) {
               </div>
 
               <div className="text-center">
-                <p className="text-xl font-extrabold text-white">{currentUser.name}</p>
+                <div className="flex items-center justify-center gap-1.5">
+                  <p className="text-xl font-extrabold text-white">{currentUser.name}</p>
+                  <VerifiedBadge userOrName={currentUser} size={20} />
+                </div>
                 <p className="text-sm text-[#b3b3b3] mt-0.5">{currentUser.email}</p>
               </div>
 

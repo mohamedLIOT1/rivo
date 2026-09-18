@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Radio, Users, Copy, Check, Play, Pause, Volume2, Plus, Trash2, Search, Music, Headphones } from 'lucide-react';
 import { resumeAudioContext } from '../utils/audioEngine';
+import VerifiedBadge from './VerifiedBadge';
 
 export default function JamRoomModal({ 
   isOpen, 
@@ -244,6 +245,7 @@ export default function JamRoomModal({
                     <div className="flex items-center gap-2.5">
                       <img src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'} alt={m.name} className="w-7 h-7 rounded-full object-cover shadow" />
                       <span className="font-bold text-white">{m.name}</span>
+                      <VerifiedBadge userOrName={m} size={13} />
                     </div>
                     {m.isHost && (
                       <span className="text-[10px] font-black text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded-full border border-cyan-500/40">

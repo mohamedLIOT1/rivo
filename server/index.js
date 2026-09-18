@@ -122,8 +122,13 @@ const MessageSchema = new mongoose.Schema({
 const Message = mongoose.model('Message', MessageSchema);
 
 // ──────────────────────────────────────────
-// Auth Helpers
+// Auth Helpers & Verified Badges
 // ──────────────────────────────────────────
+const VERIFIED_USER_NAMES = ['ali', 'lio', 'tester'];
+function isVerifiedUser(name) {
+  return VERIFIED_USER_NAMES.includes((name || '').trim().toLowerCase());
+}
+
 function makeToken(u) {
   return jwt.sign({ id: u._id, email: u.email, name: u.name }, JWT_SECRET, { expiresIn: '90d' });
 }
@@ -401,6 +406,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     const userObj = user.toObject();
     delete userObj.password;
+    userObj.isVerified = isVerifiedUser(userObj.name);
     res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -416,6 +422,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const userObj = user.toObject();
     delete userObj.password;
+    userObj.isVerified = isVerifiedUser(userObj.name);
     res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -429,7 +436,9 @@ app.get('/api/auth/me', auth, async (req, res) => {
     if (user.avatar && user.avatar.includes('format=svg')) {
       user.avatar = user.avatar.replace('format=svg', 'format=png');
     }
-    res.json({ success: true, user });
+    const userObj = user.toObject ? user.toObject() : { ...user._doc };
+    userObj.isVerified = isVerifiedUser(userObj.name);
+    res.json({ success: true, user: userObj });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -445,6 +454,7 @@ app.post('/api/auth/update-profile', auth, async (req, res) => {
     await user.save();
     const userObj = user.toObject();
     delete userObj.password;
+    userObj.isVerified = isVerifiedUser(userObj.name);
     res.json({ success: true, user: userObj });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -475,7 +485,8 @@ app.get('/api/users/search', async (req, res) => {
       bio: u.bio || '',
       publicPlaylists: (u.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs),
       followersCount: (u.followers || []).length,
-      followingCount: (u.following || []).length
+      followingCount: (u.following || []).length,
+      isVerified: isVerifiedUser(u.name)
     }));
 
     res.json({ success: true, users: sanitized });
@@ -510,7 +521,8 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
         playlistCount: publicPlaylists.length,
         followersCount: (target.followers || []).length,
         followingCount: (target.following || []).length,
-        isFollowing
+        isFollowing,
+        isVerified: isVerifiedUser(target.name)
       }
     });
   } catch (e) {
@@ -571,7 +583,8 @@ app.get('/api/users/friends', auth, async (req, res) => {
         id: String(f._id),
         name: f.name,
         avatar: f.avatar,
-        bio: f.bio || ''
+        bio: f.bio || '',
+        isVerified: isVerifiedUser(f.name)
       }))
     });
   } catch (e) {
@@ -610,7 +623,8 @@ app.get('/api/chat/conversations', auth, async (req, res) => {
         id: String(u._id),
         name: u.name,
         avatar: u.avatar || '',
-        bio: u.bio || ''
+        bio: u.bio || '',
+        isVerified: isVerifiedUser(u.name)
       },
       lastMessage: conversationMap.get(String(u._id))
     }));

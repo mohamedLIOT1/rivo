@@ -5,6 +5,7 @@ import {
   MessageSquare, UserPlus, UserCheck, Radio
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 export default function ProfileScreen({ 
   currentUser, 
@@ -233,7 +234,10 @@ export default function ProfileScreen({
           <button onClick={() => setViewingProfile(null)} className="p-2 text-white hover:text-zinc-400 transition-colors">
             <ArrowLeft size={22} />
           </button>
-          <h1 className="text-lg font-extrabold text-white">{viewingProfile.name}</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-lg font-extrabold text-white">{viewingProfile.name}</h1>
+            <VerifiedBadge userOrName={viewingProfile} size={18} />
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">
           {/* Profile Header */}
@@ -246,7 +250,10 @@ export default function ProfileScreen({
                 <User size={48} className="text-zinc-400" />
               )}
             </div>
-            <h2 className="text-3xl font-extrabold text-white mb-1">{viewingProfile.name}</h2>
+            <div className="flex items-center justify-center gap-1.5 mb-1">
+              <h2 className="text-3xl font-extrabold text-white">{viewingProfile.name}</h2>
+              <VerifiedBadge userOrName={viewingProfile} size={22} />
+            </div>
             {viewingProfile.bio && (
               <p className="text-sm text-zinc-400 mt-2 max-w-xs mx-auto">{viewingProfile.bio}</p>
             )}
@@ -442,6 +449,7 @@ export default function ProfileScreen({
               ) : (
                 <div className="flex items-center gap-2 justify-center">
                   <h1 className="text-3xl font-extrabold text-white">{localUser?.name || 'مستخدم'}</h1>
+                  <VerifiedBadge userOrName={localUser} size={22} />
                   <button onClick={() => setIsEditingName(true)} className="p-1.5 text-zinc-400 hover:text-white transition-colors">
                     <Edit2 size={16} />
                   </button>
@@ -631,7 +639,10 @@ export default function ProfileScreen({
                       )}
                     </div>
                     <div className="flex-1 truncate">
-                      <p className="text-sm font-semibold text-white">{user.name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-white truncate">{user.name}</p>
+                        <VerifiedBadge userOrName={user} size={14} />
+                      </div>
                       <p className="text-xs text-zinc-400 truncate">
                         {user.followersCount || 0} followers • {user.publicPlaylists?.length || 0} playlists
                         {user.bio ? ` • ${user.bio}` : ''}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft, Users, Bell } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import VerifiedBadge from './VerifiedBadge';
 
 export default function ChatModal({
   isOpen,
@@ -231,7 +232,10 @@ export default function ChatModal({
                 )}
               </div>
               <div className="truncate">
-                <h3 className="font-bold text-white text-lg leading-tight truncate">{activeUser.name}</h3>
+                <div className="flex items-center gap-1.5">
+                  <h3 className="font-bold text-white text-lg leading-tight truncate">{activeUser.name}</h3>
+                  <VerifiedBadge userOrName={activeUser} size={16} />
+                </div>
                 <p className="text-xs text-[#1DB954] font-semibold tracking-wide">Direct Chat</p>
               </div>
             </div>
@@ -400,7 +404,10 @@ export default function ChatModal({
                             className="w-11 h-11 rounded-full object-cover shadow"
                           />
                           <div className="truncate flex-1">
-                            <p className="font-bold text-base text-white truncate">{u.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-bold text-base text-white truncate">{u.name}</p>
+                              <VerifiedBadge userOrName={u} size={15} />
+                            </div>
                             <p className="text-sm text-zinc-400 truncate">{u.bio || 'Liofy listener'}</p>
                           </div>
                           <span className="text-xs font-bold text-[#1DB954] bg-[#1DB954]/10 px-3 py-1.5 rounded-full border border-[#1DB954]/20">
@@ -445,9 +452,12 @@ export default function ChatModal({
                           />
                           <div className="truncate flex-1">
                             <div className="flex items-center justify-between">
-                              <p className="font-bold text-base text-white truncate">{u.name}</p>
+                              <div className="flex items-center gap-1.5 truncate">
+                                <p className="font-bold text-base text-white truncate">{u.name}</p>
+                                <VerifiedBadge userOrName={u} size={15} />
+                              </div>
                               {last?.createdAt && (
-                                <span className="text-xs text-zinc-400 shrink-0 font-medium">
+                                <span className="text-xs text-zinc-400 shrink-0 font-medium ml-2">
                                   {new Date(last.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                 </span>
                               )}
@@ -482,7 +492,10 @@ export default function ChatModal({
                           className="w-10 h-10 rounded-full object-cover shadow shrink-0"
                         />
                         <div className="truncate flex-1">
-                          <p className="font-bold text-sm text-white truncate">{f.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-bold text-sm text-white truncate">{f.name}</p>
+                            <VerifiedBadge userOrName={f} size={14} />
+                          </div>
                           <p className="text-xs text-zinc-400 truncate">{f.bio || 'Friend on Liofy'}</p>
                         </div>
                         <span className="text-xs font-bold text-[#1DB954] bg-[#1DB954]/10 group-hover:bg-[#1DB954]/20 px-3 py-1 rounded-full border border-[#1DB954]/20 transition-all">

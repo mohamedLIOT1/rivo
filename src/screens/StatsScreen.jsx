@@ -1,5 +1,6 @@
 import React from 'react';
 import { Trophy, Music, Headphones, Flame, Calendar, UserCheck, Disc } from 'lucide-react';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 export default function StatsScreen({ tracks = [], currentUser }) {
   // Real calculations only
@@ -55,7 +56,10 @@ export default function StatsScreen({ tracks = [], currentUser }) {
                   <Trophy size={14} />
                   <span>Top Listener This Week</span>
                 </span>
-                <h3 className="text-2xl font-black text-white truncate mt-1">{currentUser.name}</h3>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <h3 className="text-2xl font-black text-white truncate">{currentUser.name}</h3>
+                  <VerifiedBadge userOrName={currentUser} size={20} />
+                </div>
                 <p className="text-xs text-zinc-400 mt-1 font-bold">
                   {userMinutes} mins listened strictly this week
                 </p>
@@ -120,6 +124,7 @@ export default function StatsScreen({ tracks = [], currentUser }) {
                   <div className="truncate">
                     <div className="flex items-center gap-2">
                       <h4 className="font-bold text-sm text-white truncate">{friend.name}</h4>
+                      <VerifiedBadge userOrName={friend} size={14} />
                       <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-[#1DB954] text-black rounded-full">
                         You
                       </span>
