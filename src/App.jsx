@@ -313,7 +313,7 @@ function AppContent() {
     await deleteTrack(cleanId);
   };
 
-  const handleDeleteAlbum = async (albumId, albumObj = null) => {
+  const handleDeleteAlbum = async (albumId, albumObj = null, deleteTracks = true) => {
     if (!albumId) return;
     const cleanId = String(albumId);
     const targetAlbum = albumObj || albums.find(a => String(a.id || a._id) === cleanId || a.name === cleanId);
@@ -323,26 +323,33 @@ function AppContent() {
     setAlbums(prev => prev.filter(a => String(a.id || a._id) !== cleanId && (!albumName || a.name?.toLowerCase().trim() !== albumName.toLowerCase().trim())));
 
     // Collect all tracks belonging to this album
-    const tracksToDelete = new Set();
+    const affectedTracks = new Set();
     if (targetAlbum?.trackIds && Array.isArray(targetAlbum.trackIds)) {
-      targetAlbum.trackIds.forEach(id => tracksToDelete.add(String(id)));
+      targetAlbum.trackIds.forEach(id => affectedTracks.add(String(id)));
     }
     if (albumName) {
       tracks.forEach(t => {
         if (t.album && t.album.toLowerCase().trim() === albumName.toLowerCase().trim()) {
-          tracksToDelete.add(String(t.id || t._id));
+          affectedTracks.add(String(t.id || t._id));
         }
       });
     }
 
-    // Remove tracks from state and user playlists / likes
-    if (tracksToDelete.size > 0) {
-      setTracks(prev => prev.filter(t => !tracksToDelete.has(String(t.id || t._id))));
-      setLikedTrackIds(prev => prev.filter(id => !tracksToDelete.has(String(id))));
-      setPlaylists(prev => prev.map(pl => ({
-        ...pl,
-        trackIds: (pl.trackIds || []).filter(id => !tracksToDelete.has(String(id)))
-      })));
+    if (deleteTracks) {
+      // Remove tracks from state and user playlists / likes
+      if (affectedTracks.size > 0) {
+        setTracks(prev => prev.filter(t => !affectedTracks.has(String(t.id || t._id))));
+        setLikedTrackIds(prev => prev.filter(id => !affectedTracks.has(String(id))));
+        setPlaylists(prev => prev.map(pl => ({
+          ...pl,
+          trackIds: (pl.trackIds || []).filter(id => !affectedTracks.has(String(id)))
+        })));
+      }
+    } else {
+      // Keep tracks on website, only clear their album tag
+      if (affectedTracks.size > 0) {
+        setTracks(prev => prev.map(t => affectedTracks.has(String(t.id || t._id)) ? { ...t, album: '' } : t));
+      }
     }
 
     if (selectedPlaylist && (
@@ -363,7 +370,7 @@ function AppContent() {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ deleteTracks: true })
+          body: JSON.stringify({ deleteTracks: Boolean(deleteTracks) })
         });
       }
     } catch (err) {

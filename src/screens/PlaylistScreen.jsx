@@ -11,6 +11,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import DeleteAlbumModal from '../components/DeleteAlbumModal';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -111,6 +112,7 @@ export default function PlaylistScreen({
 
   // Duplicate Track Confirmation State
   const [duplicateConfirmTrack, setDuplicateConfirmTrack] = useState(null);
+  const [isDeleteAlbumModalOpen, setIsDeleteAlbumModalOpen] = useState(false);
 
   const handleAddTrackWithCheck = (trackToAdd) => {
     if (!trackToAdd) return;
@@ -402,19 +404,26 @@ export default function PlaylistScreen({
 
   const handleDelete = () => {
     if (isSiteAlbum || playlist?.isAlbum) {
-      if (window.confirm(`Are you sure you want to delete the album "${playlist.name}" and all of its tracks?`)) {
-        setIsDeleting(true);
-        if (onDeleteAlbum) {
-          onDeleteAlbum(playlist.id || playlist._id, playlist);
-        } else {
-          onDeletePlaylist(playlist.id || playlist._id);
-        }
-      }
+      setIsDeleteAlbumModalOpen(true);
     } else {
       if (window.confirm(`Are you sure you want to delete the playlist "${playlist.name}"?`)) {
         setIsDeleting(true);
         onDeletePlaylist(playlist.id || playlist._id);
       }
+    }
+  };
+
+  const handleConfirmDeleteAlbum = async (deleteTracks) => {
+    setIsDeleting(true);
+    try {
+      if (onDeleteAlbum) {
+        await onDeleteAlbum(playlist.id || playlist._id, playlist, deleteTracks);
+      } else {
+        onDeletePlaylist(playlist.id || playlist._id);
+      }
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteAlbumModalOpen(false);
     }
   };
 
@@ -1106,6 +1115,17 @@ export default function PlaylistScreen({
             </div>
           </div>
         </div>
+      )}
+
+      {isDeleteAlbumModalOpen && (
+        <DeleteAlbumModal
+          isOpen={isDeleteAlbumModalOpen}
+          onClose={() => setIsDeleteAlbumModalOpen(false)}
+          album={playlist}
+          tracksCount={playlistTracks.length || (playlist?.trackIds || []).length}
+          onConfirm={handleConfirmDeleteAlbum}
+          globalTheme={globalTheme}
+        />
       )}
     </div>
   );

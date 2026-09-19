@@ -10,6 +10,7 @@ import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import EditArtistModal from '../components/EditArtistModal';
 import AddAlbumModal from '../components/AddAlbumModal';
+import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 
 export default function AdminScreen({
@@ -51,6 +52,7 @@ export default function AdminScreen({
   const [albumFilterQuery, setAlbumFilterQuery] = useState('');
   const [albumTypeFilter, setAlbumTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
   const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
+  const [albumToDelete, setAlbumToDelete] = useState(null);
 
   // Artists State
   const [artistsList, setArtistsList] = useState([]);
@@ -206,8 +208,9 @@ export default function AdminScreen({
     }
   };
 
-  const handleDeleteAlbumInternal = async (albumId) => {
-    if (!window.confirm(`Are you sure you want to permanently delete this album?`)) return;
+  const handleConfirmDeleteAlbum = async (deleteTracks) => {
+    if (!albumToDelete) return;
+    const albumId = albumToDelete.id || albumToDelete._id;
     try {
       const res = await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}`, {
         method: 'DELETE',
@@ -215,16 +218,16 @@ export default function AdminScreen({
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ deleteTracks: true })
+        body: JSON.stringify({ deleteTracks: Boolean(deleteTracks) })
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || `Failed with status ${res.status}`);
       }
-      setAdminAlbums(prev => prev.filter(a => String(a.id || a._id) !== String(albumId)));
+      setAdminAlbums(prev => prev.filter(a => String(a.id || a._id) !== String(albumId) && a.name !== albumToDelete.name));
       await fetchAlbums();
-      if (onDeleteAlbum) onDeleteAlbum(albumId);
-      flashMessage('Album permanently deleted');
+      if (onDeleteAlbum) onDeleteAlbum(albumId, albumToDelete, deleteTracks);
+      flashMessage(deleteTracks ? 'Album & all songs permanently deleted' : 'Album deleted (songs kept on website)');
     } catch (err) {
       console.error('Delete album error:', err);
       flashMessage(err.message || 'Error deleting album');
@@ -847,7 +850,7 @@ export default function AdminScreen({
                       </button>
                     )}
                     <button
-                      onClick={() => handleDeleteAlbumInternal(albumId)}
+                      onClick={() => setAlbumToDelete(album)}
                       className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white brutal-border border-red-500 cursor-pointer transition-colors"
                       title="Delete Album"
                     >
@@ -1212,6 +1215,18 @@ export default function AdminScreen({
             setIsAddAlbumOpen(false);
             flashMessage(`Album "${newAlbum.name}" created successfully!`);
           }}
+          globalTheme={globalTheme}
+        />
+      )}
+
+      {/* Delete Album Modal (Option C: Choice to keep or delete tracks) */}
+      {albumToDelete && (
+        <DeleteAlbumModal
+          isOpen={Boolean(albumToDelete)}
+          onClose={() => setAlbumToDelete(null)}
+          album={albumToDelete}
+          tracksCount={tracks.filter(t => t.album && t.album.toLowerCase().trim() === albumToDelete.name?.toLowerCase().trim()).length || (albumToDelete.trackIds || []).length}
+          onConfirm={handleConfirmDeleteAlbum}
           globalTheme={globalTheme}
         />
       )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Disc, User, Image, Calendar, Tag, Check, Trash2, Loader2, ShieldCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import ConfirmModal from './ConfirmModal';
+import DeleteAlbumModal from './DeleteAlbumModal';
 
 export default function EditAlbumModal({
   isOpen,
@@ -86,7 +86,7 @@ export default function EditAlbumModal({
     }
   };
 
-  const handleDeleteAlbum = async () => {
+  const handleDeleteAlbum = async (deleteTracks = true) => {
     try {
       const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}`, {
@@ -95,9 +95,10 @@ export default function EditAlbumModal({
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ deleteTracks: true })
+        body: JSON.stringify({ deleteTracks: Boolean(deleteTracks) })
       });
-      if (onDelete) onDelete(albumId, album);
+      if (onDelete) onDelete(albumId, album, deleteTracks);
+      setIsDeleteConfirmOpen(false);
       onClose();
     } catch (err) {
       console.error('Delete album error:', err);
@@ -262,17 +263,13 @@ export default function EditAlbumModal({
         </form>
       </div>
 
-      <ConfirmModal
+      <DeleteAlbumModal
         isOpen={isDeleteConfirmOpen}
-        title={`Delete Album "${name}"?`}
-        message="Are you sure you want to permanently delete this album and all associated tracks from Rivo?"
-        confirmText="Delete Album"
-        cancelText="Cancel"
-        onConfirm={() => {
-          setIsDeleteConfirmOpen(false);
-          handleDeleteAlbum();
-        }}
-        onCancel={() => setIsDeleteConfirmOpen(false)}
+        onClose={() => setIsDeleteConfirmOpen(false)}
+        album={{ ...album, name, artist, cover }}
+        tracksCount={(album?.trackIds || []).length}
+        onConfirm={handleDeleteAlbum}
+        globalTheme={globalTheme}
       />
     </div>
   );
