@@ -3,6 +3,14 @@ import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft,
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from './VerifiedBadge';
 
+const getToken = () => {
+  try {
+    return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+  } catch {
+    return '';
+  }
+};
+
 export default function ChatModal({
   isOpen,
   onClose,
@@ -46,7 +54,7 @@ export default function ChatModal({
   const fetchHubData = async () => {
     setLoadingHub(true);
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const [convRes, friendsRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/chat/conversations`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -83,7 +91,7 @@ export default function ChatModal({
     const fetchHistory = async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem('liofy_token');
+        const token = getToken();
         const res = await fetch(`${API_BASE_URL}/api/chat/${activeUser.id}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -174,7 +182,7 @@ export default function ChatModal({
     setSending(true);
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/chat/send`, {
         method: 'POST',
         headers: {
@@ -211,7 +219,7 @@ export default function ChatModal({
       roomCode = `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
     }
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/chat/send`, {
         method: 'POST',
         headers: {
@@ -648,7 +656,7 @@ export default function ChatModal({
                     }`}>
                       <Users size={32} className="mx-auto text-zinc-400 mb-2" />
                       <p className={`font-display font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Friends Added Yet</p>
-                      <p className="text-xs text-zinc-500 mt-1">Search and connect with friends on Liofy.</p>
+                      <p className="text-xs text-zinc-500 mt-1">Search and connect with friends on Rivo.</p>
                     </div>
                   ) : (
                     friends.map((f) => (

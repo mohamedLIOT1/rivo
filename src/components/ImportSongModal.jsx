@@ -19,7 +19,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const res = await fetch(`${API_BASE_URL}/api/tracks/import`, {
         method: 'POST',
         headers: {
@@ -159,7 +159,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
               ) : (
                 <>
                   <Music size={15} />
-                  <span>INTAKE TRACK INTO LIOFY</span>
+                  <span>INTAKE TRACK INTO RIVO</span>
                 </>
               )}
             </button>

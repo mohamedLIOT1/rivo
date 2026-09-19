@@ -15,7 +15,7 @@ export function getJamSocket() {
     });
 
     socket.on('connect', () => {
-      console.log('⚡ Connected to Liofy Real-Time Jam Socket:', socket.id);
+      console.log('⚡ Connected to Rivo Real-Time Jam Socket:', socket.id);
     });
 
     socket.on('connect_error', (err) => {

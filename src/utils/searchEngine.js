@@ -1,5 +1,5 @@
 /**
- * Liofy Music Search Engine
+ * Rivo Music Search Engine
  * High-performance Backend Search Engine & Fallback Stream Resolver
  */
 

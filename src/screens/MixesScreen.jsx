@@ -171,12 +171,12 @@ export default function MixesScreen({
   const [dailySeed, setDailySeed] = useState(() => {
     try {
       const today = new Date().toDateString();
-      const savedDate = localStorage.getItem('liofy_daily_seed_date');
+      const savedDate = localStorage.getItem('rivo_daily_seed_date') || localStorage.getItem('liofy_daily_seed_date');
       if (savedDate === today) {
-        const raw = localStorage.getItem('liofy_daily_seed_track');
+        const raw = localStorage.getItem('rivo_daily_seed_track') || localStorage.getItem('liofy_daily_seed_track');
         if (raw) return JSON.parse(raw);
       }
-      const lastRaw = localStorage.getItem('liofy_last_played_music_track');
+      const lastRaw = localStorage.getItem('rivo_last_played_music_track') || localStorage.getItem('liofy_last_played_music_track');
       if (lastRaw) return JSON.parse(lastRaw);
     } catch {}
     return null;
@@ -186,12 +186,16 @@ export default function MixesScreen({
   useEffect(() => {
     const handleSeedUpdate = () => {
       try {
-        const raw = localStorage.getItem('liofy_daily_seed_track');
+        const raw = localStorage.getItem('rivo_daily_seed_track') || localStorage.getItem('liofy_daily_seed_track');
         if (raw) setDailySeed(JSON.parse(raw));
       } catch {}
     };
+    window.addEventListener('rivo:daily-seed-updated', handleSeedUpdate);
     window.addEventListener('liofy:daily-seed-updated', handleSeedUpdate);
-    return () => window.removeEventListener('liofy:daily-seed-updated', handleSeedUpdate);
+    return () => {
+      window.removeEventListener('rivo:daily-seed-updated', handleSeedUpdate);
+      window.removeEventListener('liofy:daily-seed-updated', handleSeedUpdate);
+    };
   }, []);
 
   // Strictly filter out any Quran content from music mixes
@@ -304,8 +308,11 @@ export default function MixesScreen({
     };
     try {
       const todayStr = new Date().toDateString();
+      const seedJson = JSON.stringify(newSeed);
+      localStorage.setItem('rivo_daily_seed_date', todayStr);
       localStorage.setItem('liofy_daily_seed_date', todayStr);
-      localStorage.setItem('liofy_daily_seed_track', JSON.stringify(newSeed));
+      localStorage.setItem('rivo_daily_seed_track', seedJson);
+      localStorage.setItem('liofy_daily_seed_track', seedJson);
     } catch {}
     setDailySeed(newSeed);
   };

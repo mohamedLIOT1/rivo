@@ -48,7 +48,7 @@ export default function ShortcutsModal({ isOpen, onClose }) {
             </div>
             <div>
               <h3 className="font-mono font-black uppercase text-[#082621] text-sm">Keyboard Shortcuts</h3>
-              <p className="text-[11px] text-[#082621]/70 font-sans">Navigate Liofy with keyboard shortcuts</p>
+              <p className="text-[11px] text-[#082621]/70 font-sans">Navigate Rivo with keyboard shortcuts</p>
             </div>
           </div>
           <button

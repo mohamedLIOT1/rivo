@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search as SearchIcon, Play, Heart, PlusCircle, X, Trash2, Sparkles, Disc, 
   Music, Mic, Headphones, Radio, Flame, Coffee, Zap, Compass, Waves, Loader2,
-  User, Users 
+  User, Users, Edit2
 } from 'lucide-react';
 import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { API_BASE_URL } from '../config';
 import { getTrackArtists, ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { isUserAdmin } from '../utils/adminUtils';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -48,6 +49,8 @@ export default function SearchScreen({
   onAddToLibrary,
   onDeleteTrack,
   onViewProfile,
+  currentUser,
+  openEditSongModal,
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
@@ -497,7 +500,7 @@ export default function SearchScreen({
                                 <VerifiedBadge userOrName={u} size={13} />
                               </div>
                               <p className={`text-[11px] font-mono truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                                {u.bio || (u.followersCount ? `${u.followersCount} followers` : 'Liofy Listener')}
+                                {u.bio || (u.followersCount ? `${u.followersCount} followers` : 'Rivo Listener')}
                               </p>
                             </div>
                           </div>
@@ -894,6 +897,18 @@ export default function SearchScreen({
                                   className={track.liked ? 'text-[#dc2626]' : ''}
                                 />
                               </button>
+                              {openEditSongModal && isUserAdmin(currentUser) && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditSongModal(track);
+                                  }}
+                                  className="p-1 text-zinc-400 hover:text-[#17a398] transition cursor-pointer"
+                                  title="Admin: Edit Song"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              )}
                               {onDeleteTrack && (
                                 <button
                                   onClick={(e) => handleDelete(e, track)}
@@ -1064,7 +1079,7 @@ export default function SearchScreen({
                               <VerifiedBadge userOrName={u} size={13} />
                             </div>
                             <p className={`text-[11px] font-mono truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                              {u.bio || (u.followersCount ? `${u.followersCount} followers` : 'Liofy Listener')}
+                              {u.bio || (u.followersCount ? `${u.followersCount} followers` : 'Rivo Listener')}
                             </p>
                           </div>
                         </div>

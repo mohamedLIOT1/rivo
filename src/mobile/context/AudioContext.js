@@ -11,7 +11,7 @@ import { useToast } from './ToastContext';
 const AudioContext = createContext();
 const AudioProgressContext = createContext();
 
-const TEMP_PLAY_DIR = `${FileSystem.cacheDirectory}liofy_play/`;
+const TEMP_PLAY_DIR = `${FileSystem.cacheDirectory}rivo_play/`;
 
 export const AudioProvider = ({ children }) => {
   const soundRef = useRef(null);

@@ -37,10 +37,10 @@ export default function SettingsModal({
         <div className="my-4 bg-[#082621] text-[#fdfbf7] p-4 brutal-border brutal-shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-[#26c4b7] text-[#082621] brutal-border flex items-center justify-center font-mono font-black text-sm">
-              L
+              R
             </div>
             <div>
-              <h4 className="font-mono font-black uppercase text-sm text-[#26c4b7]">Liofy Hi-Fi Audio</h4>
+              <h4 className="font-mono font-black uppercase text-sm text-[#26c4b7]">Rivo Hi-Fi Audio</h4>
               <p className="text-[11px] text-[#ded2bb]">Unlimited Streaming • 24-Bit Acoustic Fidelity • Zero Loss</p>
             </div>
           </div>

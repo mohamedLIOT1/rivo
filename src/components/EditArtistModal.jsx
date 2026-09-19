@@ -46,7 +46,7 @@ export default function EditArtistModal({
     setError(null);
 
     try {
-      const token = localStorage.getItem('liofy_token') || '';
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const res = await fetch(`${API_BASE_URL}/api/artists/${encodeURIComponent(originalName)}`, {
         method: 'PUT',
         headers: {

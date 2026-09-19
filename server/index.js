@@ -1,5 +1,5 @@
 /**
- * Liofy Backend API Server — FULL FEATURED & OPTIMIZED
+ * Rivo Backend API Server — FULL FEATURED & OPTIMIZED
  */
 
 const express = require('express');
@@ -27,7 +27,15 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'liofy_secure_key_2025';
+const JWT_SECRET = process.env.JWT_SECRET || 'rivo_secure_key_2025';
+const LEGACY_JWT_SECRET = 'liofy_secure_key_2025';
+const verifyJwt = (t) => {
+  try {
+    return jwt.verify(t, JWT_SECRET);
+  } catch (err) {
+    return jwt.verify(t, LEGACY_JWT_SECRET);
+  }
+};
 
 // Global Error Handlers
 process.on('uncaughtException', (err) => console.warn('[Uncaught]:', err.message));
@@ -308,7 +316,7 @@ function auth(req, res, next) {
   const t = (req.headers.authorization || '').replace('Bearer ', '');
   if (!t) return res.status(401).json({ error: 'Auth required' });
   try {
-    req.user = jwt.verify(t, JWT_SECRET);
+    req.user = verifyJwt(t);
     next();
   } catch {
     res.status(403).json({ error: 'Invalid token' });
@@ -319,7 +327,7 @@ function adminAuth(req, res, next) {
   const t = (req.headers.authorization || '').replace('Bearer ', '');
   if (!t) return res.status(401).json({ error: 'Auth required' });
   try {
-    const decoded = jwt.verify(t, JWT_SECRET);
+    const decoded = verifyJwt(t);
     req.user = decoded;
     if (!isAdminUser(decoded)) {
       return res.status(403).json({ error: 'Permission denied. Administrator access required.' });
@@ -333,7 +341,7 @@ function adminAuth(req, res, next) {
 function optionalAuth(req, res, next) {
   const t = (req.headers.authorization || '').replace('Bearer ', '');
   if (t) {
-    try { req.user = jwt.verify(t, JWT_SECRET); } catch {}
+    try { req.user = verifyJwt(t); } catch {}
   }
   next();
 }
@@ -1430,7 +1438,7 @@ async function searchTracksInternal(query) {
         lyrics: t.lyrics || [],
         bpm: t.bpm,
         key: t.key,
-        source: 'Liofy'
+        source: 'Rivo'
       }));
 
     // 2. Query SoundCloud with dynamic client ID
@@ -2284,9 +2292,15 @@ app.post('/api/playlists/create', auth, async (req, res) => {
 
 app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
   try {
-    const u = await User.findById(req.user.id);
+    let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ error: 'User not found' });
-    const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl && isAdminUser(req.user)) {
+      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+      if (u) {
+        pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+      }
+    }
     if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
     const trackIdStr = String(req.body.trackId);
     if (req.body.allowDuplicate || !pl.trackIds.map(String).includes(trackIdStr)) {
@@ -2299,7 +2313,7 @@ app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
   }
 });
 
-// Remove track from playlist (Strictly restricted to playlist owner)
+// Remove track from playlist (Strictly restricted to playlist owner or admin)
 const removeTrackFromPlaylistHandler = async (req, res) => {
   try {
     if (!req.user || !req.user.id) return res.status(401).json({ error: 'Unauthorized' });
@@ -2307,10 +2321,16 @@ const removeTrackFromPlaylistHandler = async (req, res) => {
     const trackIdStr = String(req.body.trackId || req.params.trackId || '');
     if (!trackIdStr) return res.status(400).json({ error: 'trackId required' });
 
-    const u = await User.findById(req.user.id);
+    let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ error: 'User not found' });
 
-    const pl = u.playlists.find(p => String(p.id || p._id) === playlistId);
+    let pl = u.playlists.find(p => String(p.id || p._id) === playlistId);
+    if (!pl && isAdminUser(req.user)) {
+      u = await User.findOne({ $or: [{ 'playlists.id': playlistId }, { 'playlists._id': playlistId }] });
+      if (u) {
+        pl = u.playlists.find(p => String(p.id || p._id) === playlistId);
+      }
+    }
     if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
 
     pl.trackIds = (pl.trackIds || []).filter(id => String(id) !== trackIdStr);
@@ -2325,15 +2345,22 @@ app.delete('/api/playlists/:id/tracks/:trackId', auth, removeTrackFromPlaylistHa
 
 app.post('/api/playlists/:id/update', auth, async (req, res) => {
   try {
-    const u = await User.findById(req.user.id);
+    let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
-    const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl && isAdminUser(req.user)) {
+      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+      if (u) {
+        pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+      }
+    }
     if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
     if (req.body.name) pl.name = req.body.name;
+    if (req.body.description !== undefined) pl.description = req.body.description;
     if (req.body.cover) pl.cover = req.body.cover;
     if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
     await u.save();
-    res.json({ success: true, isPublic: pl.isPublic });
+    res.json({ success: true, isPublic: pl.isPublic, playlist: pl });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -2341,9 +2368,15 @@ app.post('/api/playlists/:id/update', auth, async (req, res) => {
 
 app.post('/api/playlists/:id/toggle-visibility', auth, async (req, res) => {
   try {
-    const u = await User.findById(req.user.id);
+    let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
-    const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl && isAdminUser(req.user)) {
+      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+      if (u) {
+        pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+      }
+    }
     if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
     pl.isPublic = pl.isPublic === false ? true : false;
     await u.save();
@@ -2355,11 +2388,19 @@ app.post('/api/playlists/:id/toggle-visibility', auth, async (req, res) => {
 
 app.delete('/api/playlists/:id', auth, async (req, res) => {
   try {
-    const u = await User.findById(req.user.id);
+    let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ error: 'User not found' });
     const initialLen = u.playlists.length;
     u.playlists = u.playlists.filter(p => String(p.id || p._id) !== String(req.params.id));
     if (u.playlists.length === initialLen) {
+      if (isAdminUser(req.user)) {
+        const owner = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+        if (owner) {
+          owner.playlists = owner.playlists.filter(p => String(p.id || p._id) !== String(req.params.id));
+          await owner.save();
+          return res.json({ success: true });
+        }
+      }
       return res.status(403).json({ error: 'Playlist not found or not owned by you' });
     }
     await u.save();
@@ -2392,6 +2433,86 @@ app.get('/api/albums/:id', async (req, res) => {
       ...t
     }));
     res.json({ success: true, album, tracks: formattedTracks });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Admin: Edit / Update Album Details
+const updateAlbumHandler = async (req, res) => {
+  try {
+    const albumId = req.params.id;
+    const { name, artist, cover, releaseDate, genre, trackIds } = req.body;
+    const album = await Album.findOne({ $or: [{ id: albumId }, { _id: mongoose.isValidObjectId(albumId) ? albumId : null }] });
+    if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
+
+    const oldName = album.name;
+    if (name) album.name = name.trim();
+    if (artist) album.artist = artist.trim();
+    if (cover !== undefined) album.cover = cover.trim();
+    if (releaseDate !== undefined) album.releaseDate = releaseDate;
+    if (genre !== undefined) album.genre = genre;
+    if (Array.isArray(trackIds)) album.trackIds = trackIds;
+
+    await album.save();
+
+    // If album name changed, update tracks that belong to this album
+    if (name && oldName && name.trim().toLowerCase() !== oldName.trim().toLowerCase()) {
+      const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      await Track.updateMany(
+        { album: { $regex: new RegExp(`^${escapeRegex(oldName)}$`, 'i') } },
+        { $set: { album: name.trim() } }
+      ).catch(() => {});
+    }
+
+    io.emit('album:updated', album);
+    res.json({ success: true, album });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+};
+app.put('/api/albums/:id', adminAuth, updateAlbumHandler);
+app.post('/api/albums/:id/update', adminAuth, updateAlbumHandler);
+
+// Admin: Delete Album
+app.delete('/api/albums/:id', adminAuth, async (req, res) => {
+  try {
+    const albumId = req.params.id;
+    await Album.deleteOne({ $or: [{ id: albumId }, { _id: mongoose.isValidObjectId(albumId) ? albumId : null }] });
+    io.emit('album:deleted', { id: albumId });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Admin: Get all playlists across website
+app.get('/api/admin/playlists', adminAuth, async (req, res) => {
+  try {
+    const users = await User.find({ 'playlists.0': { $exists: true } }, 'name username email playlists').lean();
+    const allPlaylists = [];
+    for (const u of users) {
+      for (const pl of u.playlists || []) {
+        allPlaylists.push({
+          ...pl,
+          id: pl.id || String(pl._id),
+          ownerId: String(u._id),
+          ownerName: u.name || u.username || 'User',
+          ownerEmail: u.email
+        });
+      }
+    }
+    res.json({ success: true, playlists: allPlaylists });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Admin: Get all albums across website
+app.get('/api/admin/albums', adminAuth, async (req, res) => {
+  try {
+    const albums = await Album.find().sort({ updatedAt: -1 }).lean();
+    res.json({ success: true, albums });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -2613,6 +2734,72 @@ app.delete('/api/tracks/:id', adminAuth, deleteTrackHandler);
 app.post('/api/tracks/:id/delete', adminAuth, deleteTrackHandler);
 app.post('/api/tracks/delete', adminAuth, deleteTrackHandler);
 
+// Edit / Update track details (Admin Only)
+const updateTrackHandler = async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Permission denied. Only administrators can edit songs.' });
+    }
+    const trackId = String(req.params.id || req.body.id || req.body._id || '');
+    if (!trackId) return res.status(400).json({ error: 'Track ID required' });
+
+    const track = await Track.findOne({ $or: [{ _id: mongoose.isValidObjectId(trackId) ? trackId : null }, { id: trackId }] });
+    if (!track) return res.status(404).json({ error: 'Track not found' });
+
+    const { title, artist, album, cover, audioUrl, duration, genre, lyrics } = req.body;
+    if (title) track.title = title.trim();
+    if (artist) track.artist = artist.trim();
+    if (album !== undefined) track.album = album.trim();
+    if (cover) track.cover = cover.trim();
+    if (audioUrl) track.audioUrl = audioUrl.trim();
+    if (duration !== undefined) track.duration = Number(duration) || track.duration;
+    if (genre !== undefined) track.genre = genre;
+    if (Array.isArray(lyrics)) track.lyrics = lyrics;
+
+    await track.save();
+
+    // If lyrics provided, also sync into universal SongLyrics collection
+    if (Array.isArray(lyrics) && lyrics.length > 0) {
+      const trackKey = getTrackKey(track.title, track.artist);
+      if (trackKey && trackKey !== '___') {
+        await SongLyrics.findOneAndUpdate(
+          { trackKey },
+          {
+            $set: {
+              trackKey,
+              trackId: String(track._id),
+              title: track.title,
+              artist: track.artist,
+              lyrics,
+              updatedBy: req.user.name || 'Admin',
+              isVerified: true,
+              verifiedBy: req.user.name || 'Admin',
+              verifiedAt: new Date()
+            }
+          },
+          { upsert: true, new: true }
+        ).catch(() => {});
+      }
+    }
+
+    // Auto-sync with album
+    await syncTrackToAlbum(track);
+
+    const formatted = {
+      ...track.toObject(),
+      id: String(track._id)
+    };
+
+    io.emit('track:updated', formatted);
+    res.json({ success: true, track: formatted });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+app.put('/api/tracks/:id', adminAuth, updateTrackHandler);
+app.post('/api/tracks/:id/update', adminAuth, updateTrackHandler);
+app.post('/api/tracks/update', adminAuth, updateTrackHandler);
+
 // Like / Unlike track toggle endpoint
 app.post('/api/tracks/:id/like', auth, async (req, res) => {
   try {
@@ -2707,7 +2894,7 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
     try {
       const res = await axios.get('https://lrclib.net/api/search', {
         params: { q },
-        headers: { 'User-Agent': 'LiofyApp/1.0 (https://github.com/mohamedLIOT1/liofy)' },
+        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/mohamedLIOT1/liofy)' },
         timeout: 4500
       });
       const items = res.data || [];
@@ -2851,15 +3038,16 @@ app.get('/api/tracks/download', async (req, res) => {
   }
 });
 
-app.post('/api/tracks/update-lyrics', adminAuth, async (req, res) => {
+app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
   try {
     const { trackId, title, artist, audioUrl, lyrics, isVerified } = req.body;
-    const isVer = isVerified !== undefined ? Boolean(isVerified) : true;
+    const isAdmin = isAdminUser(req.user);
+    const isVer = isAdmin ? (isVerified !== undefined ? Boolean(isVerified) : true) : false;
     const trackKey = getTrackKey(title, artist);
 
     // If admin marks lyrics as NOT correct / unverified, remove custom record
     // so the song continues using the normal function (LRCLIB / OVH scraper)
-    if (!isVer) {
+    if (!isVer && isAdmin && isVerified === false) {
       if (trackKey && trackKey !== '___') {
         await SongLyrics.deleteOne({ trackKey }).catch(() => {});
       }
@@ -2884,7 +3072,7 @@ app.post('/api/tracks/update-lyrics', adminAuth, async (req, res) => {
       return res.status(400).json({ error: 'Lyrics must be an array' });
     }
 
-    // 1. Save / upsert into universal SongLyrics collection with isVerified: true
+    // 1. Save / upsert into universal SongLyrics collection
     if (trackKey && trackKey !== '___') {
       await SongLyrics.findOneAndUpdate(
         { trackKey },
@@ -2895,11 +3083,11 @@ app.post('/api/tracks/update-lyrics', adminAuth, async (req, res) => {
             title: title || '',
             artist: artist || '',
             lyrics,
-            updatedBy: req.user.name || 'admin',
-            isVerified: true,
-            verifiedBy: req.user.name || 'Admin',
-            verifiedAt: new Date(),
-            source: 'verified'
+            updatedBy: req.user.name || req.user.username || (isAdmin ? 'Admin' : 'User'),
+            isVerified: isVer,
+            verifiedBy: isVer ? (req.user.name || 'Admin') : '',
+            verifiedAt: isVer ? new Date() : null,
+            source: isVer ? 'verified' : 'community'
           }
         },
         { upsert: true, new: true }
@@ -3164,7 +3352,7 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
             duration: t.duration || 180,
             isSmartShuffle: true,
             smartReason: 'Matching Artist & Genre',
-            source: 'Liofy'
+            source: 'Rivo'
           });
         }
       }

@@ -20,7 +20,7 @@ export default function ListeningActivityPanel({
 
   const fetchActivity = async () => {
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const res = await fetch(`${API_BASE_URL}/api/users/listening-activity`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
@@ -209,7 +209,7 @@ export default function ListeningActivityPanel({
         <div className={`p-2.5 border-t-2 flex items-center justify-between text-[11px] font-mono ${
           isDark ? 'bg-[#141d1b] border-zinc-800 text-zinc-400' : 'bg-[#ede5d3] border-[#0b1110] text-[#082621]/70'
         }`}>
-          <span className="font-bold">LIOFY SYNC</span>
+          <span className="font-bold">RIVO SYNC</span>
           <button
             onClick={() => openChatModal?.()}
             className={`flex items-center gap-1 font-black uppercase cursor-pointer ${

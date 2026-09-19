@@ -89,7 +89,7 @@ export default function AuthModal({ isOpen, onClose }) {
               </div>
 
               <div className="w-full text-center text-[10px] font-mono font-black py-1.5 px-3 bg-[#ede5d3] text-[#082621] brutal-border">
-                ✓ VERIFIED LIOFY MEMBER
+                ✓ VERIFIED RIVO MEMBER
               </div>
 
               <button

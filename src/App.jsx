@@ -9,6 +9,7 @@ import AddToPlaylistModal from './components/AddToPlaylistModal';
 import SettingsModal from './components/SettingsModal';
 import AddSongModal from './components/AddSongModal';
 import EditSongModal from './components/EditSongModal';
+import EditAlbumModal from './components/EditAlbumModal';
 import AuthModal from './components/AuthModal';
 import JamRoomModal from './components/JamRoomModal';
 import ImportPlaylistModal from './components/ImportPlaylistModal';
@@ -38,6 +39,14 @@ import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from '.
 import { resumeAudioContext } from './utils/audioEngine';
 import { UserProvider, useUser } from './context/UserContext';
 import { AudioProvider, useAudioPlayer } from './context/AudioContext';
+
+const getStoredToken = () => {
+  try {
+    return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+  } catch {
+    return '';
+  }
+};
 
 function AppContent() {
   const {
@@ -82,19 +91,21 @@ function AppContent() {
   const [isAddToPlaylistOpen, setIsAddToPlaylistOpen] = useState(false);
   const [isSettingsOpen,      setIsSettingsOpen]      = useState(false);
   const [isAddSongOpen,       setIsAddSongOpen]       = useState(false);
+  const [isImportSongOpen,    setIsImportSongOpen]    = useState(false);
+  const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
   const [isEditSongOpen,      setIsEditSongOpen]      = useState(false);
   const [editingTrack,        setEditingTrack]        = useState(null);
+  const [isEditAlbumOpen,     setIsEditAlbumOpen]     = useState(false);
+  const [editingAlbum,        setEditingAlbum]        = useState(null);
   const [isAuthOpen,          setIsAuthOpen]          = useState(false);
   const [isJamOpen,           setIsJamOpen]           = useState(false);
   const [jamSession,          setJamSession]          = useState(null);
-  const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
-  const [isImportSongOpen, setIsImportSongOpen] = useState(false);
   const [isChatOpen,          setIsChatOpen]          = useState(false);
   const [isShortcutsOpen,     setIsShortcutsOpen]     = useState(false);
   const [isMobileMenuOpen,    setIsMobileMenuOpen]    = useState(false);
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(() => {
     try {
-      const saved = localStorage.getItem('liofy_activity_panel_open');
+      const saved = localStorage.getItem('rivo_activity_panel_open') ?? localStorage.getItem('liofy_activity_panel_open');
       if (saved !== null) return JSON.parse(saved);
       return typeof window !== 'undefined' && window.innerWidth >= 1200;
     } catch {
@@ -105,7 +116,10 @@ function AppContent() {
   const toggleActivityPanel = () => {
     setIsActivityPanelOpen(prev => {
       const next = !prev;
-      try { localStorage.setItem('liofy_activity_panel_open', JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem('rivo_activity_panel_open', JSON.stringify(next));
+        localStorage.setItem('liofy_activity_panel_open', JSON.stringify(next));
+      } catch {}
       return next;
     });
   };
@@ -149,7 +163,7 @@ function AppContent() {
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
-        const token = localStorage.getItem('liofy_token');
+        const token = getStoredToken();
         if (token && currentUser) {
           const res = await fetch(`${API_BASE_URL}/api/chat/unread-count`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -261,7 +275,7 @@ function AppContent() {
     // Save to server (if not already done in AddSongModal)
     if (songToAdd.source === 'YouTube' || songToAdd.source === 'SoundCloud') {
       try {
-        const token = localStorage.getItem('liofy_token');
+        const token = getStoredToken();
         await fetch(`${API_BASE_URL}/api/tracks/add`, {
           method: 'POST',
           headers: {
@@ -279,6 +293,7 @@ function AppContent() {
   };
 
   const handleOpenEditSong = (track) => { setEditingTrack(track); setIsEditSongOpen(true); };
+  const handleOpenEditAlbum = (album) => { setEditingAlbum(album); setIsEditAlbumOpen(true); };
 
   const handleDeleteTrack = async (trackId) => {
     if (!trackId || !isUserAdmin(currentUser)) return;
@@ -297,9 +312,33 @@ function AppContent() {
     await deleteTrack(cleanId);
   };
 
-  const handleUpdateSong = (updatedTrack) => {
-    setTracks(prev => prev.map(t => (t.id === updatedTrack.id ? updatedTrack : t)));
-    if (currentTrack?.id === updatedTrack.id) setCurrentTrack(updatedTrack);
+  const handleUpdateSong = async (updatedTrack) => {
+    const trackId = String(updatedTrack.id || updatedTrack._id);
+    setTracks(prev => prev.map(t => (String(t.id || t._id) === trackId ? updatedTrack : t)));
+    if (currentTrack && String(currentTrack.id || currentTrack._id) === trackId) {
+      setCurrentTrack(updatedTrack);
+    }
+
+    try {
+      const token = getStoredToken();
+      if (token) {
+        await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            title: updatedTrack.title,
+            artist: updatedTrack.artist,
+            album: updatedTrack.album,
+            genre: updatedTrack.genre,
+            cover: updatedTrack.cover,
+            audioUrl: updatedTrack.audioUrl,
+            lyrics: updatedTrack.lyrics
+          }),
+        });
+      }
+    } catch (err) {
+      console.warn('Update song error:', err);
+    }
   };
 
   const handleDeleteSong = (trackId) => {
@@ -323,7 +362,7 @@ function AppContent() {
 
     // Sync to server
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getStoredToken();
       if (token) {
         await fetch(`${API_BASE_URL}/api/playlists/create`, {
           method: 'POST',
@@ -342,18 +381,34 @@ function AppContent() {
     }
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getStoredToken();
       if (token) {
-        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ 
-            name: updatedPl.name, 
-            description: updatedPl.description, 
-            cover: updatedPl.cover, 
-            isPublic: updatedPl.isPublic 
-          }),
-        });
+        if (updatedPl.isAlbum) {
+          await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(plId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              name: updatedPl.name,
+              artist: updatedPl.artist,
+              cover: updatedPl.cover,
+              genre: updatedPl.genre,
+              releaseDate: updatedPl.releaseDate,
+              trackIds: updatedPl.trackIds
+            }),
+          });
+          setAlbums(prev => prev.map(a => String(a.id || a._id) === plId ? { ...a, ...updatedPl } : a));
+        } else {
+          await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ 
+              name: updatedPl.name, 
+              description: updatedPl.description, 
+              cover: updatedPl.cover, 
+              isPublic: updatedPl.isPublic 
+            }),
+          });
+        }
       }
     } catch {}
   };
@@ -375,7 +430,7 @@ function AppContent() {
       setCurrentScreen('library');
     }
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getStoredToken();
       if (token) {
         await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(playlistId)}`, {
           method: 'DELETE',
@@ -395,7 +450,7 @@ function AppContent() {
     }));
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getStoredToken();
       if (token) {
         await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
           method: 'POST',
@@ -847,9 +902,11 @@ function AppContent() {
               onSelectPlaylist={handleSelectPlaylistView}
               onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
+              openEditSongModal={handleOpenEditSong}
               onOpenAddSongModal={() => setIsAddSongOpen(true)}
               onAddToLibrary={handleAddSong}
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
+              currentUser={currentUser}
               onViewProfile={(userId) => {
                 setViewingProfileUserId(userId);
                 setCurrentScreen('profile');
@@ -905,6 +962,8 @@ function AppContent() {
               onAddTrackToPlaylist={handleAddTrackToPlaylist}
               onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
+              openEditSongModal={handleOpenEditSong}
+              openEditAlbumModal={handleOpenEditAlbum}
               onUpdatePlaylist={handleUpdatePlaylist}
               onDeletePlaylist={handleDeletePlaylist}
               onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
@@ -927,6 +986,8 @@ function AppContent() {
               toggleLike={toggleLike}
               onBack={() => setCurrentScreen('home')}
               currentUser={currentUser}
+              openEditSongModal={handleOpenEditSong}
+              openEditAlbumModal={handleOpenEditAlbum}
               globalTheme={globalTheme}
             />
           )}
@@ -935,8 +996,17 @@ function AppContent() {
             <AdminScreen
               currentUser={currentUser}
               tracks={tracks}
+              albums={albums}
+              playlists={playlists}
               onDeleteTrack={handleDeleteTrack}
               onPlayTrack={playTrack}
+              onSelectArtist={handleSelectArtist}
+              onSelectPlaylist={handleSelectPlaylistView}
+              openEditSongModal={handleOpenEditSong}
+              openEditAlbumModal={handleOpenEditAlbum}
+              onDeleteAlbum={handleDeleteAlbum}
+              onUpdatePlaylist={handleUpdatePlaylist}
+              onDeletePlaylist={handleDeletePlaylist}
               onBack={() => setCurrentScreen('home')}
               globalTheme={globalTheme}
             />
@@ -988,7 +1058,10 @@ function AppContent() {
           isOpen={isActivityPanelOpen}
           onClose={() => {
             setIsActivityPanelOpen(false);
-            try { localStorage.setItem('liofy_activity_panel_open', 'false'); } catch {}
+            try {
+              localStorage.setItem('rivo_activity_panel_open', 'false');
+              localStorage.setItem('liofy_activity_panel_open', 'false');
+            } catch {}
           }}
           onSelectTrack={playTrack}
           openProfileScreen={() => setCurrentScreen('profile')}
@@ -1085,6 +1158,27 @@ function AppContent() {
         track={editingTrack}
         onUpdateSong={handleUpdateSong}
         onDeleteSong={handleDeleteSong}
+        globalTheme={globalTheme}
+      />
+
+      <EditAlbumModal
+        isOpen={isEditAlbumOpen}
+        onClose={() => setIsEditAlbumOpen(false)}
+        album={editingAlbum}
+        onSaved={(updated) => {
+          setAlbums(prev => prev.map(a => (String(a.id || a._id) === String(updated.id || updated._id) ? { ...a, ...updated } : a)));
+          if (selectedPlaylist && (String(selectedPlaylist.id || selectedPlaylist._id) === String(updated.id || updated._id) || selectedPlaylist.name === updated.name)) {
+            setSelectedPlaylist(prev => ({ ...prev, ...updated }));
+          }
+        }}
+        onDelete={(albumId) => {
+          setAlbums(prev => prev.filter(a => String(a.id || a._id) !== String(albumId)));
+          if (selectedPlaylist && (String(selectedPlaylist.id || selectedPlaylist._id) === String(albumId) || selectedPlaylist.name === albumId)) {
+            setSelectedPlaylist(null);
+            setCurrentScreen('home');
+          }
+        }}
+        globalTheme={globalTheme}
       />
 
       <SettingsModal

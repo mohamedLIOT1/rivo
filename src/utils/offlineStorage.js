@@ -2,8 +2,8 @@ import { API_BASE_URL } from '../config';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 
-// IndexedDB Offline Audio & Cover Storage Manager for Liofy
-const DB_NAME = 'LiofyOfflineDB';
+// IndexedDB Offline Audio & Cover Storage Manager for Rivo
+const DB_NAME = 'RivoOfflineDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'downloaded_tracks';
 
@@ -36,18 +36,19 @@ function openDB() {
   });
 }
 
-// Ensure dedicated "Liofy" folder exists on device filesystem
-async function ensureLiofyDir() {
+// Ensure dedicated "Rivo" folder exists on device filesystem
+async function ensureRivoDir() {
   try {
     if (Capacitor.isNativePlatform() || window.Capacitor) {
       await Filesystem.mkdir({
-        path: 'Liofy',
+        path: 'Rivo',
         directory: Directory.Data,
         recursive: true,
       });
     }
   } catch (e) {}
 }
+const ensureLiofyDir = ensureRivoDir;
 
 // Convert Blob to Base64 (with UI thread yielding to prevent app lag/stutter)
 function blobToBase64(blob) {
@@ -206,7 +207,7 @@ async function resolveYouTubeAudioClientSide(videoId) {
   return null;
 }
 
-// Save downloaded audio blob & track info locally in app private storage (IndexedDB + Native Filesystem Liofy folder)
+// Save downloaded audio blob & track info locally in app private storage (IndexedDB + Native Filesystem Rivo folder)
 export async function saveTrackOffline(track) {
   if (!track || (!track.id && !track._id)) return null;
   const trackId = String(track.id || track._id);
@@ -310,16 +311,16 @@ export async function saveTrackOffline(track) {
 
     if (audioBlob && (Capacitor.isNativePlatform() || window.Capacitor)) {
       try {
-        await ensureLiofyDir();
+        await ensureRivoDir();
         const audioB64 = await blobToBase64(audioBlob);
         if (audioB64) {
           await Filesystem.writeFile({
-            path: `Liofy/${trackId}.mp3`,
+            path: `Rivo/${trackId}.mp3`,
             data: audioB64,
             directory: Directory.Data,
           });
           const uriRes = await Filesystem.getUri({
-            path: `Liofy/${trackId}.mp3`,
+            path: `Rivo/${trackId}.mp3`,
             directory: Directory.Data,
           });
           nativeAudioUri = uriRes.uri;
@@ -470,9 +471,17 @@ export async function removeTrackOffline(trackId) {
     activeBlobUrls.delete(idStr);
   }
 
-  // Delete native files from Liofy folder
+  // Delete native files from Rivo / Liofy folder
   if (Capacitor.isNativePlatform() || window.Capacitor) {
     try {
+      await Filesystem.deleteFile({
+        path: `Rivo/${idStr}.mp3`,
+        directory: Directory.Data,
+      }).catch(() => {});
+      await Filesystem.deleteFile({
+        path: `Rivo/${idStr}_cover.jpg`,
+        directory: Directory.Data,
+      }).catch(() => {});
       await Filesystem.deleteFile({
         path: `Liofy/${idStr}.mp3`,
         directory: Directory.Data,

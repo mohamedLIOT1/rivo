@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2 } from 'lucide-react';
+import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2, Edit2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { ArtistLinks } from '../utils/artistUtils';
@@ -277,6 +277,18 @@ export default function HomeScreen({
                       />
                     </button>
                   )}
+                  {openEditSongModal && (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditSongModal(track);
+                      }}
+                      className="p-1 text-zinc-400 hover:text-[#17a398] transition cursor-pointer" 
+                      title="Admin: Edit Song"
+                    >
+                      <Edit2 size={15} />
+                    </button>
+                  )}
                   {onDeleteTrack && (
                     <button 
                       onClick={(e) => {
@@ -505,6 +517,18 @@ export default function HomeScreen({
                       </>
                     )}
                   </button>
+                  {openEditSongModal && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditSongModal(track);
+                      }}
+                      className="p-1.5 rounded-lg bg-white hover:bg-[#17a398] text-zinc-700 hover:text-black brutal-border brutal-shadow-sm transition cursor-pointer shrink-0"
+                      title="Admin: Edit Song"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                  )}
                   {onDeleteTrack && (
                     <button
                       onClick={(e) => {

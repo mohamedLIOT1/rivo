@@ -2,7 +2,13 @@ import React, { useState } from 'react';
 import { X, Upload, Music, Image, Search, Loader2, Check, Plus, Trash2, Link2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
-const getToken = () => localStorage.getItem('liofy_token') || '';
+const getToken = () => {
+  try {
+    return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+  } catch {
+    return '';
+  }
+};
 
 export default function AddSongModal({ isOpen, onClose, onAddSong }) {
   const [tab, setTab] = useState('search'); // 'search' | 'link' | 'upload'
@@ -298,7 +304,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
         <div className="flex items-center justify-between p-4 md:p-5 border-b-2 border-[#0b1110] bg-[#ede5d3]">
           <div>
             <div className="text-[10px] font-mono font-black uppercase text-[#17a398]">
-              LIOFY MUSIC INTAKE
+              RIVO MUSIC INTAKE
             </div>
             <h2 className="text-lg font-mono font-black uppercase text-[#082621]">
               ADD NEW SONG

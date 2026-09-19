@@ -1,5 +1,5 @@
 /**
- * YouTube to Direct Stream URL Resolver for Liofy Mobile
+ * YouTube to Direct Stream URL Resolver for Rivo Mobile
  * Optimized for speed using Parallel Racing and reliable instances.
  */
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Custom hook to handle global keyboard shortcuts for Liofy:
+ * Custom hook to handle global keyboard shortcuts for Rivo:
  * - Space / K: Toggle Play / Pause
  * - ArrowRight: Seek forward 5s (Shift + ArrowRight: 10s)
  * - ArrowLeft: Seek backward 5s (Shift + ArrowLeft: 10s)

@@ -10,4 +10,5 @@ registerRootComponent(App);
 
 // Fallbacks for native side
 AppRegistry.registerComponent('main', () => App);
+AppRegistry.registerComponent('Rivo', () => App);
 AppRegistry.registerComponent('Liofy', () => App);

@@ -20,8 +20,12 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
       if (e?.detail) setLocalStats({ ...e.detail });
       else setLocalStats(getListeningStats());
     };
+    window.addEventListener('rivo:listening_stats_updated', handleUpdate);
     window.addEventListener('liofy:listening_stats_updated', handleUpdate);
-    return () => window.removeEventListener('liofy:listening_stats_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('rivo:listening_stats_updated', handleUpdate);
+      window.removeEventListener('liofy:listening_stats_updated', handleUpdate);
+    };
   }, []);
 
   // Fetch real platform leaderboard from backend
@@ -30,7 +34,7 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
     const fetchLeaderboard = async () => {
       try {
         setIsLoadingLeaderboard(true);
-        const token = localStorage.getItem('liofy_token') || localStorage.getItem('token');
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token');
         const res = await fetch(`${API_BASE_URL}/api/stats/leaderboard`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
         });

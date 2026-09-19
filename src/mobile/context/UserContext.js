@@ -4,11 +4,17 @@ import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
 
 const UserContext = createContext();
-const TOKEN_KEY = '@liofy_auth_token_v1';
-const USER_KEY = '@liofy_current_user_v1';
-const CACHE_PLAYLISTS_KEY = '@liofy_cached_playlists_v1';
-const CACHE_LIKES_KEY = '@liofy_cached_likes_v1';
-const CACHE_TRACKS_KEY = '@liofy_cached_tracks_v1';
+const TOKEN_KEY = '@rivo_auth_token_v1';
+const USER_KEY = '@rivo_current_user_v1';
+const CACHE_PLAYLISTS_KEY = '@rivo_cached_playlists_v1';
+const CACHE_LIKES_KEY = '@rivo_cached_likes_v1';
+const CACHE_TRACKS_KEY = '@rivo_cached_tracks_v1';
+
+const LEGACY_TOKEN_KEY = '@liofy_auth_token_v1';
+const LEGACY_USER_KEY = '@liofy_current_user_v1';
+const LEGACY_CACHE_PLAYLISTS_KEY = '@liofy_cached_playlists_v1';
+const LEGACY_CACHE_LIKES_KEY = '@liofy_cached_likes_v1';
+const LEGACY_CACHE_TRACKS_KEY = '@liofy_cached_tracks_v1';
 
 export const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
@@ -66,11 +72,11 @@ export const UserProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      const storedUser = await AsyncStorage.getItem(USER_KEY);
-      const cachedPlaylists = await AsyncStorage.getItem(CACHE_PLAYLISTS_KEY);
-      const cachedLikes = await AsyncStorage.getItem(CACHE_LIKES_KEY);
-      const cachedTracks = await AsyncStorage.getItem(CACHE_TRACKS_KEY);
+      const storedToken = (await AsyncStorage.getItem(TOKEN_KEY)) || (await AsyncStorage.getItem(LEGACY_TOKEN_KEY));
+      const storedUser = (await AsyncStorage.getItem(USER_KEY)) || (await AsyncStorage.getItem(LEGACY_USER_KEY));
+      const cachedPlaylists = (await AsyncStorage.getItem(CACHE_PLAYLISTS_KEY)) || (await AsyncStorage.getItem(LEGACY_CACHE_PLAYLISTS_KEY));
+      const cachedLikes = (await AsyncStorage.getItem(CACHE_LIKES_KEY)) || (await AsyncStorage.getItem(LEGACY_CACHE_LIKES_KEY));
+      const cachedTracks = (await AsyncStorage.getItem(CACHE_TRACKS_KEY)) || (await AsyncStorage.getItem(LEGACY_CACHE_TRACKS_KEY));
 
       if (cachedPlaylists) setPlaylists(JSON.parse(cachedPlaylists));
       if (cachedLikes) setLikedTrackIds(JSON.parse(cachedLikes));
@@ -200,6 +206,8 @@ export const UserProvider = ({ children }) => {
     setPlaylists([]);
     await AsyncStorage.removeItem(TOKEN_KEY);
     await AsyncStorage.removeItem(USER_KEY);
+    await AsyncStorage.removeItem(LEGACY_TOKEN_KEY);
+    await AsyncStorage.removeItem(LEGACY_USER_KEY);
   };
 
   const toggleLikeTrack = async (trackId) => {

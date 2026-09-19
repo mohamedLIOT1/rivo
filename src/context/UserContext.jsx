@@ -26,8 +26,21 @@ const API = (() => {
 
 export const API_BASE_URL = API;
 
+const migrateLegacyStorage = () => {
+  try {
+    const keys = ['token', 'user', 'tracks', 'playlists', 'liked', 'followed_artists', 'activity_panel_open', 'daily_seed_date', 'daily_seed_track', 'last_played_music_track', 'active_transitions', 'listening_stats_v2'];
+    keys.forEach(k => {
+      const oldVal = localStorage.getItem(`liofy_${k}`);
+      if (oldVal && !localStorage.getItem(`rivo_${k}`)) {
+        localStorage.setItem(`rivo_${k}`, oldVal);
+      }
+    });
+  } catch {}
+};
+migrateLegacyStorage();
+
 const getToken = () => {
-  try { return localStorage.getItem('liofy_token') || localStorage.getItem('token') || ''; } catch { return ''; }
+  try { return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || ''; } catch { return ''; }
 };
 
 const authHeaders = () => ({
@@ -48,7 +61,7 @@ const UserContext = createContext(null);
 export function UserProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const u = JSON.parse(localStorage.getItem('liofy_user') || 'null');
+      const u = JSON.parse(localStorage.getItem('rivo_user') || localStorage.getItem('liofy_user') || 'null');
       if (u && isUserAdmin(u)) {
         return { ...u, isAdmin: true, role: 'admin' };
       }
@@ -58,28 +71,28 @@ export function UserProvider({ children }) {
 
   const [tracks, setTracks] = useState(() => {
     try {
-      const s = localStorage.getItem('liofy_tracks');
+      const s = localStorage.getItem('rivo_tracks') || localStorage.getItem('liofy_tracks');
       return s ? JSON.parse(s) : [];
     } catch { return []; }
   });
 
   const [playlists, setPlaylists] = useState(() => {
     try {
-      const s = localStorage.getItem('liofy_playlists');
+      const s = localStorage.getItem('rivo_playlists') || localStorage.getItem('liofy_playlists');
       return s ? JSON.parse(s) : [];
     } catch { return []; }
   });
 
   const [likedTrackIds, setLikedTrackIds] = useState(() => {
     try {
-      const s = localStorage.getItem('liofy_liked');
+      const s = localStorage.getItem('rivo_liked') || localStorage.getItem('liofy_liked');
       return s ? JSON.parse(s) : [];
     } catch { return []; }
   });
 
   const [followedArtists, setFollowedArtists] = useState(() => {
     try {
-      const s = localStorage.getItem('liofy_followed_artists');
+      const s = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
       return s ? JSON.parse(s) : [];
     } catch { return []; }
   });
@@ -88,24 +101,39 @@ export function UserProvider({ children }) {
 
   // ── Persist to localStorage ──────────────────────────
   useEffect(() => {
-    if (currentUser) localStorage.setItem('liofy_user', JSON.stringify(currentUser));
-    else { localStorage.removeItem('liofy_user'); localStorage.removeItem('liofy_token'); }
+    if (currentUser) {
+      localStorage.setItem('rivo_user', JSON.stringify(currentUser));
+      localStorage.setItem('liofy_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('rivo_user');
+      localStorage.removeItem('liofy_user');
+      localStorage.removeItem('rivo_token');
+      localStorage.removeItem('liofy_token');
+    }
   }, [currentUser]);
 
   useEffect(() => {
-    try { localStorage.setItem('liofy_tracks', JSON.stringify(tracks)); } catch {}
+    try {
+      localStorage.setItem('rivo_tracks', JSON.stringify(tracks));
+    } catch {}
   }, [tracks]);
 
   useEffect(() => {
-    try { localStorage.setItem('liofy_playlists', JSON.stringify(playlists)); } catch {}
+    try {
+      localStorage.setItem('rivo_playlists', JSON.stringify(playlists));
+    } catch {}
   }, [playlists]);
 
   useEffect(() => {
-    try { localStorage.setItem('liofy_liked', JSON.stringify(likedTrackIds)); } catch {}
+    try {
+      localStorage.setItem('rivo_liked', JSON.stringify(likedTrackIds));
+    } catch {}
   }, [likedTrackIds]);
 
   useEffect(() => {
-    try { localStorage.setItem('liofy_followed_artists', JSON.stringify(followedArtists)); } catch {}
+    try {
+      localStorage.setItem('rivo_followed_artists', JSON.stringify(followedArtists));
+    } catch {}
   }, [followedArtists]);
 
   const toggleFollowArtist = useCallback((artistName) => {
@@ -151,6 +179,7 @@ export function UserProvider({ children }) {
   // ── Login handler ────────────────────────────────────
   const login = useCallback((user, token) => {
     if (token) {
+      localStorage.setItem('rivo_token', token);
       localStorage.setItem('liofy_token', token);
       localStorage.setItem('token', token);
     }
@@ -160,8 +189,11 @@ export function UserProvider({ children }) {
 
   // ── Logout ───────────────────────────────────────────
   const logout = useCallback(() => {
+    localStorage.removeItem('rivo_token');
     localStorage.removeItem('liofy_token');
     localStorage.removeItem('token');
+    localStorage.removeItem('rivo_user');
+    localStorage.removeItem('liofy_user');
     setCurrentUser(null);
     setLikedTrackIds([]);
     setPlaylists([]);

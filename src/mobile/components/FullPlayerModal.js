@@ -1,8 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions, ActivityIndicator, ScrollView, FlatList } from 'react-native';
-import { ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Download, CheckCircle, ListMusic, AlignLeft } from 'lucide-react-native';
+import { 
+  View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions, 
+  ActivityIndicator, ScrollView, FlatList, TextInput, Switch, KeyboardAvoidingView, Platform 
+} from 'react-native';
+import { 
+  ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, 
+  Download, CheckCircle, ListMusic, AlignLeft, Edit2, X, Check, ShieldCheck, Sparkles 
+} from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useToast } from '../context/ToastContext';
+import { API_BASE_URL } from '../config';
 import SongItem from './SongItem';
 
 const { width, height } = Dimensions.get('window');
@@ -29,9 +37,23 @@ export default function FullPlayerModal({ visible, onClose }) {
     queue,
   } = audio;
 
-  const { likedTrackIds, toggleLikeTrack, tracks } = useUser();
+  const { likedTrackIds, toggleLikeTrack, token, currentUser } = useUser();
+  const { showToast } = useToast();
+
   const [activeTab, setActiveTab] = useState('artwork'); // 'artwork', 'lyrics', 'queue'
   const lyricsScrollRef = useRef(null);
+
+  // Mobile Lyrics Editor State
+  const [isEditingLyrics, setIsEditingLyrics] = useState(false);
+  const [lyricsDraft, setLyricsDraft] = useState('');
+  const [isSavingLyrics, setIsSavingLyrics] = useState(false);
+  const [markVerified, setMarkVerified] = useState(false);
+
+  const isAdmin = Boolean(
+    currentUser?.isAdmin === true || 
+    currentUser?.role === 'admin' || 
+    ['ali', 'lio', 'tester'].includes((currentUser?.name || currentUser?.username || '').trim().toLowerCase())
+  );
 
   // Auto-scroll lyrics
   useEffect(() => {
@@ -66,30 +88,85 @@ export default function FullPlayerModal({ visible, onClose }) {
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
+  const handleOpenLyricsEdit = () => {
+    const raw = (currentTrack?.lyrics || [])
+      .map(l => `[${formatTime(l.time)}] ${l.text}`)
+      .join('\n');
+    setLyricsDraft(raw);
+    setMarkVerified(Boolean(currentTrack?.isVerified || currentTrack?.lyricsVerified));
+    setIsEditingLyrics(true);
+  };
+
+  const handleSaveLyrics = async () => {
+    if (!lyricsDraft.trim()) {
+      showToast?.('Please enter lyrics text', 'error');
+      return;
+    }
+    setIsSavingLyrics(true);
+    try {
+      const lines = lyricsDraft.split('\n').filter(l => l.trim());
+      const songDur = duration || currentTrack.duration || 180;
+      const step = Math.max(2, (songDur - 10) / Math.max(1, lines.length));
+
+      const parsedLyrics = lines.map((line, idx) => {
+        const match = line.match(/\[?(\d+):(\d+)(?:\.(\d+))?\]?\s*(.*)/);
+        if (match) {
+          const m = parseInt(match[1]);
+          const s = parseInt(match[2]);
+          const cs = match[3] ? parseInt(match[3].padEnd(2, '0').slice(0, 2)) : 0;
+          const time = m * 60 + s + cs / 100;
+          return { time: Math.round(time * 100) / 100, text: match[4]?.trim() || line.trim() };
+        } else {
+          return { time: Math.round((idx * step) * 100) / 100, text: line.trim() };
+        }
+      });
+
+      const res = await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          trackId: currentTrack.id || currentTrack._id,
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          audioUrl: currentTrack.audioUrl,
+          lyrics: parsedLyrics,
+          isVerified: markVerified
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to save lyrics');
+      }
+
+      currentTrack.lyrics = parsedLyrics;
+      currentTrack.isVerified = markVerified;
+      setIsEditingLyrics(false);
+      showToast?.('Lyrics updated successfully!', 'success');
+    } catch (e) {
+      console.warn('Save lyrics error:', e);
+      showToast?.(e.message || 'Error saving lyrics', 'error');
+    } finally {
+      setIsSavingLyrics(false);
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Top Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
             <ChevronDown size={28} color="#ffffff" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Now Playing</Text>
-          <TouchableOpacity 
-            onPress={() => isDownloaded ? handleRemoveDownload(trackId) : handleDownloadTrack(currentTrack)} 
-            style={styles.headerRightBtn}
-          >
-            {isDownloading ? (
-              <ActivityIndicator size="small" color="#1DB954" />
-            ) : isDownloaded ? (
-              <CheckCircle size={22} color="#1DB954" />
-            ) : (
-              <Download size={22} color="#a1a1aa" />
-            )}
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Playing From Playlist</Text>
+          <View style={styles.headerRightBtn} />
         </View>
 
-        {/* Tab Switcher Bar */}
+        {/* Tab Switcher */}
         <View style={styles.tabSwitcherBar}>
           <TouchableOpacity
             onPress={() => setActiveTab('artwork')}
@@ -126,24 +203,56 @@ export default function FullPlayerModal({ visible, onClose }) {
           )}
 
           {activeTab === 'lyrics' && (
-            <ScrollView ref={lyricsScrollRef} contentContainerStyle={styles.lyricsContainer} showsVerticalScrollIndicator={false}>
-              {(!currentTrack.lyrics || currentTrack.lyrics.length === 0) ? (
-                <View style={styles.emptyLyricsBox}>
-                  <Text style={styles.noLyricsText}>No lyrics available for this song</Text>
+            <View style={{ flex: 1, width: '100%' }}>
+              {/* Lyrics Header Action Bar */}
+              <View style={styles.lyricsHeaderBar}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.lyricsHeaderTitle}>Karaoke Lyrics</Text>
+                  {(currentTrack.isVerified || currentTrack.lyricsVerified) && (
+                    <View style={styles.verifiedBadge}>
+                      <CheckCircle size={11} color="#1DB954" />
+                      <Text style={styles.verifiedBadgeText}>VERIFIED</Text>
+                    </View>
+                  )}
                 </View>
-              ) : (
-                currentTrack.lyrics.map((line, idx) => {
-                  const isActive = currentTime >= line.time && (!currentTrack.lyrics[idx+1] || currentTime < currentTrack.lyrics[idx+1].time);
-                  return (
-                    <TouchableOpacity key={idx} onPress={() => seekTo(line.time)}>
-                      <Text style={[styles.lyricLine, isActive && styles.activeLyricLine]}>
-                        {line.text}
-                      </Text>
+
+                {/* Edit Lyrics Action Button */}
+                <TouchableOpacity 
+                  onPress={handleOpenLyricsEdit} 
+                  style={styles.editLyricsBtn}
+                  activeOpacity={0.8}
+                >
+                  <Edit2 size={13} color="#000000" />
+                  <Text style={styles.editLyricsBtnText}>Edit Lyrics</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView ref={lyricsScrollRef} contentContainerStyle={styles.lyricsContainer} showsVerticalScrollIndicator={false}>
+                {(!currentTrack.lyrics || currentTrack.lyrics.length === 0) ? (
+                  <View style={styles.emptyLyricsBox}>
+                    <Text style={styles.noLyricsText}>No lyrics available for this song</Text>
+                    <TouchableOpacity 
+                      onPress={handleOpenLyricsEdit} 
+                      style={[styles.editLyricsBtn, { marginTop: 14, paddingHorizontal: 16, paddingVertical: 8 }]}
+                    >
+                      <Edit2 size={14} color="#000000" />
+                      <Text style={styles.editLyricsBtnText}>Add Lyrics Now</Text>
                     </TouchableOpacity>
-                  );
-                })
-              )}
-            </ScrollView>
+                  </View>
+                ) : (
+                  currentTrack.lyrics.map((line, idx) => {
+                    const isActive = currentTime >= line.time && (!currentTrack.lyrics[idx+1] || currentTime < currentTrack.lyrics[idx+1].time);
+                    return (
+                      <TouchableOpacity key={idx} onPress={() => seekTo(line.time)}>
+                        <Text style={[styles.lyricLine, isActive && styles.activeLyricLine]}>
+                          {line.text}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
           )}
 
           {activeTab === 'queue' && (
@@ -221,6 +330,97 @@ export default function FullPlayerModal({ visible, onClose }) {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ── Mobile Lyrics Editor Modal ── */}
+      <Modal
+        visible={isEditingLyrics}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsEditingLyrics(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.editorCard}>
+            {/* Header */}
+            <View style={styles.editorHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Edit2 size={18} color="#1DB954" />
+                <Text style={styles.editorTitle}>Edit Song Lyrics</Text>
+              </View>
+              <TouchableOpacity 
+                onPress={() => setIsEditingLyrics(false)} 
+                style={styles.editorCloseBtn}
+              >
+                <X size={20} color="#a1a1aa" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.editorHint}>
+              Add timestamps like <Text style={{ color: '#1DB954', fontWeight: 'bold' }}>[0:15]</Text> before lines for karaoke sync, or paste plain lyrics.
+            </Text>
+
+            {/* Input */}
+            <TextInput
+              style={styles.editorInput}
+              multiline
+              value={lyricsDraft}
+              onChangeText={setLyricsDraft}
+              placeholder="[0:00] First line&#10;[0:15] Second line..."
+              placeholderTextColor="#52525b"
+              textAlignVertical="top"
+              autoCapitalize="sentences"
+            />
+
+            {/* Admin Verified Switch */}
+            {isAdmin && (
+              <View style={styles.verifySwitchRow}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ShieldCheck size={14} color="#f59e0b" />
+                    <Text style={styles.verifySwitchLabel}>Verify & Lock Lyrics</Text>
+                  </View>
+                  <Text style={styles.verifySwitchSub}>
+                    Official badge displayed across all devices
+                  </Text>
+                </View>
+                <Switch
+                  value={markVerified}
+                  onValueChange={setMarkVerified}
+                  trackColor={{ false: '#3f3f46', true: '#1DB954' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            )}
+
+            {/* Actions */}
+            <View style={styles.editorActions}>
+              <TouchableOpacity
+                onPress={() => setIsEditingLyrics(false)}
+                style={styles.editorCancelBtn}
+              >
+                <Text style={styles.editorCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleSaveLyrics}
+                disabled={isSavingLyrics}
+                style={styles.editorSaveBtn}
+              >
+                {isSavingLyrics ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <>
+                    <Check size={16} color="#000000" />
+                    <Text style={styles.editorSaveText}>Save Lyrics</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </Modal>
   );
 }
@@ -252,13 +452,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#18181b',
     borderRadius: 16,
     padding: 6,
-    marginBottom: 24,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#27272a',
   },
   tabBtn: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 12,
   },
@@ -273,7 +473,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   tabBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     color: '#71717a',
   },
@@ -284,7 +484,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   headerRightBtn: {
-    padding: 6,
+    width: 32,
   },
   contentArea: {
     flex: 1,
@@ -299,11 +499,57 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginBottom: 16,
   },
+  lyricsHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272a',
+    marginBottom: 8,
+  },
+  lyricsHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(29, 185, 84, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(29, 185, 84, 0.3)',
+    gap: 3,
+  },
+  verifiedBadgeText: {
+    color: '#1DB954',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  editLyricsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1DB954',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 4,
+  },
+  editLyricsBtnText: {
+    color: '#000000',
+    fontSize: 11,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+  },
   emptyLyricsBox: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 100,
+    marginTop: 80,
   },
   artworkContainer: {
     alignItems: 'center',
@@ -317,26 +563,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#18181b',
   },
   lyricsContainer: {
-    paddingVertical: 20,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   lyricLine: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#71717a',
     fontWeight: '800',
     textAlign: 'center',
     marginVertical: 10,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   activeLyricLine: {
     color: '#ffffff',
-    fontSize: 24,
-    transform: [{ scale: 1.05 }],
+    fontSize: 22,
+    transform: [{ scale: 1.04 }],
   },
   noLyricsText: {
     color: '#71717a',
-    fontSize: 16,
-    marginTop: 100,
+    fontSize: 15,
   },
   trackDetails: {
     flexDirection: 'row',
@@ -394,5 +639,111 @@ const styles = StyleSheet.create({
     backgroundColor: '#1DB954',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // Modal Editor Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'flex-end',
+  },
+  editorCard: {
+    backgroundColor: '#121216',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    maxHeight: height * 0.85,
+  },
+  editorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  editorTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  editorCloseBtn: {
+    padding: 6,
+  },
+  editorHint: {
+    fontSize: 12,
+    color: '#a1a1aa',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  editorInput: {
+    backgroundColor: '#18181b',
+    color: '#ffffff',
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    borderRadius: 14,
+    padding: 14,
+    minHeight: 180,
+    maxHeight: 260,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    marginBottom: 14,
+  },
+  verifySwitchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#18181b',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#27272a',
+    marginBottom: 16,
+  },
+  verifySwitchLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  verifySwitchSub: {
+    fontSize: 11,
+    color: '#71717a',
+    marginTop: 2,
+  },
+  editorActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  editorCancelBtn: {
+    flex: 1,
+    backgroundColor: '#27272a',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  editorCancelText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  editorSaveBtn: {
+    flex: 2,
+    backgroundColor: '#1DB954',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  editorSaveText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
 });

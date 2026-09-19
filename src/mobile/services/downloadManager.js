@@ -3,8 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import { resolveYouTubeStream } from './youtubeResolver';
 
-const OFFLINE_TRACKS_KEY = '@liofy_offline_tracks_v1';
-const TRACKS_DIR = `${FileSystem.documentDirectory}liofy_tracks/`;
+const OFFLINE_TRACKS_KEY = '@rivo_offline_tracks_v1';
+const LEGACY_OFFLINE_TRACKS_KEY = '@liofy_offline_tracks_v1';
+const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
+const LEGACY_TRACKS_DIR = `${FileSystem.documentDirectory}liofy_tracks/`;
 
 // Ensure directory exists
 const ensureDirExists = async () => {
@@ -96,7 +98,7 @@ export const downloadTrack = async (track, onProgress = null) => {
  */
 export const getDownloadedTracks = async () => {
   try {
-    const jsonValue = await AsyncStorage.getItem(OFFLINE_TRACKS_KEY);
+    const jsonValue = (await AsyncStorage.getItem(OFFLINE_TRACKS_KEY)) || (await AsyncStorage.getItem(LEGACY_OFFLINE_TRACKS_KEY));
     if (!jsonValue) return [];
 
     const tracks = JSON.parse(jsonValue);
@@ -126,14 +128,20 @@ export const removeDownloadedTrack = async (trackId) => {
   try {
     const fileUri = `${TRACKS_DIR}${trackId}.mp3`;
     const fileInfo = await FileSystem.getInfoAsync(fileUri);
-
     if (fileInfo.exists) {
       await FileSystem.deleteAsync(fileUri, { idempotent: true });
+    }
+
+    const legacyUri = `${LEGACY_TRACKS_DIR}${trackId}.mp3`;
+    const legacyInfo = await FileSystem.getInfoAsync(legacyUri);
+    if (legacyInfo.exists) {
+      await FileSystem.deleteAsync(legacyUri, { idempotent: true });
     }
 
     const offlineTracks = await getDownloadedTracks();
     const updatedCatalog = offlineTracks.filter(t => (t._id || t.id) !== trackId);
     await AsyncStorage.setItem(OFFLINE_TRACKS_KEY, JSON.stringify(updatedCatalog));
+    await AsyncStorage.setItem(LEGACY_OFFLINE_TRACKS_KEY, JSON.stringify(updatedCatalog));
 
     return true;
   } catch (err) {

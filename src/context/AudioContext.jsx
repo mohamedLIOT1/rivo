@@ -115,7 +115,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [isMixMode, setIsMixMode] = useState(false);
   const [activeTransitions, setActiveTransitions] = useState(() => {
     try {
-      const saved = localStorage.getItem('liofy_active_transitions');
+      const saved = localStorage.getItem('rivo_active_transitions') || localStorage.getItem('liofy_active_transitions');
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
@@ -161,6 +161,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     activeTransRef.current = activeTransitions; 
     try {
       if (activeTransitions && typeof activeTransitions === 'object') {
+        localStorage.setItem('rivo_active_transitions', JSON.stringify(activeTransitions));
         localStorage.setItem('liofy_active_transitions', JSON.stringify(activeTransitions));
       }
     } catch {}
@@ -175,7 +176,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   // Broadcast live listening activity to server for Friend Activity
   useEffect(() => {
     if (!currentTrack) return;
-    const token = localStorage.getItem('liofy_token');
+    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
     if (!token) return;
 
     const timeout = setTimeout(() => {
@@ -591,17 +592,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // Create hidden YouTube IFrame player divs (Deck 1 & Deck 2)
   useEffect(() => {
-    let div1 = document.getElementById('liofy-yt-player-1');
+    let div1 = document.getElementById('rivo-yt-player-1');
     if (!div1) {
       div1 = document.createElement('div');
-      div1.id = 'liofy-yt-player-1';
+      div1.id = 'rivo-yt-player-1';
       div1.style.cssText = 'position:fixed;bottom:-500px;right:-500px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
       document.body.appendChild(div1);
     }
-    let div2 = document.getElementById('liofy-yt-player-2');
+    let div2 = document.getElementById('rivo-yt-player-2');
     if (!div2) {
       div2 = document.createElement('div');
-      div2.id = 'liofy-yt-player-2';
+      div2.id = 'rivo-yt-player-2';
       div2.style.cssText = 'position:fixed;bottom:-500px;right:-500px;width:200px;height:200px;opacity:0.001;pointer-events:none;z-index:-999;';
       document.body.appendChild(div2);
     }
@@ -657,7 +658,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     onYtReady(() => {
       if (!ytPlayer1Ref.current) {
-        ytPlayer1Ref.current = new window.YT.Player('liofy-yt-player-1', {
+        ytPlayer1Ref.current = new window.YT.Player('rivo-yt-player-1', {
           height: '200',
           width: '200',
           playerVars: {
@@ -690,7 +691,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       if (!ytPlayer2Ref.current) {
-        ytPlayer2Ref.current = new window.YT.Player('liofy-yt-player-2', {
+        ytPlayer2Ref.current = new window.YT.Player('rivo-yt-player-2', {
           height: '200',
           width: '200',
           playerVars: {
@@ -999,7 +1000,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if ('mediaSession' in navigator) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title:  currentTrack.title  || 'Liofy',
+          title:  currentTrack.title  || 'Rivo',
           artist: currentTrack.artist || 'Artist',
           album:  currentTrack.album  || 'Single',
           artwork: [{ src: currentTrack.cover || '', sizes: '512x512', type: 'image/jpeg' }],
@@ -1129,25 +1130,31 @@ export function AudioProvider({ children, tracks, setTracks }) {
                       (track.artist && (track.artist.includes('القارئ') || track.artist.includes('شيخ')));
       if (!isQuran) {
         const todayStr = new Date().toDateString();
-        const existingDate = localStorage.getItem('liofy_daily_seed_date');
-        if (existingDate !== todayStr || !localStorage.getItem('liofy_daily_seed_track')) {
+        const existingDate = localStorage.getItem('rivo_daily_seed_date') || localStorage.getItem('liofy_daily_seed_date');
+        if (existingDate !== todayStr || (!localStorage.getItem('rivo_daily_seed_track') && !localStorage.getItem('liofy_daily_seed_track'))) {
+          localStorage.setItem('rivo_daily_seed_date', todayStr);
           localStorage.setItem('liofy_daily_seed_date', todayStr);
-          localStorage.setItem('liofy_daily_seed_track', JSON.stringify({
+          const seedData = JSON.stringify({
             id: track.id || track._id,
             title: track.title,
             artist: track.artist,
             genre: track.genre,
             cover: track.cover
-          }));
+          });
+          localStorage.setItem('rivo_daily_seed_track', seedData);
+          localStorage.setItem('liofy_daily_seed_track', seedData);
+          window.dispatchEvent(new CustomEvent('rivo:daily-seed-updated'));
           window.dispatchEvent(new CustomEvent('liofy:daily-seed-updated'));
         }
-        localStorage.setItem('liofy_last_played_music_track', JSON.stringify({
+        const lastData = JSON.stringify({
           id: track.id || track._id,
           title: track.title,
           artist: track.artist,
           genre: track.genre,
           cover: track.cover
-        }));
+        });
+        localStorage.setItem('rivo_last_played_music_track', lastData);
+        localStorage.setItem('liofy_last_played_music_track', lastData);
       }
     } catch {}
 
@@ -1256,7 +1263,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     try {
       let followed = [];
       try {
-        const raw = localStorage.getItem('liofy_followed_artists');
+        const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
         if (raw) followed = JSON.parse(raw);
       } catch {}
 
@@ -1340,7 +1347,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       let followed = [];
       try {
-        const raw = localStorage.getItem('liofy_followed_artists');
+        const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
         if (raw) followed = JSON.parse(raw);
       } catch {}
 
@@ -1593,7 +1600,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isMixModeRef.current = false;
     setActiveTransitions({});
     activeTransRef.current = {};
-    try { localStorage.removeItem('liofy_active_transitions'); } catch {}
+    try {
+      localStorage.removeItem('rivo_active_transitions');
+      localStorage.removeItem('liofy_active_transitions');
+    } catch {}
   }, []);
 
   // ── Spotify Mix: Real Preview = seek current track near its end ──────────

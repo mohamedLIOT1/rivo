@@ -1,5 +1,5 @@
 /**
- * Liofy config — API URL resolution (safe for all environments including Capacitor Android APK)
+ * Rivo config — API URL resolution (safe for all environments including Capacitor Android APK)
  */
 
 export const API_BASE_URL = (() => {

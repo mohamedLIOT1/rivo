@@ -1,5 +1,5 @@
-// Liofy Service Worker v7 — iOS PWA & Offline Support
-const CACHE_VER = 'liofy-v7';
+// Rivo Service Worker v8 — iOS PWA & Offline Support
+const CACHE_VER = 'rivo-v8';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────

@@ -1,5 +1,5 @@
 /**
- * Liofy — YouTube Auto Seed Script
+ * Rivo — YouTube Auto Seed Script
  * يجلب الأغاني الأصلية من YouTube ويحفظها في MongoDB
  * الاستخدام: node scripts/seed-tracks.js
  * 
@@ -209,7 +209,7 @@ async function searchYouTubeOfficialAPI(query, limit = 3) {
 }
 
 async function main() {
-  console.log('\n🎵 Liofy — YouTube Auto-Seed');
+  console.log('\n🎵 Rivo — YouTube Auto-Seed');
   console.log('═══════════════════════════════════════');
   console.log(`📊 Will process ${SEED_SONGS.length} songs`);
   if (YOUTUBE_API_KEY) {

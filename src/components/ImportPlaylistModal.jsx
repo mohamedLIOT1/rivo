@@ -19,7 +19,7 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const res = await fetch(`${API_BASE_URL}/api/playlists/import`, {
         method: 'POST',
         headers: {

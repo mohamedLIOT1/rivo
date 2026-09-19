@@ -1,12 +1,12 @@
 /**
- * Liofy Real Listening Activity & Statistics Tracker
+ * Rivo Real Listening Activity & Statistics Tracker
  * Accurately tracks actual playback duration (in seconds), verified plays,
  * weekly listening leaderboards, and top streamed tracks.
  */
 
 import { API_BASE_URL } from '../config';
 
-const STORAGE_KEY = 'liofy_listening_stats_v2';
+const STORAGE_KEY = 'rivo_listening_stats_v2';
 const SYNC_INTERVAL_MS = 25000;
 
 function getISOWeekString(d = new Date()) {
@@ -40,7 +40,7 @@ export function getListeningStats() {
   if (cachedStats) return cachedStats;
 
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('liofy_listening_stats_v2');
     if (raw) {
       const parsed = JSON.parse(raw);
       const currentWeek = getISOWeekString();
@@ -66,8 +66,10 @@ export function saveListeningStats(stats) {
   saveTimeout = setTimeout(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedStats));
+      localStorage.setItem('liofy_listening_stats_v2', JSON.stringify(cachedStats));
       // Notify components about stats update
       if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('rivo:listening_stats_updated', { detail: cachedStats }));
         window.dispatchEvent(new CustomEvent('liofy:listening_stats_updated', { detail: cachedStats }));
       }
     } catch (e) {
@@ -205,7 +207,7 @@ export async function flushSessionToServer(isEnd = false) {
   lastServerSync = Date.now();
 
   try {
-    const token = localStorage.getItem('liofy_token') || localStorage.getItem('token');
+    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token');
     const res = await fetch(`${API_BASE_URL}/api/stats/listen`, {
       method: 'POST',
       headers: {

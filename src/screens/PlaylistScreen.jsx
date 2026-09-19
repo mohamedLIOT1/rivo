@@ -9,6 +9,7 @@ import MiniMixerModal from '../components/MiniMixerModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
+import { isUserAdmin } from '../utils/adminUtils';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -24,6 +25,8 @@ export default function PlaylistScreen({
   onDeletePlaylist = () => {},
   onTogglePlaylistVisibility = () => {},
   onSelectArtist,
+  openEditSongModal,
+  openEditAlbumModal,
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
@@ -33,9 +36,11 @@ export default function PlaylistScreen({
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
   const [fetchedTracks, setFetchedTracks] = useState([]);
 
-  // Ownership verification: owner can edit, delete, add/remove tracks, change cover
+  // Ownership verification: owner or admin can edit, delete, add/remove tracks, change cover
   const myId = String(currentUser?.id || currentUser?._id || '');
+  const isAdmin = isUserAdmin(currentUser);
   const isOwner = Boolean(
+    isAdmin ||
     playlist?.isLikedSongs ||
     !playlist?.ownerId ||
     !currentUser ||
@@ -190,7 +195,7 @@ export default function PlaylistScreen({
     }
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
         method: 'POST',
         headers: {
@@ -225,11 +230,12 @@ export default function PlaylistScreen({
     setIsMixMode?.(true);
 
     try {
+      localStorage.setItem('rivo_active_transitions', JSON.stringify(updatedTransitions));
       localStorage.setItem('liofy_active_transitions', JSON.stringify(updatedTransitions));
     } catch {}
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
         method: 'POST',
         headers: {
@@ -252,11 +258,12 @@ export default function PlaylistScreen({
     setIsMixMode?.(true);
 
     try {
+      localStorage.setItem('rivo_active_transitions', JSON.stringify(updated));
       localStorage.setItem('liofy_active_transitions', JSON.stringify(updated));
     } catch {}
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
         method: 'POST',
         headers: {
@@ -425,14 +432,20 @@ export default function PlaylistScreen({
 
                     {/* Edit Button */}
                     <button
-                      onClick={() => setIsEditModalOpen(true)}
+                      onClick={() => {
+                        if (playlist.isAlbum && openEditAlbumModal) {
+                          openEditAlbumModal(playlist);
+                        } else {
+                          setIsEditModalOpen(true);
+                        }
+                      }}
                       className={`brutal-btn flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
                         isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:bg-[#ded2bb]'
                       }`}
-                      title="Edit name & description"
+                      title={playlist.isAlbum ? "Admin: Edit Album" : "Edit name & description"}
                     >
                       <Edit2 size={12} />
-                      <span>EDIT RECORD</span>
+                      <span>{playlist.isAlbum ? "EDIT ALBUM" : "EDIT RECORD"}</span>
                     </button>
 
                     {/* Delete Button */}
@@ -463,13 +476,19 @@ export default function PlaylistScreen({
               }`}>
                 {playlist.name}
               </h1>
-              {!playlist.isLikedSongs && !playlist.isAlbum && isOwner && (
+              {!playlist.isLikedSongs && isOwner && (
                 <button
-                  onClick={() => setIsEditModalOpen(true)}
+                  onClick={() => {
+                    if (playlist.isAlbum && openEditAlbumModal) {
+                      openEditAlbumModal(playlist);
+                    } else {
+                      setIsEditModalOpen(true);
+                    }
+                  }}
                   className={`p-1.5 transition-colors cursor-pointer ${
                     isDark ? 'text-zinc-400 hover:text-white' : 'text-[#0b1110] hover:text-[#17a398]'
                   }`}
-                  title="Edit playlist name"
+                  title={playlist.isAlbum ? "Admin: Edit Album" : "Edit playlist name"}
                 >
                   <Edit2 size={20} />
                 </button>
@@ -491,7 +510,7 @@ export default function PlaylistScreen({
             <p className={`text-xs md:text-sm mt-2 font-medium max-w-xl ${
               isDark ? 'text-zinc-300' : 'text-[#082621]/80'
             }`}>
-              {playlist.description || (playlist.isAlbum ? `Official album by ${playlist.artist || 'Artist'}` : 'Custom playlist on Liofy.')}
+              {playlist.description || (playlist.isAlbum ? `Official album by ${playlist.artist || 'Artist'}` : 'Custom playlist on Rivo.')}
             </p>
 
             <div className={`flex items-center justify-center md:justify-start gap-3 mt-4 pt-3 border-t text-xs font-mono font-bold ${
@@ -713,6 +732,20 @@ export default function PlaylistScreen({
                             <Minus size={16} />
                           </button>
                         )
+                      )}
+                      {isUserAdmin(currentUser) && openEditSongModal && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditSongModal(track);
+                          }}
+                          className={`p-1.5 transition-colors cursor-pointer rounded-md ${
+                            isDark ? 'text-zinc-400 hover:text-[#17a398]' : 'text-[#0b1110] hover:text-[#17a398]'
+                          }`}
+                          title="Admin: Edit Song Details"
+                        >
+                          <Edit2 size={15} />
+                        </button>
                       )}
                       {onDeleteTrack && (
                         <button

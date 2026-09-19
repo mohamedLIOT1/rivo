@@ -29,8 +29,8 @@ export default function HomeScreen({ navigation }) {
     <View>
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <View style={styles.logoBadge}><Text style={{ color: '#000', fontWeight: '900', fontSize: 18 }}>L</Text></View>
-          <Text style={styles.brandName}>LIOFY</Text>
+          <View style={styles.logoBadge}><Text style={{ color: '#000', fontWeight: '900', fontSize: 18 }}>R</Text></View>
+          <Text style={styles.brandName}>RIVO</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <TouchableOpacity

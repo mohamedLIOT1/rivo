@@ -431,7 +431,7 @@ export default function MiniPlayer({
               </div>
 
               <div className="p-2.5 bg-[#ded2bb] rounded border border-dashed border-black text-[11px] font-mono font-bold text-zinc-800">
-                Liofy Hi-Fi Audio Player
+                Rivo Hi-Fi Audio Player
               </div>
             </div>
 

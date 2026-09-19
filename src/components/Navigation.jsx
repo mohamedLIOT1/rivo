@@ -316,7 +316,7 @@ export default function Navigation({
               <div className={`text-[8px] font-mono font-bold pt-1 ${
                 isDark ? 'text-zinc-500' : 'text-zinc-600'
               }`}>
-                LIOFY MUSIC
+                RIVO MUSIC
               </div>
             </div>
 

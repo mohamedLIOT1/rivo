@@ -16,6 +16,8 @@ export default function ArtistScreen({
   toggleLike, 
   onBack,
   currentUser,
+  openEditSongModal,
+  openEditAlbumModal,
   globalTheme = 'dark' 
 }) {
   const isDark = globalTheme === 'dark';
@@ -267,6 +269,20 @@ export default function ArtistScreen({
                     <span>{album.trackCount} {album.trackCount === 1 ? 'song' : 'songs'}</span>
                   )}
                 </div>
+
+                {isUserAdmin(currentUser) && openEditAlbumModal && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditAlbumModal(album);
+                    }}
+                    className="w-full mt-2 py-1 px-2 bg-[#f59e0b] hover:bg-amber-400 text-black font-mono text-[10px] font-black uppercase brutal-border rounded-md flex items-center justify-center gap-1 cursor-pointer"
+                    title="Admin: Edit Album"
+                  >
+                    <Edit size={11} />
+                    <span>EDIT ALBUM</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -338,6 +354,21 @@ export default function ArtistScreen({
                       {track.plays.toLocaleString()} plays
                     </span>
                   </div>
+                )}
+
+                {isUserAdmin(currentUser) && openEditSongModal && (
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditSongModal(track);
+                    }}
+                    className={`p-2 transition-colors cursor-pointer rounded-md ${
+                      isDark ? 'text-zinc-400 hover:text-[#17a398]' : 'text-[#0b1110] hover:text-[#17a398]'
+                    }`}
+                    title="Admin: Edit Song"
+                  >
+                    <Edit size={15} />
+                  </button>
                 )}
 
                 <button 

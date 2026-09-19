@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { X, Music, AlignLeft, Edit3, Trash2, Sparkles } from 'lucide-react';
+import { X, Music, AlignLeft, Edit3, Trash2, Sparkles, ShieldCheck, Check, Loader2, Tag, Image, Volume2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ConfirmModal from './ConfirmModal';
 
-export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, onDeleteSong }) {
+export default function EditSongModal({ 
+  isOpen, 
+  onClose, 
+  track, 
+  onUpdateSong, 
+  onDeleteSong,
+  globalTheme = 'dark'
+}) {
+  const isDark = globalTheme === 'dark';
+
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
   const [album, setAlbum] = useState('');
+  const [genre, setGenre] = useState('');
   const [cover, setCover] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [lyricsText, setLyricsText] = useState('');
@@ -32,6 +42,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
       setTitle(track.title || '');
       setArtist(track.artist || '');
       setAlbum(track.album || '');
+      setGenre(track.genre || '');
       setCover(track.cover || '');
       setAudioUrl(track.audioUrl || '');
       
@@ -40,7 +51,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
         .join('\n');
       setLyricsText(lyricsString);
     }
-  }, [track]);
+  }, [track, isOpen]);
 
   if (!isOpen || !track) return null;
 
@@ -58,11 +69,12 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
 
     const updated = {
       ...track,
-      title,
-      artist,
-      album,
-      cover: cover || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="300" height="300" fill="%23082621"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2326c4b7" font-size="80">R</text></svg>',
-      audioUrl,
+      title: title.trim(),
+      artist: artist.trim(),
+      album: album.trim() || 'Single',
+      genre: genre.trim() || 'Pop',
+      cover: cover.trim() || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      audioUrl: audioUrl.trim(),
       lyrics: parsedLyrics
     };
 
@@ -95,109 +107,186 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
-      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg max-w-lg w-full p-6 relative">
-        <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Edit Song Details</h3>
+    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs select-none animate-fadeIn">
+      <div 
+        className={`w-full max-w-lg p-6 brutal-shadow-lg brutal-border-thick rounded-2xl relative max-h-[90vh] overflow-y-auto ${
+          isDark ? 'bg-[#121816] text-white border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] border-black'
+        }`}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 mb-4 border-b-2 border-dashed border-zinc-700">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#f59e0b] text-black flex items-center justify-center brutal-border shrink-0">
+              <ShieldCheck size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display font-black text-sm uppercase tracking-wider">
+                  Admin: Edit Song Details
+                </h3>
+                <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-[#f59e0b] text-black">
+                  Admin Exclusive
+                </span>
+              </div>
+              <p className={`text-[11px] font-sans ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                Editing song: <strong>{track.title}</strong> — {track.artist}
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
+          <button
+            onClick={onClose}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              isDark ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white' : 'hover:bg-black/10 text-zinc-600'
+            }`}
+          >
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 my-4 max-h-[70vh] overflow-y-auto pr-1">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Song Title</label>
+            <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+              <Music size={13} className="text-[#17a398]" /> Song Title
+            </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               required
-              className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-xs font-sans font-bold text-[#0b1110] focus:outline-none focus:bg-white"
+              className={`w-full p-2.5 text-xs font-bold rounded-lg brutal-border focus:outline-none ${
+                isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+              }`}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Artist</label>
+              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+                <Edit3 size={13} className="text-[#17a398]" /> Artist
+              </label>
               <input
                 type="text"
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
                 required
-                className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-xs font-sans font-bold text-[#0b1110] focus:outline-none focus:bg-white"
+                className={`w-full p-2.5 text-xs font-bold rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
               />
             </div>
             <div>
-              <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Album</label>
+              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+                <AlignLeft size={13} className="text-[#17a398]" /> Album
+              </label>
               <input
                 type="text"
                 value={album}
                 onChange={(e) => setAlbum(e.target.value)}
-                className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-xs font-sans font-bold text-[#0b1110] focus:outline-none focus:bg-white"
+                placeholder="Single / Album Name"
+                className={`w-full p-2.5 text-xs font-bold rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+                <Image size={13} className="text-[#17a398]" /> Cover Artwork URL
+              </label>
+              <input
+                type="text"
+                value={cover}
+                onChange={(e) => setCover(e.target.value)}
+                className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+                <Tag size={13} className="text-[#17a398]" /> Genre
+              </label>
+              <input
+                type="text"
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                placeholder="Pop, Hip-Hop, etc."
+                className={`w-full p-2.5 text-xs font-bold rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
               />
             </div>
           </div>
 
           <div>
-            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Cover Artwork URL</label>
-            <input
-              type="text"
-              value={cover}
-              onChange={(e) => setCover(e.target.value)}
-              className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-xs font-sans font-bold text-[#0b1110] focus:outline-none focus:bg-white"
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Audio Source Stream URL</label>
+            <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+              <Volume2 size={13} className="text-[#17a398]" /> Audio Stream URL (Optional / MP3 Source)
+            </label>
             <input
               type="text"
               value={audioUrl}
               onChange={(e) => setAudioUrl(e.target.value)}
-              required
-              className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-xs font-sans font-bold text-[#0b1110] focus:outline-none focus:bg-white"
+              placeholder="Leave blank for auto dynamic SoundCloud/YouTube resolution"
+              className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none ${
+                isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+              }`}
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-[10px] font-mono font-black uppercase text-[#082621]">Synced Lyrics Timestamps</label>
+              <label className="block text-[11px] font-mono font-bold uppercase flex items-center gap-1.5">
+                <AlignLeft size={13} className="text-[#17a398]" /> Synced Lyrics Timestamps
+              </label>
               <button
                 type="button"
                 onClick={handleAiSyncTimestamps}
                 disabled={isAutoSyncing || !lyricsText.trim()}
-                className="brutal-btn text-[10px] font-mono font-black uppercase text-[#082621] flex items-center gap-1 bg-[#26c4b7] px-2 py-0.5 brutal-border disabled:opacity-40"
+                className="text-[10px] font-mono font-black uppercase flex items-center gap-1 bg-[#26c4b7] text-[#082621] px-2 py-0.5 rounded brutal-border disabled:opacity-40 cursor-pointer"
               >
                 <Sparkles size={11} />
-                <span>{isAutoSyncing ? 'CALIBRATING...' : '🪄 AI TIMESTAMP SYNC'}</span>
+                <span>{isAutoSyncing ? 'CALIBRATING...' : 'AI TIMESTAMP SYNC'}</span>
               </button>
             </div>
             <textarea
-              rows="4"
+              rows="5"
               value={lyricsText}
               onChange={(e) => setLyricsText(e.target.value)}
               placeholder="Paste plain lyrics text or format manually:&#10;[0:00] Line 1&#10;[0:15] Line 2"
-              className="w-full bg-[#ede5d3] brutal-border p-2.5 text-xs text-[#0b1110] font-mono focus:outline-none focus:bg-white"
+              className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none resize-none leading-relaxed ${
+                isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+              }`}
             />
           </div>
 
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-2 pt-2">
             <button
               type="submit"
-              className="brutal-btn flex-1 py-2.5 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow"
+              className="flex-1 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center gap-2 cursor-pointer rounded-xl"
             >
-              SAVE SONG
+              <Check size={16} />
+              <span>SAVE SONG</span>
             </button>
+            {onDeleteSong && (
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-500 font-mono text-xs font-bold uppercase brutal-border border-red-500/40 rounded-xl flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 size={15} />
+                <span>DELETE</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setIsDeleteConfirmOpen(true)}
-              className="brutal-btn py-2.5 px-4 bg-red-100 hover:bg-red-200 text-[#dc2626] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1"
+              onClick={onClose}
+              className={`px-4 py-2.5 font-mono text-xs font-bold uppercase brutal-border rounded-xl cursor-pointer ${
+                isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-black border-black'
+              }`}
             >
-              <Trash2 size={15} />
-              <span>DELETE</span>
+              CANCEL
             </button>
           </div>
         </form>
@@ -206,7 +295,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
         title={`Delete "${title}"?`}
-        message="Are you sure you want to permanently delete this song?"
+        message="Are you sure you want to permanently delete this song from the global website database?"
         confirmText="Delete Song"
         cancelText="Cancel"
         onConfirm={() => {

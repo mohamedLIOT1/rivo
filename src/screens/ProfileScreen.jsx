@@ -7,6 +7,14 @@ import {
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from '../components/VerifiedBadge';
 
+const getToken = () => {
+  try {
+    return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+  } catch {
+    return '';
+  }
+};
+
 export default function ProfileScreen({ 
   currentUser, 
   playlists = [], 
@@ -58,7 +66,7 @@ export default function ProfileScreen({
     });
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/users/${targetUserId}/${type}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
@@ -83,7 +91,7 @@ export default function ProfileScreen({
     setBioInput(currentUser?.bio || '');
 
     // Fetch fresh profile with follower counts
-    const token = localStorage.getItem('liofy_token');
+    const token = getToken();
     if (token) {
       fetch(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -112,7 +120,7 @@ export default function ProfileScreen({
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = reader.result;
-        const token = localStorage.getItem('liofy_token');
+        const token = getToken();
         const res = await fetch(`${API_BASE_URL}/api/auth/update-profile`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -121,8 +129,12 @@ export default function ProfileScreen({
         const data = await res.json();
         if (data.success) {
           setLocalUser(data.user);
+          localStorage.setItem('rivo_user', JSON.stringify(data.user));
           localStorage.setItem('liofy_user', JSON.stringify(data.user));
-          if (data.token) localStorage.setItem('liofy_token', data.token);
+          if (data.token) {
+            localStorage.setItem('rivo_token', data.token);
+            localStorage.setItem('liofy_token', data.token);
+          }
         }
         setIsUploadingAvatar(false);
       };
@@ -137,7 +149,7 @@ export default function ProfileScreen({
     if (!nameInput.trim()) return;
     setIsSaving(true);
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/auth/update-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -146,8 +158,12 @@ export default function ProfileScreen({
       const data = await res.json();
       if (data.success) {
         setLocalUser(data.user);
+        localStorage.setItem('rivo_user', JSON.stringify(data.user));
         localStorage.setItem('liofy_user', JSON.stringify(data.user));
-        if (data.token) localStorage.setItem('liofy_token', data.token);
+        if (data.token) {
+          localStorage.setItem('rivo_token', data.token);
+          localStorage.setItem('liofy_token', data.token);
+        }
       }
     } catch {}
     setIsSaving(false);
@@ -158,7 +174,7 @@ export default function ProfileScreen({
   const handleSaveBio = async () => {
     setIsSaving(true);
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/auth/update-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -167,8 +183,12 @@ export default function ProfileScreen({
       const data = await res.json();
       if (data.success) {
         setLocalUser(data.user);
+        localStorage.setItem('rivo_user', JSON.stringify(data.user));
         localStorage.setItem('liofy_user', JSON.stringify(data.user));
-        if (data.token) localStorage.setItem('liofy_token', data.token);
+        if (data.token) {
+          localStorage.setItem('rivo_token', data.token);
+          localStorage.setItem('liofy_token', data.token);
+        }
       }
     } catch {}
     setIsSaving(false);
@@ -197,7 +217,7 @@ export default function ProfileScreen({
     }
 
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/toggle-visibility`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -225,7 +245,7 @@ export default function ProfileScreen({
   // ── View another user's profile ──
   const handleViewUserProfile = async (userId) => {
     try {
-      const token = localStorage.getItem('liofy_token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/users/${userId}/profile`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
@@ -238,7 +258,7 @@ export default function ProfileScreen({
   const handleToggleFollow = async () => {
     if (!viewingProfile || followLoading) return;
     setFollowLoading(true);
-    const token = localStorage.getItem('liofy_token');
+    const token = getToken();
     const isCurrentlyFollowing = viewingProfile.isFollowing;
     const endpoint = isCurrentlyFollowing ? 'unfollow' : 'follow';
 

@@ -394,7 +394,7 @@ export default function ProfileScreen() {
                     </View>
                   ) : (
                     <View style={styles.nameRow}>
-                      <Text style={styles.userName}>{currentUser.name || 'Liofy User'}</Text>
+                      <Text style={styles.userName}>{currentUser.name || 'Rivo User'}</Text>
                       <TouchableOpacity onPress={() => setIsEditingName(true)}>
                         <Edit2 size={16} color="#a1a1aa" />
                       </TouchableOpacity>
@@ -524,12 +524,12 @@ export default function ProfileScreen() {
       ) : (
         /* Login / Register View */
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Liofy Account</Text>
+          <Text style={styles.title}>Rivo Account</Text>
           <View style={styles.authBox}>
             <View style={styles.authHeader}>
               <LogIn size={24} color="#1DB954" />
               <Text style={styles.authTitle}>
-                {isRegisterMode ? 'Create New Account' : 'Login to Liofy'}
+                {isRegisterMode ? 'Create New Account' : 'Login to Rivo'}
               </Text>
             </View>
             <Text style={styles.authSubtitle}>

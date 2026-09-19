@@ -396,7 +396,7 @@ export default function FullPlayerModal({
         }
       });
 
-      const token = localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
 
       await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
         method: 'POST',
@@ -470,7 +470,7 @@ export default function FullPlayerModal({
     if (!currentTrack || !rawLyrics.length || !isAdmin) return;
     setIsClearingLyrics(true);
     try {
-      const token = localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
       await fetch(`${API_BASE_URL}/api/tracks/clear-lyrics`, {
         method: 'POST',
         headers: { 
@@ -1367,11 +1367,11 @@ export default function FullPlayerModal({
                     <span className="text-[10px]">Translate</span>
                   </button>
                 )}
-                {isAdmin && rawLyrics.length > 0 && (
+                {isAdmin && (
                   <>
                     <button
                       onClick={openManualEdit}
-                      className={`p-1.5 rounded-lg transition-colors ${
+                      className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
                         isDark 
                           ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
                           : 'bg-white text-zinc-700 hover:text-black border border-black'
@@ -1379,18 +1379,21 @@ export default function FullPlayerModal({
                       title="Edit Lyrics (Admin)"
                     >
                       <Edit3 size={13} />
+                      {rawLyrics.length === 0 && <span className="text-[10px]">Add Lyrics</span>}
                     </button>
-                    <button
-                      onClick={() => setIsClearLyricsConfirmOpen(true)}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
-                      }`}
-                      title="Clear Lyrics (Admin)"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    {rawLyrics.length > 0 && (
+                      <button
+                        onClick={() => setIsClearLyricsConfirmOpen(true)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          isDark 
+                            ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
+                            : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                        }`}
+                        title="Clear Lyrics (Admin)"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -1483,47 +1486,48 @@ export default function FullPlayerModal({
                   </div>
                 )}
                 {rawLyrics.length > 0 && (
+                  <button
+                    onClick={handleTranslateLyrics}
+                    disabled={isTranslating}
+                    className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
+                      showTranslation 
+                        ? 'text-[#0b1110] bg-[#17a398] brutal-border' 
+                        : isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                    }`}
+                    title="Translate Lyrics"
+                  >
+                    <Languages size={14} />
+                    <span className="text-[10px]">Translate</span>
+                  </button>
+                )}
+                {isAdmin && (
                   <>
                     <button
-                      onClick={handleTranslateLyrics}
-                      disabled={isTranslating}
-                      className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
-                        showTranslation 
-                          ? 'text-[#0b1110] bg-[#17a398] brutal-border' 
-                          : isDark 
-                            ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                            : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      onClick={openManualEdit}
+                      className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                        isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-black'
                       }`}
-                      title="Translate Lyrics"
+                      title="Edit Lyrics (Admin)"
                     >
-                      <Languages size={14} />
-                      <span className="text-[10px]">Translate</span>
+                      <Edit3 size={14} />
+                      {rawLyrics.length === 0 && <span className="text-[10px]">Add Lyrics</span>}
                     </button>
-                    {isAdmin && (
-                      <>
-                        <button
-                          onClick={openManualEdit}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            isDark 
-                              ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                              : 'bg-white text-zinc-700 hover:text-black border border-black'
-                          }`}
-                          title="Edit Lyrics (Admin)"
-                        >
-                          <Edit3 size={14} />
-                        </button>
-                        <button
-                          onClick={() => setIsClearLyricsConfirmOpen(true)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            isDark 
-                              ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
-                              : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
-                          }`}
-                          title="Clear Lyrics (Admin)"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </>
+                    {rawLyrics.length > 0 && (
+                      <button
+                        onClick={() => setIsClearLyricsConfirmOpen(true)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          isDark 
+                            ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
+                            : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                        }`}
+                        title="Clear Lyrics (Admin)"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     )}
                   </>
                 )}
