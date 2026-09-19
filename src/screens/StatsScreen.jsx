@@ -124,7 +124,7 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
   const topListener = realLeaderboard.length > 0 ? realLeaderboard[0] : null;
 
   return (
-    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
       {/* Header Banner */}

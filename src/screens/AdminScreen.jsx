@@ -317,7 +317,7 @@ export default function AdminScreen({
   });
 
   return (
-    <div className={`flex-1 overflow-y-auto pb-32 p-4 md:p-8 select-none transition-colors ${
+    <div className={`flex-1 overflow-y-auto pb-32 p-4 md:p-8 select-none ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
       {/* Header */}

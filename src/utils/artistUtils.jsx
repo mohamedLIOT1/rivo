@@ -151,7 +151,7 @@ export const CANONICAL_ARTIST_MAP = [
   },
   {
     canonical: 'Lege-Cy',
-    aliases: ['lege-cy', 'lege cy', 'legecy', 'ليجي سي', 'ليجي-سي']
+    aliases: ['lege-cy', 'lege cy', 'legecy', 'legi c', 'legi-c', 'legic', 'ليجي سي', 'ليجي-سي']
   },
   {
     canonical: 'Abyusif',

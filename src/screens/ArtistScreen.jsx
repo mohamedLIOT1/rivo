@@ -118,7 +118,7 @@ export default function ArtistScreen({
   }, [artistTracks]);
 
   return (
-    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
       {/* Back Button */}

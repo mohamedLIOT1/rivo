@@ -126,7 +126,7 @@ export default function QuranScreen({
 
   return (
     <div 
-      className={`flex-1 overflow-y-auto select-none p-4 sm:p-6 transition-colors ${
+      className={`flex-1 overflow-y-auto select-none p-4 sm:p-6 ${
         isDark ? 'bg-[#081715] text-[#fdfbf7]' : 'bg-[#0f4c45] text-[#fdfbf7]'
       }`}
       style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}

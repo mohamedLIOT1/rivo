@@ -35,7 +35,6 @@ export default function Navigation({
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
-    ...(libraryMode === 'music' ? [{ id: 'mixes', label: 'DJ Mix', icon: Radio }] : []),
     { id: 'quran', label: 'Quran', icon: BookOpen },
     { id: 'stats', label: 'Stats & History', icon: Disc },
   ];
