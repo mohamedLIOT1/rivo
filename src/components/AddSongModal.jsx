@@ -10,6 +10,8 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [addedIds, setAddedIds] = useState(new Set());
+  const [searchError, setSearchError] = useState('');
+  const [addingId, setAddingId] = useState(null);
 
   // Upload form
   const [title, setTitle]   = useState('');
@@ -98,7 +100,9 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     setIsSearching(false);
   };
 
-  const handleAddFromSearch = async (track) => {
+  const handleAddSearchResult = async (track) => {
+    setAddingId(track.id);
+    setSearchError('');
     try {
       const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/tracks`, {
@@ -123,11 +127,17 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
       if (data.success) {
         onAddSong?.(data.track);
         setAddedIds(prev => new Set([...prev, track.id]));
+      } else {
+        setSearchError(data.message || data.error || 'Failed to add song.');
       }
     } catch (err) {
       console.warn('Failed to save searched track:', err);
+      setSearchError('Network error while adding song.');
+    } finally {
+      setAddingId(null);
     }
   };
+  const handleAddFromSearch = handleAddSearchResult;
 
   // ── Upload ────────────────────────────────────────
   const handleCoverChange = (e) => {
@@ -306,10 +316,14 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                     </div>
                     <button
                       onClick={() => handleAddSearchResult(track)}
-                      disabled={addingId === track.id}
-                      className="brutal-btn px-3 py-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-60"
+                      disabled={addingId === track.id || addedIds.has(track.id)}
+                      className={`brutal-btn px-3 py-1.5 font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-60 ${
+                        addedIds.has(track.id) ? 'bg-[#082621] text-[#26c4b7]' : 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110]'
+                      }`}
                     >
-                      {addingId === track.id ? (
+                      {addedIds.has(track.id) ? (
+                        <><Check size={13} /> Added</>
+                      ) : addingId === track.id ? (
                         <><Loader2 size={12} className="animate-spin" /> Adding</>
                       ) : (
                         <><Plus size={13} /> Add</>
