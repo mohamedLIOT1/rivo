@@ -209,15 +209,25 @@ export default function AdminScreen({
   const handleDeleteAlbumInternal = async (albumId) => {
     if (!window.confirm(`Are you sure you want to permanently delete this album?`)) return;
     try {
-      await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}`, {
+      const res = await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ deleteTracks: true })
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed with status ${res.status}`);
+      }
       setAdminAlbums(prev => prev.filter(a => String(a.id || a._id) !== String(albumId)));
+      await fetchAlbums();
       if (onDeleteAlbum) onDeleteAlbum(albumId);
-      flashMessage('Album deleted successfully');
+      flashMessage('Album permanently deleted');
     } catch (err) {
       console.error('Delete album error:', err);
+      flashMessage(err.message || 'Error deleting album');
     }
   };
 
