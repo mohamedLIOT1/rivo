@@ -4,6 +4,7 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import { matchesArtist, ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import EditArtistModal from '../components/EditArtistModal';
+import { useUser } from '../context/UserContext';
 
 export default function ArtistScreen({ 
   artist: initialArtist, 
@@ -18,8 +19,8 @@ export default function ArtistScreen({
   globalTheme = 'dark' 
 }) {
   const isDark = globalTheme === 'dark';
+  const { isFollowingArtist, toggleFollowArtist } = useUser();
   const [artist, setArtist] = useState(initialArtist);
-  const [isFollowing, setIsFollowing] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
@@ -187,17 +188,17 @@ export default function ArtistScreen({
               </button>
 
               <button 
-                onClick={() => setIsFollowing(!isFollowing)}
+                onClick={() => toggleFollowArtist(artistName)}
                 className={`brutal-btn flex items-center gap-2 px-5 py-2.5 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer rounded-xl ${
-                  isFollowing 
-                    ? 'bg-[#082621] text-[#26c4b7]' 
+                  isFollowingArtist(artistName) 
+                    ? 'bg-[#17a398] text-[#0b1110] font-black' 
                     : isDark 
                       ? 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700' 
                       : 'bg-[#ede5d3] text-[#082621] hover:bg-[#ded2bb] border-black'
                 }`}
               >
-                {isFollowing ? <Check size={14} /> : <UserPlus size={14} />}
-                <span>{isFollowing ? 'FOLLOWING' : 'FOLLOW'}</span>
+                {isFollowingArtist(artistName) ? <Check size={14} strokeWidth={3} /> : <UserPlus size={14} strokeWidth={2.5} />}
+                <span>{isFollowingArtist(artistName) ? 'FOLLOWING' : 'FOLLOW'}</span>
               </button>
 
               {isUserAdmin(currentUser) && (

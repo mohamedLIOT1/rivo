@@ -42,10 +42,10 @@ export default function LibraryScreen({
       }}
     >
       {/* ── Library Header ── */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <h1 className={`text-3xl font-display font-black tracking-tight ${
+            <h1 className={`text-2xl sm:text-3xl font-display font-black tracking-tight ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1.5px_1.5px_0px_#082621]'
             }`}>
               Your Library
@@ -55,42 +55,39 @@ export default function LibraryScreen({
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {openImportSongModal && (
               <button
                 onClick={openImportSongModal}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                   isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
                 }`}
                 title="Add Song by Link"
               >
                 <Link2 size={15} strokeWidth={2.5} className="text-[#17a398]" />
-                <span className="hidden sm:inline">Add Song by Link</span>
               </button>
             )}
 
             {openImportPlaylistModal && (
               <button
                 onClick={openImportPlaylistModal}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                   isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
                 }`}
                 title="Import Playlist"
               >
                 <DownloadCloud size={15} strokeWidth={2.5} className="text-[#17a398]" />
-                <span className="hidden sm:inline">Import Playlist</span>
               </button>
             )}
 
             <button
               onClick={openCreatePlaylistModal}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+              className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                 isDark ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] border-zinc-700' : 'bg-[#0b1110] hover:bg-[#082621] text-[#26c4b7]'
               }`}
               title="Create Playlist"
             >
               <Plus size={16} strokeWidth={2.5} />
-              <span className="hidden sm:inline">New Playlist</span>
             </button>
           </div>
         </div>

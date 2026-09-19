@@ -554,12 +554,12 @@ export default function ProfileScreen({
           )}
 
           {/* Profile Hero Card */}
-          <div className={`rounded-2xl brutal-border-thick p-4 sm:p-6 mb-6 brutal-shadow-lg relative overflow-hidden ${
+          <div className={`rounded-2xl brutal-border-thick p-3 sm:p-6 mb-4 brutal-shadow-lg relative overflow-hidden ${
             isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110] paper-texture'
           }`}>
             
             {/* Header Bar */}
-            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b-2 mb-4 ${
+            <div className={`flex items-center justify-between pb-2.5 border-b-2 mb-3 ${
               isDark ? 'border-zinc-700' : 'border-[#0b1110]'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
@@ -570,13 +570,13 @@ export default function ProfileScreen({
                   USER PROFILE // @{localUser?.name || 'user'}
                 </span>
               </div>
-              <div className={`self-start sm:self-auto border-2 border-dashed ${currentUser ? 'border-[#17a398] text-[#17a398]' : 'border-[#f59e0b] text-[#0b1110]'} px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0`}>
+              <div className={`border-2 border-dashed ${currentUser ? 'border-[#17a398] text-[#17a398]' : 'border-[#f59e0b] text-[#0b1110]'} px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0`}>
                 {currentUser ? 'MEMBER' : 'GUEST'}
               </div>
             </div>
 
             {/* Profile Body: Horizontal layout */}
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
               
               {/* Photo Frame */}
               <div className="shrink-0 flex flex-col items-center">

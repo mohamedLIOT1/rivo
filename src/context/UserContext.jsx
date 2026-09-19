@@ -77,6 +77,13 @@ export function UserProvider({ children }) {
     } catch { return []; }
   });
 
+  const [followedArtists, setFollowedArtists] = useState(() => {
+    try {
+      const s = localStorage.getItem('liofy_followed_artists');
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  });
+
   const [isSyncing, setIsSyncing] = useState(false);
 
   // ── Persist to localStorage ──────────────────────────
@@ -96,6 +103,30 @@ export function UserProvider({ children }) {
   useEffect(() => {
     try { localStorage.setItem('liofy_liked', JSON.stringify(likedTrackIds)); } catch {}
   }, [likedTrackIds]);
+
+  useEffect(() => {
+    try { localStorage.setItem('liofy_followed_artists', JSON.stringify(followedArtists)); } catch {}
+  }, [followedArtists]);
+
+  const toggleFollowArtist = useCallback((artistName) => {
+    if (!artistName) return;
+    const cleanName = typeof artistName === 'string' ? artistName.trim() : (artistName.name || '').trim();
+    if (!cleanName) return;
+    setFollowedArtists(prev => {
+      const exists = prev.some(a => a.toLowerCase() === cleanName.toLowerCase());
+      const next = exists
+        ? prev.filter(a => a.toLowerCase() !== cleanName.toLowerCase())
+        : [...prev, cleanName];
+      try { localStorage.setItem('liofy_followed_artists', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const isFollowingArtist = useCallback((artistName) => {
+    if (!artistName) return false;
+    const cleanName = typeof artistName === 'string' ? artistName.trim() : (artistName.name || '').trim();
+    return followedArtists.some(a => a.toLowerCase() === cleanName.toLowerCase());
+  }, [followedArtists]);
 
   const deduplicateTracks = (trackList) => {
     if (!Array.isArray(trackList)) return [];
@@ -320,6 +351,8 @@ export function UserProvider({ children }) {
     playlists, setPlaylists,
     likedTrackIds, setLikedTrackIds,
     toggleLike,
+    followedArtists, setFollowedArtists,
+    toggleFollowArtist, isFollowingArtist,
     deleteTrack,
     removeTrackFromPlaylist,
     isSyncing,

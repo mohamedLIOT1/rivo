@@ -69,12 +69,12 @@ export default function Navigation({
             <RivoLogo size={36} showText={true} isDark={isDark} />
           </div>
 
-          {/* ── Primary Navigation ── */}
+          {/* ── Primary Navigation: Discover ── */}
           <div className="space-y-1">
-            <div className={`text-[10px] font-mono font-bold uppercase px-2 mb-1 ${
+            <div className={`text-[10px] font-mono font-black uppercase px-2 mb-1 tracking-wider ${
               isDark ? 'text-zinc-500' : 'text-zinc-500'
             }`}>
-              Navigation
+              Discover
             </div>
 
             {mainNavItems.map((item) => {
@@ -101,82 +101,6 @@ export default function Navigation({
                 </button>
               );
             })}
-
-            {/* Jam Session Button */}
-            <button
-              onClick={openJamModal}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
-                currentScreen === 'jam'
-                  ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black'
-                  : isDark
-                    ? 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
-                    : 'text-[#0b1110] hover:bg-[#ede5d3]'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Radio size={17} className={currentScreen === 'jam' ? 'text-[#0b1110] shrink-0' : 'text-[#17a398] shrink-0'} strokeWidth={2.5} />
-                <span>Jam Session</span>
-              </div>
-              <span className="font-mono text-[9px] bg-[#f59e0b] text-[#0b1110] font-black px-1 rounded brutal-border">
-                LIVE
-              </span>
-            </button>
-
-            {/* Telegram / Messages Drawer Toggle */}
-            <button
-              onClick={openChatModal}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
-                isDark 
-                  ? 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white' 
-                  : 'text-[#0b1110] hover:bg-[#ede5d3]'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <MessageSquare size={17} className="text-[#dc2626] shrink-0" strokeWidth={2.5} />
-                <span>Messages</span>
-              </div>
-              {unreadChatCount > 0 ? (
-                <span className="bg-[#dc2626] text-white text-[9px] font-mono px-1.5 py-0.2 rounded-full font-bold brutal-border animate-pulse">
-                  {unreadChatCount}
-                </span>
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-[#17a398]"></span>
-              )}
-            </button>
-
-            <button
-              onClick={toggleActivityPanel}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
-                isActivityPanelOpen 
-                  ? isDark ? 'bg-zinc-800 text-white font-black' : 'bg-[#ede5d3] text-[#0b1110] font-black' 
-                  : isDark ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
-              }`}
-            >
-              <Users size={17} className="text-[#17a398] shrink-0" strokeWidth={2.5} />
-              <span>Listening Activity</span>
-            </button>
-
-            {/* Admin Portal Button */}
-            {isUserAdmin(currentUser) && (
-              <button
-                onClick={() => setCurrentScreen('admin')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
-                  currentScreen === 'admin'
-                    ? 'bg-[#f59e0b] text-[#0b1110] brutal-shadow-sm brutal-border font-black'
-                    : isDark
-                      ? 'text-[#f59e0b] hover:bg-zinc-800/80 hover:text-amber-300'
-                      : 'text-[#b45309] hover:bg-[#ede5d3]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <ShieldCheck size={17} className={currentScreen === 'admin' ? 'text-[#0b1110] shrink-0' : 'text-[#f59e0b] shrink-0'} strokeWidth={2.5} />
-                  <span>Admin Dashboard</span>
-                </div>
-                <span className="font-mono text-[8px] bg-[#f59e0b] text-[#0b1110] font-black px-1.5 py-0.5 rounded-full brutal-border">
-                  ADMIN
-                </span>
-              </button>
-            )}
           </div>
 
           {/* ── "Your Dispensary" Library Section ── */}
@@ -446,6 +370,26 @@ export default function Navigation({
             </button>
           );
         })}
+
+        {/* Mobile Messages Button */}
+        <button
+          onClick={openChatModal}
+          className={`relative flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+            isDark ? 'text-zinc-400 hover:text-white' : 'text-[#0b1110]'
+          }`}
+        >
+          <div className="relative">
+            <MessageSquare size={18} className={isDark ? 'text-zinc-400' : 'text-[#0b1110]'} strokeWidth={2.5} />
+            {unreadChatCount > 0 && (
+              <span className="absolute -top-1 -right-2 bg-[#dc2626] text-white text-[8px] font-mono px-1 rounded-full font-bold brutal-border">
+                {unreadChatCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] font-display font-bold">
+            Chat
+          </span>
+        </button>
       </nav>
     </>
   );

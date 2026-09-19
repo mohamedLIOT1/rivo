@@ -80,11 +80,11 @@ export default function MixesScreen({ tracks = [], globalTheme = 'dark' }) {
   const inTransition = remaining > 0 && remaining <= transitionDuration && isMixMode;
 
   return (
-    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-3 sm:p-4 md:p-8 transition-colors ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
       {/* ── Apothecary DJ Master Deck Card ── */}
-      <div className={`brutal-border-thick brutal-shadow-lg p-6 md:p-8 mb-8 relative transition-colors ${
+      <div className={`brutal-border-thick brutal-shadow-lg p-4 sm:p-6 md:p-8 mb-6 relative transition-colors ${
         isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#082621]'
       }`}>
         <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
@@ -92,8 +92,8 @@ export default function MixesScreen({ tracks = [], globalTheme = 'dark' }) {
         }`}>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 bg-[#f59e0b] brutal-border inline-block" />
-            <span className="text-xs font-mono font-black uppercase tracking-wider">
-              RIVO AUTOMATED APOTHECARY MIXER • CONSOLE #01
+            <span className="text-[10px] sm:text-xs font-mono font-black uppercase tracking-wider">
+              <span className="hidden sm:inline">RIVO AUTOMATED APOTHECARY MIXER • </span>CONSOLE #01
             </span>
           </div>
           <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${

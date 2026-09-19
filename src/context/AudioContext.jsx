@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { initAudioEngine, setEqualizerBands, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
+import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicAnalysis';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { API_BASE_URL } from '../config';
 
@@ -399,6 +400,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
           ytPlayerRef.current = getActiveYtPlayer();
           isYtTrackRef.current = true;
           setIsYtTrack(true);
+          isSeamlessYtHandoffRef.current = true;
+        } else if (secondaryAudioRef.current && transitionActiveTrackIdRef.current) {
+          // Seamless HTML5 Audio Handoff: swap active audio elements with zero audible gap
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
+          const temp = audioRef.current;
+          audioRef.current = secondaryAudioRef.current;
+          secondaryAudioRef.current = temp;
+          if (audioRef.current) {
+            audioRef.current.volume = volumeRef.current;
+          }
           isSeamlessYtHandoffRef.current = true;
         }
 
@@ -1172,12 +1185,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
     if (!seedTrack) return;
     try {
+      let followed = [];
+      try {
+        const raw = localStorage.getItem('liofy_followed_artists');
+        if (raw) followed = JSON.parse(raw);
+      } catch {}
+
       const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           currentTrack: seedTrack,
           seedTracks: currentList.slice(0, 5),
+          followedArtists: followed,
           limit: 6
         })
       });
@@ -1245,10 +1265,41 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const cur = currentTrackRef.current;
       const curId = String(cur?.id || cur?._id || '');
       const candidates = activeList.filter(t => String(t.id || t._id) !== curId);
-      const smartCandidates = candidates.filter(t => t.isSmartShuffle);
-      const chosen = (smartCandidates.length > 0)
-        ? smartCandidates[0]
-        : (candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : activeList[0]);
+
+      let followed = [];
+      try {
+        const raw = localStorage.getItem('liofy_followed_artists');
+        if (raw) followed = JSON.parse(raw);
+      } catch {}
+
+      // Intelligent AI scoring based on Followed Artists + Harmonic Camelot Key + BPM Proximity
+      const curMusical = getTrackMusicalData(cur);
+      const scoredCandidates = candidates.map(t => {
+        let score = 0;
+        const tArtist = (t.artist || '').toLowerCase();
+        // 1. Followed Artist match (+50 points)
+        if (followed.some(fa => tArtist.includes(fa.toLowerCase()))) {
+          score += 50;
+        }
+        // 2. Harmonic Key & BPM match (+30 points)
+        const tMusical = getTrackMusicalData(t);
+        const harm = checkHarmonicCompatibility(curMusical.key, tMusical.key, curMusical.bpm, tMusical.bpm);
+        score += (harm.score || 50) * 0.3; // up to 30 points
+
+        // 3. Play count popularity bonus (up to 10 points)
+        const plays = Number(t.plays) || 0;
+        score += Math.min(10, plays * 0.5);
+
+        // 4. Smart Shuffle flag (+20 points)
+        if (t.isSmartShuffle) score += 20;
+
+        return { track: t, score };
+      });
+
+      scoredCandidates.sort((a, b) => b.score - a.score);
+      const chosen = (scoredCandidates.length > 0)
+        ? scoredCandidates[0].track
+        : activeList[0];
 
       if (candidates.length <= 3 && cur) {
         fetchSmartShuffleTracks(cur, activeList);

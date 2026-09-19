@@ -225,26 +225,26 @@ export default function SearchScreen({
 
   return (
     <div 
-      className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+      className={`flex-1 overflow-y-auto pb-32 select-none p-3 sm:p-4 md:p-8 transition-colors ${
         isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
       }`}
     >
       <div className="max-w-6xl mx-auto">
-        {/* ── Apothecary Search Master Deck Card (Identical to Image 3 DJ Console) ── */}
-        <div className={`brutal-border-thick brutal-shadow-lg p-6 md:p-8 mb-8 relative transition-colors ${
+        {/* ── Search Header Card — compact on mobile ── */}
+        <div className={`brutal-border-thick brutal-shadow-lg p-2.5 sm:p-4 md:p-8 mb-3 md:mb-8 relative transition-colors ${
           isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
         }`}>
-          {/* Deck Header Bar */}
-          <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
+          {/* Deck Header Bar — hidden on mobile */}
+          <div className={`hidden sm:flex justify-between items-center pb-2.5 mb-3 border-b-2 ${
             isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
           }`}>
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 bg-[#f59e0b] brutal-border inline-block" />
-              <span className="text-xs font-mono font-black uppercase tracking-wider">
+              <span className="w-2.5 h-2.5 bg-[#f59e0b] brutal-border inline-block" />
+              <span className="text-[11px] font-mono font-black uppercase tracking-wider">
                 MUSIC & PEOPLE SEARCH ENGINE
               </span>
             </div>
-            <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
+            <div className={`text-[9px] font-mono font-black px-2 py-0.5 brutal-border ${
               isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
             }`}>
               INSTANT STREAMING
@@ -252,9 +252,9 @@ export default function SearchScreen({
           </div>
 
           {/* Deck Body */}
-          <div className="flex flex-col md:flex-row items-center gap-6">
-            {/* Search Scanner Box */}
-            <div className="w-28 h-28 md:w-36 md:h-36 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative flex flex-col items-center justify-center text-[#26c4b7]">
+          <div className="flex flex-col md:flex-row items-center gap-3 md:gap-6">
+            {/* Search Scanner Box — Desktop only */}
+            <div className="hidden md:flex w-28 h-28 md:w-36 md:h-36 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative flex-col items-center justify-center text-[#26c4b7]">
               {filterType === 'people' ? (
                 <Users size={48} strokeWidth={2.5} className={isSearchingUsers ? "animate-pulse" : ""} />
               ) : (
@@ -270,16 +270,10 @@ export default function SearchScreen({
               </div>
             </div>
 
-            <div className="flex-1 w-full text-center md:text-left">
-              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 brutal-border text-[10px] font-mono font-black uppercase mb-2 ${
-                isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
-              }`}>
-                <Sparkles size={12} className="text-[#17a398]" />
-                <span>SOUNDCLOUD & YOUTUBE STREAMING LAB</span>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                <h2 className={`text-2xl md:text-4xl font-display font-black leading-tight ${
+            <div className="flex-1 w-full text-left">
+              {/* Title row — compact on mobile */}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h2 className={`text-base sm:text-2xl md:text-4xl font-display font-black leading-tight ${
                   isDark ? 'text-white' : 'text-[#082621]'
                 }`}>
                   Search Music & People
@@ -288,16 +282,16 @@ export default function SearchScreen({
                 {onOpenAddSongModal && (
                   <button
                     onClick={onOpenAddSongModal}
-                    className="self-center sm:self-auto flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-mono font-black uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer shrink-0"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-mono font-black uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer shrink-0"
                   >
                     <PlusCircle size={14} strokeWidth={2.5} />
-                    <span>Add Song / Link</span>
+                    <span className="hidden xs:inline sm:inline">ADD SONG / LINK</span>
                   </button>
                 )}
               </div>
 
               {/* Tactile Search Input Box */}
-              <div className="relative mb-3">
+              <div className="relative mb-2.5">
                 <SearchIcon 
                   className={`absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none ${
                     isDark ? 'text-zinc-500' : 'text-[#082621]/70'
@@ -318,7 +312,7 @@ export default function SearchScreen({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   autoComplete="off"
-                  className={`w-full font-mono text-xs sm:text-sm py-2.5 pl-10 pr-10 brutal-border focus:outline-none transition-all ${
+                  className={`w-full font-mono text-xs sm:text-sm py-2 sm:py-2.5 pl-10 pr-10 brutal-border focus:outline-none transition-all ${
                     isDark 
                       ? 'bg-[#0b1110] text-white placeholder-zinc-500 border-zinc-700 focus:bg-[#141d1b]' 
                       : 'bg-[#ede5d3] text-[#0b1110] placeholder-[#082621]/60 border-black focus:bg-white'
@@ -338,13 +332,13 @@ export default function SearchScreen({
               </div>
 
               {/* ── Search Type Filter Options (All / Songs / People) ── */}
-              <div className="flex items-center gap-2 mb-3 flex-wrap justify-center md:justify-start">
-                <span className={`text-[10px] font-mono font-black uppercase tracking-wider ${
+              <div className="flex items-center gap-2 mb-2.5 overflow-x-auto no-scrollbar py-0.5">
+                <span className={`text-[10px] font-mono font-black uppercase tracking-wider shrink-0 ${
                   isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                 }`}>
                   FILTER:
                 </span>
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {[
                     { id: 'all', label: 'All', icon: Sparkles },
                     { id: 'songs', label: 'Songs', icon: Music },
@@ -357,7 +351,7 @@ export default function SearchScreen({
                       <button
                         key={id}
                         onClick={() => setFilterType(id)}
-                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer rounded-lg ${
+                        className={`shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer rounded-lg ${
                           isActive
                             ? 'bg-[#17a398] text-[#0b1110] font-black scale-105 brutal-shadow-sm'
                             : isDark
@@ -382,8 +376,8 @@ export default function SearchScreen({
 
               {/* Trending Quick Filter Pills */}
               {filterType !== 'people' && (
-                <div className="flex items-center gap-1.5 flex-wrap justify-center md:justify-start">
-                  <span className={`text-[10px] font-mono font-black uppercase mr-1 ${
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                  <span className={`text-[10px] font-mono font-black uppercase mr-1 shrink-0 ${
                     isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                   }`}>
                     TRENDING:
@@ -394,7 +388,7 @@ export default function SearchScreen({
                       <button
                         key={tag.label}
                         onClick={() => setQuery(isSelected ? '' : tag.query)}
-                        className={`px-2.5 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer ${
+                        className={`shrink-0 px-2.5 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer ${
                           isSelected
                             ? 'bg-[#17a398] text-[#0b1110] font-black scale-105'
                             : isDark 

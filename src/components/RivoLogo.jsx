@@ -55,7 +55,7 @@ export default function RivoLogo({ size = 36, className = '', showText = false, 
             }`}>
               RIVO
             </span>
-            <span className="font-mono font-black text-[9px] text-[#0b1110] bg-[#17a398] px-1.5 py-0.5 rounded uppercase brutal-border shrink-0">
+            <span className="hidden sm:inline font-mono font-black text-[9px] text-[#0b1110] bg-[#17a398] px-1.5 py-0.5 rounded uppercase brutal-border shrink-0">
               RIVO-RX
             </span>
           </div>

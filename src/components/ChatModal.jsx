@@ -10,6 +10,7 @@ export default function ChatModal({
   currentUser,
   socket,
   onStartJamWithUser,
+  onJoinJam,
   onPlayTrack,
   globalTheme = 'dark'
 }) {
@@ -200,10 +201,45 @@ export default function ChatModal({
   };
 
   const handleSendJamInvite = async () => {
-    if (onStartJamWithUser && activeUser) {
-      onStartJamWithUser(activeUser);
-      onClose();
+    if (!activeUser) return;
+    setSending(true);
+    let roomCode = null;
+    if (onStartJamWithUser) {
+      roomCode = await onStartJamWithUser(activeUser);
     }
+    if (!roomCode) {
+      roomCode = `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+    try {
+      const token = localStorage.getItem('liofy_token');
+      const res = await fetch(`${API_BASE_URL}/api/chat/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          recipientId: activeUser.id || activeUser._id,
+          text: `🎧 I started a Jam Session! Come join me to listen together in sync.`,
+          jamInvite: {
+            roomCode,
+            hostName: currentUser?.name || 'Friend',
+            hostAvatar: currentUser?.avatar || ''
+          }
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.message) {
+        setMessages((prev) => {
+          if (prev.some((m) => String(m._id) === String(data.message._id))) return prev;
+          return [...prev, data.message];
+        });
+        setTimeout(scrollToBottom, 100);
+      }
+    } catch (err) {
+      console.error('Failed to send Jam invite:', err);
+    }
+    setSending(false);
   };
 
   return (
@@ -407,6 +443,41 @@ export default function ChatModal({
                             <div className="w-7 h-7 rounded bg-[#17a398] brutal-border flex items-center justify-center shrink-0">
                               <Music size={13} className="text-[#0b1110]" />
                             </div>
+                          </div>
+                        )}
+
+                        {/* Jam Session Invite Card */}
+                        {msg.jamInvite && (
+                          <div className={`mt-2 p-2.5 rounded-xl brutal-border flex flex-col gap-2 ${
+                            isDark ? 'bg-zinc-900/95 border-zinc-700 text-white' : 'bg-[#ded2bb] border-black text-[#0b1110]'
+                          }`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <Radio size={14} className="text-[#f59e0b] animate-pulse shrink-0" strokeWidth={2.5} />
+                                <span className="text-[10px] font-mono font-black uppercase text-[#f59e0b] tracking-wider">
+                                  LIVE JAM SESSION
+                                </span>
+                              </div>
+                              <span className="text-[9px] font-mono font-black bg-[#0b1110] text-[#f59e0b] px-1.5 py-0.5 rounded brutal-border">
+                                {msg.jamInvite.roomCode}
+                              </span>
+                            </div>
+                            <p className="text-xs font-bold leading-tight">
+                              {msg.jamInvite.hostName ? `${msg.jamInvite.hostName} invites you to listen together!` : 'Invited to a live music jam!'}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (onJoinJam && msg.jamInvite.roomCode) {
+                                  onJoinJam(msg.jamInvite.roomCode);
+                                  onClose();
+                                }
+                              }}
+                              className="w-full py-1.5 px-3 rounded-lg bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-2 cursor-pointer transition"
+                            >
+                              <Radio size={13} className="text-[#0b1110]" strokeWidth={2.5} />
+                              <span>Join Jam Session</span>
+                            </button>
                           </div>
                         )}
                       </div>

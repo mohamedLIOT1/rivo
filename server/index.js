@@ -2837,17 +2837,21 @@ app.post('/api/playlists/:id/transitions', auth, async (req, res) => {
 // ──────────────────────────────────────────
 // AI SMART SHUFFLE & INTELLIGENT RECOMMENDATIONS
 // ──────────────────────────────────────────
-async function getGeminiMusicSuggestions(seedTracks, vibePrompt = '') {
+async function getGeminiMusicSuggestions(seedTracks, vibePrompt = '', followedArtists = []) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
   try {
     const seeds = seedTracks.slice(0, 6).map(t => `"${t.title}" by ${t.artist}`).join(', ');
-    const prompt = `You are a world-class music DJ and recommendation algorithm.
+    const artistFocus = (followedArtists && followedArtists.length > 0)
+      ? `Important: The user specifically follows these artists: [${followedArtists.join(', ')}]. Strongly prioritize recommending tracks by these artists or matching their exact style and vibe.`
+      : '';
+    const prompt = `You are a world-class Spotify-grade music DJ and recommendation algorithm.
 Given these seed tracks from a user's playlist: [${seeds}].
-${vibePrompt ? `User mood/vibe request: "${vibePrompt}".` : 'Recommend tracks that seamlessly blend with this mood, tempo, and genre for Smart Shuffle.'}
+${artistFocus}
+${vibePrompt ? `User mood/vibe request: "${vibePrompt}".` : 'Recommend tracks that seamlessly blend with this mood, tempo, and harmonic key for Smart Shuffle.'}
 Provide 6 song recommendations.
-Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason" (short 4-word reason like "Matching energy & tempo" or "Same vibe"). No markdown, no formatting.`;
+Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason" (short 4-word reason like "Followed Artist Hit" or "Matching Energy"). No markdown, no formatting.`;
 
     const model = 'gemini-flash-latest';
     const res = await axios.post(
@@ -2871,11 +2875,11 @@ Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason"
 
 app.post('/api/ai/smart-shuffle', async (req, res) => {
   try {
-    const { currentTrack, seedTracks = [], limit = 6 } = req.body;
+    const { currentTrack, seedTracks = [], limit = 6, followedArtists = [] } = req.body;
     const allSeeds = [currentTrack, ...seedTracks].filter(Boolean);
 
     // 1. Try Gemini AI recommendations first if key exists
-    let aiRecs = await getGeminiMusicSuggestions(allSeeds);
+    let aiRecs = await getGeminiMusicSuggestions(allSeeds, '', followedArtists);
     let tracks = [];
 
     if (aiRecs && aiRecs.length > 0) {

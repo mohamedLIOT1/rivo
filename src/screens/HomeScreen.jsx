@@ -83,85 +83,82 @@ export default function HomeScreen({
           RIVO
         </div>
 
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 sm:gap-6 relative z-10">
           
           {/* Left Text & CTA */}
-          <div className="max-w-xl text-left">
-            <div className="inline-flex items-center gap-2 bg-[#fdfbf7] text-[#0b1110] px-3 py-1 rounded-full brutal-border text-xs font-display font-bold mb-3 brutal-shadow-sm">
+          <div className="max-w-xl text-left w-full">
+            <div className="inline-flex items-center gap-1.5 bg-[#fdfbf7] text-[#0b1110] px-2.5 py-0.5 rounded-full brutal-border text-[10px] sm:text-xs font-display font-bold mb-2.5 brutal-shadow-sm">
               <span className="w-2 h-2 rounded-full bg-[#17a398] animate-pulse"></span>
               <span>🎵 UNLIMITED HI-FI STREAMING • CAIRO MUSIC LAB</span>
             </div>
 
-            <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black leading-tight mb-3 tracking-tight text-white">
-              {getGreeting()}, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Listener'}. <br />
-              <span className="bg-[#fdfbf7] text-[#0b1110] px-3 py-0.5 rounded-xl brutal-border inline-block transform -rotate-1 shadow-[4px_4px_0px_#f59e0b] mt-1">
-                Pure Sound Experience.
-              </span>
+            <h1 className="font-display text-2xl sm:text-4xl lg:text-5xl font-black leading-tight mb-2 tracking-tight text-white">
+              {getGreeting()}, <span className="text-[#17a398]">{currentUser?.name ? currentUser.name.split(' ')[0] : 'Listener'}</span>.
             </h1>
 
-            <p className="text-emerald-100 text-xs sm:text-sm font-medium leading-relaxed mb-4">
+            <p className="text-emerald-100/90 text-xs sm:text-sm font-medium leading-relaxed mb-3.5 line-clamp-2 sm:line-clamp-none">
               Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.
             </p>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button 
                 onClick={() => {
                   if (displayTracks.length > 0) {
                     onSelectTrack(displayTracks[0]);
                   }
                 }}
-                className="bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-black text-xs sm:text-sm px-5 py-2.5 rounded-xl brutal-border brutal-shadow brutal-btn flex items-center gap-2 cursor-pointer"
+                className="flex-1 sm:flex-initial bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-black text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Play size={16} fill="currentColor" />
+                <Play size={15} fill="currentColor" />
                 <span>PLAY DAILY MIX</span>
               </button>
 
               <button 
                 onClick={openChatModal}
-                className="bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs px-4 py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center gap-2 cursor-pointer"
+                className="flex-1 sm:flex-initial bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Sparkles size={16} strokeWidth={2.5} />
-                <span>AI Music DJ</span>
+                <Sparkles size={15} strokeWidth={2.5} />
+                <span>AI DJ</span>
               </button>
 
               <button 
                 onClick={openAddSongModal}
-                className="bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-display font-bold text-xs px-4 py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center gap-2 cursor-pointer"
+                className="w-full sm:w-auto bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-display font-bold text-xs px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Plus size={16} strokeWidth={2.5} />
-                <span>Add Song / Link</span>
+                <Plus size={15} strokeWidth={2.5} />
+                <span>Add Track</span>
               </button>
             </div>
           </div>
 
-          {/* Authentic Rivo Cassette Deck Graphic */}
-          <div className="relative shrink-0 flex items-center justify-center self-center lg:self-auto mt-2 lg:mt-0">
-            <div className="w-64 bg-[#fdfbf7] text-[#0b1110] rounded-xl brutal-border-thick p-4 brutal-shadow-lg transform rotate-2 hover:rotate-0 transition duration-300">
-              <div className="border-2 border-dashed border-[#0b1110] rounded-lg p-3 bg-white text-center">
+          {/* Authentic Rivo Cassette Deck Graphic (Shown on tablets and desktop) */}
+          <div className="hidden md:flex relative shrink-0 items-center justify-center self-center lg:self-auto mt-2 lg:mt-0">
+            <div className="w-56 sm:w-64 bg-[#fdfbf7] text-[#0b1110] rounded-xl brutal-border-thick p-3.5 sm:p-4 brutal-shadow-lg transform rotate-2 hover:rotate-0 transition duration-300">
+              <div className="border-2 border-dashed border-[#0b1110] rounded-lg p-2.5 sm:p-3 bg-white text-center">
                 <div className="flex items-center justify-between text-[10px] font-mono font-bold border-b-2 border-black pb-1 mb-2">
                   <span>RIVO SOUND LAB</span>
                   <span>HI-FI STEREO</span>
                 </div>
 
                 <div className="py-2">
-                  <div className="w-16 h-16 mx-auto mb-2 rounded-full bg-[#17a398] flex items-center justify-center brutal-border brutal-shadow-sm">
-                    <Disc size={32} className="text-[#0b1110]" strokeWidth={2.2} />
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-2 rounded-full bg-[#17a398] flex items-center justify-center brutal-border brutal-shadow-sm">
+                    <Disc size={30} className="text-[#0b1110]" strokeWidth={2.2} />
                   </div>
-                  <div className="font-display font-black text-xl text-[#0b1110] leading-tight">RIVO CASSETTE</div>
-                  <div className="text-[11px] text-zinc-600 font-bold">Daily Tape Rotation</div>
+                  <div className="font-display font-black text-lg sm:text-xl text-[#0b1110] leading-tight">RIVO CASSETTE</div>
+                  <div className="text-[10px] sm:text-[11px] text-zinc-600 font-bold">Daily Tape Rotation</div>
                 </div>
 
-                <div className="bg-[#0b1110] text-[#17a398] text-[10px] font-mono py-1 rounded mt-2 font-bold">
+                <div className="bg-[#0b1110] text-[#17a398] text-[9px] sm:text-[10px] font-mono py-1 rounded mt-1.5 font-bold">
                   NOW STREAMING • ZERO ADS
                 </div>
               </div>
             </div>
 
             {/* Serrated Starburst Badge Sticker */}
-            <div className="sawtooth-badge w-24 h-24 bg-[#dc2626] text-white flex flex-col items-center justify-center p-2 text-center absolute -top-4 -right-4 transform -rotate-12 brutal-border shadow-md">
-              <span className="font-display text-[9px] font-bold">100%</span>
-              <span className="font-display font-black text-base leading-tight">STEREO</span>
-              <span className="text-[8px] font-mono font-bold">TOP PICKS</span>
+            <div className="sawtooth-badge w-20 h-20 sm:w-24 sm:h-24 bg-[#dc2626] text-white flex flex-col items-center justify-center p-2 text-center absolute -top-3 -right-3 sm:-top-4 sm:-right-4 transform -rotate-12 brutal-border shadow-md">
+              <span className="font-display text-[8px] sm:text-[9px] font-bold">100%</span>
+              <span className="font-display font-black text-sm sm:text-base leading-tight">STEREO</span>
+              <span className="text-[7px] sm:text-[8px] font-mono font-bold">TOP PICKS</span>
             </div>
           </div>
 

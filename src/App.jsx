@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon } from 'lucide-react';
+import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon, Menu, Disc, Sparkles, ShieldCheck } from 'lucide-react';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
@@ -81,6 +81,7 @@ function AppContent() {
   const [isImportSongOpen, setIsImportSongOpen] = useState(false);
   const [isChatOpen,          setIsChatOpen]          = useState(false);
   const [isShortcutsOpen,     setIsShortcutsOpen]     = useState(false);
+  const [isMobileMenuOpen,    setIsMobileMenuOpen]    = useState(false);
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(() => {
     try {
       const saved = localStorage.getItem('liofy_activity_panel_open');
@@ -188,7 +189,25 @@ function AppContent() {
   }, [globalTheme]);
 
   const toggleGlobalTheme = () => {
-    setGlobalTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+    const root = document.documentElement;
+    root.classList.add('disable-transitions');
+    const next = globalTheme === 'dark' ? 'light' : 'dark';
+    if (next === 'dark') {
+      root.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+    setGlobalTheme(next);
+    try {
+      localStorage.setItem('rivo_global_theme', next);
+    } catch {}
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        root.classList.remove('disable-transitions');
+      }, 50);
+    });
   };
 
   // Fetch albums
@@ -492,23 +511,24 @@ function AppContent() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [jamSession?.code, socket]);
 
-  const handleStartJam = () => {
+  const handleStartJam = (openModal = true) => {
     resumeAudioContext();
-    const code = `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
+    const code = jamSession?.code || `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
     const userPayload = currentUser 
       ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
       : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
 
-    if (socket) {
+    if (socket && !jamSession?.code) {
       socket.emit('jam:join_room', {
         roomCode: code,
         user: userPayload
       });
-      setIsJamOpen(true);
-      showToast(`Jam Session created: ${code}`);
-    } else {
+      showToast(`Jam Session active: ${code}`);
+    }
+    if (openModal) {
       setIsJamOpen(true);
     }
+    return code;
   };
 
   const handleJoinJam = (code) => {
@@ -672,82 +692,35 @@ function AppContent() {
         </div>
 
         {/* Header Actions */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          {/* Add Song Button */}
-          <button 
-            onClick={() => setIsAddSongOpen(true)}
-            className={`font-display font-bold text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0 ${
-              globalTheme === 'dark' 
-                ? 'bg-[#141d1b] hover:bg-[#182320] border-zinc-700 text-white' 
-                : 'bg-[#fdfbf7] hover:bg-white border-black text-[#0b1110]'
-            }`}
-            title="Add Song"
-          >
-            <Plus size={15} className="text-[#dc2626]" strokeWidth={2.5} />
-            <span className="hidden sm:inline">Add Song</span>
-          </button>
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Action Icons */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Global Dark / Light Mode Switcher */}
+            <button 
+              onClick={toggleGlobalTheme}
+              className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 flex items-center justify-center cursor-pointer transition shrink-0"
+              title={globalTheme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {globalTheme === 'dark' ? <Sun size={15} strokeWidth={2.5} /> : <Moon size={15} strokeWidth={2.5} />}
+            </button>
 
-          {/* Jam Session Button */}
-          <button 
-            onClick={() => setIsJamOpen(true)}
-            className="bg-[#f59e0b] text-[#0b1110] font-display font-black text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0"
-            title="Jam Session"
-          >
-            <Radio size={15} className="animate-pulse" strokeWidth={2.5} />
-            <span className="hidden sm:inline">Jam</span>
-          </button>
-
-          {/* Messages Button */}
-          <button 
-            onClick={() => handleOpenChat(null)}
-            className="relative bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0"
-            title="Messages"
-          >
-            <MessageSquare size={15} strokeWidth={2.2} />
-            <span className="hidden sm:inline">Messages</span>
-            {unreadChatCount > 0 && (
-              <span className="bg-[#dc2626] text-white text-[9px] font-mono px-1 rounded-full font-bold brutal-border animate-pulse">
-                {unreadChatCount}
-              </span>
-            )}
-          </button>
-
-          {/* Activity / Friends Radar Button (Top Header) */}
-          <button 
-            onClick={() => {
-              const nextState = !isActivityPanelOpen;
-              setIsActivityPanelOpen(nextState);
-              try { localStorage.setItem('liofy_activity_panel_open', String(nextState)); } catch {}
-            }}
-            className={`relative ${
-              isActivityPanelOpen 
-                ? 'bg-[#17a398] text-[#0b1110]' 
-                : (globalTheme === 'dark' 
-                    ? 'bg-[#141d1b] hover:bg-[#182320] border-zinc-700 text-white' 
-                    : 'bg-[#fdfbf7] hover:bg-[#ede5d3] border-black text-[#0b1110]')
-            } font-display font-bold text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0`}
-            title="Friend Activity Radar"
-          >
-            <Users size={15} strokeWidth={2.5} />
-            <span className="hidden sm:inline">Activity</span>
-            {isActivityPanelOpen && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#0b1110]" />
-            )}
-          </button>
-
-          {/* Global Dark / Light Mode Switcher */}
-          <button 
-            onClick={toggleGlobalTheme}
-            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 flex items-center justify-center cursor-pointer transition shrink-0"
-            title={globalTheme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {globalTheme === 'dark' ? <Sun size={16} strokeWidth={2.5} /> : <Moon size={16} strokeWidth={2.5} />}
-          </button>
+            {/* Quick Actions Drawer Toggle (☰ 3 bars) */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="relative w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 flex items-center justify-center cursor-pointer transition shrink-0"
+              title="Menu & Quick Tools"
+            >
+              <Menu size={16} strokeWidth={2.5} />
+              {unreadChatCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#dc2626] rounded-full border border-black animate-pulse" />
+              )}
+            </button>
+          </div>
 
           {/* User Profile Badge */}
           <div 
             onClick={handleUserAvatarClick}
-            className="flex items-center gap-2 pl-2 border-l border-zinc-700 ml-1 cursor-pointer group"
+            className="flex items-center gap-1.5 pl-1.5 sm:pl-2 border-l border-zinc-700/60 ml-0.5 sm:ml-1 cursor-pointer group shrink-0"
           >
             <div className="w-8 h-8 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-display font-black text-xs text-[#0b1110] brutal-shadow-sm overflow-hidden shrink-0 group-hover:scale-105 transition-transform">
               {currentUser?.avatar ? (
@@ -757,7 +730,7 @@ function AppContent() {
               )}
             </div>
             <div className="hidden sm:flex flex-col justify-center text-left">
-              <span className="text-xs font-display font-bold leading-tight text-white truncate max-w-[100px] group-hover:text-[#17a398] transition-colors">
+              <span className="text-xs font-display font-bold leading-tight text-white truncate max-w-[90px] group-hover:text-[#17a398] transition-colors">
                 {currentUser ? currentUser.name : 'Sign In'}
               </span>
               <div className="flex items-center gap-1 mt-0.5">
@@ -1137,8 +1110,11 @@ function AppContent() {
         targetUser={chatTargetUser}
         currentUser={currentUser}
         socket={socket}
-        onStartJamWithUser={() => {
-          handleStartJam();
+        onStartJamWithUser={async (target) => {
+          return handleStartJam(false);
+        }}
+        onJoinJam={(code) => {
+          handleJoinJam(code);
         }}
         onPlayTrack={(track) => {
           playTrack(track);
@@ -1150,6 +1126,170 @@ function AppContent() {
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
       />
+
+      {/* ── Slide-out Quick Actions Drawer (☰ 3 bars) ── */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[100] flex justify-end select-none animate-in fade-in duration-200">
+          {/* Backdrop */}
+          <div 
+            onClick={() => setIsMobileMenuOpen(false)} 
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs cursor-pointer" 
+          />
+
+          {/* Drawer Panel */}
+          <div className={`relative w-72 max-w-[85vw] h-full flex flex-col brutal-border-thick border-y-0 border-r-0 shadow-2xl z-10 animate-in slide-in-from-right duration-200 ${
+            globalTheme === 'dark' ? 'bg-[#101716] text-white border-zinc-800' : 'bg-[#fdfbf7] text-[#0b1110] border-black'
+          }`}>
+            {/* Header */}
+            <div className={`p-3.5 border-b-2 flex items-center justify-between shrink-0 ${
+              globalTheme === 'dark' ? 'border-zinc-800 bg-[#0b1110]' : 'border-black bg-[#ede5d3]'
+            }`}>
+              <RivoLogo size={28} showText={true} isDark={globalTheme === 'dark'} />
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`w-8 h-8 rounded-lg brutal-border flex items-center justify-center brutal-btn cursor-pointer ${
+                  globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ded2bb] text-black'
+                }`}
+              >
+                <X size={17} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Menu Links & Tools */}
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 font-display font-bold text-xs">
+              {/* Quick Actions */}
+              <div className="space-y-1">
+                <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 mb-1 px-1">
+                  Quick Actions
+                </div>
+
+                <button
+                  onClick={() => { setIsAddSongOpen(true); setIsMobileMenuOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer font-black"
+                >
+                  <Plus size={17} strokeWidth={3} />
+                  <span>Add Song / Link</span>
+                </button>
+
+                <button
+                  onClick={() => { setIsJamOpen(true); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                    globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Radio size={16} className="text-[#f59e0b] animate-pulse" strokeWidth={2.5} />
+                    <span>Jam Session</span>
+                  </div>
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#f59e0b] text-black brutal-border">
+                    LIVE
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => { handleOpenChat(null); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                    globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MessageSquare size={16} className="text-[#17a398]" strokeWidth={2.5} />
+                    <span>Messages & Chat</span>
+                  </div>
+                  {unreadChatCount > 0 && (
+                    <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full bg-[#dc2626] text-white">
+                      {unreadChatCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => {
+                    toggleActivityPanel();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                    globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Users size={16} className="text-[#17a398]" strokeWidth={2.5} />
+                    <span>Listening Activity</span>
+                  </div>
+                  {isActivityPanelOpen && (
+                    <span className="w-2 h-2 rounded-full bg-[#17a398]" />
+                  )}
+                </button>
+              </div>
+
+              {/* Navigation */}
+              <div className="space-y-1 pt-2 border-t-2 border-dashed border-zinc-800">
+                <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 mb-1 px-1">
+                  Browse & Decks
+                </div>
+
+                <button
+                  onClick={() => { setCurrentScreen('mixes'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
+                    currentScreen === 'mixes' 
+                      ? 'bg-[#17a398] text-[#0b1110] font-black brutal-border' 
+                      : globalTheme === 'dark' ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
+                  }`}
+                >
+                  <Radio size={16} />
+                  <span>DJ Automix Deck</span>
+                </button>
+
+                <button
+                  onClick={() => { setCurrentScreen('stats'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
+                    currentScreen === 'stats' 
+                      ? 'bg-[#17a398] text-[#0b1110] font-black brutal-border' 
+                      : globalTheme === 'dark' ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
+                  }`}
+                >
+                  <Disc size={16} />
+                  <span>Stats & History</span>
+                </button>
+
+                {isUserAdmin(currentUser) && (
+                  <button
+                    onClick={() => { setCurrentScreen('admin'); setIsMobileMenuOpen(false); }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#f59e0b] brutal-border border-[#f59e0b] cursor-pointer"
+                  >
+                    <span>Admin Dashboard</span>
+                    <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#f59e0b] text-black">
+                      ADMIN
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {/* Preferences */}
+              <div className="space-y-1.5 pt-2 border-t-2 border-dashed border-zinc-800">
+                <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 px-1">
+                  Preferences
+                </div>
+
+                <button
+                  onClick={toggleGlobalTheme}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                    globalTheme === 'dark' ? 'bg-zinc-800 text-white' : 'bg-white text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {globalTheme === 'dark' ? <Moon size={15} className="text-amber-400" /> : <Sun size={15} className="text-amber-500" />}
+                    <span>{globalTheme === 'dark' ? 'Dark Theme' : 'Light Theme'}</span>
+                  </div>
+                  <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-zinc-700/50">
+                    {globalTheme === 'dark' ? 'NIGHT' : 'DAY'}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast Notification Banner ── */}
       {toastMessage && (
