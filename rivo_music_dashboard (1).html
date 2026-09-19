@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIOFY — Sonic Dispensary (Rivo Edition)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            rivo: {
+              teal: '#17a398',
+              tealLight: '#26c4b7',
+              tealDark: '#0f756d',
+              deepForest: '#082621',
+              cardBg: '#fdfbf7',
+              cream: '#f4ede1',
+              paper: '#ede5d3',
+              paperDark: '#ded2bb',
+              ink: '#0b1110',
+              crimson: '#dc2626',
+              amber: '#f59e0b',
+              navy: '#1e3a8a'
+            }
+          },
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Space Grotesk"', 'sans-serif'],
+            mono: ['"Space Mono"', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Neo-Brutalist design foundations inspired by Rivo packaging */
+    .brutal-border {
+      border: 2.5px solid #0b1110;
+    }
+    .brutal-border-thick {
+      border: 3.5px solid #0b1110;
+    }
+    .brutal-shadow-sm {
+      box-shadow: 2px 2px 0px #0b1110;
+    }
+    .brutal-shadow {
+      box-shadow: 4px 4px 0px #0b1110;
+    }
+    .brutal-shadow-lg {
+      box-shadow: 6px 6px 0px #0b1110;
+    }
+    .brutal-shadow-teal {
+      box-shadow: 5px 5px 0px #082621;
+    }
+
+    .brutal-btn {
+      transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .brutal-btn:hover {
+      transform: translate(-1.5px, -1.5px);
+      box-shadow: 5px 5px 0px #0b1110;
+    }
+    .brutal-btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0px #0b1110;
+    }
+
+    /* Outer filmstrip / perforated strip margins matching rivo.host */
+    .filmstrip-stripes {
+      background: repeating-linear-gradient(
+        0deg,
+        #0b1110,
+        #0b1110 12px,
+        #17a398 12px,
+        #17a398 24px
+      );
+    }
+
+    /* Sawtooth pharmaceutical guarantee badge */
+    .sawtooth-badge {
+      clip-path: polygon(
+        50% 0%, 59% 7%, 70% 3%, 76% 12%, 87% 12%, 89% 23%, 99% 27%, 97% 38%, 
+        100% 50%, 97% 62%, 99% 73%, 89% 77%, 87% 88%, 76% 88%, 70% 97%, 59% 93%, 
+        50% 100%, 41% 93%, 30% 97%, 24% 88%, 13% 88%, 11% 77%, 1% 73%, 3% 62%, 
+        0% 50%, 3% 38%, 1% 27%, 11% 23%, 13% 12%, 24% 12%, 30% 3%, 41% 7%
+      );
+    }
+
+    /* Subtle halftoning for vintage paper texture */
+    .paper-texture {
+      background-color: #fdfbf7;
+      background-image: radial-gradient(#d3c9b4 0.75px, transparent 0.75px);
+      background-size: 7px 7px;
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 7px;
+      height: 7px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #ede5d3;
+      border-left: 1.5px solid #0b1110;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #0b1110;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #0f756d;
+    }
+
+    /* Dynamic equalizer bars */
+    @keyframes audioBounce {
+      0%, 100% { height: 4px; }
+      50% { height: 26px; }
+    }
+    .eq-bar {
+      animation: audioBounce 0.75s infinite ease-in-out;
+    }
+    .eq-bar:nth-child(1) { animation-delay: 0.1s; }
+    .eq-bar:nth-child(2) { animation-delay: 0.35s; }
+    .eq-bar:nth-child(3) { animation-delay: 0.2s; }
+    .eq-bar:nth-child(4) { animation-delay: 0.5s; }
+    .eq-bar:nth-child(5) { animation-delay: 0.15s; }
+
+    input[type=range] {
+      accent-color: #0b1110;
+    }
+  </style>
+</head>
+
+<body class="h-full font-sans bg-rivo-deepForest text-rivo-ink select-none overflow-hidden flex flex-col">
+
+  <!-- TOP APOTHECARY NAV BAR -->
+  <header class="bg-rivo-ink text-rivo-cardBg brutal-border-thick border-x-0 border-t-0 px-4 py-2.5 flex items-center justify-between gap-3 z-30 shrink-0">
+    
+    <!-- Brand identity: LIOFY in Rivo Apothecary typeface -->
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-rivo-teal text-rivo-ink rounded-lg brutal-border flex items-center justify-center brutal-shadow-sm transform -rotate-2">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-display font-black text-2xl tracking-wider text-rivo-cardBg">LIOFY</span>
+          <span class="font-mono font-black text-[10px] text-rivo-ink bg-rivo-teal px-1.5 py-0.5 rounded uppercase brutal-border">RIVO-RX</span>
+        </div>
+        <div class="text-[10px] text-zinc-400 font-medium flex items-center gap-1.5">
+          <span>Relief For The Ears</span>
+          <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block"></span>
+          <span class="text-emerald-400 font-mono">EST. 1954</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Retro Search Box -->
+    <div class="hidden md:flex flex-1 max-w-md mx-4">
+      <div class="relative w-full">
+        <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </span>
+        <input 
+          id="globalSearchInput" 
+          type="text" 
+          placeholder="Search by dose, artist, prescription, or cassette..."
+          class="w-full bg-rivo-cardBg text-rivo-ink placeholder-zinc-500 text-xs font-bold py-2 pl-10 pr-8 rounded-full brutal-border focus:outline-none focus:bg-white brutal-shadow-sm"
+        />
+        <button id="clearSearchBtn" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-black">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Header Actions matching user screenshot -->
+    <div class="flex items-center gap-2 sm:gap-2.5">
+      <!-- Add Song Button -->
+      <button id="openAddSongBtn" class="bg-rivo-cardBg hover:bg-white text-rivo-ink font-display font-bold text-xs px-3 py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-rivo-crimson" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span class="hidden sm:inline">Add Song</span>
+      </button>
+
+      <!-- Jam Session Button -->
+      <button id="openJamBtn" class="bg-rivo-amber text-rivo-ink font-display font-black text-xs px-3 py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5">
+        <svg class="w-4 h-4 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path>
+          <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path>
+          <circle cx="12" cy="12" r="2"></circle>
+          <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path>
+          <path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path>
+        </svg>
+        <span class="hidden sm:inline">Jam</span>
+      </button>
+
+      <!-- Messages Button (Opens Drawer) -->
+      <button id="toggleMessagesBtn" class="relative bg-rivo-teal hover:bg-rivo-tealLight text-rivo-ink font-display font-bold text-xs px-3 py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span>Messages</span>
+        <span class="bg-rivo-crimson text-white text-[9px] font-mono px-1 rounded-full font-bold brutal-border">2</span>
+      </button>
+
+      <!-- User Profile Badge -->
+      <div class="flex items-center gap-2 pl-2 border-l-2 border-zinc-700 ml-1">
+        <div class="w-8 h-8 rounded-lg bg-rivo-teal border-2 border-black flex items-center justify-center font-display font-black text-sm text-rivo-ink brutal-shadow-sm">
+          L
+        </div>
+        <div class="hidden lg:block text-left">
+          <div class="text-xs font-bold leading-none text-rivo-cardBg">Lio</div>
+          <span class="text-[9px] text-emerald-400 font-mono font-medium">DISPENSARY ACTIVE</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- Left Perforated Filmstrip Rail (matches rivo.host) -->
+    <aside class="hidden xl:flex w-8 flex-col filmstrip-stripes brutal-border border-y-0 border-l-0 shrink-0"></aside>
+
+    <!-- LEFT APOTHECARY SIDEBAR -->
+    <nav class="w-64 bg-rivo-cardBg brutal-border border-y-0 border-l-0 hidden md:flex flex-col justify-between shrink-0 p-3.5 overflow-y-auto">
+      <div class="space-y-4">
+        
+        <!-- Primary Navigation -->
+        <div class="space-y-1">
+          <div class="text-[10px] font-mono font-bold text-zinc-500 uppercase px-2 mb-1">Navigation</div>
+          
+          <button class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs bg-rivo-ink text-rivo-cardBg brutal-shadow-sm brutal-border">
+            <svg class="w-4 h-4 text-rivo-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            </svg>
+            <span>Home</span>
+          </button>
+
+          <button id="sidebarSearchTrigger" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs text-rivo-ink hover:bg-rivo-paper transition">
+            <svg class="w-4 h-4 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <span>Search</span>
+          </button>
+
+          <button id="sidebarJamTrigger" class="nav-item w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs text-rivo-ink hover:bg-rivo-paper transition">
+            <svg class="w-4 h-4 text-rivo-tealDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M2 12h5"></path>
+              <path d="M17 12h5"></path>
+              <circle cx="12" cy="12" r="4"></circle>
+            </svg>
+            <span>Jam Session</span>
+          </button>
+
+          <button id="sidebarMsgTrigger" class="nav-item w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs text-rivo-ink hover:bg-rivo-paper transition">
+            <div class="flex items-center gap-3">
+              <svg class="w-4 h-4 text-rivo-crimson" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>Messages</span>
+            </div>
+            <span class="w-2 h-2 rounded-full bg-rivo-crimson"></span>
+          </button>
+        </div>
+
+        <!-- "Your Library" Dispensary section from screenshot -->
+        <div class="pt-3 border-t-2 border-dashed border-zinc-400">
+          <div class="flex items-center justify-between px-2 mb-2">
+            <div class="flex items-center gap-1.5 text-[11px] font-display font-bold text-rivo-ink">
+              <svg class="w-3.5 h-3.5 text-rivo-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="m16 6 4 14"></path>
+                <path d="M12 6v14"></path>
+                <path d="M8 8v12"></path>
+                <path d="M4 4v16"></path>
+              </svg>
+              <span>Your Dispensary</span>
+            </div>
+            <button id="quickAddPlaylist" class="text-xs font-bold hover:text-rivo-teal" title="New Blister Pack">+</button>
+          </div>
+
+          <!-- Filter Pills -->
+          <div class="flex gap-1 mb-2.5">
+            <button class="px-2 py-0.5 rounded text-[10px] font-bold bg-rivo-ink text-white brutal-border">All</button>
+            <button class="px-2 py-0.5 rounded text-[10px] font-bold bg-white text-zinc-700 border border-black hover:bg-rivo-paper">Playlists</button>
+            <button class="px-2 py-0.5 rounded text-[10px] font-bold bg-white text-zinc-700 border border-black hover:bg-rivo-paper">Artists</button>
+          </div>
+
+          <!-- Playlists from user reference -->
+          <div class="space-y-1.5 text-xs font-bold">
+            <!-- Liked Songs -->
+            <div onclick="filterLibrary('liked')" class="p-2 bg-white rounded-lg brutal-border flex items-center justify-between cursor-pointer hover:bg-rivo-paper transition group">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="w-6 h-6 rounded bg-rivo-crimson text-white flex items-center justify-center shrink-0">
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+                  </svg>
+                </div>
+                <div class="truncate">
+                  <div class="truncate leading-none">Liked Songs</div>
+                  <span class="text-[10px] font-mono text-zinc-500 font-normal">Playlist • 2 songs</span>
+                </div>
+              </div>
+              <span class="text-[10px] font-mono text-zinc-400">RX</span>
+            </div>
+
+            <!-- حريفي (7arify) -->
+            <div onclick="filterLibrary('7arify')" class="p-2 bg-white rounded-lg brutal-border flex items-center justify-between cursor-pointer hover:bg-rivo-paper transition">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="w-6 h-6 rounded bg-rivo-navy text-white flex items-center justify-center shrink-0 font-mono text-[10px]">
+                  7
+                </div>
+                <div class="truncate">
+                  <div class="truncate leading-none">حريفي (Pro Mix)</div>
+                  <span class="text-[10px] font-mono text-zinc-500 font-normal">Playlist • 0 songs</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Peter Parker -->
+            <div onclick="filterLibrary('peter')" class="p-2 bg-white rounded-lg brutal-border flex items-center justify-between cursor-pointer hover:bg-rivo-paper transition">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="w-6 h-6 rounded bg-rivo-amber text-rivo-ink flex items-center justify-center shrink-0 font-mono text-[10px]">
+                  P
+                </div>
+                <div class="truncate">
+                  <div class="truncate leading-none">Peter Parker</div>
+                  <span class="text-[10px] font-mono text-zinc-500 font-normal">Playlist • 9 songs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pharmaceutical Certification Badge -->
+        <div class="bg-rivo-paperDark p-3 rounded-xl brutal-border text-center space-y-1">
+          <div class="text-[11px] font-display font-bold text-rivo-ink">CLINICALLY PROVEN</div>
+          <p class="text-[10px] text-zinc-700 leading-snug">
+            Formulated for 0% buffering, instant migraine relief, and continuous flow.
+          </p>
+          <div class="text-[9px] font-mono font-bold text-zinc-500 pt-1">BATCH NO. 54-CAIRO</div>
+        </div>
+
+      </div>
+
+      <div class="pt-2 text-[10px] font-mono text-zinc-500 text-center">
+        LIOFY v3.4 • RIVO LICENSED
+      </div>
+    </nav>
+
+    <!-- CENTER MAIN VIEW (TURQUOISE RIVO CANVAS) -->
+    <main class="flex-1 overflow-y-auto bg-rivo-teal p-3.5 sm:p-6 pb-36">
+
+      <!-- HERO BANNER (NO HEADACHE STREAMING) -->
+      <section class="mb-6 bg-rivo-deepForest rounded-2xl brutal-border-thick p-5 sm:p-7 text-rivo-cardBg brutal-shadow-teal relative overflow-hidden">
+        
+        <!-- Large background watermark -->
+        <div class="absolute -right-6 -bottom-10 opacity-10 text-white font-display font-black text-9xl select-none pointer-events-none tracking-tighter">
+          RIVO
+        </div>
+
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
+          
+          <div class="max-w-xl text-left">
+            <div class="inline-flex items-center gap-2 bg-rivo-cardBg text-rivo-ink px-3 py-1 rounded-full brutal-border text-xs font-display font-bold mb-3 brutal-shadow-sm">
+              <svg class="w-3.5 h-3.5 text-rivo-crimson" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>NO HEADACHE STREAMING • DIRECT FROM CAIRO</span>
+            </div>
+
+            <h1 class="font-display text-3xl sm:text-4xl lg:text-5xl font-black leading-tight mb-3 tracking-tight">
+              Good morning, Lio. <br>
+              <span class="bg-rivo-cardBg text-rivo-ink px-3 py-0.5 rounded-xl brutal-border inline-block transform -rotate-1 shadow-[4px_4px_0px_#f59e0b]">
+                Pure Sound Relief.
+              </span>
+            </h1>
+
+            <p class="text-emerald-100 text-xs sm:text-sm font-medium leading-relaxed mb-4">
+              Formulated to soothe mental exhaustion, debug sessions, and daily grind. Authentic Egyptian rap, indie rhythms, and focus-enhancing tracks packaged into daily blister packs.
+            </p>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <button id="heroPlayDoseBtn" class="bg-rivo-cardBg hover:bg-white text-rivo-ink font-display font-black text-xs sm:text-sm px-5 py-2.5 rounded-xl brutal-border brutal-shadow brutal-btn flex items-center gap-2">
+                <svg class="w-4 h-4 text-rivo-ink" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                <span>DISPENSE FULL DOSE</span>
+              </button>
+
+              <button id="heroTelegramBtn" class="bg-rivo-teal hover:bg-rivo-tealLight text-rivo-ink font-display font-bold text-xs px-4 py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Request Custom Prescription</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Authentic Rivo Blister Pack Graphic -->
+          <div class="relative shrink-0 flex items-center justify-center self-center lg:self-auto">
+            <div class="w-64 bg-rivo-cardBg text-rivo-ink rounded-xl brutal-border-thick p-4 brutal-shadow-lg transform rotate-2 hover:rotate-0 transition duration-300">
+              <div class="border-2 border-dashed border-rivo-ink rounded-lg p-3 bg-white text-center">
+                <div class="flex items-center justify-between text-[10px] font-mono font-bold border-b-2 border-black pb-1 mb-2">
+                  <span>RIVO SOUND CO.</span>
+                  <span>500mg STEREO</span>
+                </div>
+
+                <div class="py-2">
+                  <div class="w-16 h-16 mx-auto mb-2 rounded-full bg-rivo-teal flex items-center justify-center brutal-border brutal-shadow-sm">
+                    <svg class="w-8 h-8 text-rivo-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                      <circle cx="8" cy="10" r="2"></circle>
+                      <circle cx="16" cy="10" r="2"></circle>
+                      <path d="M8 14h8"></path>
+                    </svg>
+                  </div>
+                  <div class="font-display font-black text-xl text-rivo-ink leading-tight">RIVO CASSETTE</div>
+                  <div class="text-[11px] text-zinc-600 font-bold">Fast Mental Analgesic</div>
+                </div>
+
+                <div class="bg-rivo-ink text-rivo-teal text-[10px] font-mono py-1 rounded mt-2 font-bold">
+                  DOSAGE: 1 TO 3 TRACKS
+                </div>
+              </div>
+            </div>
+
+            <!-- Serrated Starburst Badge Sticker -->
+            <div class="sawtooth-badge w-24 h-24 bg-rivo-crimson text-white flex flex-col items-center justify-center p-2 text-center absolute -top-4 -right-4 transform -rotate-12 brutal-border shadow-md">
+              <span class="font-display text-[9px] font-bold">RELIEVES</span>
+              <span class="font-display font-black text-base leading-tight">BURNOUT</span>
+              <span class="text-[8px] font-mono">100% ASPIRIN</span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- QUICK DOSAGE 6-PACK GRID (Directly mapping the user screenshot) -->
+      <section class="mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <h2 class="font-display font-black text-xl text-rivo-cardBg tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
+              Morning Dispensary Pack
+            </h2>
+            <span class="text-[10px] font-mono font-bold bg-rivo-ink text-rivo-teal px-2 py-0.5 rounded-full brutal-border">
+              QUICK RELIEF
+            </span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button class="pill-filter active px-3 py-1 rounded-lg text-xs font-display font-bold bg-rivo-ink text-rivo-cardBg brutal-border brutal-shadow-sm" data-filter="all">All</button>
+            <button class="pill-filter px-3 py-1 rounded-lg text-xs font-display font-bold bg-rivo-cardBg text-rivo-ink brutal-border hover:bg-white" data-filter="music">Music</button>
+            <button class="pill-filter px-3 py-1 rounded-lg text-xs font-display font-bold bg-rivo-cardBg text-rivo-ink brutal-border hover:bg-white" data-filter="podcast">Podcasts</button>
+          </div>
+        </div>
+
+        <div id="quickDoseGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <!-- Populated by JavaScript with tracks from the user screenshot -->
+        </div>
+      </section>
+
+      <!-- RECENTLY DISPENSED (Blister Cards Section) -->
+      <section class="mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="font-display font-black text-xl text-rivo-cardBg tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
+              Recently Dispensed
+            </h3>
+            <p class="text-xs text-emerald-950 font-bold">
+              Blister packs prescribed for your daily rotation
+            </p>
+          </div>
+          <span class="text-xs font-mono font-bold bg-rivo-cardBg px-2.5 py-1 rounded-lg brutal-border brutal-shadow-sm text-rivo-ink">
+            BATCH: <span id="batchCount">6</span> ITEMS
+          </span>
+        </div>
+
+        <!-- Dynamic Grid of Cassette / Blister Cards -->
+        <div id="recentlyPlayedGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <!-- Populated dynamically via JavaScript -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Right Perforated Filmstrip Rail -->
+    <aside class="hidden xl:flex w-8 flex-col filmstrip-stripes brutal-border border-y-0 border-r-0 shrink-0"></aside>
+
+    <!-- RETRO MESSAGES / PAGER SLIDE-OVER DRAWER -->
+    <aside id="messagesDrawer" class="fixed inset-y-0 right-0 w-full sm:w-96 bg-rivo-cardBg brutal-border-thick border-y-0 border-r-0 z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col shadow-2xl">
+      
+      <!-- Drawer Header -->
+      <div class="p-3.5 bg-rivo-ink text-rivo-cardBg brutal-border border-x-0 border-t-0 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded bg-rivo-teal text-rivo-ink brutal-border flex items-center justify-center font-display font-black text-sm">
+            RX
+          </div>
+          <div>
+            <h3 class="font-display font-bold text-sm leading-none">Rivo Telegraph Bureau</h3>
+            <span class="text-[10px] text-zinc-400 font-mono">ENCRYPTED MEDICAL TELEGRAM</span>
+          </div>
+        </div>
+        <button id="closeMessagesBtn" class="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Contact Selector Tabs -->
+      <div class="bg-rivo-paperDark p-2 border-b-2 border-black flex gap-1.5 overflow-x-auto text-xs font-display font-bold shrink-0">
+        <button class="chat-contact-tab active px-3 py-1 rounded bg-rivo-ink text-white brutal-border" data-contact="pharmacist">
+          Dr. Cassette
+        </button>
+        <button class="chat-contact-tab px-3 py-1 rounded bg-white text-rivo-ink brutal-border" data-contact="abyusif">
+          Abyusif
+        </button>
+        <button class="chat-contact-tab px-3 py-1 rounded bg-white text-rivo-ink brutal-border" data-contact="elwaili">
+          El-Waili
+        </button>
+      </div>
+
+      <!-- Messages Stream -->
+      <div id="messagesThread" class="flex-1 p-3.5 overflow-y-auto space-y-3 paper-texture">
+        <!-- Message from Pharmacist -->
+        <div class="flex flex-col items-start max-w-[85%]">
+          <div class="bg-white p-3 rounded-xl rounded-tl-none brutal-border brutal-shadow-sm text-xs font-medium text-rivo-ink space-y-1">
+            <div class="flex items-center justify-between border-b border-dashed border-zinc-300 pb-1 mb-1 font-mono text-[10px] text-zinc-500 gap-4">
+              <span>TELEGRAM #881</span>
+              <span>10:45 AM</span>
+            </div>
+            <p>Welcome to Liofy Rivo Dispensary! Need a quick beat dosage or suffering from syntax headache?</p>
+          </div>
+          <span class="text-[9px] font-mono text-zinc-500 mt-1 px-1">Dr. Cassette • Head Pharmacist</span>
+        </div>
+
+        <!-- Outgoing message from User -->
+        <div class="flex flex-col items-end max-w-[85%] ml-auto">
+          <div class="bg-rivo-teal text-rivo-ink p-3 rounded-xl rounded-tr-none brutal-border brutal-shadow-sm text-xs font-bold space-y-1">
+            <div class="flex items-center justify-between border-b border-black/20 pb-1 mb-1 font-mono text-[10px] text-rivo-deepForest gap-4">
+              <span>Lio</span>
+              <span>10:48 AM</span>
+            </div>
+            <p>I have a heavy coding deadline. Dispense me something fast and intense.</p>
+          </div>
+          <span class="text-[9px] font-mono text-zinc-500 mt-1 px-1">Dispatched via Telegraph</span>
+        </div>
+
+        <!-- Prescribed track card inside chat -->
+        <div class="flex flex-col items-start max-w-[90%]">
+          <div class="bg-white p-3 rounded-xl rounded-tl-none brutal-border brutal-shadow-sm text-xs font-medium text-rivo-ink space-y-2">
+            <div class="flex items-center justify-between border-b border-dashed border-zinc-300 pb-1 font-mono text-[10px] text-zinc-500">
+              <span>RECOMMENDED REMEDY</span>
+              <span>10:49 AM</span>
+            </div>
+            <p>Prescribed: <b>Karim Osama x ElWaili — EASY</b>. Highly active synth formulation.</p>
+            <button onclick="playTrackById(3)" class="w-full bg-rivo-amber text-rivo-ink font-display font-bold text-xs py-1.5 rounded brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <span>Dispense Remedy Now</span>
+            </button>
+          </div>
+          <span class="text-[9px] font-mono text-zinc-500 mt-1 px-1">Prescription Approved</span>
+        </div>
+      </div>
+
+      <!-- Chat Input Field -->
+      <div class="p-3 bg-rivo-paperDark brutal-border border-x-0 border-b-0 shrink-0">
+        <form id="chatForm" class="flex gap-2">
+          <input 
+            id="chatInput" 
+            type="text" 
+            placeholder="Type a prescription inquiry..."
+            class="flex-1 bg-white text-xs font-bold px-3 py-2 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-rivo-teal"
+            required
+          />
+          <button type="submit" class="bg-rivo-ink hover:bg-zinc-800 text-rivo-cardBg px-4 py-2 rounded-lg font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1">
+            <svg class="w-4 h-4 text-rivo-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <span>Send</span>
+          </button>
+        </form>
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- PERSISTENT CASSETTE DECK PLAYER (Bottom Bar) -->
+  <footer class="fixed bottom-0 inset-x-0 bg-rivo-cardBg brutal-border-thick border-x-0 border-b-0 p-2 sm:p-3.5 z-40 brutal-shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+      
+      <!-- Current Track Info & Medical Label -->
+      <div class="w-full md:w-1/3 flex items-center gap-3">
+        <!-- Vinyl / Cassette Art SVG box -->
+        <div id="playerTapeArt" class="w-12 h-12 bg-rivo-ink text-rivo-teal rounded-lg brutal-border flex items-center justify-center shrink-0 brutal-shadow-sm relative overflow-hidden">
+          <svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <circle cx="8" cy="10" r="2"></circle>
+            <circle cx="16" cy="10" r="2"></circle>
+            <path d="M8 14h8"></path>
+          </svg>
+        </div>
+
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5">
+            <span id="playerBadge" class="text-[9px] font-mono font-bold bg-rivo-crimson text-white px-1.5 py-0.2 rounded brutal-border">ACTIVE DOSE</span>
+            <span id="playerGenre" class="text-[9px] font-bold bg-rivo-teal text-rivo-ink px-1.5 py-0.2 rounded brutal-border">Egyptian Rap</span>
+          </div>
+          <h4 id="playerTitle" class="font-display font-black text-sm text-rivo-ink truncate leading-tight mt-0.5">
+            El Neyya
+          </h4>
+          <p id="playerArtist" class="text-[11px] font-bold text-zinc-600 truncate">
+            Lege-Cy • RIVO-07-EGY
+          </p>
+        </div>
+
+        <!-- Heart Favorite Icon -->
+        <button id="likeTrackBtn" class="p-1.5 text-zinc-400 hover:text-rivo-crimson transition" title="Save in Rx Library">
+          <svg id="likeHeartIcon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+          </svg>
+        </button>
+
+        <!-- Prescription details modal trigger -->
+        <button id="prescriptionModalBtn" class="p-1.5 text-zinc-700 hover:text-black transition" title="View Prescription Details">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Player Controls & Progress Scrubber -->
+      <div class="w-full md:w-5/12 flex flex-col items-center gap-1">
+        <!-- Controls buttons -->
+        <div class="flex items-center gap-3">
+          <button id="shuffleBtn" class="p-1.5 text-zinc-600 hover:text-black transition" title="Random Shuffle">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="16 3 21 3 21 8"></polyline>
+              <line x1="4" y1="20" x2="21" y2="3"></line>
+              <polyline points="21 16 21 21 16 21"></polyline>
+              <line x1="15" y1="15" x2="21" y2="21"></line>
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+            </svg>
+          </button>
+
+          <button id="prevBtn" class="w-8 h-8 rounded-lg bg-white hover:bg-rivo-paper brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn" title="Previous Track">
+            <svg class="w-4 h-4 text-rivo-ink" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="19 20 9 12 19 4 19 20"></polygon>
+              <line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"></line>
+            </svg>
+          </button>
+
+          <button id="mainPlayBtn" class="w-11 h-11 rounded-xl bg-rivo-teal hover:bg-rivo-tealLight text-rivo-ink brutal-border-thick flex items-center justify-center brutal-shadow brutal-btn" title="Play / Pause">
+            <svg id="mainPlayIcon" class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+
+          <button id="nextBtn" class="w-8 h-8 rounded-lg bg-white hover:bg-rivo-paper brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn" title="Next Track">
+            <svg class="w-4 h-4 text-rivo-ink" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 4 15 12 5 20 5 4"></polygon>
+              <line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line>
+            </svg>
+          </button>
+
+          <button id="loopBtn" class="p-1.5 text-zinc-600 hover:text-black transition" title="Repeat Dose">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="17 1 21 5 17 9"></polyline>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <polyline points="7 23 3 19 7 15"></polyline>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Progress bar & time -->
+        <div class="w-full flex items-center gap-2 text-[11px] font-mono font-bold text-zinc-700">
+          <span id="currentTimeDisplay">0:39</span>
+          <div class="relative flex-1">
+            <input 
+              id="progressSlider" 
+              type="range" 
+              min="0" 
+              max="100" 
+              value="24" 
+              class="w-full h-2 bg-zinc-300 rounded-lg appearance-none cursor-pointer brutal-border"
+            />
+          </div>
+          <span id="totalDurationDisplay">2:40</span>
+        </div>
+      </div>
+
+      <!-- Sound Visualizer & Volume Meter -->
+      <div class="hidden md:flex w-1/4 items-center justify-end gap-3">
+        <!-- Animated Equalizer Bars -->
+        <div id="equalizerVisualizer" class="flex items-end gap-1 h-7 px-2.5 py-1 bg-rivo-ink brutal-border rounded-md opacity-40">
+          <div class="eq-bar w-1 bg-rivo-teal rounded-t"></div>
+          <div class="eq-bar w-1 bg-rivo-tealLight rounded-t"></div>
+          <div class="eq-bar w-1 bg-rivo-amber rounded-t"></div>
+          <div class="eq-bar w-1 bg-rivo-crimson rounded-t"></div>
+          <div class="eq-bar w-1 bg-rivo-teal rounded-t"></div>
+        </div>
+
+        <!-- Volume Controller -->
+        <div class="flex items-center gap-1.5 bg-white brutal-border px-2 py-1 rounded-lg">
+          <svg class="w-4 h-4 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <input 
+            id="volumeBar" 
+            type="range" 
+            min="0" 
+            max="100" 
+            value="80" 
+            class="w-16 h-1.5 bg-zinc-300 rounded appearance-none cursor-pointer"
+          />
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- MODAL: ADD SONG (Registering a new track to dispensary) -->
+  <div id="addSongModal" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-rivo-cardBg w-full max-w-md rounded-2xl brutal-border-thick p-5 brutal-shadow-lg text-rivo-ink relative">
+      <div class="flex items-center justify-between border-b-2 border-black pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 bg-rivo-crimson text-white rounded brutal-border flex items-center justify-center font-bold text-xs">
+            +
+          </div>
+          <h3 class="font-display font-bold text-lg">Register New Cassette</h3>
+        </div>
+        <button id="closeAddSongModal" class="p-1 hover:bg-zinc-200 rounded text-base font-bold">✕</button>
+      </div>
+
+      <form id="addSongForm" class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold mb-1">Track / Song Title</label>
+          <input id="inputTitle" type="text" required placeholder="e.g. Msh Bel Hazz, Skrt, ..." class="w-full bg-white text-xs font-bold p-2.5 rounded-lg brutal-border focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold mb-1">Artist / Compounder</label>
+          <input id="inputArtist" type="text" required placeholder="e.g. Wegz, Marwan Pablo..." class="w-full bg-white text-xs font-bold p-2.5 rounded-lg brutal-border focus:outline-none" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-bold mb-1">Medical Genre</label>
+            <select id="inputGenre" class="w-full bg-white text-xs font-bold p-2.5 rounded-lg brutal-border focus:outline-none">
+              <option value="rap">Egyptian Rap / Trap</option>
+              <option value="indie">Alternative / Indie</option>
+              <option value="focus">Deep Focus / Synth</option>
+              <option value="nostalgia">90s Nostalgia</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold mb-1">Estimated Duration</label>
+            <input id="inputDuration" type="text" value="03:15" class="w-full bg-white text-xs font-bold p-2.5 rounded-lg brutal-border focus:outline-none text-center font-mono" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold mb-1">Prescription Notes (Indications for use)</label>
+          <textarea id="inputDesc" rows="2" placeholder="Take 1 dose when encountering burnout or slow compilation..." class="w-full bg-white text-xs font-medium p-2.5 rounded-lg brutal-border focus:outline-none"></textarea>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" id="cancelAddSong" class="px-4 py-2 rounded-lg font-display font-bold text-xs bg-zinc-200 hover:bg-zinc-300">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-lg font-display font-bold text-xs bg-rivo-teal hover:bg-rivo-tealLight text-rivo-ink brutal-border brutal-shadow-sm brutal-btn">
+            Save in Pharmacy
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: JAM SESSION (Shared Live Radio) -->
+  <div id="jamModal" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-rivo-cardBg w-full max-w-sm rounded-2xl brutal-border-thick p-5 brutal-shadow-lg text-rivo-ink text-center">
+      <div class="w-14 h-14 bg-rivo-amber mx-auto rounded-full brutal-border flex items-center justify-center brutal-shadow mb-3">
+        <svg class="w-7 h-7 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+        </svg>
+      </div>
+      <h3 class="font-display font-black text-xl mb-1">Rivo Collective Radio</h3>
+      <p class="text-xs text-zinc-700 font-medium mb-4">
+        You are now synchronized with <b>1,420 listeners</b> across Egypt on the same wavelength.
+      </p>
+      <div class="bg-white p-3 rounded-xl brutal-border text-xs text-left space-y-1.5 mb-4 font-mono">
+        <div class="flex justify-between font-bold">
+          <span>FREQUENCY:</span>
+          <span class="text-rivo-crimson font-black">98.5 FM RIVO</span>
+        </div>
+        <div class="flex justify-between font-bold">
+          <span>NOW BROADCASTING:</span>
+          <span class="text-zinc-600">Lege-Cy — El Neyya</span>
+        </div>
+      </div>
+      <button id="closeJamModal" class="w-full bg-rivo-ink text-rivo-cardBg font-display font-bold text-xs py-2.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn">
+        Keep Listening with Collective
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: PRESCRIPTION SPECIFICATION SHEET -->
+  <div id="prescriptionModal" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-rivo-cardBg w-full max-w-md rounded-2xl brutal-border-thick p-5 brutal-shadow-lg text-rivo-ink relative">
+      <div class="border-b-2 border-black pb-3 mb-3 flex justify-between items-start">
+        <div>
+          <span class="text-[10px] font-mono font-bold bg-rivo-teal px-2 py-0.5 rounded uppercase brutal-border">CLINICAL AUDIT RECORD</span>
+          <h3 id="modalDocTitle" class="font-display font-black text-xl mt-1">Prescription Sheet</h3>
+        </div>
+        <button id="closePrescriptionModal" class="p-1 hover:bg-zinc-200 rounded font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="bg-white p-3 rounded-lg brutal-border space-y-1">
+          <div class="font-bold text-zinc-500 font-mono">ACTIVE CHEMICAL INGREDIENTS:</div>
+          <p id="modalDocIngredients" class="font-semibold text-zinc-800">100% Cairo Trap Beats • Sub-bass Compression • Analog Synths</p>
+        </div>
+
+        <div class="bg-white p-3 rounded-lg brutal-border space-y-1">
+          <div class="font-bold text-zinc-500 font-mono">PROJECTED PHYSIOLOGICAL EFFECTS:</div>
+          <p class="font-semibold text-zinc-800">Accelerated workflow velocity, involuntary head nodding, instant mitigation of server errors.</p>
+        </div>
+
+        <div class="p-2.5 bg-rivo-paperDark rounded border border-dashed border-black text-[11px] font-mono">
+          Certified by Egyptian Apothecary Union • Batch No. 1954-AC
+        </div>
+      </div>
+
+      <div class="mt-4 flex justify-end">
+        <button id="closePrescriptionModalBtn" class="bg-rivo-ink text-rivo-cardBg font-display font-bold text-xs px-5 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn">
+          Close Inspection
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER (Strictly avoiding alerts) -->
+  <div id="systemToast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-rivo-amber text-rivo-ink font-display font-black text-xs px-4 py-2 rounded-full brutal-border-thick brutal-shadow-lg z-50 transition-all duration-300 opacity-0 -translate-y-6 pointer-events-none flex items-center gap-2">
+    <svg class="w-4 h-4 text-rivo-crimson" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="12" r="10"></circle>
+      <line x1="12" y1="8" x2="12" y2="12" stroke="#fff" stroke-width="2"></line>
+      <line x1="12" y1="16" x2="12.01" y2="16" stroke="#fff" stroke-width="2"></line>
+    </svg>
+    <span id="toastMessage">System Alert</span>
+  </div>
+
+  <script>
+    // Exact catalog mirrored from the user's Liofy screenshot with authentic details
+    const catalog = [
+      {
+        id: 1,
+        title: "3Alsamet",
+        artist: "Lege-Cy",
+        album: "Plan B",
+        genre: "rap",
+        genreLabel: "Egyptian Rap",
+        duration: "02:40",
+        durationSec: 160,
+        color: "#0f756d",
+        ingredients: "Plan B Formula • Vocal Resonators • High-Pass EQ",
+        dosage: "High Potency Focus",
+        desc: "Precision flow prescribed to bypass cognitive noise."
+      },
+      {
+        id: 2,
+        title: "Chroma (النهارده العيد يا كاسبر)",
+        artist: "Abyusif",
+        album: "Chroma EP",
+        genre: "rap",
+        genreLabel: "Egyptian Trap",
+        duration: "02:45",
+        durationSec: 165,
+        color: "#111615",
+        ingredients: "Raw Abyusif Bars • 808 Distortions • Heavy Compression",
+        dosage: "Instant Energy Spike",
+        desc: "Explosive delivery crafted to dissolve daily monotony."
+      },
+      {
+        id: 3,
+        title: "Karim Osama X @ELWaili - EASY",
+        artist: "Karim Osama & El Waili",
+        album: "EASY Single",
+        genre: "focus",
+        genreLabel: "Cairo Electro",
+        duration: "03:10",
+        durationSec: 190,
+        color: "#17a398",
+        ingredients: "Modular Synthesizers • ElWaili Signature Grooves",
+        dosage: "Anti-Burnout Formulation",
+        desc: "Surgical rhythm designed for late-night coding sessions."
+      },
+      {
+        id: 4,
+        title: "Wahshteeny",
+        artist: "Amir Eid",
+        album: "Rooftop Sessions",
+        genre: "indie",
+        genreLabel: "Downtown Indie",
+        duration: "03:42",
+        durationSec: 222,
+        color: "#dc2626",
+        ingredients: "Acoustic Warmth • Cairo Melancholy • Pure Lyricism",
+        dosage: "Cardiac Calmer",
+        desc: "Introspective acoustic melody for decompressing after rush hour."
+      },
+      {
+        id: 5,
+        title: "LAMA BETETGANEN",
+        artist: "TUL8TE",
+        album: "Tech Shabab",
+        genre: "nostalgia",
+        genreLabel: "90s Nostalgia",
+        duration: "02:58",
+        durationSec: 178,
+        color: "#ec4899",
+        ingredients: "Vintage Tape Saturation • Retrowave Keys • Synth Arpeggio",
+        dosage: "Vitamin Euphoria",
+        desc: "Masked nostalgic pop evoking classic cassette car stereos."
+      },
+      {
+        id: 6,
+        title: "Johnny Cash",
+        artist: "Cairokee",
+        album: "ROMA",
+        genre: "indie",
+        genreLabel: "Arabic Rock",
+        duration: "04:15",
+        durationSec: 255,
+        color: "#1e3a8a",
+        ingredients: "Heavy Drums • Raw Vocal Delivery • Overdriven Guitars",
+        dosage: "Resistance Tonic",
+        desc: "Anthemic release against conformity and corporate routine."
+      },
+      {
+        id: 7,
+        title: "El Neyya",
+        artist: "Lege-Cy",
+        album: "El Neyya",
+        genre: "rap",
+        genreLabel: "Egyptian Rap",
+        duration: "02:40",
+        durationSec: 160,
+        color: "#082621",
+        ingredients: "Heavy Kick Drums • Dark Trap Synths • Melodic Flow",
+        dosage: "Sub-bass Concentration",
+        desc: "Currently active dose loaded into the primary deck."
+      },
+      {
+        id: 8,
+        title: "SAFINA",
+        artist: "Mousv",
+        album: "Safina Voyage",
+        genre: "focus",
+        genreLabel: "Atmospheric Flow",
+        duration: "03:30",
+        durationSec: 210,
+        color: "#3b82f6",
+        ingredients: "Reverb Spaces • Ambient Chords • Relaxed Percussion",
+        dosage: "Clarity Capsule",
+        desc: "Smooth sonic medication for navigating challenging tasks."
+      }
+    ];
+
+    // State Variables
+    let currentTrackIndex = 6; // Starts on "El Neyya" like screenshot
+    let isPlaying = false;
+    let currentTimeSeconds = 39;
+    let playbackTimer = null;
+    let isLooping = false;
+    let isLiked = false;
+    let searchQuery = '';
+
+    // Web Audio API Synth (Generates real, pleasant lo-fi ambient arpeggios when playing)
+    let audioCtx = null;
+    let synthLoopTimer = null;
+
+    function initAudioSynth() {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContext();
+      }
+    }
+
+    function playTone(freq, duration = 0.3, type = 'triangle') {
+      try {
+        initAudioSynth();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        // Safe handling if browser audio restricted
+      }
+    }
+
+    function startMusicSynthesis() {
+      stopMusicSynthesis();
+      const scale = [220, 246.94, 277.18, 329.63, 369.99, 440];
+      let step = 0;
+      synthLoopTimer = setInterval(() => {
+        if (!isPlaying) return;
+        const note = scale[step % scale.length];
+        playTone(note, 0.4, 'sine');
+        if (step % 2 === 0) playTone(note / 2, 0.6, 'triangle');
+        step++;
+      }, 450);
+    }
+
+    function stopMusicSynthesis() {
+      if (synthLoopTimer) {
+        clearInterval(synthLoopTimer);
+        synthLoopTimer = null;
+      }
+    }
+
+    // DOM Elements
+    const quickDoseGrid = document.getElementById('quickDoseGrid');
+    const recentlyPlayedGrid = document.getElementById('recentlyPlayedGrid');
+    const batchCount = document.getElementById('batchCount');
+    const mainPlayBtn = document.getElementById('mainPlayBtn');
+    const mainPlayIcon = document.getElementById('mainPlayIcon');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const shuffleBtn = document.getElementById('shuffleBtn');
+    const loopBtn = document.getElementById('loopBtn');
+    const progressSlider = document.getElementById('progressSlider');
+    const currentTimeDisplay = document.getElementById('currentTimeDisplay');
+    const totalDurationDisplay = document.getElementById('totalDurationDisplay');
+    const playerTitle = document.getElementById('playerTitle');
+    const playerArtist = document.getElementById('playerArtist');
+    const playerGenre = document.getElementById('playerGenre');
+    const playerBadge = document.getElementById('playerBadge');
+    const equalizerVisualizer = document.getElementById('equalizerVisualizer');
+    const likeTrackBtn = document.getElementById('likeTrackBtn');
+    const likeHeartIcon = document.getElementById('likeHeartIcon');
+    const globalSearchInput = document.getElementById('globalSearchInput');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const systemToast = document.getElementById('systemToast');
+    const toastMessage = document.getElementById('toastMessage');
+
+    // Modals and Drawers
+    const messagesDrawer = document.getElementById('messagesDrawer');
+    const toggleMessagesBtn = document.getElementById('toggleMessagesBtn');
+    const sidebarMsgTrigger = document.getElementById('sidebarMsgTrigger');
+    const closeMessagesBtn = document.getElementById('closeMessagesBtn');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+    const messagesThread = document.getElementById('messagesThread');
+    const addSongModal = document.getElementById('addSongModal');
+    const openAddSongBtn = document.getElementById('openAddSongBtn');
+    const closeAddSongModal = document.getElementById('closeAddSongModal');
+    const cancelAddSong = document.getElementById('cancelAddSong');
+    const addSongForm = document.getElementById('addSongForm');
+    const jamModal = document.getElementById('jamModal');
+    const openJamBtn = document.getElementById('openJamBtn');
+    const sidebarJamTrigger = document.getElementById('sidebarJamTrigger');
+    const closeJamModal = document.getElementById('closeJamModal');
+    const prescriptionModal = document.getElementById('prescriptionModal');
+    const prescriptionModalBtn = document.getElementById('prescriptionModalBtn');
+    const closePrescriptionModal = document.getElementById('closePrescriptionModal');
+    const closePrescriptionModalBtn = document.getElementById('closePrescriptionModalBtn');
+    const modalDocTitle = document.getElementById('modalDocTitle');
+    const modalDocIngredients = document.getElementById('modalDocIngredients');
+
+    // Safe Notification system (replaces alert completely)
+    function notify(text) {
+      toastMessage.textContent = text;
+      systemToast.classList.remove('opacity-0', '-translate-y-6', 'pointer-events-none');
+      systemToast.classList.add('opacity-100', 'translate-y-0');
+      playTone(587.33, 0.08, 'sine');
+
+      setTimeout(() => {
+        systemToast.classList.add('opacity-0', '-translate-y-6', 'pointer-events-none');
+        systemToast.classList.remove('opacity-100', 'translate-y-0');
+      }, 2400);
+    }
+
+    function formatTime(secs) {
+      const m = Math.floor(secs / 60);
+      const s = Math.floor(secs % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // Render the 2x3 Quick Dose cards from the user screenshot
+    function renderQuickDoseGrid() {
+      quickDoseGrid.innerHTML = '';
+      const items = catalog.slice(0, 6);
+
+      items.forEach((item, index) => {
+        const isCurrent = catalog[currentTrackIndex].id === item.id;
+        const row = document.createElement('div');
+        row.className = `bg-rivo-cardBg hover:bg-white rounded-xl brutal-border p-2 flex items-center justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${isCurrent ? 'ring-2 ring-rivo-ink bg-white' : ''}`;
+        
+        row.innerHTML = `
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-11 h-11 rounded-lg brutal-border flex items-center justify-center shrink-0 text-white font-mono font-bold text-xs" style="background-color: ${item.color};">
+              RX${item.id}
+            </div>
+            <div class="min-w-0">
+              <div class="font-display font-black text-xs text-rivo-ink truncate">${item.title}</div>
+              <div class="text-[10px] text-zinc-600 font-bold truncate">${item.artist}</div>
+            </div>
+          </div>
+          <button class="w-8 h-8 rounded-lg bg-rivo-teal hover:bg-rivo-tealLight text-rivo-ink brutal-border flex items-center justify-center brutal-btn shrink-0 mr-1" title="Dispense">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+        `;
+
+        row.addEventListener('click', () => {
+          loadTrack(index);
+          startPlay();
+        });
+
+        quickDoseGrid.appendChild(row);
+      });
+    }
+
+    // Render Blister Cards in Recently Dispensed Section
+    function renderRecentlyPlayed() {
+      recentlyPlayedGrid.innerHTML = '';
+      
+      const filtered = catalog.filter(track => {
+        return track.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               track.artist.toLowerCase().includes(searchQuery.toLowerCase());
+      });
+
+      batchCount.textContent = filtered.length;
+
+      filtered.forEach(track => {
+        const isCurrent = catalog[currentTrackIndex].id === track.id;
+        const card = document.createElement('div');
+        card.className = `bg-rivo-cardBg rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition ${isCurrent ? 'ring-3 ring-rivo-ink' : ''}`;
+
+        card.innerHTML = `
+          <div>
+            <!-- Pill Blister Cap Graphic -->
+            <div class="h-32 rounded-lg brutal-border mb-2.5 p-2 flex flex-col justify-between text-white relative overflow-hidden" style="background-color: ${track.color};">
+              <div class="flex justify-between items-center z-10">
+                <span class="text-[8px] font-mono font-bold bg-black/70 px-1.5 py-0.5 rounded uppercase">SEALED</span>
+                <span class="text-[9px] font-mono font-bold">${track.duration}</span>
+              </div>
+              <div class="z-10 text-center my-auto">
+                <div class="font-display font-black text-sm text-white drop-shadow-[1px_1px_0px_#000] truncate">
+                  ${track.title.split('(')[0]}
+                </div>
+                <div class="text-[10px] text-white/90 font-bold truncate">
+                  ${track.artist}
+                </div>
+              </div>
+              <div class="z-10 text-[8px] font-mono bg-black/60 px-1.5 py-0.5 rounded text-center truncate">
+                ${track.genreLabel}
+              </div>
+            </div>
+
+            <div class="font-display font-bold text-xs text-rivo-ink truncate">${track.title}</div>
+            <div class="text-[10px] text-zinc-600 font-bold truncate mb-2">${track.artist}</div>
+          </div>
+
+          <button class="w-full bg-rivo-paperDark hover:bg-rivo-teal text-rivo-ink font-display font-black text-[11px] py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5">
+            ${isCurrent && isPlaying ? `
+              <svg class="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+              <span>PAUSE</span>
+            ` : `
+              <svg class="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <span>DISPENSE</span>
+            `}
+          </button>
+        `;
+
+        card.addEventListener('click', () => {
+          const idx = catalog.findIndex(t => t.id === track.id);
+          if (currentTrackIndex === idx) {
+            togglePlay();
+          } else {
+            loadTrack(idx);
+            startPlay();
+          }
+        });
+
+        recentlyPlayedGrid.appendChild(card);
+      });
+    }
+
+    // Load track into active bottom deck
+    function loadTrack(index) {
+      currentTrackIndex = index;
+      const track = catalog[currentTrackIndex];
+      currentTimeSeconds = 0;
+
+      playerTitle.textContent = track.title;
+      playerArtist.textContent = `${track.artist} • RX-DOSE ${track.id}`;
+      playerGenre.textContent = track.genreLabel;
+      playerBadge.textContent = track.dosage;
+      totalDurationDisplay.textContent = track.duration;
+      currentTimeDisplay.textContent = "0:00";
+      progressSlider.value = 0;
+
+      modalDocTitle.textContent = track.title;
+      modalDocIngredients.textContent = track.ingredients;
+
+      renderQuickDoseGrid();
+      renderRecentlyPlayed();
+    }
+
+    function startPlay() {
+      isPlaying = true;
+      mainPlayIcon.innerHTML = `
+        <rect x="6" y="4" width="4" height="16"></rect>
+        <rect x="14" y="4" width="4" height="16"></rect>
+      `;
+      equalizerVisualizer.classList.remove('opacity-40');
+      startMusicSynthesis();
+      clearInterval(playbackTimer);
+
+      playbackTimer = setInterval(() => {
+        const track = catalog[currentTrackIndex];
+        if (currentTimeSeconds < track.durationSec) {
+          currentTimeSeconds++;
+          currentTimeDisplay.textContent = formatTime(currentTimeSeconds);
+          progressSlider.value = (currentTimeSeconds / track.durationSec) * 100;
+        } else {
+          if (isLooping) {
+            currentTimeSeconds = 0;
+          } else {
+            nextTrack();
+          }
+        }
+      }, 1000);
+
+      renderQuickDoseGrid();
+      renderRecentlyPlayed();
+    }
+
+    function pausePlay() {
+      isPlaying = false;
+      mainPlayIcon.innerHTML = `<polygon points="5 3 19 12 5 21 5 3"></polygon>`;
+      equalizerVisualizer.classList.add('opacity-40');
+      stopMusicSynthesis();
+      clearInterval(playbackTimer);
+      renderQuickDoseGrid();
+      renderRecentlyPlayed();
+    }
+
+    function togglePlay() {
+      if (isPlaying) {
+        pausePlay();
+        notify("Paused active dose");
+      } else {
+        startPlay();
+        notify(`Dispensing: ${catalog[currentTrackIndex].title}`);
+      }
+    }
+
+    function nextTrack() {
+      const nextIdx = (currentTrackIndex + 1) % catalog.length;
+      loadTrack(nextIdx);
+      startPlay();
+      notify(`Next cassette: ${catalog[nextIdx].title}`);
+    }
+
+    function prevTrack() {
+      const prevIdx = (currentTrackIndex - 1 + catalog.length) % catalog.length;
+      loadTrack(prevIdx);
+      startPlay();
+      notify(`Previous cassette: ${catalog[prevIdx].title}`);
+    }
+
+    window.playTrackById = function(id) {
+      const idx = catalog.findIndex(t => t.id === id);
+      if (idx !== -1) {
+        loadTrack(idx);
+        startPlay();
+        notify("Prescription track started!");
+      }
+    };
+
+    window.filterLibrary = function(type) {
+      notify(`Dispensary filter set to: ${type.toUpperCase()}`);
+    };
+
+    // Main Control Event Listeners
+    mainPlayBtn.addEventListener('click', togglePlay);
+    nextBtn.addEventListener('click', nextTrack);
+    prevBtn.addEventListener('click', prevTrack);
+
+    shuffleBtn.addEventListener('click', () => {
+      const randomIdx = Math.floor(Math.random() * catalog.length);
+      loadTrack(randomIdx);
+      startPlay();
+      notify(`Random Compound: ${catalog[randomIdx].title}`);
+    });
+
+    loopBtn.addEventListener('click', () => {
+      isLooping = !isLooping;
+      loopBtn.classList.toggle('text-rivo-crimson', isLooping);
+      notify(isLooping ? "Dose repetition enabled" : "Continuous track rotation");
+    });
+
+    progressSlider.addEventListener('input', (e) => {
+      const track = catalog[currentTrackIndex];
+      currentTimeSeconds = (e.target.value / 100) * track.durationSec;
+      currentTimeDisplay.textContent = formatTime(currentTimeSeconds);
+    });
+
+    likeTrackBtn.addEventListener('click', () => {
+      isLiked = !isLiked;
+      likeHeartIcon.setAttribute('fill', isLiked ? '#dc2626' : 'none');
+      likeTrackBtn.classList.toggle('text-rivo-crimson', isLiked);
+      notify(isLiked ? "Added to your Liked Prescriptions" : "Removed from Liked Prescriptions");
+    });
+
+    // Hero Play CTA
+    document.getElementById('heroPlayDoseBtn').addEventListener('click', () => {
+      loadTrack(0);
+      startPlay();
+      notify("Dispensing comprehensive daily dose!");
+    });
+
+    // Search bar filtering
+    globalSearchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      clearSearchBtn.classList.toggle('hidden', searchQuery.length === 0);
+      renderRecentlyPlayed();
+    });
+
+    clearSearchBtn.addEventListener('click', () => {
+      globalSearchInput.value = '';
+      searchQuery = '';
+      clearSearchBtn.classList.add('hidden');
+      renderRecentlyPlayed();
+    });
+
+    document.getElementById('sidebarSearchTrigger').addEventListener('click', () => {
+      globalSearchInput.focus();
+    });
+
+    // Pill filters in header
+    document.querySelectorAll('.pill-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.pill-filter').forEach(b => {
+          b.classList.remove('active', 'bg-rivo-ink', 'text-rivo-cardBg');
+          b.classList.add('bg-rivo-cardBg', 'text-rivo-ink');
+        });
+        btn.classList.add('active', 'bg-rivo-ink', 'text-rivo-cardBg');
+        btn.classList.remove('bg-rivo-cardBg', 'text-rivo-ink');
+        notify(`Filter: ${btn.dataset.filter.toUpperCase()}`);
+      });
+    });
+
+    // DRAWER / MESSAGES LOGIC
+    function openMessagesDrawer() {
+      messagesDrawer.classList.remove('translate-x-full');
+      playTone(500, 0.05, 'sine');
+    }
+    function closeMessagesDrawer() {
+      messagesDrawer.classList.add('translate-x-full');
+    }
+
+    toggleMessagesBtn.addEventListener('click', openMessagesDrawer);
+    sidebarMsgTrigger.addEventListener('click', openMessagesDrawer);
+    document.getElementById('heroTelegramBtn').addEventListener('click', openMessagesDrawer);
+    closeMessagesBtn.addEventListener('click', closeMessagesDrawer);
+
+    // Live chat telegraph simulation
+    chatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = chatInput.value.trim();
+      if (!text) return;
+
+      const now = new Date();
+      const timeStr = `${now.getHours()}:${now.getMinutes() < 10 ? '0' : ''}${now.getMinutes()}`;
+
+      // Append user telegraph
+      const userNode = document.createElement('div');
+      userNode.className = "flex flex-col items-end max-w-[85%] ml-auto";
+      userNode.innerHTML = `
+        <div class="bg-rivo-teal text-rivo-ink p-3 rounded-xl rounded-tr-none brutal-border brutal-shadow-sm text-xs font-bold space-y-1">
+          <div class="flex items-center justify-between border-b border-black/20 pb-1 mb-1 font-mono text-[10px] text-rivo-deepForest gap-4">
+            <span>Lio</span>
+            <span>${timeStr}</span>
+          </div>
+          <p>${text}</p>
+        </div>
+        <span class="text-[9px] font-mono text-zinc-500 mt-1 px-1">Dispatched via Telegraph</span>
+      `;
+      messagesThread.appendChild(userNode);
+      chatInput.value = '';
+      messagesThread.scrollTop = messagesThread.scrollHeight;
+
+      // Automated apothecary response
+      setTimeout(() => {
+        const answers = [
+          "Telegram received! We recommend 1 capsule of Amir Eid's 'Wahshteeny' to stabilize pulse.",
+          "Clinical note: Take a 5-minute break and ingest ElWaili's 'EASY' synth formulation.",
+          "Prescription verified: Added to your personal dispensary drawer.",
+          "Apothecary advice: Do not exceed 4 consecutive hours of heavy trap without hydration."
+        ];
+        const randomAnswer = answers[Math.floor(Math.random() * answers.length)];
+
+        const docNode = document.createElement('div');
+        docNode.className = "flex flex-col items-start max-w-[85%]";
+        docNode.innerHTML = `
+          <div class="bg-white p-3 rounded-xl rounded-tl-none brutal-border brutal-shadow-sm text-xs font-medium text-rivo-ink space-y-1">
+            <div class="flex items-center justify-between border-b border-dashed border-zinc-300 pb-1 mb-1 font-mono text-[10px] text-zinc-500 gap-4">
+              <span>Dr. Cassette (Immediate Response)</span>
+              <span>NOW</span>
+            </div>
+            <p>${randomAnswer}</p>
+          </div>
+          <span class="text-[9px] font-mono text-zinc-500 mt-1 px-1">Rivo Dispensary Seal</span>
+        `;
+        messagesThread.appendChild(docNode);
+        messagesThread.scrollTop = messagesThread.scrollHeight;
+        playTone(650, 0.08, 'sine');
+      }, 700);
+    });
+
+    document.querySelectorAll('.chat-contact-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.chat-contact-tab').forEach(b => {
+          b.classList.remove('active', 'bg-rivo-ink', 'text-white');
+          b.classList.add('bg-white', 'text-rivo-ink');
+        });
+        btn.classList.add('active', 'bg-rivo-ink', 'text-white');
+        btn.classList.remove('bg-white', 'text-rivo-ink');
+        notify(`Telegraph line connected to: ${btn.textContent.trim()}`);
+      });
+    });
+
+    // MODAL HANDLERS
+    // Add Song Modal
+    openAddSongBtn.addEventListener('click', () => addSongModal.classList.remove('hidden'));
+    closeAddSongModal.addEventListener('click', () => addSongModal.classList.add('hidden'));
+    cancelAddSong.addEventListener('click', () => addSongModal.classList.add('hidden'));
+
+    addSongForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const title = document.getElementById('inputTitle').value.trim();
+      const artist = document.getElementById('inputArtist').value.trim();
+      const genre = document.getElementById('inputGenre').value;
+      const duration = document.getElementById('inputDuration').value || "03:15";
+      const desc = document.getElementById('inputDesc').value || "Newly registered prescription compound.";
+
+      const newTrack = {
+        id: catalog.length + 1,
+        title: title,
+        artist: artist,
+        album: "Custom Blend",
+        genre: genre,
+        genreLabel: genre === 'rap' ? 'Egyptian Rap' : (genre === 'indie' ? 'Indie Rock' : 'Focus Synthesis'),
+        duration: duration,
+        durationSec: 195,
+        color: "#082621",
+        ingredients: "Custom compounded beats • Certified high fidelity",
+        dosage: "Special Prescription",
+        desc: desc
+      };
+
+      catalog.unshift(newTrack);
+      addSongModal.classList.add('hidden');
+      addSongForm.reset();
+      renderQuickDoseGrid();
+      renderRecentlyPlayed();
+      notify(`Saved "${title}" into Rivo Dispensary!`);
+    });
+
+    // Jam Session Modal
+    function openJam() { jamModal.classList.remove('hidden'); }
+    openJamBtn.addEventListener('click', openJam);
+    sidebarJamTrigger.addEventListener('click', openJam);
+    closeJamModal.addEventListener('click', () => jamModal.classList.add('hidden'));
+
+    // Prescription Modal
+    prescriptionModalBtn.addEventListener('click', () => prescriptionModal.classList.remove('hidden'));
+    closePrescriptionModal.addEventListener('click', () => prescriptionModal.classList.add('hidden'));
+    closePrescriptionModalBtn.addEventListener('click', () => prescriptionModal.classList.add('hidden'));
+
+    // Initialize interface
+    renderQuickDoseGrid();
+    renderRecentlyPlayed();
+    loadTrack(6); // Sets initial track to "El Neyya" matching the screenshot
+  </script>
+</body>
+</html>

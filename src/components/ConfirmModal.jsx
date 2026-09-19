@@ -5,57 +5,51 @@ export default function ConfirmModal({ isOpen, title, message, confirmText = 'De
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
-      <div className="bg-[#181818] border border-white/15 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 text-center relative overflow-hidden">
+    <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
+      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg max-w-sm w-full p-6 text-center relative overflow-hidden">
         
-        {/* Top Glow Accent */}
-        <div 
-          className="absolute -top-12 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full blur-2xl pointer-events-none"
-          style={{ background: isDanger ? 'rgba(239, 68, 68, 0.25)' : 'rgba(29, 185, 84, 0.25)' }}
-        />
-
         {/* Close Icon */}
         <button 
           onClick={onCancel}
-          className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-full transition-colors"
+          className="brutal-btn absolute top-3.5 right-3.5 text-[#0b1110] p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb]"
         >
-          <X size={18} />
+          <X size={16} />
         </button>
 
         {/* Icon */}
-        <div className={`w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center border shadow-xl ${
+        <div className={`w-12 h-12 mx-auto mb-3 flex items-center justify-center brutal-border ${
           isDanger 
-            ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-            : 'bg-[#1DB954]/10 border-[#1DB954]/20 text-[#1DB954]'
+            ? 'bg-red-100 text-[#dc2626]' 
+            : 'bg-[#082621] text-[#26c4b7]'
         }`}>
-          {isDanger ? <Trash2 size={26} /> : <AlertTriangle size={26} />}
+          {isDanger ? <Trash2 size={22} /> : <AlertTriangle size={22} />}
         </div>
 
         {/* Title & Message */}
-        <h3 className="text-lg font-extrabold text-white mb-2 tracking-tight">
-          {title || 'Are you sure?'}
+        <h3 className="text-base font-mono font-black uppercase text-[#082621] mb-1.5 tracking-tight">
+          {title || 'Confirm Action'}
         </h3>
         {message && (
-          <p className="text-xs text-zinc-400 mb-6 leading-relaxed">
+          <p className="text-xs text-[#082621]/70 mb-5 font-sans leading-relaxed">
             {message}
           </p>
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-3 mt-2">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={onConfirm}
-            className={`flex-1 py-3 font-extrabold text-xs rounded-full shadow-lg transition-all active:scale-95 ${
+            className={`brutal-btn flex-1 py-2 font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm ${
               isDanger 
-                ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30' 
-                : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-[#1DB954]/30'
+                ? 'bg-red-100 hover:bg-red-200 text-[#dc2626]' 
+                : 'bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7]'
             }`}
           >
             {confirmText}
           </button>
           <button
             onClick={onCancel}
-            className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white font-extrabold text-xs rounded-full border border-white/10 transition-all active:scale-95"
+            className="brutal-btn flex-1 py-2 bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] font-mono font-black text-xs uppercase brutal-border brutal-shadow-sm"
           >
             {cancelText}
           </button>

@@ -99,19 +99,43 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
   };
 
   const handleAddFromSearch = async (track) => {
-    if (addedIds.has(track.id)) return;
-    setAddedIds(p => new Set(p).add(track.id));
-    const newTrack = { ...track, liked: false };
-    await onAddSong(newTrack);
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/api/tracks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          title: track.title,
+          artist: track.artist,
+          album: track.album || 'Single',
+          cover: track.cover,
+          audioUrl: track.audioUrl,
+          duration: track.duration || 180,
+          genre: 'Pop',
+          source: track.source || 'Online',
+          lyrics: []
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        onAddSong?.(data.track);
+        setAddedIds(prev => new Set([...prev, track.id]));
+      }
+    } catch (err) {
+      console.warn('Failed to save searched track:', err);
+    }
   };
 
-  // ── File Upload ───────────────────────────────────
+  // ── Upload ────────────────────────────────────────
   const handleCoverChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setCoverFile(file);
     const reader = new FileReader();
-    reader.onloadend = () => setCoverPreview(reader.result);
+    reader.onload = () => setCoverPreview(reader.result);
     reader.readAsDataURL(file);
   };
 
@@ -119,105 +143,106 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setAudioFile(file);
+    if (!title) {
+      const name = file.name.replace(/\.[^/.]+$/, '');
+      const parts = name.split(' - ');
+      if (parts.length === 2) {
+        setArtist(parts[0].trim());
+        setTitle(parts[1].trim());
+      } else {
+        setTitle(name);
+      }
+    }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!title || !artist) { setUploadError('Title and artist required'); return; }
-    if (!audioFile)         { setUploadError('Please select an MP3 file'); return; }
+    if (!title.trim() || !artist.trim()) {
+      setUploadError('Title and artist are required.');
+      return;
+    }
+    if (!audioFile) {
+      setUploadError('Please choose an audio file.');
+      return;
+    }
 
     setIsUploading(true);
     setUploadError('');
 
     try {
+      const formData = new FormData();
+      formData.append('title', title.trim());
+      formData.append('artist', artist.trim());
+      formData.append('album', album.trim() || 'Single');
+      formData.append('genre', genre);
+      formData.append('audio', audioFile);
+      if (coverFile) formData.append('cover', coverFile);
+      formData.append('lyrics', JSON.stringify(lyrics));
+
       const token = getToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      // Upload audio
-      const audioForm = new FormData();
-      audioForm.append('audio', audioFile);
-      const audioRes = await fetch(`${API_BASE_URL}/api/upload/audio`, {
-        method: 'POST', headers, body: audioForm,
-      });
-      const audioData = await audioRes.json();
-      if (!audioData.success) throw new Error(audioData.error || 'Audio upload failed');
-
-      // Upload cover (optional)
-      let coverUrl = '';
-      if (coverFile) {
-        const coverForm = new FormData();
-        coverForm.append('cover', coverFile);
-        const coverRes = await fetch(`${API_BASE_URL}/api/upload/cover`, {
-          method: 'POST', headers, body: coverForm,
-        });
-        const coverData = await coverRes.json();
-        if (coverData.success) coverUrl = coverData.url;
-      }
-
-      // Save track to global library
-      const trackData = {
-        title, artist, album: album || 'Single', genre,
-        audioUrl: audioData.url,
-        cover: coverUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=1DB954&color=000&size=512&bold=true&format=svg`,
-        source: 'Upload',
-        lyrics,
-      };
-
-      const saveRes = await fetch(`${API_BASE_URL}/api/tracks/add`, {
+      const res = await fetch(`${API_BASE_URL}/api/tracks/upload`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...headers },
-        body: JSON.stringify(trackData),
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
       });
-      const saveData = await saveRes.json();
-      if (!saveData.success) throw new Error(saveData.error || 'Save failed');
+      const data = await res.json();
 
-      await onAddSong({ ...saveData.track, liked: false });
-      setUploadDone(true);
-
-      // Reset form
-      setTimeout(() => {
-        setTitle(''); setArtist(''); setAlbum(''); setGenre('Pop');
-        setAudioFile(null); setCoverFile(null); setCoverPreview('');
-        setLyrics([]); setUploadDone(false);
-      }, 2000);
+      if (data.success) {
+        setUploadDone(true);
+        onAddSong?.(data.track);
+        setTimeout(() => {
+          onClose();
+        }, 1200);
+      } else {
+        setUploadError(data.message || 'Upload failed.');
+      }
     } catch (err) {
-      setUploadError(err.message);
+      setUploadError('Network error during upload.');
+    } finally {
+      setIsUploading(false);
     }
-    setIsUploading(false);
   };
 
-  // ── Lyrics editor ─────────────────────────────────
   const addLyricLine = () => {
     const lastTime = lyrics.length > 0 ? lyrics[lyrics.length - 1].time + 15 : 0;
     setLyrics([...lyrics, { time: lastTime, text: '' }]);
   };
 
   return (
-    <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
-
+    <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <h2 className="text-lg font-extrabold text-white">Add Song</h2>
-          <button onClick={onClose} className="p-1.5 text-[#b3b3b3] hover:text-white rounded-full hover:bg-white/10 transition-all">
-            <X size={20} />
+        <div className="flex items-center justify-between p-4 md:p-5 border-b-2 border-[#0b1110] bg-[#ede5d3]">
+          <div>
+            <div className="text-[10px] font-mono font-black uppercase text-[#17a398]">
+              RIVO FORMULATION INTAKE
+            </div>
+            <h2 className="text-lg font-mono font-black uppercase text-[#082621]">
+              REGISTER NEW CASSETTE
+            </h2>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="brutal-btn p-1.5 bg-[#fdfbf7] brutal-border hover:bg-[#ede5d3] text-[#0b1110]"
+          >
+            <X size={18} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-white/10">
+        <div className="flex border-b-2 border-[#0b1110] bg-[#ede5d3]">
           {[
-            { id: 'search', label: '🔍 Search Online' },
-            { id: 'upload', label: '⬆️ Upload MP3' },
+            { id: 'search', label: '🔍 SEARCH CATALOG ONLINE' },
+            { id: 'upload', label: '⬆️ UPLOAD LOCAL MP3 TAPE' },
           ].map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className="flex-1 py-3 text-sm font-bold transition-all"
-              style={tab === t.id
-                ? { color: '#1DB954', borderBottom: '2px solid #1DB954' }
-                : { color: '#b3b3b3' }
-              }
+              className={`flex-1 py-3 text-xs font-mono font-black uppercase transition-all ${
+                tab === t.id
+                  ? 'bg-[#082621] text-[#26c4b7] border-b-2 border-[#082621]'
+                  : 'text-[#082621]/70 hover:bg-[#ded2bb]'
+              }`}
             >
               {t.label}
             </button>
@@ -225,7 +250,6 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
-
           {/* ── SEARCH TAB ── */}
           {tab === 'search' && (
             <div>
@@ -233,68 +257,62 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                 <input
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="Search YouTube, SoundCloud..."
-                  className="flex-1 bg-[#282828] text-white text-sm px-4 py-2.5 rounded-full border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                  placeholder="Search artist, composition or frequency..."
+                  className="flex-1 bg-[#ede5d3] text-[#0b1110] text-xs font-mono px-4 py-2.5 brutal-border focus:outline-none focus:bg-white"
                 />
                 <button
                   type="submit"
                   disabled={isSearching}
-                  className="px-4 py-2.5 bg-[#1DB954] text-black text-sm font-bold rounded-full hover:bg-[#1ed760] transition-all disabled:opacity-50"
+                  className="brutal-btn px-4 py-2.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center disabled:opacity-50"
                 >
                   {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                 </button>
               </form>
 
               {isSearching && (
-                <div className="text-center py-10">
-                  <Loader2 size={32} className="animate-spin text-[#1DB954] mx-auto" />
-                  <p className="text-sm text-[#b3b3b3] mt-3">Searching YouTube & SoundCloud...</p>
+                <div className="text-center py-8">
+                  <Loader2 size={30} className="animate-spin text-[#17a398] mx-auto" />
+                  <p className="text-xs font-mono text-[#082621] mt-2">Searching audio frequencies...</p>
                 </div>
               )}
 
               <div className="flex flex-col gap-2">
                 {results.map(track => (
-                  <div key={track.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#181818] hover:bg-[#282828] transition-colors border border-white/5">
+                  <div key={track.id} className="flex items-center gap-3 p-2.5 bg-[#ede5d3] brutal-border hover:bg-white transition-colors">
                     <img
-                      src={track.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(track.title)}&background=1DB954&color=000`}
+                      src={track.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(track.title)}&background=082621&color=26c4b7`}
                       alt={track.title}
-                      className="w-12 h-12 rounded-lg object-cover shrink-0"
-                      onError={e => { e.target.src = `https://ui-avatars.com/api/?name=Music&background=1DB954&color=000`; }}
+                      className="w-11 h-11 brutal-border object-cover shrink-0 bg-white"
+                      onError={e => { e.target.src = `https://ui-avatars.com/api/?name=Music&background=082621&color=26c4b7`; }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{track.title}</p>
-                      <p className="text-xs text-[#b3b3b3] truncate">{track.artist}</p>
-                      <span
-                        className="text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 inline-block"
-                        style={{
-                          background: track.source === 'YouTube' ? '#ff000020' : '#1DB95420',
-                          color: track.source === 'YouTube' ? '#ff4444' : '#1DB954',
-                        }}
-                      >
-                        {track.source}
+                      <p className="text-xs font-bold text-[#0b1110] truncate">{track.title}</p>
+                      <p className="text-[11px] text-[#082621]/70 truncate">{track.artist}</p>
+                      <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] mt-1 inline-block">
+                        {track.source || 'ONLINE'}
                       </span>
                     </div>
                     <button
                       onClick={() => handleAddFromSearch(track)}
                       disabled={addedIds.has(track.id)}
-                      className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all"
-                      style={{
-                        background: addedIds.has(track.id) ? '#1DB954' : '#282828',
-                        color: addedIds.has(track.id) ? 'black' : 'white',
-                      }}
+                      className={`brutal-btn shrink-0 w-8 h-8 brutal-border flex items-center justify-center ${
+                        addedIds.has(track.id) ? 'bg-[#082621] text-[#26c4b7]' : 'bg-[#f59e0b] text-[#0b1110]'
+                      }`}
                     >
-                      {addedIds.has(track.id) ? <Check size={16} /> : <Plus size={16} />}
+                      {addedIds.has(track.id) ? <Check size={14} /> : <Plus size={14} />}
                     </button>
                   </div>
                 ))}
 
                 {results.length === 0 && !isSearching && query && (
-                  <p className="text-center text-sm text-[#b3b3b3] py-8">No results found. Try a different search.</p>
+                  <p className="text-center text-xs font-mono text-[#082621]/70 py-6">
+                    No results found for this frequency query.
+                  </p>
                 )}
 
                 {results.length === 0 && !isSearching && !query && (
-                  <p className="text-center text-sm text-[#b3b3b3] py-8">
-                    Search for any song and add it to the shared library for everyone!
+                  <p className="text-center text-xs font-mono text-[#082621]/70 py-6">
+                    Search online archives and inject directly into Rivo Dispensary!
                   </p>
                 )}
               </div>
@@ -305,43 +323,43 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
           {tab === 'upload' && (
             <form onSubmit={handleUpload} className="flex flex-col gap-4">
               {uploadError && (
-                <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-sm">
+                <div className="p-3 bg-red-100 border-2 border-[#dc2626] text-[#dc2626] text-xs font-mono font-bold">
                   {uploadError}
                 </div>
               )}
 
               {uploadDone && (
-                <div className="p-3 bg-[#1DB954]/20 border border-[#1DB954]/40 rounded-xl text-[#1DB954] text-sm flex items-center gap-2">
-                  <Check size={16} /> Song uploaded and added to the shared library!
+                <div className="p-3 bg-[#082621] text-[#26c4b7] brutal-border text-xs font-mono font-bold flex items-center gap-2">
+                  <Check size={16} /> CASSETTE REGISTERED AND DISPENSED INTO ARCHIVE!
                 </div>
               )}
 
               {/* Cover + Audio */}
               <div className="flex gap-3">
                 {/* Cover */}
-                <label className="w-24 h-24 rounded-xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center cursor-pointer hover:border-[#1DB954] transition-colors overflow-hidden shrink-0">
+                <label className="w-24 h-24 bg-[#ede5d3] brutal-border border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors overflow-hidden shrink-0">
                   {coverPreview ? (
                     <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
                   ) : (
                     <>
-                      <Image size={24} className="text-[#b3b3b3]" />
-                      <span className="text-[10px] text-[#b3b3b3] mt-1">Cover</span>
+                      <Image size={24} className="text-[#082621]/60" />
+                      <span className="text-[10px] font-mono font-black uppercase text-[#082621] mt-1">COVER</span>
                     </>
                   )}
                   <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
                 </label>
 
                 {/* Audio File */}
-                <label className={`flex-1 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${audioFile ? 'border-[#1DB954] bg-[#1DB954]/10' : 'border-white/20 hover:border-[#1DB954]'}`}>
+                <label className={`flex-1 h-24 bg-[#ede5d3] brutal-border border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${audioFile ? 'bg-[#fdfbf7] border-solid' : 'hover:bg-white'}`}>
                   {audioFile ? (
                     <>
-                      <Music size={24} className="text-[#1DB954]" />
-                      <span className="text-xs text-[#1DB954] mt-1 font-bold text-center px-2 truncate max-w-full">{audioFile.name}</span>
+                      <Music size={24} className="text-[#17a398]" />
+                      <span className="text-xs font-mono text-[#082621] mt-1 font-bold text-center px-2 truncate max-w-full">{audioFile.name}</span>
                     </>
                   ) : (
                     <>
-                      <Upload size={24} className="text-[#b3b3b3]" />
-                      <span className="text-xs text-[#b3b3b3] mt-1">Upload MP3</span>
+                      <Upload size={24} className="text-[#082621]/60" />
+                      <span className="text-xs font-mono font-black uppercase text-[#082621] mt-1">SELECT AUDIO FILE (MP3)</span>
                     </>
                   )}
                   <input type="file" accept="audio/*" onChange={handleAudioChange} className="hidden" />
@@ -350,28 +368,28 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
 
               {/* Fields */}
               {[
-                { label: 'Song Title *', value: title, setter: setTitle, placeholder: 'e.g. Blinding Lights' },
-                { label: 'Artist *', value: artist, setter: setArtist, placeholder: 'e.g. The Weeknd' },
-                { label: 'Album', value: album, setter: setAlbum, placeholder: 'e.g. After Hours' },
+                { label: 'TRACK TITLE *', value: title, setter: setTitle, placeholder: 'e.g. Asprin Acoustic' },
+                { label: 'ARTIST / PRACTITIONER *', value: artist, setter: setArtist, placeholder: 'e.g. Dr. Sound' },
+                { label: 'ALBUM / CASSETTE', value: album, setter: setAlbum, placeholder: 'e.g. Pure Relief Vol. 1' },
               ].map(f => (
                 <div key={f.label}>
-                  <label className="text-xs font-bold text-[#b3b3b3] block mb-1">{f.label}</label>
+                  <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">{f.label}</label>
                   <input
                     value={f.value}
                     onChange={e => f.setter(e.target.value)}
                     placeholder={f.placeholder}
-                    className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                    className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2 brutal-border focus:outline-none focus:bg-white"
                   />
                 </div>
               ))}
 
               {/* Genre */}
               <div>
-                <label className="text-xs font-bold text-[#b3b3b3] block mb-1">Genre</label>
+                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">CLINICAL CATEGORY (GENRE)</label>
                 <select
                   value={genre}
                   onChange={e => setGenre(e.target.value)}
-                  className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                  className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-mono font-bold px-3 py-2 brutal-border focus:outline-none focus:bg-white"
                 >
                   {['Pop', 'Hip-Hop', 'R&B', 'Electronic', 'Rock', 'Jazz', 'Classical', 'Arab Pop', 'Mahragan', 'Sha3bi', 'Other'].map(g => (
                     <option key={g} value={g}>{g}</option>
@@ -381,9 +399,9 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
 
               {/* Lyrics (optional) */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-[#b3b3b3]">Synced Lyrics (optional)</label>
-                  <button type="button" onClick={addLyricLine} className="text-xs text-[#1DB954] font-bold">+ Add Line</button>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] font-mono font-black uppercase text-[#082621]">SYNCED LYRICS TIMESTAMPS</label>
+                  <button type="button" onClick={addLyricLine} className="text-[10px] font-mono font-black uppercase text-[#17a398] hover:underline">+ ADD TIMESTAMP</button>
                 </div>
                 {lyrics.map((line, i) => (
                   <div key={i} className="flex gap-2 mb-2">
@@ -392,15 +410,15 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                       value={line.time}
                       onChange={e => setLyrics(prev => prev.map((l, idx) => idx === i ? { ...l, time: Number(e.target.value) } : l))}
                       placeholder="0"
-                      className="w-16 bg-[#282828] text-white text-xs px-2 py-2 rounded-lg border border-white/10 focus:outline-none"
+                      className="w-16 bg-[#ede5d3] text-[#0b1110] text-xs font-mono px-2 py-1.5 brutal-border focus:outline-none focus:bg-white"
                     />
                     <input
                       value={line.text}
                       onChange={e => setLyrics(prev => prev.map((l, idx) => idx === i ? { ...l, text: e.target.value } : l))}
                       placeholder="Lyric line..."
-                      className="flex-1 bg-[#282828] text-white text-xs px-3 py-2 rounded-lg border border-white/10 focus:outline-none"
+                      className="flex-1 bg-[#ede5d3] text-[#0b1110] text-xs px-3 py-1.5 brutal-border focus:outline-none focus:bg-white"
                     />
-                    <button type="button" onClick={() => setLyrics(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300">
+                    <button type="button" onClick={() => setLyrics(prev => prev.filter((_, idx) => idx !== i))} className="text-[#dc2626] p-1 hover:bg-red-100">
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -410,18 +428,14 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
               <button
                 type="submit"
                 disabled={isUploading}
-                className="w-full py-3 bg-[#1DB954] text-black font-extrabold text-sm rounded-full hover:bg-[#1ed760] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                className="brutal-btn w-full py-3 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {isUploading ? (
-                  <><Loader2 size={16} className="animate-spin" /> Uploading...</>
+                  <><Loader2 size={16} className="animate-spin" /> DISPENSING TO NETWORK...</>
                 ) : (
-                  <><Upload size={16} /> Upload & Share with Everyone</>
+                  <><Upload size={16} /> REGISTER & DISPENSE CASSETTE</>
                 )}
               </button>
-
-              <p className="text-xs text-center text-[#b3b3b3]">
-                Uploaded songs appear in the shared library for all users 🌍
-              </p>
             </form>
           )}
         </div>

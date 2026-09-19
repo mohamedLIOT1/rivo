@@ -1,36 +1,57 @@
 import React, { useState } from 'react';
-import { Mic2, Play, Pause, Clock, RotateCcw, RotateCw } from 'lucide-react';
+import { Mic2, Play, Pause, Clock, Radio, Volume2 } from 'lucide-react';
 import { PODCASTS } from '../data/musicData';
 
-export default function PodcastsScreen({ onPlayEpisode }) {
+export default function PodcastsScreen({ onPlayEpisode, globalTheme = 'dark' }) {
+  const isDark = globalTheme === 'dark';
   const [selectedPodcast, setSelectedPodcast] = useState(PODCASTS[0]);
   const [playbackSpeed, setPlaybackSpeed] = useState('1.0x');
 
   const speedOptions = ['0.8x', '1.0x', '1.2x', '1.5x', '2.0x'];
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white">
-          <Mic2 size={20} />
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+      isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
+    }`}>
+      {/* ── Apothecary Broadcast Header ── */}
+      <div className={`brutal-border-thick brutal-shadow-lg p-6 mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+        isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-[#082621] text-[#26c4b7] brutal-border flex items-center justify-center">
+            <Radio size={24} />
+          </div>
+          <div>
+            <div className={`text-[10px] font-mono font-black uppercase ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
+              SPOKEN WORD & CLINICAL DISCOURSES
+            </div>
+            <h1 className={`text-2xl md:text-4xl font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+              RIVO BROADCAST BUREAU
+            </h1>
+          </div>
         </div>
-        <h1 className="text-3xl font-extrabold text-white">Podcasts & Shows</h1>
-      </div>
 
-      {/* Speed Controller Bar */}
-      <div className="flex items-center gap-3 bg-zinc-900 p-3 rounded-2xl mb-8 border border-zinc-800">
-        <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Speed:</span>
-        {speedOptions.map((s) => (
-          <button
-            key={s}
-            onClick={() => setPlaybackSpeed(s)}
-            className={`px-3 py-1 rounded-full text-xs font-extrabold transition-all ${
-              playbackSpeed === s ? 'bg-[#1DB954] text-black shadow-md' : 'bg-zinc-800 text-zinc-300 hover:text-white'
-            }`}
-          >
-            {s}
-          </button>
-        ))}
+        {/* Speed Controller Bar */}
+        <div className={`flex items-center gap-2 p-2 brutal-border ${
+          isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] border-black text-[#082621]'
+        }`}>
+          <span className="text-[10px] font-mono font-black uppercase px-1">VELOCITY:</span>
+          {speedOptions.map((s) => (
+            <button
+              key={s}
+              onClick={() => setPlaybackSpeed(s)}
+              className={`brutal-btn px-2.5 py-1 text-xs font-mono font-black uppercase transition-all ${
+                playbackSpeed === s 
+                  ? 'bg-[#082621] text-[#26c4b7] brutal-border' 
+                  : isDark
+                    ? 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600'
+                    : 'bg-[#fdfbf7] text-[#082621] hover:bg-[#ded2bb]'
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Podcast Shows Selector */}
@@ -39,50 +60,82 @@ export default function PodcastsScreen({ onPlayEpisode }) {
           <div
             key={pod.id}
             onClick={() => setSelectedPodcast(pod)}
-            className={`p-4 rounded-2xl cursor-pointer transition-all border flex items-center gap-4 ${
+            className={`p-4 cursor-pointer transition-all brutal-border flex items-center gap-4 ${
               selectedPodcast.id === pod.id 
-                ? 'bg-zinc-800 border-[#1DB954]' 
-                : 'bg-[#181818] border-zinc-800 hover:bg-zinc-800/60'
+                ? (isDark ? 'bg-[#141d1b] border-zinc-700 brutal-shadow-lg scale-[1.01]' : 'bg-[#fdfbf7] border-black brutal-shadow-lg scale-[1.01]')
+                : (isDark ? 'bg-[#182320] border-zinc-700 hover:bg-[#141d1b] brutal-shadow-sm' : 'bg-[#ede5d3] border-black hover:bg-[#fdfbf7] brutal-shadow-sm')
             }`}
           >
-            <img src={pod.cover} alt={pod.title} className="w-20 h-20 rounded-xl object-cover shadow-lg" />
-            <div>
-              <h3 className="font-extrabold text-base text-white">{pod.title}</h3>
-              <p className="text-xs text-zinc-400 font-medium mt-1">{pod.author}</p>
-              <span className="text-[11px] text-[#1DB954] font-bold mt-2 block">{pod.episodesCount} episodes available</span>
+            <img 
+              src={pod.cover} 
+              alt={pod.title} 
+              className="w-20 h-20 brutal-border object-cover bg-white shrink-0" 
+              onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=Podcast&background=082621&color=26c4b7`; }}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="text-[9px] font-mono font-black uppercase text-[#17a398] mb-0.5">
+                AUDIO SERIES • #{String(pod.id).slice(-3)}
+              </div>
+              <h3 className={`font-display font-bold text-base truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>{pod.title}</h3>
+              <p className={`text-xs font-medium truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{pod.author}</p>
+              <span className="inline-block text-[10px] font-mono font-black bg-[#082621] text-[#26c4b7] px-2 py-0.5 mt-2">
+                {pod.episodesCount} TAPES ARCHIVED
+              </span>
             </div>
           </div>
         ))}
       </div>
 
       {/* Episodes List */}
-      <section>
-        <h2 className="text-xl font-bold text-white mb-4">Latest Episodes from {selectedPodcast.title}</h2>
+      <section className={`brutal-border-thick brutal-shadow-lg p-6 ${
+        isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
+      }`}>
+        <div className={`flex items-center justify-between pb-3 mb-4 border-b-2 ${
+          isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+        }`}>
+          <h2 className="text-lg font-mono font-black uppercase">
+            TAPES ARCHIVE: {selectedPodcast.title}
+          </h2>
+          <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>CLINICAL AUDIO LOGS</span>
+        </div>
+
         <div className="flex flex-col gap-3">
           {selectedPodcast.episodes.map((ep) => (
             <div
               key={ep.id}
-              className="bg-[#181818] p-4 rounded-2xl border border-zinc-800/80 hover:bg-zinc-900 transition-all"
+              className={`p-4 brutal-border brutal-shadow-sm transition-colors ${
+                isDark ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b]' : 'bg-[#ede5d3] border-black hover:bg-white'
+              }`}
             >
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <span className="text-[11px] font-bold text-[#1DB954] uppercase tracking-wider">{ep.date}</span>
-                  <h4 className="text-base font-bold text-white mt-1">{ep.title}</h4>
-                  <p className="text-xs text-zinc-400 mt-2 line-clamp-2">{ep.description}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-black text-[#17a398] uppercase">
+                      DATE: {ep.date}
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>• EPISODE #{ep.id}</span>
+                  </div>
+                  <h4 className={`text-sm font-bold mt-1 ${isDark ? 'text-white' : 'text-[#082621]'}`}>{ep.title}</h4>
+                  <p className={`text-xs mt-1 line-clamp-2 font-medium ${isDark ? 'text-zinc-300' : 'text-[#082621]/80'}`}>{ep.description}</p>
                 </div>
                 <button
                   onClick={() => onPlayEpisode(ep, selectedPodcast)}
-                  className="w-12 h-12 rounded-full bg-[#1DB954] text-black flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 transition-transform shadow-xl"
+                  className="brutal-btn w-11 h-11 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] brutal-border-thick brutal-shadow flex items-center justify-center shrink-0 cursor-pointer"
+                  title="Dispense spoken audio"
                 >
-                  <Play size={22} fill="black" className="ml-0.5" />
+                  <Play size={20} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-zinc-800 text-xs text-zinc-400">
-                <span className="flex items-center gap-1 font-semibold">
-                  <Clock size={14} /> {ep.duration}
+              <div className={`flex items-center gap-4 mt-3 pt-2 border-t text-xs font-mono font-bold ${
+                isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110]/15 text-[#082621]'
+              }`}>
+                <span className="flex items-center gap-1">
+                  <Clock size={13} /> {ep.duration}
                 </span>
-                <span className="bg-zinc-800 px-2.5 py-0.5 rounded-full font-bold text-white">{playbackSpeed}</span>
+                <span className={`px-2 py-0.5 brutal-border ${
+                  isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#fdfbf7] border-black'
+                }`}>SPEED: {playbackSpeed}</span>
               </div>
             </div>
           ))}

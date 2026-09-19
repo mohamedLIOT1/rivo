@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="128" fill="#1DB954"/>
-  <text x="48%" y="66%" dominant-baseline="middle" text-anchor="middle" fill="#000000" font-size="360" font-weight="900" font-family="'Outfit', 'Arial Black', sans-serif">L</text>
+  <!-- Teal Offset Disc -->
+  <circle cx="280" cy="280" r="210" fill="#17a398" stroke="#0b1110" stroke-width="24"/>
+  <!-- Front Cream Disc -->
+  <circle cx="240" cy="240" r="210" fill="#fdfbf7" stroke="#0b1110" stroke-width="28"/>
+  <!-- Letter R with chromatic aberration depth -->
+  <text x="248" y="325" text-anchor="middle" fill="#17a398" font-size="280" font-weight="900" font-family="'Space Grotesk', 'Arial Black', sans-serif">R</text>
+  <text x="234" y="325" text-anchor="middle" fill="#dc2626" opacity="0.6" font-size="280" font-weight="900" font-family="'Space Grotesk', 'Arial Black', sans-serif">R</text>
+  <text x="240" y="325" text-anchor="middle" fill="#0b1110" font-size="280" font-weight="900" font-family="'Space Grotesk', 'Arial Black', sans-serif">R</text>
 </svg>

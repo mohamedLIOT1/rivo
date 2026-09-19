@@ -23,15 +23,15 @@ export function isUserVerified(userOrName) {
  */
 export default function VerifiedBadge({
   userOrName,
-  size = 16,
-  className = 'text-[#1DB954] fill-[#1DB954]/20 shrink-0',
-  title = 'Verified User',
+  size = 14,
+  className = 'text-[#17a398] fill-[#17a398]/20 shrink-0',
+  title = 'Verified Dispensary Member',
 }) {
   if (userOrName !== undefined && !isUserVerified(userOrName)) {
     return null;
   }
   return (
-    <span title={title} className="inline-flex items-center shrink-0 ml-1" style={{ verticalAlign: 'middle' }}>
+    <span title={title} className="inline-flex items-center shrink-0">
       <BadgeCheck size={size} className={className} />
     </span>
   );

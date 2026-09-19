@@ -5,10 +5,23 @@
 
 import { API_BASE_URL } from '../config.js';
 
+export const isMusicTrack = (title = '', artist = '') => {
+  const NON_MUSIC_REGEX = /(سبونج\s*بوب|سبونجبوب|spongebob|sponge\s*bob|بوب\s*القطار|bob\s*the\s*train|كرتون|رسوم\s*متحركة|حلقة\s*\d+|الموسم|حلقات|سلسلة|أنمي|انمي|نيكيلوديون|nickelodeon|mbc\s*3|mbc3|سبيستون|spacetoon|أطفال|اطفال|حكايات\s*أطفال|قصة\s*قبل\s*النوم|مسلسل|فيلم\s*كامل|مشهد\s*مضحك|كارتون|براعم|طيور\s*الجنة|كراميش|baby\s*shark|cocomelon|cartoon|animation|episode|full\s*episode)/i;
+  const text = `${title || ''} ${artist || ''}`.toLowerCase();
+  return !NON_MUSIC_REGEX.test(text);
+};
+
 export const searchMusicOnline = async (searchQuery) => {
   if (!searchQuery || !searchQuery.trim()) return [];
 
-  const query = searchQuery.trim();
+  let query = searchQuery.trim();
+
+  // Redirect Western Pop / Bob to Arabic Pop Songs
+  if (/^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop)$/i.test(query)) {
+    query = 'أغاني بوب عربي عمرو دياب تامر حسني';
+  } else if (query === 'بوب') {
+    query = 'أغاني بوب عربي';
+  }
 
   // 1. Primary Backend Search Engine API Call
   try {
@@ -26,7 +39,7 @@ export const searchMusicOnline = async (searchQuery) => {
       if (contentType && contentType.includes('application/json')) {
         const data = await backendRes.json();
         if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
-          return data.tracks.filter(t => t.title && t.audioUrl);
+          return data.tracks.filter(t => t.title && t.audioUrl && isMusicTrack(t.title, t.artist));
         }
       }
     }
@@ -37,7 +50,7 @@ export const searchMusicOnline = async (searchQuery) => {
   // 2. Client-side Safe Search Fallback
   try {
     const scRes = await fetch(
-      `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&limit=10`
+      `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(query)}&limit=12`
     ).catch(() => null);
 
     if (!scRes || !scRes.ok) return [];
@@ -46,7 +59,7 @@ export const searchMusicOnline = async (searchQuery) => {
     if (!scData || !Array.isArray(scData.collection)) return [];
 
     const collection = scData.collection.filter(
-      item => Math.round((item.duration || 0) / 1000) > 30
+      item => Math.round((item.duration || 0) / 1000) > 30 && isMusicTrack(item.title, item.user?.username)
     );
 
     const resolved = await Promise.all(
@@ -76,7 +89,7 @@ export const searchMusicOnline = async (searchQuery) => {
             source: 'SoundCloud',
             lyrics: [
               { time: 0, text: `🎵 ${item.title || query}` },
-              { time: 5, text: `♪ Full Audio on Liofy ♪` }
+              { time: 5, text: `♪ Full Audio on Rivo ♪` }
             ],
             hasSynced: false
           };
@@ -86,7 +99,7 @@ export const searchMusicOnline = async (searchQuery) => {
       })
     );
 
-    return resolved.filter(Boolean);
+    return resolved.filter(Boolean).filter(t => isMusicTrack(t.title, t.artist));
   } catch (e) {
     return [];
   }

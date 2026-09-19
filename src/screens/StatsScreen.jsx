@@ -1,13 +1,12 @@
 import React from 'react';
-import { Trophy, Music, Headphones, Flame, Calendar, UserCheck, Disc } from 'lucide-react';
+import { Trophy, Music, Headphones, Flame, Calendar, UserCheck, Disc, Activity } from 'lucide-react';
 import VerifiedBadge from '../components/VerifiedBadge';
 
-export default function StatsScreen({ tracks = [], currentUser }) {
-  // Real calculations only
+export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'dark' }) {
+  const isDark = globalTheme === 'dark';
   const sortedTracks = [...tracks].filter(t => (Number(t.plays) || 0) > 0).sort((a, b) => (Number(b.plays) || 0) - (Number(a.plays) || 0));
   const topTrack = sortedTracks[0] || null;
 
-  // Calculate actual total minutes listened by current user
   const userTotalPlays = tracks.reduce((acc, t) => acc + (Number(t.plays) || 0), 0);
   const userMinutes = Math.round((userTotalPlays * 3.5));
 
@@ -23,126 +22,147 @@ export default function StatsScreen({ tracks = [], currentUser }) {
   ] : [];
 
   return (
-    <div className="flex-1 overflow-y-auto pb-32 select-none px-4 md:px-8 py-6">
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+      isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
+    }`}>
       {/* Header Banner */}
-      <div className="flex items-center justify-between mb-8 pb-4 border-b border-zinc-800">
+      <div className={`brutal-border-thick brutal-shadow-lg p-6 mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+        isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
+      }`}>
         <div>
           <div className="flex items-center gap-2">
-            <Calendar className="text-[#1DB954]" size={22} />
-            <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight">Weekly Listening Stats</h1>
+            <Activity className="text-[#17a398]" size={22} />
+            <h1 className={`text-2xl md:text-4xl font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+              CLINICAL CONSUMPTION METRICS
+            </h1>
           </div>
-          <p className="text-xs text-zinc-400 mt-1">Real-time weekly statistics calculated strictly from actual listening history</p>
+          <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+            Official dosage and acoustic audit logs recorded strictly by Rivo Dispensary
+          </p>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full text-xs font-black text-[#1DB954] flex items-center gap-1.5">
-          <Flame size={16} />
-          <span>Real Activity</span>
+        <div className={`brutal-border px-3 py-1.5 text-xs font-mono font-black flex items-center gap-1.5 self-start sm:self-auto ${
+          isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+        }`}>
+          <Flame size={15} className="text-[#dc2626]" />
+          <span>VERIFIED LOGS</span>
         </div>
       </div>
 
       {/* Top 2 Highlight Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* 🏆 Top Listener of the Week */}
-        <div className="bg-gradient-to-br from-amber-950/80 via-zinc-900 to-black p-6 rounded-3xl border border-amber-500/30 flex items-center gap-5 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-3 right-3 text-amber-500/20">
-            <Trophy size={96} />
+        {/* 🏆 Top Listener */}
+        <div className={`p-6 brutal-border-thick brutal-shadow flex items-center gap-5 relative overflow-hidden ${
+          isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
+        }`}>
+          <div className="absolute top-2 right-2 text-[#082621]/10 pointer-events-none">
+            <Trophy size={80} />
           </div>
 
           {currentUser && userTotalPlays > 0 ? (
             <>
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-20 h-20 rounded-full object-cover shadow-2xl border-2 border-amber-400 shrink-0" />
+              <img src={currentUser.avatar} alt={currentUser.name} className="w-18 h-18 brutal-border object-cover bg-[#ede5d3] shrink-0" />
               <div className="relative z-10 truncate">
-                <span className="text-[10px] uppercase font-black tracking-widest text-amber-400 flex items-center gap-1">
-                  <Trophy size={14} />
-                  <span>Top Listener This Week</span>
+                <span className="text-[10px] uppercase font-mono font-black text-[#17a398] flex items-center gap-1">
+                  <Trophy size={13} />
+                  <span>PREMIER PATIENT OF THE WEEK</span>
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <h3 className="text-2xl font-black text-white truncate">{currentUser.name}</h3>
-                  <VerifiedBadge userOrName={currentUser} size={20} />
+                  <h3 className={`text-xl font-display font-black truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>{currentUser.name}</h3>
+                  <VerifiedBadge userOrName={currentUser} size={18} />
                 </div>
-                <p className="text-xs text-zinc-400 mt-1 font-bold">
-                  {userMinutes} mins listened strictly this week
+                <p className={`text-xs font-mono mt-1 font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
+                  {userMinutes} DOSAGE MINUTES RECORDED
                 </p>
               </div>
             </>
           ) : (
-            <div className="py-2 text-zinc-400 text-xs font-bold">
-              No listening activity recorded yet. Play a song to generate stats!
+            <div className={`py-4 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              NO CLINICAL ACTIVITY RECORDED YET. DISPENSE A CASSETTE TO GENERATE METRICS!
             </div>
           )}
         </div>
 
-        {/* 🎵 Most Streamed Track of the Week */}
-        <div className="bg-gradient-to-br from-emerald-950/80 via-zinc-900 to-black p-6 rounded-3xl border border-emerald-500/30 flex items-center gap-5 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-3 right-3 text-emerald-500/20">
-            <Headphones size={96} />
+        {/* 🎵 Most Streamed Track */}
+        <div className="bg-[#082621] text-[#fdfbf7] p-6 brutal-border-thick brutal-shadow flex items-center gap-5 relative overflow-hidden">
+          <div className="absolute top-2 right-2 text-[#26c4b7]/10 pointer-events-none">
+            <Headphones size={80} />
           </div>
 
           {topTrack ? (
             <>
-              <img src={topTrack.cover} alt={topTrack.title} className="w-20 h-20 rounded-2xl object-cover shadow-2xl border-2 border-[#1DB954] shrink-0" />
+              <img src={topTrack.cover} alt={topTrack.title} className="w-18 h-18 brutal-border object-cover bg-white shrink-0" />
               <div className="relative z-10 truncate">
-                <span className="text-[10px] uppercase font-black tracking-widest text-[#1DB954] flex items-center gap-1">
-                  <Flame size={14} />
-                  <span>Most Streamed Song</span>
+                <span className="text-[10px] uppercase font-mono font-black text-[#f59e0b] flex items-center gap-1">
+                  <Flame size={13} />
+                  <span>MOST PRESCRIBED COMPOSITION</span>
                 </span>
-                <h3 className="text-2xl font-black text-white truncate mt-1">{topTrack.title}</h3>
-                <p className="text-xs text-zinc-400 mt-1 font-bold">
-                  {topTrack.artist} • {topTrack.plays || 0} real plays
+                <h3 className="text-xl font-display font-black text-[#fdfbf7] truncate mt-1">{topTrack.title}</h3>
+                <p className="text-xs font-mono text-[#ded2bb] mt-1 font-bold">
+                  {topTrack.artist} • {topTrack.plays || 0} TOTAL DOSES
                 </p>
               </div>
             </>
           ) : (
-            <div className="py-2 text-zinc-400 text-xs font-bold">
-              No plays recorded yet. Start listening to see your top song!
+            <div className="py-4 text-[#ded2bb] text-xs font-mono">
+              NO TRACKS STREAMED YET. START LISTENING TO IDENTIFY TOP FORMULATION!
             </div>
           )}
         </div>
       </div>
 
       {/* Weekly Leaderboard Table */}
-      <section className="bg-zinc-900/60 p-6 rounded-3xl border border-zinc-800/80">
-        <h3 className="text-lg font-extrabold text-white mb-4 flex items-center gap-2">
-          <UserCheck size={20} className="text-[#1DB954]" />
-          <span>Active Users Leaderboard</span>
-        </h3>
+      <section className={`brutal-border-thick brutal-shadow-lg p-6 ${
+        isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
+      }`}>
+        <div className={`flex items-center justify-between pb-3 mb-4 border-b-2 ${
+          isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+        }`}>
+          <h3 className="text-lg font-mono font-black uppercase flex items-center gap-2">
+            <UserCheck size={18} className="text-[#17a398]" />
+            <span>APOTHECARY REGISTRATION LEADERBOARD</span>
+          </h3>
+          <span className={`text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>WEEKLY REPORT</span>
+        </div>
 
         {realLeaderboard.length > 0 ? (
           <div className="flex flex-col gap-2">
             {realLeaderboard.map((friend) => (
               <div
                 key={friend.rank}
-                className="flex items-center justify-between p-4 rounded-2xl bg-emerald-950/40 border border-[#1DB954]/50 shadow-md"
+                className={`flex items-center justify-between p-3.5 brutal-border brutal-shadow-sm ${
+                  isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#082621]'
+                }`}
               >
                 <div className="flex items-center gap-4 truncate">
-                  <span className="w-7 text-center font-black text-base text-amber-400">
+                  <span className={`w-7 text-center font-mono font-black text-sm ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>
                     #{friend.rank}
                   </span>
 
-                  <img src={friend.avatar} alt={friend.name} className="w-11 h-11 rounded-full object-cover shrink-0" />
+                  <img src={friend.avatar} alt={friend.name} className="w-10 h-10 brutal-border object-cover shrink-0 bg-white" />
 
                   <div className="truncate">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-sm text-white truncate">{friend.name}</h4>
+                      <h4 className={`font-bold text-sm truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>{friend.name}</h4>
                       <VerifiedBadge userOrName={friend} size={14} />
-                      <span className="text-[9px] font-black uppercase px-2 py-0.5 bg-[#1DB954] text-black rounded-full">
-                        You
+                      <span className="text-[9px] font-mono font-black uppercase px-2 py-0.5 bg-[#082621] text-[#26c4b7]">
+                        ACTIVE PATIENT
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-400 truncate">Top Song: {friend.topSong}</p>
+                    <p className={`text-xs truncate font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>PRIMARY DOSE: {friend.topSong}</p>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <span className="text-sm font-black text-[#1DB954]">{friend.minutes} min</span>
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase">This Week</p>
+                  <span className={`text-sm font-mono font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>{friend.minutes} MIN</span>
+                  <p className={`text-[10px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>THIS AUDIT CYCLE</p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-zinc-500 text-xs font-bold">
-            No real users have listened to songs yet. Upload and play a song to populate real stats!
+          <div className={`text-center py-8 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+            NO STREAMING RECORDS DOCUMENTED THIS AUDIT CYCLE.
           </div>
         )}
       </section>

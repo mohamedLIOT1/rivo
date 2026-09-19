@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Settings, ShieldCheck, WifiOff, Volume2, Music, Check } from 'lucide-react';
+import { X, Settings, ShieldCheck, Check } from 'lucide-react';
 
 export default function SettingsModal({
   isOpen,
@@ -14,57 +14,61 @@ export default function SettingsModal({
   if (!isOpen) return null;
 
   const qualities = [
-    { label: 'Very High (320 kbps Lossless)', value: '320' },
-    { label: 'High (256 kbps)', value: '256' },
-    { label: 'Normal (160 kbps)', value: '160' },
-    { label: 'Automatic (Based on network)', value: 'auto' }
+    { label: 'Lossless Master Pure (320 kbps Studio)', value: '320' },
+    { label: 'High Fidelity Relief (256 kbps Balanced)', value: '256' },
+    { label: 'Standard Formulation (160 kbps Data-Saver)', value: '160' },
+    { label: 'Automatic Calibration (Adaptive Network)', value: 'auto' }
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="bg-[#181818] border border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg max-w-md w-full p-6 relative">
+        <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
           <div className="flex items-center gap-2">
-            <Settings className="text-[#1DB954]" size={22} />
-            <h3 className="text-lg font-bold text-white">Liofy Settings</h3>
+            <div className="w-3 h-3 bg-[#17a398] brutal-border" />
+            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Rivo System Calibration</h3>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white rounded-full">
-            <X size={20} />
+          <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
+            <X size={18} />
           </button>
         </div>
 
-        {/* Premium Account Badge */}
-        <div className="my-4 bg-gradient-to-r from-emerald-950 to-zinc-900 p-4 rounded-2xl border border-emerald-500/30 flex items-center justify-between">
+        {/* Clinical Tier Guarantee Badge */}
+        <div className="my-4 bg-[#082621] text-[#fdfbf7] p-4 brutal-border brutal-shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center font-black">
-              <ShieldCheck size={24} />
+            <div className="w-9 h-9 bg-[#26c4b7] text-[#082621] brutal-border flex items-center justify-center font-mono font-black text-sm">
+              R
             </div>
             <div>
-              <h4 className="font-extrabold text-white text-sm">Liofy Premium</h4>
-              <p className="text-xs text-emerald-300">Unlimited Skips • High-Fidelity Audio • Zero Ads</p>
+              <h4 className="font-mono font-black uppercase text-sm text-[#26c4b7]">Rivo Pure Relief Tier</h4>
+              <p className="text-[11px] text-[#ded2bb]">Uncapped Doses • Pure 24-Bit Acoustic Relief • Zero Interruption</p>
             </div>
           </div>
         </div>
 
         {/* Offline Mode Toggle */}
-        <div className="flex items-center justify-between py-3 border-b border-zinc-800">
+        <div className="flex items-center justify-between py-3 border-b-2 border-[#0b1110]">
           <div>
-            <span className="text-sm font-semibold text-white">Offline Mode</span>
-            <p className="text-xs text-zinc-400">Only play downloaded songs</p>
+            <span className="text-xs font-mono font-black uppercase text-[#082621]">Offline Apothecary Storage</span>
+            <p className="text-[11px] text-[#082621]/70">Strictly dispense downloaded offline cassettes</p>
           </div>
           <button
             onClick={() => setIsOfflineMode(!isOfflineMode)}
-            className={`w-12 h-6 rounded-full p-1 transition-colors ${isOfflineMode ? 'bg-[#1DB954]' : 'bg-zinc-700'}`}
+            className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm ${
+              isOfflineMode ? 'bg-[#082621] text-[#26c4b7]' : 'bg-[#ede5d3] text-[#082621]'
+            }`}
           >
-            <div className={`w-4 h-4 rounded-full bg-white transition-transform ${isOfflineMode ? 'translate-x-6' : 'translate-x-0'}`} />
+            {isOfflineMode ? 'ACTIVE' : 'DISABLED'}
           </button>
         </div>
 
         {/* Crossfade Slider */}
-        <div className="py-4 border-b border-zinc-800">
+        <div className="py-4 border-b-2 border-[#0b1110]">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-semibold text-white">Crossfade Songs</span>
-            <span className="text-xs font-bold text-[#1DB954]">{crossfade} seconds</span>
+            <span className="text-xs font-mono font-black uppercase text-[#082621]">Tape Splice Crossfade</span>
+            <span className="text-xs font-mono font-bold text-[#17a398] bg-[#ede5d3] px-2 py-0.5 brutal-border">
+              {crossfade} SECONDS
+            </span>
           </div>
           <input
             type="range"
@@ -72,22 +76,24 @@ export default function SettingsModal({
             max="12"
             value={crossfade}
             onChange={(e) => setCrossfade(Number(e.target.value))}
-            className="w-full accent-[#1DB954]"
+            className="w-full accent-[#17a398]"
           />
         </div>
 
         {/* Audio Streaming Quality */}
         <div className="py-4">
-          <label className="text-xs font-extrabold uppercase text-zinc-400 block mb-3">Audio Streaming Quality</label>
-          <div className="flex flex-col gap-2">
+          <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-2">
+            ACOUSTIC FIDELITY & BITRATE RESOLUTION
+          </label>
+          <div className="flex flex-col gap-1.5">
             {qualities.map((q) => (
               <button
                 key={q.value}
                 onClick={() => setAudioQuality(q.value)}
-                className={`p-3 rounded-xl text-left text-xs font-bold flex items-center justify-between transition-all ${
+                className={`brutal-btn p-2.5 text-left text-xs font-mono font-bold flex items-center justify-between brutal-border ${
                   audioQuality === q.value 
-                    ? 'bg-[#1DB954]/20 border border-[#1DB954] text-[#1DB954]' 
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white'
+                    ? 'bg-[#082621] text-[#26c4b7] brutal-shadow-sm' 
+                    : 'bg-[#ede5d3] text-[#082621] hover:bg-white'
                 }`}
               >
                 <span>{q.label}</span>
@@ -99,9 +105,9 @@ export default function SettingsModal({
 
         <button
           onClick={onClose}
-          className="w-full mt-2 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold rounded-xl transition-all shadow-lg"
+          className="brutal-btn w-full py-2.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow cursor-pointer"
         >
-          Save Settings
+          CONFIRM CONFIGURATION
         </button>
       </div>
     </div>

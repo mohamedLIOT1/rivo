@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Liofy — Music for Everyone</title>
-    <meta name="description" content="Stream, discover, and share music with your friends. Upload songs, build playlists, and listen offline." />
-    <meta name="theme-color" content="#1DB954" />
+    <title>Rivo — Sonic Dispensary (Pure Sound Relief)</title>
+    <meta name="description" content="Rivo Sonic Dispensary — Fast musical analgesics, non-stop flow, and pure sound relief." />
+    <meta name="theme-color" content="#17a398" />
 
     <!-- Apple PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Liofy" />
+    <meta name="apple-mobile-web-app-title" content="Rivo" />
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="apple-touch-icon" href="/logo.svg" />
 
@@ -23,52 +23,72 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
 
     <!-- Splash Screen Style -->
     <style>
       #splash {
         position: fixed; inset: 0; z-index: 9999;
-        background: #000000;
+        background: #082621;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        gap: 20px;
+        gap: 18px;
         transition: opacity 0.5s ease;
       }
-      #splash .logo {
-        width: 96px; height: 96px; border-radius: 24px;
-        background: #1DB954;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 60px; font-weight: 900; color: #000000;
-        font-family: 'Outfit', Arial, sans-serif;
-        box-shadow: 0 0 60px rgba(29, 185, 84, 0.4);
-        animation: pulse 1.5s ease-in-out infinite;
+      #splash .rivo-logo-wrap {
+        position: relative;
+        width: 100px; height: 100px;
+      }
+      #splash .rivo-shadow-disc {
+        position: absolute;
+        inset: 0;
+        transform: translate(6px, 6px);
+        background: #17a398;
+        border-radius: 9999px;
+        border: 3px solid #0b1110;
+      }
+      #splash .rivo-front-disc {
+        position: absolute;
+        inset: 0;
+        background: #fdfbf7;
+        border-radius: 9999px;
+        border: 3px solid #0b1110;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 52px;
+        font-weight: 900;
+        color: #0b1110;
+        font-family: 'Space Grotesk', sans-serif;
+        text-shadow: 2px 0px 0px rgba(23, 163, 152, 0.7), -1px 0px 0px rgba(220, 38, 38, 0.4);
       }
       #splash h1 {
-        color: #ffffff; font-size: 32px; font-weight: 900;
-        font-family: 'Outfit', Arial, sans-serif;
-        letter-spacing: -1px; margin: 0;
+        color: #fdfbf7; font-size: 34px; font-weight: 900;
+        font-family: 'Space Grotesk', sans-serif;
+        letter-spacing: -0.5px; margin: 0;
+        text-shadow: 2px 2px 0px #0b1110;
       }
       #splash p {
-        color: #b3b3b3; font-size: 13px;
-        font-family: 'Outfit', Arial, sans-serif;
+        color: #26c4b7; font-size: 13px; font-weight: 700;
+        font-family: 'Space Mono', monospace;
+        letter-spacing: 1px;
         margin: 0;
-      }
-      @keyframes pulse {
-        0%, 100% { transform: scale(1); box-shadow: 0 0 60px rgba(29, 185, 84, 0.4); }
-        50% { transform: scale(1.05); box-shadow: 0 0 80px rgba(29, 185, 84, 0.7); }
+        text-transform: uppercase;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-C3Jio7wO.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BmjKveeH.css">
+    <script type="module" crossorigin src="/assets/index-BUKaFCRE.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BXLHzgyj.css">
   </head>
-  <body class="bg-black text-white antialiased select-none overflow-hidden" style="font-family:'Outfit',sans-serif">
+  <body class="bg-[#082621] text-[#0b1110] antialiased select-none overflow-hidden" style="font-family:'Plus Jakarta Sans',sans-serif">
 
     <!-- Splash Screen -->
     <div id="splash">
-      <div class="logo">L</div>
-      <h1>Liofy</h1>
-      <p>Music for Everyone</p>
+      <div class="rivo-logo-wrap">
+        <div class="rivo-shadow-disc"></div>
+        <div class="rivo-front-disc">R</div>
+      </div>
+      <h1>RIVO</h1>
+      <p>Pure Sound Relief • Est. 1954</p>
     </div>
 
     <div id="root"></div>

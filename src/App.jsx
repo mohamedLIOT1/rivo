@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
+import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon } from 'lucide-react';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
@@ -14,6 +15,7 @@ import ImportPlaylistModal from './components/ImportPlaylistModal';
 import ChatModal from './components/ChatModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import ListeningActivityPanel from './components/ListeningActivityPanel';
+import RivoLogo from './components/RivoLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 import HomeScreen from './screens/HomeScreen';
@@ -55,6 +57,7 @@ function AppContent() {
 
   // Screen Navigation
   const [currentScreen, setCurrentScreen]     = useState('home');
+  const [topSearchQuery, setTopSearchQuery]   = useState('');
   const [selectedArtist, setSelectedArtist]   = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
 
@@ -155,6 +158,32 @@ function AppContent() {
 
   const [audioQuality, setAudioQuality] = useState('320');
   const [crossfade,    setCrossfade]    = useState(4);
+
+  // Global Dark Mode Theme State
+  const [globalTheme, setGlobalTheme] = useState(() => {
+    try {
+      return localStorage.getItem('rivo_global_theme') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rivo_global_theme', globalTheme);
+    } catch {}
+    if (globalTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+  }, [globalTheme]);
+
+  const toggleGlobalTheme = () => {
+    setGlobalTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // Open auth on first boot
   useEffect(() => {
@@ -396,10 +425,10 @@ function AppContent() {
           // Browser Desktop Push Notification
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              const notif = new Notification(`Liofy • Message from ${senderName}`, {
+              const notif = new Notification(`Rivo • Telegram from ${senderName}`, {
                 body: preview,
                 icon: msg.senderAvatar || '/favicon.ico',
-                tag: `liofy-chat-${msg.sender}`
+                tag: `rivo-chat-${msg.sender}`
               });
               notif.onclick = () => {
                 window.focus();
@@ -567,151 +596,315 @@ function AppContent() {
   };
 
   return (
-    <div className="flex text-white overflow-hidden select-none" style={{ height: '100dvh', background: '#000' }}>
+    <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
 
-      {/* ── Sidebar / Bottom Nav ── */}
-      <Navigation
-        currentScreen={currentScreen}
-        setCurrentScreen={goToScreen}
-        playlists={playlists}
-        openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
-        openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
-        openJamModal={() => setIsJamOpen(true)}
-        openSettings={() => setIsSettingsOpen(true)}
-        openAddSongModal={() => setIsAddSongOpen(true)}
-        openAuthModal={handleUserAvatarClick}
-        currentUser={currentUser}
-        openChatModal={() => handleOpenChat(null)}
-        openShortcutsModal={() => setIsShortcutsOpen(true)}
-        unreadChatCount={unreadChatCount}
-        isActivityPanelOpen={isActivityPanelOpen}
-        toggleActivityPanel={toggleActivityPanel}
-      />
+      {/* ── TOP APOTHECARY NAV BAR (Rivo Design) ── */}
+      <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
+        
+        {/* Brand identity: RIVO */}
+        <div 
+          onClick={() => setCurrentScreen('home')} 
+          className="cursor-pointer flex items-center shrink-0"
+        >
+          <RivoLogo size={34} showText={true} textClassName="text-white text-lg sm:text-xl" isDark={true} />
+        </div>
 
-      {/* ── Main Content ── */}
-      <main
-        className="flex-1 flex flex-col overflow-hidden"
-        style={{
-          background: '#121212',
-          paddingBottom: currentTrack ? 'var(--player-height)' : 0,
-          paddingTop: 0,
-        }}
-      >
-        {currentScreen === 'home' && (
-          <HomeScreen
-            tracks={tracks}
-            playlists={playlists}
-            onSelectTrack={playTrack}
-            onSelectPlaylist={handleSelectPlaylistView}
-            toggleLike={toggleLike}
-            onSelectArtist={handleSelectArtist}
-            openAddSongModal={() => setIsAddSongOpen(true)}
-            openEditSongModal={handleOpenEditSong}
-            onDeleteTrack={handleDeleteTrack}
-            currentTrack={currentTrack}
-            isPlaying={isPlaying}
-            currentUser={currentUser}
-            logout={logout}
-            openAuthModal={() => setIsAuthOpen(true)}
-            openProfileScreen={() => setCurrentScreen('profile')}
-            openJamModal={() => setIsJamOpen(true)}
-            jamSession={jamSession}
-            openChatModal={() => handleOpenChat(null)}
-            unreadChatCount={unreadChatCount}
-            isActivityPanelOpen={isActivityPanelOpen}
-            toggleActivityPanel={toggleActivityPanel}
-          />
-        )}
+        {/* Retro Search Box */}
+        <div className="hidden md:flex flex-1 max-w-md mx-4">
+          <div className="relative w-full">
+            <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
+              <SearchIcon size={16} strokeWidth={2.5} />
+            </span>
+            <input 
+              type="text" 
+              value={topSearchQuery}
+              onChange={(e) => {
+                setTopSearchQuery(e.target.value);
+                if (currentScreen !== 'search') setCurrentScreen('search');
+              }}
+              placeholder="Search by dose, artist, prescription, or cassette..."
+              className={`w-full text-xs font-bold py-2 pl-9 pr-8 rounded-full brutal-border focus:outline-none transition-colors brutal-shadow-sm ${
+                globalTheme === 'dark' 
+                  ? 'bg-[#141d1b] border-zinc-700 text-white placeholder-zinc-500 focus:bg-[#182320]' 
+                  : 'bg-[#fdfbf7] border-black text-[#0b1110] placeholder-zinc-500 focus:bg-white'
+              }`}
+            />
+            {topSearchQuery && (
+              <button 
+                onClick={() => setTopSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-black cursor-pointer"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+        </div>
 
-        {currentScreen === 'search' && (
-          <SearchScreen
-            tracks={tracks}
-            onSelectTrack={playTrack}
-            toggleLike={toggleLike}
-            onOpenAddSongModal={() => setIsAddSongOpen(true)}
-            onAddToLibrary={handleAddSong}
-          />
-        )}
+        {/* Header Actions */}
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Add Song Button */}
+          <button 
+            onClick={() => setIsAddSongOpen(true)}
+            className={`font-display font-bold text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0 ${
+              globalTheme === 'dark' 
+                ? 'bg-[#141d1b] hover:bg-[#182320] border-zinc-700 text-white' 
+                : 'bg-[#fdfbf7] hover:bg-white border-black text-[#0b1110]'
+            }`}
+            title="Add Song"
+          >
+            <Plus size={15} className="text-[#dc2626]" strokeWidth={2.5} />
+            <span className="hidden sm:inline">Add Song</span>
+          </button>
 
-        {currentScreen === 'library' && (
-          <LibraryScreen
-            playlists={playlists}
-            tracks={tracks}
-            onSelectPlaylist={handleSelectPlaylistView}
-            onSelectTrack={playTrack}
-            openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
-            toggleLike={toggleLike}
-          />
-        )}
+          {/* Jam Session Button */}
+          <button 
+            onClick={() => setIsJamOpen(true)}
+            className="bg-[#f59e0b] text-[#0b1110] font-display font-black text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Jam Session"
+          >
+            <Radio size={15} className="animate-pulse" strokeWidth={2.5} />
+            <span className="hidden sm:inline">Jam</span>
+          </button>
 
-        {currentScreen === 'playlist' && selectedPlaylist && (
-          <PlaylistScreen
-            playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || selectedPlaylist}
-            tracks={tracks}
-            currentUser={currentUser}
-            onSelectTrack={playTrack}
-            toggleLike={toggleLike}
-            toggleDownload={handleDownload}
-            onBack={() => setCurrentScreen('library')}
-            onAddTrackToPlaylist={handleAddTrackToPlaylist}
-            onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
-            onDeleteTrack={handleDeleteTrack}
-            onUpdatePlaylist={handleUpdatePlaylist}
-            onDeletePlaylist={handleDeletePlaylist}
-            onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
-          />
-        )}
+          {/* Messages Button */}
+          <button 
+            onClick={() => handleOpenChat(null)}
+            className="relative bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0"
+            title="Messages"
+          >
+            <MessageSquare size={15} strokeWidth={2.2} />
+            <span className="hidden sm:inline">Messages</span>
+            {unreadChatCount > 0 && (
+              <span className="bg-[#dc2626] text-white text-[9px] font-mono px-1 rounded-full font-bold brutal-border animate-pulse">
+                {unreadChatCount}
+              </span>
+            )}
+          </button>
 
-        {currentScreen === 'podcasts' && (
-          <PodcastsScreen onPlayEpisode={handlePlayPodcastEpisode} />
-        )}
-
-        {currentScreen === 'artist' && selectedArtist && (
-          <ArtistScreen
-            artist={selectedArtist}
-            tracks={tracks}
-            onSelectTrack={playTrack}
-            toggleLike={toggleLike}
-          />
-        )}
-
-        {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} />}
-
-        {currentScreen === 'mixes' && (
-          <MixesScreen tracks={tracks} />
-        )}
-
-        {currentScreen === 'profile' && (
-          <ProfileScreen
-            currentUser={currentUser}
-            playlists={playlists}
-            onBack={() => setCurrentScreen('home')}
-            logout={logout}
-            onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
-            onOpenChat={(target) => {
-              handleOpenChat(target);
+          {/* Activity / Friends Radar Button (Top Header) */}
+          <button 
+            onClick={() => {
+              const nextState = !isActivityPanelOpen;
+              setIsActivityPanelOpen(nextState);
+              try { localStorage.setItem('liofy_activity_panel_open', String(nextState)); } catch {}
             }}
-            onStartJamWithUser={(target) => {
-              handleStartJam();
-              handleOpenChat(target);
-            }}
-            onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
-          />
-        )}
-      </main>
+            className={`relative ${
+              isActivityPanelOpen 
+                ? 'bg-[#17a398] text-[#0b1110]' 
+                : (globalTheme === 'dark' 
+                    ? 'bg-[#141d1b] hover:bg-[#182320] border-zinc-700 text-white' 
+                    : 'bg-[#fdfbf7] hover:bg-[#ede5d3] border-black text-[#0b1110]')
+            } font-display font-bold text-xs p-1.5 sm:px-3 sm:py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer shrink-0`}
+            title="Friend Activity Radar"
+          >
+            <Users size={15} strokeWidth={2.5} />
+            <span className="hidden sm:inline">Activity</span>
+            {isActivityPanelOpen && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[#0b1110]" />
+            )}
+          </button>
 
-      {/* ── Listening Activity Panel (Spotify Friend Activity) ── */}
-      <ListeningActivityPanel
-        isOpen={isActivityPanelOpen}
-        onClose={() => {
-          setIsActivityPanelOpen(false);
-          try { localStorage.setItem('liofy_activity_panel_open', 'false'); } catch {}
-        }}
-        onSelectTrack={playTrack}
-        openProfileScreen={() => setCurrentScreen('profile')}
-        openChatModal={() => handleOpenChat(null)}
-        currentUser={currentUser}
-      />
+          {/* Global Dark / Light Mode Switcher */}
+          <button 
+            onClick={toggleGlobalTheme}
+            className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 border border-zinc-700 flex items-center justify-center cursor-pointer transition shrink-0"
+            title={globalTheme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {globalTheme === 'dark' ? <Sun size={16} strokeWidth={2.5} /> : <Moon size={16} strokeWidth={2.5} />}
+          </button>
+
+          {/* User Profile Badge */}
+          <div 
+            onClick={handleUserAvatarClick}
+            className="flex items-center gap-2 pl-2 border-l border-zinc-700 ml-1 cursor-pointer group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-display font-black text-xs text-[#0b1110] brutal-shadow-sm overflow-hidden shrink-0 group-hover:scale-105 transition-transform">
+              {currentUser?.avatar ? (
+                <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                currentUser?.name?.[0] || 'R'
+              )}
+            </div>
+            <div className="hidden sm:flex flex-col justify-center text-left">
+              <span className="text-xs font-display font-bold leading-tight text-white truncate max-w-[100px] group-hover:text-[#17a398] transition-colors">
+                {currentUser ? currentUser.name : 'Sign In'}
+              </span>
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${currentUser ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                <span className="text-[8.5px] font-mono font-bold text-zinc-300 uppercase">
+                  {currentUser ? 'ONLINE' : 'GUEST'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ── MAIN WORKSPACE WITH FILMSTRIPS ── */}
+      <div className="flex-1 flex overflow-hidden relative">
+
+        {/* Left Perforated Filmstrip Rail */}
+        <aside className="hidden xl:flex w-8 flex-col filmstrip-stripes brutal-border border-y-0 border-l-0 shrink-0"></aside>
+
+        {/* ── Apothecary Sidebar / Bottom Nav ── */}
+        <Navigation
+          currentScreen={currentScreen}
+          setCurrentScreen={goToScreen}
+          playlists={playlists}
+          openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
+          openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
+          openJamModal={() => setIsJamOpen(true)}
+          openSettings={() => setIsSettingsOpen(true)}
+          openAddSongModal={() => setIsAddSongOpen(true)}
+          openAuthModal={handleUserAvatarClick}
+          currentUser={currentUser}
+          openChatModal={() => handleOpenChat(null)}
+          openShortcutsModal={() => setIsShortcutsOpen(true)}
+          unreadChatCount={unreadChatCount}
+          isActivityPanelOpen={isActivityPanelOpen}
+          toggleActivityPanel={toggleActivityPanel}
+          globalTheme={globalTheme}
+        />
+
+        {/* ── Main Canvas View ── */}
+        <main
+          className={`flex-1 flex flex-col overflow-hidden relative ${
+            currentTrack ? 'pb-[114px] md:pb-[96px]' : 'pb-[52px] md:pb-0'
+          }`}
+          style={{
+            background: globalTheme === 'dark' ? '#0b1110' : '#17a398',
+            paddingTop: 0,
+          }}
+        >
+          {currentScreen === 'home' && (
+            <HomeScreen
+              tracks={tracks}
+              playlists={playlists}
+              onSelectTrack={playTrack}
+              onSelectPlaylist={handleSelectPlaylistView}
+              toggleLike={toggleLike}
+              onSelectArtist={handleSelectArtist}
+              openAddSongModal={() => setIsAddSongOpen(true)}
+              openEditSongModal={handleOpenEditSong}
+              onDeleteTrack={handleDeleteTrack}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              currentUser={currentUser}
+              logout={logout}
+              openAuthModal={() => setIsAuthOpen(true)}
+              openProfileScreen={() => setCurrentScreen('profile')}
+              openJamModal={() => setIsJamOpen(true)}
+              jamSession={jamSession}
+              openChatModal={() => handleOpenChat(null)}
+              unreadChatCount={unreadChatCount}
+              isActivityPanelOpen={isActivityPanelOpen}
+              toggleActivityPanel={toggleActivityPanel}
+              globalTheme={globalTheme}
+            />
+          )}
+
+          {currentScreen === 'search' && (
+            <SearchScreen
+              tracks={tracks}
+              initialQuery={topSearchQuery}
+              onSelectTrack={playTrack}
+              toggleLike={toggleLike}
+              onOpenAddSongModal={() => setIsAddSongOpen(true)}
+              onAddToLibrary={handleAddSong}
+              onDeleteTrack={handleDeleteTrack}
+              globalTheme={globalTheme}
+            />
+          )}
+
+          {currentScreen === 'library' && (
+            <LibraryScreen
+              playlists={playlists}
+              tracks={tracks}
+              onSelectPlaylist={handleSelectPlaylistView}
+              onSelectTrack={playTrack}
+              openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
+              toggleLike={toggleLike}
+              globalTheme={globalTheme}
+            />
+          )}
+
+          {currentScreen === 'playlist' && selectedPlaylist && (
+            <PlaylistScreen
+              playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || selectedPlaylist}
+              tracks={tracks}
+              currentUser={currentUser}
+              onSelectTrack={playTrack}
+              toggleLike={toggleLike}
+              toggleDownload={handleDownload}
+              onBack={() => setCurrentScreen('library')}
+              onAddTrackToPlaylist={handleAddTrackToPlaylist}
+              onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
+              onDeleteTrack={handleDeleteTrack}
+              onUpdatePlaylist={handleUpdatePlaylist}
+              onDeletePlaylist={handleDeletePlaylist}
+              onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
+              globalTheme={globalTheme}
+            />
+          )}
+
+          {currentScreen === 'podcasts' && (
+            <PodcastsScreen onPlayEpisode={handlePlayPodcastEpisode} globalTheme={globalTheme} />
+          )}
+
+          {currentScreen === 'artist' && selectedArtist && (
+            <ArtistScreen
+              artist={selectedArtist}
+              tracks={tracks}
+              onSelectTrack={playTrack}
+              toggleLike={toggleLike}
+              globalTheme={globalTheme}
+            />
+          )}
+
+          {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} globalTheme={globalTheme} />}
+
+          {currentScreen === 'mixes' && (
+            <MixesScreen tracks={tracks} globalTheme={globalTheme} />
+          )}
+
+          {currentScreen === 'profile' && (
+            <ProfileScreen
+              currentUser={currentUser}
+              playlists={playlists}
+              onBack={() => setCurrentScreen('home')}
+              logout={logout}
+              openAuthModal={() => setIsAuthOpen(true)}
+              onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
+              onOpenChat={(target) => {
+                handleOpenChat(target);
+              }}
+              onStartJamWithUser={(target) => {
+                handleStartJam();
+                handleOpenChat(target);
+              }}
+              onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
+              globalTheme={globalTheme}
+            />
+          )}
+        </main>
+
+        {/* Right Perforated Filmstrip Rail */}
+        <aside className="hidden xl:flex w-8 flex-col filmstrip-stripes brutal-border border-y-0 border-r-0 shrink-0"></aside>
+
+        {/* ── Listening Activity Panel (Docked on the Right Side) ── */}
+        <ListeningActivityPanel
+          isOpen={isActivityPanelOpen}
+          onClose={() => {
+            setIsActivityPanelOpen(false);
+            try { localStorage.setItem('liofy_activity_panel_open', 'false'); } catch {}
+          }}
+          onSelectTrack={playTrack}
+          openProfileScreen={() => setCurrentScreen('profile')}
+          openChatModal={() => handleOpenChat(null)}
+          currentUser={currentUser}
+          globalTheme={globalTheme}
+        />
+      </div>
 
       {/* ── Now Playing Bar ── */}
       {currentTrack && (
@@ -736,6 +929,7 @@ function AppContent() {
           seekTo={seekTo}
           jamSession={jamSession}
           openJamModal={() => setIsJamOpen(true)}
+          globalTheme={globalTheme}
         />
       )}
 
@@ -765,6 +959,7 @@ function AppContent() {
         onRemoveFromJamQueue={removeFromJamQueue}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
         onPlayTrack={playTrack}
+        globalTheme={globalTheme}
       />
 
       <CreatePlaylistModal
@@ -881,34 +1076,30 @@ function AppContent() {
               setToastMessage(null);
             }
           }}
-          className={`fixed left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-xs font-black shadow-2xl flex items-center gap-3 border border-white/20 transition-all ${
-            typeof toastMessage === 'object' && toastMessage?.sender ? 'cursor-pointer pointer-events-auto hover:scale-105 active:scale-95 text-white' : 'pointer-events-none'
+          className={`fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl text-xs font-display font-black brutal-border-thick brutal-shadow-lg flex items-center gap-2.5 transition-all bg-[#fdfbf7] text-[#0b1110] ${
+            typeof toastMessage === 'object' && toastMessage?.sender ? 'cursor-pointer pointer-events-auto hover:scale-105 active:scale-95' : 'pointer-events-none'
           }`}
           style={{
             bottom: currentTrack ? 'calc(var(--player-height) + 16px)' : '24px',
-            background: typeof toastMessage === 'object' && toastMessage?.sender ? 'rgba(20, 20, 28, 0.96)' : 'rgba(18, 18, 18, 0.95)',
-            backdropFilter: 'blur(12px)',
-            color: typeof toastMessage === 'object' && toastMessage?.sender ? '#fff' : '#1DB954',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.9)'
           }}
         >
           {typeof toastMessage === 'object' && toastMessage?.sender ? (
             <>
               {toastMessage.sender.avatar ? (
-                <img src={toastMessage.sender.avatar} alt="" className="w-6 h-6 rounded-full object-cover border border-[#1DB954]/50 shrink-0" />
+                <img src={toastMessage.sender.avatar} alt="" className="w-6 h-6 rounded-lg object-cover brutal-border shrink-0" />
               ) : (
-                <span className="w-2.5 h-2.5 rounded-full bg-[#1DB954] shrink-0 animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] shrink-0 animate-pulse" />
               )}
               <div className="flex flex-col text-left">
-                <span className="font-extrabold text-[#1DB954] text-[11px]">{toastMessage.title}</span>
-                <span className="text-gray-300 font-medium text-[11px] max-w-[220px] truncate">{toastMessage.body}</span>
+                <span className="font-display font-black text-[#0f756d] text-[11px]">{toastMessage.title}</span>
+                <span className="text-zinc-700 font-mono font-medium text-[11px] max-w-[220px] truncate">{toastMessage.body}</span>
               </div>
-              <span className="text-[10px] text-[#1DB954] font-bold ml-1 bg-white/10 px-2 py-0.5 rounded-full hover:bg-white/20">Open</span>
+              <span className="text-[10px] text-[#0b1110] font-mono font-bold ml-1 bg-[#ede5d3] brutal-border px-2 py-0.5 rounded">Open</span>
             </>
           ) : (
             <>
-              <span className="w-2 h-2 rounded-full bg-[#1DB954] shrink-0" />
-              <span>{typeof toastMessage === 'string' ? toastMessage : toastMessage?.text || ''}</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] shrink-0" />
+              <span className="font-mono text-xs">{typeof toastMessage === 'string' ? toastMessage : toastMessage?.text || ''}</span>
             </>
           )}
         </div>

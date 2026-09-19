@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Play, Music, Radio, MessageSquare, ExternalLink, RefreshCw, UserCheck, Users, Volume2 } from 'lucide-react';
+import { X, Play, Music, Radio, MessageSquare, RefreshCw, Users } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from './VerifiedBadge';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -10,8 +10,10 @@ export default function ListeningActivityPanel({
   onSelectTrack,
   openProfileScreen,
   openChatModal,
-  currentUser
+  currentUser,
+  globalTheme = 'dark'
 }) {
+  const isDark = globalTheme === 'dark';
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const { currentTrack, isPlaying } = useAudioPlayer();
@@ -40,7 +42,6 @@ export default function ListeningActivityPanel({
     return () => clearInterval(interval);
   }, [isOpen]);
 
-  // Format relative time (e.g. 2h, 45m, 2d)
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return '';
     const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -69,21 +70,25 @@ export default function ListeningActivityPanel({
       {/* Mobile Backdrop */}
       <div 
         onClick={onClose}
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-200"
       />
 
       {/* Panel Container (Desktop Right Sidebar / Mobile Slide-Over) */}
       <aside 
-        className="fixed md:static top-0 right-0 bottom-0 z-50 md:z-auto w-80 md:w-72 bg-[#121212] md:bg-[#121212] border-l border-zinc-800/80 flex flex-col shrink-0 select-none shadow-2xl md:shadow-none animate-in slide-in-from-right duration-250"
-        style={{ height: '100%' }}
+        className={`fixed md:relative top-0 md:top-auto right-0 bottom-0 md:bottom-auto z-40 md:z-10 w-80 md:w-72 border-l-2 md:border-l-[2.5px] flex flex-col shrink-0 select-none shadow-2xl md:shadow-none animate-in slide-in-from-right duration-250 h-full transition-colors ${
+          isDark ? 'bg-[#101716] border-zinc-800 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
+        }`}
       >
         {/* Header */}
-        <div className="p-4 border-b border-zinc-800/80 flex items-center justify-between">
+        <div className={`p-3.5 border-b-2 flex items-center justify-between ${
+          isDark ? 'bg-[#141d1b] border-zinc-800 text-white' : 'bg-[#ede5d3] border-[#0b1110] text-[#082621]'
+        }`}>
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-black text-white tracking-tight flex items-center gap-2">
-              Listening activity
+            <div className="w-2.5 h-2.5 bg-[#17a398] brutal-border" />
+            <h3 className="text-xs font-mono font-black uppercase">
+              PATIENT RADAR LOGS
             </h3>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/10 text-zinc-300">
+            <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7]">
               {activities.length}
             </span>
           </div>
@@ -91,23 +96,27 @@ export default function ListeningActivityPanel({
           <div className="flex items-center gap-1">
             <button
               onClick={fetchActivity}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors"
+              className={`p-1 transition-colors cursor-pointer ${
+                isDark ? 'text-zinc-400 hover:text-white' : 'text-[#082621] hover:bg-[#ded2bb]'
+              }`}
               title="Refresh Activity"
             >
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors"
+              className={`p-1 transition-colors cursor-pointer ${
+                isDark ? 'text-zinc-400 hover:text-white' : 'text-[#082621] hover:bg-[#ded2bb]'
+              }`}
               title="Close Panel"
             >
-              <X size={16} />
+              <X size={15} />
             </button>
           </div>
         </div>
 
         {/* Friends Activity List */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
           {activities.length > 0 ? (
             activities.map((friend) => {
               const listening = friend.currentListening;
@@ -118,11 +127,15 @@ export default function ListeningActivityPanel({
                 <div
                   key={friend.id}
                   onClick={() => handlePlayFriendTrack(friend)}
-                  className="group relative p-2 rounded-2xl hover:bg-white/5 transition-all cursor-pointer flex items-center gap-3 border border-transparent hover:border-white/5"
+                  className={`group relative p-2 brutal-border transition-all cursor-pointer flex items-center gap-2.5 ${
+                    isDark 
+                      ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b]' 
+                      : 'bg-[#ede5d3] border-black hover:bg-white'
+                  }`}
                 >
-                  {/* User Avatar with overlapping Track Art Badge */}
+                  {/* User Avatar */}
                   <div className="relative shrink-0">
-                    <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-800 border border-zinc-700">
+                    <div className="w-9 h-9 brutal-border overflow-hidden bg-white">
                       <img
                         src={friend.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
                         alt={friend.name}
@@ -130,57 +143,38 @@ export default function ListeningActivityPanel({
                       />
                     </div>
 
-                    {/* Mini Track Artwork badge overlapping on bottom-right */}
-                    {listening?.cover && (
-                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-md overflow-hidden border-2 border-[#121212] shadow-md bg-zinc-900">
-                        <img
-                          src={listening.cover}
-                          alt={listening.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-
-                    {/* Live Online Pulse Dot */}
                     {isLive && (
-                      <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-[#1DB954] ring-2 ring-[#121212] animate-pulse" />
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-[#dc2626] border border-[#0b1110] animate-pulse" />
                     )}
                   </div>
 
                   {/* Friend Info & Current Track */}
                   <div className="flex-1 min-w-0 pr-1">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-xs font-bold text-white truncate max-w-[120px]">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className={`text-xs font-bold truncate max-w-[110px] ${isDark ? 'text-white' : 'text-[#082621]'}`}>
                         {friend.name}
                       </span>
                       {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
                       
                       {!isLive && timeAgo && (
-                        <span className="text-[10px] text-zinc-500 font-medium shrink-0">
+                        <span className={`text-[9px] font-mono shrink-0 ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
                           • {timeAgo}
                         </span>
                       )}
                     </div>
 
                     {listening ? (
-                      <div className="flex items-center gap-1.5 truncate">
-                        {isLive ? (
-                          // Animated Soundwave Equalizer
-                          <span className="flex items-end gap-[1.5px] h-3 w-3 shrink-0 pb-0.5" title="Listening Now">
-                            <span className="w-[2px] bg-[#1DB954] rounded-full animate-[spEq1_0.8s_ease-in-out_infinite]" style={{ height: '70%' }} />
-                            <span className="w-[2px] bg-[#1DB954] rounded-full animate-[spEq2_0.8s_ease-in-out_infinite]" style={{ height: '100%' }} />
-                            <span className="w-[2px] bg-[#1DB954] rounded-full animate-[spEq1_0.8s_ease-in-out_infinite_0.2s]" style={{ height: '50%' }} />
-                          </span>
-                        ) : (
-                          <Music size={11} className="text-zinc-500 shrink-0" />
-                        )}
-
-                        <p className={`text-[11px] truncate leading-tight ${isLive ? 'text-[#1DB954] font-semibold' : 'text-zinc-400'}`}>
-                          {listening.title} <span className="text-zinc-500">•</span> {listening.artist}
+                      <div className="flex items-center gap-1 truncate">
+                        <p className={`text-[11px] truncate leading-tight ${
+                          isLive 
+                            ? 'text-[#17a398] font-bold' 
+                            : (isDark ? 'text-zinc-300' : 'text-[#082621]/70')
+                        }`}>
+                          {listening.title} <span className="opacity-50">•</span> {listening.artist}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-[10px] text-zinc-500">Not listening to anything</p>
+                      <p className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>IDLE • NO DOSE ACTIVE</p>
                     )}
                   </div>
 
@@ -191,35 +185,39 @@ export default function ListeningActivityPanel({
                         e.stopPropagation();
                         handlePlayFriendTrack(friend);
                       }}
-                      className="opacity-0 group-hover:opacity-100 w-8 h-8 rounded-full bg-[#1DB954] hover:scale-105 active:scale-95 text-black flex items-center justify-center shadow-lg transition-all shrink-0 cursor-pointer"
+                      className="opacity-0 group-hover:opacity-100 w-7 h-7 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] brutal-border flex items-center justify-center transition-all shrink-0 cursor-pointer"
                       title={`Listen to ${listening.title}`}
                     >
-                      <Play size={13} fill="currentColor" className="ml-0.5" />
+                      <Play size={12} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
                     </button>
                   )}
                 </div>
               );
             })
           ) : (
-            <div className="text-center py-12 px-4">
-              <Users size={36} className="mx-auto text-zinc-600 mb-3" />
-              <h4 className="text-xs font-bold text-white mb-1">See what friends are playing</h4>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                Follow friends and creators to discover fresh music and see their live listening activity here.
+            <div className="text-center py-10 px-3">
+              <Users size={30} className={`mx-auto mb-2 ${isDark ? 'text-zinc-600' : 'text-[#082621]/40'}`} />
+              <h4 className={`text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>NO PEER RADAR DATA</h4>
+              <p className={`text-[11px] font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                Connect with fellow dispensary patients to track their active sound dosages in real-time.
               </p>
             </div>
           )}
         </div>
 
         {/* Footer info banner */}
-        <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between text-[11px]">
-          <span className="text-zinc-400 font-medium">Real-time sync</span>
+        <div className={`p-2.5 border-t-2 flex items-center justify-between text-[11px] font-mono ${
+          isDark ? 'bg-[#141d1b] border-zinc-800 text-zinc-400' : 'bg-[#ede5d3] border-[#0b1110] text-[#082621]/70'
+        }`}>
+          <span className="font-bold">RIVO SYNC v2.4</span>
           <button
             onClick={() => openChatModal?.()}
-            className="flex items-center gap-1 font-bold text-[#1DB954] hover:text-[#1ed760] transition-colors"
+            className={`flex items-center gap-1 font-black uppercase cursor-pointer ${
+              isDark ? 'text-zinc-300 hover:text-[#17a398]' : 'text-[#082621] hover:text-[#17a398]'
+            }`}
           >
             <MessageSquare size={12} />
-            <span>Chat</span>
+            <span>DISPENSARY CHAT</span>
           </button>
         </div>
       </aside>

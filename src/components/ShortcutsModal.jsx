@@ -6,78 +6,78 @@ export default function ShortcutsModal({ isOpen, onClose }) {
 
   const shortcuts = [
     {
-      category: 'Playback',
+      category: 'Playback Controls',
       items: [
-        { keys: ['Space'], desc: 'Play / Pause', icon: Play },
-        { keys: ['Ctrl', '→'], desc: 'Next track', icon: SkipForward },
-        { keys: ['Ctrl', '←'], desc: 'Previous track', icon: SkipBack },
+        { keys: ['Space'], desc: 'Dispense / Halt Dose', icon: Play },
+        { keys: ['Ctrl', '→'], desc: 'Advance to Next Cassette', icon: SkipForward },
+        { keys: ['Ctrl', '←'], desc: 'Revert to Previous Track', icon: SkipBack },
         { keys: ['→'], desc: 'Seek forward 5s (Shift + → for 10s)' },
         { keys: ['←'], desc: 'Seek backward 5s (Shift + ← for 10s)' },
-        { keys: ['K'], desc: 'Play / Pause (alternative)' },
-        { keys: ['J'], desc: 'Seek backward 10s' },
+        { keys: ['K'], desc: 'Toggle Dispenser playback' },
+        { keys: ['J'], desc: 'Rewind 10s' },
       ],
     },
     {
-      category: 'Volume & Audio',
+      category: 'Acoustic Amplitude & Volume',
       items: [
-        { keys: ['↑'], desc: 'Volume up (+5%)', icon: Volume2 },
-        { keys: ['↓'], desc: 'Volume down (-5%)', icon: Volume2 },
-        { keys: ['M'], desc: 'Mute / Unmute', icon: VolumeX },
+        { keys: ['↑'], desc: 'Increase decibels (+5%)', icon: Volume2 },
+        { keys: ['↓'], desc: 'Decrease decibels (-5%)', icon: Volume2 },
+        { keys: ['M'], desc: 'Mute / Unmute dispensary audio', icon: VolumeX },
       ],
     },
     {
-      category: 'Controls & Navigation',
+      category: 'Dispensary Navigation',
       items: [
-        { keys: ['L'], desc: 'Save to / Remove from Liked Songs', icon: Heart },
-        { keys: ['S'], desc: 'Toggle Shuffle', icon: Shuffle },
-        { keys: ['R'], desc: 'Toggle Repeat', icon: Repeat },
-        { keys: ['?'], desc: 'Show / Hide Keyboard Shortcuts', icon: HelpCircle },
+        { keys: ['L'], desc: 'Save to / Remove from Primary Archive', icon: Heart },
+        { keys: ['S'], desc: 'Toggle Algorithmic Shuffle', icon: Shuffle },
+        { keys: ['R'], desc: 'Toggle Continuous Repeat Dose', icon: Repeat },
+        { keys: ['?'], desc: 'Display Console Key Bindings', icon: HelpCircle },
       ],
     },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 select-none animate-in fade-in duration-150">
-      <div className="bg-[#181818] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-150">
+      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full max-w-lg overflow-hidden relative">
         
         {/* Header */}
-        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-zinc-900/80">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#1DB954]/20 border border-[#1DB954]/40 flex items-center justify-center text-[#1DB954]">
-              <Command size={18} />
+        <div className="px-5 py-4 border-b-2 border-[#0b1110] flex items-center justify-between bg-[#ede5d3]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-[#082621] text-[#26c4b7] brutal-border flex items-center justify-center">
+              <Command size={16} />
             </div>
             <div>
-              <h3 className="font-extrabold text-white text-base leading-tight">Keyboard Shortcuts</h3>
-              <p className="text-xs text-zinc-400">Quickly control Liofy without a mouse</p>
+              <h3 className="font-mono font-black uppercase text-[#082621] text-sm">Hardware Keyboard Controls</h3>
+              <p className="text-[11px] text-[#082621]/70 font-sans">Navigate Rivo console with precision keystrokes</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+            className="brutal-btn p-1 bg-[#fdfbf7] brutal-border hover:bg-[#ded2bb] text-[#0b1110]"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[70vh] overflow-y-auto space-y-5">
+        <div className="p-5 max-h-[65vh] overflow-y-auto space-y-4">
           {shortcuts.map((cat) => (
             <div key={cat.category}>
-              <h4 className="text-[11px] font-black uppercase tracking-wider text-[#1DB954] mb-2.5">
+              <h4 className="text-[10px] font-mono font-black uppercase tracking-wider text-[#17a398] mb-1.5">
                 {cat.category}
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {cat.items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.06] transition-colors"
+                    className="flex items-center justify-between py-1.5 px-2 bg-[#ede5d3] brutal-border text-xs"
                   >
-                    <span className="text-xs text-zinc-200 font-medium">{item.desc}</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs text-[#082621] font-medium font-sans">{item.desc}</span>
+                    <div className="flex items-center gap-1 shrink-0">
                       {item.keys.map((k, kIdx) => (
                         <kbd
                           key={kIdx}
-                          className="min-w-[24px] px-2 py-1 rounded bg-[#282828] border border-white/10 text-white font-mono text-[11px] font-bold text-center shadow-inner"
+                          className="min-w-[22px] px-2 py-0.5 bg-[#fdfbf7] brutal-border text-[#082621] font-mono text-[10px] font-black text-center"
                         >
                           {k}
                         </kbd>
@@ -91,16 +91,15 @@ export default function ShortcutsModal({ isOpen, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-white/10 bg-zinc-900/60 flex items-center justify-between text-xs text-zinc-400">
-          <span>Press <kbd className="px-1.5 py-0.5 rounded bg-white/10 text-white font-mono font-bold">?</kbd> anytime to toggle</span>
+        <div className="px-5 py-2.5 border-t-2 border-[#0b1110] bg-[#ede5d3] flex items-center justify-between text-xs font-mono text-[#082621]">
+          <span>Tap <kbd className="px-1 py-0.5 bg-[#fdfbf7] brutal-border font-bold">?</kbd> anytime to toggle</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:bg-zinc-200 transition-colors"
+            className="brutal-btn px-4 py-1 bg-[#082621] text-[#26c4b7] font-mono font-black text-xs uppercase brutal-border brutal-shadow-sm cursor-pointer"
           >
-            Got it
+            DISMISS
           </button>
         </div>
-
       </div>
     </div>
   );

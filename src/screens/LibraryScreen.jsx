@@ -1,247 +1,226 @@
 import React, { useState } from 'react';
-import { Heart, Plus, Download, Grid, List, Search } from 'lucide-react';
+import { Heart, Plus, Download, Grid, List, Search, Disc } from 'lucide-react';
 
-export default function LibraryScreen({ playlists, tracks, onSelectPlaylist, onSelectTrack, openCreatePlaylistModal, toggleLike }) {
+export default function LibraryScreen({ 
+  playlists = [], 
+  tracks = [], 
+  onSelectPlaylist, 
+  onSelectTrack, 
+  openCreatePlaylistModal, 
+  toggleLike,
+  globalTheme = 'dark'
+}) {
+  const isDark = globalTheme === 'dark';
   const [filter, setFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
+  const [viewMode, setViewMode] = useState('grid');
   const [search, setSearch] = useState('');
 
-  const likedTracks = tracks.filter((t) => t.liked);
-  const downloadedTracks = tracks.filter((t) => t.downloaded);
+  const downloadedTracks = (tracks || []).filter((t) => t.downloaded);
 
-  const allItems = [
-    // Liked Songs — always first
-    ...(playlists.length > 0 ? [playlists[0]] : []),
-    // Other playlists
-    ...playlists.slice(1)
-  ].filter(item => {
+  const allItems = (playlists || []).filter(item => {
     if (filter === 'playlists') return true;
     if (filter === 'downloads') return false;
     return true;
   }).filter(item => {
     if (!search) return true;
-    return item.name.toLowerCase().includes(search.toLowerCase());
+    return item.name && item.name.toLowerCase().includes(search.toLowerCase());
   });
 
   return (
     <div 
-      className="flex-1 overflow-y-auto select-none"
+      className={`flex-1 overflow-y-auto select-none p-4 sm:p-6 transition-colors ${
+        isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
+      }`}
       style={{ 
-        background: '#121212',
-        paddingBottom: 'calc(var(--player-height) + 32px)',
+        paddingBottom: 'calc(var(--player-height) + 40px)',
       }}
     >
       {/* ── Library Header ── */}
-      <div className="px-4 md:px-6 pt-6 pb-2">
-        {/* Title + Actions */}
+      <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Your Library</h1>
+          <div className="flex items-center gap-2">
+            <h1 className={`text-3xl font-display font-black tracking-tight ${
+              isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1.5px_1.5px_0px_#082621]'
+            }`}>
+              Dispensary Formulations
+            </h1>
+            <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
+              RX-VAULT
+            </span>
+          </div>
+
           <button
             onClick={openCreatePlaylistModal}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-all"
-            title="Create playlist"
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+              isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
+            }`}
+            title="Formulate New Pack"
           >
-            <Plus size={22} />
+            <Plus size={16} strokeWidth={2.5} />
+            <span className="hidden sm:inline">New Blister Pack</span>
           </button>
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-          {[
-            { id: 'all', label: 'All' },
-            { id: 'playlists', label: 'Playlists' },
-            { id: 'downloads', label: 'Downloads' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className="px-3 py-1.5 rounded-full text-sm font-bold shrink-0 transition-all"
-              style={filter === f.id
-                ? { background: 'white', color: 'black' }
-                : { background: '#2a2a2a', color: 'white' }
-              }
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search + View Toggle (when there are playlists) */}
-        {playlists.length > 2 && (
-          <div className="flex items-center gap-2 mb-3">
-            <div className="relative flex-1 max-w-xs">
-              <Search 
-                size={16} 
-                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" 
-                style={{ color: '#b3b3b3' }}
-              />
-              <input
-                type="text"
-                placeholder="Search in library"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full text-sm font-semibold pl-9 pr-3 py-2 rounded-md"
-                style={{ background: '#2a2a2a', color: 'white', border: 'none', outline: 'none' }}
-              />
-            </div>
-            <button
-              onClick={() => setViewMode(v => v === 'list' ? 'grid' : 'list')}
-              className="p-2 rounded transition-colors"
-              style={{ color: viewMode === 'grid' ? 'white' : '#b3b3b3' }}
-              title="Toggle view"
-            >
-              {viewMode === 'list' ? <Grid size={20} /> : <List size={20} />}
-            </button>
+        {/* Filter Pills + Search */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {[
+              { id: 'all', label: 'All Packs' },
+              { id: 'playlists', label: 'Blister Packs' },
+              { id: 'downloads', label: 'Offline Capsules' },
+            ].map((f) => {
+              const active = filter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-all brutal-btn ${
+                    active
+                      ? isDark ? 'bg-amber-400 text-black font-black brutal-border border-zinc-700' : 'bg-[#0b1110] text-[#fdfbf7] brutal-border brutal-shadow-sm'
+                      : isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border hover:bg-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
           </div>
-        )}
+
+          {/* Search in Library */}
+          <div className="relative w-full sm:w-64">
+            <Search 
+              size={15} 
+              className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500" 
+              strokeWidth={2.5}
+            />
+            <input
+              type="text"
+              placeholder="Search packs..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className={`w-full text-xs font-bold pl-9 pr-3 py-2 rounded-lg brutal-border focus:outline-none ${
+                isDark 
+                  ? 'bg-[#141d1b] text-white border-zinc-700 placeholder-zinc-500' 
+                  : 'bg-[#fdfbf7] text-[#0b1110] placeholder-zinc-500 border-black'
+              }`}
+            />
+          </div>
+        </div>
       </div>
 
-      <div className="px-4 md:px-6">
-        {/* ── Playlists ── */}
-        {filter !== 'downloads' && (
-          viewMode === 'list' ? (
-            /* List View */
-            <div className="flex flex-col gap-1 mb-6">
-              {allItems.map((pl) => {
-                if (!pl) return null;
-                return (
-                  <button
-                    key={pl.id}
-                    onClick={() => onSelectPlaylist(pl)}
-                    className="flex items-center gap-3 p-2 rounded-md text-left transition-colors group w-full hover:bg-white/10"
+      {/* ── Playlists Grid ── */}
+      {filter !== 'downloads' && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+          {allItems.map((pl, idx) => {
+            const count = (pl.trackIds || []).length;
+            const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899', '#082621'];
+            const color = colors[idx % colors.length];
+
+            return (
+              <div
+                key={pl.id || idx}
+                onClick={() => onSelectPlaylist(pl)}
+                className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition brutal-btn group ${
+                  isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
+                }`}
+              >
+                <div>
+                  <div 
+                    className="w-full aspect-square rounded-lg brutal-border mb-2.5 flex items-center justify-center relative overflow-hidden text-white"
+                    style={{ backgroundColor: color }}
                   >
                     {pl.isLikedSongs ? (
-                      <div 
-                        className="w-12 h-12 rounded flex items-center justify-center shrink-0 shadow-lg"
-                        style={{ background: 'linear-gradient(135deg, #450af5, #c4efd9)' }}
-                      >
-                        <Heart size={22} fill="white" className="text-white" />
-                      </div>
-                    ) : (
+                      <Heart size={44} fill="currentColor" />
+                    ) : pl.cover ? (
                       <img 
                         src={pl.cover} 
                         alt={pl.name} 
-                        className="w-12 h-12 rounded object-cover shrink-0 shadow-md"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{pl.name}</p>
-                      <p className="text-xs truncate mt-0.5" style={{ color: '#b3b3b3' }}>
-                        {pl.isLikedSongs ? `Playlist • ${(pl.trackIds||[]).length} songs` : `Playlist • ${(pl.trackIds||[]).length} songs`}
-                      </p>
-                    </div>
-                    {pl.isBlend && (
-                      <span 
-                        className="text-[10px] font-black px-2 py-1 rounded-full shrink-0"
-                        style={{ background: '#1DB95420', color: '#1DB954' }}
-                      >
-                        Blend
+                    ) : (
+                      <span className="font-display font-black text-4xl">
+                        {pl.name ? pl.name[0].toUpperCase() : 'R'}
                       </span>
                     )}
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            /* Grid View */
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-6">
-              {allItems.map((pl) => {
-                if (!pl) return null;
-                return (
-                  <div
-                    key={pl.id}
-                    onClick={() => onSelectPlaylist(pl)}
-                    className="sp-card cursor-pointer"
-                  >
-                    {pl.isLikedSongs ? (
-                      <div 
-                        className="w-full aspect-square rounded mb-3 flex items-center justify-center shadow-2xl"
-                        style={{ background: 'linear-gradient(135deg, #450af5, #c4efd9)' }}
-                      >
-                        <Heart size={52} fill="white" className="text-white" />
-                      </div>
-                    ) : (
-                      <img 
-                        src={pl.cover} 
-                        alt={pl.name} 
-                        className="sp-card-img"
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
-                    )}
-                    <p className="sp-card-title">{pl.name}</p>
-                    <p className="sp-card-subtitle">Playlist • {(pl.trackIds||[]).length} songs</p>
+                    <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
+                      {count} DOSES
+                    </span>
                   </div>
-                );
-              })}
-            </div>
-          )
-        )}
 
-        {/* ── Empty State ── */}
-        {filter !== 'downloads' && playlists.length <= 1 && (
-          <div 
-            className="mx-auto max-w-xs p-6 rounded-lg mb-6"
-            style={{ background: '#282828' }}
-          >
-            <h3 className="text-base font-extrabold text-white mb-2">Create your first playlist</h3>
-            <p className="text-sm mb-4" style={{ color: '#b3b3b3' }}>It's easy, we'll help you</p>
-            <button
-              onClick={openCreatePlaylistModal}
-              className="px-5 py-2 bg-white text-black text-sm font-bold rounded-full hover:scale-105 transition-transform"
-            >
-              Create playlist
-            </button>
-          </div>
-        )}
-
-        {/* ── Downloads Section ── */}
-        {(filter === 'all' || filter === 'downloads') && downloadedTracks.length > 0 && (
-          <section className="mt-2 mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Download size={18} style={{ color: '#1DB954' }} />
-              <h2 className="text-xl font-extrabold text-white">Downloaded</h2>
-              <span 
-                className="text-xs font-bold px-2 py-1 rounded-full"
-                style={{ background: '#1DB95420', color: '#1DB954' }}
-              >
-                {downloadedTracks.length}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              {downloadedTracks.map((track) => (
-                <div
-                  key={track.id}
-                  onClick={() => onSelectTrack(track, downloadedTracks)}
-                  className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-white/10 transition-colors group"
-                >
-                  <img src={track.cover} alt={track.title} className="w-12 h-12 rounded object-cover shadow-md shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate group-hover:text-[#1DB954] transition-colors">
-                      {track.title}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: '#b3b3b3' }}>{track.artist}</p>
-                  </div>
-                  <span 
-                    className="text-xs font-bold px-2 py-1 rounded-full shrink-0"
-                    style={{ background: '#1DB95415', color: '#1DB954', border: '1px solid #1DB95440' }}
-                  >
-                    Offline
-                  </span>
+                  <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                    {pl.name}
+                  </p>
+                  <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                    {pl.isLikedSongs ? 'Favorites • Prescriptions' : 'Blister Pack Formulation'}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </section>
-        )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-        {filter === 'downloads' && downloadedTracks.length === 0 && (
-          <div className="text-center py-20">
-            <Download size={48} className="mx-auto mb-4 opacity-30 text-white" />
-            <p className="text-lg font-bold text-white mb-2">No downloaded songs</p>
-            <p className="text-sm" style={{ color: '#b3b3b3' }}>Download songs to listen offline</p>
+      {/* ── Downloads / Offline Capsules Section ── */}
+      {(filter === 'all' || filter === 'downloads') && downloadedTracks.length > 0 && (
+        <section className="mt-4 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Download size={18} className={isDark ? "text-[#17a398]" : "text-[#082621]"} strokeWidth={2.5} />
+            <h2 className={`font-display font-black text-xl ${
+              isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
+            }`}>
+              Offline Capsules ({downloadedTracks.length})
+            </h2>
           </div>
-        )}
-      </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {downloadedTracks.map((track) => (
+              <div
+                key={track.id || track._id}
+                onClick={() => onSelectTrack(track, downloadedTracks)}
+                className={`rounded-xl brutal-border p-2.5 flex items-center justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
+                  isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black hover:bg-white text-[#0b1110]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <img 
+                    src={track.cover} 
+                    alt={track.title} 
+                    className="w-11 h-11 rounded-lg brutal-border object-cover shrink-0" 
+                  />
+                  <div className="min-w-0">
+                    <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{track.title}</p>
+                    <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{track.artist}</p>
+                  </div>
+                </div>
+                <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.5 rounded brutal-border">
+                  SAVED
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Empty State */}
+      {allItems.length === 0 && (
+        <div className={`brutal-border-thick rounded-2xl p-8 text-center max-w-sm mx-auto brutal-shadow-lg mt-6 ${
+          isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
+        }`}>
+          <p className="font-display font-black text-base mb-1">
+            No Blister Packs Found
+          </p>
+          <p className={`text-xs font-medium mb-4 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            Formulate your first playlist to organize your daily sound dosages.
+          </p>
+          <button
+            onClick={openCreatePlaylistModal}
+            className="px-4 py-2 bg-[#17a398] text-[#0b1110] font-display font-bold text-xs rounded-xl brutal-border brutal-shadow brutal-btn cursor-pointer"
+          >
+            + Create Blister Pack
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,44 +12,51 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("Liofy ErrorBoundary caught:", error, errorInfo);
+    console.error("Rivo ErrorBoundary caught:", error, errorInfo);
     this.setState({ errorInfo });
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="h-screen w-screen bg-[#121212] text-white flex flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
-          <div className="w-16 h-16 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center font-black mb-4 shadow-2xl">
-            <AlertTriangle size={32} />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-black mb-2">Application Notice</h1>
-          <p className="text-sm text-zinc-400 max-w-md mb-4">
-            Click below to clear cache and restart Liofy freshly.
-          </p>
-
-          {this.state.error && (
-            <div className="bg-zinc-900 border border-zinc-800 p-4 rounded-xl max-w-lg w-full text-left text-xs font-mono text-red-300 mb-6 overflow-x-auto">
-              <p className="font-bold mb-1 text-red-400">{this.state.error.toString()}</p>
-              {this.state.errorInfo && (
-                <pre className="text-[10px] text-zinc-500 whitespace-pre-wrap">{this.state.errorInfo.componentStack}</pre>
-              )}
+        <div className="h-screen w-screen bg-[#17a398] text-[#0b1110] flex flex-col items-center justify-center p-6 text-center select-none overflow-y-auto">
+          <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg p-8 max-w-lg w-full text-center">
+            <div className="w-14 h-14 bg-red-100 text-[#dc2626] brutal-border flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle size={28} />
             </div>
-          )}
+            <div className="text-[10px] font-mono font-black uppercase text-[#17a398] mb-1">
+              APOTHECARY SAFETY INTERVENTION
+            </div>
+            <h1 className="text-xl md:text-2xl font-mono font-black uppercase text-[#082621] mb-2">
+              DISPENSARY INTERRUPTION
+            </h1>
+            <p className="text-xs text-[#082621]/70 mb-4 font-sans">
+              Click below to reset local audio storage and relaunch Rivo cleanly.
+            </p>
 
-          <button
-            onClick={() => {
-              try {
-                localStorage.clear();
-                sessionStorage.clear();
-              } catch(e){}
-              window.location.href = window.location.origin;
-            }}
-            className="px-6 py-3 bg-[#1DB954] hover:bg-[#1ed760] text-black font-extrabold text-sm rounded-full shadow-xl flex items-center gap-2 transition-transform active:scale-95"
-          >
-            <RefreshCw size={18} />
-            <span>Reset Cache & Launch Liofy</span>
-          </button>
+            {this.state.error && (
+              <div className="bg-[#ede5d3] brutal-border p-3 text-left text-xs font-mono text-[#0b1110] mb-5 overflow-x-auto">
+                <p className="font-bold mb-1 text-[#dc2626]">{this.state.error.toString()}</p>
+                {this.state.errorInfo && (
+                  <pre className="text-[10px] text-[#082621]/60 whitespace-pre-wrap">{this.state.errorInfo.componentStack}</pre>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                try {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                } catch(e){}
+                window.location.href = window.location.origin;
+              }}
+              className="brutal-btn w-full py-3 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <RefreshCw size={16} />
+              <span>RESET CACHE & RELAUNCH RIVO</span>
+            </button>
+          </div>
         </div>
       );
     }

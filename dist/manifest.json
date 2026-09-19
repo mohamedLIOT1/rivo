@@ -1,7 +1,7 @@
 {
-  "short_name": "Liofy",
-  "name": "Liofy — Music for Everyone",
-  "description": "Stream, discover and share music with your friends",
+  "short_name": "Rivo",
+  "name": "Rivo — Sonic Dispensary",
+  "description": "Pure sound relief • Non-stop flow and mental analgesics",
   "icons": [
     {
       "src": "/logo.svg",
@@ -12,8 +12,8 @@
   ],
   "start_url": "/",
   "scope": "/",
-  "background_color": "#000000",
-  "theme_color": "#1DB954",
+  "background_color": "#082621",
+  "theme_color": "#17a398",
   "display": "standalone",
   "orientation": "any",
   "categories": ["music", "entertainment"],

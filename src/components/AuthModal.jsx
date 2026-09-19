@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User, Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Camera, Loader2 } from 'lucide-react';
+import { X, User, Lock, Eye, EyeOff, LogIn, UserPlus, LogOut, Loader2, Award } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
 import VerifiedBadge from './VerifiedBadge';
@@ -50,63 +50,54 @@ export default function AuthModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#121212] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
-
+    <div className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full max-w-sm overflow-hidden relative">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center">
-              <User size={16} className="text-black" />
-            </div>
-            <h2 className="text-base font-extrabold text-white">
-              {currentUser ? 'My Account' : mode === 'login' ? 'Sign In' : 'Create Account'}
+        <div className="flex items-center justify-between p-4 border-b-2 border-[#0b1110] bg-[#ede5d3]">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-[#17a398] brutal-border" />
+            <h2 className="text-xs font-mono font-black uppercase text-[#082621]">
+              {currentUser ? 'PATIENT DOSSIER' : mode === 'login' ? 'PATIENT SIGN IN' : 'NEW PATIENT REGISTRATION'}
             </h2>
           </div>
-          <button onClick={onClose} className="p-1.5 text-[#b3b3b3] hover:text-white rounded-full hover:bg-white/10 transition-all">
-            <X size={18} />
+          <button onClick={onClose} className="brutal-btn p-1 bg-[#fdfbf7] brutal-border hover:bg-[#ede5d3] text-[#0b1110]">
+            <X size={16} />
           </button>
         </div>
 
         <div className="p-5">
-
           {/* ── Logged In View ── */}
           {currentUser ? (
             <div className="flex flex-col items-center gap-4 py-2">
               {/* Avatar */}
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#1DB954] shadow-xl">
-                  {currentUser.avatar ? (
-                    <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#1DB954] to-[#169c46] flex items-center justify-center text-black text-3xl font-black">
-                      {(currentUser.name || currentUser.email)?.[0]?.toUpperCase()}
-                    </div>
-                  )}
-                </div>
+              <div className="w-20 h-20 bg-[#ede5d3] brutal-border-thick brutal-shadow overflow-hidden">
+                {currentUser.avatar ? (
+                  <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-[#082621] text-[#26c4b7] flex items-center justify-center text-3xl font-mono font-black">
+                    {(currentUser.name || currentUser.email)?.[0]?.toUpperCase()}
+                  </div>
+                )}
               </div>
 
               <div className="text-center">
                 <div className="flex items-center justify-center gap-1.5">
-                  <p className="text-xl font-extrabold text-white">{currentUser.name}</p>
-                  <VerifiedBadge userOrName={currentUser} size={20} />
+                  <p className="text-lg font-display font-black text-[#082621]">{currentUser.name}</p>
+                  <VerifiedBadge userOrName={currentUser} size={18} />
                 </div>
-                <p className="text-sm text-[#b3b3b3] mt-0.5">{currentUser.email}</p>
+                <p className="text-xs font-mono text-[#082621]/70 mt-0.5">{currentUser.email}</p>
               </div>
 
-              <div 
-                className="w-full text-center text-xs font-bold py-2 px-4 rounded-full"
-                style={{ background: '#1DB95420', color: '#1DB954', border: '1px solid #1DB95440' }}
-              >
-                ✓ Synced across all devices
+              <div className="w-full text-center text-[10px] font-mono font-black py-1.5 px-3 bg-[#ede5d3] text-[#082621] brutal-border">
+                ✓ RIVO CERTIFIED CLINICAL PATIENT
               </div>
 
               <button
                 onClick={handleLogout}
-                className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-bold text-red-400 border border-red-400/30 rounded-full hover:bg-red-400/10 transition-all"
+                className="brutal-btn w-full py-2.5 flex items-center justify-center gap-2 text-xs font-mono font-black uppercase text-[#dc2626] bg-red-50 hover:bg-red-100 brutal-border brutal-shadow-sm transition-all cursor-pointer"
               >
-                <LogOut size={16} />
-                Sign Out
+                <LogOut size={14} />
+                <span>TERMINATE DISPENSARY SESSION</span>
               </button>
             </div>
 
@@ -115,40 +106,40 @@ export default function AuthModal({ isOpen, onClose }) {
             /* ── Auth Form ── */
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               {error && (
-                <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-red-400 text-sm text-center">
+                <div className="p-2.5 bg-red-100 border-2 border-[#dc2626] text-[#dc2626] text-xs font-mono font-bold text-center">
                   {error}
                 </div>
               )}
 
               {mode === 'register' && (
                 <div>
-                  <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">Your Name</label>
+                  <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">PATIENT NAME</label>
                   <input
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Mohamed"
-                    className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                    placeholder="e.g. Dr. Mohamed"
+                    className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2 brutal-border focus:outline-none focus:bg-white"
                   />
                 </div>
               )}
 
               <div>
-                <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">
-                  {mode === 'login' ? 'Email or Username' : 'Email'}
+                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">
+                  {mode === 'login' ? 'EMAIL OR USER IDENTIFIER' : 'OFFICIAL EMAIL'}
                 </label>
                 <input
                   type={mode === 'login' ? 'text' : 'email'}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder={mode === 'login' ? 'Username or email@example.com' : 'you@example.com'}
+                  placeholder={mode === 'login' ? 'Username or email' : 'patient@hospital.org'}
                   required
-                  className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                  className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2 brutal-border focus:outline-none focus:bg-white"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5">Password</label>
+                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">SECRET CIPHER (PASSWORD)</label>
                 <div className="relative">
                   <input
                     type={showPass ? 'text' : 'password'}
@@ -156,14 +147,14 @@ export default function AuthModal({ isOpen, onClose }) {
                     onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••"
                     required
-                    className="w-full bg-[#282828] text-white text-sm px-4 py-2.5 pr-10 rounded-xl border border-white/10 focus:outline-none focus:border-[#1DB954]"
+                    className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2 pr-9 brutal-border focus:outline-none focus:bg-white"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPass(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#b3b3b3] hover:text-white"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#082621]/60 hover:text-[#0b1110]"
                   >
-                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
                   </button>
                 </div>
               </div>
@@ -171,23 +162,23 @@ export default function AuthModal({ isOpen, onClose }) {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 mt-2 bg-[#1DB954] text-black font-extrabold text-sm rounded-full hover:bg-[#1ed760] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                className="brutal-btn w-full py-2.5 mt-2 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {isLoading
-                  ? <Loader2 size={16} className="animate-spin" />
-                  : mode === 'login' ? <LogIn size={16} /> : <UserPlus size={16} />
+                  ? <Loader2 size={15} className="animate-spin" />
+                  : mode === 'login' ? <LogIn size={15} /> : <UserPlus size={15} />
                 }
-                {isLoading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+                <span>{isLoading ? 'VERIFYING...' : mode === 'login' ? 'ACCESS DISPENSARY' : 'REGISTER PATIENT'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
-                className="text-sm text-[#b3b3b3] hover:text-white text-center mt-1 font-medium"
+                className="text-xs font-mono font-bold text-[#17a398] hover:underline text-center mt-1"
               >
                 {mode === 'login'
-                  ? "Don't have an account? Sign up"
-                  : 'Already have an account? Sign in'
+                  ? "No medical registration? Create Patient ID"
+                  : 'Already registered? Sign In to Dispensary'
                 }
               </button>
             </form>

@@ -1,30 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Sparkles, Disc, SkipForward, StopCircle, Music2, Mic2 } from 'lucide-react';
+import { Play, Pause, Sparkles, Disc, SkipForward, StopCircle, Music2, Mic2, Sliders } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 
 const DJ_QUOTES = [
-  "Here's a mix built just for you — sit back and enjoy the flow.",
-  "Switching it up with some fresh vibes right now...",
-  "Let's slow things down with some late-night chill tracks.",
-  "Your taste is fire — keeping the energy going!",
-  "Coming up next, something you're going to love.",
-  "Dropping into a new vibe in 3... 2... 1...",
-  "That track was 🔥 — here's what's next in your mix.",
-  "Feeling the rhythm? This next one hits different.",
-  "Your personal DJ is on the ones and twos tonight.",
-  "Seamless transitions, all for you — just sit back.",
+  "Rivo formulation active — dispensing continuous harmonic remedies.",
+  "Calibrating acoustic tempo for optimal patient equilibrium.",
+  "Switching frequency spectra to relieve auditory tension.",
+  "Your sound prescription is performing at peak clinical resonance.",
+  "Preparing smooth frequency crossfade for seamless listening therapy.",
+  "Clinical balance verified. Dispensing next dose now.",
+  "Acoustic relief in progress — keeping the rhythm steady.",
+  "Certified sonic blend engaged. Sit back and absorb the frequency.",
 ];
 
 const STYLE_LABELS = {
-  equal_power: 'Smooth Blend',
-  bass_swap: 'Bass Swap',
-  low_pass: 'Filter Sweep',
-  cut: 'Instant Cut',
-  vinyl_brake: 'Vinyl Brake',
-  echo_out: 'Echo Out',
+  equal_power: 'Equal Power Blend',
+  bass_swap: 'Low-End Swap',
+  low_pass: 'Acoustic Filter Sweep',
+  cut: 'Instant Splice',
+  vinyl_brake: 'Tape Brake',
+  echo_out: 'Clinical Echo Out',
 };
 
-export default function MixesScreen({ tracks = [] }) {
+export default function MixesScreen({ tracks = [], globalTheme = 'dark' }) {
+  const isDark = globalTheme === 'dark';
   const {
     isMixMode, startDjMode, stopDjMode,
     currentTrack, isPlaying, togglePlay,
@@ -49,7 +48,6 @@ export default function MixesScreen({ tracks = [] }) {
     setQuoteIdx(next);
     setDjQuote(DJ_QUOTES[next]);
 
-    // Flash "transitioning" badge briefly
     setIsTransitioning(true);
     if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
     quoteTimerRef.current = setTimeout(() => setIsTransitioning(false), 4000);
@@ -76,105 +74,116 @@ export default function MixesScreen({ tracks = [] }) {
     return (key && activeTransitions[key]?.style) || 'equal_power';
   })();
 
-  // Progress through current track (for transition window indicator)
   const progress = duration > 0 ? currentTime / duration : 0;
   const remaining = duration > 0 ? duration - currentTime : 0;
   const transitionDuration = (activeTransitions && Object.values(activeTransitions)[0]?.duration) || 8;
   const inTransition = remaining > 0 && remaining <= transitionDuration && isMixMode;
 
-  const djAvatarSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%2300E5FF"/><stop offset="100%" stop-color="%231DB954"/></linearGradient></defs><rect width="300" height="300" fill="%23121212"/><circle cx="150" cy="150" r="100" fill="url(%23g)" opacity="0.8"/><circle cx="150" cy="150" r="40" fill="%23121212"/><path d="M70,150 C70,105 105,70 150,70 C195,70 230,105 230,150" fill="none" stroke="%23FFF" stroke-width="12" stroke-linecap="round"/><rect x="55" y="130" width="25" height="40" rx="10" fill="%23FFF"/><rect x="220" y="130" width="25" height="40" rx="10" fill="%23FFF"/></svg>`;
-
   return (
-    <div className="flex-1 overflow-y-auto pb-32 select-none px-4 md:px-8 py-6">
-
-      {/* ── Header ── */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center text-black shadow-lg">
-          <Sparkles size={22} />
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+      isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
+    }`}>
+      {/* ── Apothecary DJ Master Deck Card ── */}
+      <div className={`brutal-border-thick brutal-shadow-lg p-6 md:p-8 mb-8 relative transition-colors ${
+        isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#082621]'
+      }`}>
+        <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
+          isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+        }`}>
+          <div className="flex items-center gap-2">
+            <span className="w-3 h-3 bg-[#f59e0b] brutal-border inline-block" />
+            <span className="text-xs font-mono font-black uppercase tracking-wider">
+              RIVO AUTOMATED APOTHECARY MIXER • CONSOLE #01
+            </span>
+          </div>
+          <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
+            isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+          }`}>
+            CONTINUOUS DISPENSE
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight">AI DJ</h1>
-          <p className="text-xs text-zinc-400">Spotify-style continuous mix with auto crossfade</p>
-        </div>
-      </div>
 
-      {/* ── DJ Lio Card ── */}
-      <div className="bg-gradient-to-r from-cyan-950 via-zinc-900 to-black p-5 md:p-8 rounded-3xl border border-cyan-500/30 mb-6 shadow-2xl relative overflow-hidden">
-
-        {/* Animated background glow when active */}
-        {isMixMode && (
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-emerald-500/5 animate-pulse pointer-events-none rounded-3xl" />
-        )}
-
-        <div className="flex flex-col md:flex-row items-center gap-5 relative">
-          {/* DJ Avatar */}
-          <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-2xl overflow-hidden shadow-2xl shrink-0 border border-cyan-400/40 bg-zinc-900">
-            <img src={djAvatarSvg} alt="DJ Lio" className="w-full h-full object-cover" />
-            {isMixMode && isPlaying && (
-              <div className="absolute inset-0 bg-cyan-950/60 backdrop-blur-xs flex items-center justify-center">
-                <Disc size={44} className="text-cyan-400 animate-spin" />
-              </div>
-            )}
-            {/* LIVE badge */}
+        <div className="flex flex-col md:flex-row items-center gap-6">
+          {/* Deck Cassette Spool Indicator */}
+          <div className="w-28 h-28 md:w-36 md:h-36 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative flex flex-col items-center justify-center text-[#26c4b7]">
+            <Disc size={54} className={isPlaying && isMixMode ? "animate-spin" : ""} />
+            <span className="text-[9px] font-mono font-black uppercase tracking-widest text-[#f59e0b] mt-1">
+              {isMixMode ? (isPlaying ? 'DISPENSING' : 'IDLE') : 'STANDBY'}
+            </span>
             {isMixMode && (
-              <div className="absolute top-1.5 left-1.5 flex items-center gap-1 bg-red-600 px-1.5 py-0.5 rounded text-[9px] font-black text-white uppercase tracking-wider">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse inline-block" />
-                LIVE
+              <div className="absolute top-2 left-2 flex items-center gap-1 bg-[#dc2626] text-white px-1.5 py-0.5 text-[8px] font-mono font-black">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
               </div>
             )}
           </div>
 
           <div className="flex-1 text-center md:text-left">
-            <span className="text-[10px] uppercase font-black tracking-widest text-cyan-400">AI Host</span>
-            <h2 className="text-2xl md:text-3xl font-black text-white mt-0.5">DJ Lio</h2>
+            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 brutal-border text-[10px] font-mono font-black uppercase mb-2 ${
+              isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+            }`}>
+              <Sparkles size={12} className="text-[#17a398]" />
+              <span>ALGORITHMIC CROSSFADE ENGINE</span>
+            </div>
 
-            {/* Quote bubble */}
-            <div className="flex items-start gap-2 mt-2 bg-cyan-950/40 p-3 rounded-2xl border border-cyan-500/20">
-              <Mic2 size={14} className="text-cyan-400 shrink-0 mt-0.5" />
-              <p className="text-xs md:text-sm text-zinc-200 font-medium italic leading-snug">
+            <h2 className={`text-2xl md:text-4xl font-display font-black ${
+              isDark ? 'text-white' : 'text-[#082621]'
+            }`}>
+              Rivo Sonic Dispatcher
+            </h2>
+
+            {/* Clinical Quote Pill */}
+            <div className={`mt-3 p-3 brutal-border flex items-start gap-2 max-w-xl ${
+              isDark ? 'bg-[#0b1110] text-zinc-200 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+            }`}>
+              <Mic2 size={16} className={`shrink-0 mt-0.5 ${isDark ? 'text-zinc-400' : 'text-[#082621]'}`} />
+              <p className="text-xs font-mono font-medium italic leading-snug">
                 "{djQuote}"
               </p>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mt-4">
+            {/* Deck Controls */}
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-5">
               {!isMixMode ? (
                 <button
                   disabled={tracks.length === 0}
                   onClick={() => startDjMode(tracks)}
-                  className={`px-6 py-3 rounded-full font-extrabold text-sm flex items-center gap-2 transition-all shadow-xl ${
+                  className={`brutal-btn px-6 py-3 font-mono text-xs font-black uppercase brutal-border-thick brutal-shadow flex items-center gap-2 ${
                     tracks.length > 0
-                      ? 'bg-cyan-400 hover:bg-cyan-300 text-black hover:scale-105 active:scale-95 cursor-pointer'
-                      : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
+                      ? 'bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] cursor-pointer'
+                      : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
                   }`}
                 >
-                  <Play size={16} fill="black" />
-                  <span>Start DJ Mix</span>
+                  <Play size={16} fill="currentColor" />
+                  <span>ENGAGE APOTHECARY MIX</span>
                 </button>
               ) : (
                 <>
                   <button
                     onClick={togglePlay}
-                    className="px-5 py-3 rounded-full font-extrabold text-sm flex items-center gap-2 bg-cyan-400 hover:bg-cyan-300 text-black hover:scale-105 active:scale-95 transition-all shadow-xl cursor-pointer"
+                    className="brutal-btn px-5 py-2.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-mono text-xs font-black uppercase brutal-border-thick brutal-shadow flex items-center gap-2 cursor-pointer"
                   >
-                    {isPlaying ? <Pause size={16} fill="black" /> : <Play size={16} fill="black" />}
-                    <span>{isPlaying ? 'Pause' : 'Resume'}</span>
+                    {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                    <span>{isPlaying ? 'PAUSE DISPENSE' : 'RESUME'}</span>
                   </button>
 
                   <button
                     onClick={playNextTrack}
-                    className="px-4 py-3 rounded-full font-extrabold text-sm flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-zinc-700"
+                    className={`brutal-btn px-4 py-2.5 font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1.5 cursor-pointer ${
+                      isDark 
+                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' 
+                        : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] border-black'
+                    }`}
                   >
-                    <SkipForward size={15} />
-                    <span>Skip</span>
+                    <SkipForward size={14} />
+                    <span>ADVANCE DOSE</span>
                   </button>
 
                   <button
                     onClick={stopDjMode}
-                    className="px-4 py-3 rounded-full font-extrabold text-sm flex items-center gap-2 bg-red-900/60 hover:bg-red-800/80 text-red-300 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-red-700/40"
+                    className="brutal-btn px-4 py-2.5 bg-red-100 hover:bg-red-200 text-[#dc2626] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1.5 cursor-pointer"
                   >
-                    <StopCircle size={15} />
-                    <span>Stop DJ</span>
+                    <StopCircle size={14} />
+                    <span>HALT MIX</span>
                   </button>
                 </>
               )}
@@ -183,77 +192,76 @@ export default function MixesScreen({ tracks = [] }) {
         </div>
       </div>
 
-      {/* ── Now Playing + Transition Status (only when active) ── */}
+      {/* ── Active Status Cards (When Mix is engaged) ── */}
       {isMixMode && currentTrack && (
-        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-
-          {/* Now Playing Card */}
-          <div className="bg-zinc-900/70 rounded-2xl border border-zinc-800 p-4 flex items-center gap-3 relative overflow-hidden">
-            <div className="absolute top-0 left-0 h-1 w-full bg-zinc-800 rounded-t-2xl">
-              <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 rounded-t-2xl transition-all duration-300"
-                style={{ width: `${Math.min(100, progress * 100)}%` }}
-              />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          {/* Active Dose */}
+          <div className={`brutal-border brutal-shadow p-4 relative overflow-hidden ${
+            isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
+          }`}>
+            <div className="text-[10px] font-mono font-black uppercase text-[#dc2626] flex items-center gap-1.5 mb-2">
+              <span className="w-2 h-2 bg-[#dc2626] rounded-full animate-pulse" />
+              CURRENT ACOUSTIC DOSE
             </div>
-            <img src={currentTrack.cover} alt={currentTrack.title} className="w-12 h-12 rounded-xl object-cover shadow-lg shrink-0 mt-1" />
-            <div className="min-w-0 flex-1">
-              <span className="text-[9px] font-black uppercase tracking-widest text-red-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block" /> NOW PLAYING
+            <div className="flex items-center gap-3">
+              <img src={currentTrack.cover} alt={currentTrack.title} className="w-12 h-12 brutal-border object-cover bg-white shrink-0" />
+              <div className="truncate flex-1">
+                <h4 className={`font-bold text-sm truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{currentTrack.title}</h4>
+                <p className={`text-xs truncate font-medium ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{currentTrack.artist}</p>
+              </div>
+              <span className={`text-xs font-mono font-bold px-2 py-0.5 brutal-border ${
+                isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+              }`}>
+                {Math.round(progress * 100)}%
               </span>
-              <h4 className="text-sm font-bold text-white truncate">{currentTrack.title}</h4>
-              <p className="text-xs text-zinc-400 truncate">{currentTrack.artist}</p>
             </div>
-            {isPlaying && (
-              <Disc size={20} className="text-cyan-400 animate-spin shrink-0" />
-            )}
           </div>
 
-          {/* Next Track / Transition Card */}
+          {/* Incoming Dose */}
           {nextTrack && (
-            <div className={`bg-zinc-900/70 rounded-2xl border p-4 flex items-center gap-3 transition-all ${
-              inTransition ? 'border-emerald-500/50 bg-emerald-950/20' : 'border-zinc-800'
+            <div className={`p-4 brutal-border brutal-shadow transition-colors ${
+              inTransition 
+                ? 'bg-[#082621] text-white border-zinc-700' 
+                : (isDark ? 'bg-[#182320] border-zinc-700 text-zinc-100' : 'bg-[#ede5d3] border-black text-[#0b1110]')
             }`}>
-              <img src={nextTrack.cover} alt={nextTrack.title} className="w-12 h-12 rounded-xl object-cover shadow-lg shrink-0 opacity-80" />
-              <div className="min-w-0 flex-1">
-                <span className={`text-[9px] font-black uppercase tracking-widest flex items-center gap-1 ${inTransition ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                  {inTransition ? (
-                    <><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block" /> MIXING IN</>
-                  ) : (
-                    <><Music2 size={9} /> UP NEXT</>
-                  )}
+              <div className="text-[10px] font-mono font-black uppercase flex items-center justify-between mb-2">
+                <span className={inTransition ? 'text-[#26c4b7]' : (isDark ? 'text-zinc-400' : 'text-[#082621]/70')}>
+                  {inTransition ? 'SPLICE IN PROGRESS...' : 'NEXT IN DISPENSARY QUEUE'}
                 </span>
-                <h4 className="text-sm font-bold text-zinc-300 truncate">{nextTrack.title}</h4>
-                <p className="text-xs text-zinc-500 truncate">{nextTrack.artist}</p>
+                <span className={`px-2 py-0.5 text-[9px] brutal-border ${
+                  isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] text-[#082621] border-black'
+                }`}>
+                  {STYLE_LABELS[currentStyle] || 'Blend'}
+                </span>
               </div>
-              <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 shrink-0 whitespace-nowrap">
-                {STYLE_LABELS[currentStyle] || 'Blend'}
-              </span>
+              <div className="flex items-center gap-3">
+                <img src={nextTrack.cover} alt={nextTrack.title} className="w-12 h-12 brutal-border object-cover bg-white shrink-0" />
+                <div className="truncate flex-1">
+                  <h4 className="font-bold text-sm truncate">{nextTrack.title}</h4>
+                  <p className={`text-xs truncate font-medium ${isDark ? 'text-zinc-400' : 'opacity-70'}`}>{nextTrack.artist}</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ── Transition Info strip ── */}
-      {isMixMode && (
-        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-2xl bg-zinc-900/40 border border-zinc-800/60 text-xs text-zinc-400">
-          <Sparkles size={14} className="text-cyan-400 shrink-0" />
-          <span>
-            DJ Mix is <span className="text-white font-bold">active</span> — every track auto-crossfades with a{' '}
-            <span className="text-emerald-400 font-bold">
-              {STYLE_LABELS[currentStyle]} ({transitionDuration}s)
-            </span>{' '}
-            transition. Customize transitions in the{' '}
-            <span className="text-cyan-400 font-bold">Full Player → Mix</span>.
+      {/* ── Library / Queue Blister Cards ── */}
+      <section className={`brutal-border-thick brutal-shadow-lg p-6 ${
+        isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#082621]'
+      }`}>
+        <div className={`flex items-center justify-between pb-3 mb-4 border-b-2 ${
+          isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+        }`}>
+          <h3 className="text-lg font-mono font-black uppercase tracking-wider">
+            {isMixMode ? 'AUTOMATED MIX QUEUE' : 'DISPENSARY INVENTORY QUEUE'}
+          </h3>
+          <span className={`text-xs font-mono font-bold ${
+            isDark ? 'text-zinc-400' : 'text-[#082621]/60'
+          }`}>
+            {tracks.length} CASSETTES READY
           </span>
         </div>
-      )}
-
-      {/* ── Track Queue ── */}
-      <section>
-        <h3 className="text-lg font-extrabold text-white mb-3">
-          {isMixMode ? '🎛 DJ Queue' : 'Your Library'}{' '}
-          <span className="text-zinc-500 font-normal text-sm">({tracks.length} tracks)</span>
-        </h3>
 
         {tracks.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -263,39 +271,36 @@ export default function MixesScreen({ tracks = [] }) {
               return (
                 <div
                   key={t.id || t._id || i}
-                  className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                  className={`flex items-center justify-between p-3 brutal-border transition-transform ${
                     isActive
-                      ? 'bg-cyan-950/40 border-cyan-500/50'
+                      ? 'bg-[#082621] text-[#fdfbf7] brutal-shadow translate-x-1 border-teal-500'
                       : isNext && isMixMode
-                      ? 'bg-emerald-950/30 border-emerald-500/30'
-                      : 'bg-zinc-900/60 border-zinc-800/80'
+                      ? 'bg-[#26c4b7] text-[#082621] brutal-shadow-sm border-black'
+                      : isDark
+                      ? 'bg-[#182320] text-zinc-100 hover:bg-[#202f2b] border-zinc-700'
+                      : 'bg-[#ede5d3] text-[#0b1110] hover:bg-white border-black'
                   }`}
                 >
-                  <div className="flex items-center gap-3 truncate">
-                    <div className="relative shrink-0">
-                      <img src={t.cover} alt={t.title} className="w-11 h-11 rounded-xl object-cover" />
-                      {isActive && isPlaying && (
-                        <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
-                          <Disc size={16} className="text-cyan-400 animate-spin" />
-                        </div>
-                      )}
-                    </div>
+                  <div className="flex items-center gap-3 truncate flex-1">
+                    <img src={t.cover} alt={t.title} className="w-10 h-10 brutal-border object-cover bg-white shrink-0" />
                     <div className="truncate">
-                      <h4 className={`font-bold text-sm truncate ${isActive ? 'text-cyan-300' : 'text-white'}`}>
+                      <h4 className="font-bold text-xs sm:text-sm truncate">
                         {t.title}
                       </h4>
-                      <p className="text-xs text-zinc-400 truncate">{t.artist}</p>
+                      <p className={`text-[11px] truncate font-medium ${
+                        isActive ? 'text-teal-200' : isNext && isMixMode ? 'text-emerald-950' : isDark ? 'text-zinc-400' : 'opacity-70'
+                      }`}>{t.artist}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     {isActive && (
-                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                      <span className="text-[9px] font-mono font-black px-2 py-0.5 bg-[#f59e0b] text-[#0b1110] brutal-border">
                         PLAYING
                       </span>
                     )}
                     {isNext && isMixMode && (
-                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30">
-                        NEXT
+                      <span className="text-[9px] font-mono font-black px-2 py-0.5 bg-[#082621] text-[#26c4b7] brutal-border">
+                        UP NEXT
                       </span>
                     )}
                   </div>
@@ -304,8 +309,10 @@ export default function MixesScreen({ tracks = [] }) {
             })}
           </div>
         ) : (
-          <div className="text-center py-12 bg-zinc-900/40 rounded-3xl border border-zinc-800/80 p-8 text-zinc-500 text-xs font-bold">
-            Add songs to your library to start the AI DJ Mix!
+          <div className={`text-center py-8 text-xs font-mono ${
+            isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+          }`}>
+            NO AUDIO RECORDINGS AVAILABLE IN LIBRARY.
           </div>
         )}
       </section>

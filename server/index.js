@@ -856,14 +856,31 @@ app.post('/api/chat/send', auth, async (req, res) => {
 });
 
 // ──────────────────────────────────────────
+// Non-music blacklist regex (cartoons, kids shows, anime, episodes)
+const NON_MUSIC_REGEX = /(سبونج\s*بوب|سبونجبوب|spongebob|sponge\s*bob|بوب\s*القطار|bob\s*the\s*train|كرتون|رسوم\s*متحركة|حلقة\s*\d+|الموسم|حلقات|سلسلة|أنمي|انمي|نيكيلوديون|nickelodeon|mbc\s*3|mbc3|سبيستون|spacetoon|أطفال|اطفال|حكايات\s*أطفال|قصة\s*قبل\s*النوم|مسلسل|فيلم\s*كامل|مشهد\s*مضحك|كارتون|براعم|طيور\s*الجنة|كراميش|baby\s*shark|cocomelon|cartoon|animation|episode|full\s*episode)/i;
+
+function isMusicTrackServer(title = '', artist = '') {
+  const combined = `${title} ${artist}`.toLowerCase();
+  return !NON_MUSIC_REGEX.test(combined);
+}
+
+// ──────────────────────────────────────────
 async function searchTracksInternal(query) {
-  const q = (query || '').trim();
+  let q = (query || '').trim();
   if (!q) return [];
+
+  // Map generic Pop / Bob query to Arabic Pop Music
+  let targetQuery = q;
+  if (/^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop)$/i.test(q)) {
+    targetQuery = 'أغاني بوب عربي عمرو دياب تامر حسني';
+  } else if (q === 'بوب') {
+    targetQuery = 'أغاني بوب عربي';
+  }
 
   const cacheKey = q.toLowerCase();
   const cached = searchCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    return cached.tracks;
+    return cached.tracks.filter(t => isMusicTrackServer(t.title, t.artist));
   }
 
   try {
@@ -875,19 +892,21 @@ async function searchTracksInternal(query) {
       ]
     }).limit(10).lean();
 
-    const formattedDbTracks = dbTracks.map(t => ({
-      id: String(t._id),
-      title: t.title,
-      artist: t.artist,
-      album: t.album || 'Single',
-      cover: t.cover,
-      audioUrl: t.audioUrl,
-      duration: t.duration || 180,
-      lyrics: t.lyrics || [],
-      bpm: t.bpm,
-      key: t.key,
-      source: 'Liofy'
-    }));
+    const formattedDbTracks = dbTracks
+      .filter(t => isMusicTrackServer(t.title, t.artist))
+      .map(t => ({
+        id: String(t._id),
+        title: t.title,
+        artist: t.artist,
+        album: t.album || 'Single',
+        cover: t.cover,
+        audioUrl: t.audioUrl,
+        duration: t.duration || 180,
+        lyrics: t.lyrics || [],
+        bpm: t.bpm,
+        key: t.key,
+        source: 'Liofy'
+      }));
 
     // 2. Query SoundCloud with dynamic client ID
     let scTracks = [];
@@ -896,14 +915,14 @@ async function searchTracksInternal(query) {
       let scRes;
       try {
         scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q, client_id: clientId, limit: 15 },
+          params: { q: targetQuery, client_id: clientId, limit: 15 },
           timeout: 4000
         });
       } catch (err) {
         if (err.response?.status === 401) {
           clientId = await getSoundCloudClientId(true);
           scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-            params: { q, client_id: clientId, limit: 15 },
+            params: { q: targetQuery, client_id: clientId, limit: 15 },
             timeout: 4000
           });
         } else {
@@ -912,7 +931,9 @@ async function searchTracksInternal(query) {
       }
 
       if (scRes?.data?.collection?.length > 0) {
-        const valid = scRes.data.collection.filter(item => (item.duration || 0) > 30000);
+        const valid = scRes.data.collection.filter(item => 
+          (item.duration || 0) > 30000 && isMusicTrackServer(item.title, item.user?.username)
+        );
         const resolved = await Promise.all(
           valid.slice(0, 10).map(async (item) => {
             const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
@@ -940,10 +961,11 @@ async function searchTracksInternal(query) {
       console.warn('[Search] SoundCloud search error:', err.message);
     }
 
-    // 3. Query YouTube for official releases
+    // 3. Query YouTube for official music releases
     let ytTracks = [];
     try {
-      const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, {
+      const ytSearchStr = `${targetQuery} music`;
+      const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(ytSearchStr)}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         timeout: 4000
       });
@@ -953,20 +975,23 @@ async function searchTracksInternal(query) {
         const contents = parsed.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
         ytTracks = contents
           .filter(c => c.videoRenderer && c.videoRenderer.videoId)
-          .slice(0, 8)
           .map(c => {
             const v = c.videoRenderer;
+            const title = v.title?.runs?.[0]?.text || q;
+            const artist = v.ownerText?.runs?.[0]?.text || 'YouTube';
             return {
               id: `yt-${v.videoId}`,
-              title: v.title?.runs?.[0]?.text || q,
-              artist: v.ownerText?.runs?.[0]?.text || 'YouTube',
+              title,
+              artist,
               album: 'YouTube',
               cover: v.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
               audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
               duration: 240,
               source: 'YouTube'
             };
-          });
+          })
+          .filter(t => isMusicTrackServer(t.title, t.artist))
+          .slice(0, 10);
       }
     } catch {}
 

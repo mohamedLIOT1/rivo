@@ -1,37 +1,163 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* =============================================
-   LIOFY — Spotify-Level Design System
+   RIVO — Sonic Dispensary Neo-Brutalist System
    ============================================= */
 
 :root {
-  /* Spotify Core Colors */
-  --sp-green: #1DB954;
-  --sp-green-hover: #1ed760;
-  --sp-green-press: #169c46;
-  --sp-black: #000000;
-  --sp-bg: #121212;
-  --sp-surface: #181818;
-  --sp-elevated: #282828;
-  --sp-elevated-hover: #3E3E3E;
-  --sp-highlight: #ffffff1a;
-  --sp-subtle: #ffffff0d;
+  /* Rivo Apothecary Colors */
+  --rivo-teal: #17a398;
+  --rivo-teal-light: #26c4b7;
+  --rivo-teal-dark: #0f756d;
+  --rivo-deep-forest: #082621;
+  --rivo-card-bg: #fdfbf7;
+  --rivo-cream: #f4ede1;
+  --rivo-paper: #ede5d3;
+  --rivo-paper-dark: #ded2bb;
+  --rivo-ink: #0b1110;
+  --rivo-crimson: #dc2626;
+  --rivo-amber: #f59e0b;
+  --rivo-navy: #1e3a8a;
+
+  /* Classic Liofy aliases mapped to Rivo palette */
+  --sp-green: #17a398;
+  --sp-green-hover: #26c4b7;
+  --sp-green-press: #0f756d;
+  --sp-black: #082621;
+  --sp-bg: #17a398;
+  --sp-surface: #fdfbf7;
+  --sp-elevated: #ede5d3;
+  --sp-elevated-hover: #ded2bb;
+  --sp-highlight: rgba(11, 17, 16, 0.08);
+  --sp-subtle: rgba(11, 17, 16, 0.04);
 
   /* Text */
-  --sp-text-primary: #ffffff;
-  --sp-text-secondary: #b3b3b3;
-  --sp-text-subdued: #6a6a6a;
-  --sp-text-link: #ffffff;
-  --sp-text-link-hover: #1DB954;
+  --sp-text-primary: #0b1110;
+  --sp-text-secondary: #4b5563;
+  --sp-text-subdued: #6b7280;
+  --sp-text-link: #0f756d;
+  --sp-text-link-hover: #17a398;
 
   /* Borders */
-  --sp-border: rgba(255,255,255,0.1);
-  --sp-border-subtle: rgba(255,255,255,0.05);
+  --sp-border: #0b1110;
+  --sp-border-subtle: rgba(11, 17, 16, 0.2);
 
-  /* Spotify Layout Dimensions */
-  --nav-width: 285px;
-  --player-height: 90px;
-  --topbar-height: 64px;
+  /* Layout Dimensions */
+  --nav-width: 275px;
+  --player-height: 96px;
+  --topbar-height: 66px;
+}
+
+/* =============================================
+   Neo-Brutalist Foundations (Rivo Design)
+   ============================================= */
+.brutal-border {
+  border: 2.5px solid #0b1110 !important;
+}
+.brutal-border-thick {
+  border: 3.5px solid #0b1110 !important;
+}
+.brutal-shadow-sm {
+  box-shadow: 2px 2px 0px #0b1110 !important;
+}
+.brutal-shadow {
+  box-shadow: 4px 4px 0px #0b1110 !important;
+}
+.brutal-shadow-lg {
+  box-shadow: 6px 6px 0px #0b1110 !important;
+}
+.brutal-shadow-teal {
+  box-shadow: 5px 5px 0px #082621 !important;
+}
+.brutal-shadow-amber {
+  box-shadow: 4px 4px 0px #f59e0b !important;
+}
+.brutal-shadow-crimson {
+  box-shadow: 4px 4px 0px #dc2626 !important;
+}
+
+.brutal-btn {
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.brutal-btn:hover {
+  transform: translate(-1.5px, -1.5px);
+  box-shadow: 5px 5px 0px #0b1110 !important;
+}
+.brutal-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #0b1110 !important;
+}
+
+/* Outer filmstrip / perforated strip margins matching rivo.host */
+.filmstrip-stripes {
+  background: repeating-linear-gradient(
+    0deg,
+    #0b1110,
+    #0b1110 12px,
+    #17a398 12px,
+    #17a398 24px
+  );
+}
+
+/* Sawtooth pharmaceutical guarantee badge */
+.sawtooth-badge {
+  clip-path: polygon(
+    50% 0%, 59% 7%, 70% 3%, 76% 12%, 87% 12%, 89% 23%, 99% 27%, 97% 38%, 
+    100% 50%, 97% 62%, 99% 73%, 89% 77%, 87% 88%, 76% 88%, 70% 97%, 59% 93%, 
+    50% 100%, 41% 93%, 30% 97%, 24% 88%, 13% 88%, 11% 77%, 1% 73%, 3% 62%, 
+    0% 50%, 3% 38%, 1% 27%, 11% 23%, 13% 12%, 24% 12%, 30% 3%, 41% 7%
+  );
+}
+
+/* Vintage paper texture */
+.paper-texture {
+  background-color: #fdfbf7;
+  background-image: radial-gradient(#d3c9b4 0.75px, transparent 0.75px);
+  background-size: 7px 7px;
+}
+
+.dark .paper-texture,
+.paper-texture-dark {
+  background-color: #141d1b !important;
+  background-image: radial-gradient(#263834 0.75px, transparent 0.75px) !important;
+  background-size: 7px 7px;
+}
+
+/* Dynamic Equalizer animations matching uploaded widget */
+@keyframes eqBounce1 { 0%, 100% { height: 6px; } 50% { height: 18px; } }
+@keyframes eqBounce2 { 0%, 100% { height: 13px; } 50% { height: 25px; } }
+@keyframes eqBounce3 { 0%, 100% { height: 5px; } 50% { height: 13px; } }
+@keyframes eqBounce4 { 0%, 100% { height: 17px; } 50% { height: 28px; } }
+@keyframes eqBounce5 { 0%, 100% { height: 8px; } 50% { height: 20px; } }
+
+.animate-eq-1 { animation: eqBounce1 0.7s infinite ease-in-out; }
+.animate-eq-2 { animation: eqBounce2 0.85s infinite ease-in-out; }
+.animate-eq-3 { animation: eqBounce3 0.6s infinite ease-in-out; }
+.animate-eq-4 { animation: eqBounce4 0.9s infinite ease-in-out; }
+.animate-eq-5 { animation: eqBounce5 0.75s infinite ease-in-out; }
+
+/* Font Family definitions */
+.font-sans { font-family: 'Plus Jakarta Sans', sans-serif; }
+.font-display { font-family: 'Space Grotesk', sans-serif; }
+.font-mono { font-family: 'Space Mono', monospace; }
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #ede5d3;
+  border-left: 1.5px solid #0b1110;
+}
+::-webkit-scrollbar-thumb {
+  background: #0b1110;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0f756d;
 }
 
 /* =============================================
@@ -56,9 +182,9 @@ body {
   padding-right: env(safe-area-inset-right);
   min-height: 100vh;
   min-height: -webkit-fill-available;
-  background-color: var(--sp-black);
-  color: var(--sp-text-primary);
-  font-family: 'Circular Std', 'Outfit', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--rivo-deep-forest);
+  color: var(--rivo-ink);
+  font-family: 'Plus Jakarta Sans', sans-serif;
   user-select: none;
   overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;

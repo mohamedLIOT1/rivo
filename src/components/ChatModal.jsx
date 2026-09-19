@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft, Users, Bell } from 'lucide-react';
+import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft, Users, Disc } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from './VerifiedBadge';
 
@@ -26,6 +26,7 @@ export default function ChatModal({
   const [searchResults, setSearchResults] = useState([]);
   const [loadingHub, setLoadingHub] = useState(false);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'friends'
 
   // Sync activeUser if targetUser prop changes
   useEffect(() => {
@@ -204,75 +205,85 @@ export default function ChatModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 select-none">
-      <div className="bg-[#181818] border border-white/10 rounded-3xl w-full max-w-lg md:max-w-xl h-[620px] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none">
+      <div className="bg-[#fdfbf7] brutal-border-thick rounded-2xl w-full max-w-lg md:max-w-xl h-[620px] flex flex-col brutal-shadow-lg overflow-hidden animate-in zoom-in-95 duration-200 text-[#0b1110]">
         
         {/* ─────────────────────────────────────────
-            HEADER: DIRECT CHAT vs CONVERSATIONS HUB
+            HEADER: RIVO TELEGRAPH BUREAU
             ───────────────────────────────────────── */}
-        {activeUser ? (
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-zinc-900/80 shrink-0">
-            <div className="flex items-center gap-3">
+        <div className="p-3.5 bg-[#0b1110] text-[#fdfbf7] brutal-border border-x-0 border-t-0 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            {activeUser ? (
               <button
                 onClick={() => {
                   setActiveUser(null);
                   fetchHubData();
                 }}
-                className="p-1.5 -ml-1 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-                title="All Chats"
+                className="w-8 h-8 rounded-lg bg-[#fdfbf7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer mr-1"
+                title="Back to Telegraph Hub"
               >
-                <ArrowLeft size={22} />
+                <ArrowLeft size={16} strokeWidth={2.5} />
               </button>
+            ) : null}
 
-              <div className="w-11 h-11 rounded-full overflow-hidden bg-zinc-800 flex items-center justify-center shrink-0 border border-white/10 shadow">
-                {activeUser.avatar ? (
-                  <img src={activeUser.avatar} alt={activeUser.name} className="w-full h-full object-cover" />
-                ) : (
-                  <User size={22} className="text-zinc-400" />
-                )}
-              </div>
-              <div className="truncate">
-                <div className="flex items-center gap-1.5">
-                  <h3 className="font-bold text-white text-lg leading-tight truncate">{activeUser.name}</h3>
-                  <VerifiedBadge userOrName={activeUser} size={16} />
-                </div>
-                <p className="text-xs text-[#1DB954] font-semibold tracking-wide">Direct Chat</p>
-              </div>
+            <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm brutal-shadow-sm">
+              RX
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSendJamInvite}
-                className="px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md active:scale-95"
-                title="Invite to Jam"
-              >
-                <Radio size={14} className="text-cyan-400" />
-                <span className="hidden sm:inline">Jam Invite</span>
-              </button>
-              <button
-                onClick={onClose}
-                className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
-              >
-                <X size={20} />
-              </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display font-bold text-sm leading-none text-white">
+                  {activeUser ? activeUser.name : 'Rivo Telegraph Bureau'}
+                </h3>
+                {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
+              </div>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {activeUser ? 'DIRECT ENCRYPTED TELEGRAM' : 'ENCRYPTED MEDICAL TELEGRAPH'}
+              </span>
             </div>
           </div>
-        ) : (
-          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-zinc-900/80 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center font-black shadow-lg shadow-[#1DB954]/20">
-                <MessageSquare size={20} />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-white text-lg leading-tight">Messages</h3>
-                <p className="text-sm text-zinc-400">Chat & share music with friends</p>
-              </div>
-            </div>
+
+          <div className="flex items-center gap-2">
+            {activeUser && (
+              <button
+                onClick={handleSendJamInvite}
+                className="px-2.5 py-1 rounded bg-[#f59e0b] text-[#0b1110] font-display font-black text-[11px] brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer"
+                title="Invite to Jam"
+              >
+                <Radio size={12} className="animate-pulse" strokeWidth={2.5} />
+                <span>Jam Invite</span>
+              </button>
+            )}
+
             <button
               onClick={onClose}
-              className="p-2 text-zinc-400 hover:text-white rounded-full hover:bg-white/10 transition-colors"
+              className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
             >
-              <X size={20} />
+              <X size={17} strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
+
+        {/* ─────────────────────────────────────────
+            SUB-HEADER TABS (WHEN IN HUB MODE)
+            ───────────────────────────────────────── */}
+        {!activeUser && (
+          <div className="bg-[#ded2bb] p-2 border-b-2 border-black flex gap-1.5 overflow-x-auto text-xs font-display font-bold shrink-0">
+            <button
+              onClick={() => setActiveTab('chats')}
+              className={`px-3 py-1 rounded brutal-border transition ${
+                activeTab === 'chats' ? 'bg-[#0b1110] text-white brutal-shadow-sm' : 'bg-white text-[#0b1110]'
+              }`}
+            >
+              Active Telegrams ({conversations.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('friends')}
+              className={`px-3 py-1 rounded brutal-border transition ${
+                activeTab === 'friends' ? 'bg-[#0b1110] text-white brutal-shadow-sm' : 'bg-white text-[#0b1110]'
+              }`}
+            >
+              Friends ({friends.length})
             </button>
           </div>
         )}
@@ -282,64 +293,82 @@ export default function ChatModal({
             ───────────────────────────────────────── */}
         {activeUser ? (
           <>
-            {/* Message List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
+            {/* Messages Stream with paper texture */}
+            <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 paper-texture bg-[#fdfbf7]">
               {loading ? (
                 <div className="flex items-center justify-center h-full">
-                  <Loader2 size={26} className="animate-spin text-zinc-500" />
+                  <Loader2 size={26} className="animate-spin text-[#17a398]" />
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center text-zinc-400 mb-3">
-                    <Radio size={28} />
+                  <div className="w-14 h-14 rounded-2xl bg-[#ede5d3] brutal-border flex items-center justify-center text-[#0b1110] mb-3 brutal-shadow-sm">
+                    <Disc size={28} />
                   </div>
-                  <p className="text-base font-bold text-zinc-200">Start the conversation</p>
-                  <p className="text-sm text-zinc-400 mt-1 max-w-xs leading-relaxed">
-                    Say hello, share music, or invite {activeUser.name} to a Jam session!
+                  <p className="text-base font-display font-black text-[#0b1110]">Telegram Channel Open</p>
+                  <p className="text-xs text-zinc-600 font-medium mt-1 max-w-xs leading-relaxed">
+                    Prescribe beats, say hello, or invite {activeUser.name} to a synchronized Rivo Jam session!
                   </p>
                 </div>
               ) : (
                 messages.map((msg, idx) => {
                   const isMe = String(msg.sender) === String(currentUser?.id || currentUser?._id);
+                  const timeFormatted = msg.createdAt
+                    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : 'NOW';
+
                   return (
                     <div
                       key={msg._id || idx}
-                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
+                      className={`flex flex-col ${isMe ? 'items-end max-w-[85%] ml-auto' : 'items-start max-w-[85%]'}`}
                     >
                       <div
-                        className={`max-w-[82%] rounded-2xl px-4 py-3 text-[15px] sm:text-base ${
+                        className={`p-3 rounded-xl brutal-border brutal-shadow-sm text-xs font-medium space-y-1 ${
                           isMe
-                            ? 'bg-[#1DB954] text-black font-medium rounded-br-none'
-                            : 'bg-zinc-800 text-white rounded-bl-none border border-white/5'
+                            ? 'bg-[#17a398] text-[#0b1110] font-bold rounded-tr-none'
+                            : 'bg-white text-[#0b1110] rounded-tl-none'
                         }`}
                       >
+                        {/* Message Meta Header */}
+                        <div className={`flex items-center justify-between border-b pb-1 mb-1 font-mono text-[10px] gap-4 ${
+                          isMe ? 'border-black/20 text-[#082621]' : 'border-dashed border-zinc-300 text-zinc-500'
+                        }`}>
+                          <span>{isMe ? (currentUser?.name || 'You') : (activeUser.name || 'Dispenser')}</span>
+                          <span>{timeFormatted}</span>
+                        </div>
+
                         {msg.text && <p className="break-words leading-relaxed">{msg.text}</p>}
-                        
+
                         {/* Track attached */}
                         {msg.track && (
                           <div
                             onClick={() => onPlayTrack && onPlayTrack(msg.track)}
-                            className={`mt-2.5 p-2.5 rounded-xl flex items-center gap-3 cursor-pointer transition-colors ${
-                              isMe ? 'bg-black/20 hover:bg-black/30' : 'bg-black/40 hover:bg-black/60'
-                            }`}
+                            className="mt-2 p-2 bg-white rounded-lg brutal-border flex items-center justify-between gap-2.5 cursor-pointer hover:bg-[#ede5d3] transition"
                           >
                             <img
                               src={msg.track.cover}
                               alt=""
-                              className="w-11 h-11 rounded-lg object-cover shadow shrink-0"
+                              className="w-10 h-10 rounded brutal-border object-cover shrink-0"
                             />
-                            <div className="truncate flex-1">
-                              <p className="text-sm font-bold truncate">{msg.track.title}</p>
-                              <p className="text-xs opacity-85 truncate mt-0.5">{msg.track.artist}</p>
+                            <div className="truncate flex-1 min-w-0">
+                              <span className="text-[8px] font-mono font-bold bg-[#f59e0b] px-1 rounded text-black">
+                                PRESCRIBED TRACK
+                              </span>
+                              <p className="text-xs font-display font-black text-[#0b1110] truncate mt-0.5">
+                                {msg.track.title}
+                              </p>
+                              <p className="text-[10px] text-zinc-600 font-bold truncate">
+                                {msg.track.artist}
+                              </p>
                             </div>
-                            <Music size={16} className="shrink-0" />
+                            <div className="w-7 h-7 rounded bg-[#17a398] brutal-border flex items-center justify-center shrink-0">
+                              <Music size={13} className="text-[#0b1110]" />
+                            </div>
                           </div>
                         )}
                       </div>
-                      <span className="text-xs text-zinc-400 mt-1 px-1 font-medium">
-                        {msg.createdAt
-                          ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
+
+                      <span className="text-[9px] font-mono text-zinc-500 mt-1 px-1 font-bold">
+                        {isMe ? 'Dispatched via Telegraph' : 'Telegram Verified'}
                       </span>
                     </div>
                   );
@@ -348,169 +377,170 @@ export default function ChatModal({
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-white/10 bg-zinc-900/40 flex items-center gap-2.5 shrink-0">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={`Message ${activeUser.name}...`}
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-[15px] sm:text-base text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954] transition-colors"
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim() || sending}
-                className="p-3 rounded-xl bg-[#1DB954] text-black hover:bg-[#1ed760] active:scale-95 disabled:opacity-40 disabled:hover:bg-[#1DB954] transition-all shadow-md cursor-pointer shrink-0"
-              >
-                {sending ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-              </button>
-            </form>
+            {/* Chat Input Field */}
+            <div className="p-3 bg-[#ded2bb] brutal-border border-x-0 border-b-0 shrink-0">
+              <form onSubmit={handleSendMessage} className="flex gap-2">
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder={`Type a prescription message for ${activeUser.name}...`}
+                  className="flex-1 bg-white text-xs font-bold px-3 py-2.5 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-[#17a398]"
+                />
+                <button
+                  type="submit"
+                  disabled={!inputText.trim() || sending}
+                  className="bg-[#0b1110] hover:bg-zinc-800 text-[#fdfbf7] px-4 py-2 rounded-lg font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                >
+                  {sending ? (
+                    <Loader2 size={14} className="animate-spin text-[#17a398]" />
+                  ) : (
+                    <Send size={14} className="text-[#17a398]" strokeWidth={2.5} />
+                  )}
+                  <span>Send</span>
+                </button>
+              </form>
+            </div>
           </>
         ) : (
           /* ── Conversations & Friends Hub ── */
-          <div className="flex-1 flex flex-col overflow-hidden p-4">
+          <div className="flex-1 flex flex-col overflow-hidden p-3.5 sm:p-4 bg-[#fdfbf7] paper-texture">
             {/* Search Input */}
-            <div className="relative mb-3.5 shrink-0">
-              <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <div className="relative mb-3 shrink-0">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" strokeWidth={2.5} />
               <input
                 type="text"
-                placeholder="Search friends or find users..."
+                placeholder="Search friends or telegraph users..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm sm:text-[15px] text-white placeholder-zinc-500 focus:outline-none focus:border-[#1DB954] transition-colors"
+                className="w-full bg-white brutal-border rounded-xl pl-10 pr-4 py-2 text-xs font-bold text-[#0b1110] placeholder-zinc-500 focus:outline-none focus:bg-white brutal-shadow-sm"
               />
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            {/* Content List */}
+            <div className="flex-1 overflow-y-auto space-y-2">
               {/* Search Results */}
-              {searchQuery.trim().length >= 2 && (
+              {searchQuery.trim() ? (
                 <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-2.5">Search Results</h4>
+                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-500 mb-2">
+                    Search Results ({searchResults.length})
+                  </p>
                   {isSearchingUsers ? (
-                    <div className="py-4 text-center"><Loader2 size={20} className="animate-spin text-zinc-500 mx-auto" /></div>
+                    <div className="text-center py-6">
+                      <Loader2 size={20} className="animate-spin text-[#17a398] mx-auto" />
+                    </div>
                   ) : searchResults.length === 0 ? (
-                    <p className="text-sm text-zinc-400 py-3 text-center">No users found matching "{searchQuery}"</p>
+                    <p className="text-xs text-zinc-500 text-center py-4">No users found on telegraph wire</p>
                   ) : (
-                    <div className="space-y-2">
-                      {searchResults.map((u) => (
-                        <div
-                          key={u.id || u._id}
-                          onClick={() => setActiveUser(u)}
-                          className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer transition-colors"
-                        >
-                          <img
-                            src={u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'}
-                            alt={u.name}
-                            className="w-11 h-11 rounded-full object-cover shadow"
-                          />
-                          <div className="truncate flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-bold text-base text-white truncate">{u.name}</p>
-                              <VerifiedBadge userOrName={u} size={15} />
-                            </div>
-                            <p className="text-sm text-zinc-400 truncate">{u.bio || 'Liofy listener'}</p>
+                    searchResults.map((u) => (
+                      <div
+                        key={u.id || u._id}
+                        onClick={() => setActiveUser(u)}
+                        className="p-2.5 bg-white hover:bg-[#ede5d3] rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
+                            {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name?.[0] || 'U'}
                           </div>
-                          <span className="text-xs font-bold text-[#1DB954] bg-[#1DB954]/10 px-3 py-1.5 rounded-full border border-[#1DB954]/20">
-                            Chat
+                          <div className="truncate">
+                            <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#0b1110]">
+                              <span>{u.name}</span>
+                              <VerifiedBadge userOrName={u} size={12} />
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-500">Dispatch Message</span>
+                          </div>
+                        </div>
+                        <button className="px-3 py-1 bg-[#0b1110] text-white font-display font-bold text-[11px] rounded-lg brutal-border">
+                          Chat →
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : activeTab === 'chats' ? (
+                /* Conversations List */
+                <div>
+                  {loadingHub ? (
+                    <div className="text-center py-8">
+                      <Loader2 size={24} className="animate-spin text-[#17a398] mx-auto" />
+                    </div>
+                  ) : conversations.length === 0 ? (
+                    <div className="text-center py-10 bg-white rounded-xl brutal-border p-5">
+                      <MessageSquare size={32} className="mx-auto text-zinc-400 mb-2" />
+                      <p className="font-display font-bold text-sm text-[#0b1110]">No Active Telegrams</p>
+                      <p className="text-xs text-zinc-600 mt-1">Search for users above or choose a friend to begin communication.</p>
+                    </div>
+                  ) : (
+                    conversations.map((conv) => {
+                      const other = conv.user;
+                      if (!other) return null;
+                      return (
+                        <div
+                          key={other.id || other._id}
+                          onClick={() => setActiveUser(other)}
+                          className="p-2.5 bg-white hover:bg-[#ede5d3] rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm mb-2"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
+                              {other.avatar ? <img src={other.avatar} alt="" className="w-full h-full object-cover" /> : other.name?.[0] || 'U'}
+                            </div>
+                            <div className="truncate flex-1">
+                              <div className="flex items-center gap-1.5 font-display font-black text-xs text-[#0b1110]">
+                                <span>{other.name}</span>
+                                <VerifiedBadge userOrName={other} size={12} />
+                              </div>
+                              <p className="text-[11px] text-zinc-600 font-medium truncate mt-0.5">
+                                {conv.lastMessage?.text || (conv.lastMessage?.track ? '🎵 Shared a prescription' : 'Active wire')}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-mono font-bold bg-[#ede5d3] px-1.5 py-0.5 rounded shrink-0">
+                            WIRE
                           </span>
                         </div>
-                      ))}
+                      );
+                    })
+                  )}
+                </div>
+              ) : (
+                /* Friends List */
+                <div>
+                  {friends.length === 0 ? (
+                    <div className="text-center py-10 bg-white rounded-xl brutal-border p-5">
+                      <Users size={32} className="mx-auto text-zinc-400 mb-2" />
+                      <p className="font-display font-bold text-sm text-[#0b1110]">No Friends Added Yet</p>
+                      <p className="text-xs text-zinc-600 mt-1">Search and connect with friends across the Rivo network.</p>
                     </div>
+                  ) : (
+                    friends.map((f) => (
+                      <div
+                        key={f.id || f._id}
+                        onClick={() => setActiveUser(f)}
+                        className="p-2.5 bg-white hover:bg-[#ede5d3] rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm mb-2"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
+                            {f.avatar ? <img src={f.avatar} alt="" className="w-full h-full object-cover" /> : f.name?.[0] || 'F'}
+                          </div>
+                          <div className="truncate">
+                            <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#0b1110]">
+                              <span>{f.name}</span>
+                              <VerifiedBadge userOrName={f} size={12} />
+                            </div>
+                            <span className="text-[10px] font-mono text-emerald-700 font-bold">ACTIVE LISTENER</span>
+                          </div>
+                        </div>
+                        <button className="px-3 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-shadow-sm brutal-btn">
+                          Open Wire →
+                        </button>
+                      </div>
+                    ))
                   )}
                 </div>
               )}
-
-              {/* Recent Conversations */}
-              <div>
-                <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-2.5 flex items-center justify-between">
-                  <span>Recent Conversations</span>
-                  <span className="text-xs text-zinc-400 font-mono bg-white/10 px-2 py-0.5 rounded-full">{conversations.length}</span>
-                </h4>
-
-                {loadingHub ? (
-                  <div className="py-6 text-center"><Loader2 size={22} className="animate-spin text-zinc-500 mx-auto" /></div>
-                ) : conversations.length === 0 ? (
-                  <div className="p-5 bg-white/5 rounded-2xl text-center border border-white/5 text-sm text-zinc-300">
-                    <p className="font-semibold">No recent messages yet.</p>
-                    <p className="text-zinc-400 text-xs mt-1.5">Pick a friend below or search above to send your first message!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {conversations.map((c) => {
-                      const u = c.user;
-                      const last = c.lastMessage;
-                      return (
-                        <div
-                          key={u.id}
-                          onClick={() => setActiveUser(u)}
-                          className="flex items-center gap-3.5 p-3 rounded-xl bg-zinc-900/60 hover:bg-zinc-800 border border-zinc-800/80 cursor-pointer transition-colors group"
-                        >
-                          <img
-                            src={u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'}
-                            alt={u.name}
-                            className="w-12 h-12 rounded-full object-cover shadow shrink-0"
-                          />
-                          <div className="truncate flex-1">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 truncate">
-                                <p className="font-bold text-base text-white truncate">{u.name}</p>
-                                <VerifiedBadge userOrName={u} size={15} />
-                              </div>
-                              {last?.createdAt && (
-                                <span className="text-xs text-zinc-400 shrink-0 font-medium ml-2">
-                                  {new Date(last.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-sm text-zinc-300 truncate mt-1">
-                              {last?.track ? `🎵 ${last.track.title}` : (last?.text || 'Sent an attachment')}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Friends & Followers list */}
-              {friends.length > 0 && (
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400 mb-2.5">
-                    Friends ({friends.length})
-                  </h4>
-                  <div className="space-y-1.5">
-                    {friends.map((f) => (
-                      <div
-                        key={f.id}
-                        onClick={() => setActiveUser(f)}
-                        className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/5 cursor-pointer transition-colors group"
-                      >
-                        <img
-                          src={f.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'}
-                          alt={f.name}
-                          className="w-10 h-10 rounded-full object-cover shadow shrink-0"
-                        />
-                        <div className="truncate flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-bold text-sm text-white truncate">{f.name}</p>
-                            <VerifiedBadge userOrName={f} size={14} />
-                          </div>
-                          <p className="text-xs text-zinc-400 truncate">{f.bio || 'Friend on Liofy'}</p>
-                        </div>
-                        <span className="text-xs font-bold text-[#1DB954] bg-[#1DB954]/10 group-hover:bg-[#1DB954]/20 px-3 py-1 rounded-full border border-[#1DB954]/20 transition-all">
-                          Chat →
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

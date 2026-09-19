@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Home, Search, Library, Plus, Heart, User, Trophy, Radio, DownloadCloud, MessageSquare, Command, Users } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
+import RivoLogo from './RivoLogo';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -18,277 +19,390 @@ export default function Navigation({
   currentUser,
   isActivityPanelOpen = false,
   toggleActivityPanel = () => {},
+  globalTheme = 'dark',
 }) {
+  const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
 
   const mainNavItems = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'search', label: 'Search', icon: Search },
+    { id: 'home', label: 'Dispensary Home', icon: Home },
+    { id: 'search', label: 'Search Rx', icon: Search },
+    { id: 'mixes', label: 'Rivo DJ Mix', icon: Radio },
+    { id: 'stats', label: 'Dose History', icon: Disc },
   ];
 
   const mobileNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Library', icon: Library },
+    { id: 'library', label: 'Dispensary', icon: Disc },
     { id: 'mixes', label: 'DJ Mix', icon: Radio },
-    { id: 'stats', label: 'Stats', icon: Trophy },
   ];
 
   const safePlaylists = Array.isArray(playlists) ? playlists : [];
+  const filteredPlaylists = safePlaylists.filter(pl => {
+    if (libraryFilter === 'playlists') return !pl.isArtistMix;
+    if (libraryFilter === 'artists') return Boolean(pl.isArtistMix);
+    return true;
+  });
 
   return (
     <>
       {/* =============================================
-          DESKTOP LEFT SIDEBAR
+          DESKTOP LEFT APOTHECARY SIDEBAR
           ============================================= */}
-      <aside className="hidden md:flex flex-col h-full shrink-0 gap-2 p-2" style={{ width: 'var(--nav-width)' }}>
-        
-        {/* ── Top Nav Panel ── */}
-        <div className="bg-[#121212] rounded-lg p-3 flex flex-col gap-1">
-          {/* Logo */}
-          <div className="flex items-center gap-2 px-3 py-2 mb-1">
-            <div className="w-8 h-8 rounded-full bg-[#1DB954] flex items-center justify-center font-black text-black text-lg shadow-lg shrink-0">
-              L
+      <aside 
+        className={`hidden md:flex flex-col h-full shrink-0 brutal-border border-y-0 border-l-0 p-3.5 justify-between select-none overflow-hidden transition-colors ${
+          isDark 
+            ? 'bg-[#101716] border-zinc-800 text-white' 
+            : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
+        }`} 
+        style={{ width: 'var(--nav-width)' }}
+      >
+        <div className="flex flex-col h-full space-y-3.5 overflow-hidden">
+          
+          {/* ── Brand Header (Rivo) ── */}
+          <div className={`px-1 pt-1 pb-2 border-b-2 border-dashed ${
+            isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
+          }`}>
+            <RivoLogo size={36} showText={true} isDark={isDark} />
+          </div>
+
+          {/* ── Primary Navigation ── */}
+          <div className="space-y-1">
+            <div className={`text-[10px] font-mono font-bold uppercase px-2 mb-1 ${
+              isDark ? 'text-zinc-500' : 'text-zinc-500'
+            }`}>
+              Navigation
             </div>
-            <span className="text-xl font-extrabold tracking-tight text-white">Liofy</span>
-          </div>
 
-          {/* Main Nav Links */}
-          {mainNavItems.map((item) => {
-            const Icon = item.icon;
-            const active = currentScreen === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentScreen(item.id)}
-                className={`sp-nav-link ${active ? 'active text-white' : ''}`}
-              >
-                <Icon 
-                  size={24} 
-                  fill={active ? 'white' : 'none'}
-                  strokeWidth={active ? 0 : 2}
-                  style={{ color: active ? '#fff' : '#b3b3b3', flexShrink: 0 }}
-                />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-
-          <button
-            onClick={() => setCurrentScreen('mixes')}
-            className={`sp-nav-link ${currentScreen === 'mixes' ? 'active text-white' : ''}`}
-            title="AI DJ Mix"
-          >
-            <Radio size={24} className={currentScreen === 'mixes' ? 'text-emerald-400 shrink-0' : 'text-[#b3b3b3] shrink-0'} strokeWidth={2} />
-            <span className={`font-bold ${currentScreen === 'mixes' ? 'text-emerald-400' : ''}`}>DJ Mix</span>
-          </button>
-
-          <button
-            onClick={openJamModal}
-            className={`sp-nav-link ${currentScreen === 'jam' ? 'active' : ''}`}
-            title="Start or Join Jam Session"
-          >
-            <Radio size={24} className="text-cyan-400 shrink-0" strokeWidth={2} />
-            <span className="font-bold text-cyan-400">Jam Session</span>
-          </button>
-
-          <button
-            onClick={openChatModal}
-            className="sp-nav-link text-zinc-300 hover:text-white transition-colors relative"
-            title="Direct Messages & Friends"
-          >
-            <MessageSquare size={24} className="text-[#b3b3b3] group-hover:text-white shrink-0" strokeWidth={2} />
-            <span className="font-bold text-[#b3b3b3] group-hover:text-white flex-1 text-left">Messages</span>
-            {unreadChatCount > 0 && (
-              <span className="min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-[#1DB954] text-black text-xs font-black shadow-lg shadow-[#1DB954]/30 tracking-tight ml-auto">
-                {unreadChatCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={toggleActivityPanel}
-            className={`sp-nav-link ${isActivityPanelOpen ? 'active text-white' : 'text-zinc-300'} hover:text-white transition-colors relative`}
-            title="Friend Listening Activity"
-          >
-            <Users size={24} className={isActivityPanelOpen ? 'text-[#1DB954]' : 'text-[#b3b3b3] group-hover:text-white shrink-0'} strokeWidth={2} />
-            <span className="font-bold flex-1 text-left">Listening Activity</span>
-          </button>
-        </div>
-
-        {/* ── Library Panel ── */}
-        <div className="sp-library-panel flex-1 min-h-0">
-          {/* Library Header */}
-          <div className="flex items-center justify-between px-4 py-3 gap-2">
-            <button
-              onClick={() => setCurrentScreen('library')}
-              className="flex items-center gap-3 group shrink-0"
-            >
-              <Library 
-                size={24} 
-                style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}
-                fill={currentScreen === 'library' ? 'white' : 'none'}
-                strokeWidth={currentScreen === 'library' ? 0 : 2}
-                className="shrink-0"
-              />
-              <span className="font-bold text-sm whitespace-nowrap" style={{ color: currentScreen === 'library' ? '#fff' : '#b3b3b3' }}>
-                Your Library
-              </span>
-            </button>
-
-            <div className="flex items-center gap-1">
-              <button
-                onClick={openImportPlaylistModal}
-                title="Import Spotify/YouTube/Apple playlist"
-                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer hover:scale-105 active:scale-95"
-              >
-                <DownloadCloud size={19} />
-              </button>
-              <button
-                onClick={openCreatePlaylistModal}
-                title="Create new playlist"
-                className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition-all cursor-pointer hover:scale-105 active:scale-95"
-              >
-                <Plus size={22} />
-              </button>
-            </div>
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex items-center gap-2 px-3 pb-2 overflow-x-auto">
-            {['All', 'Playlists', 'Artists'].map((f) => (
-              <button
-                key={f}
-                onClick={() => setLibraryFilter(f.toLowerCase())}
-                className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 transition-all ${
-                  libraryFilter === f.toLowerCase()
-                    ? 'bg-white text-black'
-                    : 'bg-[#2a2a2a] text-white hover:bg-[#3a3a3a]'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-
-          {/* Playlist List */}
-          <div className="flex-1 overflow-y-auto px-2 pb-2">
-            {safePlaylists.map((pl) => {
-              const isActive = currentScreen === `playlist:${pl.id}` || currentScreen === 'playlist';
+            {mainNavItems.map((item) => {
+              const Icon = item.icon;
+              const active = currentScreen === item.id;
               return (
                 <button
-                  key={pl.id || Math.random()}
-                  onClick={() => setCurrentScreen(`playlist:${pl.id}`)}
-                  className={`w-full flex items-center gap-3 px-2 py-2 rounded-md text-left transition-all group ${
-                    isActive ? 'bg-white/10' : 'hover:bg-white/10'
+                  key={item.id}
+                  onClick={() => setCurrentScreen(item.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
+                    active 
+                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black' 
+                      : isDark
+                        ? 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                        : 'text-[#0b1110] hover:bg-[#ede5d3]'
                   }`}
                 >
-                  {pl.isLikedSongs ? (
-                    <div className="w-10 h-10 rounded flex items-center justify-center shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #450af5, #c4efd9)' }}>
-                      <Heart size={16} fill="white" className="text-white" />
-                    </div>
-                  ) : (
-                    <img 
-                      src={pl.cover} 
-                      alt={pl.name} 
-                      className="w-10 h-10 rounded object-cover shrink-0 shadow-md" 
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                  )}
-                  <div className="truncate flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate text-white">
-                      {pl.name}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: '#b3b3b3' }}>
-                      Playlist • {(pl.trackIds || []).length} songs
-                    </p>
-                  </div>
+                  <Icon 
+                    size={17} 
+                    className={active ? 'text-[#0b1110] shrink-0' : isDark ? 'text-zinc-400 shrink-0' : 'text-zinc-600 shrink-0'}
+                    strokeWidth={2.5}
+                  />
+                  <span>{item.label}</span>
                 </button>
               );
             })}
 
-            {safePlaylists.length === 0 && (
-              <div className="px-4 py-6 text-center">
-                <p className="text-sm font-bold text-white mb-1">Create your first playlist</p>
-                <p className="text-xs mb-4" style={{ color: '#b3b3b3' }}>It's easy, we'll help you</p>
-                <button 
-                  onClick={openCreatePlaylistModal}
-                  className="px-4 py-2 bg-white text-black text-sm font-bold rounded-full hover:scale-105 transition-transform"
+            {/* Jam Session Button */}
+            <button
+              onClick={openJamModal}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
+                currentScreen === 'jam'
+                  ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black'
+                  : isDark
+                    ? 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
+                    : 'text-[#0b1110] hover:bg-[#ede5d3]'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Radio size={17} className={currentScreen === 'jam' ? 'text-[#0b1110] shrink-0' : 'text-[#17a398] shrink-0'} strokeWidth={2.5} />
+                <span>Jam Session</span>
+              </div>
+              <span className="font-mono text-[9px] bg-[#f59e0b] text-[#0b1110] font-black px-1 rounded brutal-border">
+                LIVE
+              </span>
+            </button>
+
+            {/* Telegram / Messages Drawer Toggle */}
+            <button
+              onClick={openChatModal}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
+                isDark 
+                  ? 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white' 
+                  : 'text-[#0b1110] hover:bg-[#ede5d3]'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <MessageSquare size={17} className="text-[#dc2626] shrink-0" strokeWidth={2.5} />
+                <span>Messages</span>
+              </div>
+              {unreadChatCount > 0 ? (
+                <span className="bg-[#dc2626] text-white text-[9px] font-mono px-1.5 py-0.2 rounded-full font-bold brutal-border animate-pulse">
+                  {unreadChatCount}
+                </span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-[#17a398]"></span>
+              )}
+            </button>
+
+            {/* Friend Listening Activity Toggle */}
+            <button
+              onClick={toggleActivityPanel}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
+                isActivityPanelOpen 
+                  ? isDark ? 'bg-zinc-800 text-white font-black' : 'bg-[#ede5d3] text-[#0b1110] font-black' 
+                  : isDark ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
+              }`}
+            >
+              <Users size={17} className="text-[#17a398] shrink-0" strokeWidth={2.5} />
+              <span>Listening Activity</span>
+            </button>
+          </div>
+
+          {/* ── "Your Dispensary" Library Section ── */}
+          <div className={`pt-2 border-t-2 border-dashed flex-1 flex flex-col min-h-0 ${
+            isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
+          }`}>
+            <div className="flex items-center justify-between px-2 mb-2">
+              <div className={`flex items-center gap-1.5 text-[11px] font-display font-bold ${
+                isDark ? 'text-zinc-200' : 'text-[#0b1110]'
+              }`}>
+                <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
+                <span>Your Dispensary</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={openImportPlaylistModal}
+                  title="Import Prescription Pack"
+                  className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
+                    isDark 
+                      ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-zinc-200' 
+                      : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
                 >
-                  Create playlist
+                  <DownloadCloud size={12} />
+                </button>
+                <button
+                  onClick={openCreatePlaylistModal}
+                  title="New Blister Pack"
+                  className="w-6 h-6 rounded brutal-border bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] flex items-center justify-center font-bold text-xs transition brutal-shadow-sm"
+                >
+                  +
                 </button>
               </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex gap-1 mb-2 px-1">
+              {['All', 'Playlists', 'Artists'].map((f) => {
+                const active = libraryFilter === f.toLowerCase();
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setLibraryFilter(f.toLowerCase())}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                      active
+                        ? 'bg-[#17a398] text-[#0b1110] brutal-border font-black'
+                        : isDark
+                          ? 'bg-zinc-800/80 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
+                          : 'bg-white text-zinc-700 border border-[#0b1110] hover:bg-[#ede5d3]'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Playlists / Blister Packs List */}
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs font-bold">
+              {/* Liked Songs Pack */}
+              <div
+                onClick={() => setCurrentScreen('library')}
+                className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
+                  isDark 
+                    ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
+                    : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
+                    <Heart size={12} fill="currentColor" />
+                  </div>
+                  <div className="truncate">
+                    <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
+                      Liked Prescriptions
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500 font-normal">Favorites</span>
+                  </div>
+                </div>
+                <span className="text-[9px] font-mono text-zinc-400 font-bold">RX</span>
+              </div>
+
+              {filteredPlaylists.map((pl, idx) => {
+                const isActive = currentScreen === `playlist:${pl.id}` || (currentScreen === 'playlist' && pl.id);
+                const count = (pl.trackIds || []).length;
+                const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899'];
+                const badgeColor = colors[idx % colors.length];
+
+                return (
+                  <div
+                    key={pl.id || idx}
+                    onClick={() => setCurrentScreen(`playlist:${pl.id}`)}
+                    className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition ${
+                      isActive 
+                        ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm' : 'bg-[#ede5d3] brutal-shadow-sm'
+                        : isDark ? 'bg-zinc-900/90 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-white hover:bg-[#ede5d3]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {pl.cover ? (
+                        <img 
+                          src={pl.cover} 
+                          alt={pl.name} 
+                          className="w-6 h-6 rounded object-cover border border-zinc-700 shrink-0" 
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div 
+                          className="w-6 h-6 rounded text-white flex items-center justify-center shrink-0 font-mono text-[10px] font-bold"
+                          style={{ backgroundColor: badgeColor }}
+                        >
+                          {pl.name ? pl.name[0].toUpperCase() : 'P'}
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>{pl.name}</div>
+                        <span className="text-[10px] font-mono text-zinc-500 font-normal">
+                          {count} {count === 1 ? 'dose' : 'doses'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
+                      isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
+                    }`}>
+                      PACK
+                    </span>
+                  </div>
+                );
+              })}
+
+              {filteredPlaylists.length === 0 && (
+                <div className={`p-3 text-center rounded-lg border border-dashed ${
+                  isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
+                }`}>
+                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>No Blister Packs yet</p>
+                  <button
+                    onClick={openCreatePlaylistModal}
+                    className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
+                  >
+                    + Formulate Pack
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Pharmaceutical Certification Badge */}
+            <div className={`mt-2 p-2.5 rounded-xl brutal-border text-center shrink-0 ${
+              isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-[#0b1110]'
+            }`}>
+              <div className={`text-[10px] font-display font-black tracking-wide ${
+                isDark ? 'text-zinc-200' : 'text-[#0b1110]'
+              }`}>
+                CLINICALLY PROVEN
+              </div>
+              <p className={`text-[9px] leading-snug mt-0.5 font-medium ${
+                isDark ? 'text-zinc-400' : 'text-zinc-700'
+              }`}>
+                0% buffering • 100% pure audio flow
+              </p>
+              <div className={`text-[8px] font-mono font-bold pt-1 ${
+                isDark ? 'text-zinc-500' : 'text-zinc-600'
+              }`}>
+                BATCH NO. 54-CAIRO
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── User & Shortcuts Bar (Bottom) ── */}
+          <div className={`p-2 rounded-xl brutal-border flex items-center justify-between gap-2.5 mt-auto shrink-0 ${
+            isDark ? 'bg-[#141d1b] border-zinc-800' : 'bg-[#ede5d3] border-black'
+          }`}>
+            <button
+              onClick={openAuthModal}
+              className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
+              title={currentUser ? "Account Profile" : "Log In"}
+            >
+              <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-display font-black text-xs text-[#0b1110] brutal-shadow-sm shrink-0 overflow-hidden group-hover:scale-105 transition-transform">
+                {currentUser?.avatar ? (
+                  <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  currentUser?.name?.[0] || 'R'
+                )}
+              </div>
+              <div className="min-w-0 flex-1 flex flex-col justify-center pt-1">
+                <div className={`text-xs font-display font-black truncate flex items-center gap-1 leading-snug ${
+                  isDark ? 'text-zinc-100 group-hover:text-white' : 'text-[#0b1110] group-hover:text-black'
+                }`}>
+                  <span className="truncate">{currentUser ? currentUser.name : 'Sign In'}</span>
+                  {currentUser && isUserVerified(currentUser) && <VerifiedBadge size={13} />}
+                </div>
+                <div className="mt-0.5 flex items-center">
+                  <span className={`inline-flex items-center text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded brutal-border leading-none ${
+                    currentUser ? 'bg-[#17a398] text-[#0b1110]' : 'bg-[#f59e0b] text-[#0b1110]'
+                  }`}>
+                    {currentUser ? 'ACTIVE RX' : 'GUEST'}
+                  </span>
+                </div>
+              </div>
+            </button>
+
+            {openShortcutsModal && (
+              <button
+                onClick={openShortcutsModal}
+                title="Prescription Shortcuts (?)"
+                className={`w-9 h-9 rounded-lg brutal-border flex items-center justify-center transition shrink-0 cursor-pointer ${
+                  isDark 
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white' 
+                    : 'bg-white border-[#0b1110] text-[#0b1110] hover:bg-[#ded2bb]'
+                }`}
+              >
+                <Command size={14} strokeWidth={2.5} />
+              </button>
             )}
           </div>
-        </div>
 
-        {/* ── User Profile & Shortcuts (Bottom) ── */}
-        <div className="bg-[#121212] rounded-lg flex items-center justify-between p-1">
-          <button
-            onClick={openAuthModal}
-            className="flex-1 flex items-center gap-3 px-3 py-2 hover:bg-white/10 rounded-lg transition-all group min-w-0"
-          >
-            {currentUser ? (
-              <img src={currentUser.avatar} alt={currentUser.name} className="w-8 h-8 rounded-full object-cover shadow-md" />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-[#535353] flex items-center justify-center shrink-0">
-                <User size={16} className="text-white" />
-              </div>
-            )}
-            <span className="text-sm font-bold text-white truncate flex-1 text-left flex items-center gap-1">
-              <span className="truncate">{currentUser ? currentUser.name : 'Log in'}</span>
-              {currentUser && isUserVerified(currentUser) && <VerifiedBadge size={14} />}
-            </span>
-          </button>
-          {openShortcutsModal && (
-            <button
-              onClick={openShortcutsModal}
-              title="Keyboard Shortcuts (?)"
-              className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-all mr-1 shrink-0"
-            >
-              <Command size={16} />
-            </button>
-          )}
         </div>
       </aside>
 
       {/* =============================================
-          MOBILE BOTTOM NAVIGATION — Spotify Style
+          MOBILE BOTTOM NAVIGATION — Rivo Apothecary Style
           ============================================= */}
-      <nav className="md:hidden sp-mobile-nav">
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 brutal-border-thick border-x-0 border-b-0 py-2 px-3 flex items-center justify-around shadow-2xl transition-colors ${
+        isDark 
+          ? 'bg-[#101716] border-zinc-800 text-white' 
+          : 'bg-[#fdfbf7] border-black text-[#0b1110]'
+      }`}>
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
           const active = currentScreen === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => {
-                if (item.id === 'chat') {
-                  openChatModal();
-                } else {
-                  setCurrentScreen(item.id);
-                }
-              }}
-              className="flex flex-col items-center gap-1 transition-all px-2 relative"
+              onClick={() => setCurrentScreen(item.id)}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+                active 
+                  ? 'bg-[#17a398] text-[#0b1110] brutal-border font-bold' 
+                  : isDark 
+                    ? 'text-zinc-400 hover:text-white' 
+                    : 'text-[#0b1110]'
+              }`}
             >
-              <div className="relative">
-                <Icon 
-                  size={22} 
-                  fill={active ? 'white' : 'none'} 
-                  strokeWidth={active ? 0 : 2}
-                  style={{ color: active ? '#fff' : '#b3b3b3' }}
-                />
-                {item.badge > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-4 px-1 rounded-full bg-[#1DB954] text-black font-black text-[9px] flex items-center justify-center shadow-md animate-pulse">
-                    {item.badge}
-                  </span>
-                )}
-              </div>
-              <span 
-                className="text-[10px] font-bold"
-                style={{ color: active ? '#fff' : '#b3b3b3' }}
-              >
+              <Icon 
+                size={18} 
+                className={active ? 'text-[#0b1110]' : isDark ? 'text-zinc-400' : 'text-[#0b1110]'} 
+                strokeWidth={2.5} 
+              />
+              <span className="text-[9px] font-display font-bold">
                 {item.label}
               </span>
             </button>

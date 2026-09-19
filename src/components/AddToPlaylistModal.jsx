@@ -1,11 +1,11 @@
 import React from 'react';
-import { X, Plus, Music, Check, Radio } from 'lucide-react';
+import { X, Plus, Check, Radio } from 'lucide-react';
 
 export default function AddToPlaylistModal({ 
   isOpen, 
   onClose, 
   track, 
-  playlists, 
+  playlists = [], 
   onAddTrackToPlaylist,
   jamSession,
   onAddToJamQueue
@@ -15,20 +15,23 @@ export default function AddToPlaylistModal({
   const customPlaylists = playlists.filter(p => !p.isLikedSongs);
 
   return (
-    <div className="fixed inset-0 z-[500] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="bg-[#181818] border border-zinc-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-800">
-          <h3 className="text-lg font-extrabold text-white">Add to Playlist</h3>
-          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-white rounded-full">
-            <X size={20} />
+    <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg max-w-sm w-full p-6 relative">
+        <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-[#17a398] brutal-border" />
+            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Dispense to Cassette</h3>
+          </div>
+          <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
+            <X size={18} />
           </button>
         </div>
 
-        <div className="flex items-center gap-3 my-4 p-3 bg-zinc-900 rounded-2xl border border-zinc-800">
-          <img src={track.cover} alt={track.title} className="w-12 h-12 rounded-xl object-cover" />
+        <div className="flex items-center gap-3 my-4 p-2.5 bg-[#ede5d3] brutal-border">
+          <img src={track.cover} alt={track.title} className="w-11 h-11 brutal-border object-cover bg-white" />
           <div className="truncate flex-1">
-            <h4 className="font-bold text-sm text-white truncate">{track.title}</h4>
-            <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+            <h4 className="font-bold text-xs text-[#0b1110] truncate">{track.title}</h4>
+            <p className="text-[11px] text-[#082621]/70 truncate">{track.artist}</p>
           </div>
         </div>
 
@@ -40,18 +43,18 @@ export default function AddToPlaylistModal({
                 onAddToJamQueue?.(track);
                 onClose();
               }}
-              className="w-full p-3 rounded-xl bg-gradient-to-r from-cyan-950 to-zinc-900 border border-cyan-500/40 text-cyan-300 hover:text-white hover:border-cyan-400 flex items-center justify-between text-xs font-bold transition-all shadow-md active:scale-98"
+              className="brutal-btn w-full p-2.5 bg-[#082621] text-[#26c4b7] brutal-border brutal-shadow-sm flex items-center justify-between text-xs font-mono font-black uppercase"
             >
               <div className="flex items-center gap-2">
-                <Radio size={16} className="text-cyan-400 animate-pulse shrink-0" />
-                <span className="truncate">Add to Jam Queue ({jamSession.code})</span>
+                <Radio size={14} className="text-[#f59e0b] animate-pulse shrink-0" />
+                <span className="truncate">BROADCAST TO RADIO ({jamSession.code})</span>
               </div>
-              <Plus size={16} className="text-cyan-400" />
+              <Plus size={14} className="text-[#26c4b7]" />
             </button>
           </div>
         )}
 
-        <div className="flex flex-col gap-2 max-h-60 overflow-y-auto mb-4">
+        <div className="flex flex-col gap-2 max-h-60 overflow-y-auto mb-2 pr-1">
           {customPlaylists.map((pl) => {
             const alreadyAdded = (pl.trackIds || []).includes(track.id);
             return (
@@ -61,14 +64,14 @@ export default function AddToPlaylistModal({
                   onAddTrackToPlaylist(track.id, pl.id);
                   onClose();
                 }}
-                className={`p-3 rounded-xl text-left text-xs font-bold flex items-center justify-between transition-all ${
+                className={`brutal-btn p-2.5 brutal-border text-left text-xs font-mono font-black uppercase flex items-center justify-between transition-colors ${
                   alreadyAdded 
-                    ? 'bg-[#1DB954]/10 border border-[#1DB954] text-[#1DB954]' 
-                    : 'bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800'
+                    ? 'bg-[#082621] text-[#26c4b7]' 
+                    : 'bg-[#ede5d3] text-[#082621] hover:bg-white'
                 }`}
               >
                 <span className="truncate">{pl.name}</span>
-                {alreadyAdded ? <Check size={16} /> : <Plus size={16} />}
+                {alreadyAdded ? <Check size={14} /> : <Plus size={14} />}
               </button>
             );
           })}

@@ -263,56 +263,56 @@ export default function MiniMixerModal({
       {/* Modal Card Shell: Mobile Bottom Sheet + Desktop Modal */}
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#121212] border border-zinc-800 rounded-t-[28px] md:rounded-3xl w-full md:max-w-2xl shadow-2xl overflow-hidden flex flex-col h-[90vh] md:h-auto md:max-h-[85vh] relative animate-in slide-in-from-bottom-5 md:zoom-in-95 duration-200"
+        className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full md:max-w-2xl overflow-hidden flex flex-col h-[90vh] md:h-auto md:max-h-[85vh] relative animate-in slide-in-from-bottom-5 md:zoom-in-95 duration-200"
       >
         
         {/* Mobile Drag Indicator */}
-        <div className="w-12 h-1 bg-zinc-700 rounded-full mx-auto mt-2.5 mb-1 md:hidden shrink-0" />
+        <div className="w-12 h-1 bg-[#0b1110] mx-auto mt-2.5 mb-1 md:hidden shrink-0" />
 
         {/* ── Header ── */}
-        <div className="px-4 py-3 md:px-5 md:py-4 border-b border-zinc-800 flex items-center justify-between bg-gradient-to-r from-emerald-950/40 via-zinc-900 to-[#121212] shrink-0">
+        <div className="px-4 py-3 md:px-5 md:py-3.5 border-b-2 border-[#0b1110] flex items-center justify-between bg-[#ede5d3] shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-br from-[#1DB954] to-emerald-700 flex items-center justify-center text-black shadow-lg shrink-0">
+            <div className="w-8 h-8 md:w-9 md:h-9 bg-[#082621] text-[#26c4b7] brutal-border flex items-center justify-center font-black shrink-0">
               <Sliders size={16} />
             </div>
             <div>
-              <h3 className="text-sm md:text-base font-black text-white flex items-center gap-2">
-                Spotify DJ Mix
-                <span className="text-[9px] md:text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Smart Transition
+              <h3 className="text-sm md:text-base font-mono font-black uppercase text-[#082621] flex items-center gap-2">
+                Rivo Splice Mixer
+                <span className="text-[9px] md:text-[10px] font-mono font-black uppercase px-2 py-0.5 bg-[#082621] text-[#26c4b7]">
+                  SMART HARMONY
                 </span>
               </h3>
-              <p className="text-[10px] md:text-[11px] text-zinc-400 truncate">Seamless beat & harmonic mix between songs</p>
+              <p className="text-[10px] md:text-[11px] text-[#082621]/70 truncate font-sans">Acoustic BPM matching & clinical crossfade transition</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 md:p-2 text-zinc-400 hover:text-white rounded-full hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+            className="brutal-btn p-1.5 text-[#0b1110] bg-[#fdfbf7] brutal-border hover:bg-[#ded2bb] cursor-pointer shrink-0"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
         {/* ── Dual DJ Decks (Responsive Card Layout) ── */}
-        <div className="p-3 md:p-4 bg-zinc-900/60 border-b border-zinc-800 flex flex-col sm:flex-row items-center gap-2 md:gap-3 shrink-0">
+        <div className="p-3 md:p-4 bg-[#fdfbf7] border-b-2 border-[#0b1110] flex flex-col sm:flex-row items-center gap-2 md:gap-3 shrink-0">
           {/* Deck A (Outgoing) */}
-          <div className="flex-1 w-full flex items-center gap-2.5 md:gap-3 p-2 md:p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 relative overflow-hidden">
+          <div className="flex-1 w-full flex items-center gap-2.5 md:gap-3 p-2 md:p-2.5 bg-[#ede5d3] brutal-border relative overflow-hidden">
             <div className="relative shrink-0">
-              <img src={trackA.cover} alt={trackA.title} className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-cover" />
+              <img src={trackA.cover} alt={trackA.title} className="w-10 h-10 md:w-12 md:h-12 brutal-border object-cover bg-white" />
               {/* Spinning Vinyl Badge */}
-              <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center ${isPreviewing && previewProgress < 0.85 ? 'animate-spin' : ''}`}>
-                <Disc size={11} className="text-[#1DB954]" />
+              <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 bg-[#082621] text-[#26c4b7] border border-[#0b1110] flex items-center justify-center ${isPreviewing && previewProgress < 0.85 ? 'animate-spin' : ''}`}>
+                <Disc size={11} />
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <span className="text-[9px] font-black uppercase tracking-wider text-red-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block animate-pulse" /> Deck A (Outgoing)
+              <span className="text-[9px] font-mono font-black uppercase tracking-wider text-[#dc2626] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-[#dc2626] inline-block animate-pulse" /> Deck A (Outgoing)
               </span>
-              <h4 className="text-xs font-bold text-white truncate">{trackA.title}</h4>
-              <p className="text-[10px] text-zinc-400 truncate">{trackA.artist}</p>
+              <h4 className="text-xs font-bold text-[#0b1110] truncate">{trackA.title}</h4>
+              <p className="text-[10px] text-[#082621]/70 truncate font-medium">{trackA.artist}</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-extrabold text-[#1DB954]">{dataA.bpm} BPM</span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-emerald-400 font-bold border border-emerald-500/20">
+                <span className="text-[10px] font-mono font-black text-[#082621] bg-[#fdfbf7] px-1.5 py-0.2 brutal-border">{dataA.bpm} BPM</span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] font-black">
                   {dataA.key}
                 </span>
               </div>
@@ -321,29 +321,29 @@ export default function MiniMixerModal({
 
           {/* Center Connector Indicator */}
           <div className="hidden sm:flex items-center justify-center shrink-0">
-            <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400 shadow-md">
+            <div className="w-7 h-7 bg-[#ede5d3] brutal-border flex items-center justify-center text-[#082621] shadow-xs">
               <ArrowRight size={14} />
             </div>
           </div>
 
           {/* Deck B (Incoming) */}
-          <div className="flex-1 w-full flex items-center gap-2.5 md:gap-3 p-2 md:p-2.5 rounded-2xl bg-zinc-900/90 border border-zinc-800 relative overflow-hidden">
+          <div className="flex-1 w-full flex items-center gap-2.5 md:gap-3 p-2 md:p-2.5 bg-[#ede5d3] brutal-border relative overflow-hidden">
             <div className="relative shrink-0">
-              <img src={trackB.cover} alt={trackB.title} className="w-10 h-10 md:w-12 md:h-12 rounded-xl object-cover" />
+              <img src={trackB.cover} alt={trackB.title} className="w-10 h-10 md:w-12 md:h-12 brutal-border object-cover bg-white" />
               {/* Spinning Vinyl Badge */}
-              <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 rounded-full bg-black border border-zinc-700 flex items-center justify-center ${isPreviewing && previewProgress > 0.15 ? 'animate-spin' : ''}`}>
-                <Disc size={11} className="text-emerald-400" />
+              <div className={`absolute -bottom-1 -right-1 w-5 h-5 md:w-6 md:h-6 bg-[#082621] text-[#26c4b7] border border-[#0b1110] flex items-center justify-center ${isPreviewing && previewProgress > 0.15 ? 'animate-spin' : ''}`}>
+                <Disc size={11} />
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <span className="text-[9px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1DB954] inline-block animate-pulse" /> Deck B (Incoming)
+              <span className="text-[9px] font-mono font-black uppercase tracking-wider text-[#17a398] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-[#17a398] inline-block animate-pulse" /> Deck B (Incoming)
               </span>
-              <h4 className="text-xs font-bold text-white truncate">{trackB.title}</h4>
-              <p className="text-[10px] text-zinc-400 truncate">{trackB.artist}</p>
+              <h4 className="text-xs font-bold text-[#0b1110] truncate">{trackB.title}</h4>
+              <p className="text-[10px] text-[#082621]/70 truncate font-medium">{trackB.artist}</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-extrabold text-[#1DB954]">{dataB.bpm} BPM</span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-emerald-400 font-bold border border-emerald-500/20">
+                <span className="text-[10px] font-mono font-black text-[#082621] bg-[#fdfbf7] px-1.5 py-0.2 brutal-border">{dataB.bpm} BPM</span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] font-black">
                   {dataB.key}
                 </span>
               </div>
@@ -357,11 +357,11 @@ export default function MiniMixerModal({
             onClick={() => setActiveTab('fx')}
             className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'fx'
-                ? 'border-[#1DB954] text-white bg-white/5'
+                ? 'border-[#17a398] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
-            <Sliders size={13} className={activeTab === 'fx' ? 'text-[#1DB954]' : ''} />
+            <Sliders size={13} className={activeTab === 'fx' ? 'text-[#17a398]' : ''} />
             <span>Transition FX & Overlap</span>
           </button>
 
@@ -369,11 +369,11 @@ export default function MiniMixerModal({
             onClick={() => setActiveTab('decks')}
             className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'decks'
-                ? 'border-[#1DB954] text-white bg-white/5'
+                ? 'border-[#17a398] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
-            <Disc size={13} className={activeTab === 'decks' ? 'text-[#1DB954]' : ''} />
+            <Disc size={13} className={activeTab === 'decks' ? 'text-[#17a398]' : ''} />
             <span>Live Crossfader & EQ</span>
           </button>
 
@@ -381,11 +381,11 @@ export default function MiniMixerModal({
             onClick={() => setActiveTab('harmony')}
             className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'harmony'
-                ? 'border-[#1DB954] text-white bg-white/5'
+                ? 'border-[#17a398] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
-            <Gauge size={13} className={activeTab === 'harmony' ? 'text-[#1DB954]' : ''} />
+            <Gauge size={13} className={activeTab === 'harmony' ? 'text-[#17a398]' : ''} />
             <span>BPM & Key Harmony</span>
           </button>
 
@@ -393,11 +393,11 @@ export default function MiniMixerModal({
             onClick={() => setActiveTab('presets')}
             className={`px-3 py-2 text-[11px] md:text-xs font-extrabold rounded-t-xl border-b-2 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'presets'
-                ? 'border-[#1DB954] text-white bg-white/5'
+                ? 'border-[#17a398] text-white bg-white/5'
                 : 'border-transparent text-zinc-400 hover:text-white'
             }`}
           >
-            <Sparkles size={13} className={activeTab === 'presets' ? 'text-[#1DB954]' : ''} />
+            <Sparkles size={13} className={activeTab === 'presets' ? 'text-[#17a398]' : ''} />
             <span>DJ Presets</span>
           </button>
         </div>
@@ -423,11 +423,11 @@ export default function MiniMixerModal({
                         onClick={() => setStyle(st.id)}
                         className={`p-2.5 md:p-3 rounded-2xl text-left border transition-all flex items-start gap-2.5 md:gap-3 cursor-pointer ${
                           isSelected
-                            ? 'bg-emerald-500/10 border-[#1DB954] shadow-md shadow-[#1DB954]/10'
+                            ? 'bg-emerald-500/10 border-[#17a398] shadow-md shadow-[#17a398]/10'
                             : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
                         }`}
                       >
-                        <div className={`p-2 rounded-xl shrink-0 ${isSelected ? 'bg-[#1DB954] text-black' : 'bg-zinc-800 text-zinc-400'}`}>
+                        <div className={`p-2 rounded-xl shrink-0 ${isSelected ? 'bg-[#17a398] text-black' : 'bg-zinc-800 text-zinc-400'}`}>
                           <Icon size={16} />
                         </div>
                         <div className="min-w-0 flex-1">
@@ -451,7 +451,7 @@ export default function MiniMixerModal({
                   <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                     Transition Overlap Length
                   </label>
-                  <span className="text-sm font-extrabold text-[#1DB954]">{duration}s</span>
+                  <span className="text-sm font-extrabold text-[#17a398]">{duration}s</span>
                 </div>
 
                 <div className="relative flex items-center h-7 group my-1">
@@ -459,7 +459,7 @@ export default function MiniMixerModal({
                   <div className="w-full h-2 rounded-full bg-zinc-800 border border-zinc-700/80 overflow-hidden relative shadow-inner">
                     {/* Spotify Green Active Fill */}
                     <div 
-                      className="h-full bg-gradient-to-r from-emerald-500 to-[#1DB954] rounded-full transition-all duration-75"
+                      className="h-full bg-gradient-to-r from-emerald-500 to-[#17a398] rounded-full transition-all duration-75"
                       style={{ width: `${((duration - 2) / (16 - 2)) * 100}%` }}
                     />
                   </div>
@@ -484,7 +484,7 @@ export default function MiniMixerModal({
 
                 <div className="flex justify-between text-[10px] text-zinc-500 font-bold mt-1">
                   <span className={duration <= 4 ? 'text-white' : ''}>Quick (2s)</span>
-                  <span className={duration >= 6 && duration <= 10 ? 'text-[#1DB954]' : ''}>Standard (8s)</span>
+                  <span className={duration >= 6 && duration <= 10 ? 'text-[#17a398]' : ''}>Standard (8s)</span>
                   <span className={duration >= 14 ? 'text-white' : ''}>Long Mix (16s)</span>
                 </div>
               </div>
@@ -497,7 +497,7 @@ export default function MiniMixerModal({
                     Track A Fade-Out
                   </span>
                   <span className="flex items-center gap-1 text-emerald-400">
-                    <span className="w-2 h-2 rounded-full bg-[#1DB954] inline-block" />
+                    <span className="w-2 h-2 rounded-full bg-[#17a398] inline-block" />
                     Track B Fade-In
                   </span>
                 </div>
@@ -542,7 +542,7 @@ export default function MiniMixerModal({
               <div className="p-4 bg-zinc-900/50 rounded-2xl border border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase text-zinc-400">Interactive DJ Crossfader</span>
-                  <span className="text-xs font-extrabold text-[#1DB954]">
+                  <span className="text-xs font-extrabold text-[#17a398]">
                     {crossfaderPos < 45 ? 'Deck A (Outgoing)' : crossfaderPos > 55 ? 'Deck B (Incoming)' : 'Center Blend (50/50)'}
                   </span>
                 </div>
@@ -605,7 +605,7 @@ export default function MiniMixerModal({
                   <button
                     onClick={() => setHighCut(!highCut)}
                     className={`px-3 py-1.5 rounded-full text-xs font-black transition-all ${
-                      highCut ? 'bg-[#1DB954] text-black shadow-lg shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-400'
+                      highCut ? 'bg-[#17a398] text-black shadow-lg shadow-emerald-500/20' : 'bg-zinc-800 text-zinc-400'
                     }`}
                   >
                     {highCut ? 'ACTIVE' : 'OFF'}
@@ -664,7 +664,7 @@ export default function MiniMixerModal({
                 <button
                   onClick={() => setAutoMatchBpm(!autoMatchBpm)}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-black transition-all ${
-                    autoMatchBpm ? 'bg-[#1DB954] text-black' : 'bg-zinc-800 text-zinc-400'
+                    autoMatchBpm ? 'bg-[#17a398] text-black' : 'bg-zinc-800 text-zinc-400'
                   }`}
                 >
                   {autoMatchBpm ? 'SYNCED' : 'MANUAL'}
@@ -688,7 +688,7 @@ export default function MiniMixerModal({
                       onClick={() => handleApplyPreset(preset)}
                       className="p-3.5 rounded-2xl bg-zinc-900/60 hover:bg-zinc-800/80 border border-zinc-800 hover:border-emerald-500/50 text-left transition-all group flex items-start gap-3 cursor-pointer shadow-sm"
                     >
-                      <div className="p-2.5 rounded-xl bg-emerald-500/10 text-[#1DB954] group-hover:bg-[#1DB954] group-hover:text-black transition-colors shrink-0">
+                      <div className="p-2.5 rounded-xl bg-emerald-500/10 text-[#17a398] group-hover:bg-[#17a398] group-hover:text-black transition-colors shrink-0">
                         <Icon size={18} />
                       </div>
                       <div className="min-w-0">
@@ -705,33 +705,33 @@ export default function MiniMixerModal({
         </div>
 
         {/* ── Footer Action Buttons ── */}
-        <div className="p-3 md:p-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between gap-2 md:gap-3 shrink-0">
+        <div className="p-3 md:p-4 bg-[#ede5d3] border-t-2 border-[#0b1110] flex items-center justify-between gap-2 md:gap-3 shrink-0">
           <button
             onClick={handlePreview}
             disabled={isPreviewing}
-            className={`flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-full text-xs font-bold transition-all shrink-0 ${
+            className={`brutal-btn flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm shrink-0 ${
               isPreviewing
-                ? 'bg-zinc-800 text-zinc-400 cursor-wait'
-                : 'bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer active:scale-95'
+                ? 'bg-[#ded2bb] text-[#082621]/50 cursor-wait'
+                : 'bg-[#fdfbf7] hover:bg-white text-[#082621] cursor-pointer'
             }`}
           >
             <Play size={13} fill="currentColor" />
-            <span>{isPreviewing ? `Seeking to crossfade...` : '▶ Hear Real Crossfade'}</span>
+            <span>{isPreviewing ? `SEEKING CROSSFADE...` : '▶ AUDIT CROSSFADE'}</span>
           </button>
 
           <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
             <button
               onClick={onClose}
-              className="px-3 md:px-3.5 py-2 md:py-2.5 rounded-full text-xs font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="brutal-btn px-3 md:px-3.5 py-2 md:py-2 bg-[#fdfbf7] brutal-border font-mono text-xs font-black uppercase text-[#082621] hover:bg-white cursor-pointer"
             >
-              Cancel
+              CANCEL
             </button>
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-4 md:px-6 py-2 md:py-2.5 rounded-full text-xs font-extrabold bg-[#1DB954] hover:bg-[#1ed760] text-black hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
+              className="brutal-btn flex items-center gap-1.5 px-4 md:px-5 py-2 md:py-2 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow cursor-pointer"
             >
               <Check size={14} />
-              <span>Save Mix</span>
+              <span>CONFIRM SPLICE</span>
             </button>
           </div>
         </div>
