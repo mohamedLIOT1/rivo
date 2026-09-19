@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon, Menu, Disc, Sparkles, ShieldCheck } from 'lucide-react';
 import Navigation from './components/Navigation';
@@ -79,12 +79,12 @@ function AppContent() {
   const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
   const [albums, setAlbums]                   = useState([]);
 
-  const musicTracks = tracks.filter(track => !isQuranContent(track));
-  const quranTracks = tracks.filter(track => isQuranContent(track));
-  const musicPlaylists = playlists.filter(playlist => !isQuranContent(playlist));
-  const quranPlaylists = playlists.filter(playlist => isQuranContent(playlist));
-  const musicAlbums = albums.filter(album => !isQuranContent(album));
-  const quranAlbums = albums.filter(album => isQuranContent(album));
+  const musicTracks = useMemo(() => tracks.filter(track => !isQuranContent(track)), [tracks]);
+  const quranTracks = useMemo(() => tracks.filter(track => isQuranContent(track)), [tracks]);
+  const musicPlaylists = useMemo(() => playlists.filter(playlist => !isQuranContent(playlist)), [playlists]);
+  const quranPlaylists = useMemo(() => playlists.filter(playlist => isQuranContent(playlist)), [playlists]);
+  const musicAlbums = useMemo(() => albums.filter(album => !isQuranContent(album)), [albums]);
+  const quranAlbums = useMemo(() => albums.filter(album => isQuranContent(album)), [albums]);
 
   // Modals
   const [isFullPlayerOpen,    setIsFullPlayerOpen]    = useState(false);

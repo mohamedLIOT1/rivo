@@ -10,7 +10,7 @@ export default function PodcastsScreen({ onPlayEpisode, globalTheme = 'dark' }) 
   const speedOptions = ['0.8x', '1.0x', '1.2x', '1.5x', '2.0x'];
 
   return (
-    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 transition-colors ${
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
       {/* ── Apothecary Broadcast Header ── */}

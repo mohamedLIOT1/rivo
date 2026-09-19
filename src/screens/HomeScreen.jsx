@@ -59,7 +59,7 @@ export default function HomeScreen({
   }, [albums]);
 
   const quickItems = displayTracks.slice(0, 6);
-  const recentItems = displayTracks;
+  const recentItems = displayTracks.slice(0, 50);
 
   // Preset vibrant badge colors for blister packs
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];
@@ -73,11 +73,13 @@ export default function HomeScreen({
 
   return (
     <div 
-      className={`flex-1 overflow-y-auto select-none p-3.5 sm:p-6 transition-colors duration-300 ${
+      className={`flex-1 overflow-y-auto select-none p-3.5 sm:p-6 ${
         isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
       }`}
       style={{ 
         paddingBottom: 'calc(var(--player-height) + 40px)',
+        WebkitOverflowScrolling: 'touch',
+        willChange: 'scroll-position',
       }}
     >
       {/* ─────────────────────────────────────────

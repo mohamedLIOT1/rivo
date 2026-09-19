@@ -3,7 +3,7 @@ import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X, Sliders, Sun, Moon
+  Edit3, Check, Search, X, Sun, Moon
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -110,7 +110,7 @@ export default function FullPlayerModal({
   const isAdmin = isUserAdmin(currentUser);
 
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
-  const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration, isMixMode, setIsMixMode } = useAudioPlayer();
+  const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration } = useAudioPlayer();
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
@@ -545,6 +545,11 @@ export default function FullPlayerModal({
   // ── Download handler with visual feedback ──
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // ── Scrubbing & volume hooks (must be before early return to respect Rules of Hooks) ──
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(0);
+  const [isVolScrubbing, setIsVolScrubbing] = useState(false);
+
   const handleDownloadClick = async () => {
     if (!currentTrack || isDownloading) return;
     setIsDownloading(true);
@@ -565,9 +570,6 @@ export default function FullPlayerModal({
     const s = Math.floor(secs % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
-
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubPercent, setScrubPercent] = useState(0);
 
   const realPercent = activeDuration > 0 ? (activeTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
@@ -619,8 +621,6 @@ export default function FullPlayerModal({
       if (seekTo) seekTo(dur);
     }
   };
-
-  const [isVolScrubbing, setIsVolScrubbing] = useState(false);
 
   const setVolumeFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;
@@ -1074,9 +1074,9 @@ export default function FullPlayerModal({
             </div>
           </div>
 
-          {/* Cassette / Vinyl / Album Art Bay (Cleanly Sized without Overlap) */}
-          <div className="flex-1 flex items-center justify-center py-1 sm:py-2 min-h-0 overflow-hidden my-auto">
-            <div className="relative w-[210px] h-[210px] sm:w-[220px] sm:h-[220px] flex items-center justify-center shrink-0">
+          {/* Cassette / Vinyl / Album Art Bay */}
+          <div className="flex-1 flex items-center justify-center py-2 min-h-0 my-auto">
+            <div className="relative w-[190px] h-[190px] sm:w-[210px] sm:h-[210px] flex items-center justify-center shrink-0">
               {isVinylMode ? (
                 <div 
                   className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden brutal-border brutal-shadow-md ${isPlaying ? 'vinyl-spin' : ''}`}
@@ -1094,7 +1094,7 @@ export default function FullPlayerModal({
                 /* Authentic Retro Cassette / Album Art Enclosure */
                 <div className={`w-full h-full p-2 ${
                   isDark ? 'bg-[#141b19] border-2 border-zinc-700' : 'bg-[#ede5d3] brutal-border'
-                } rounded-xl brutal-shadow-sm flex flex-col justify-between relative overflow-hidden`}>
+                } rounded-xl brutal-shadow-sm flex flex-col justify-between relative`}>
                   {/* Clean Cover Window */}
                   <div className="relative w-full flex-1 rounded-lg overflow-hidden brutal-border bg-[#0b1110] shadow-inner flex items-center justify-center min-h-0">
                     <img 
@@ -1109,11 +1109,11 @@ export default function FullPlayerModal({
                   </div>
 
                   {/* Clean Lower Cassette Tape Bar (Separate from Cover Art) */}
-                  <div className="mt-2 pt-1.5 pb-0.5 border-t border-dashed border-zinc-400/30 flex items-center justify-between px-1 shrink-0">
-                    <span className="text-[7.5px] font-mono font-medium text-zinc-400 uppercase tracking-wider">
+                  <div className="mt-1.5 pt-1 pb-0.5 border-t border-dashed border-zinc-400/40 flex items-center justify-between px-1 shrink-0">
+                    <span className="text-[7.5px] font-mono font-bold text-zinc-500 uppercase tracking-wider">
                       {isCurQuran ? 'QURAN // TAPE' : 'SIDE A // STEREO'}
                     </span>
-                    {/* Compact Spool Wheels (Separate) */}
+                    {/* Compact Spool Wheels */}
                     <div className="flex items-center gap-1">
                       <div className={`w-2.5 h-2.5 rounded-full border border-zinc-400/80 bg-black/40 flex items-center justify-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }}>
                         <div className="w-0.5 h-0.5 rounded-full bg-[#17a398]" />
@@ -1123,7 +1123,7 @@ export default function FullPlayerModal({
                         <div className="w-0.5 h-0.5 rounded-full bg-[#17a398]" />
                       </div>
                     </div>
-                    <span className="text-[7.5px] font-mono font-medium text-zinc-400 uppercase tracking-wider">
+                    <span className="text-[7.5px] font-mono font-bold text-zinc-500 uppercase tracking-wider">
                       HI-FI 24-BIT
                     </span>
                   </div>
@@ -1344,20 +1344,7 @@ export default function FullPlayerModal({
                 <Disc size={15} strokeWidth={2.5} />
               </button>
 
-              {/* DJ Mix Mode Toggle */}
-              <button 
-                onClick={() => setIsMixMode?.(prev => !prev)} 
-                className={`p-1.5 sm:p-2 rounded-xl brutal-border brutal-btn cursor-pointer transition-colors ${
-                  isMixMode 
-                    ? 'bg-[#17a398] text-[#0b1110]' 
-                    : isDark 
-                      ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
-                      : 'bg-white text-zinc-700 hover:bg-[#ede5d3]'
-                }`}
-                title={isMixMode ? "DJ Mix ON (Auto Crossfade)" : "Turn on DJ Mix (Auto Crossfade)"}
-              >
-                <Sliders size={15} strokeWidth={2.5} />
-              </button>
+
 
               {/* Quick Lyrics View Toggle */}
               <button 
