@@ -1,29 +1,32 @@
 import React, { useState } from 'react';
-import { Heart, Plus, Download, Grid, List, Search, Disc } from 'lucide-react';
+import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User } from 'lucide-react';
 
 export default function LibraryScreen({ 
   playlists = [], 
+  albums = [],
   tracks = [], 
   onSelectPlaylist, 
+  onSelectArtist,
   onSelectTrack, 
   openCreatePlaylistModal, 
   toggleLike,
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
-  const [filter, setFilter] = useState('all');
-  const [viewMode, setViewMode] = useState('grid');
+  const [filter, setFilter] = useState('all'); // 'all' | 'playlists' | 'albums' | 'downloads'
   const [search, setSearch] = useState('');
 
   const downloadedTracks = (tracks || []).filter((t) => t.downloaded);
 
-  const allItems = (playlists || []).filter(item => {
-    if (filter === 'playlists') return true;
-    if (filter === 'downloads') return false;
-    return true;
-  }).filter(item => {
+  const filteredPlaylists = (playlists || []).filter(item => {
     if (!search) return true;
     return item.name && item.name.toLowerCase().includes(search.toLowerCase());
+  });
+
+  const filteredAlbums = (albums || []).filter(item => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (item.name && item.name.toLowerCase().includes(s)) || (item.artist && item.artist.toLowerCase().includes(s));
   });
 
   return (
@@ -67,6 +70,7 @@ export default function LibraryScreen({
             {[
               { id: 'all', label: 'All' },
               { id: 'playlists', label: 'Playlists' },
+              { id: 'albums', label: `Albums (${albums.length})` },
               { id: 'downloads', label: 'Downloaded' },
             ].map((f) => {
               const active = filter === f.id;
@@ -108,57 +112,127 @@ export default function LibraryScreen({
         </div>
       </div>
 
-      {/* ── Playlists Grid ── */}
-      {filter !== 'downloads' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
-          {allItems.map((pl, idx) => {
-            const count = (pl.trackIds || []).length;
-            const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899', '#082621'];
-            const color = colors[idx % colors.length];
+      {/* ── Albums Section ── */}
+      {(filter === 'all' || filter === 'albums') && filteredAlbums.length > 0 && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Disc size={18} className="text-amber-400" />
+              <h2 className={`font-display font-black text-xl ${
+                isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
+              }`}>
+                Albums ({filteredAlbums.length})
+              </h2>
+            </div>
+          </div>
 
-            return (
-              <div
-                key={pl.id || idx}
-                onClick={() => onSelectPlaylist(pl)}
-                className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition brutal-btn group ${
-                  isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
-                }`}
-              >
-                <div>
-                  <div 
-                    className="w-full aspect-square rounded-lg brutal-border mb-2.5 flex items-center justify-center relative overflow-hidden text-white"
-                    style={{ backgroundColor: color }}
-                  >
-                    {pl.isLikedSongs ? (
-                      <Heart size={44} fill="currentColor" />
-                    ) : pl.cover ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+            {filteredAlbums.map((alb, idx) => {
+              const count = (alb.trackIds || []).length;
+              return (
+                <div
+                  key={alb.id || alb._id || idx}
+                  onClick={() => onSelectPlaylist(alb)}
+                  className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition brutal-btn group ${
+                    isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="w-full aspect-square rounded-lg brutal-border mb-2.5 flex items-center justify-center relative overflow-hidden bg-black/10">
                       <img 
-                        src={pl.cover} 
-                        alt={pl.name} 
+                        src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'} 
+                        alt={alb.name} 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                        onError={(e) => { e.target.style.display = 'none'; }}
+                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
                       />
-                    ) : (
-                      <span className="font-display font-black text-4xl">
-                        {pl.name ? pl.name[0].toUpperCase() : 'R'}
+                      <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
+                        {count} SONGS
                       </span>
-                    )}
-                    <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
-                      {count} SONGS
-                    </span>
-                  </div>
+                    </div>
 
-                  <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                    {pl.name}
-                  </p>
-                  <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                    {pl.isLikedSongs ? 'Favorites' : 'Playlist'}
-                  </p>
+                    <p className={`font-display font-black text-xs truncate group-hover:text-[#17a398] transition-colors ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                      {alb.name}
+                    </p>
+                    <p 
+                      onClick={(e) => {
+                        if (onSelectArtist && alb.artist) {
+                          e.stopPropagation();
+                          onSelectArtist(alb.artist);
+                        }
+                      }}
+                      className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                    >
+                      {alb.artist || 'Artist'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Playlists Section ── */}
+      {(filter === 'all' || filter === 'playlists') && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className={`font-display font-black text-xl ${
+              isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
+            }`}>
+              Playlists ({filteredPlaylists.length})
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+            {filteredPlaylists.map((pl, idx) => {
+              const count = (pl.trackIds || []).length;
+              const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899', '#082621'];
+              const color = colors[idx % colors.length];
+
+              return (
+                <div
+                  key={pl.id || idx}
+                  onClick={() => onSelectPlaylist(pl)}
+                  className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition brutal-btn group ${
+                    isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
+                  }`}
+                >
+                  <div>
+                    <div 
+                      className="w-full aspect-square rounded-lg brutal-border mb-2.5 flex items-center justify-center relative overflow-hidden text-white"
+                      style={{ backgroundColor: color }}
+                    >
+                      {pl.isLikedSongs ? (
+                        <Heart size={44} fill="currentColor" />
+                      ) : pl.cover ? (
+                        <img 
+                          src={pl.cover} 
+                          alt={pl.name} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span className="font-display font-black text-4xl">
+                          {pl.name ? pl.name[0].toUpperCase() : 'R'}
+                        </span>
+                      )}
+                      <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
+                        {count} SONGS
+                      </span>
+                    </div>
+
+                    <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                      {pl.name}
+                    </p>
+                    <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                      {pl.isLikedSongs ? 'Favorites' : 'Playlist'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* ── Downloads Section ── */}
@@ -178,48 +252,36 @@ export default function LibraryScreen({
               <div
                 key={track.id || track._id}
                 onClick={() => onSelectTrack(track, downloadedTracks)}
-                className={`rounded-xl brutal-border p-2.5 flex items-center justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
-                  isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black hover:bg-white text-[#0b1110]'
+                className={`flex items-center gap-3 p-3 rounded-xl brutal-border cursor-pointer brutal-shadow-sm hover:brutal-shadow transition brutal-btn ${
+                  isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <img 
-                    src={track.cover} 
-                    alt={track.title} 
-                    className="w-11 h-11 rounded-lg brutal-border object-cover shrink-0" 
-                  />
-                  <div className="min-w-0">
-                    <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{track.title}</p>
-                    <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{track.artist}</p>
-                  </div>
+                <img 
+                  src={track.cover} 
+                  alt={track.title} 
+                  className="w-12 h-12 rounded-lg brutal-border object-cover shrink-0" 
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                    {track.title}
+                  </p>
+                  <p 
+                    onClick={(e) => {
+                      if (onSelectArtist && track.artist) {
+                        e.stopPropagation();
+                        onSelectArtist(track.artist);
+                      }
+                    }}
+                    className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                  >
+                    {track.artist}
+                  </p>
                 </div>
-                <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.5 rounded brutal-border">
-                  SAVED
-                </span>
               </div>
             ))}
           </div>
         </section>
-      )}
-
-      {/* Empty State */}
-      {allItems.length === 0 && (
-        <div className={`brutal-border-thick rounded-2xl p-8 text-center max-w-sm mx-auto brutal-shadow-lg mt-6 ${
-          isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
-        }`}>
-          <p className="font-display font-black text-base mb-1">
-            No Playlists Found
-          </p>
-          <p className={`text-xs font-medium mb-4 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Create your first playlist to organize your favorite tracks.
-          </p>
-          <button
-            onClick={openCreatePlaylistModal}
-            className="px-4 py-2 bg-[#17a398] text-[#0b1110] font-display font-bold text-xs rounded-xl brutal-border brutal-shadow brutal-btn cursor-pointer"
-          >
-            + Create Playlist
-          </button>
-        </div>
       )}
     </div>
   );

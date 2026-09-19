@@ -23,6 +23,7 @@ export default function MiniPlayer({
   setVolume = () => {},
   jamSession,
   openJamModal,
+  onSelectArtist,
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
@@ -111,9 +112,17 @@ export default function MiniPlayer({
               }`}>
                 {currentTrack.title}
               </h4>
-              <p className={`text-[10px] font-bold truncate mt-0.5 ${
-                isDark ? 'text-zinc-400' : 'text-zinc-600'
-              }`}>
+              <p 
+                onClick={(e) => {
+                  if (onSelectArtist && currentTrack.artist) {
+                    e.stopPropagation();
+                    onSelectArtist(currentTrack.artist);
+                  }
+                }}
+                className={`text-[10px] font-bold truncate mt-0.5 hover:underline cursor-pointer ${
+                  isDark ? 'text-zinc-400' : 'text-zinc-600'
+                }`}
+              >
                 {currentTrack.artist || 'Unknown Artist'}
               </p>
             </div>
@@ -182,9 +191,17 @@ export default function MiniPlayer({
               }`}>
                 {currentTrack.title}
               </h4>
-              <p className={`text-[10px] sm:text-[11px] font-bold truncate ${
-                isDark ? 'text-zinc-400' : 'text-zinc-600'
-              }`}>
+              <p 
+                onClick={(e) => {
+                  if (onSelectArtist && currentTrack.artist) {
+                    e.stopPropagation();
+                    onSelectArtist(currentTrack.artist);
+                  }
+                }}
+                className={`text-[10px] sm:text-[11px] font-bold truncate hover:underline cursor-pointer ${
+                  isDark ? 'text-zinc-400' : 'text-zinc-600'
+                }`}
+              >
                 {currentTrack.artist || 'Unknown Artist'}
               </p>
             </div>

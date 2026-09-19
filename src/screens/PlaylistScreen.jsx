@@ -22,6 +22,7 @@ export default function PlaylistScreen({
   onUpdatePlaylist = () => {},
   onDeletePlaylist = () => {},
   onTogglePlaylistVisibility = () => {},
+  onSelectArtist,
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
@@ -381,11 +382,11 @@ export default function PlaylistScreen({
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start gap-2 mb-2 flex-wrap">
               <span className="bg-[#082621] text-[#26c4b7] text-[10px] font-mono font-black uppercase px-2.5 py-1 brutal-border">
-                {playlist.isLikedSongs ? 'PRIMARY FAVORITES DOSAGE' : 'FORMULATED CASSETTE'}
+                {playlist.isAlbum ? 'OFFICIAL ALBUM' : playlist.isLikedSongs ? 'PRIMARY FAVORITES' : 'PLAYLIST'}
               </span>
 
-              {/* Public/Private Badge & Action Buttons */}
-              {!playlist.isLikedSongs && (
+              {/* Public/Private Badge & Action Buttons (Hidden for Site Albums) */}
+              {!playlist.isLikedSongs && !playlist.isAlbum && (
                 isOwner ? (
                   <>
                     <button
@@ -447,7 +448,7 @@ export default function PlaylistScreen({
               }`}>
                 {playlist.name}
               </h1>
-              {!playlist.isLikedSongs && isOwner && (
+              {!playlist.isLikedSongs && !playlist.isAlbum && isOwner && (
                 <button
                   onClick={() => setIsEditModalOpen(true)}
                   className={`p-1.5 transition-colors cursor-pointer ${
@@ -460,10 +461,22 @@ export default function PlaylistScreen({
               )}
             </div>
 
+            {playlist.isAlbum && playlist.artist && (
+              <div className="mt-1 text-xs font-mono font-bold flex items-center justify-center md:justify-start gap-1">
+                <span className={isDark ? 'text-zinc-400' : 'text-[#082621]/70'}>Album by</span>
+                <button
+                  onClick={() => onSelectArtist?.(playlist.artist)}
+                  className="text-[#17a398] hover:underline font-black cursor-pointer uppercase inline-block"
+                >
+                  {playlist.artist}
+                </button>
+              </div>
+            )}
+
             <p className={`text-xs md:text-sm mt-2 font-medium max-w-xl ${
               isDark ? 'text-zinc-300' : 'text-[#082621]/80'
             }`}>
-              {playlist.description || 'Custom playlist on Liofy.'}
+              {playlist.description || (playlist.isAlbum ? `Official album by ${playlist.artist || 'Artist'}` : 'Custom playlist on Liofy.')}
             </p>
 
             <div className={`flex items-center justify-center md:justify-start gap-3 mt-4 pt-3 border-t text-xs font-mono font-bold ${
@@ -471,7 +484,7 @@ export default function PlaylistScreen({
             }`}>
               <span className={`px-2 py-0.5 brutal-border ${
                 isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] border-black'
-              }`}>PLAYLIST</span>
+              }`}>{playlist.isAlbum ? 'ALBUM' : 'PLAYLIST'}</span>
               <span>•</span>
               <span>{playlistTracks.length} TRACKS</span>
               <span>•</span>
@@ -669,9 +682,19 @@ export default function PlaylistScreen({
                           {track.title}
                         </h4>
                         <div className="flex items-center gap-2">
-                          <p className={`text-[11px] truncate font-medium ${
-                            isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                          }`}>{track.artist}</p>
+                          <p 
+                            onClick={(e) => {
+                              if (onSelectArtist && track.artist) {
+                                e.stopPropagation();
+                                onSelectArtist(track.artist);
+                              }
+                            }}
+                            className={`text-[11px] truncate font-medium hover:underline cursor-pointer ${
+                              isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                            }`}
+                          >
+                            {track.artist}
+                          </p>
                           {curTransition && (
                             <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.2 rounded-none bg-[#082621] text-[#26c4b7]">
                               🎛️ {getTransitionDisplayName(curTransition.style || curTransition.name)} ({curTransition.duration || 8}s)

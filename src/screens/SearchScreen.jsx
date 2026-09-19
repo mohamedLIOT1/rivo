@@ -36,17 +36,21 @@ const GENRE_CATEGORIES = [
 
 export default function SearchScreen({ 
   tracks = [], 
+  albums = [],
   initialQuery = '', 
   onSelectTrack, 
+  onSelectPlaylist,
+  onSelectArtist,
   toggleLike, 
   onOpenAddSongModal,
+  onAddToLibrary,
   onDeleteTrack,
   onViewProfile,
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
   const [query, setQuery] = useState(initialQuery);
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'people'
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [onlineResults, setOnlineResults] = useState([]);
   const [isSearchingOnline, setIsSearchingOnline] = useState(false);
   const [userResults, setUserResults] = useState([]);
@@ -63,8 +67,46 @@ export default function SearchScreen({
   const cleanQuery = (query || '').trim().toLowerCase();
   const isPopSearch = /^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop|أغاني بوب عربي)$/i.test(cleanQuery);
 
+  // Extract all artists from tracks & albums
+  const allArtists = React.useMemo(() => {
+    const map = new Map();
+    (tracks || []).forEach(t => {
+      if (!t.artist || !isMusicTrack(t.title, t.artist)) return;
+      const name = t.artist.trim();
+      const key = name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { name, count: 1, cover: t.cover });
+      } else {
+        map.get(key).count += 1;
+      }
+    });
+    (albums || []).forEach(a => {
+      if (!a.artist) return;
+      const name = a.artist.trim();
+      const key = name.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { name, count: (a.trackIds || []).length, cover: a.cover });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [tracks, albums]);
+
+  // Matching Artists
+  const matchedArtists = (filterType === 'people' || filterType === 'albums' || filterType === 'songs') ? [] : (
+    cleanQuery ? allArtists.filter(a => a.name.toLowerCase().includes(cleanQuery)) : (filterType === 'artists' ? allArtists : [])
+  );
+
+  // Matching Albums
+  const matchedAlbums = (filterType === 'people' || filterType === 'artists' || filterType === 'songs') ? [] : (albums || []).filter(a => {
+    if (filterType === 'albums' && !cleanQuery) return true;
+    if (!cleanQuery) return false;
+    const nameMatch = a.name && a.name.toLowerCase().includes(cleanQuery);
+    const artistMatch = a.artist && a.artist.toLowerCase().includes(cleanQuery);
+    return nameMatch || artistMatch;
+  });
+
   // Local tracks matching
-  const localFiltered = (filterType === 'people') ? [] : (tracks || []).filter((t) => {
+  const localFiltered = (filterType === 'people' || filterType === 'artists' || filterType === 'albums') ? [] : (tracks || []).filter((t) => {
     if (!cleanQuery) return false;
     if (!isMusicTrack(t.title, t.artist)) return false;
     const titleMatch = t.title && t.title.toLowerCase().includes(cleanQuery);
@@ -300,6 +342,8 @@ export default function SearchScreen({
                   {[
                     { id: 'all', label: 'All', icon: Sparkles },
                     { id: 'songs', label: 'Songs', icon: Music },
+                    { id: 'artists', label: 'Artists', icon: Mic, count: cleanQuery ? matchedArtists.length : allArtists.length },
+                    { id: 'albums', label: 'Albums', icon: Disc, count: cleanQuery ? matchedAlbums.length : (albums || []).length },
                     { id: 'people', label: 'People', icon: Users, count: userResults.length },
                   ].map(({ id, label, icon: FilterIcon, count }) => {
                     const isActive = filterType === id;
@@ -317,7 +361,7 @@ export default function SearchScreen({
                       >
                         <FilterIcon size={12} strokeWidth={2.5} />
                         <span>{label}</span>
-                        {count > 0 && id === 'people' && (
+                        {count !== undefined && count > 0 && id !== 'all' && id !== 'songs' && (
                           <span className={`px-1.5 py-0.2 text-[9px] font-mono font-black rounded-full ${
                             isActive ? 'bg-[#0b1110] text-[#17a398]' : 'bg-[#17a398] text-[#0b1110]'
                           }`}>
@@ -474,6 +518,256 @@ export default function SearchScreen({
                 </div>
               )}
 
+              {/* ── ARTISTS ONLY RESULTS ── */}
+              {filterType === 'artists' && (
+                <div>
+                  {matchedArtists.length === 0 ? (
+                    <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                      isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                    }`}>
+                      <Mic size={32} className="mx-auto text-zinc-500 mb-2" />
+                      <h3 className="font-display font-bold text-sm">No artists found matching "{query}"</h3>
+                      <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        Check spelling or search by song title instead.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {matchedArtists.map((art) => (
+                        <div
+                          key={art.name}
+                          onClick={() => onSelectArtist && onSelectArtist(art.name)}
+                          className={`p-3.5 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-1 hover:-translate-y-0.5 brutal-shadow-sm group ${
+                            isDark ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                            <div className="w-12 h-12 rounded-full bg-[#082621] border-2 border-[#17a398] flex items-center justify-center font-bold text-sm text-[#26c4b7] overflow-hidden shrink-0">
+                              {art.cover ? (
+                                <img src={art.cover} alt={art.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <Mic size={20} />
+                              )}
+                            </div>
+                            <div className="truncate flex-1 min-w-0">
+                              <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors">
+                                {art.name}
+                              </p>
+                              <span className={`text-[11px] font-mono truncate block mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                {art.count} {art.count === 1 ? 'song' : 'songs'} in library
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectArtist && onSelectArtist(art.name);
+                            }}
+                            className="px-2.5 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-btn shrink-0 cursor-pointer"
+                          >
+                            View Artist →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── ALBUMS ONLY RESULTS ── */}
+              {filterType === 'albums' && (
+                <div>
+                  {matchedAlbums.length === 0 ? (
+                    <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                      isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                    }`}>
+                      <Disc size={32} className="mx-auto text-zinc-500 mb-2" />
+                      <h3 className="font-display font-bold text-sm">No albums found matching "{query}"</h3>
+                      <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        Albums are created automatically when songs from an album are added.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {matchedAlbums.map((alb) => (
+                        <div
+                          key={alb.id || alb._id}
+                          onClick={() => onSelectPlaylist && onSelectPlaylist(alb)}
+                          className={`p-3.5 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-1 hover:-translate-y-0.5 brutal-shadow-sm group ${
+                            isDark ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                            <div className="w-12 h-12 rounded-xl bg-black/10 brutal-border overflow-hidden shrink-0">
+                              <img 
+                                src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+                                alt={alb.name} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                                onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'; }}
+                              />
+                            </div>
+                            <div className="truncate flex-1 min-w-0">
+                              <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors">
+                                {alb.name}
+                              </p>
+                              <span 
+                                onClick={(e) => {
+                                  if (onSelectArtist && alb.artist) {
+                                    e.stopPropagation();
+                                    onSelectArtist(alb.artist);
+                                  }
+                                }}
+                                className={`text-[11px] font-mono hover:underline cursor-pointer truncate block mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                              >
+                                {alb.artist || 'Artist'} • {(alb.trackIds || []).length} songs
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectPlaylist && onSelectPlaylist(alb);
+                            }}
+                            className="px-2.5 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-btn shrink-0 cursor-pointer"
+                          >
+                            Open Album →
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── ALL FILTER: MATCHED ARTISTS PREVIEW ── */}
+              {filterType === 'all' && matchedArtists.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Mic size={14} className="text-[#17a398]" />
+                      <p className={`text-xs font-mono font-black uppercase tracking-wider ${
+                        isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                      }`}>
+                        Artists ({matchedArtists.length})
+                      </p>
+                    </div>
+                    {matchedArtists.length > 3 && (
+                      <button
+                        onClick={() => setFilterType('artists')}
+                        className="text-xs font-mono font-black text-[#17a398] hover:underline cursor-pointer"
+                      >
+                        View All ({matchedArtists.length}) →
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {matchedArtists.slice(0, 3).map((art) => (
+                      <div
+                        key={`all-art-${art.name}`}
+                        onClick={() => onSelectArtist && onSelectArtist(art.name)}
+                        className={`p-3 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-0.5 brutal-shadow-sm group ${
+                          isDark 
+                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                          <div className="w-10 h-10 rounded-full bg-[#082621] border border-[#17a398] flex items-center justify-center font-bold text-xs text-[#26c4b7] overflow-hidden shrink-0">
+                            {art.cover ? (
+                              <img src={art.cover} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <Mic size={16} />
+                            )}
+                          </div>
+                          <div className="truncate flex-1 min-w-0">
+                            <span className="truncate group-hover:text-[#17a398] transition-colors font-display font-black text-xs block">
+                              {art.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-zinc-400 truncate block">
+                              {art.count} {art.count === 1 ? 'song' : 'songs'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectArtist && onSelectArtist(art.name);
+                          }}
+                          className="px-2 py-0.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-[11px] rounded-md brutal-border brutal-btn shrink-0 cursor-pointer"
+                        >
+                          View →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── ALL FILTER: MATCHED ALBUMS PREVIEW ── */}
+              {filterType === 'all' && matchedAlbums.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Disc size={14} className="text-[#17a398]" />
+                      <p className={`text-xs font-mono font-black uppercase tracking-wider ${
+                        isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                      }`}>
+                        Albums ({matchedAlbums.length})
+                      </p>
+                    </div>
+                    {matchedAlbums.length > 3 && (
+                      <button
+                        onClick={() => setFilterType('albums')}
+                        className="text-xs font-mono font-black text-[#17a398] hover:underline cursor-pointer"
+                      >
+                        View All ({matchedAlbums.length}) →
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {matchedAlbums.slice(0, 3).map((alb) => (
+                      <div
+                        key={`all-alb-${alb.id || alb._id}`}
+                        onClick={() => onSelectPlaylist && onSelectPlaylist(alb)}
+                        className={`p-3 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-0.5 brutal-shadow-sm group ${
+                          isDark 
+                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                          <div className="w-10 h-10 rounded-lg bg-black/10 brutal-border overflow-hidden shrink-0">
+                            <img 
+                              src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+                              alt="" 
+                              className="w-full h-full object-cover" 
+                              onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'; }}
+                            />
+                          </div>
+                          <div className="truncate flex-1 min-w-0">
+                            <span className="truncate group-hover:text-[#17a398] transition-colors font-display font-black text-xs block">
+                              {alb.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-zinc-400 truncate block">
+                              {alb.artist || 'Artist'} • {(alb.trackIds || []).length} songs
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectPlaylist && onSelectPlaylist(alb);
+                          }}
+                          className="px-2 py-0.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-[11px] rounded-md brutal-border brutal-btn shrink-0 cursor-pointer"
+                        >
+                          Album →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* ── ALL FILTER: MATCHED PEOPLE PREVIEW ── */}
               {filterType === 'all' && userResults.length > 0 && (
                 <div className="mb-6">
@@ -540,7 +834,7 @@ export default function SearchScreen({
               )}
 
               {/* ── SONG RESULTS (For ALL & SONGS filters) ── */}
-              {filterType !== 'people' && (
+              {(filterType === 'all' || filterType === 'songs') && (
                 <>
                   {/* Local Library Matches */}
                   {localFiltered.length > 0 && (
@@ -572,9 +866,17 @@ export default function SearchScreen({
                                 <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
                                   {track.title}
                                 </p>
-                                <p className={`text-[11px] font-mono truncate ${
-                                  isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                                }`}>
+                                <p 
+                                  onClick={(e) => {
+                                    if (onSelectArtist && track.artist) {
+                                      e.stopPropagation();
+                                      onSelectArtist(track.artist);
+                                    }
+                                  }}
+                                  className={`text-[11px] font-mono truncate hover:underline cursor-pointer ${
+                                    isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                                  }`}
+                                >
                                   {track.artist || 'Unknown Artist'}
                                 </p>
                               </div>
@@ -658,9 +960,17 @@ export default function SearchScreen({
                               <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
                                 {track.title}
                               </p>
-                              <p className={`text-[11px] font-mono truncate ${
-                                isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                              }`}>
+                              <p 
+                                onClick={(e) => {
+                                  if (onSelectArtist && track.artist) {
+                                    e.stopPropagation();
+                                    onSelectArtist(track.artist);
+                                  }
+                                }}
+                                className={`text-[11px] font-mono truncate hover:underline cursor-pointer ${
+                                  isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                                }`}
+                              >
                                 {track.artist || 'Online Stream'}
                               </p>
                             </div>
@@ -682,14 +992,14 @@ export default function SearchScreen({
                   </div>
                 )}
 
-                {/* Zero Results for songs */}
-                {localFiltered.length === 0 && onlineResults.length === 0 && userResults.length === 0 && !isSearchingOnline && (
+                {/* Zero Results */}
+                {localFiltered.length === 0 && onlineResults.length === 0 && userResults.length === 0 && matchedArtists.length === 0 && matchedAlbums.length === 0 && !isSearchingOnline && (
                   <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
                     isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
                   }`}>
                     <Music size={28} className="mx-auto text-[#17a398] mb-3" />
                     <h3 className="font-mono font-black text-sm uppercase mb-1">
-                      No Songs or Listeners Found for "{query}"
+                      No Results Found for "{query}"
                     </h3>
                     <p className={`text-xs font-mono mb-4 ${
                       isDark ? 'text-zinc-400' : 'text-[#082621]/70'
@@ -792,6 +1102,144 @@ export default function SearchScreen({
                     <h3 className="font-display font-bold text-sm">Find Listeners</h3>
                     <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                       Type any listener name in the search bar above to locate their profile and playlists.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : filterType === 'artists' ? (
+              /* ── Discover Artists View ── */
+              <div>
+                <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <Mic size={16} className="text-[#17a398]" />
+                    <span className="text-xs font-mono font-black uppercase tracking-wider">
+                      DISCOVER ARTISTS ({allArtists.length})
+                    </span>
+                  </div>
+                  <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
+                    isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+                  }`}>
+                    DISCOGRAPHY
+                  </div>
+                </div>
+
+                {allArtists.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {allArtists.map((art) => (
+                      <div
+                        key={`browse-art-${art.name}`}
+                        onClick={() => onSelectArtist && onSelectArtist(art.name)}
+                        className={`p-3.5 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-1 hover:-translate-y-0.5 brutal-shadow-sm group ${
+                          isDark ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                          <div className="w-12 h-12 rounded-full bg-[#082621] border-2 border-[#17a398] flex items-center justify-center font-bold text-sm text-[#26c4b7] overflow-hidden shrink-0">
+                            {art.cover ? (
+                              <img src={art.cover} alt={art.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Mic size={20} />
+                            )}
+                          </div>
+                          <div className="truncate flex-1 min-w-0">
+                            <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors">
+                              {art.name}
+                            </p>
+                            <span className={`text-[11px] font-mono truncate block mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                              {art.count} {art.count === 1 ? 'song' : 'songs'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectArtist && onSelectArtist(art.name);
+                          }}
+                          className="px-2.5 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-btn shrink-0 cursor-pointer"
+                        >
+                          View Artist →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                    isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                  }`}>
+                    <Mic size={32} className="mx-auto text-zinc-500 mb-2" />
+                    <h3 className="font-display font-bold text-sm">No Artists Yet</h3>
+                    <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                      Add songs to your library or import albums to discover artist pages.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : filterType === 'albums' ? (
+              /* ── Discover Albums View ── */
+              <div>
+                <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <Disc size={16} className="text-[#17a398]" />
+                    <span className="text-xs font-mono font-black uppercase tracking-wider">
+                      DISCOVER ALBUMS ({(albums || []).length})
+                    </span>
+                  </div>
+                  <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
+                    isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+                  }`}>
+                    OFFICIAL ALBUMS
+                  </div>
+                </div>
+
+                {(albums || []).length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {(albums || []).map((alb) => (
+                      <div
+                        key={`browse-alb-${alb.id || alb._id}`}
+                        onClick={() => onSelectPlaylist && onSelectPlaylist(alb)}
+                        className={`p-3 rounded-xl brutal-border flex flex-col justify-between cursor-pointer transition hover:translate-x-0.5 hover:-translate-y-0.5 brutal-shadow-sm group ${
+                          isDark ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="w-full aspect-square rounded-lg bg-black/10 brutal-border overflow-hidden mb-2">
+                          <img 
+                            src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400'} 
+                            alt={alb.name} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                            onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400'; }}
+                          />
+                        </div>
+                        <div className="truncate">
+                          <p className="font-display font-black text-xs sm:text-sm truncate group-hover:text-[#17a398] transition-colors">
+                            {alb.name}
+                          </p>
+                          <p 
+                            onClick={(e) => {
+                              if (onSelectArtist && alb.artist) {
+                                e.stopPropagation();
+                                onSelectArtist(alb.artist);
+                              }
+                            }}
+                            className={`text-[10px] font-mono hover:underline cursor-pointer truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                          >
+                            {alb.artist || 'Artist'} • {(alb.trackIds || []).length} songs
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                    isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                  }`}>
+                    <Disc size={32} className="mx-auto text-zinc-500 mb-2" />
+                    <h3 className="font-display font-bold text-sm">No Albums Detected Yet</h3>
+                    <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                      When songs from an album are uploaded or added, they appear here automatically.
                     </p>
                   </div>
                 )}

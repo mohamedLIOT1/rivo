@@ -100,6 +100,7 @@ export default function FullPlayerModal({
   jamSession,
   onAddToJamQueue,
   onRemoveFromJamQueue,
+  onSelectArtist,
   globalTheme = 'dark'
 }) {
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
@@ -681,7 +682,18 @@ export default function FullPlayerModal({
                 }`}>
                   {track.title}
                 </p>
-                <p className={`text-[11px] truncate font-sans mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{track.artist}</p>
+                <p 
+                  onClick={(e) => {
+                    if (onSelectArtist && track.artist) {
+                      e.stopPropagation();
+                      if (onClose) onClose();
+                      onSelectArtist(track.artist);
+                    }
+                  }}
+                  className={`text-[11px] truncate font-sans mt-0.5 hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                >
+                  {track.artist}
+                </p>
               </div>
 
               {jamSession && onRemoveFromJamQueue && (
@@ -888,9 +900,18 @@ export default function FullPlayerModal({
               }`}>
                 {currentTrack.title}
               </h2>
-              <p className={`text-xs font-bold truncate ${
-                isDark ? 'text-zinc-300' : 'text-[#0f756d]'
-              }`}>
+              <p 
+                onClick={(e) => {
+                  if (onSelectArtist && currentTrack.artist) {
+                    e.stopPropagation();
+                    if (onClose) onClose();
+                    onSelectArtist(currentTrack.artist);
+                  }
+                }}
+                className={`text-xs font-bold truncate hover:underline cursor-pointer ${
+                  isDark ? 'text-zinc-300' : 'text-[#0f756d]'
+                }`}
+              >
                 {currentTrack.artist}
               </p>
             </div>

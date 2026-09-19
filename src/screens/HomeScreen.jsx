@@ -6,6 +6,7 @@ import VerifiedBadge from '../components/VerifiedBadge';
 export default function HomeScreen({ 
   tracks = [], 
   playlists = [], 
+  albums = [],
   artists = [], 
   onSelectTrack, 
   onSelectPlaylist, 
@@ -253,7 +254,15 @@ export default function HomeScreen({
                     <div className={`font-display font-black text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                       {track.title}
                     </div>
-                    <div className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                    <div 
+                      onClick={(e) => {
+                        if (onSelectArtist && track.artist) {
+                          e.stopPropagation();
+                          onSelectArtist(track.artist);
+                        }
+                      }}
+                      className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                    >
                       {track.artist || 'Unknown Artist'}
                     </div>
                   </div>
@@ -320,6 +329,71 @@ export default function HomeScreen({
           )}
         </div>
       </section>
+
+      {/* ─────────────────────────────────────────
+          FEATURED ALBUMS & DISCOGRAPHY SPOTLIGHT
+          ───────────────────────────────────────── */}
+      {albums && albums.length > 0 && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Disc size={20} className="text-amber-400" />
+              <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
+                Featured Albums
+              </h2>
+              <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
+                {albums.length} {albums.length === 1 ? 'ALBUM' : 'ALBUMS'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
+            {albums.slice(0, 6).map((alb) => (
+              <div
+                key={alb.id || alb._id || alb.name}
+                onClick={() => onSelectPlaylist?.(alb)}
+                className={`p-3 rounded-xl brutal-border brutal-shadow-sm cursor-pointer group transition-transform hover:-translate-y-1 ${
+                  isDark ? 'bg-[#141d1b] border-zinc-700 hover:bg-[#182320]' : 'bg-[#fdfbf7] border-black hover:bg-white'
+                }`}
+              >
+                <div className="relative aspect-square mb-2.5 overflow-hidden rounded-lg brutal-border bg-black/10">
+                  <img
+                    src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'}
+                    alt={alb.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
+                  />
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-full bg-[#f59e0b] text-black flex items-center justify-center brutal-border brutal-shadow-sm shadow-md">
+                      <Play size={16} fill="currentColor" className="ml-0.5" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`font-display font-black text-xs truncate group-hover:text-[#17a398] transition-colors ${
+                  isDark ? 'text-white' : 'text-[#0b1110]'
+                }`}>
+                  {alb.name}
+                </div>
+
+                <div 
+                  onClick={(e) => {
+                    if (onSelectArtist && alb.artist) {
+                      e.stopPropagation();
+                      onSelectArtist(alb.artist);
+                    }
+                  }}
+                  className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${
+                    isDark ? 'text-zinc-400' : 'text-zinc-600'
+                  }`}
+                >
+                  {alb.artist || 'Artist'}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ─────────────────────────────────────────
           RECENTLY DISPENSED / POPULAR TRACKS
@@ -395,7 +469,15 @@ export default function HomeScreen({
                       <div className="font-display font-black text-sm text-white drop-shadow-[1px_1px_0px_#000] truncate">
                         {track.title ? track.title.split('(')[0] : 'Untitled'}
                       </div>
-                      <div className="text-[10px] text-white/90 font-bold truncate">
+                      <div 
+                        onClick={(e) => {
+                          if (onSelectArtist && track.artist) {
+                            e.stopPropagation();
+                            onSelectArtist(track.artist);
+                          }
+                        }}
+                        className="text-[10px] text-white/90 font-bold truncate hover:underline cursor-pointer"
+                      >
                         {track.artist || 'Rivo Artist'}
                       </div>
                     </div>
@@ -408,7 +490,15 @@ export default function HomeScreen({
                   <div className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                     {track.title}
                   </div>
-                  <div className={`text-[10px] font-bold truncate mb-2 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  <div 
+                    onClick={(e) => {
+                      if (onSelectArtist && track.artist) {
+                        e.stopPropagation();
+                        onSelectArtist(track.artist);
+                      }
+                    }}
+                    className={`text-[10px] font-bold truncate mb-2 hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                  >
                     {track.artist}
                   </div>
                 </div>

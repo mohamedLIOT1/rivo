@@ -61,6 +61,7 @@ function AppContent() {
   const [selectedArtist, setSelectedArtist]   = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
+  const [albums, setAlbums]                   = useState([]);
 
   // Modals
   const [isFullPlayerOpen,    setIsFullPlayerOpen]    = useState(false);
@@ -186,11 +187,25 @@ function AppContent() {
     setGlobalTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  // Fetch albums
+  const fetchAlbums = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/albums`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.albums)) {
+        setAlbums(data.albums);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchAlbums();
+  }, []);
+
   // Open auth on first boot
   useEffect(() => {
     if (!currentUser) setIsAuthOpen(true);
   }, []);
-
 
   const handleAddSong = async (newSong) => {
     if (!newSong) return;
@@ -214,7 +229,10 @@ function AppContent() {
           body: JSON.stringify(newSong),
         });
         syncFromServer();
+        fetchAlbums();
       } catch {}
+    } else {
+      fetchAlbums();
     }
   };
 
@@ -352,7 +370,14 @@ function AppContent() {
     await removeTrackFromPlaylist(trackId, playlistId);
   };
 
-  const handleSelectArtist = (artist) => { setSelectedArtist(artist); setCurrentScreen('artist'); };
+  const handleSelectArtist = (artist) => {
+    if (!artist) return;
+    const artistObj = typeof artist === 'string'
+      ? { name: artist.trim(), id: artist.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') }
+      : artist;
+    setSelectedArtist(artistObj);
+    setCurrentScreen('artist');
+  };
   const handleSelectPlaylistView = (pl) => { setSelectedPlaylist(pl); setCurrentScreen('playlist'); };
 
   const handlePlayPodcastEpisode = (episode, podcast) => {
@@ -781,6 +806,7 @@ function AppContent() {
             <HomeScreen
               tracks={tracks}
               playlists={playlists}
+              albums={albums}
               onSelectTrack={playTrack}
               onSelectPlaylist={handleSelectPlaylistView}
               toggleLike={toggleLike}
@@ -807,8 +833,11 @@ function AppContent() {
           {currentScreen === 'search' && (
             <SearchScreen
               tracks={tracks}
+              albums={albums}
               initialQuery={topSearchQuery}
               onSelectTrack={playTrack}
+              onSelectPlaylist={handleSelectPlaylistView}
+              onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
               onOpenAddSongModal={() => setIsAddSongOpen(true)}
               onAddToLibrary={handleAddSong}
@@ -824,8 +853,10 @@ function AppContent() {
           {currentScreen === 'library' && (
             <LibraryScreen
               playlists={playlists}
+              albums={albums}
               tracks={tracks}
               onSelectPlaylist={handleSelectPlaylistView}
+              onSelectArtist={handleSelectArtist}
               onSelectTrack={playTrack}
               openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
               toggleLike={toggleLike}
@@ -835,10 +866,11 @@ function AppContent() {
 
           {currentScreen === 'playlist' && selectedPlaylist && (
             <PlaylistScreen
-              playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || selectedPlaylist}
+              playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || albums.find(a => String(a.id) === String(selectedPlaylist.id)) || selectedPlaylist}
               tracks={tracks}
               currentUser={currentUser}
               onSelectTrack={playTrack}
+              onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
               toggleDownload={handleDownload}
               onBack={() => setCurrentScreen('library')}
@@ -860,8 +892,11 @@ function AppContent() {
             <ArtistScreen
               artist={selectedArtist}
               tracks={tracks}
+              albums={albums}
               onSelectTrack={playTrack}
+              onSelectPlaylist={handleSelectPlaylistView}
               toggleLike={toggleLike}
+              onBack={() => setCurrentScreen('home')}
               globalTheme={globalTheme}
             />
           )}
@@ -939,6 +974,7 @@ function AppContent() {
           seekTo={seekTo}
           jamSession={jamSession}
           openJamModal={() => setIsJamOpen(true)}
+          onSelectArtist={handleSelectArtist}
           globalTheme={globalTheme}
         />
       )}
@@ -969,6 +1005,10 @@ function AppContent() {
         onRemoveFromJamQueue={removeFromJamQueue}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
         onPlayTrack={playTrack}
+        onSelectArtist={(artist) => {
+          setIsFullPlayerOpen(false);
+          handleSelectArtist(artist);
+        }}
         globalTheme={globalTheme}
       />
 

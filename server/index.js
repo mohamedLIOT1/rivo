@@ -4,6 +4,7 @@
 
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
@@ -76,6 +77,25 @@ const LyricsSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const SongLyrics = mongoose.model('SongLyrics', LyricsSchema);
+
+// ──────────────────────────────────────────
+// Website-Wide Album Collection (Playlists not tied to individual user account)
+// ──────────────────────────────────────────
+const AlbumSchema = new mongoose.Schema({
+  id: { type: String, unique: true, index: true },
+  name: { type: String, required: true },
+  artist: { type: String, required: true },
+  cover: { type: String },
+  trackIds: [{ type: String }],
+  releaseDate: { type: String },
+  genre: { type: String },
+  isAlbum: { type: Boolean, default: true },
+  isSystem: { type: Boolean, default: true },
+  isPublic: { type: Boolean, default: true },
+  source: { type: String, default: 'album_detection' }
+}, { timestamps: true });
+
+const Album = mongoose.model('Album', AlbumSchema);
 
 function getTrackKey(title, artist) {
   const norm = (str) => (str || '')
@@ -270,6 +290,121 @@ async function fetchTrackCover(title, artist) {
   } catch {}
   return null;
 }
+
+async function fetchTrackMetadata(title, artist) {
+  const q = `${artist || ''} ${title || ''}`.trim();
+  if (!q) return null;
+  try {
+    const res = await axios.get(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`, { timeout: 3000 });
+    const item = res.data?.results?.[0];
+    if (item) {
+      const art = item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : null;
+      return {
+        cover: art,
+        album: item.collectionName || '',
+        artist: item.artistName || artist,
+        releaseDate: item.releaseDate ? item.releaseDate.split('-')[0] : '',
+        genre: item.primaryGenreName || ''
+      };
+    }
+  } catch {}
+  return null;
+}
+
+function isValidAlbumName(albumName) {
+  if (!albumName || typeof albumName !== 'string') return false;
+  const clean = albumName.trim().toLowerCase();
+  const invalid = [
+    '', 'single', 'single cassette', 'singles', 'single release',
+    'unknown', 'unknown album', 'track', 'audio', 'youtube', 'soundcloud',
+    'import', 'spotify', 'spotify playlist', 'imported playlist', 'official audio'
+  ];
+  if (invalid.includes(clean)) return false;
+  if (clean.length < 2) return false;
+  return true;
+}
+
+async function syncTrackToAlbum(track) {
+  if (!track || !track.title || !track.artist) return null;
+
+  let albumTitle = (track.album || '').trim();
+  const artistName = track.artist.trim();
+  const trackId = String(track._id || track.id);
+
+  // If album is missing or generic placeholder, attempt lookup via iTunes API
+  if (!isValidAlbumName(albumTitle)) {
+    try {
+      const meta = await fetchTrackMetadata(track.title, artistName);
+      if (meta?.album && isValidAlbumName(meta.album)) {
+        albumTitle = meta.album.trim();
+        const updates = { album: albumTitle };
+        if (meta.cover && (!track.cover || track.cover.includes('unsplash') || track.cover.includes('pixabay'))) {
+          updates.cover = meta.cover;
+        }
+        await Track.updateOne({ _id: track._id || track.id }, { $set: updates });
+      }
+    } catch {}
+  }
+
+  if (!isValidAlbumName(albumTitle)) return null;
+
+  try {
+    const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    let album = await Album.findOne({
+      name: { $regex: new RegExp(`^${escapeRegex(albumTitle)}$`, 'i') },
+      artist: { $regex: new RegExp(`^${escapeRegex(artistName)}$`, 'i') }
+    });
+
+    if (album) {
+      if (!album.trackIds.includes(trackId)) {
+        album.trackIds.push(trackId);
+      }
+      if (!album.cover && track.cover) {
+        album.cover = track.cover;
+      }
+      await album.save();
+      return album;
+    } else {
+      const newAlbum = new Album({
+        id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+        name: albumTitle,
+        artist: artistName,
+        cover: track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+        trackIds: [trackId],
+        genre: track.genre || 'Pop',
+        isAlbum: true,
+        isSystem: true,
+        isPublic: true,
+        source: track.source || 'auto_detected'
+      });
+      await newAlbum.save();
+      console.log(`[Album] Created new website album: "${albumTitle}" by "${artistName}"`);
+      return newAlbum;
+    }
+  } catch (err) {
+    console.warn('[Album] syncTrackToAlbum error:', err.message);
+    return null;
+  }
+}
+
+// Background task: sync existing tracks that have an album title into Album collection
+setTimeout(async () => {
+  try {
+    const allTracks = await Track.find();
+    let count = 0;
+    for (const t of allTracks) {
+      if (t.title && t.artist && isValidAlbumName(t.album)) {
+        await syncTrackToAlbum(t);
+        count++;
+      }
+    }
+    if (count > 0) {
+      console.log(`[DB] Synced ${count} tracks into website Album collections`);
+    }
+  } catch (err) {
+    console.warn('[DB] Album backfill error:', err.message);
+  }
+}, 4000);
 
 function rankSoundCloudTrack(item, title = '', artist = '') {
   let score = 100;
@@ -1037,16 +1172,23 @@ app.post('/api/playlists/import', auth, async (req, res) => {
     let playlistCover = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600';
     let rawItems = [];
 
-    // 1. Detect Spotify Playlist
-    if (url.includes('spotify.com/playlist') || url.includes('spotify:playlist')) {
-      const match = url.match(/playlist\/([a-zA-Z0-9]+)/) || url.match(/spotify:playlist:([a-zA-Z0-9]+)/);
-      const playlistId = match ? match[1] : null;
+    // 1. Detect Spotify Playlist or Album
+    const isSpotifyAlbum = url.includes('spotify.com/album') || url.includes('spotify:album');
+    const isSpotifyPlaylist = url.includes('spotify.com/playlist') || url.includes('spotify:playlist');
+    const isAlbum = isSpotifyAlbum;
 
-      if (!playlistId) return res.status(400).json({ error: 'Invalid Spotify playlist link' });
+    if (isSpotifyPlaylist || isSpotifyAlbum) {
+      const match = isSpotifyAlbum
+        ? (url.match(/album\/([a-zA-Z0-9]+)/) || url.match(/spotify:album:([a-zA-Z0-9]+)/))
+        : (url.match(/playlist\/([a-zA-Z0-9]+)/) || url.match(/spotify:playlist:([a-zA-Z0-9]+)/));
+      const entityId = match ? match[1] : null;
+
+      if (!entityId) return res.status(400).json({ error: `Invalid Spotify ${isSpotifyAlbum ? 'album' : 'playlist'} link` });
 
       // Fetch Spotify Embed page which has embedded JSON metadata
       try {
-        const embedRes = await axios.get(`https://open.spotify.com/embed/playlist/${playlistId}`, {
+        const embedType = isSpotifyAlbum ? 'album' : 'playlist';
+        const embedRes = await axios.get(`https://open.spotify.com/embed/${embedType}/${entityId}`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
           timeout: 10000
         });
@@ -1060,10 +1202,11 @@ app.post('/api/playlists/import', auth, async (req, res) => {
             playlistTitle = entity.name || playlistTitle;
             if (entity.coverArt?.sources?.[0]?.url) playlistCover = entity.coverArt.sources[0].url;
 
+            const defaultArtist = entity.subtitle || entity.artists?.[0]?.name || 'Artist';
             const trackList = entity.trackList || [];
             rawItems = trackList.map(t => ({
               title: t.title || t.name,
-              artist: t.subtitle || t.artists?.[0]?.name || 'Artist',
+              artist: t.subtitle || t.artists?.[0]?.name || defaultArtist,
               duration: Math.round((t.duration || 180000) / 1000)
             }));
           }
@@ -1253,6 +1396,37 @@ app.post('/api/playlists/import', auth, async (req, res) => {
         }
       } catch (err) {
         console.warn('Could not persist playlist to user document:', err.message);
+      }
+    }
+
+    if (isAlbum) {
+      try {
+        const albumArtist = rawItems[0]?.artist || 'Artist';
+        const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        let siteAlbum = await Album.findOne({
+          name: { $regex: new RegExp(`^${escapeRegex(playlistTitle)}$`, 'i') },
+          artist: { $regex: new RegExp(`^${escapeRegex(albumArtist)}$`, 'i') }
+        });
+        if (siteAlbum) {
+          siteAlbum.trackIds = Array.from(new Set([...siteAlbum.trackIds, ...trackIds]));
+          siteAlbum.cover = playlistCover || siteAlbum.cover;
+          await siteAlbum.save();
+        } else {
+          siteAlbum = new Album({
+            id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            name: playlistTitle,
+            artist: albumArtist,
+            cover: playlistCover,
+            trackIds,
+            genre: 'Imported',
+            isAlbum: true,
+            isSystem: true,
+            isPublic: true
+          });
+          await siteAlbum.save();
+        }
+      } catch (err) {
+        console.warn('Could not register imported album to Album collection:', err.message);
       }
     }
 
@@ -1456,14 +1630,173 @@ app.delete('/api/playlists/:id', auth, async (req, res) => {
 });
 
 // ──────────────────────────────────────────
+// ALBUMS & ARTISTS (WEBSITE-WIDE DISCOGRAPHY)
+// ──────────────────────────────────────────
+app.get('/api/albums', async (req, res) => {
+  try {
+    const albums = await Album.find().sort({ updatedAt: -1 }).lean();
+    res.json({ success: true, albums });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/albums/:id', async (req, res) => {
+  try {
+    const album = await Album.findOne({ $or: [{ id: req.params.id }, { _id: req.params.id }] }).lean();
+    if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
+    const tracks = await Track.find({ _id: { $in: album.trackIds } }).lean();
+    const formattedTracks = tracks.map(t => ({
+      id: String(t._id),
+      _id: String(t._id),
+      ...t
+    }));
+    res.json({ success: true, album, tracks: formattedTracks });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/artists', async (req, res) => {
+  try {
+    const allTracks = await Track.find({}, 'artist album cover plays').lean();
+    const allAlbums = await Album.find().lean();
+
+    const artistMap = {};
+    for (const t of allTracks) {
+      if (!t.artist) continue;
+      const name = t.artist.trim();
+      const key = name.toLowerCase();
+      if (!artistMap[key]) {
+        artistMap[key] = {
+          id: key,
+          name,
+          avatar: t.cover,
+          trackCount: 0,
+          albumCount: 0,
+          totalPlays: 0,
+          albums: []
+        };
+      }
+      artistMap[key].trackCount++;
+      artistMap[key].totalPlays += (Number(t.plays) || 0);
+    }
+
+    for (const a of allAlbums) {
+      if (!a.artist) continue;
+      const key = a.artist.trim().toLowerCase();
+      if (artistMap[key]) {
+        artistMap[key].albumCount++;
+        artistMap[key].albums.push(a);
+      }
+    }
+
+    const artists = Object.values(artistMap).sort((a, b) => b.trackCount - a.trackCount);
+    res.json({ success: true, artists });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.get('/api/artists/:name', async (req, res) => {
+  try {
+    const artistName = decodeURIComponent(req.params.name).trim();
+    const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    const regex = new RegExp(`^${escapeRegex(artistName)}$`, 'i');
+
+    const tracks = await Track.find({ artist: { $regex: regex } }).sort({ plays: -1 }).lean();
+    const albums = await Album.find({ artist: { $regex: regex } }).sort({ createdAt: -1 }).lean();
+
+    const formattedTracks = tracks.map(t => ({
+      id: String(t._id),
+      _id: String(t._id),
+      ...t
+    }));
+
+    const artistData = {
+      id: artistName.toLowerCase(),
+      name: tracks[0]?.artist || artistName,
+      avatar: tracks[0]?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      trackCount: tracks.length,
+      albumCount: albums.length,
+      tracks: formattedTracks,
+      albums
+    };
+
+    res.json({ success: true, artist: artistData });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
 // TRACKS CRUD
 // ──────────────────────────────────────────
 app.get('/api/tracks', async (req, res) => {
   try {
-    const tracks = await Track.find().sort({ createdAt: -1 }).limit(100);
+    const tracks = await Track.find().sort({ createdAt: -1 }).limit(150);
     res.json({ success: true, tracks });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadsDir));
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_'));
+  }
+});
+const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
+
+app.post('/api/tracks/upload', optionalAuth, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+  try {
+    const { title, artist, album, genre, lyrics } = req.body;
+    if (!title || !artist) return res.status(400).json({ error: 'Title and artist are required' });
+
+    let audioUrl = '';
+    if (req.files?.audio?.[0]) {
+      audioUrl = `/uploads/${req.files.audio[0].filename}`;
+    }
+
+    let coverUrl = '';
+    if (req.files?.cover?.[0]) {
+      coverUrl = `/uploads/${req.files.cover[0].filename}`;
+    } else {
+      coverUrl = await fetchTrackCover(title, artist) || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+    }
+
+    let parsedLyrics = [];
+    if (lyrics) {
+      try { parsedLyrics = typeof lyrics === 'string' ? JSON.parse(lyrics) : lyrics; } catch {}
+    }
+
+    const newTrack = await new Track({
+      title: title.trim(),
+      artist: artist.trim(),
+      album: (album || '').trim() || 'Single',
+      cover: coverUrl,
+      audioUrl,
+      duration: 210,
+      genre: genre || 'Pop',
+      source: 'Upload',
+      addedBy: req.user ? req.user.id : 'user',
+      lyrics: parsedLyrics
+    }).save();
+
+    // Auto-detect and sync to website album
+    await syncTrackToAlbum(newTrack);
+
+    res.json({ success: true, track: newTrack });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1473,13 +1806,16 @@ const createTrackHandler = async (req, res) => {
       ...req.body,
       addedBy: req.user ? req.user.id : 'user'
     }).save();
+
+    // Auto-detect and sync to website album
+    await syncTrackToAlbum(newTrack);
+
     res.json({ success: true, track: newTrack });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 };
-app.post('/api/tracks/create', optionalAuth, createTrackHandler);
-app.post('/api/tracks/add', optionalAuth, createTrackHandler);
+app.post(['/api/tracks', '/api/tracks/create', '/api/tracks/add'], optionalAuth, createTrackHandler);
 
 // Delete track permanently from database & remove from all playlists & likes
 const deleteTrackHandler = async (req, res) => {
