@@ -28,8 +28,10 @@ import PlaylistScreen from './screens/PlaylistScreen';
 import PodcastsScreen from './screens/PodcastsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import MixesScreen from './screens/MixesScreen';
+import QuranScreen from './screens/QuranScreen';
 import AdminScreen from './screens/AdminScreen';
 import { isUserAdmin } from './utils/adminUtils';
+import { isQuranContent, getQuranReciterName } from './utils/quranUtils';
 
 import { API_BASE_URL } from './config';
 import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from './utils/offlineStorage';
@@ -63,8 +65,16 @@ function AppContent() {
   const [topSearchQuery, setTopSearchQuery]   = useState('');
   const [selectedArtist, setSelectedArtist]   = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [libraryMode, setLibraryMode] = useState('music');
   const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
   const [albums, setAlbums]                   = useState([]);
+
+  const musicTracks = tracks.filter(track => !isQuranContent(track));
+  const quranTracks = tracks.filter(track => isQuranContent(track));
+  const musicPlaylists = playlists.filter(playlist => !isQuranContent(playlist));
+  const quranPlaylists = playlists.filter(playlist => isQuranContent(playlist));
+  const musicAlbums = albums.filter(album => !isQuranContent(album));
+  const quranAlbums = albums.filter(album => isQuranContent(album));
 
   // Modals
   const [isFullPlayerOpen,    setIsFullPlayerOpen]    = useState(false);
@@ -232,15 +242,24 @@ function AppContent() {
 
   const handleAddSong = async (newSong) => {
     if (!newSong) return;
+    const isQ = currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent(newSong);
+    let artist = newSong.artist;
+    if (isQ) {
+      const reciter = getQuranReciterName(newSong, playlists);
+      if (reciter && reciter !== 'تلاوات قرآنية' && reciter !== 'قارئ غير معروف') {
+        artist = reciter;
+      }
+    }
+    const songToAdd = { ...newSong, isQuran: isQ, artist };
     setTracks(prev => {
-      const exists = prev.some(x => String(x.id) === String(newSong.id));
+      const exists = prev.some(x => String(x.id) === String(songToAdd.id));
       if (exists) return prev;
-      return [{ ...newSong, liked: false }, ...prev];
+      return [{ ...songToAdd, liked: false }, ...prev];
     });
-    playTrack(newSong);
+    playTrack(songToAdd);
 
     // Save to server (if not already done in AddSongModal)
-    if (newSong.source === 'YouTube' || newSong.source === 'SoundCloud') {
+    if (songToAdd.source === 'YouTube' || songToAdd.source === 'SoundCloud') {
       try {
         const token = localStorage.getItem('liofy_token');
         await fetch(`${API_BASE_URL}/api/tracks/add`, {
@@ -249,7 +268,7 @@ function AppContent() {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify(newSong),
+          body: JSON.stringify(songToAdd),
         });
         syncFromServer();
         fetchAlbums();
@@ -288,12 +307,14 @@ function AppContent() {
   };
 
   const handleCreatePlaylist = async (name, description, cover = '', isPublic = true) => {
+    const isQ = currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent({ title: name, description });
     const newPl = {
       id: `pl-${Date.now()}`,
       name,
       description: description || '',
       cover: cover || '',
       isPublic: isPublic !== false,
+      isQuran: isQ,
       trackIds: [],
     };
     setPlaylists(prev => [...prev, newPl]);
@@ -307,7 +328,7 @@ function AppContent() {
         await fetch(`${API_BASE_URL}/api/playlists/create`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name, description, cover, isPublic }),
+          body: JSON.stringify({ name, description, cover, isPublic, isQuran: isQ }),
         });
       }
     } catch {}
@@ -402,7 +423,12 @@ function AppContent() {
     setSelectedArtist(artistObj);
     setCurrentScreen('artist');
   };
-  const handleSelectPlaylistView = (pl) => { setSelectedPlaylist(pl); setCurrentScreen('playlist'); };
+  const handleSelectPlaylistView = (pl) => {
+    setSelectedPlaylist(pl);
+    const isQ = Boolean(pl?.isQuran || isQuranContent(pl));
+    setLibraryMode(isQ ? 'quran' : 'music');
+    setCurrentScreen('playlist');
+  };
 
   const handlePlayPodcastEpisode = (episode, podcast) => {
     playTrack({
@@ -639,9 +665,11 @@ function AppContent() {
   const goToScreen = (screen) => {
     if (typeof screen === 'string' && screen.startsWith('playlist:')) {
       const plId = screen.split(':')[1];
-      const pl = playlists.find(p => p.id === plId);
+      const pl = playlists.find(p => String(p.id || p._id) === String(plId));
       if (pl) handleSelectPlaylistView(pl);
     } else {
+      if (screen === 'quran') setLibraryMode('quran');
+      if (screen === 'library' || screen === 'home' || screen === 'search' || screen === 'mixes') setLibraryMode('music');
       setCurrentScreen(screen);
     }
   };
@@ -755,6 +783,7 @@ function AppContent() {
           currentScreen={currentScreen}
           setCurrentScreen={goToScreen}
           playlists={playlists}
+          libraryMode={libraryMode}
           openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
           openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
           openImportSongModal={() => setIsImportSongOpen(true)}
@@ -783,9 +812,9 @@ function AppContent() {
         >
           {currentScreen === 'home' && (
             <HomeScreen
-              tracks={tracks}
-              playlists={playlists}
-              albums={albums}
+              tracks={musicTracks}
+              playlists={musicPlaylists}
+              albums={musicAlbums}
               onSelectTrack={playTrack}
               onSelectPlaylist={handleSelectPlaylistView}
               toggleLike={toggleLike}
@@ -811,8 +840,8 @@ function AppContent() {
 
           {currentScreen === 'search' && (
             <SearchScreen
-              tracks={tracks}
-              albums={albums}
+              tracks={musicTracks}
+              albums={musicAlbums}
               initialQuery={topSearchQuery}
               onSelectTrack={playTrack}
               onSelectPlaylist={handleSelectPlaylistView}
@@ -831,9 +860,9 @@ function AppContent() {
 
           {currentScreen === 'library' && (
             <LibraryScreen
-              playlists={playlists}
-              albums={albums}
-              tracks={tracks}
+              playlists={musicPlaylists}
+              albums={musicAlbums}
+              tracks={musicTracks}
               onSelectPlaylist={handleSelectPlaylistView}
               onSelectArtist={handleSelectArtist}
               onSelectTrack={playTrack}
@@ -845,16 +874,34 @@ function AppContent() {
             />
           )}
 
+          {currentScreen === 'quran' && (
+            <QuranScreen
+              tracks={quranTracks}
+              playlists={quranPlaylists}
+              onSelectTrack={playTrack}
+              onSelectPlaylist={handleSelectPlaylistView}
+              onSelectArtist={handleSelectArtist}
+              toggleLike={toggleLike}
+              openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
+              openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
+              openImportSongModal={() => setIsImportSongOpen(true)}
+              openAddSongModal={() => setIsAddSongOpen(true)}
+              currentTrack={currentTrack}
+              isPlaying={isPlaying}
+              globalTheme={globalTheme}
+            />
+          )}
+
           {currentScreen === 'playlist' && selectedPlaylist && (
             <PlaylistScreen
               playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || albums.find(a => String(a.id) === String(selectedPlaylist.id)) || selectedPlaylist}
-              tracks={tracks}
+              tracks={isQuranContent(selectedPlaylist) ? quranTracks : musicTracks}
               currentUser={currentUser}
               onSelectTrack={playTrack}
               onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
               toggleDownload={handleDownload}
-              onBack={() => setCurrentScreen('library')}
+              onBack={() => setCurrentScreen(isQuranContent(selectedPlaylist) ? 'quran' : 'library')}
               onAddTrackToPlaylist={handleAddTrackToPlaylist}
               onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
@@ -898,7 +945,13 @@ function AppContent() {
           {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} globalTheme={globalTheme} />}
 
           {currentScreen === 'mixes' && (
-            <MixesScreen tracks={tracks} globalTheme={globalTheme} />
+            <MixesScreen 
+              tracks={musicTracks} 
+              toggleLike={toggleLike} 
+              onSelectArtist={handleSelectArtist} 
+              onBack={() => setCurrentScreen('home')}
+              globalTheme={globalTheme} 
+            />
           )}
 
           {currentScreen === 'profile' && (
@@ -993,9 +1046,11 @@ function AppContent() {
         isShuffle={isShuffle}
         toggleShuffle={toggleShuffle}
         isRepeat={isRepeat}
-        toggleRepeat={() => setIsRepeat(p => !p)}
-        queue={jamSession?.queue?.length ? jamSession.queue : (currentQueue?.length > 0 ? currentQueue : (tracks?.length ? [currentTrack].filter(Boolean) : []))}
-        jamSession={jamSession}
+        queue={(() => {
+          const isCurQ = isQuranContent(currentTrack);
+          const rawQ = jamSession?.queue?.length ? jamSession.queue : (currentQueue?.length > 0 ? currentQueue : (isCurQ ? quranTracks : musicTracks));
+          return rawQ.filter(t => isCurQ ? isQuranContent(t) : !isQuranContent(t));
+        })()}
         onRemoveFromJamQueue={removeFromJamQueue}
         openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
         onPlayTrack={playTrack}
@@ -1017,7 +1072,7 @@ function AppContent() {
         isOpen={isAddToPlaylistOpen}
         onClose={() => setIsAddToPlaylistOpen(false)}
         track={currentTrack}
-        playlists={playlists}
+        playlists={libraryMode === 'quran' ? quranPlaylists : musicPlaylists}
         onAddTrackToPlaylist={handleAddTrackToPlaylist}
         onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
         jamSession={jamSession}
@@ -1076,16 +1131,31 @@ function AppContent() {
       <ImportPlaylistModal
         isOpen={isImportPlaylistOpen}
         onClose={() => setIsImportPlaylistOpen(false)}
+        isQuran={currentScreen === 'quran' || libraryMode === 'quran'}
         onPlaylistImported={(newPl, newTracks) => {
-          if (newTracks && newTracks.length > 0) {
+          const importedIsQuran = currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent(newPl) || (newTracks || []).some(isQuranContent);
+          const taggedPlaylist = { ...newPl, isQuran: importedIsQuran };
+          const taggedTracks = (newTracks || []).map(track => {
+            const isQ = importedIsQuran || isQuranContent(track);
+            let artist = track.artist;
+            if (isQ) {
+              const reciter = getQuranReciterName(track, [taggedPlaylist]);
+              if (reciter && reciter !== 'تلاوات قرآنية' && reciter !== 'قارئ غير معروف') {
+                artist = reciter;
+              }
+            }
+            return { ...track, isQuran: isQ, artist };
+          });
+          if (taggedTracks.length > 0) {
             setTracks(prev => {
               const existingIds = new Set(prev.map(t => String(t.id || t._id)));
-              const uniqueNew = newTracks.filter(t => !existingIds.has(String(t.id || t._id)));
+              const uniqueNew = taggedTracks.filter(t => !existingIds.has(String(t.id || t._id)));
               return [...uniqueNew, ...prev];
             });
           }
-          setPlaylists(prev => [newPl, ...prev.filter(p => p.id !== newPl.id)]);
-          setSelectedPlaylist(newPl);
+          setPlaylists(prev => [taggedPlaylist, ...prev.filter(p => p.id !== taggedPlaylist.id)]);
+          setSelectedPlaylist(taggedPlaylist);
+          setLibraryMode(importedIsQuran ? 'quran' : 'music');
           setCurrentScreen('playlist');
           showToast(`Imported "${newPl.name}" (${newPl.trackIds?.length || 0} songs)!`);
           syncFromServer();
@@ -1237,7 +1307,7 @@ function AppContent() {
                   }`}
                 >
                   <Radio size={16} />
-                  <span>DJ Automix Deck</span>
+                  <span>Mix</span>
                 </button>
 
                 <button

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Link2, DownloadCloud, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
-export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImported }) {
+export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImported, isQuran = false }) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +26,7 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ url: url.trim() })
+        body: JSON.stringify({ url: url.trim(), isQuran })
       });
 
       const data = await res.json();

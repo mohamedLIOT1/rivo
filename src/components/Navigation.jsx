@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
+import { isQuranContent } from '../utils/quranUtils';
 import RivoLogo from './RivoLogo';
 
 export default function Navigation({ 
@@ -22,6 +23,7 @@ export default function Navigation({
   isActivityPanelOpen = false,
   toggleActivityPanel = () => {},
   globalTheme = 'dark',
+  libraryMode = 'music',
 }) {
   const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
@@ -29,7 +31,8 @@ export default function Navigation({
   const mainNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'mixes', label: 'DJ Mix', icon: Radio },
+    ...(libraryMode === 'music' ? [{ id: 'mixes', label: 'DJ Mix', icon: Radio }] : []),
+    { id: 'quran', label: 'Quran', icon: BookOpen },
     { id: 'stats', label: 'Stats & History', icon: Disc },
   ];
 
@@ -37,10 +40,15 @@ export default function Navigation({
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
-    { id: 'mixes', label: 'DJ Mix', icon: Radio },
+    { id: 'quran', label: 'Quran', icon: BookOpen },
   ];
 
-  const safePlaylists = Array.isArray(playlists) ? playlists : [];
+  const safePlaylists = (Array.isArray(playlists) ? playlists : [])
+    .filter(pl => isQuranContent(pl) === (libraryMode === 'quran'))
+    .filter(pl => {
+      const name = (pl.name || '').trim().toLowerCase();
+      return name !== 'liked songs' && name !== 'liked prescriptions' && pl.id !== 'liked' && !pl.isLikedSongs;
+    });
   const filteredPlaylists = safePlaylists.filter(pl => {
     if (libraryFilter === 'playlists') return !pl.isArtistMix;
     if (libraryFilter === 'artists') return Boolean(pl.isArtistMix);
@@ -112,7 +120,7 @@ export default function Navigation({
                 isDark ? 'text-zinc-200' : 'text-[#0b1110]'
               }`}>
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>Your Library</span>
+                <span>{libraryMode === 'quran' ? 'Quran Library' : 'Your Library'}</span>
               </div>
 
               <div className="flex items-center gap-1">
@@ -176,9 +184,11 @@ export default function Navigation({
               <div
                 onClick={() => setCurrentScreen('library')}
                 className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
-                  isDark 
-                    ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
-                    : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  currentScreen === 'library'
+                    ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
+                    : isDark 
+                      ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
+                      : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
                 }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -194,6 +204,37 @@ export default function Navigation({
                 </div>
                 <span className="text-[9px] font-mono text-zinc-400 font-bold">AUTO</span>
               </div>
+
+              {/* DJ Mixes */}
+              {libraryMode === 'music' && libraryFilter !== 'artists' && (
+                <div
+                  onClick={() => setCurrentScreen('mixes')}
+                  className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
+                    currentScreen === 'mixes'
+                      ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
+                      : isDark 
+                        ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-300' 
+                        : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded bg-[#17a398] text-[#0b1110] flex items-center justify-center shrink-0 font-bold">
+                      <Radio size={12} strokeWidth={2.5} />
+                    </div>
+                    <div className="truncate">
+                      <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
+                        DJ Mixes
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-500 font-normal">Moods & Vibes</span>
+                    </div>
+                  </div>
+                  <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
+                    isDark ? 'bg-zinc-800 text-[#17a398]' : 'bg-[#ede5d3] text-[#082621]'
+                  }`}>
+                    MIX
+                  </span>
+                </div>
+              )}
 
               {filteredPlaylists.map((pl, idx) => {
                 const isActive = currentScreen === `playlist:${pl.id}` || (currentScreen === 'playlist' && pl.id);

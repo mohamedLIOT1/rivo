@@ -173,11 +173,23 @@ const UserSchema = new mongoose.Schema({
     isLikedSongs: Boolean,
     isPublic: { type: Boolean, default: true },
     description: String,
+    isQuran: { type: Boolean, default: false },
     isMix: { type: Boolean, default: false },
     transitions: { type: Object, default: {} }
   }],
   currentListening: { type: Object, default: null },
-  lastActiveAt: { type: Date, default: Date.now }
+  lastActiveAt: { type: Date, default: Date.now },
+  totalListeningSeconds: { type: Number, default: 0 },
+  weeklyListeningSeconds: { type: Number, default: 0 },
+  weeklyWeek: { type: String, default: '' },
+  topTrack: {
+    id: String,
+    title: String,
+    artist: String,
+    cover: String,
+    plays: { type: Number, default: 0 },
+    seconds: { type: Number, default: 0 }
+  }
 }, { timestamps: true });
 
 const User = mongoose.model('User', UserSchema);
@@ -240,6 +252,46 @@ setTimeout(async () => {
     console.warn('[Admin] Startup auto-promotion error:', err.message);
   }
 }, 4000);
+
+const QURAN_REGEX = /(\bسورة|\bسوره|\bقرآن|\bقران|\bالمصحف|\bمصحف|\bتلاوة|\bتلاوه|\bترتيل|\bتجويد|المنشاوي|عبد\s*الباسط|الحصري|البناء|الطبلاوي|العفاسي|ماهر\s*المعيقلي|السديس|الشريم|ياسر\s*الدوسري|مشاري\s*العفاسي|أحمد\s*العجمي|سعد\s*الغامدي|\bsurah\b|\bquran\b|\bkoran\b|\brecitation\b|\btajweed\b|\btartil\b|\bmushaf\b)/i;
+
+function isQuranContent(title, artist, album, genre, description) {
+  const str = `${title || ''} ${artist || ''} ${album || ''} ${genre || ''} ${description || ''}`;
+  return QURAN_REGEX.test(str);
+}
+
+// Auto-migrate & classify existing Quran tracks & playlists on startup
+setTimeout(async () => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const tracks = await Track.find({});
+      for (const t of tracks) {
+        if (!t.isQuran && isQuranContent(t.title, t.artist, t.album, t.genre)) {
+          await Track.updateOne({ _id: t._id }, { $set: { isQuran: true } });
+        }
+      }
+
+      const users = await User.find({});
+      for (const u of users) {
+        let changed = false;
+        if (Array.isArray(u.playlists)) {
+          for (const pl of u.playlists) {
+            if (!pl.isQuran && isQuranContent(pl.name, '', '', '', pl.description)) {
+              pl.isQuran = true;
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          await u.save();
+        }
+      }
+      console.log('✅ [Quran] Auto-categorized existing Quran tracks & playlists in MongoDB');
+    }
+  } catch (err) {
+    console.warn('[Quran] Migration warning:', err.message);
+  }
+}, 4500);
 
 function makeToken(u) {
   const isAdmin = isAdminUser(u);
@@ -1071,6 +1123,114 @@ app.post('/api/users/listening-activity', auth, async (req, res) => {
   }
 });
 
+// Helper for ISO week
+function getCurrentISOWeek() {
+  const d = new Date();
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+// ──────────────────────────────────────────
+// Listening Activity & Real Stats APIs
+// ──────────────────────────────────────────
+app.post('/api/stats/listen', optionalAuth, async (req, res) => {
+  try {
+    const { trackId, title, artist, cover, seconds = 0, isCompleted = false } = req.body;
+    const sec = Math.max(0, Math.min(300, Number(seconds) || 0));
+    const currentWeek = getCurrentISOWeek();
+
+    // 1. If user is authenticated, update their real stats
+    if (req.user?.id) {
+      const user = await User.findById(req.user.id);
+      if (user) {
+        if (user.weeklyWeek !== currentWeek) {
+          user.weeklyWeek = currentWeek;
+          user.weeklyListeningSeconds = 0;
+        }
+
+        user.totalListeningSeconds = (user.totalListeningSeconds || 0) + sec;
+        user.weeklyListeningSeconds = (user.weeklyListeningSeconds || 0) + sec;
+
+        if (title && artist) {
+          if (!user.topTrack || !user.topTrack.title) {
+            user.topTrack = { id: trackId, title, artist, cover: cover || '', plays: isCompleted ? 1 : 0, seconds: sec };
+          } else if (user.topTrack.title === title) {
+            user.topTrack.seconds = (user.topTrack.seconds || 0) + sec;
+            if (isCompleted) user.topTrack.plays = (user.topTrack.plays || 0) + 1;
+            if (cover) user.topTrack.cover = cover;
+          } else if (sec > (user.topTrack.seconds || 0) && isCompleted) {
+            user.topTrack = { id: trackId, title, artist, cover: cover || user.topTrack.cover || '', plays: 1, seconds: sec };
+          }
+        }
+
+        user.lastActiveAt = new Date();
+        await user.save();
+      }
+    }
+
+    // 2. Increment real track plays in Track collection if completed
+    if (isCompleted && trackId) {
+      await Track.updateOne(
+        { $or: [{ _id: mongoose.isValidObjectId(trackId) ? trackId : null }, { id: trackId }] },
+        { $inc: { plays: 1 } }
+      ).catch(() => {});
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/stats/leaderboard', optionalAuth, async (req, res) => {
+  try {
+    const currentWeek = getCurrentISOWeek();
+    const users = await User.find({})
+      .select('_id name avatar role isAdmin isVerified totalListeningSeconds weeklyListeningSeconds weeklyWeek topTrack')
+      .lean();
+
+    const currentUserId = req.user?.id ? String(req.user.id) : '';
+
+    const leaderboard = users.map(u => {
+      const isCurWeek = u.weeklyWeek === currentWeek;
+      const weeklySec = isCurWeek ? (u.weeklyListeningSeconds || 0) : 0;
+      const totalSec = u.totalListeningSeconds || 0;
+      const effectiveSec = weeklySec > 0 ? weeklySec : (totalSec > 0 ? totalSec : 0);
+      const minutes = Math.floor(effectiveSec / 60);
+
+      return {
+        id: String(u._id),
+        name: u.name,
+        avatar: u.avatar || '',
+        minutes,
+        seconds: effectiveSec,
+        topSong: u.topTrack?.title ? `${u.topTrack.title} - ${u.topTrack.artist}` : 'Various Tracks',
+        isVerified: isVerifiedUser(u.name) || Boolean(u.isVerified),
+        isCurrentUser: Boolean(currentUserId && String(u._id) === currentUserId)
+      };
+    });
+
+    leaderboard.sort((a, b) => b.seconds - a.seconds);
+
+    const ranked = leaderboard.map((item, idx) => ({
+      ...item,
+      rank: idx + 1
+    }));
+
+    res.json({
+      success: true,
+      currentWeek,
+      leaderboard: ranked
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get user followers list
 app.get('/api/users/:id/followers', optionalAuth, async (req, res) => {
   try {
@@ -1392,7 +1552,7 @@ function parseDurationFromLabel(label) {
 // ──────────────────────────────────────────
 app.post('/api/playlists/import', auth, async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, isQuran } = req.body;
     if (!url) return res.status(400).json({ error: 'Playlist URL is required' });
 
     let playlistTitle = 'Imported Playlist';
@@ -1510,6 +1670,63 @@ app.post('/api/playlists/import', auth, async (req, res) => {
                     audioUrl: `https://www.youtube.com/watch?v=${videoId}`
                   });
                 }
+                else if (it.continuationItemRenderer) {
+                  continuationToken = it.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+                }
+              }
+            }
+
+            // Extract InnerTube API key and fetch all continuation pages (supporting full Quran playlists > 100 tracks)
+            const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/) || html.match(/innertubeApiKey":"([^"]+)"/);
+            const apiKey = apiKeyMatch ? apiKeyMatch[1] : null;
+            const clientVersionMatch = html.match(/"INNERTUBE_CONTEXT_CLIENT_VERSION":"([^"]+)"/);
+            const clientVersion = clientVersionMatch ? clientVersionMatch[1] : '2.20240101.01.00';
+
+            let currentCont = continuationToken;
+            let pageCount = 0;
+            while (apiKey && currentCont && pageCount < 15) {
+              pageCount++;
+              try {
+                const contRes = await axios.post(`https://www.youtube.com/youtubei/v1/browse?key=${apiKey}`, {
+                  context: { client: { clientName: 'WEB', clientVersion } },
+                  continuation: currentCont
+                }, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9'
+                  },
+                  timeout: 10000
+                });
+
+                const actions = contRes.data?.onResponseReceivedActions || [];
+                let nextCont = null;
+                for (const act of actions) {
+                  const items = act?.appendContinuationItemsAction?.continuationItems || [];
+                  for (const it of items) {
+                    if (it.playlistVideoRenderer && it.playlistVideoRenderer.videoId) {
+                      const p = it.playlistVideoRenderer;
+                      const videoId = p.videoId;
+                      const title = p.title?.runs?.[0]?.text || p.title?.simpleText || 'Unknown Track';
+                      const author = p.shortBylineText?.runs?.[0]?.text || 'Artist';
+                      const duration = p.lengthSeconds ? parseInt(p.lengthSeconds, 10) : 200;
+                      const cover = p.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                      rawItems.push({
+                        title,
+                        artist: author,
+                        videoId,
+                        duration,
+                        cover,
+                        audioUrl: `https://www.youtube.com/watch?v=${videoId}`
+                      });
+                    } else if (it.continuationItemRenderer) {
+                      nextCont = it.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+                    }
+                  }
+                }
+                currentCont = nextCont;
+              } catch (contErr) {
+                console.warn('Continuation fetch stopped:', contErr.message);
+                break;
               }
             }
           } catch (e) {
@@ -1551,11 +1768,12 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       return res.status(400).json({ error: 'Could not extract tracks from playlist. Please verify the link is public.' });
     }
 
-    // Save tracks to database
+    // Save tracks to database (no limit, full support for Quran playlists)
+    const finalIsQuran = Boolean(isQuran || isQuranContent(playlistTitle, '', '', ''));
     const trackIds = [];
     const createdTracks = [];
 
-    for (const item of rawItems.slice(0, 100)) { // up to 100 tracks
+    for (const item of rawItems) {
       try {
         const duration = item.duration || 180;
         const ytId = item.videoId || await searchYouTubeId(`${item.artist} - ${item.title}`);
@@ -1565,6 +1783,7 @@ app.post('/api/playlists/import', auth, async (req, res) => {
         if (!trackCover) trackCover = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
 
         const audioUrl = item.audioUrl || (ytId ? `https://www.youtube.com/watch?v=${ytId}` : '');
+        const itemIsQuran = Boolean(finalIsQuran || isQuranContent(item.title, item.artist, playlistTitle, ''));
 
         let trackId = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
         if (mongoose.connection.readyState === 1) {
@@ -1576,8 +1795,9 @@ app.post('/api/playlists/import', auth, async (req, res) => {
               cover: trackCover,
               audioUrl,
               duration,
-              genre: 'Imported',
-              source: 'YouTube'
+              genre: itemIsQuran ? 'Quran' : 'Imported',
+              source: 'YouTube',
+              isQuran: itemIsQuran
             }).save();
             if (newTrack?._id) trackId = String(newTrack._id);
           } catch (dbErr) {
@@ -1594,8 +1814,9 @@ app.post('/api/playlists/import', auth, async (req, res) => {
           cover: trackCover,
           audioUrl,
           duration,
-          genre: 'Imported',
-          source: 'YouTube'
+          genre: itemIsQuran ? 'Quran' : 'Imported',
+          source: 'YouTube',
+          isQuran: itemIsQuran
         };
 
         trackIds.push(trackId);
@@ -1611,6 +1832,7 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       trackIds,
       isLikedSongs: false,
       isPublic: true,
+      isQuran: Boolean(finalIsQuran),
       description: `Imported from ${url.includes('spotify') ? 'Spotify' : url.includes('youtube') ? 'YouTube' : 'External'} (${trackIds.length} tracks)`
     };
 
@@ -1961,7 +2183,7 @@ app.get('/api/sync', auth, async (req, res) => {
     const user = await User.findById(req.user.id).select('-password').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const allTracks = await Track.find().sort({ createdAt: -1 }).limit(1000).lean();
+    const allTracks = await Track.find().sort({ createdAt: -1 }).limit(3000).lean();
     const formatted = allTracks.map(t => ({
       id: String(t._id),
       _id: String(t._id),
@@ -1973,6 +2195,7 @@ app.get('/api/sync', auth, async (req, res) => {
       duration: t.duration || 180,
       genre: t.genre,
       source: t.source,
+      isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre)),
       addedBy: t.addedBy,
       lyrics: t.lyrics || [],
       color: t.color || '#1DB954',
@@ -1983,7 +2206,10 @@ app.get('/api/sync', auth, async (req, res) => {
       success: true,
       user,
       tracks: formatted,
-      playlists: user.playlists || [],
+      playlists: (user.playlists || []).map(p => ({
+        ...p,
+        isQuran: Boolean(p.isQuran || isQuranContent(p.name, '', '', '', p.description))
+      })),
       likedTrackIds: user.likedTrackIds || [],
     });
   } catch (e) {
@@ -2020,6 +2246,7 @@ app.post('/api/tracks/by-ids', async (req, res) => {
       duration: t.duration || 180,
       genre: t.genre,
       source: t.source || 'SoundCloud',
+      isQuran: Boolean(t.isQuran),
       lyrics: t.lyrics || []
     }));
 
@@ -2044,7 +2271,8 @@ app.post('/api/playlists/create', auth, async (req, res) => {
       cover: req.body.cover || '',
       trackIds: [],
       isLikedSongs: false,
-      isPublic: true
+      isPublic: req.body.isPublic !== false,
+      isQuran: Boolean(req.body.isQuran)
     };
     u.playlists.push(newPl);
     await u.save();
@@ -2246,7 +2474,12 @@ app.get('/api/artists/:name', async (req, res) => {
 // ──────────────────────────────────────────
 app.get('/api/tracks', async (req, res) => {
   try {
-    const tracks = await Track.find().sort({ createdAt: -1 }).limit(150);
+    const raw = await Track.find().sort({ createdAt: -1 }).limit(3000).lean();
+    const tracks = raw.map(t => ({
+      ...t,
+      id: String(t._id),
+      isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre))
+    }));
     res.json({ success: true, tracks });
   } catch (e) {
     res.status(500).json({ error: e.message });

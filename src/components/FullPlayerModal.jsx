@@ -11,6 +11,7 @@ import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
+import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -127,6 +128,12 @@ export default function FullPlayerModal({
   // Use global theme directly
   const isDark = globalTheme === 'dark';
 
+  // Strictly isolate queue: Quran only displays Quran; Music only displays Music
+  const isCurQuran = isQuranContent(currentTrack);
+  const displayQueue = useMemo(() => {
+    return (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+  }, [queue, isCurQuran]);
+
   // ── Dynamic background color extracted from album art ──
   const [dynamicColor, setDynamicColor] = useState(null);
   const lastGoodColorRef = useRef(null); // Persists last successfully extracted color
@@ -181,6 +188,23 @@ export default function FullPlayerModal({
 
   const activeTime = currentTime !== undefined ? currentTime : (audioCurrentTime || 0);
   const activeDuration = (duration !== undefined && duration > 0) ? duration : (audioDuration || currentTrack?.duration || 210);
+
+  // High-frequency 50ms sampler to eliminate visual lag during lyrics playback
+  const [smoothTime, setSmoothTime] = useState(activeTime);
+
+  useEffect(() => {
+    setSmoothTime(activeTime);
+  }, [activeTime]);
+
+  useEffect(() => {
+    if (!isOpen || !isPlaying) return;
+    const interval = setInterval(() => {
+      if (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime)) {
+        setSmoothTime(audioRef.current.currentTime);
+      }
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isOpen, isPlaying, isYtTrack, audioRef]);
 
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
@@ -281,10 +305,14 @@ export default function FullPlayerModal({
     }));
   }, [baseLyrics, syncOffset]);
 
+  const effectiveLyricTime = (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime) && isPlaying)
+    ? smoothTime
+    : activeTime;
+
   const activeLyricIndex = lyrics.length > 0
     ? lyrics.findIndex((line, idx) => {
         const nextLine = lyrics[idx + 1];
-        return activeTime >= line.time && (!nextLine || activeTime < nextLine.time);
+        return effectiveLyricTime >= line.time && (!nextLine || effectiveLyricTime < nextLine.time);
       })
     : -1;
 
@@ -468,6 +496,7 @@ export default function FullPlayerModal({
     setIsClearLyricsConfirmOpen(false);
   };
 
+  const lyricsContainerRef = useRef(null);
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
 
@@ -476,19 +505,42 @@ export default function FullPlayerModal({
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
       setIsUserScrolling(false);
-    }, 4000);
+    }, 3500);
   };
 
-  useEffect(() => {
-    if (isOpen && activeTab === 'lyrics' && activeLyricIndex !== -1 && lyricRefs.current[activeLyricIndex] && !isUserScrolling) {
-      try {
-        lyricRefs.current[activeLyricIndex].scrollIntoView({
-          behavior: 'smooth',
-          block: 'center'
-        });
-      } catch (err) {}
+  const scrollToActiveLyric = useCallback((behavior = 'smooth') => {
+    if (activeLyricIndex === -1) return;
+    const container = lyricsContainerRef.current;
+    const activeEl = lyricRefs.current[activeLyricIndex];
+    if (container && activeEl) {
+      const containerRect = container.getBoundingClientRect();
+      const activeRect = activeEl.getBoundingClientRect();
+      const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
+      const targetScroll = relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
+      
+      container.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior
+      });
     }
-  }, [activeLyricIndex, activeTab, isOpen, isUserScrolling]);
+  }, [activeLyricIndex]);
+
+  // Auto-scroll on active lyric line change for BOTH desktop side panel and mobile lyrics tab
+  useEffect(() => {
+    const isShowingLyrics = activeTab === 'lyrics' || desktopSideTab === 'lyrics';
+    if (isOpen && isShowingLyrics && activeLyricIndex !== -1 && !isUserScrolling) {
+      scrollToActiveLyric('smooth');
+    }
+  }, [activeLyricIndex, activeTab, desktopSideTab, isOpen, isUserScrolling, scrollToActiveLyric]);
+
+  // Center active lyric immediately upon opening or switching to lyrics view
+  useEffect(() => {
+    const isShowingLyrics = activeTab === 'lyrics' || desktopSideTab === 'lyrics';
+    if (isOpen && isShowingLyrics && activeLyricIndex !== -1) {
+      const timer = setTimeout(() => scrollToActiveLyric('auto'), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, desktopSideTab, isOpen, scrollToActiveLyric]);
 
   // ── Download handler with visual feedback ──
   const [isDownloading, setIsDownloading] = useState(false);
@@ -519,21 +571,22 @@ export default function FullPlayerModal({
   // Play a track from the queue
   const handleQueueTrackClick = (track) => {
     if (onPlayTrack) {
-      onPlayTrack(track, queue);
+      onPlayTrack(track, displayQueue);
     } else if (playTrack) {
-      playTrack(track, queue);
+      playTrack(track, displayQueue);
     }
   };
 
   const renderLyrics = () => (
     <div 
+      ref={lyricsContainerRef}
       onScroll={handleUserScroll} 
       onTouchStart={handleUserScroll} 
-      className="flex-1 overflow-y-auto py-2 scroll-smooth relative h-full select-none"
+      className="flex-1 overflow-y-auto py-16 px-2 scroll-smooth relative h-full select-none"
       style={{ scrollbarWidth: 'none' }}
     >
       {lyrics.length > 0 ? (
-        <div className="py-3 px-2 space-y-3">
+        <div className="py-2 px-1 space-y-3">
           {isLyricsVerified && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 mb-3 rounded-xl bg-[#17a398]/10 border border-[#17a398]/30 w-fit">
               <CheckCircle2 size={14} className="text-[#17a398]" />
@@ -548,15 +601,18 @@ export default function FullPlayerModal({
               <div 
                 key={idx}
                 ref={(el) => (lyricRefs.current[idx] = el)}
-                onClick={() => seekTo(line.time)}
-                className={`cursor-pointer transition-all duration-250 p-2.5 rounded-xl ${
+                onClick={() => {
+                  seekTo(line.time);
+                  setIsUserScrolling(false);
+                }}
+                className={`cursor-pointer transition-all duration-300 p-3 rounded-2xl ${
                   isActive 
                     ? isDark
-                      ? 'bg-zinc-800/90 border-2 border-zinc-700 border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.01]'
-                      : 'bg-[#ede5d3] brutal-border border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.01]' 
+                      ? 'bg-[#17a398]/15 border-2 border-[#17a398] border-l-8 border-l-[#17a398] shadow-lg scale-[1.02]'
+                      : 'bg-[#ede5d3] brutal-border border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.02]' 
                     : isDark
-                      ? 'hover:bg-zinc-800/40 opacity-60 hover:opacity-90'
-                      : 'hover:bg-[#ede5d3]/50 opacity-60 hover:opacity-90'
+                      ? 'hover:bg-zinc-800/40 opacity-40 hover:opacity-85'
+                      : 'hover:bg-[#ede5d3]/50 opacity-40 hover:opacity-85'
                 }`}
               >
                 <p 
@@ -700,7 +756,7 @@ export default function FullPlayerModal({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-ping" />
             <p className={`text-xs font-mono font-bold uppercase ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-              Jam Session Queue — {queue.length} Tracks
+              Jam Session Queue — {displayQueue.length} Tracks
             </p>
           </div>
           <span className="text-[10px] font-mono font-black bg-[#0b1110] text-[#26c4b7] px-2 py-0.5 rounded brutal-border">
@@ -712,24 +768,30 @@ export default function FullPlayerModal({
           isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
         } mb-2`}>
           <span className={`text-[11px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Queue ({queue.length} Songs)
+            Queue ({displayQueue.length} {isCurQuran ? 'Recitations' : 'Songs'})
           </span>
           <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
             isDark ? 'bg-zinc-800 text-zinc-300 border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-zinc-700'
           }`}>
-            AUDIO QUEUE
+            {isCurQuran ? 'QURAN QUEUE' : 'MUSIC QUEUE'}
           </span>
         </div>
       )}
 
-      {queue.length === 0 ? (
+      {displayQueue.length === 0 ? (
         <div className={`py-12 text-center text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
           <p className="font-bold">The queue is currently empty.</p>
-          <p className={`mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Queue up songs from your library or search.</p>
+          <p className={`mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+            {isCurQuran ? 'Add surahs from the Quran library.' : 'Queue up songs from your library or search.'}
+          </p>
         </div>
       ) : (
-        queue.map((track, i) => {
+        displayQueue.map((track, i) => {
           const isActive = String(track.id || track._id) === String(currentTrack?.id || currentTrack?._id);
+          const isTrackQuran = isQuranContent(track);
+          const title = isTrackQuran ? cleanQuranTrackTitle(track.title) : track.title;
+          const subtitle = isTrackQuran ? getQuranReciterName(track) : (track.artist || 'Unknown Artist');
+
           return (
             <div 
               key={`${track.id || track._id}-${i}`}
@@ -745,7 +807,12 @@ export default function FullPlayerModal({
               }`}
             >
               <div className="relative shrink-0">
-                <img src={track.cover} alt={track.title} className="w-10 h-10 rounded-lg object-cover brutal-border" />
+                <img 
+                  src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+                  alt={title} 
+                  className="w-10 h-10 rounded-lg object-cover brutal-border bg-black" 
+                  onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
+                />
                 {isActive && (
                   <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
                     <span className="w-2 h-2 rounded-full bg-[#17a398] animate-ping" />
@@ -756,15 +823,21 @@ export default function FullPlayerModal({
                 <p className={`text-xs truncate font-display font-black ${
                   isActive ? 'text-[#17a398]' : isDark ? 'text-white' : 'text-[#0b1110]'
                 }`}>
-                  {track.title}
+                  {title}
                 </p>
-                <ArtistLinks
-                  track={track}
-                  onSelectArtist={onSelectArtist}
-                  onClickExtra={onClose}
-                  className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                  linkClassName="hover:underline cursor-pointer"
-                />
+                {isTrackQuran ? (
+                  <span className={`text-[11px] truncate font-mono mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                    {subtitle}
+                  </span>
+                ) : (
+                  <ArtistLinks
+                    track={track}
+                    onSelectArtist={onSelectArtist}
+                    onClickExtra={onClose}
+                    className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                    linkClassName="hover:underline cursor-pointer"
+                  />
+                )}
               </div>
 
               {jamSession && onRemoveFromJamQueue && (
@@ -859,7 +932,7 @@ export default function FullPlayerModal({
         {[
           { id: 'player', label: 'Now Playing' },
           { id: 'lyrics', label: 'Lyrics' },
-          { id: 'queue', label: `Queue` },
+          { id: 'queue', label: `Queue (${displayQueue.length})` },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -902,12 +975,12 @@ export default function FullPlayerModal({
             </div>
           </div>
 
-          {/* Cassette / Vinyl / Album Art Bay */}
-          <div className="flex-1 flex items-center justify-center py-2 min-h-0">
-            <div className="relative w-full max-h-[260px] flex items-center justify-center" style={{ maxWidth: 'min(280px, 60vw)', aspectRatio: '1' }}>
+          {/* Cassette / Vinyl / Album Art Bay (Cleanly Sized without Overlap) */}
+          <div className="flex-1 flex items-center justify-center py-1 sm:py-2 min-h-0 overflow-hidden my-auto">
+            <div className="relative w-[210px] h-[210px] sm:w-[220px] sm:h-[220px] flex items-center justify-center shrink-0">
               {isVinylMode ? (
                 <div 
-                  className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden brutal-border-thick brutal-shadow-md ${isPlaying ? 'vinyl-spin' : ''}`}
+                  className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden brutal-border brutal-shadow-md ${isPlaying ? 'vinyl-spin' : ''}`}
                   style={{ background: '#111' }}
                 >
                   <div className="absolute inset-0" style={{ 
@@ -920,15 +993,15 @@ export default function FullPlayerModal({
                 </div>
               ) : (
                 /* Authentic Retro Cassette / Album Art Enclosure */
-                <div className={`w-full h-full p-2.5 ${
-                  isDark ? 'bg-[#141b19] border-2 border-zinc-700' : 'bg-[#ede5d3] brutal-border-thick'
-                } rounded-2xl brutal-shadow-sm flex flex-col justify-between relative overflow-hidden`}>
-                  {/* Clean Uncluttered Cover Window */}
-                  <div className="relative w-full flex-1 rounded-xl overflow-hidden brutal-border bg-[#0b1110] shadow-inner flex items-center justify-center">
+                <div className={`w-full h-full p-2 ${
+                  isDark ? 'bg-[#141b19] border-2 border-zinc-700' : 'bg-[#ede5d3] brutal-border'
+                } rounded-xl brutal-shadow-sm flex flex-col justify-between relative overflow-hidden`}>
+                  {/* Clean Cover Window */}
+                  <div className="relative w-full flex-1 rounded-lg overflow-hidden brutal-border bg-[#0b1110] shadow-inner flex items-center justify-center min-h-0">
                     <img 
                       src={currentTrack.cover} 
                       alt={currentTrack.title}
-                      className="w-full h-full object-contain bg-black"
+                      className="w-full h-full object-cover bg-black"
                       style={{ 
                         transform: isPlaying ? 'scale(1.02)' : 'scale(1)',
                         transition: 'transform 0.4s ease',
@@ -937,9 +1010,9 @@ export default function FullPlayerModal({
                   </div>
 
                   {/* Clean Lower Cassette Tape Bar (Separate from Cover Art) */}
-                  <div className="mt-3 pt-2.5 pb-0.5 border-t border-dashed border-zinc-400/30 flex items-center justify-between px-1.5 shrink-0">
+                  <div className="mt-2 pt-1.5 pb-0.5 border-t border-dashed border-zinc-400/30 flex items-center justify-between px-1 shrink-0">
                     <span className="text-[7.5px] font-mono font-medium text-zinc-400 uppercase tracking-wider">
-                      SIDE A // STEREO
+                      {isCurQuran ? 'QURAN // TAPE' : 'SIDE A // STEREO'}
                     </span>
                     {/* Compact Spool Wheels (Separate) */}
                     <div className="flex items-center gap-1">
@@ -964,22 +1037,28 @@ export default function FullPlayerModal({
           <div className="flex items-center justify-between my-2 shrink-0">
             <div className="truncate flex-1 min-w-0 pr-2">
               <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border">
-                {currentTrack.genre || 'STEREO'}
+                {isCurQuran ? 'QURAN' : (currentTrack.genre || 'STEREO')}
               </span>
               <h2 className={`text-base sm:text-lg font-display font-black truncate tracking-tight mt-0.5 ${
                 isDark ? 'text-white' : 'text-[#0b1110]'
               }`}>
-                {currentTrack.title}
+                {isCurQuran ? cleanQuranTrackTitle(currentTrack.title) : currentTrack.title}
               </h2>
-              <ArtistLinks
-                track={currentTrack}
-                onSelectArtist={onSelectArtist}
-                onClickExtra={onClose}
-                className={`text-xs font-bold truncate block ${
-                  isDark ? 'text-zinc-300' : 'text-[#0f756d]'
-                }`}
-                linkClassName="hover:underline cursor-pointer"
-              />
+              {isCurQuran ? (
+                <span className={`text-xs font-bold truncate block ${isDark ? 'text-zinc-300' : 'text-[#0f756d]'}`}>
+                  {getQuranReciterName(currentTrack)}
+                </span>
+              ) : (
+                <ArtistLinks
+                  track={currentTrack}
+                  onSelectArtist={onSelectArtist}
+                  onClickExtra={onClose}
+                  className={`text-xs font-bold truncate block ${
+                    isDark ? 'text-zinc-300' : 'text-[#0f756d]'
+                  }`}
+                  linkClassName="hover:underline cursor-pointer"
+                />
+              )}
             </div>
 
             <button 
@@ -1176,6 +1255,27 @@ export default function FullPlayerModal({
                 <Sliders size={15} strokeWidth={2.5} />
               </button>
 
+              {/* Quick Lyrics View Toggle */}
+              <button 
+                onClick={() => {
+                  if (window.innerWidth < 1024) {
+                    setActiveTab(activeTab === 'lyrics' ? 'player' : 'lyrics');
+                  } else {
+                    setDesktopSideTab('lyrics');
+                  }
+                }}
+                className={`p-1.5 sm:p-2 rounded-xl brutal-border brutal-btn cursor-pointer transition-colors ${
+                  (activeTab === 'lyrics' || desktopSideTab === 'lyrics')
+                    ? 'bg-[#17a398] text-[#0b1110]' 
+                    : isDark 
+                      ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
+                      : 'bg-white text-zinc-700 hover:bg-[#ede5d3]'
+                }`}
+                title="Lyrics Display"
+              >
+                <Mic size={15} strokeWidth={2.5} />
+              </button>
+
               {/* Download Audio */}
               {toggleDownload && (
                 <button 
@@ -1218,7 +1318,38 @@ export default function FullPlayerModal({
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {rawLyrics.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSyncOffset(prev => Math.round((prev - 0.5) * 10) / 10)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
+                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      }`}
+                      title="Nudge lyrics 0.5s earlier"
+                    >
+                      -0.5s
+                    </button>
+                    <button
+                      onClick={() => setSyncOffset(prev => Math.round((prev + 0.5) * 10) / 10)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
+                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      }`}
+                      title="Nudge lyrics 0.5s later"
+                    >
+                      +0.5s
+                    </button>
+                    {syncOffset !== 0 && (
+                      <button
+                        onClick={() => setSyncOffset(0)}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#f59e0b] text-black cursor-pointer"
+                        title="Reset sync offset"
+                      >
+                        RESET
+                      </button>
+                    )}
+                  </div>
+                )}
                 {rawLyrics.length > 0 && (
                   <button
                     onClick={handleTranslateLyrics}
@@ -1305,12 +1436,12 @@ export default function FullPlayerModal({
                     : isDark ? 'bg-[#1c2422] text-zinc-400 hover:text-white' : 'bg-white text-[#0b1110] border border-[#0b1110] hover:bg-[#ede5d3]'
                 }`}
               >
-                Queue ({queue.length})
+                Queue ({displayQueue.length})
               </button>
             </div>
 
             {desktopSideTab === 'lyrics' && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 {isLyricsVerified && (
                   <span 
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30 mr-1"
@@ -1319,6 +1450,37 @@ export default function FullPlayerModal({
                     <CheckCircle2 size={12} className="text-[#17a398]" />
                     VERIFIED {lyricsVerifiedBy ? `(@${lyricsVerifiedBy})` : ''}
                   </span>
+                )}
+                {rawLyrics.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setSyncOffset(prev => Math.round((prev - 0.5) * 10) / 10)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
+                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      }`}
+                      title="Nudge lyrics 0.5s earlier"
+                    >
+                      -0.5s
+                    </button>
+                    <button
+                      onClick={() => setSyncOffset(prev => Math.round((prev + 0.5) * 10) / 10)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
+                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      }`}
+                      title="Nudge lyrics 0.5s later"
+                    >
+                      +0.5s
+                    </button>
+                    {syncOffset !== 0 && (
+                      <button
+                        onClick={() => setSyncOffset(0)}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#f59e0b] text-black cursor-pointer"
+                        title="Reset sync offset"
+                      >
+                        RESET
+                      </button>
+                    )}
+                  </div>
                 )}
                 {rawLyrics.length > 0 && (
                   <>
@@ -1369,7 +1531,7 @@ export default function FullPlayerModal({
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
             {desktopSideTab === 'lyrics' ? renderLyrics() : renderQueue()}
           </div>
         </div>

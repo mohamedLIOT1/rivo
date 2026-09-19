@@ -2,7 +2,9 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { initAudioEngine, setEqualizerBands, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
 import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicAnalysis';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
+import { isQuranContent } from '../utils/quranUtils';
 import { API_BASE_URL } from '../config';
+import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/listeningTracker';
 
 const AudioPlayerContext = createContext(null);
 
@@ -499,6 +501,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
     };
     const handleEnded = () => {
+      onTrackEnded(currentTrackRef.current);
       if (isYtTrackRef.current) return;
       if (isRepeatRef.current) { audio.currentTime = 0; audio.play().catch(() => {}); }
       else if (playNextTrackRef.current) playNextTrackRef.current();
@@ -639,6 +642,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       } else if (event.data === YT.PlayerState.ENDED) {
         if (activeYtDeckRef.current === deckNum) {
           if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+          onTrackEnded(currentTrackRef.current);
           if (isRepeatRef.current) {
             try {
               player.seekTo(0, true);
@@ -741,6 +745,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
       try { actPlayer.setVolume(val * 100); } catch {}
     }
   };
+
+  // ── Real Listening Activity Tracker (Ticks accurate seconds when music is playing) ──
+  useEffect(() => {
+    if (!isPlaying || !currentTrack) return;
+
+    const ticker = setInterval(() => {
+      if (isYtTrackRef.current) {
+        const activeP = getActiveYtPlayer();
+        if (activeP && typeof activeP.getPlayerState === 'function' && activeP.getPlayerState() === 1) {
+          recordListeningTick(currentTrack, 1);
+        }
+      } else if (audioRef.current && !audioRef.current.paused && !isNaN(audioRef.current.currentTime) && audioRef.current.currentTime > 0) {
+        recordListeningTick(currentTrack, 1);
+      }
+    }, 1000);
+
+    return () => clearInterval(ticker);
+  }, [isPlaying, currentTrack]);
 
   // ── Main track playback logic ──────────────────────────────────
   useEffect(() => {
@@ -1100,6 +1122,35 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const playTrack = useCallback(async (track, newQueue = null, isRemote = false) => {
     if (!track) return;
+
+    // Track daily listening seed for dynamic personalized mixes
+    try {
+      const isQuran = (track.genre && track.genre.toLowerCase().includes('quran')) ||
+                      (track.artist && (track.artist.includes('القارئ') || track.artist.includes('شيخ')));
+      if (!isQuran) {
+        const todayStr = new Date().toDateString();
+        const existingDate = localStorage.getItem('liofy_daily_seed_date');
+        if (existingDate !== todayStr || !localStorage.getItem('liofy_daily_seed_track')) {
+          localStorage.setItem('liofy_daily_seed_date', todayStr);
+          localStorage.setItem('liofy_daily_seed_track', JSON.stringify({
+            id: track.id || track._id,
+            title: track.title,
+            artist: track.artist,
+            genre: track.genre,
+            cover: track.cover
+          }));
+          window.dispatchEvent(new CustomEvent('liofy:daily-seed-updated'));
+        }
+        localStorage.setItem('liofy_last_played_music_track', JSON.stringify({
+          id: track.id || track._id,
+          title: track.title,
+          artist: track.artist,
+          genre: track.genre,
+          cover: track.cover
+        }));
+      }
+    } catch {}
+
     const isSeamless = isSeamlessYtHandoffRef.current;
     isTransitionTriggeredRef.current = false;
     transitionActiveTrackIdRef.current = null;
@@ -1137,9 +1188,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
       trackToPlay.nativeAudioUri = offlineAudioUrl;
     }
 
-    if (newQueue?.length > 0) setCurrentQueue(newQueue);
-    else if (!currentQueueRef.current.length && tracksRef.current.length > 0)
-      setCurrentQueue(tracksRef.current);
+    // ── STRICT QUEUE ISOLATION (Quran vs Music) ──
+    const isTargetQuran = isQuranContent(trackToPlay);
+    if (newQueue?.length > 0) {
+      const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+      if (sanitized.length > 0) {
+        setCurrentQueue(sanitized);
+      } else {
+        const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        setCurrentQueue(pool.length > 0 ? pool : [trackToPlay]);
+      }
+    } else {
+      // Check if current queue is already strictly composed of the same type
+      const curQ = currentQueueRef.current;
+      const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+      if (!curQMatchesType) {
+        const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        setCurrentQueue(pool.length > 0 ? pool : [trackToPlay]);
+      }
+    }
+
+    onTrackStarted(trackToPlay);
 
     if (setTracks) {
       setTracks(prev => {
@@ -1246,9 +1315,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Host: falls through to advance host's queue below and sync to all listeners!
     }
 
+    const isCurQuran = isQuranContent(currentTrackRef.current);
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
-    const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
+    const typeIsolated = rawQueue.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const pool = typeIsolated.length > 0 ? typeIsolated : tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const activeList = isOfflineMode ? pool.filter(t => t.downloaded) : pool;
     if (!activeList.length) return;
 
     // Immediately stop current audio only if NOT a seamless handoff
@@ -1325,9 +1397,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const playPrevTrack = useCallback(() => {
     isTransitionTriggeredRef.current = false;
     isSeamlessYtHandoffRef.current = false;
+    const isCurQuran = isQuranContent(currentTrackRef.current);
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
-    const activeList = isOfflineMode ? rawQueue.filter(t => t.downloaded) : rawQueue;
+    const typeIsolated = rawQueue.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const pool = typeIsolated.length > 0 ? typeIsolated : tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const activeList = isOfflineMode ? pool.filter(t => t.downloaded) : pool;
     if (!activeList.length) return;
 
     // Immediately stop current audio

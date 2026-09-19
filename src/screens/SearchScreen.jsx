@@ -8,6 +8,7 @@ import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { API_BASE_URL } from '../config';
 import { getTrackArtists, ArtistLinks } from '../utils/artistUtils';
+import { isQuranContent } from '../utils/quranUtils';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -68,10 +69,14 @@ export default function SearchScreen({
   const cleanQuery = (query || '').trim().toLowerCase();
   const isPopSearch = /^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop|أغاني بوب عربي)$/i.test(cleanQuery);
 
+  // Strictly filter out any Quran content from Music Search
+  const safeTracks = React.useMemo(() => (tracks || []).filter(t => !isQuranContent(t)), [tracks]);
+  const safeAlbums = React.useMemo(() => (albums || []).filter(a => !isQuranContent(a)), [albums]);
+
   // Extract all artists from tracks & albums (supporting multiple artists per track)
   const allArtists = React.useMemo(() => {
     const map = new Map();
-    (tracks || []).forEach(t => {
+    safeTracks.forEach(t => {
       if (!t.artist || !isMusicTrack(t.title, t.artist)) return;
       const artistNames = getTrackArtists(t.artist, t.title);
       artistNames.forEach(name => {
@@ -83,7 +88,7 @@ export default function SearchScreen({
         }
       });
     });
-    (albums || []).forEach(a => {
+    safeAlbums.forEach(a => {
       if (!a.artist) return;
       const artistNames = getTrackArtists(a.artist);
       artistNames.forEach(name => {
@@ -94,7 +99,7 @@ export default function SearchScreen({
       });
     });
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [tracks, albums]);
+  }, [safeTracks, safeAlbums]);
 
   // Matching Artists
   const matchedArtists = (filterType === 'people' || filterType === 'albums' || filterType === 'songs') ? [] : (
@@ -102,7 +107,7 @@ export default function SearchScreen({
   );
 
   // Matching Albums
-  const matchedAlbums = (filterType === 'people' || filterType === 'artists' || filterType === 'songs') ? [] : (albums || []).filter(a => {
+  const matchedAlbums = (filterType === 'people' || filterType === 'artists' || filterType === 'songs') ? [] : safeAlbums.filter(a => {
     if (filterType === 'albums' && !cleanQuery) return true;
     if (!cleanQuery) return false;
     const nameMatch = a.name && a.name.toLowerCase().includes(cleanQuery);
@@ -111,7 +116,7 @@ export default function SearchScreen({
   });
 
   // Local tracks matching
-  const localFiltered = (filterType === 'people' || filterType === 'artists' || filterType === 'albums') ? [] : (tracks || []).filter((t) => {
+  const localFiltered = (filterType === 'people' || filterType === 'artists' || filterType === 'albums') ? [] : safeTracks.filter((t) => {
     if (!cleanQuery) return false;
     if (!isMusicTrack(t.title, t.artist)) return false;
     const titleMatch = t.title && t.title.toLowerCase().includes(cleanQuery);
@@ -143,10 +148,10 @@ export default function SearchScreen({
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         const results = await searchMusicOnline(cleanQuery);
-        // Exclude tracks that already exist locally or are non-music/cartoons
-        const localIds = new Set((tracks || []).map(t => String(t.id || t._id)));
+        // Exclude tracks that already exist locally or are non-music or Quran
+        const localIds = new Set(safeTracks.map(t => String(t.id || t._id)));
         const filteredOnline = (results || []).filter(t => 
-          !localIds.has(String(t.id || t._id)) && isMusicTrack(t.title, t.artist)
+          !localIds.has(String(t.id || t._id)) && isMusicTrack(t.title, t.artist) && !isQuranContent(t)
         );
         setOnlineResults(filteredOnline);
       } catch (err) {

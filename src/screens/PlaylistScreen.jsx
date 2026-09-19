@@ -583,44 +583,6 @@ export default function PlaylistScreen({
           >
             <Play size={22} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
           </button>
-
-          {/* Rivo Beat Mixer DJ Mode Toggle */}
-          {!playlist.isLikedSongs && (
-            <button
-              onClick={handleToggleMix}
-              className={`brutal-btn flex items-center gap-2 px-4 py-2.5 brutal-border brutal-shadow-sm font-mono text-xs font-black uppercase transition-all cursor-pointer ${
-                isMixActive
-                  ? 'bg-[#082621] text-[#26c4b7]'
-                  : isDark 
-                    ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' 
-                    : 'bg-[#ede5d3] text-[#082621] hover:bg-[#ded2bb]'
-              }`}
-              title="Continuous Beat Crossfade & BPM Harmonization"
-            >
-              <Sliders size={15} />
-              <span>RIVO-MIX {isMixActive ? 'ACTIVE' : 'OFF'}</span>
-              {isMixActive && (
-                <span className="w-2 h-2 rounded-full bg-[#26c4b7] animate-pulse" />
-              )}
-            </button>
-          )}
-
-          {/* Auto Mix All Button */}
-          {isMixActive && isOwner && filteredPlaylistTracks.length > 1 && (
-            <button
-              onClick={handleAutoMixAll}
-              disabled={isAutoMixingAll}
-              className={`brutal-btn flex items-center gap-1.5 px-4 py-2.5 brutal-border brutal-shadow-sm font-mono text-xs font-black uppercase cursor-pointer ${
-                isDark 
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' 
-                  : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] border-black'
-              }`}
-              title="Auto harmonize BPM and calculate clinical crossfade timings"
-            >
-              {isAutoMixingAll ? <Loader2 size={14} className="animate-spin text-[#082621]" /> : <Wand2 size={14} />}
-              <span>Auto Blend All</span>
-            </button>
-          )}
         </div>
 
         {playlistTracks.length > 0 && (
@@ -651,21 +613,13 @@ export default function PlaylistScreen({
             <div className={`grid grid-cols-12 text-[10px] font-mono font-black uppercase tracking-wider brutal-border p-2.5 ${
               isDark ? 'bg-[#101716] text-zinc-300 border-zinc-700' : 'bg-[#ded2bb] text-[#082621] border-black'
             }`}>
-              <span className="col-span-1 text-center">DOSE #</span>
-              <span className="col-span-6 sm:col-span-5">ACOUSTIC COMPOSITION</span>
-              <span className="col-span-2 text-center">TEMPO (BPM)</span>
-              <span className="col-span-2 text-center">KEY / HARMONY</span>
-              <span className="col-span-1 sm:col-span-2 text-right">ACTION</span>
+              <span className="col-span-1 text-center">#</span>
+              <span className="col-span-6 md:col-span-5">TITLE & ARTIST</span>
+              <span className="hidden md:block col-span-3">ALBUM</span>
+              <span className="col-span-5 md:col-span-3 text-right pr-2">ACTIONS</span>
             </div>
 
             {filteredPlaylistTracks.map((track, i) => {
-              const nextTrack = filteredPlaylistTracks[i + 1];
-              const dataThis = getTrackMusicalData(track);
-              const dataNext = nextTrack ? getTrackMusicalData(nextTrack) : null;
-              const pairKey = nextTrack ? `${String(track.id || track._id)}___${String(nextTrack.id || nextTrack._id)}` : null;
-              const curTransition = pairKey ? transitions[pairKey] : null;
-              const compatibility = (nextTrack && dataNext) ? checkHarmonicCompatibility(dataThis.key, dataNext.key, dataThis.bpm, dataNext.bpm) : null;
-
               return (
                 <React.Fragment key={track.id || track._id || i}>
                   <div
@@ -683,7 +637,7 @@ export default function PlaylistScreen({
                     </span>
                     
                     {/* Title & Artist */}
-                    <div className="col-span-6 sm:col-span-5 flex items-center gap-3 truncate pr-2">
+                    <div className="col-span-6 md:col-span-5 flex items-center gap-3 truncate pr-2">
                       <img 
                         src={track.cover} 
                         alt={track.title} 
@@ -705,33 +659,20 @@ export default function PlaylistScreen({
                             }`}
                             linkClassName="hover:underline cursor-pointer"
                           />
-                          {curTransition && (
-                            <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.2 rounded-none bg-[#082621] text-[#26c4b7]">
-                              🎛️ {getTransitionDisplayName(curTransition.style || curTransition.name)} ({curTransition.duration || 8}s)
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* BPM */}
-                    <div className="col-span-2 text-center">
-                      <span className={`text-xs font-mono font-bold px-2 py-0.5 brutal-border ${
-                        isDark ? 'text-zinc-300 bg-[#0b1110] border-zinc-700' : 'text-[#082621] bg-[#ede5d3] border-black'
-                      }`}>
-                        {dataThis.bpm}
-                      </span>
+                    {/* Album */}
+                    <div className="hidden md:block col-span-3 text-xs text-zinc-400 truncate pr-2 font-medium">
+                      {track.album || playlist.name}
                     </div>
 
-                    {/* Harmonic Key Pill (2A, 3A, 4A) */}
-                    <div className="col-span-2 flex justify-center">
-                      <span className="text-[10px] font-mono font-black px-2 py-0.5 bg-[#082621] text-[#26c4b7] brutal-border">
-                        {dataThis.key}
+                    {/* Action & Duration */}
+                    <div className="col-span-5 md:col-span-3 flex items-center justify-end gap-2 text-xs">
+                      <span className="text-xs font-mono text-zinc-400 mr-2">
+                        {track.duration ? `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, '0')}` : '3:00'}
                       </span>
-                    </div>
-
-                    {/* Action */}
-                    <div className="col-span-1 sm:col-span-2 flex items-center justify-end gap-1 text-xs">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -791,37 +732,6 @@ export default function PlaylistScreen({
                       )}
                     </div>
                   </div>
-
-                  {/* Rivo Mix DJ Transition Tape Connector */}
-                  {isMixActive && nextTrack && compatibility && (
-                    <div
-                      onClick={(e) => {
-                        if (!isOwner) return;
-                        e.stopPropagation();
-                        setActiveMixerPair({ trackA: track, trackB: nextTrack, pairKey });
-                      }}
-                      className={`my-1 mx-4 p-2 bg-[#082621] text-[#26c4b7] brutal-border flex items-center justify-between transition-all group ${
-                        isOwner ? 'hover:bg-[#0b1110] cursor-pointer' : 'cursor-default'
-                      }`}
-                      title={isOwner ? "Adjust crossfade timing and EQ blend in Mini-Mixer" : "DJ Transition"}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Sliders size={13} className="text-[#26c4b7]" />
-                        <span className="text-[10px] font-mono font-black uppercase tracking-wider">
-                          SPLICE: {getTransitionDisplayName(curTransition?.style || curTransition?.name)} ({curTransition?.duration || 8}S)
-                        </span>
-                        <span className="text-[9px] font-mono text-[#ded2bb] hidden sm:inline">
-                          • {compatibility.badge}
-                        </span>
-                      </div>
-                      {isOwner && (
-                        <div className="flex items-center gap-1.5 text-[10px] font-mono font-black text-[#f59e0b]">
-                          <span>CALIBRATE MIX</span>
-                          <ArrowRight size={12} />
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </React.Fragment>
               );
             })}
@@ -955,17 +865,6 @@ export default function PlaylistScreen({
         </section>
       )}
 
-      {/* Mini-Mixer Modal for Custom DJ Transitions */}
-      {activeMixerPair && (
-        <MiniMixerModal
-          isOpen={Boolean(activeMixerPair)}
-          onClose={() => setActiveMixerPair(null)}
-          trackA={activeMixerPair.trackA}
-          trackB={activeMixerPair.trackB}
-          initialTransition={transitions[activeMixerPair.pairKey]}
-          onSaveTransition={handleSaveTransitionSettings}
-        />
-      )}
 
       {/* Duplicate Track Confirmation Modal */}
       {duplicateConfirmTrack && (

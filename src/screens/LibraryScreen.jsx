@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud } from 'lucide-react';
 import { ArtistLinks } from '../utils/artistUtils';
+import { isQuranContent } from '../utils/quranUtils';
 
 export default function LibraryScreen({ 
   playlists = [], 
@@ -10,23 +11,50 @@ export default function LibraryScreen({
   onSelectArtist,
   onSelectTrack, 
   openCreatePlaylistModal, 
-  openImportPlaylistModal,
+  openImportPlaylistModal, 
   openImportSongModal,
   toggleLike,
-  globalTheme = 'dark'
+  globalTheme = 'dark',
+  libraryTitle = 'Your Library'
 }) {
   const isDark = globalTheme === 'dark';
   const [filter, setFilter] = useState('all'); // 'all' | 'playlists' | 'albums' | 'downloads'
   const [search, setSearch] = useState('');
 
-  const downloadedTracks = (tracks || []).filter((t) => t.downloaded);
+  const isQuranMode = libraryTitle?.toLowerCase().includes('quran');
 
-  const filteredPlaylists = (playlists || []).filter(item => {
+  // Filter out duplicate "Liked Songs" and strictly segregate Quran content
+  const safePlaylists = useMemo(() => {
+    return (playlists || []).filter(item => {
+      if (isQuranMode) return isQuranContent(item);
+      if (isQuranContent(item)) return false;
+      const name = (item.name || '').trim().toLowerCase();
+      return name !== 'liked songs' && name !== 'liked prescriptions' && item.id !== 'liked' && !item.isLikedSongs;
+    });
+  }, [playlists, isQuranMode]);
+
+  const safeAlbums = useMemo(() => {
+    return (albums || []).filter(item => {
+      if (isQuranMode) return isQuranContent(item);
+      return !isQuranContent(item);
+    });
+  }, [albums, isQuranMode]);
+
+  const safeTracks = useMemo(() => {
+    return (tracks || []).filter(item => {
+      if (isQuranMode) return isQuranContent(item);
+      return !isQuranContent(item);
+    });
+  }, [tracks, isQuranMode]);
+
+  const downloadedTracks = safeTracks.filter((t) => t.downloaded);
+
+  const filteredPlaylists = safePlaylists.filter(item => {
     if (!search) return true;
     return item.name && item.name.toLowerCase().includes(search.toLowerCase());
   });
 
-  const filteredAlbums = (albums || []).filter(item => {
+  const filteredAlbums = safeAlbums.filter(item => {
     if (!search) return true;
     const s = search.toLowerCase();
     return (item.name && item.name.toLowerCase().includes(s)) || (item.artist && item.artist.toLowerCase().includes(s));
@@ -48,10 +76,10 @@ export default function LibraryScreen({
             <h1 className={`text-2xl sm:text-3xl font-display font-black tracking-tight ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1.5px_1.5px_0px_#082621]'
             }`}>
-              Your Library
+              {libraryTitle}
             </h1>
             <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-              LIBRARY
+              {libraryTitle === 'Quran' ? 'QURAN' : 'LIBRARY'}
             </span>
           </div>
 

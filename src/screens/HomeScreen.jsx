@@ -3,6 +3,7 @@ import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activit
 import ConfirmModal from '../components/ConfirmModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { ArtistLinks } from '../utils/artistUtils';
+import { isQuranContent } from '../utils/quranUtils';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -41,15 +42,21 @@ export default function HomeScreen({
     return Boolean(curId && tId && String(curId) === String(tId));
   };
 
-  // Filtered tracks
+  // Filtered tracks (Strictly excluding Quran content from Music Home)
   const displayTracks = useMemo(() => {
-    if (!tracks || tracks.length === 0) return [];
+    const musicOnly = (tracks || []).filter(t => !isQuranContent(t));
+    if (musicOnly.length === 0) return [];
     if (activeFilter === 'podcasts') {
-      const podTracks = tracks.filter(t => t.isPodcast || t.album?.toLowerCase().includes('podcast') || t.artist?.toLowerCase().includes('podcast'));
-      return podTracks.length > 0 ? podTracks : tracks;
+      const podTracks = musicOnly.filter(t => t.isPodcast || t.album?.toLowerCase().includes('podcast') || t.artist?.toLowerCase().includes('podcast'));
+      return podTracks.length > 0 ? podTracks : musicOnly;
     }
-    return [...tracks];
+    return musicOnly;
   }, [tracks, activeFilter]);
+
+  // Strictly filter out any Quran recitations/albums from Featured Albums on Home
+  const displayAlbums = useMemo(() => {
+    return (albums || []).filter(alb => !isQuranContent(alb));
+  }, [albums]);
 
   const quickItems = displayTracks.slice(0, 6);
   const recentItems = displayTracks;
@@ -111,14 +118,6 @@ export default function HomeScreen({
               >
                 <Play size={15} fill="currentColor" />
                 <span>PLAY DAILY MIX</span>
-              </button>
-
-              <button 
-                onClick={openChatModal}
-                className="flex-1 sm:flex-initial bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Sparkles size={15} strokeWidth={2.5} />
-                <span>AI DJ</span>
               </button>
 
               <button 
@@ -326,7 +325,7 @@ export default function HomeScreen({
       {/* ─────────────────────────────────────────
           FEATURED ALBUMS & DISCOGRAPHY SPOTLIGHT
           ───────────────────────────────────────── */}
-      {albums && albums.length > 0 && (
+      {displayAlbums && displayAlbums.length > 0 && (
         <section className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -335,13 +334,13 @@ export default function HomeScreen({
                 Featured Albums
               </h2>
               <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-                {albums.length} {albums.length === 1 ? 'ALBUM' : 'ALBUMS'}
+                {displayAlbums.length} {displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS'}
               </span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
-            {albums.slice(0, 6).map((alb) => (
+            {displayAlbums.slice(0, 6).map((alb) => (
               <div
                 key={alb.id || alb._id || alb.name}
                 onClick={() => onSelectPlaylist?.(alb)}
