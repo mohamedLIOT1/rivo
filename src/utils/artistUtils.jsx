@@ -95,30 +95,193 @@ export function formatArtists(artistsList) {
 }
 
 /**
- * Checks whether a track belongs to an artist name or key (case-insensitive).
+ * Normalizes an artist name by stripping uploader suffixes and punctuation.
+ * E.g. "CairokeeOffical" -> "Cairokee", "Marwan Pablo - Topic" -> "Marwan Pablo"
+ */
+export function normalizeArtistName(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let clean = raw.trim();
+
+  // Strip trailing " - Topic"
+  clean = clean.replace(/\s*-\s*topic\b/gi, '');
+
+  // Strip common YouTube/uploader channel suffixes
+  clean = clean.replace(/\b(official(?:\s*(?:channel|music|video|audio|records|tv|page))?|offical|vevo|topic|channel)\b/gi, '');
+
+  // Strip surrounding quotes or brackets
+  clean = clean.replace(/^["'\[\(]+|["'\]\)]+$/g, '');
+
+  // Normalize multiple spaces
+  clean = clean.replace(/\s+/g, ' ').trim();
+
+  return clean;
+}
+
+/**
+ * Built-in dictionary of canonical artists and their known aliases/members/typos.
+ */
+export const CANONICAL_ARTIST_MAP = [
+  {
+    canonical: 'Cairokee',
+    aliases: [
+      'cairokee', 'cairokeeoffical', 'cairokeeofficial', 'cairokee official',
+      'amir eid', 'amireid', 'أمير عيد', 'كايروكي'
+    ],
+    displayAliasInfo: 'Includes Cairokee, CairokeeOfficial & Amir Eid solo works'
+  },
+  {
+    canonical: 'Mohamed Hamaki',
+    aliases: ['hamaki', 'mohamed hamaki', 'محمد حماقي', 'حماقي']
+  },
+  {
+    canonical: 'Amr Diab',
+    aliases: ['amr diab', 'عمرو دياب', 'elhadaba', 'el hadaba']
+  },
+  {
+    canonical: 'Tamer Hosny',
+    aliases: ['tamer hosny', 'tamer hosni', 'تامر حسني']
+  },
+  {
+    canonical: 'Marwan Pablo',
+    aliases: ['marwan pablo', 'pablo', 'مروان بابلو', 'بابلو']
+  },
+  {
+    canonical: 'Wegz',
+    aliases: ['wegz', 'ويجز']
+  },
+  {
+    canonical: 'Lege-Cy',
+    aliases: ['lege-cy', 'lege cy', 'legecy', 'ليجي سي', 'ليجي-سي']
+  },
+  {
+    canonical: 'Abyusif',
+    aliases: ['abyusif', 'أبيوسف', 'ابيوسف']
+  },
+  {
+    canonical: 'Marwan Moussa',
+    aliases: ['marwan moussa', 'marwan mousa', 'مروان موسى']
+  },
+  {
+    canonical: 'Afroto',
+    aliases: ['afroto', 'عفروتو']
+  },
+  {
+    canonical: 'Sharmoofers',
+    aliases: ['sharmoofers', 'شارموفرز']
+  },
+  {
+    canonical: 'Massar Egbari',
+    aliases: ['massar egbari', 'مسار إجباري', 'مسار اجباري']
+  },
+  {
+    canonical: 'Ahmed Saad',
+    aliases: ['ahmed saad', 'أحمد سعد', 'احمد سعد']
+  },
+  {
+    canonical: 'Bahaa Sultan',
+    aliases: ['bahaa sultan', 'بهاء سلطان']
+  },
+  {
+    canonical: 'Sherine',
+    aliases: ['sherine', 'sherine abdel-wahab', 'sherine abdel wahab', 'شيرين', 'شيرين عبد الوهاب']
+  }
+];
+
+/**
+ * Returns the canonical artist name for a given raw name or alias.
+ */
+export function getCanonicalArtistName(rawName) {
+  if (!rawName || typeof rawName !== 'string') return '';
+  const trimmed = rawName.trim();
+  const lower = trimmed.toLowerCase();
+  const normalized = normalizeArtistName(trimmed).toLowerCase();
+
+  for (const group of CANONICAL_ARTIST_MAP) {
+    if (group.aliases.includes(lower) || group.aliases.includes(normalized)) {
+      return group.canonical;
+    }
+  }
+
+  // If no predefined group matched, return the cleaned name
+  const clean = normalizeArtistName(trimmed);
+  return clean || trimmed;
+}
+
+/**
+ * Returns all aliases associated with an artist.
+ */
+export function getArtistAliases(artistName) {
+  if (!artistName || typeof artistName !== 'string') return [];
+  const canonical = getCanonicalArtistName(artistName).toLowerCase();
+  for (const group of CANONICAL_ARTIST_MAP) {
+    if (group.canonical.toLowerCase() === canonical) {
+      return group.aliases;
+    }
+  }
+  return [artistName.toLowerCase().trim()];
+}
+
+/**
+ * Returns display info about aliases (e.g. "Includes Cairokee, Amir Eid solo works")
+ */
+export function getArtistAliasNote(artistName) {
+  if (!artistName || typeof artistName !== 'string') return null;
+  const canonical = getCanonicalArtistName(artistName).toLowerCase();
+  for (const group of CANONICAL_ARTIST_MAP) {
+    if (group.canonical.toLowerCase() === canonical && group.displayAliasInfo) {
+      return group.displayAliasInfo;
+    }
+  }
+  return null;
+}
+
+/**
+ * Checks whether a track belongs to an artist name or key (case-insensitive, supporting aliases & features).
  */
 export function matchesArtist(track, targetArtist) {
   if (!track || !targetArtist) return false;
 
-  const targetName = (
+  const rawTarget = (
     typeof targetArtist === 'string'
       ? targetArtist
       : (targetArtist.name || targetArtist.artist || '')
-  ).trim().toLowerCase();
+  ).trim();
 
-  if (!targetName) return false;
+  if (!rawTarget) return false;
+
+  const canonicalTarget = getCanonicalArtistName(rawTarget).toLowerCase();
+  const targetAliases = new Set([
+    rawTarget.toLowerCase(),
+    canonicalTarget,
+    ...getArtistAliases(rawTarget).map(a => a.toLowerCase()),
+    ...getArtistAliases(canonicalTarget).map(a => a.toLowerCase())
+  ]);
 
   const targetId = typeof targetArtist === 'object' ? targetArtist.id : null;
   if (targetId && track.artistId && String(track.artistId) === String(targetId)) {
     return true;
   }
 
-  if (track.artist && track.artist.trim().toLowerCase() === targetName) {
-    return true;
+  // 1. Direct match on track.artist
+  if (track.artist) {
+    const rawTrackArtist = track.artist.trim().toLowerCase();
+    const canonicalTrackArtist = getCanonicalArtistName(track.artist).toLowerCase();
+    if (targetAliases.has(rawTrackArtist) || targetAliases.has(canonicalTrackArtist)) {
+      return true;
+    }
   }
 
-  const artists = getTrackArtists(track).map(a => a.toLowerCase());
-  return artists.includes(targetName) || artists.some(a => a === targetName);
+  // 2. Multi-artist extraction from track (features, delimiters)
+  const trackArtists = getTrackArtists(track);
+  for (const a of trackArtists) {
+    const rawA = a.toLowerCase().trim();
+    const canA = getCanonicalArtistName(a).toLowerCase();
+    if (targetAliases.has(rawA) || targetAliases.has(canA)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**

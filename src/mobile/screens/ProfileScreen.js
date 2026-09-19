@@ -233,13 +233,15 @@ export default function ProfileScreen() {
               )}
             </View>
             <Text style={styles.userName}>{selectedPlaylist.name || 'Untitled'}</Text>
-            <Text style={styles.publicPlCount}>{(plTracks || []).length} Songs</Text>
+            <Text style={styles.publicPlCount}>
+              {(plTracks || []).length} {Boolean(selectedPlaylist.isQuran) ? ((plTracks || []).length === 1 ? 'Surah' : 'Surahs') : 'Songs'}
+            </Text>
           </View>
 
-          <Text style={styles.sectionHeader}>Playlist Tracks</Text>
+          <Text style={styles.sectionHeader}>{Boolean(selectedPlaylist.isQuran) ? 'Surah List' : 'Playlist Tracks'}</Text>
           <View style={{ marginBottom: 40 }}>
             {(!plTracks || plTracks.length === 0) ? (
-              <Text style={styles.emptyText}>No songs in this playlist</Text>
+              <Text style={styles.emptyText}>{Boolean(selectedPlaylist.isQuran) ? 'No surahs in this playlist' : 'No songs in this playlist'}</Text>
             ) : (
               (plTracks || []).map((track, idx) => (
                 <SongItem
@@ -291,7 +293,7 @@ export default function ProfileScreen() {
                 <Music size={20} color="#1DB954" />
                 <View style={{ flex: 1, marginHorizontal: 10 }}>
                   <Text style={styles.playlistName}>{pl.name}</Text>
-                  <Text style={styles.playlistSub}>{pl.trackCount || 0} Songs</Text>
+                  <Text style={styles.playlistSub}>{pl.trackCount || 0} {Boolean(pl.isQuran) ? 'Surahs' : 'Songs'}</Text>
                 </View>
               </TouchableOpacity>
             ))
@@ -453,7 +455,7 @@ export default function ProfileScreen() {
                         <Music size={20} color="#1DB954" />
                         <View style={{ flex: 1, marginHorizontal: 10 }}>
                           <Text style={styles.playlistName}>{pl.name}</Text>
-                          <Text style={styles.playlistSub}>{(pl.trackIds || []).length} Songs</Text>
+                          <Text style={styles.playlistSub}>{(pl.trackIds || []).length} {Boolean(pl.isQuran) ? 'Surahs' : 'Songs'}</Text>
                         </View>
                         <TouchableOpacity
                           style={styles.eyeBtn}
@@ -731,8 +733,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   userBio: {
-    fontSize: 13,
-    color: '#d4d4d8',
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#f4f4f5',
     textAlign: 'center',
   },
   bioContainer: {

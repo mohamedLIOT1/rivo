@@ -29,7 +29,15 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
         body: JSON.stringify({ url: url.trim(), isQuran })
       });
 
-      const data = await res.json();
+      let data = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json().catch(() => ({}));
+      } else {
+        const text = await res.text().catch(() => '');
+        throw new Error(text.slice(0, 120) || `Server returned ${res.status}`);
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Failed to import playlist');
       }
@@ -68,8 +76,12 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
               <DownloadCloud size={16} />
             </div>
             <div>
-              <h3 className="text-base font-mono font-black uppercase text-[#082621]">Import External Tape</h3>
-              <p className="text-[11px] text-[#082621]/70 font-sans">Resolve and convert Spotify, YouTube, or Apple Music</p>
+              <h3 className="text-base font-mono font-black uppercase text-[#082621]">
+                {isQuran ? 'Import Quran Playlist' : 'Import External Tape'}
+              </h3>
+              <p className="text-[11px] text-[#082621]/70 font-sans">
+                {isQuran ? 'Resolve and convert Quran playlist from YouTube or Spotify' : 'Resolve and convert Spotify, YouTube, or Apple Music'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
@@ -81,7 +93,7 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
         <form onSubmit={handleImport} className="mt-4 space-y-4">
           <div>
             <label className="block text-[10px] font-mono font-black uppercase text-[#082621] mb-1.5">
-              EXTERNAL ARCHIVE URL
+              {isQuran ? 'QURAN PLAYLIST URL' : 'EXTERNAL ARCHIVE URL'}
             </label>
             <div className="relative">
               <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#082621]/60" />
@@ -90,7 +102,7 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
                 required
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://open.spotify.com/playlist/... or YouTube link"
+                placeholder={isQuran ? "Paste YouTube Quran playlist or Spotify link..." : "https://open.spotify.com/playlist/... or YouTube link"}
                 className="w-full bg-[#ede5d3] brutal-border pl-9 pr-3 py-2 text-xs font-mono text-[#0b1110] placeholder-[#082621]/40 focus:outline-none focus:bg-white"
                 autoFocus
               />
@@ -127,7 +139,9 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
           {success && (
             <div className="p-2.5 bg-[#082621] text-[#26c4b7] brutal-border flex items-center gap-2 text-xs font-mono font-bold">
               <CheckCircle2 size={15} className="shrink-0" />
-              <span>IMPORTED "{success.name}" ({success.trackCount} DOSES CONVERTED)!</span>
+              <span>
+                IMPORTED "{success.name}" ({success.trackCount} {isQuran ? (success.trackCount === 1 ? 'SURAH' : 'SURAHS') : 'DOSES CONVERTED'})!
+              </span>
             </div>
           )}
 
@@ -140,12 +154,12 @@ export default function ImportPlaylistModal({ isOpen, onClose, onPlaylistImporte
               {loading ? (
                 <>
                   <Loader2 size={15} className="animate-spin" />
-                  <span>RESOLVING & INTAKING TRACKS...</span>
+                  <span>{isQuran ? 'RESOLVING & IMPORTING SURAHS...' : 'RESOLVING & INTAKING TRACKS...'}</span>
                 </>
               ) : (
                 <>
                   <DownloadCloud size={15} />
-                  <span>IMPORT INTO RIVO ARCHIVE</span>
+                  <span>{isQuran ? 'IMPORT QURAN PLAYLIST' : 'IMPORT INTO RIVO ARCHIVE'}</span>
                 </>
               )}
             </button>

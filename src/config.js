@@ -14,18 +14,21 @@ export const API_BASE_URL = (() => {
     if (
       window.Capacitor ||
       protocol === 'capacitor:' ||
-      protocol === 'file:' ||
-      hostname === 'localhost' && !host.includes('5000')
+      protocol === 'file:'
     ) {
-      return 'http://192.168.42.128:5000';
+      return 'http://10.166.17.242:5000';
     }
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://192.168.42.128:5000';
+      return 'http://localhost:5000';
+    }
+    // If accessed via local network IP (e.g. 10.x.x.x or 192.168.x.x), target port 5000
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+      return `${protocol}//${hostname}:5000`;
     }
     return `${protocol}//${host}`;
   }
 
-  return 'http://192.168.42.128:5000';
+  return 'http://10.166.17.242:5000';
 })();
 
 export const getApiUrl = (endpoint) => {

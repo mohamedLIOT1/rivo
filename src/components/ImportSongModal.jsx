@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Link2, Music, Loader2, CheckCircle2, AlertCircle, Play } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
-export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
+export default function ImportSongModal({ isOpen, onClose, onTrackImported, isQuran = false }) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,7 +26,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ url: url.trim() })
+        body: JSON.stringify({ url: url.trim(), isQuran })
       });
 
       const data = await res.json();
@@ -50,7 +50,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
         onClose();
       }, 1800);
     } catch (err) {
-      setError(err.message || 'Something went wrong while importing the song.');
+      setError(err.message || 'Something went wrong while importing.');
     } finally {
       setLoading(false);
     }
@@ -71,8 +71,12 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
               <Music size={16} />
             </div>
             <div>
-              <h3 className="text-base font-mono font-black uppercase text-[#082621]">Import External Track</h3>
-              <p className="text-[11px] text-[#082621]/70 font-sans">Resolve and intake Spotify, YouTube, SoundCloud, or Apple Music</p>
+              <h3 className="text-base font-mono font-black uppercase text-[#082621]">
+                {isQuran ? 'Import Surah / Recitation' : 'Import External Track'}
+              </h3>
+              <p className="text-[11px] text-[#082621]/70 font-sans">
+                {isQuran ? 'Resolve and intake Quran recitation from YouTube, Spotify, or SoundCloud' : 'Resolve and intake Spotify, YouTube, SoundCloud, or Apple Music'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
@@ -84,7 +88,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
         <form onSubmit={handleImport} className="mt-4 space-y-4">
           <div>
             <label className="block text-[10px] font-mono font-black uppercase text-[#082621] mb-1.5">
-              EXTERNAL TRACK LINK
+              {isQuran ? 'EXTERNAL SURAH / AUDIO LINK' : 'EXTERNAL TRACK LINK'}
             </label>
             <div className="relative">
               <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#082621]/60" />
@@ -93,7 +97,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
                 required
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://open.spotify.com/track/... or YouTube link"
+                placeholder={isQuran ? "Paste Surah link (YouTube, Spotify, etc.)..." : "https://open.spotify.com/track/... or YouTube link"}
                 className="w-full bg-[#ede5d3] brutal-border pl-9 pr-3 py-2 text-xs font-mono text-[#0b1110] placeholder-[#082621]/40 focus:outline-none focus:bg-white"
                 autoFocus
               />
@@ -113,7 +117,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
               YouTube
             </span>
             <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
-              isSoundCloud ? 'bg-orange-100 text-orange-600' : 'bg-[#ede5d3] text-[#082621]/70'
+              isSoundCloud ? 'bg-orange-100 text-orange-700' : 'bg-[#ede5d3] text-[#082621]/70'
             }`}>
               SoundCloud
             </span>
@@ -154,12 +158,12 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported }) {
               {loading ? (
                 <>
                   <Loader2 size={15} className="animate-spin" />
-                  <span>RESOLVING & INTAKING TRACK...</span>
+                  <span>{isQuran ? 'RESOLVING & IMPORTING SURAH...' : 'RESOLVING & INTAKING TRACK...'}</span>
                 </>
               ) : (
                 <>
                   <Music size={15} />
-                  <span>INTAKE TRACK INTO RIVO</span>
+                  <span>{isQuran ? 'IMPORT SURAH INTO RIVO' : 'INTAKE TRACK INTO RIVO'}</span>
                 </>
               )}
             </button>

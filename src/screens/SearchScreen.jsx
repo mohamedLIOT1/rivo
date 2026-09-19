@@ -7,7 +7,7 @@ import {
 import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { API_BASE_URL } from '../config';
-import { getTrackArtists, ArtistLinks } from '../utils/artistUtils';
+import { getTrackArtists, ArtistLinks, getCanonicalArtistName, getArtistAliases } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 
@@ -76,37 +76,60 @@ export default function SearchScreen({
   const safeTracks = React.useMemo(() => (tracks || []).filter(t => !isQuranContent(t)), [tracks]);
   const safeAlbums = React.useMemo(() => (albums || []).filter(a => !isQuranContent(a)), [albums]);
 
-  // Extract all artists from tracks & albums (supporting multiple artists per track)
+  // Extract all artists from tracks & albums (aggregated by canonical artist identity)
   const allArtists = React.useMemo(() => {
     const map = new Map();
     safeTracks.forEach(t => {
       if (!t.artist || !isMusicTrack(t.title, t.artist)) return;
       const artistNames = getTrackArtists(t.artist, t.title);
-      artistNames.forEach(name => {
-        const key = name.toLowerCase();
+      artistNames.forEach(rawName => {
+        const canonical = getCanonicalArtistName(rawName);
+        if (!canonical) return;
+        const key = canonical.toLowerCase();
         if (!map.has(key)) {
-          map.set(key, { name, count: 1, cover: t.cover });
+          map.set(key, { 
+            name: canonical, 
+            count: 1, 
+            cover: t.cover,
+            aliases: getArtistAliases(canonical)
+          });
         } else {
-          map.get(key).count += 1;
+          const existing = map.get(key);
+          existing.count += 1;
+          if (!existing.cover && t.cover) existing.cover = t.cover;
         }
       });
     });
     safeAlbums.forEach(a => {
       if (!a.artist) return;
       const artistNames = getTrackArtists(a.artist);
-      artistNames.forEach(name => {
-        const key = name.toLowerCase();
+      artistNames.forEach(rawName => {
+        const canonical = getCanonicalArtistName(rawName);
+        if (!canonical) return;
+        const key = canonical.toLowerCase();
+        const albCount = (a.trackIds || []).length || 1;
         if (!map.has(key)) {
-          map.set(key, { name, count: (a.trackIds || []).length, cover: a.cover });
+          map.set(key, { 
+            name: canonical, 
+            count: albCount, 
+            cover: a.cover,
+            aliases: getArtistAliases(canonical)
+          });
+        } else {
+          const existing = map.get(key);
+          if (!existing.cover && a.cover) existing.cover = a.cover;
         }
       });
     });
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [safeTracks, safeAlbums]);
 
-  // Matching Artists
+  // Matching Artists (searches canonical name and all known aliases)
   const matchedArtists = (filterType === 'people' || filterType === 'albums' || filterType === 'songs') ? [] : (
-    cleanQuery ? allArtists.filter(a => a.name.toLowerCase().includes(cleanQuery)) : (filterType === 'artists' ? allArtists : [])
+    cleanQuery ? allArtists.filter(a => {
+      if (a.name.toLowerCase().includes(cleanQuery)) return true;
+      return (a.aliases || []).some(alias => alias.toLowerCase().includes(cleanQuery));
+    }) : (filterType === 'artists' ? allArtists : [])
   );
 
   // Matching Albums
@@ -624,7 +647,7 @@ export default function SearchScreen({
                                   onSelectArtist={onSelectArtist}
                                   linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
                                 />
-                                <span>• {(alb.trackIds || []).length} songs</span>
+                                <span>• {(alb.trackIds || []).length} {Boolean(alb.isQuran || isQuranContent(alb)) ? ((alb.trackIds || []).length === 1 ? 'surah' : 'surahs') : ((alb.trackIds || []).length === 1 ? 'song' : 'songs')}</span>
                               </div>
                             </div>
                           </div>
@@ -754,7 +777,7 @@ export default function SearchScreen({
                               {alb.name}
                             </span>
                             <span className="text-[10px] font-mono text-zinc-400 truncate block">
-                              {alb.artist || 'Artist'} • {(alb.trackIds || []).length} songs
+                              {alb.artist || 'Artist'} • {(alb.trackIds || []).length} {Boolean(alb.isQuran || isQuranContent(alb)) ? ((alb.trackIds || []).length === 1 ? 'surah' : 'surahs') : ((alb.trackIds || []).length === 1 ? 'song' : 'songs')}
                             </span>
                           </div>
                         </div>
@@ -1233,7 +1256,7 @@ export default function SearchScreen({
                             }}
                             className={`text-[10px] font-mono hover:underline cursor-pointer truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
                           >
-                            {alb.artist || 'Artist'} • {(alb.trackIds || []).length} songs
+                            {alb.artist || 'Artist'} • {(alb.trackIds || []).length} {Boolean(alb.isQuran || isQuranContent(alb)) ? ((alb.trackIds || []).length === 1 ? 'surah' : 'surahs') : ((alb.trackIds || []).length === 1 ? 'song' : 'songs')}
                           </p>
                         </div>
                       </div>

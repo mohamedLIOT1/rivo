@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud } from 'lucide-react';
+import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud, Trash2 } from 'lucide-react';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 
@@ -7,12 +7,15 @@ export default function LibraryScreen({
   playlists = [], 
   albums = [],
   tracks = [], 
+  likedTrackIds = [],
+  currentUser,
   onSelectPlaylist, 
   onSelectArtist,
   onSelectTrack, 
   openCreatePlaylistModal, 
   openImportPlaylistModal, 
   openImportSongModal,
+  onDeletePlaylist,
   toggleLike,
   globalTheme = 'dark',
   libraryTitle = 'Your Library'
@@ -25,13 +28,26 @@ export default function LibraryScreen({
 
   // Filter out duplicate "Liked Songs" and strictly segregate Quran content
   const safePlaylists = useMemo(() => {
-    return (playlists || []).filter(item => {
+    const list = (playlists || []).filter(item => {
       if (isQuranMode) return isQuranContent(item);
       if (isQuranContent(item)) return false;
       const name = (item.name || '').trim().toLowerCase();
       return name !== 'liked songs' && name !== 'liked prescriptions' && item.id !== 'liked' && !item.isLikedSongs;
     });
-  }, [playlists, isQuranMode]);
+
+    if (!isQuranMode) {
+      const likedPl = {
+        id: 'liked',
+        _id: 'liked',
+        name: 'Liked Songs',
+        description: 'Your favorite tracks in one place.',
+        isLikedSongs: true,
+        trackIds: (likedTrackIds || []).map(String),
+      };
+      return [likedPl, ...list];
+    }
+    return list;
+  }, [playlists, isQuranMode, likedTrackIds]);
 
   const safeAlbums = useMemo(() => {
     return (albums || []).filter(item => {
@@ -90,7 +106,7 @@ export default function LibraryScreen({
                 className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                   isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
                 }`}
-                title="Add Song by Link"
+                title={isQuranMode ? "Add Surah by Link" : "Add Song by Link"}
               >
                 <Link2 size={15} strokeWidth={2.5} className="text-[#17a398]" />
               </button>
@@ -102,7 +118,7 @@ export default function LibraryScreen({
                 className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                   isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
                 }`}
-                title="Import Playlist"
+                title={isQuranMode ? "Import Quran Playlist" : "Import Playlist"}
               >
                 <DownloadCloud size={15} strokeWidth={2.5} className="text-[#17a398]" />
               </button>
@@ -113,7 +129,7 @@ export default function LibraryScreen({
               className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                 isDark ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] border-zinc-700' : 'bg-[#0b1110] hover:bg-[#082621] text-[#26c4b7]'
               }`}
-              title="Create Playlist"
+              title={isQuranMode ? "Create Quran Playlist" : "Create Playlist"}
             >
               <Plus size={16} strokeWidth={2.5} />
             </button>
@@ -125,9 +141,9 @@ export default function LibraryScreen({
           <div className="flex items-center gap-2 overflow-x-auto">
             {[
               { id: 'all', label: 'All' },
-              { id: 'playlists', label: 'Playlists' },
-              { id: 'albums', label: `Albums (${albums.length})` },
-              { id: 'downloads', label: 'Downloaded' },
+              { id: 'playlists', label: isQuranMode ? 'Quran Playlists' : 'Playlists' },
+              { id: 'albums', label: `${isQuranMode ? 'Collections' : 'Albums'} (${safeAlbums.length})` },
+              { id: 'downloads', label: isQuranMode ? 'Downloaded Surahs' : 'Downloaded' },
             ].map((f) => {
               const active = filter === f.id;
               return (
@@ -155,7 +171,7 @@ export default function LibraryScreen({
             />
             <input
               type="text"
-              placeholder="Search library..."
+              placeholder={isQuranMode ? "Search Quran library..." : "Search library..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={`w-full text-xs font-bold pl-9 pr-3 py-2 rounded-lg brutal-border focus:outline-none ${
@@ -168,61 +184,6 @@ export default function LibraryScreen({
         </div>
       </div>
 
-      {/* ── Albums Section ── */}
-      {(filter === 'all' || filter === 'albums') && filteredAlbums.length > 0 && (
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Disc size={18} className="text-amber-400" />
-              <h2 className={`font-display font-black text-xl ${
-                isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
-              }`}>
-                Albums ({filteredAlbums.length})
-              </h2>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
-            {filteredAlbums.map((alb, idx) => {
-              const count = (alb.trackIds || []).length;
-              return (
-                <div
-                  key={alb.id || alb._id || idx}
-                  onClick={() => onSelectPlaylist(alb)}
-                  className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition brutal-btn group ${
-                    isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
-                  }`}
-                >
-                  <div>
-                    <div className="w-full aspect-square rounded-lg brutal-border mb-2.5 flex items-center justify-center relative overflow-hidden bg-black/10">
-                      <img 
-                        src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'} 
-                        alt={alb.name} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
-                      />
-                      <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
-                        {count} SONGS
-                      </span>
-                    </div>
-
-                    <p className={`font-display font-black text-xs truncate group-hover:text-[#17a398] transition-colors ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                      {alb.name}
-                    </p>
-                    <ArtistLinks
-                      artist={alb.artist}
-                      onSelectArtist={onSelectArtist}
-                      className={`text-[10px] font-bold truncate block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                      linkClassName="hover:underline cursor-pointer"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
       {/* ── Playlists Section ── */}
       {(filter === 'all' || filter === 'playlists') && (
         <section className="mb-8">
@@ -230,7 +191,7 @@ export default function LibraryScreen({
             <h2 className={`font-display font-black text-xl ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
             }`}>
-              Playlists ({filteredPlaylists.length})
+              {isQuranMode ? 'Quran Playlists' : 'Playlists'} ({filteredPlaylists.length})
             </h2>
           </div>
 
@@ -268,16 +229,88 @@ export default function LibraryScreen({
                         </span>
                       )}
                       <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
-                        {count} SONGS
+                        {count} {isQuranMode || isQuranContent(pl) ? (count === 1 ? 'SURAH' : 'SURAHS') : (count === 1 ? 'SONG' : 'SONGS')}
                       </span>
                     </div>
 
                     <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                       {pl.name}
                     </p>
-                    <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                      {pl.isLikedSongs ? 'Favorites' : 'Playlist'}
+                    <div className="flex items-center justify-between gap-1 mt-0.5">
+                      <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        {pl.isLikedSongs ? (isQuranMode ? 'Favorite Surahs' : 'Favorites') : (isQuranMode ? 'Quran Playlist' : 'Playlist')}
+                      </p>
+                      {!pl.isLikedSongs && onDeletePlaylist && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Are you sure you want to delete the playlist "${pl.name}"?`)) {
+                              onDeletePlaylist(pl.id || pl._id);
+                            }
+                          }}
+                          className="p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 hover:bg-red-200 text-[#dc2626] brutal-border cursor-pointer shrink-0"
+                          title="Delete playlist"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── Albums Section ── */}
+      {(filter === 'all' || filter === 'albums') && filteredAlbums.length > 0 && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Disc size={18} className="text-amber-400" />
+              <h2 className={`font-display font-black text-xl ${
+                isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
+              }`}>
+                {isQuranMode ? 'Collections' : 'Albums'} ({filteredAlbums.length})
+              </h2>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-6">
+            {filteredAlbums.map((alb, idx) => {
+              const count = (alb.trackIds || []).length;
+              return (
+                <div
+                  key={alb.id || alb._id || idx}
+                  onClick={() => onSelectPlaylist(alb)}
+                  className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow hover:brutal-shadow-lg transition brutal-btn group ${
+                    isDark ? 'bg-[#141d1b] border-zinc-700 text-white hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black text-[#0b1110] hover:bg-white'
+                  }`}
+                >
+                  <div>
+                    <div className="w-full aspect-square rounded-lg brutal-border mb-2.5 flex items-center justify-center relative overflow-hidden bg-black/10">
+                      <img 
+                        src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'} 
+                        alt={alb.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
+                      />
+                      <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
+                        {count} {isQuranMode || isQuranContent(alb) ? (count === 1 ? 'SURAH' : 'SURAHS') : (count === 1 ? 'SONG' : 'SONGS')}
+                      </span>
+                    </div>
+
+                    <p className={`font-display font-black text-xs truncate group-hover:text-[#17a398] transition-colors ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                      {alb.name}
                     </p>
+                    <ArtistLinks
+                      artist={alb.artist}
+                      onSelectArtist={onSelectArtist}
+                      className={`text-[10px] font-bold truncate block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                      linkClassName="hover:underline cursor-pointer"
+                    />
                   </div>
                 </div>
               );
@@ -294,7 +327,7 @@ export default function LibraryScreen({
             <h2 className={`font-display font-black text-xl ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
             }`}>
-              Downloaded Songs ({downloadedTracks.length})
+              {isQuranMode ? 'Downloaded Surahs' : 'Downloaded Songs'} ({downloadedTracks.length})
             </h2>
           </div>
 

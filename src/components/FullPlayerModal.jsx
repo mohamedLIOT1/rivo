@@ -566,7 +566,106 @@ export default function FullPlayerModal({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const progressPercent = activeDuration > 0 ? (activeTime / activeDuration) * 100 : 0;
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(0);
+
+  const realPercent = activeDuration > 0 ? (activeTime / activeDuration) * 100 : 0;
+  const progressPercent = isScrubbing ? scrubPercent : realPercent;
+
+  const seekFromClientX = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const clickX = clientX - targetRect.left;
+    const pct = Math.max(0, Math.min(1, clickX / targetRect.width));
+    const targetDuration = (activeDuration && activeDuration > 0) ? activeDuration : (currentTrack?.duration || 210);
+    const targetSec = pct * targetDuration;
+    setScrubPercent(pct * 100);
+    if (seekTo) seekTo(targetSec);
+  };
+
+  const handleSeekPointerDown = (e) => {
+    e.preventDefault();
+    setIsScrubbing(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekFromClientX(e.clientX, rect);
+  };
+
+  const handleSeekPointerMove = (e) => {
+    if (!isScrubbing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekFromClientX(e.clientX, rect);
+  };
+
+  const handleSeekPointerUp = (e) => {
+    if (isScrubbing) {
+      setIsScrubbing(false);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    }
+  };
+
+  const handleSeekKeyDown = (e) => {
+    const dur = (activeDuration && activeDuration > 0) ? activeDuration : (currentTrack?.duration || 210);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (seekTo) seekTo(Math.max(0, activeTime - 5));
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (seekTo) seekTo(Math.min(dur, activeTime + 5));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      if (seekTo) seekTo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      if (seekTo) seekTo(dur);
+    }
+  };
+
+  const [isVolScrubbing, setIsVolScrubbing] = useState(false);
+
+  const setVolumeFromClientX = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const clickX = clientX - targetRect.left;
+    const pct = Math.max(0, Math.min(1, clickX / targetRect.width));
+    setVolume(Math.round(pct * 100) / 100);
+  };
+
+  const handleVolPointerDown = (e) => {
+    e.preventDefault();
+    setIsVolScrubbing(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setVolumeFromClientX(e.clientX, rect);
+  };
+
+  const handleVolPointerMove = (e) => {
+    if (!isVolScrubbing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setVolumeFromClientX(e.clientX, rect);
+  };
+
+  const handleVolPointerUp = (e) => {
+    if (isVolScrubbing) {
+      setIsVolScrubbing(false);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    }
+  };
+
+  const handleVolKeyDown = (e) => {
+    const cur = volume || 0;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setVolume(Math.max(0, Math.round((cur - 0.05) * 100) / 100));
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setVolume(Math.min(1, Math.round((cur + 0.05) * 100) / 100));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setVolume(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setVolume(1);
+    }
+  };
 
   // Play a track from the queue
   const handleQueueTrackClick = (track) => {
@@ -768,7 +867,7 @@ export default function FullPlayerModal({
           isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
         } mb-2`}>
           <span className={`text-[11px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Queue ({displayQueue.length} {isCurQuran ? 'Recitations' : 'Songs'})
+            Queue ({displayQueue.length} {isCurQuran ? (displayQueue.length === 1 ? 'Surah' : 'Surahs') : (displayQueue.length === 1 ? 'Song' : 'Songs')})
           </span>
           <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
             isDark ? 'bg-zinc-800 text-zinc-300 border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-zinc-700'
@@ -1066,7 +1165,7 @@ export default function FullPlayerModal({
               className={`p-2 rounded-xl brutal-shadow-sm brutal-btn hover:scale-105 active:scale-95 cursor-pointer shrink-0 ${
                 isDark ? 'bg-[#1c2422] border-2 border-zinc-700 text-white' : 'bg-white brutal-border text-zinc-700'
               }`}
-              title={isTrackLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+              title={isTrackLiked ? (isCurQuran ? 'Remove from Favorites' : 'Remove from Liked Songs') : (isCurQuran ? 'Save to Favorites' : 'Save to Liked Songs')}
             >
               <Heart 
                 size={18} 
@@ -1078,30 +1177,31 @@ export default function FullPlayerModal({
 
           {/* Seekbar */}
           <div className="mb-2 shrink-0">
-            <div className="relative w-full group h-3 flex items-center cursor-pointer">
-              <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+            <div 
+              role="slider"
+              tabIndex={0}
+              aria-label="Seek track"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(progressPercent)}
+              onKeyDown={handleSeekKeyDown}
+              className="relative w-full group h-8 flex items-center cursor-pointer select-none py-2 touch-none focus:outline-none"
+              onPointerDown={handleSeekPointerDown}
+              onPointerMove={handleSeekPointerMove}
+              onPointerUp={handleSeekPointerUp}
+              onPointerCancel={handleSeekPointerUp}
+            >
+              <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden brutal-border transition-all pointer-events-none ${
                 isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
               }`}>
                 <div 
-                  className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                  className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
                   style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
                 />
               </div>
               <div 
                 className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
                 style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
-              />
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                value={isNaN(progressPercent) ? 0 : progressPercent} 
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  const targetSec = (val / 100) * (activeDuration || 0);
-                  if (seekTo) seekTo(targetSec);
-                }}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
               />
             </div>
             <div className={`flex justify-between mt-1 font-mono font-bold text-[10px] ${
@@ -1192,27 +1292,31 @@ export default function FullPlayerModal({
                 {volume === 0 ? <VolumeX size={15} className="text-red-500" /> : <Volume2 size={15} />}
               </button>
               
-              <div className="relative flex-1 group h-3 flex items-center cursor-pointer">
-                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+              <div 
+                role="slider"
+                tabIndex={0}
+                aria-label="Master volume"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round((volume || 0) * 100)}
+                onKeyDown={handleVolKeyDown}
+                className="relative flex-1 group h-6 flex items-center cursor-pointer select-none touch-none focus:outline-none py-1.5"
+                onPointerDown={handleVolPointerDown}
+                onPointerMove={handleVolPointerMove}
+                onPointerUp={handleVolPointerUp}
+                onPointerCancel={handleVolPointerUp}
+              >
+                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border pointer-events-none ${
                   isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
                 }`}>
                   <div 
-                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
                     style={{ width: `${Math.min(100, Math.max(0, (volume || 0) * 100))}%` }}
                   />
                 </div>
                 <div 
                   className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
                   style={{ left: `calc(${Math.min(100, Math.max(0, (volume || 0) * 100))}% - 7px)` }}
-                />
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.01" 
-                  value={volume || 0} 
-                  onChange={(e) => setVolume(parseFloat(e.target.value))} 
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
               </div>
 

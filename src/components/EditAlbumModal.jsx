@@ -92,10 +92,12 @@ export default function EditAlbumModal({
       await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ deleteTracks: true })
       });
-      onDelete(albumId);
+      if (onDelete) onDelete(albumId, album);
       onClose();
     } catch (err) {
       console.error('Delete album error:', err);
@@ -263,7 +265,7 @@ export default function EditAlbumModal({
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
         title={`Delete Album "${name}"?`}
-        message="Are you sure you want to delete this album? Associated tracks will not be deleted, but the album collection will be removed."
+        message="Are you sure you want to permanently delete this album and all associated tracks from Rivo?"
         confirmText="Delete Album"
         cancelText="Cancel"
         onConfirm={() => {

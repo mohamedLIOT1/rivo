@@ -2,6 +2,9 @@
  * Rivo Backend API Server — FULL FEATURED & OPTIMIZED
  */
 
+const dns = require('dns');
+try { dns.setDefaultResultOrder('ipv4first'); dns.setServers(['8.8.8.8', '1.1.1.1']); } catch (e) {}
+
 const express = require('express');
 const http = require('http');
 const fs = require('fs');
@@ -456,41 +459,130 @@ async function fetchTrackMetadata(title, artist) {
   return null;
 }
 
+function normalizeArtistName(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let clean = raw.trim();
+  clean = clean.replace(/\s*-\s*topic\b/gi, '');
+  clean = clean.replace(/\b(official(?:\s*(?:channel|music|video|audio|records|tv|page))?|offical|vevo|topic|channel)\b/gi, '');
+  clean = clean.replace(/^["'\[\(]+|["'\]\)]+$/g, '');
+  clean = clean.replace(/\s+/g, ' ').trim();
+  return clean;
+}
+
+const CANONICAL_ARTIST_MAP = [
+  {
+    canonical: 'Cairokee',
+    aliases: [
+      'cairokee', 'cairokeeoffical', 'cairokeeofficial', 'cairokee official',
+      'amir eid', 'amireid', 'أمير عيد', 'كايروكي'
+    ]
+  },
+  {
+    canonical: 'Mohamed Hamaki',
+    aliases: ['hamaki', 'mohamed hamaki', 'محمد حماقي', 'حماقي']
+  },
+  {
+    canonical: 'Amr Diab',
+    aliases: ['amr diab', 'عمرو دياب', 'elhadaba', 'el hadaba']
+  },
+  {
+    canonical: 'Tamer Hosny',
+    aliases: ['tamer hosny', 'tamer hosni', 'تامر حسني']
+  },
+  {
+    canonical: 'Marwan Pablo',
+    aliases: ['marwan pablo', 'pablo', 'مروان بابلو', 'بابلو']
+  },
+  {
+    canonical: 'Wegz',
+    aliases: ['wegz', 'ويجز']
+  },
+  {
+    canonical: 'Lege-Cy',
+    aliases: ['lege-cy', 'lege cy', 'legecy', 'ليجي سي', 'ليجي-سي']
+  },
+  {
+    canonical: 'Abyusif',
+    aliases: ['abyusif', 'أبيوسف', 'ابيوسف']
+  },
+  {
+    canonical: 'Marwan Moussa',
+    aliases: ['marwan moussa', 'marwan mousa', 'مروان موسى']
+  },
+  {
+    canonical: 'Afroto',
+    aliases: ['afroto', 'عفروتو']
+  },
+  {
+    canonical: 'Sharmoofers',
+    aliases: ['sharmoofers', 'شارموفرز']
+  },
+  {
+    canonical: 'Massar Egbari',
+    aliases: ['massar egbari', 'مسار إجباري', 'مسار اجباري']
+  },
+  {
+    canonical: 'Ahmed Saad',
+    aliases: ['ahmed saad', 'أحمد سعد', 'احمد سعد']
+  },
+  {
+    canonical: 'Bahaa Sultan',
+    aliases: ['bahaa sultan', 'بهاء سلطان']
+  },
+  {
+    canonical: 'Sherine',
+    aliases: ['sherine', 'sherine abdel-wahab', 'sherine abdel wahab', 'شيرين', 'شيرين عبد الوهاب']
+  }
+];
+
+function getCanonicalArtistName(rawName) {
+  if (!rawName || typeof rawName !== 'string') return '';
+  const trimmed = rawName.trim();
+  const lower = trimmed.toLowerCase();
+  const normalized = normalizeArtistName(trimmed).toLowerCase();
+
+  for (const group of CANONICAL_ARTIST_MAP) {
+    if (group.aliases.includes(lower) || group.aliases.includes(normalized)) {
+      return group.canonical;
+    }
+  }
+
+  const clean = normalizeArtistName(trimmed);
+  return clean || trimmed;
+}
+
+function getArtistAliases(artistName) {
+  if (!artistName || typeof artistName !== 'string') return [];
+  const canonical = getCanonicalArtistName(artistName).toLowerCase();
+  for (const group of CANONICAL_ARTIST_MAP) {
+    if (group.canonical.toLowerCase() === canonical) {
+      return group.aliases;
+    }
+  }
+  return [artistName.toLowerCase().trim()];
+}
+
 function isValidAlbumName(albumName) {
   if (!albumName || typeof albumName !== 'string') return false;
   const clean = albumName.trim().toLowerCase();
   const invalid = [
     '', 'single', 'single cassette', 'singles', 'single release',
     'unknown', 'unknown album', 'track', 'audio', 'youtube', 'soundcloud',
-    'import', 'spotify', 'spotify playlist', 'imported playlist', 'official audio'
+    'import', 'spotify', 'spotify playlist', 'imported playlist', 'official audio',
+    'playlist', 'my playlist', 'favorites', 'liked songs', 'new playlist'
   ];
   if (invalid.includes(clean)) return false;
+  if (clean.startsWith('playlist') || clean.endsWith('playlist')) return false;
   if (clean.length < 2) return false;
   return true;
 }
 
 async function syncTrackToAlbum(track) {
-  if (!track || !track.title || !track.artist) return null;
-
-  let albumTitle = (track.album || '').trim();
+  // Albums are strictly admin-created. Only attach to an existing album if one already exists.
+  if (!track || !track.title || !track.artist || !track.album) return null;
+  const albumTitle = (track.album || '').trim();
   const artistName = track.artist.trim();
   const trackId = String(track._id || track.id);
-
-  // If album is missing or generic placeholder, attempt lookup via iTunes API
-  if (!isValidAlbumName(albumTitle)) {
-    try {
-      const meta = await fetchTrackMetadata(track.title, artistName);
-      if (meta?.album && isValidAlbumName(meta.album)) {
-        albumTitle = meta.album.trim();
-        const updates = { album: albumTitle };
-        if (meta.cover && (!track.cover || track.cover.includes('unsplash') || track.cover.includes('pixabay'))) {
-          updates.cover = meta.cover;
-        }
-        await Track.updateOne({ _id: track._id || track.id }, { $set: updates });
-      }
-    } catch {}
-  }
-
   if (!isValidAlbumName(albumTitle)) return null;
 
   try {
@@ -503,53 +595,15 @@ async function syncTrackToAlbum(track) {
     if (album) {
       if (!album.trackIds.includes(trackId)) {
         album.trackIds.push(trackId);
+        await album.save();
       }
-      if (!album.cover && track.cover) {
-        album.cover = track.cover;
-      }
-      await album.save();
       return album;
-    } else {
-      const newAlbum = new Album({
-        id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-        name: albumTitle,
-        artist: artistName,
-        cover: track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
-        trackIds: [trackId],
-        genre: track.genre || 'Pop',
-        isAlbum: true,
-        isSystem: true,
-        isPublic: true,
-        source: track.source || 'auto_detected'
-      });
-      await newAlbum.save();
-      console.log(`[Album] Created new website album: "${albumTitle}" by "${artistName}"`);
-      return newAlbum;
     }
   } catch (err) {
     console.warn('[Album] syncTrackToAlbum error:', err.message);
-    return null;
   }
+  return null;
 }
-
-// Background task: sync existing tracks that have an album title into Album collection
-setTimeout(async () => {
-  try {
-    const allTracks = await Track.find();
-    let count = 0;
-    for (const t of allTracks) {
-      if (t.title && t.artist && isValidAlbumName(t.album)) {
-        await syncTrackToAlbum(t);
-        count++;
-      }
-    }
-    if (count > 0) {
-      console.log(`[DB] Synced ${count} tracks into website Album collections`);
-    }
-  } catch (err) {
-    console.warn('[DB] Album backfill error:', err.message);
-  }
-}, 4000);
 
 function rankSoundCloudTrack(item, title = '', artist = '') {
   let score = 100;
@@ -862,28 +916,6 @@ app.patch('/api/admin/users/:id/role', adminAuth, async (req, res) => {
 // ──────────────────────────────────────────
 // ARTIST PROFILE MANAGEMENT (Admins Only to Edit)
 // ──────────────────────────────────────────
-app.get('/api/artists/:name', async (req, res) => {
-  try {
-    const rawName = decodeURIComponent(req.params.name).trim();
-    const artistDoc = await Artist.findOne({
-      name: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, 'i') }
-    }).lean();
-
-    res.json({
-      success: true,
-      artist: artistDoc || {
-        name: rawName,
-        id: rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
-        bio: '',
-        cover: '',
-        banner: '',
-        isVerified: false
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 app.put('/api/artists/:name', adminAuth, async (req, res) => {
   try {
@@ -967,13 +999,22 @@ app.get('/api/users/search', async (req, res) => {
 
 app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
   try {
-    const target = await User.findById(req.params.id)
-      .select('_id name avatar bio playlists followers following createdAt')
-      .lean();
+    const rawId = req.params.id;
+    let target = null;
+    if (mongoose.isValidObjectId(rawId)) {
+      target = await User.findById(rawId)
+        .select('_id name avatar bio playlists followers following createdAt')
+        .lean();
+    }
+    if (!target) {
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] })
+        .select('_id name avatar bio playlists followers following createdAt')
+        .lean();
+    }
     if (!target) return res.status(404).json({ error: 'User not found' });
 
-    const currentUserId = req.user?.id;
-    const isFollowing = currentUserId ? (target.followers || []).map(String).includes(String(currentUserId)) : false;
+    const currentUserId = req.user?.id ? String(req.user.id) : '';
+    const isFollowing = currentUserId ? (target.followers || []).map(String).includes(currentUserId) : false;
     const publicPlaylists = (target.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
       ...p,
       ownerId: String(target._id),
@@ -985,6 +1026,7 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
       success: true,
       user: {
         id: String(target._id),
+        _id: String(target._id),
         name: target.name,
         avatar: target.avatar,
         bio: target.bio || '',
@@ -1004,8 +1046,18 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
 
 app.post('/api/users/:id/follow', auth, async (req, res) => {
   try {
-    const targetId = req.params.id;
-    const currentUserId = req.user.id;
+    const rawId = req.params.id;
+    let target = null;
+    if (mongoose.isValidObjectId(rawId)) {
+      target = await User.findById(rawId);
+    }
+    if (!target) {
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] });
+    }
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const targetId = String(target._id);
+    const currentUserId = String(req.user.id);
     if (targetId === currentUserId) return res.status(400).json({ error: 'Cannot follow yourself' });
 
     await User.findByIdAndUpdate(targetId, { $addToSet: { followers: currentUserId } });
@@ -1024,8 +1076,18 @@ app.post('/api/users/:id/follow', auth, async (req, res) => {
 
 app.post('/api/users/:id/unfollow', auth, async (req, res) => {
   try {
-    const targetId = req.params.id;
-    const currentUserId = req.user.id;
+    const rawId = req.params.id;
+    let target = null;
+    if (mongoose.isValidObjectId(rawId)) {
+      target = await User.findById(rawId);
+    }
+    if (!target) {
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] });
+    }
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const targetId = String(target._id);
+    const currentUserId = String(req.user.id);
 
     await User.findByIdAndUpdate(targetId, { $pull: { followers: currentUserId } });
     await User.findByIdAndUpdate(currentUserId, { $pull: { following: targetId } });
@@ -1242,12 +1304,35 @@ app.get('/api/stats/leaderboard', optionalAuth, async (req, res) => {
 // Get user followers list
 app.get('/api/users/:id/followers', optionalAuth, async (req, res) => {
   try {
-    const target = await User.findById(req.params.id).populate('followers', '_id name avatar bio').lean();
+    const rawId = req.params.id;
+    let target = null;
+    if (mongoose.isValidObjectId(rawId)) {
+      target = await User.findById(rawId).select('followers').lean();
+    }
+    if (!target) {
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('followers').lean();
+    }
     if (!target) return res.status(404).json({ error: 'User not found' });
-    const followers = (target.followers || []).map(f => ({
+
+    const rawIds = (target.followers || []).map(f => {
+      if (!f) return null;
+      if (typeof f === 'object' && f._id) return String(f._id);
+      return String(f);
+    }).filter(Boolean);
+
+    const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+    const followerUsers = await User.find({
+      $or: [
+        { _id: { $in: validObjectIds } },
+        { id: { $in: rawIds } }
+      ]
+    }).select('_id name avatar bio').lean();
+
+    const followers = followerUsers.map(f => ({
       id: String(f._id),
+      _id: String(f._id),
       name: f.name,
-      avatar: f.avatar,
+      avatar: f.avatar || '',
       bio: f.bio || '',
       isVerified: isVerifiedUser(f.name)
     }));
@@ -1260,12 +1345,35 @@ app.get('/api/users/:id/followers', optionalAuth, async (req, res) => {
 // Get user following list
 app.get('/api/users/:id/following', optionalAuth, async (req, res) => {
   try {
-    const target = await User.findById(req.params.id).populate('following', '_id name avatar bio').lean();
+    const rawId = req.params.id;
+    let target = null;
+    if (mongoose.isValidObjectId(rawId)) {
+      target = await User.findById(rawId).select('following').lean();
+    }
+    if (!target) {
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('following').lean();
+    }
     if (!target) return res.status(404).json({ error: 'User not found' });
-    const following = (target.following || []).map(f => ({
+
+    const rawIds = (target.following || []).map(f => {
+      if (!f) return null;
+      if (typeof f === 'object' && f._id) return String(f._id);
+      return String(f);
+    }).filter(Boolean);
+
+    const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+    const followingUsers = await User.find({
+      $or: [
+        { _id: { $in: validObjectIds } },
+        { id: { $in: rawIds } }
+      ]
+    }).select('_id name avatar bio').lean();
+
+    const following = followingUsers.map(f => ({
       id: String(f._id),
+      _id: String(f._id),
       name: f.name,
-      avatar: f.avatar,
+      avatar: f.avatar || '',
       bio: f.bio || '',
       isVerified: isVerifiedUser(f.name)
     }));
@@ -1556,6 +1664,269 @@ function parseDurationFromLabel(label) {
 }
 
 // ──────────────────────────────────────────
+// PLAYLIST & ALBUM SCRAPER (Spotify, YouTube, Apple Music)
+// ──────────────────────────────────────────
+async function scrapePlaylistOrAlbum(url) {
+  let title = 'Imported Collection';
+  let cover = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600';
+  let artist = '';
+  let rawItems = [];
+  let isAlbum = false;
+
+  const isSpotifyAlbum = url.includes('spotify.com/album') || url.includes('spotify:album');
+  const isSpotifyPlaylist = url.includes('spotify.com/playlist') || url.includes('spotify:playlist');
+  isAlbum = isSpotifyAlbum;
+
+  if (isSpotifyPlaylist || isSpotifyAlbum) {
+    const match = isSpotifyAlbum
+      ? (url.match(/album\/([a-zA-Z0-9]+)/) || url.match(/spotify:album:([a-zA-Z0-9]+)/))
+      : (url.match(/playlist\/([a-zA-Z0-9]+)/) || url.match(/spotify:playlist:([a-zA-Z0-9]+)/));
+    const entityId = match ? match[1] : null;
+
+    if (!entityId) throw new Error(`Invalid Spotify ${isSpotifyAlbum ? 'album' : 'playlist'} link`);
+
+    // Fetch Spotify Embed page which has embedded JSON metadata
+    try {
+      const embedType = isSpotifyAlbum ? 'album' : 'playlist';
+      const embedRes = await axios.get(`https://open.spotify.com/embed/${embedType}/${entityId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        timeout: 10000
+      });
+
+      const html = embedRes.data;
+      const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
+      if (nextDataMatch) {
+        const parsed = JSON.parse(nextDataMatch[1]);
+        const entity = parsed?.props?.pageProps?.state?.data?.entity;
+        if (entity) {
+          title = entity.name || title;
+          if (entity.coverArt?.sources?.[0]?.url) cover = entity.coverArt.sources[0].url;
+
+          artist = entity.subtitle || entity.artists?.[0]?.name || '';
+          const defaultArtist = artist || 'Artist';
+          const trackList = entity.trackList || [];
+          rawItems = trackList.map(t => ({
+            title: t.title || t.name,
+            artist: t.subtitle || t.artists?.[0]?.name || defaultArtist,
+            duration: Math.round((t.duration || 180000) / 1000)
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('Spotify embed fetch failed:', err.message);
+    }
+  }
+  // 2. Detect YouTube Playlist
+  else if (url.includes('youtube.com/playlist') || url.includes('list=')) {
+    const match = url.match(/list=([a-zA-Z0-9_-]+)/);
+    const listId = match ? match[1] : null;
+    if (!listId) throw new Error('Invalid YouTube playlist link');
+
+    try {
+      const ytRes = await axios.get(`https://www.youtube.com/playlist?list=${listId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9'
+        },
+        timeout: 12000
+      });
+      const html = ytRes.data;
+
+      // Recursive helpers to extract YouTube playlist tracks and continuation tokens
+      const extractYTVideos = (node, dest = []) => {
+        if (!node || typeof node !== 'object') return dest;
+        if (node.lockupViewModel && node.lockupViewModel.contentId) {
+          const vm = node.lockupViewModel;
+          const videoId = vm.contentId;
+          const vTitle = vm.metadata?.lockupMetadataViewModel?.title?.content || 'Unknown Track';
+          const metadataRows = vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
+          const author = metadataRows[0]?.metadataParts?.[0]?.text?.content || 'Artist';
+          const duration = parseDurationFromLabel(vm.rendererContext?.accessibilityContext?.label);
+          const vCover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+          dest.push({
+            title: vTitle,
+            artist: author,
+            videoId,
+            duration,
+            cover: vCover,
+            audioUrl: `https://www.youtube.com/watch?v=${videoId}`
+          });
+        } else if (node.playlistVideoRenderer && node.playlistVideoRenderer.videoId) {
+          const p = node.playlistVideoRenderer;
+          const videoId = p.videoId;
+          const vTitle = p.title?.runs?.[0]?.text || p.title?.simpleText || 'Unknown Track';
+          const author = p.shortBylineText?.runs?.[0]?.text || 'Artist';
+          const duration = p.lengthSeconds ? parseInt(p.lengthSeconds, 10) : 200;
+          const vCover = p.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+          dest.push({
+            title: vTitle,
+            artist: author,
+            videoId,
+            duration,
+            cover: vCover,
+            audioUrl: `https://www.youtube.com/watch?v=${videoId}`
+          });
+        } else if (Array.isArray(node)) {
+          for (const el of node) extractYTVideos(el, dest);
+        } else {
+          for (const k of Object.keys(node)) {
+            if (k !== 'lockupViewModel' && k !== 'playlistVideoRenderer') {
+              extractYTVideos(node[k], dest);
+            }
+          }
+        }
+        return dest;
+      };
+
+      const findYTContinuationToken = (node) => {
+        if (!node || typeof node !== 'object') return null;
+        if (node.continuationItemRenderer) {
+          const tok = node.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+          if (tok) return tok;
+        }
+        if (node.continuationCommand && node.continuationCommand.token) {
+          return node.continuationCommand.token;
+        }
+        if (Array.isArray(node)) {
+          for (const el of node) {
+            const tok = findYTContinuationToken(el);
+            if (tok) return tok;
+          }
+        } else {
+          for (const k of Object.keys(node)) {
+            const tok = findYTContinuationToken(node[k]);
+            if (tok) return tok;
+          }
+        }
+        return null;
+      };
+
+      // Try extracting ytInitialData
+      const initialDataMatch = html.match(/var ytInitialData = ({.*?});<\/script>/s) || html.match(/ytInitialData\s*=\s*({.+?});/);
+      if (initialDataMatch) {
+        try {
+          const data = JSON.parse(initialDataMatch[1]);
+          const headerTitle = data?.metadata?.playlistMetadataRenderer?.title || data?.header?.playlistHeaderRenderer?.title?.simpleText;
+          if (headerTitle) title = headerTitle;
+
+          const headerOwner = data?.header?.playlistHeaderRenderer?.ownerText?.runs?.[0]?.text;
+          if (headerOwner) artist = headerOwner;
+
+          extractYTVideos(data, rawItems);
+          let continuationToken = findYTContinuationToken(data);
+
+          // Extract InnerTube API key
+          const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/) || html.match(/"innertubeApiKey":"([^"]+)"/i) || html.match(/"key":"(AIza[^"]+)"/);
+          const apiKey = apiKeyMatch ? apiKeyMatch[1] : null;
+          const clientVersionMatch = html.match(/"INNERTUBE_CONTEXT_CLIENT_VERSION":"([^"]+)"/) || html.match(/"clientVersion":"([^"]+)"/);
+          const clientVersion = clientVersionMatch ? clientVersionMatch[1] : '2.20240101.00.00';
+
+          // Paginate through continuation tokens
+          let pageCount = 0;
+          const MAX_PAGES = 30;
+
+          while (continuationToken && apiKey && pageCount < MAX_PAGES) {
+            pageCount++;
+            try {
+              const contRes = await axios.post(
+                `https://www.youtube.com/youtubei/v1/browse?key=${apiKey}`,
+                {
+                  context: {
+                    client: {
+                      clientName: 'WEB',
+                      clientVersion: clientVersion,
+                      hl: 'en',
+                      gl: 'US'
+                    }
+                  },
+                  continuation: continuationToken
+                },
+                {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Content-Type': 'application/json'
+                  },
+                  timeout: 10000
+                }
+              );
+
+              const contData = contRes.data;
+              const prevLen = rawItems.length;
+              extractYTVideos(contData, rawItems);
+              continuationToken = findYTContinuationToken(contData);
+
+              if (rawItems.length === prevLen) {
+                break;
+              }
+            } catch (pageErr) {
+              console.warn(`[YouTube Scraper] Continuation page ${pageCount} failed:`, pageErr.message);
+              break;
+            }
+          }
+
+          // Deduplicate items by videoId
+          const seenVids = new Set();
+          rawItems = rawItems.filter(item => {
+            if (!item.videoId) return true;
+            if (seenVids.has(item.videoId)) return false;
+            seenVids.add(item.videoId);
+            return true;
+          });
+        } catch (e) {
+          console.warn('ytInitialData parse error:', e.message);
+        }
+      }
+
+      // Fallback: title from HTML tag
+      if (title === 'Imported Collection') {
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+        if (titleMatch) {
+          title = titleMatch[1].replace(' - YouTube', '').trim();
+        }
+      }
+
+      if (rawItems.length > 0 && rawItems[0].cover) {
+        cover = rawItems[0].cover;
+      }
+    } catch (err) {
+      if (err.response?.status === 404) {
+        throw new Error('YouTube playlist not found (404). Please verify the link is complete and the playlist is public.');
+      }
+      console.warn('YouTube playlist scrape failed:', err.message);
+      throw err;
+    }
+  }
+  // 3. Detect Apple Music Playlist
+  else if (url.includes('music.apple.com')) {
+    try {
+      const appleRes = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        timeout: 10000
+      });
+      const html = appleRes.data;
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+      if (titleMatch) {
+        title = titleMatch[1].replace(' - Apple Music', '').trim();
+      }
+    } catch (err) {}
+  }
+
+  // Derive artist fallback if empty
+  if (!artist && rawItems.length > 0) {
+    const artistCounts = {};
+    rawItems.forEach(item => {
+      if (item.artist && item.artist !== 'Artist') {
+        artistCounts[item.artist] = (artistCounts[item.artist] || 0) + 1;
+      }
+    });
+    const sorted = Object.entries(artistCounts).sort((a, b) => b[1] - a[1]);
+    if (sorted.length > 0) artist = sorted[0][0];
+  }
+
+  return { title, cover, artist, isAlbum, items: rawItems };
+}
+
+// ──────────────────────────────────────────
 // PLAYLIST IMPORT (Spotify, YouTube, Apple Music)
 // ──────────────────────────────────────────
 app.post('/api/playlists/import', auth, async (req, res) => {
@@ -1563,273 +1934,104 @@ app.post('/api/playlists/import', auth, async (req, res) => {
     const { url, isQuran } = req.body;
     if (!url) return res.status(400).json({ error: 'Playlist URL is required' });
 
-    let playlistTitle = 'Imported Playlist';
-    let playlistCover = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600';
-    let rawItems = [];
-
-    // 1. Detect Spotify Playlist or Album
-    const isSpotifyAlbum = url.includes('spotify.com/album') || url.includes('spotify:album');
-    const isSpotifyPlaylist = url.includes('spotify.com/playlist') || url.includes('spotify:playlist');
-    const isAlbum = isSpotifyAlbum;
-
-    if (isSpotifyPlaylist || isSpotifyAlbum) {
-      const match = isSpotifyAlbum
-        ? (url.match(/album\/([a-zA-Z0-9]+)/) || url.match(/spotify:album:([a-zA-Z0-9]+)/))
-        : (url.match(/playlist\/([a-zA-Z0-9]+)/) || url.match(/spotify:playlist:([a-zA-Z0-9]+)/));
-      const entityId = match ? match[1] : null;
-
-      if (!entityId) return res.status(400).json({ error: `Invalid Spotify ${isSpotifyAlbum ? 'album' : 'playlist'} link` });
-
-      // Fetch Spotify Embed page which has embedded JSON metadata
-      try {
-        const embedType = isSpotifyAlbum ? 'album' : 'playlist';
-        const embedRes = await axios.get(`https://open.spotify.com/embed/${embedType}/${entityId}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-          timeout: 10000
-        });
-
-        const html = embedRes.data;
-        const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([^<]+)<\/script>/);
-        if (nextDataMatch) {
-          const parsed = JSON.parse(nextDataMatch[1]);
-          const entity = parsed?.props?.pageProps?.state?.data?.entity;
-          if (entity) {
-            playlistTitle = entity.name || playlistTitle;
-            if (entity.coverArt?.sources?.[0]?.url) playlistCover = entity.coverArt.sources[0].url;
-
-            const defaultArtist = entity.subtitle || entity.artists?.[0]?.name || 'Artist';
-            const trackList = entity.trackList || [];
-            rawItems = trackList.map(t => ({
-              title: t.title || t.name,
-              artist: t.subtitle || t.artists?.[0]?.name || defaultArtist,
-              duration: Math.round((t.duration || 180000) / 1000)
-            }));
-          }
-        }
-      } catch (err) {
-        console.warn('Spotify embed fetch failed:', err.message);
-      }
-    }
-    // 2. Detect YouTube Playlist
-    else if (url.includes('youtube.com/playlist') || url.includes('list=')) {
-      const match = url.match(/list=([a-zA-Z0-9_-]+)/);
-      const listId = match ? match[1] : null;
-      if (!listId) return res.status(400).json({ error: 'Invalid YouTube playlist link' });
-
-      try {
-        const ytRes = await axios.get(`https://www.youtube.com/playlist?list=${listId}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9'
-          },
-          timeout: 12000
-        });
-        const html = ytRes.data;
-
-        // Try extracting ytInitialData
-        const initialDataMatch = html.match(/var ytInitialData = ({.*?});<\/script>/s) || html.match(/ytInitialData\s*=\s*({.+?});/);
-        if (initialDataMatch) {
-          try {
-            const data = JSON.parse(initialDataMatch[1]);
-            const headerTitle = data?.metadata?.playlistMetadataRenderer?.title;
-            if (headerTitle) playlistTitle = headerTitle;
-
-            const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs;
-            const sectionList = tabs?.[0]?.tabRenderer?.content?.sectionListRenderer;
-            const sectionContents = sectionList?.contents || [];
-
-            for (const sec of sectionContents) {
-              const itemContents = sec.itemSectionRenderer?.contents || [];
-              for (const it of itemContents) {
-                // 1. Modern lockupViewModel (current YouTube UI)
-                if (it.lockupViewModel && it.lockupViewModel.contentId) {
-                  const vm = it.lockupViewModel;
-                  const videoId = vm.contentId;
-                  const title = vm.metadata?.lockupMetadataViewModel?.title?.content || 'Unknown Track';
-                  const metadataRows = vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
-                  const author = metadataRows[0]?.metadataParts?.[0]?.text?.content || 'Artist';
-                  const duration = parseDurationFromLabel(vm.rendererContext?.accessibilityContext?.label);
-                  const cover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-
-                  rawItems.push({
-                    title,
-                    artist: author,
-                    videoId,
-                    duration,
-                    cover,
-                    audioUrl: `https://www.youtube.com/watch?v=${videoId}`
-                  });
-                }
-                // 2. Classic playlistVideoRenderer
-                else if (it.playlistVideoRenderer && it.playlistVideoRenderer.videoId) {
-                  const p = it.playlistVideoRenderer;
-                  const videoId = p.videoId;
-                  const title = p.title?.runs?.[0]?.text || p.title?.simpleText || 'Unknown Track';
-                  const author = p.shortBylineText?.runs?.[0]?.text || 'Artist';
-                  const duration = p.lengthSeconds ? parseInt(p.lengthSeconds, 10) : 200;
-                  const cover = p.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-
-                  rawItems.push({
-                    title,
-                    artist: author,
-                    videoId,
-                    duration,
-                    cover,
-                    audioUrl: `https://www.youtube.com/watch?v=${videoId}`
-                  });
-                }
-                else if (it.continuationItemRenderer) {
-                  continuationToken = it.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
-                }
-              }
-            }
-
-            // Extract InnerTube API key and fetch all continuation pages (supporting full Quran playlists > 100 tracks)
-            const apiKeyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/) || html.match(/innertubeApiKey":"([^"]+)"/);
-            const apiKey = apiKeyMatch ? apiKeyMatch[1] : null;
-            const clientVersionMatch = html.match(/"INNERTUBE_CONTEXT_CLIENT_VERSION":"([^"]+)"/);
-            const clientVersion = clientVersionMatch ? clientVersionMatch[1] : '2.20240101.01.00';
-
-            let currentCont = continuationToken;
-            let pageCount = 0;
-            while (apiKey && currentCont && pageCount < 15) {
-              pageCount++;
-              try {
-                const contRes = await axios.post(`https://www.youtube.com/youtubei/v1/browse?key=${apiKey}`, {
-                  context: { client: { clientName: 'WEB', clientVersion } },
-                  continuation: currentCont
-                }, {
-                  headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9'
-                  },
-                  timeout: 10000
-                });
-
-                const actions = contRes.data?.onResponseReceivedActions || [];
-                let nextCont = null;
-                for (const act of actions) {
-                  const items = act?.appendContinuationItemsAction?.continuationItems || [];
-                  for (const it of items) {
-                    if (it.playlistVideoRenderer && it.playlistVideoRenderer.videoId) {
-                      const p = it.playlistVideoRenderer;
-                      const videoId = p.videoId;
-                      const title = p.title?.runs?.[0]?.text || p.title?.simpleText || 'Unknown Track';
-                      const author = p.shortBylineText?.runs?.[0]?.text || 'Artist';
-                      const duration = p.lengthSeconds ? parseInt(p.lengthSeconds, 10) : 200;
-                      const cover = p.thumbnail?.thumbnails?.slice(-1)?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-                      rawItems.push({
-                        title,
-                        artist: author,
-                        videoId,
-                        duration,
-                        cover,
-                        audioUrl: `https://www.youtube.com/watch?v=${videoId}`
-                      });
-                    } else if (it.continuationItemRenderer) {
-                      nextCont = it.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
-                    }
-                  }
-                }
-                currentCont = nextCont;
-              } catch (contErr) {
-                console.warn('Continuation fetch stopped:', contErr.message);
-                break;
-              }
-            }
-          } catch (e) {
-            console.warn('ytInitialData parse error:', e.message);
-          }
-        }
-
-        // Fallback: title from HTML tag
-        if (playlistTitle === 'Imported Playlist') {
-          const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-          if (titleMatch) {
-            playlistTitle = titleMatch[1].replace(' - YouTube', '').trim();
-          }
-        }
-
-        if (rawItems.length > 0 && rawItems[0].cover) {
-          playlistCover = rawItems[0].cover;
-        }
-      } catch (err) {
-        console.warn('YouTube playlist scrape failed:', err.message);
-      }
-    }
-    // 3. Detect Apple Music Playlist
-    else if (url.includes('music.apple.com')) {
-      try {
-        const appleRes = await axios.get(url, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          timeout: 10000
-        });
-        const html = appleRes.data;
-        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-        if (titleMatch) {
-          playlistTitle = titleMatch[1].replace(' - Apple Music', '').trim();
-        }
-      } catch (err) {}
+    let scraped;
+    try {
+      scraped = await scrapePlaylistOrAlbum(url);
+    } catch (err) {
+      return res.status(400).json({ error: err.message || 'Failed to scrape playlist link' });
     }
 
-    if (rawItems.length === 0) {
+    if (!scraped || !scraped.items || scraped.items.length === 0) {
       return res.status(400).json({ error: 'Could not extract tracks from playlist. Please verify the link is public.' });
     }
+
+    const playlistTitle = scraped.title || 'Imported Playlist';
+    const playlistCover = scraped.cover;
+    const isAlbum = scraped.isAlbum;
+    const rawItems = scraped.items;
 
     // Save tracks to database (no limit, full support for Quran playlists)
     const finalIsQuran = Boolean(isQuran || isQuranContent(playlistTitle, '', '', ''));
     const trackIds = [];
     const createdTracks = [];
 
+    const tracksToInsert = [];
     for (const item of rawItems) {
       try {
         const duration = item.duration || 180;
-        const ytId = item.videoId || await searchYouTubeId(`${item.artist} - ${item.title}`);
+        const ytId = item.videoId || (item.audioUrl ? null : await searchYouTubeId(`${item.artist} - ${item.title}`));
         let trackCover = item.cover || (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : null);
-        if (!trackCover) trackCover = await fetchTrackCover(item.title, item.artist);
+        if (!trackCover && !item.videoId) trackCover = await fetchTrackCover(item.title, item.artist);
         if (!trackCover && ytId) trackCover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
         if (!trackCover) trackCover = playlistCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
 
         const audioUrl = item.audioUrl || (ytId ? `https://www.youtube.com/watch?v=${ytId}` : '');
         const itemIsQuran = Boolean(finalIsQuran || isQuranContent(item.title, item.artist, playlistTitle, ''));
+        const finalAlbumName = isAlbum ? playlistTitle : (item.album || '');
 
-        let trackId = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-        if (mongoose.connection.readyState === 1) {
-          try {
-            const newTrack = await new Track({
-              title: item.title,
-              artist: item.artist,
-              album: playlistTitle,
-              cover: trackCover,
-              audioUrl,
-              duration,
-              genre: itemIsQuran ? 'Quran' : 'Imported',
-              source: 'YouTube',
-              isQuran: itemIsQuran
-            }).save();
-            if (newTrack?._id) trackId = String(newTrack._id);
-          } catch (dbErr) {
-            console.warn('Track DB save error, using fallback ID:', dbErr.message);
-          }
-        }
-
-        const trackObj = {
-          id: trackId,
-          _id: trackId,
+        tracksToInsert.push({
           title: item.title,
           artist: item.artist,
-          album: playlistTitle,
+          album: finalAlbumName,
           cover: trackCover,
           audioUrl,
           duration,
           genre: itemIsQuran ? 'Quran' : 'Imported',
-          source: 'YouTube',
+          source: item.videoId ? 'YouTube' : 'Spotify',
           isQuran: itemIsQuran
-        };
-
-        trackIds.push(trackId);
-        createdTracks.push(trackObj);
+        });
       } catch (err) {}
+    }
+
+    if (mongoose.connection.readyState === 1 && tracksToInsert.length > 0) {
+      try {
+        const inserted = await Track.insertMany(tracksToInsert, { ordered: false });
+        for (const t of inserted) {
+          const tid = String(t._id);
+          trackIds.push(tid);
+          createdTracks.push({
+            id: tid,
+            _id: tid,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            cover: t.cover,
+            audioUrl: t.audioUrl,
+            duration: t.duration,
+            genre: t.genre,
+            source: t.source,
+            isQuran: t.isQuran
+          });
+        }
+      } catch (insertErr) {
+        if (insertErr.insertedDocs && insertErr.insertedDocs.length > 0) {
+          for (const t of insertErr.insertedDocs) {
+            const tid = String(t._id);
+            trackIds.push(tid);
+            createdTracks.push({
+              id: tid,
+              _id: tid,
+              title: t.title,
+              artist: t.artist,
+              album: t.album,
+              cover: t.cover,
+              audioUrl: t.audioUrl,
+              duration: t.duration,
+              genre: t.genre,
+              source: t.source,
+              isQuran: t.isQuran
+            });
+          }
+        }
+      }
+    }
+
+    if (createdTracks.length === 0) {
+      for (const t of tracksToInsert) {
+        const tid = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        trackIds.push(tid);
+        createdTracks.push({ id: tid, _id: tid, ...t });
+      }
     }
 
     // Add new playlist to user
@@ -1839,6 +2041,7 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       cover: playlistCover,
       trackIds,
       isLikedSongs: false,
+      isAlbum: Boolean(isAlbum),
       isPublic: true,
       isQuran: Boolean(finalIsQuran),
       description: `Imported from ${url.includes('spotify') ? 'Spotify' : url.includes('youtube') ? 'YouTube' : 'External'} (${trackIds.length} tracks)`
@@ -1856,7 +2059,7 @@ app.post('/api/playlists/import', auth, async (req, res) => {
       }
     }
 
-    if (isAlbum) {
+    if (isAlbum && isAdminUser(req.user)) {
       try {
         const albumArtist = rawItems[0]?.artist || 'Artist';
         const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -2210,11 +2413,19 @@ app.get('/api/sync', auth, async (req, res) => {
       liked: (user.likedTrackIds || []).includes(String(t._id)),
     }));
 
+    let userPlaylists = user.playlists || [];
+    if (!userPlaylists.some(p => p.isLikedSongs || p.id === 'liked' || p.name === 'Liked Songs')) {
+      userPlaylists = [
+        { id: 'liked', name: 'Liked Songs', trackIds: (user.likedTrackIds || []).map(String), isLikedSongs: true, isPublic: false },
+        ...userPlaylists
+      ];
+    }
+
     res.json({
       success: true,
       user,
       tracks: formatted,
-      playlists: (user.playlists || []).map(p => ({
+      playlists: userPlaylists.map(p => ({
         ...p,
         isQuran: Boolean(p.isQuran || isQuranContent(p.name, '', '', '', p.description))
       })),
@@ -2388,25 +2599,142 @@ app.post('/api/playlists/:id/toggle-visibility', auth, async (req, res) => {
 
 app.delete('/api/playlists/:id', auth, async (req, res) => {
   try {
+    const targetId = String(req.params.id);
     let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ error: 'User not found' });
     const initialLen = u.playlists.length;
-    u.playlists = u.playlists.filter(p => String(p.id || p._id) !== String(req.params.id));
+    u.playlists = u.playlists.filter(p => String(p.id) !== targetId && String(p._id) !== targetId);
     if (u.playlists.length === initialLen) {
       if (isAdminUser(req.user)) {
-        const owner = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+        const owner = await User.findOne({ $or: [{ 'playlists.id': targetId }, { 'playlists._id': targetId }] });
         if (owner) {
-          owner.playlists = owner.playlists.filter(p => String(p.id || p._id) !== String(req.params.id));
+          owner.playlists = owner.playlists.filter(p => String(p.id) !== targetId && String(p._id) !== targetId);
+          owner.markModified('playlists');
           await owner.save();
           return res.json({ success: true });
         }
       }
       return res.status(403).json({ error: 'Playlist not found or not owned by you' });
     }
+    u.markModified('playlists');
     await u.save();
     res.json({ success: true });
   } catch (e) {
-    res.status(500).end();
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Save another user's public playlist into current user's library
+app.post('/api/playlists/:id/save', auth, async (req, res) => {
+  try {
+    const targetId = String(req.params.id);
+    const currentUser = await User.findById(req.user.id);
+    if (!currentUser) return res.status(404).json({ error: 'User not found' });
+
+    // Look up playlist across users
+    let sourceOwner = await User.findOne({
+      $or: [{ 'playlists.id': targetId }, { 'playlists._id': targetId }]
+    }).select('_id name avatar playlists').lean();
+
+    let sourcePlaylist = sourceOwner?.playlists?.find(p => String(p.id || p._id) === targetId);
+
+    // Fallback: look up in Album collection if applicable
+    if (!sourcePlaylist) {
+      const album = await Album.findOne({ $or: [{ id: targetId }, { _id: targetId }] }).lean();
+      if (album) {
+        sourcePlaylist = {
+          id: album.id,
+          name: album.title,
+          cover: album.cover || '',
+          description: album.description || '',
+          trackIds: album.trackIds || [],
+          isPublic: true
+        };
+      }
+    }
+
+    // Fallback: client provided playlist payload
+    if (!sourcePlaylist && req.body?.playlist) {
+      sourcePlaylist = req.body.playlist;
+    }
+
+    if (!sourcePlaylist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    if (sourcePlaylist.isPublic === false && String(sourceOwner?._id) !== String(currentUser._id)) {
+      return res.status(403).json({ error: 'Cannot save a private playlist' });
+    }
+
+    // Check if already in user's playlists
+    const existingIndex = (currentUser.playlists || []).findIndex(p =>
+      String(p.sourcePlaylistId) === targetId ||
+      String(p.id) === targetId
+    );
+
+    if (existingIndex >= 0) {
+      return res.json({
+        success: true,
+        alreadySaved: true,
+        playlist: currentUser.playlists[existingIndex],
+        playlists: currentUser.playlists
+      });
+    }
+
+    const newId = `pl-saved-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const savedPlaylist = {
+      id: newId,
+      _id: newId,
+      name: sourcePlaylist.name,
+      cover: sourcePlaylist.cover || '',
+      description: sourcePlaylist.description || (sourceOwner?.name ? `Saved from ${sourceOwner.name}` : 'Saved playlist'),
+      trackIds: [...(sourcePlaylist.trackIds || [])],
+      isPublic: false,
+      isLikedSongs: false,
+      isQuran: Boolean(sourcePlaylist.isQuran),
+      sourcePlaylistId: targetId,
+      sourceOwnerName: sourceOwner?.name || '',
+      sourceOwnerId: sourceOwner?._id ? String(sourceOwner._id) : '',
+      createdAt: new Date()
+    };
+
+    currentUser.playlists.push(savedPlaylist);
+    currentUser.markModified('playlists');
+    await currentUser.save();
+
+    res.json({
+      success: true,
+      playlist: savedPlaylist,
+      playlists: currentUser.playlists
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Unsave / remove a saved playlist from user's library
+app.post('/api/playlists/:id/unsave', auth, async (req, res) => {
+  try {
+    const targetId = String(req.params.id);
+    const currentUser = await User.findById(req.user.id);
+    if (!currentUser) return res.status(404).json({ error: 'User not found' });
+
+    const initialLen = currentUser.playlists.length;
+    currentUser.playlists = currentUser.playlists.filter(p =>
+      String(p.sourcePlaylistId) !== targetId &&
+      String(p.id) !== targetId &&
+      String(p._id) !== targetId
+    );
+    currentUser.markModified('playlists');
+    await currentUser.save();
+
+    res.json({
+      success: true,
+      removed: currentUser.playlists.length < initialLen,
+      playlists: currentUser.playlists
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -2437,6 +2765,205 @@ app.get('/api/albums/:id', async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 });
+
+// Admin: Create / Upload Album
+const createAlbumHandler = async (req, res) => {
+  try {
+    const { name, artist, cover, releaseDate, genre, trackIds = [], isQuran = false, description = '' } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Album name is required' });
+    }
+    if (!artist || !artist.trim()) {
+      return res.status(400).json({ success: false, error: 'Artist name is required' });
+    }
+
+    const cleanName = name.trim();
+    const cleanArtist = artist.trim();
+    const cleanTrackIds = Array.isArray(trackIds) ? trackIds.map(String) : [];
+
+    const newAlbum = new Album({
+      id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      name: cleanName,
+      artist: cleanArtist,
+      cover: cover ? cover.trim() : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      trackIds: cleanTrackIds,
+      releaseDate: releaseDate ? releaseDate.trim() : '',
+      genre: genre ? genre.trim() : 'Pop',
+      isAlbum: true,
+      isSystem: true,
+      isPublic: true,
+      isQuran: Boolean(isQuran),
+      description: description ? description.trim() : '',
+      source: 'admin_upload',
+      createdBy: req.user?.id || req.user?.name || 'admin'
+    });
+
+    await newAlbum.save();
+
+    // If trackIds are provided, assign those tracks to this album
+    if (cleanTrackIds.length > 0) {
+      await Track.updateMany(
+        { _id: { $in: cleanTrackIds } },
+        { $set: { album: cleanName } }
+      ).catch(() => {});
+    }
+
+    io.emit('album:created', newAlbum);
+    res.json({ success: true, album: newAlbum });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+};
+app.post('/api/albums', adminAuth, createAlbumHandler);
+app.post('/api/albums/create', adminAuth, createAlbumHandler);
+
+// Admin: Import Album from YouTube / Spotify Link
+const importAlbumHandler = async (req, res) => {
+  try {
+    const { url, name, artist, cover, releaseDate, genre, isQuran, description } = req.body;
+    if (!url || !url.trim()) {
+      return res.status(400).json({ success: false, error: 'A valid Spotify album or YouTube playlist link is required' });
+    }
+
+    const cleanUrl = url.trim();
+    let scraped;
+    try {
+      scraped = await scrapePlaylistOrAlbum(cleanUrl);
+    } catch (err) {
+      return res.status(400).json({ success: false, error: err.message || 'Failed to scrape album link' });
+    }
+
+    if (!scraped || !scraped.items || scraped.items.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Could not extract tracks from the provided link. Please ensure it is a public Spotify album or YouTube playlist.' 
+      });
+    }
+
+    const albumName = (name && name.trim()) || scraped.title || 'Imported Album';
+    const albumArtist = (artist && artist.trim()) || scraped.artist || 'Unknown Artist';
+    const albumCover = (cover && cover.trim()) || scraped.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+    const finalIsQuran = Boolean(
+      isQuran !== undefined 
+        ? isQuran 
+        : isQuranContent(albumName, albumArtist, '', '') || scraped.items.every(t => isQuranContent(t.title, t.artist || albumArtist))
+    );
+
+    const trackIds = [];
+    const createdTracks = [];
+
+    const tracksToInsert = [];
+    for (const item of scraped.items) {
+      try {
+        const duration = item.duration || 180;
+        const ytId = item.videoId || (item.audioUrl ? null : await searchYouTubeId(`${item.artist || albumArtist} - ${item.title}`));
+        let trackCover = item.cover || (item.videoId ? `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg` : null);
+        if (!trackCover && !item.videoId) trackCover = await fetchTrackCover(item.title, item.artist || albumArtist);
+        if (!trackCover && ytId) trackCover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+        if (!trackCover) trackCover = albumCover;
+
+        const audioUrl = item.audioUrl || (ytId ? `https://www.youtube.com/watch?v=${ytId}` : '');
+        const trackArtist = (item.artist && item.artist !== 'Artist') ? item.artist : albumArtist;
+        const itemIsQuran = Boolean(finalIsQuran || isQuranContent(item.title, trackArtist, albumName, ''));
+
+        tracksToInsert.push({
+          title: item.title,
+          artist: trackArtist,
+          album: albumName,
+          cover: trackCover,
+          audioUrl,
+          duration,
+          genre: itemIsQuran ? 'Quran' : (genre ? genre.trim() : 'Pop'),
+          source: item.videoId ? 'YouTube' : 'Spotify',
+          isQuran: itemIsQuran
+        });
+      } catch (itemErr) {
+        console.warn('Track import item error:', itemErr.message);
+      }
+    }
+
+    if (mongoose.connection.readyState === 1 && tracksToInsert.length > 0) {
+      try {
+        const inserted = await Track.insertMany(tracksToInsert, { ordered: false });
+        for (const t of inserted) {
+          const tid = String(t._id);
+          trackIds.push(tid);
+          createdTracks.push({
+            id: tid,
+            _id: tid,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            cover: t.cover,
+            audioUrl: t.audioUrl,
+            duration: t.duration,
+            genre: t.genre,
+            source: t.source,
+            isQuran: t.isQuran
+          });
+        }
+      } catch (insertErr) {
+        if (insertErr.insertedDocs && insertErr.insertedDocs.length > 0) {
+          for (const t of insertErr.insertedDocs) {
+            const tid = String(t._id);
+            trackIds.push(tid);
+            createdTracks.push({
+              id: tid,
+              _id: tid,
+              title: t.title,
+              artist: t.artist,
+              album: t.album,
+              cover: t.cover,
+              audioUrl: t.audioUrl,
+              duration: t.duration,
+              genre: t.genre,
+              source: t.source,
+              isQuran: t.isQuran
+            });
+          }
+        }
+      }
+    }
+
+    if (createdTracks.length === 0) {
+      for (const t of tracksToInsert) {
+        const tid = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        trackIds.push(tid);
+        createdTracks.push({ id: tid, _id: tid, ...t });
+      }
+    }
+
+    const newAlbum = new Album({
+      id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      name: albumName,
+      artist: albumArtist,
+      cover: albumCover,
+      trackIds: trackIds,
+      releaseDate: releaseDate ? releaseDate.trim() : new Date().getFullYear().toString(),
+      genre: finalIsQuran ? 'Quran' : (genre ? genre.trim() : 'Pop'),
+      isAlbum: true,
+      isSystem: true,
+      isPublic: true,
+      isQuran: finalIsQuran,
+      description: description ? description.trim() : '',
+      source: 'link_import',
+      createdBy: req.user?.id || req.user?.name || 'admin'
+    });
+
+    await newAlbum.save();
+
+    io.emit('album:created', newAlbum);
+    res.json({
+      success: true,
+      album: newAlbum,
+      tracks: createdTracks
+    });
+  } catch (e) {
+    console.error('Import album error:', e);
+    res.status(500).json({ success: false, error: e.message });
+  }
+};
+app.post('/api/albums/import', adminAuth, importAlbumHandler);
 
 // Admin: Edit / Update Album Details
 const updateAlbumHandler = async (req, res) => {
@@ -2475,16 +3002,123 @@ app.put('/api/albums/:id', adminAuth, updateAlbumHandler);
 app.post('/api/albums/:id/update', adminAuth, updateAlbumHandler);
 
 // Admin: Delete Album
-app.delete('/api/albums/:id', adminAuth, async (req, res) => {
+const deleteAlbumHandler = async (req, res) => {
   try {
     const albumId = req.params.id;
-    await Album.deleteOne({ $or: [{ id: albumId }, { _id: mongoose.isValidObjectId(albumId) ? albumId : null }] });
-    io.emit('album:deleted', { id: albumId });
-    res.json({ success: true });
+    const deleteTracks = req.body?.deleteTracks !== false; // default true
+
+    // 1. Find album by id, _id, or decode if safe-id
+    let album = await Album.findOne({
+      $or: [
+        { id: albumId },
+        { _id: mongoose.isValidObjectId(albumId) ? albumId : null }
+      ]
+    });
+
+    let albumName = album?.name;
+    let albumArtist = album?.artist;
+    let trackIds = album?.trackIds ? [...album.trackIds] : [];
+
+    const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
+    if (!album && albumId.startsWith('album-')) {
+      const candidateName = decodeURIComponent(albumId.replace(/^album-/, '').replace(/-/g, ' '));
+      album = await Album.findOne({ name: { $regex: new RegExp(`^${escapeRegex(candidateName)}$`, 'i') } });
+      if (album) {
+        albumName = album.name;
+        albumArtist = album.artist;
+        trackIds = album.trackIds ? [...album.trackIds] : [];
+      } else {
+        albumName = candidateName;
+      }
+    }
+
+    // 2. Locate all associated tracks
+    const trackQueries = [];
+    if (trackIds.length > 0) {
+      trackQueries.push({ _id: { $in: trackIds } });
+    }
+    if (albumName) {
+      if (albumArtist) {
+        trackQueries.push({
+          album: { $regex: new RegExp(`^${escapeRegex(albumName)}$`, 'i') },
+          artist: { $regex: new RegExp(`^${escapeRegex(albumArtist)}$`, 'i') }
+        });
+      } else {
+        trackQueries.push({
+          album: { $regex: new RegExp(`^${escapeRegex(albumName)}$`, 'i') }
+        });
+      }
+    }
+
+    let deletedTrackIds = [];
+    if (trackQueries.length > 0) {
+      const associatedTracks = await Track.find({ $or: trackQueries }).lean();
+      deletedTrackIds = associatedTracks.map(t => String(t._id || t.id));
+
+      if (deleteTracks) {
+        if (deletedTrackIds.length > 0) {
+          await Track.deleteMany({ _id: { $in: deletedTrackIds } });
+
+          // Clean up from all users' likedTrackIds and playlists
+          const users = await User.find({
+            $or: [
+              { likedTrackIds: { $in: deletedTrackIds } },
+              { 'playlists.trackIds': { $in: deletedTrackIds } }
+            ]
+          });
+
+          for (const u of users) {
+            let changed = false;
+            if (u.likedTrackIds && u.likedTrackIds.length > 0) {
+              const prevLen = u.likedTrackIds.length;
+              u.likedTrackIds = u.likedTrackIds.filter(id => !deletedTrackIds.includes(String(id)));
+              if (u.likedTrackIds.length !== prevLen) changed = true;
+            }
+            if (u.playlists && u.playlists.length > 0) {
+              for (const pl of u.playlists) {
+                if (pl.trackIds && pl.trackIds.length > 0) {
+                  const prevLen = pl.trackIds.length;
+                  pl.trackIds = pl.trackIds.filter(id => !deletedTrackIds.includes(String(id)));
+                  if (pl.trackIds.length !== prevLen) changed = true;
+                }
+              }
+            }
+            if (changed) {
+              await u.save();
+            }
+          }
+
+          deletedTrackIds.forEach(tId => {
+            io.emit('track:deleted', { id: tId });
+          });
+        }
+      } else {
+        // Disassociate tracks
+        if (deletedTrackIds.length > 0) {
+          await Track.updateMany(
+            { _id: { $in: deletedTrackIds } },
+            { $set: { album: '' } }
+          );
+        }
+      }
+    }
+
+    // 3. Delete the Album document
+    if (album) {
+      await Album.deleteOne({ _id: album._id });
+    } else {
+      await Album.deleteOne({ $or: [{ id: albumId }, { _id: mongoose.isValidObjectId(albumId) ? albumId : null }] });
+    }
+
+    io.emit('album:deleted', { id: albumId, albumName, deletedTrackIds });
+    res.json({ success: true, deletedTrackIds });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
-});
+};
+app.delete('/api/albums/:id', adminAuth, deleteAlbumHandler);
+app.post('/api/albums/:id/delete', adminAuth, deleteAlbumHandler);
 
 // Admin: Get all playlists across website
 app.get('/api/admin/playlists', adminAuth, async (req, res) => {
@@ -2526,12 +3160,12 @@ app.get('/api/artists', async (req, res) => {
     const artistMap = {};
     for (const t of allTracks) {
       if (!t.artist) continue;
-      const name = t.artist.trim();
-      const key = name.toLowerCase();
+      const canonical = getCanonicalArtistName(t.artist);
+      const key = canonical.toLowerCase();
       if (!artistMap[key]) {
         artistMap[key] = {
           id: key,
-          name,
+          name: canonical,
           avatar: t.cover,
           trackCount: 0,
           albumCount: 0,
@@ -2541,11 +3175,13 @@ app.get('/api/artists', async (req, res) => {
       }
       artistMap[key].trackCount++;
       artistMap[key].totalPlays += (Number(t.plays) || 0);
+      if (!artistMap[key].avatar && t.cover) artistMap[key].avatar = t.cover;
     }
 
     for (const a of allAlbums) {
       if (!a.artist) continue;
-      const key = a.artist.trim().toLowerCase();
+      const canonical = getCanonicalArtistName(a.artist);
+      const key = canonical.toLowerCase();
       if (artistMap[key]) {
         artistMap[key].albumCount++;
         artistMap[key].albums.push(a);
@@ -2561,12 +3197,19 @@ app.get('/api/artists', async (req, res) => {
 
 app.get('/api/artists/:name', async (req, res) => {
   try {
-    const artistName = decodeURIComponent(req.params.name).trim();
+    const rawName = decodeURIComponent(req.params.name).trim();
+    const canonicalName = getCanonicalArtistName(rawName);
+    const aliases = getArtistAliases(rawName);
+    const allNames = Array.from(new Set([rawName, canonicalName, ...aliases]));
     const escapeRegex = (s) => s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
-    const regex = new RegExp(`^${escapeRegex(artistName)}$`, 'i');
+    const pattern = allNames.map(escapeRegex).join('|');
+    const regex = new RegExp(`^(?:${pattern})$`, 'i');
 
-    const tracks = await Track.find({ artist: { $regex: regex } }).sort({ plays: -1 }).lean();
-    const albums = await Album.find({ artist: { $regex: regex } }).sort({ createdAt: -1 }).lean();
+    const [tracks, albums, artistDoc] = await Promise.all([
+      Track.find({ artist: { $regex: regex } }).sort({ plays: -1 }).lean(),
+      Album.find({ artist: { $regex: regex } }).sort({ createdAt: -1 }).lean(),
+      Artist.findOne({ name: { $regex: regex } }).lean()
+    ]);
 
     const formattedTracks = tracks.map(t => ({
       id: String(t._id),
@@ -2575,11 +3218,17 @@ app.get('/api/artists/:name', async (req, res) => {
     }));
 
     const artistData = {
-      id: artistName.toLowerCase(),
-      name: tracks[0]?.artist || artistName,
-      avatar: tracks[0]?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      id: canonicalName.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+      name: artistDoc?.name || canonicalName,
+      avatar: artistDoc?.cover || artistDoc?.avatar || tracks[0]?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      cover: artistDoc?.cover || tracks[0]?.cover || '',
+      banner: artistDoc?.banner || '',
+      bio: artistDoc?.bio || '',
+      isVerified: Boolean(artistDoc?.isVerified),
+      aliases,
       trackCount: tracks.length,
       albumCount: albums.length,
+      totalPlays: tracks.reduce((sum, t) => sum + (Number(t.plays) || 0), 0),
       tracks: formattedTracks,
       albums
     };
@@ -2819,9 +3468,14 @@ app.post('/api/tracks/:id/like', auth, async (req, res) => {
     }
 
     // Keep user's Liked Songs playlist in sync
-    const likedPl = (u.playlists || []).find(p => p.isLikedSongs || p.name === 'Liked Songs');
+    const likedPl = (u.playlists || []).find(p => p.isLikedSongs || p.name === 'Liked Songs' || p.id === 'liked');
     if (likedPl) {
       likedPl.trackIds = [...u.likedTrackIds];
+    } else {
+      u.playlists = [
+        { id: 'liked', name: 'Liked Songs', trackIds: [...u.likedTrackIds], isLikedSongs: true, isPublic: false },
+        ...(u.playlists || [])
+      ];
     }
 
     await u.save();

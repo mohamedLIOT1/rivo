@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Check, Radio, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { isQuranContent } from '../utils/quranUtils';
 
 export default function AddToPlaylistModal({ 
   isOpen, 
@@ -21,7 +22,8 @@ export default function AddToPlaylistModal({
 
   if (!isOpen || !track) return null;
 
-  const customPlaylists = playlists.filter(p => !p.isLikedSongs);
+  const isQuran = isQuranContent(track);
+  const customPlaylists = playlists.filter(p => !p.isLikedSongs && (isQuran ? isQuranContent(p) : !isQuranContent(p)));
   const trackIdClean = String(track.id || track._id);
 
   const handlePlaylistClick = (pl) => {
@@ -52,7 +54,7 @@ export default function AddToPlaylistModal({
               <div className="w-3 h-3 bg-[#17a398] brutal-border" />
             )}
             <h3 className="text-base font-mono font-black uppercase text-[#082621]">
-              {duplicateConfirmPlaylist ? 'Already in Playlist' : 'Dispense to Cassette'}
+              {duplicateConfirmPlaylist ? 'Already in Playlist' : (isQuran ? 'Add to Quran Playlist' : 'Dispense to Cassette')}
             </h3>
           </div>
           <button 

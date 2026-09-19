@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
+import { isQuranContent } from '../utils/quranUtils';
 
 export default function MiniPlayer({
   currentTrack,
@@ -37,8 +38,14 @@ export default function MiniPlayer({
 
   if (!currentTrack) return null;
 
+  const isQuran = isQuranContent(currentTrack);
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
-  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(0);
+
+  const activeDuration = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
+  const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
+  const progressPercent = isScrubbing ? scrubPercent : realPercent;
 
   const formatTime = (secs) => {
     if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
@@ -47,10 +54,118 @@ export default function MiniPlayer({
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const handleSeek = (e) => {
-    const val = parseFloat(e.target.value);
-    const targetSec = (val / 100) * duration;
+  const seekFromClientX = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const clickX = clientX - targetRect.left;
+    const pct = Math.max(0, Math.min(1, clickX / targetRect.width));
+    const targetSec = pct * activeDuration;
+    setScrubPercent(pct * 100);
     if (seekTo) seekTo(targetSec);
+  };
+
+  const handleDesktopPointerDown = (e) => {
+    e.preventDefault();
+    setIsScrubbing(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekFromClientX(e.clientX, rect);
+  };
+
+  const handleDesktopPointerMove = (e) => {
+    if (!isScrubbing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekFromClientX(e.clientX, rect);
+  };
+
+  const handleDesktopPointerUp = (e) => {
+    if (isScrubbing) {
+      setIsScrubbing(false);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    }
+  };
+
+  const handleMobilePointerDown = (e) => {
+    e.preventDefault();
+    setIsScrubbing(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekFromClientX(e.clientX, rect);
+  };
+
+  const handleMobilePointerMove = (e) => {
+    if (!isScrubbing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    seekFromClientX(e.clientX, rect);
+  };
+
+  const handleMobilePointerUp = (e) => {
+    if (isScrubbing) {
+      setIsScrubbing(false);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (seekTo) seekTo(Math.max(0, currentTime - 5));
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (seekTo) seekTo(Math.min(activeDuration, currentTime + 5));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      if (seekTo) seekTo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      if (seekTo) seekTo(activeDuration);
+    }
+  };
+
+  const [isVolScrubbing, setIsVolScrubbing] = useState(false);
+
+  const setVolumeFromClientX = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const clickX = clientX - targetRect.left;
+    const pct = Math.max(0, Math.min(1, clickX / targetRect.width));
+    setVolume(Math.round(pct * 100) / 100);
+  };
+
+  const handleVolPointerDown = (e) => {
+    e.preventDefault();
+    setIsVolScrubbing(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    setVolumeFromClientX(e.clientX, rect);
+  };
+
+  const handleVolPointerMove = (e) => {
+    if (!isVolScrubbing) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setVolumeFromClientX(e.clientX, rect);
+  };
+
+  const handleVolPointerUp = (e) => {
+    if (isVolScrubbing) {
+      setIsVolScrubbing(false);
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    }
+  };
+
+  const handleVolKeyDown = (e) => {
+    const cur = volume || 0;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setVolume(Math.max(0, Math.round((cur - 0.05) * 100) / 100));
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setVolume(Math.min(1, Math.round((cur + 0.05) * 100) / 100));
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setVolume(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setVolume(1);
+    }
   };
 
   return (
@@ -63,22 +178,22 @@ export default function MiniPlayer({
             : 'bg-[#fdfbf7] border-black text-[#0b1110]'
         }`}
       >
-        {/* Mobile Scrubber Line (top 3px) */}
+        {/* Mobile Scrubber Line (generous 32px touch & drag hitbox) */}
         <div 
-          className={`md:hidden absolute top-0 inset-x-0 h-[3px] cursor-pointer overflow-hidden ${
-            isDark ? 'bg-zinc-800' : 'bg-[#ded2bb]'
-          }`}
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const pct = Math.max(0, Math.min(1, clickX / rect.width));
-            if (seekTo && duration > 0) seekTo(pct * duration);
-          }}
+          role="slider"
+          aria-label="Seek track"
+          className="md:hidden absolute -top-3.5 inset-x-0 h-8 pt-3.5 cursor-pointer z-30 flex items-start touch-none select-none"
+          onPointerDown={handleMobilePointerDown}
+          onPointerMove={handleMobilePointerMove}
+          onPointerUp={handleMobilePointerUp}
+          onPointerCancel={handleMobilePointerUp}
         >
-          <div 
-            className="h-full bg-[#17a398] transition-all"
-            style={{ width: `${isNaN(progressPercent) ? 0 : Math.min(100, Math.max(0, progressPercent))}%` }}
-          />
+          <div className={`w-full h-[4px] overflow-hidden pointer-events-none ${isDark ? 'bg-zinc-800' : 'bg-[#ded2bb]'}`}>
+            <div 
+              className="h-full bg-[#17a398] transition-all pointer-events-none"
+              style={{ width: `${isNaN(progressPercent) ? 0 : Math.min(100, Math.max(0, progressPercent))}%` }}
+            />
+          </div>
         </div>
 
         {/* ─────────────────────────────────────────
@@ -206,7 +321,7 @@ export default function MiniPlayer({
               className={`p-1.5 transition-transform hover:scale-110 active:scale-95 cursor-pointer ${
                 isTrackLiked ? 'text-[#dc2626]' : 'text-zinc-400 hover:text-[#dc2626]'
               }`}
-              title={isTrackLiked ? "Saved in Liked Songs" : "Save to Liked Songs"}
+              title={isTrackLiked ? (isQuran ? "Saved in Favorites" : "Saved in Liked Songs") : (isQuran ? "Save to Favorites" : "Save to Liked Songs")}
             >
               <Heart size={18} fill={isTrackLiked ? 'currentColor' : 'none'} strokeWidth={2.5} />
             </button>
@@ -220,7 +335,7 @@ export default function MiniPlayer({
               className={`p-1.5 transition cursor-pointer ${
                 isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
               }`} 
-              title="View Song Details"
+              title={isQuran ? "View Surah Details" : "View Song Details"}
             >
               <FileText size={18} strokeWidth={2.5} />
             </button>
@@ -235,7 +350,7 @@ export default function MiniPlayer({
                 className={`p-1.5 transition cursor-pointer ${
                   isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`} 
-                title="Add to Playlist"
+                title={isQuran ? "Add to Quran Playlist" : "Add to Playlist"}
               >
                 <PlusCircle size={18} strokeWidth={2.5} />
               </button>
@@ -308,13 +423,26 @@ export default function MiniPlayer({
               isDark ? 'text-zinc-400' : 'text-zinc-700'
             }`}>
               <span className="w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
-              <div className="relative flex-1 group h-3 flex items-center cursor-pointer">
+              <div 
+                role="slider"
+                tabIndex={0}
+                aria-label="Seek track"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progressPercent)}
+                onKeyDown={handleKeyDown}
+                className="relative flex-1 group h-8 flex items-center cursor-pointer select-none py-2 touch-none focus:outline-none"
+                onPointerDown={handleDesktopPointerDown}
+                onPointerMove={handleDesktopPointerMove}
+                onPointerUp={handleDesktopPointerUp}
+                onPointerCancel={handleDesktopPointerUp}
+              >
                 {/* Track background & vibrant active fill */}
-                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+                <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden brutal-border transition-all pointer-events-none ${
                   isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
                 }`}>
                   <div 
-                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
                     style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
                   />
                 </div>
@@ -322,14 +450,6 @@ export default function MiniPlayer({
                 <div 
                   className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
                   style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
-                />
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={isNaN(progressPercent) ? 0 : progressPercent} 
-                  onChange={handleSeek}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
               </div>
               <span className="w-8 tabular-nums">{formatTime(duration)}</span>
@@ -351,27 +471,31 @@ export default function MiniPlayer({
               >
                 {volume === 0 ? <VolumeX size={15} className="text-red-500" /> : <Volume2 size={15} />}
               </button>
-              <div className="relative w-16 lg:w-20 group h-3 flex items-center cursor-pointer">
-                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+              <div 
+                role="slider"
+                tabIndex={0}
+                aria-label="Master volume"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round((volume || 0) * 100)}
+                onKeyDown={handleVolKeyDown}
+                className="relative w-16 lg:w-20 group h-6 flex items-center cursor-pointer select-none touch-none focus:outline-none py-1.5"
+                onPointerDown={handleVolPointerDown}
+                onPointerMove={handleVolPointerMove}
+                onPointerUp={handleVolPointerUp}
+                onPointerCancel={handleVolPointerUp}
+              >
+                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border pointer-events-none ${
                   isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
                 }`}>
                   <div 
-                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
                     style={{ width: `${Math.min(100, Math.max(0, (volume || 0) * 100))}%` }}
                   />
                 </div>
                 <div 
                   className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
                   style={{ left: `calc(${Math.min(100, Math.max(0, (volume || 0) * 100))}% - 6px)` }}
-                />
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.01" 
-                  value={volume || 0} 
-                  onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
               </div>
               <span className={`text-[10px] font-mono font-bold w-6 text-right select-none ${

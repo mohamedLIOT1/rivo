@@ -54,7 +54,8 @@ function AppContent() {
     tracks, setTracks,
     playlists, setPlaylists,
     likedTrackIds, toggleLike,
-    deleteTrack, removeTrackFromPlaylist,
+    deleteTrack, deletePlaylist, removeTrackFromPlaylist,
+    savePublicPlaylist, unsavePublicPlaylist,
     syncFromServer,
   } = useUser();
 
@@ -312,6 +313,85 @@ function AppContent() {
     await deleteTrack(cleanId);
   };
 
+  const handleDeleteAlbum = async (albumId, albumObj = null) => {
+    if (!albumId) return;
+    const cleanId = String(albumId);
+    const targetAlbum = albumObj || albums.find(a => String(a.id || a._id) === cleanId || a.name === cleanId);
+    const albumName = targetAlbum?.name || (selectedPlaylist && (String(selectedPlaylist.id || selectedPlaylist._id) === cleanId || selectedPlaylist.name === cleanId) ? selectedPlaylist.name : null);
+
+    // Remove from albums state
+    setAlbums(prev => prev.filter(a => String(a.id || a._id) !== cleanId && (!albumName || a.name?.toLowerCase().trim() !== albumName.toLowerCase().trim())));
+
+    // Collect all tracks belonging to this album
+    const tracksToDelete = new Set();
+    if (targetAlbum?.trackIds && Array.isArray(targetAlbum.trackIds)) {
+      targetAlbum.trackIds.forEach(id => tracksToDelete.add(String(id)));
+    }
+    if (albumName) {
+      tracks.forEach(t => {
+        if (t.album && t.album.toLowerCase().trim() === albumName.toLowerCase().trim()) {
+          tracksToDelete.add(String(t.id || t._id));
+        }
+      });
+    }
+
+    // Remove tracks from state and user playlists / likes
+    if (tracksToDelete.size > 0) {
+      setTracks(prev => prev.filter(t => !tracksToDelete.has(String(t.id || t._id))));
+      setLikedTrackIds(prev => prev.filter(id => !tracksToDelete.has(String(id))));
+      setPlaylists(prev => prev.map(pl => ({
+        ...pl,
+        trackIds: (pl.trackIds || []).filter(id => !tracksToDelete.has(String(id)))
+      })));
+    }
+
+    if (selectedPlaylist && (
+      String(selectedPlaylist.id || selectedPlaylist._id) === cleanId || 
+      selectedPlaylist.name === cleanId ||
+      (albumName && selectedPlaylist.name?.toLowerCase().trim() === albumName.toLowerCase().trim())
+    )) {
+      setSelectedPlaylist(null);
+      setCurrentScreen(selectedArtist ? 'artist' : 'home');
+    }
+
+    try {
+      const token = getStoredToken();
+      if (token) {
+        await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(cleanId)}`, {
+          method: 'DELETE',
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ deleteTracks: true })
+        });
+      }
+    } catch (err) {
+      console.warn('Delete album error:', err);
+    }
+  };
+
+  const handleCreateAlbum = (newAlbum, selectedTrackIds = [], newTracks = []) => {
+    if (!newAlbum) return;
+    setAlbums(prev => [newAlbum, ...prev.filter(a => String(a.id || a._id) !== String(newAlbum.id || newAlbum._id))]);
+    if (Array.isArray(newTracks) && newTracks.length > 0) {
+      setTracks(prev => {
+        const existingIds = new Set(prev.map(t => String(t.id || t._id)));
+        const toAdd = newTracks.filter(t => !existingIds.has(String(t.id || t._id)));
+        return [...toAdd, ...prev];
+      });
+    } else if (Array.isArray(selectedTrackIds) && selectedTrackIds.length > 0) {
+      const selectedSet = new Set(selectedTrackIds.map(String));
+      setTracks(prev => prev.map(t => {
+        if (selectedSet.has(String(t.id || t._id))) {
+          return { ...t, album: newAlbum.name };
+        }
+        return t;
+      }));
+    }
+    fetchAlbums();
+  };
+
   const handleUpdateSong = async (updatedTrack) => {
     const trackId = String(updatedTrack.id || updatedTrack._id);
     setTracks(prev => prev.map(t => (String(t.id || t._id) === trackId ? updatedTrack : t)));
@@ -345,8 +425,8 @@ function AppContent() {
     handleDeleteTrack(trackId);
   };
 
-  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true) => {
-    const isQ = currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent({ title: name, description });
+  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true, isQuranExplicit = false) => {
+    const isQ = isQuranExplicit || currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent({ title: name, description });
     const newPl = {
       id: `pl-${Date.now()}`,
       name,
@@ -424,18 +504,23 @@ function AppContent() {
 
   const handleDeletePlaylist = async (playlistId) => {
     if (!playlistId) return;
-    setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-    if (selectedPlaylist?.id === playlistId) {
+    const cleanId = String(playlistId);
+    setPlaylists(prev => prev.filter(p => String(p.id) !== cleanId && String(p._id) !== cleanId));
+    if (selectedPlaylist && (String(selectedPlaylist.id) === cleanId || String(selectedPlaylist._id) === cleanId)) {
       setSelectedPlaylist(null);
       setCurrentScreen('library');
     }
     try {
-      const token = getStoredToken();
-      if (token) {
-        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(playlistId)}`, {
-          method: 'DELETE',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
+      if (deletePlaylist) {
+        await deletePlaylist(cleanId);
+      } else {
+        const token = getStoredToken();
+        if (token) {
+          await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(cleanId)}`, {
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+        }
       }
     } catch {}
   };
@@ -716,10 +801,30 @@ function AppContent() {
     }
   };
 
+  // Liked Songs playlist generator
+  const getLikedSongsPlaylist = () => ({
+    id: 'liked',
+    _id: 'liked',
+    name: 'Liked Songs',
+    description: 'Your favorite tracks in one place.',
+    isLikedSongs: true,
+    isAlbum: false,
+    trackIds: (likedTrackIds || []).map(String),
+    cover: '',
+  });
+
   // Screen nav helper
   const goToScreen = (screen) => {
+    if (screen === 'liked' || screen === 'playlist:liked') {
+      handleSelectPlaylistView(getLikedSongsPlaylist());
+      return;
+    }
     if (typeof screen === 'string' && screen.startsWith('playlist:')) {
       const plId = screen.split(':')[1];
+      if (plId === 'liked') {
+        handleSelectPlaylistView(getLikedSongsPlaylist());
+        return;
+      }
       const pl = playlists.find(p => String(p.id || p._id) === String(plId));
       if (pl) handleSelectPlaylistView(pl);
     } else {
@@ -853,6 +958,9 @@ function AppContent() {
           isActivityPanelOpen={isActivityPanelOpen}
           toggleActivityPanel={toggleActivityPanel}
           globalTheme={globalTheme}
+          likedTrackIds={likedTrackIds}
+          selectedPlaylist={selectedPlaylist}
+          onSelectLikedSongs={() => goToScreen('liked')}
         />
 
         {/* ── Main Canvas View ── */}
@@ -920,12 +1028,15 @@ function AppContent() {
               playlists={musicPlaylists}
               albums={musicAlbums}
               tracks={musicTracks}
+              likedTrackIds={likedTrackIds}
+              currentUser={currentUser}
               onSelectPlaylist={handleSelectPlaylistView}
               onSelectArtist={handleSelectArtist}
               onSelectTrack={playTrack}
               openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
               openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
               openImportSongModal={() => setIsImportSongOpen(true)}
+              onDeletePlaylist={handleDeletePlaylist}
               toggleLike={toggleLike}
               globalTheme={globalTheme}
             />
@@ -951,8 +1062,34 @@ function AppContent() {
 
           {currentScreen === 'playlist' && selectedPlaylist && (
             <PlaylistScreen
-              playlist={playlists.find(p => String(p.id) === String(selectedPlaylist.id)) || albums.find(a => String(a.id) === String(selectedPlaylist.id)) || selectedPlaylist}
+              playlist={(() => {
+                const selId = String(selectedPlaylist.id || selectedPlaylist._id || '');
+                if (selectedPlaylist.isLikedSongs || selId === 'liked') {
+                  return {
+                    ...selectedPlaylist,
+                    name: 'Liked Songs',
+                    isLikedSongs: true,
+                    trackIds: (likedTrackIds || []).map(String)
+                  };
+                }
+                const userPl = playlists.find(p => String(p.id || p._id) === selId);
+                if (userPl) {
+                  return { ...userPl, isAlbum: false };
+                }
+                const alb = albums.find(a => String(a.id || a._id) === selId);
+                if (alb) {
+                  const albumTracks = (tracks || []).filter(t => t.album && t.album.toLowerCase().trim() === (alb.name || '').toLowerCase().trim());
+                  const allTrackIds = Array.from(new Set([
+                    ...albumTracks.map(t => String(t.id || t._id)),
+                    ...(alb.trackIds || []).map(String),
+                    ...(selectedPlaylist?.trackIds || []).map(String)
+                  ]));
+                  return { ...selectedPlaylist, ...alb, trackIds: allTrackIds, isAlbum: true };
+                }
+                return selectedPlaylist;
+              })()}
               tracks={isQuranContent(selectedPlaylist) ? quranTracks : musicTracks}
+              likedTrackIds={likedTrackIds}
               currentUser={currentUser}
               onSelectTrack={playTrack}
               onSelectArtist={handleSelectArtist}
@@ -966,7 +1103,11 @@ function AppContent() {
               openEditAlbumModal={handleOpenEditAlbum}
               onUpdatePlaylist={handleUpdatePlaylist}
               onDeletePlaylist={handleDeletePlaylist}
+              onDeleteAlbum={handleDeleteAlbum}
               onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
+              onSavePlaylist={savePublicPlaylist}
+              onUnsavePlaylist={unsavePublicPlaylist}
+              userPlaylists={playlists}
               globalTheme={globalTheme}
             />
           )}
@@ -988,6 +1129,8 @@ function AppContent() {
               currentUser={currentUser}
               openEditSongModal={handleOpenEditSong}
               openEditAlbumModal={handleOpenEditAlbum}
+              onAlbumCreated={handleCreateAlbum}
+              onDeleteAlbum={handleDeleteAlbum}
               globalTheme={globalTheme}
             />
           )}
@@ -1004,6 +1147,7 @@ function AppContent() {
               onSelectPlaylist={handleSelectPlaylistView}
               openEditSongModal={handleOpenEditSong}
               openEditAlbumModal={handleOpenEditAlbum}
+              onAlbumCreated={handleCreateAlbum}
               onDeleteAlbum={handleDeleteAlbum}
               onUpdatePlaylist={handleUpdatePlaylist}
               onDeletePlaylist={handleDeletePlaylist}
@@ -1043,6 +1187,9 @@ function AppContent() {
                 handleOpenChat(target);
               }}
               onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
+              onSavePlaylist={savePublicPlaylist}
+              onUnsavePlaylist={unsavePublicPlaylist}
+              userPlaylists={playlists}
               viewingUserId={viewingProfileUserId}
               onClearViewingUser={() => setViewingProfileUserId(null)}
               globalTheme={globalTheme}
@@ -1139,6 +1286,7 @@ function AppContent() {
         isOpen={isCreatePlaylistOpen}
         onClose={() => setIsCreatePlaylistOpen(false)}
         onCreatePlaylist={handleCreatePlaylist}
+        isQuran={currentScreen === 'quran' || libraryMode === 'quran'}
       />
 
       <AddToPlaylistModal
@@ -1171,12 +1319,8 @@ function AppContent() {
             setSelectedPlaylist(prev => ({ ...prev, ...updated }));
           }
         }}
-        onDelete={(albumId) => {
-          setAlbums(prev => prev.filter(a => String(a.id || a._id) !== String(albumId)));
-          if (selectedPlaylist && (String(selectedPlaylist.id || selectedPlaylist._id) === String(albumId) || selectedPlaylist.name === albumId)) {
-            setSelectedPlaylist(null);
-            setCurrentScreen('home');
-          }
+        onDelete={(albumId, albumObj) => {
+          handleDeleteAlbum(albumId, albumObj || editingAlbum);
         }}
         globalTheme={globalTheme}
       />
@@ -1251,7 +1395,7 @@ function AppContent() {
           setSelectedPlaylist(taggedPlaylist);
           setLibraryMode(importedIsQuran ? 'quran' : 'music');
           setCurrentScreen('playlist');
-          showToast(`Imported "${newPl.name}" (${newPl.trackIds?.length || 0} songs)!`);
+          showToast(`Imported "${newPl.name}" (${newPl.trackIds?.length || 0} ${importedIsQuran ? 'surahs' : 'songs'})!`);
           syncFromServer();
         }}
       />
@@ -1259,6 +1403,7 @@ function AppContent() {
       <ImportSongModal
         isOpen={isImportSongOpen}
         onClose={() => setIsImportSongOpen(false)}
+        isQuran={currentScreen === 'quran' || libraryMode === 'quran'}
         onTrackImported={(newTrack) => {
           handleAddSong(newTrack);
           showToast(`Imported "${newTrack.title}" by ${newTrack.artist}!`);

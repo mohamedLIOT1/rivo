@@ -24,6 +24,9 @@ export default function Navigation({
   toggleActivityPanel = () => {},
   globalTheme = 'dark',
   libraryMode = 'music',
+  likedTrackIds = [],
+  selectedPlaylist = null,
+  onSelectLikedSongs,
 }) {
   const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
@@ -31,6 +34,7 @@ export default function Navigation({
   const mainNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
+    { id: 'library', label: 'Library', icon: Disc },
     ...(libraryMode === 'music' ? [{ id: 'mixes', label: 'DJ Mix', icon: Radio }] : []),
     { id: 'quran', label: 'Quran', icon: BookOpen },
     { id: 'stats', label: 'Stats & History', icon: Disc },
@@ -116,17 +120,23 @@ export default function Navigation({
             isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
           }`}>
             <div className="flex items-center justify-between px-2 mb-2">
-              <div className={`flex items-center gap-1.5 text-[11px] font-display font-bold ${
-                isDark ? 'text-zinc-200' : 'text-[#0b1110]'
-              }`}>
+              <button
+                onClick={() => setCurrentScreen('library')}
+                className={`flex items-center gap-1.5 text-[11px] font-display font-bold hover:underline cursor-pointer ${
+                  currentScreen === 'library'
+                    ? 'text-[#17a398]'
+                    : isDark ? 'text-zinc-200' : 'text-[#0b1110]'
+                }`}
+                title="View full library"
+              >
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
                 <span>{libraryMode === 'quran' ? 'Quran Library' : 'Your Library'}</span>
-              </div>
+              </button>
 
               <div className="flex items-center gap-1">
                 <button
                   onClick={openImportSongModal}
-                  title="Import Song by Link"
+                  title={libraryMode === 'quran' ? "Import Surah by Link" : "Import Song by Link"}
                   className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
                     isDark 
                       ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-[#17a398]' 
@@ -137,7 +147,7 @@ export default function Navigation({
                 </button>
                 <button
                   onClick={openImportPlaylistModal}
-                  title="Import Playlist"
+                  title={libraryMode === 'quran' ? "Import Quran Playlist" : "Import Playlist"}
                   className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
                     isDark 
                       ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-zinc-200' 
@@ -148,7 +158,7 @@ export default function Navigation({
                 </button>
                 <button
                   onClick={openCreatePlaylistModal}
-                  title="New Playlist"
+                  title={libraryMode === 'quran' ? "New Quran Playlist" : "New Playlist"}
                   className="w-6 h-6 rounded brutal-border bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] flex items-center justify-center font-bold text-xs transition brutal-shadow-sm"
                 >
                   +
@@ -181,29 +191,47 @@ export default function Navigation({
             {/* Playlists List */}
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs font-bold">
               {/* Liked Songs */}
-              <div
-                onClick={() => setCurrentScreen('library')}
-                className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
-                  currentScreen === 'library'
-                    ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
-                    : isDark 
-                      ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
-                      : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
-                    <Heart size={12} fill="currentColor" />
-                  </div>
-                  <div className="truncate">
-                    <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
-                      Liked Songs
+              {libraryMode === 'music' && (
+                <div
+                  onClick={() => {
+                    if (onSelectLikedSongs) {
+                      onSelectLikedSongs();
+                    } else {
+                      setCurrentScreen('playlist:liked');
+                    }
+                  }}
+                  className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
+                    (currentScreen === 'playlist' && (selectedPlaylist?.isLikedSongs || selectedPlaylist?.id === 'liked')) || currentScreen === 'liked'
+                      ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white font-black' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
+                      : isDark 
+                        ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
+                        : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
+                      <Heart size={12} fill="currentColor" />
                     </div>
-                    <span className="text-[10px] font-mono text-zinc-500 font-normal">Favorites</span>
+                    <div className="truncate">
+                      <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
+                        {libraryMode === 'quran' ? 'Favorite Surahs' : 'Liked Songs'}
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-500 font-normal">
+                        {likedTrackIds && likedTrackIds.length > 0
+                          ? `${likedTrackIds.length} ${libraryMode === 'quran' ? (likedTrackIds.length === 1 ? 'surah' : 'surahs') : (likedTrackIds.length === 1 ? 'song' : 'songs')}`
+                          : 'Favorites'}
+                      </span>
+                    </div>
                   </div>
+                  {likedTrackIds && likedTrackIds.length > 0 && (
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ded2bb] text-[#0b1110]'
+                    }`}>
+                      {likedTrackIds.length}
+                    </span>
+                  )}
                 </div>
-                <span className="text-[9px] font-mono text-zinc-400 font-bold">AUTO</span>
-              </div>
+              )}
 
               {/* DJ Mixes */}
               {libraryMode === 'music' && libraryFilter !== 'artists' && (
@@ -271,14 +299,14 @@ export default function Navigation({
                       <div className="truncate">
                         <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>{pl.name}</div>
                         <span className="text-[10px] font-mono text-zinc-500 font-normal">
-                          {count} {count === 1 ? 'song' : 'songs'}
+                          {count} {isQuranContent(pl) || libraryMode === 'quran' ? (count === 1 ? 'surah' : 'surahs') : (count === 1 ? 'song' : 'songs')}
                         </span>
                       </div>
                     </div>
                     <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
                       isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
                     }`}>
-                      LIST
+                      {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : 'LIST'}
                     </span>
                   </div>
                 );
@@ -288,12 +316,14 @@ export default function Navigation({
                 <div className={`p-3 text-center rounded-lg border border-dashed ${
                   isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
                 }`}>
-                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>No playlists yet</p>
+                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                    {libraryMode === 'quran' ? 'No Quran playlists yet' : 'No playlists yet'}
+                  </p>
                   <button
                     onClick={openCreatePlaylistModal}
                     className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
                   >
-                    + Create Playlist
+                    {libraryMode === 'quran' ? '+ Create Quran Playlist' : '+ Create Playlist'}
                   </button>
                 </div>
               )}

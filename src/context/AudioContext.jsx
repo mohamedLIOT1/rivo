@@ -100,7 +100,7 @@ async function resolveTrackAudioUrl(track) {
 // ──────────────────────────────────────────────────────────────────
 
 export function AudioProvider({ children, tracks, setTracks }) {
-  const [currentTrack, setCurrentTrack] = useState(() => tracks[0] || null);
+  const [currentTrack, setCurrentTrack] = useState(null);
   const [currentQueue, setCurrentQueue] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -115,11 +115,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [isMixMode, setIsMixMode] = useState(false);
   const [activeTransitions, setActiveTransitions] = useState(() => {
     try {
-      const saved = localStorage.getItem('rivo_active_transitions') || localStorage.getItem('liofy_active_transitions');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
+      localStorage.removeItem('rivo_active_transitions');
+      localStorage.removeItem('liofy_active_transitions');
+    } catch {}
+    return {};
   });
 
   // Equalizer State
@@ -140,6 +139,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const currentTrackRef   = useRef(currentTrack);
   const isPlayingRef      = useRef(isPlaying);
   const currentTimeRef    = useRef(currentTime);
+  const durationRef       = useRef(duration);
   const jamSessionRef     = useRef(jamSession);
   const socketRef         = useRef(null);
   const isRemoteActionRef = useRef(false);
@@ -159,18 +159,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { isMixModeRef.current    = isMixMode;   }, [isMixMode]);
   useEffect(() => { 
     activeTransRef.current = activeTransitions; 
-    try {
-      if (activeTransitions && typeof activeTransitions === 'object') {
-        localStorage.setItem('rivo_active_transitions', JSON.stringify(activeTransitions));
-        localStorage.setItem('liofy_active_transitions', JSON.stringify(activeTransitions));
-      }
-    } catch {}
   }, [activeTransitions]);
   useEffect(() => { currentQueueRef.current = currentQueue;}, [currentQueue]);
   useEffect(() => { tracksRef.current       = tracks;      }, [tracks]);
   useEffect(() => { currentTrackRef.current = currentTrack;}, [currentTrack]);
   useEffect(() => { isPlayingRef.current    = isPlaying;   }, [isPlaying]);
   useEffect(() => { currentTimeRef.current = currentTime;  }, [currentTime]);
+  useEffect(() => { durationRef.current    = duration;     }, [duration]);
   useEffect(() => { jamSessionRef.current   = jamSession;  }, [jamSession]);
 
   // Broadcast live listening activity to server for Friend Activity
@@ -222,227 +217,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, []);
 
   // ── Spotify Mix: Real Audio DJ Transition Execution Engine ───────
-  const checkAndRunDjTransition = useCallback((cTime, dur) => {
-    if (!isPlayingRef.current) return;
-    if (!dur || isNaN(cTime)) return;
-
-    const remaining = dur - cTime;
-    const cur = currentTrackRef.current;
-    if (!cur) return;
-
-    const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
-    if (!rawQueue || rawQueue.length < 2) return;
-
-    const curId = String(cur.id || cur._id || '');
-    let idx = rawQueue.findIndex(t => String(t.id || t._id) === curId || (t.title && cur.title && t.title.trim().toLowerCase() === cur.title.trim().toLowerCase()));
-    if (idx === -1 && tracksRef.current.length > 1) {
-      idx = tracksRef.current.findIndex(t => String(t.id || t._id) === curId || (t.title && cur.title && t.title.trim().toLowerCase() === cur.title.trim().toLowerCase()));
-    }
-    if (idx === -1) return;
-
-    const activeQueue = idx < rawQueue.length ? rawQueue : tracksRef.current;
-    const nextTrack = activeQueue[(idx + 1) % activeQueue.length];
-    const nextId = String(nextTrack.id || nextTrack._id || '');
-    const pairKey = `${curId}___${nextId}`;
-
-    let customTrans = activeTransRef.current[pairKey];
-    if (!customTrans) {
-      const altKey1 = `${cur._id || cur.id}___${nextTrack._id || nextTrack.id}`;
-      const altKey2 = `${cur.id || cur._id}___${nextTrack.id || nextTrack._id}`;
-      customTrans = activeTransRef.current[altKey1] || activeTransRef.current[altKey2];
-    }
-    if (!customTrans) {
-      for (const [k, v] of Object.entries(activeTransRef.current || {})) {
-        const [kA, kB] = k.split('___');
-        const isA = kA === curId || (cur._id && kA === String(cur._id)) || (cur.title && kA.toLowerCase() === cur.title.toLowerCase());
-        const isB = kB === nextId || (nextTrack._id && kB === String(nextTrack._id)) || (nextTrack.title && kB.toLowerCase() === nextTrack.title.toLowerCase());
-        if (isA && isB) {
-          customTrans = v;
-          break;
-        }
-      }
-    }
-
-    const isMixEnabled = isMixModeRef.current || Boolean(customTrans) || Object.keys(activeTransRef.current).length > 0;
-    if (!isMixEnabled) return;
-
-    const allTransValues = Object.values(activeTransRef.current || {});
-    const latestConfigured = allTransValues.length > 0 ? allTransValues[allTransValues.length - 1] : null;
-    // Default Spotify-style: 8s equal_power crossfade when no custom transition is set
-    const DEFAULT_TRANSITION = { style: 'equal_power', duration: 8 };
-    const trans = customTrans || latestConfigured || DEFAULT_TRANSITION;
-    const transDuration = Math.min(30, Math.max(2, Number(trans.duration) || 8));
-
-    // Handle smooth track fade-in on start (first 3 seconds)
-    if (cTime < 3 && !transitionActiveTrackIdRef.current) {
-      const pIn = Math.min(1, Math.max(0, cTime / 3));
-      const inVol = volumeRef.current * Math.sin(pIn * (Math.PI / 2));
-      if (!isYtTrackRef.current && audioRef.current) {
-        audioRef.current.volume = Math.max(0, Math.min(1, inVol));
-      } else if (isYtTrackRef.current) {
-        const actYt = getActiveYtPlayer();
-        if (actYt) {
-          try { actYt.setVolume(Math.round(Math.max(0, Math.min(1, inVol)) * 100)); } catch {}
-        }
-      }
-      return;
-    }
-
-    // Handle DJ Transition out window
-    if (remaining <= transDuration && remaining >= 0) {
-      const pOut = Math.min(1, Math.max(0, 1 - (remaining / transDuration)));
-      const { gainA, gainB } = calculateCrossfadeGains(pOut, trans.style || 'equal_power');
-      const targetVolA = volumeRef.current * gainA;
-      const targetVolB = volumeRef.current * gainB;
-
-      const nextYtId = extractYtId(nextTrack.audioUrl);
-      const isCurYt = isYtTrackRef.current;
-
-      // ── Scenario 1: YouTube to YouTube or YouTube involved ──
-      if (nextYtId) {
-        if (transitionActiveTrackIdRef.current !== nextId) {
-          transitionActiveTrackIdRef.current = nextId;
-          const secPlayer = getSecondaryYtPlayer();
-          if (secPlayer) {
-            try {
-              secPlayer.unMute();
-              secPlayer.setVolume(0);
-              secPlayer.loadVideoById(nextYtId);
-              secPlayer.playVideo();
-            } catch (err) {
-              console.warn('[YT Deck 2] Start error:', err);
-            }
-          }
-        }
-
-        // Adjust deck A (outgoing)
-        if (isCurYt) {
-          const actPlayer = getActiveYtPlayer();
-          if (actPlayer) {
-            try { actPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
-          }
-        } else if (audioRef.current) {
-          audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
-        }
-
-        // Adjust deck B (incoming)
-        const secPlayer = getSecondaryYtPlayer();
-        if (secPlayer && transitionActiveTrackIdRef.current === nextId) {
-          try { secPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolB)) * 100)); } catch {}
-        }
-      }
-      // ── Scenario 2: Non-YouTube — use HTML5 secondary audio element ──
-      else {
-        if (!isCurYt && audioRef.current) {
-          audioRef.current.volume = Math.max(0, Math.min(1, targetVolA));
-        } else if (isCurYt) {
-          const actPlayer = getActiveYtPlayer();
-          if (actPlayer) {
-            try { actPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolA)) * 100)); } catch {}
-          }
-        }
-
-        // Start secondary HTML5 audio element for next track
-        if (transitionActiveTrackIdRef.current !== nextId) {
-          transitionActiveTrackIdRef.current = nextId;
-          resolveTrackAudioUrl(nextTrack).then(resolved => {
-            if (!resolved?.url) return;
-            // Check if it resolved to YouTube after all
-            const resolvedYtId = resolved.ytId || extractYtId(resolved.url);
-            if (resolvedYtId) {
-              const secPlayer = getSecondaryYtPlayer();
-              if (secPlayer) {
-                try {
-                  secPlayer.unMute();
-                  secPlayer.setVolume(0);
-                  secPlayer.loadVideoById(resolvedYtId);
-                  secPlayer.playVideo();
-                } catch {}
-              }
-            } else {
-              // Plain audio URL — use secondary HTML5 Audio element
-              if (!secondaryAudioRef.current) secondaryAudioRef.current = new Audio();
-              const sec = secondaryAudioRef.current;
-              sec.src = resolved.url;
-              sec.volume = 0;
-              sec.currentTime = 0;
-              sec.play().catch(() => {});
-            }
-          });
-        }
-
-        // Update secondary element volume every tick
-        const resolvedIsYt = transitionActiveTrackIdRef.current === nextId &&
-          Boolean(extractYtId(nextTrack.audioUrl));
-        if (resolvedIsYt) {
-          const secPlayer = getSecondaryYtPlayer();
-          if (secPlayer) {
-            try { secPlayer.setVolume(Math.round(Math.max(0, Math.min(1, targetVolB)) * 100)); } catch {}
-          }
-        } else if (secondaryAudioRef.current) {
-          secondaryAudioRef.current.volume = Math.max(0, Math.min(1, targetVolB));
-        }
-      }
-
-      // Automatically trigger next track right at transition threshold
-      const threshold = trans.style === 'cut' ? 0.25 : 0.45;
-      if (remaining <= threshold && !isTransitionTriggeredRef.current) {
-        isTransitionTriggeredRef.current = true;
-
-        if (nextYtId) {
-          const actPlayer = getActiveYtPlayer();
-          const secPlayer = getSecondaryYtPlayer();
-          if (actPlayer) {
-            try { actPlayer.pauseVideo(); actPlayer.mute(); } catch {}
-          }
-          if (secPlayer) {
-            try { secPlayer.setVolume(Math.round(volumeRef.current * 100)); } catch {}
-          }
-          // Swap active deck seamlessly
-          activeYtDeckRef.current = activeYtDeckRef.current === 1 ? 2 : 1;
-          ytPlayerRef.current = getActiveYtPlayer();
-          isYtTrackRef.current = true;
-          setIsYtTrack(true);
-          isSeamlessYtHandoffRef.current = true;
-        } else if (secondaryAudioRef.current && transitionActiveTrackIdRef.current) {
-          // Seamless HTML5 Audio Handoff: swap active audio elements with zero audible gap
-          if (audioRef.current) {
-            audioRef.current.pause();
-          }
-          const temp = audioRef.current;
-          audioRef.current = secondaryAudioRef.current;
-          secondaryAudioRef.current = temp;
-          if (audioRef.current) {
-            audioRef.current.volume = volumeRef.current;
-          }
-          isSeamlessYtHandoffRef.current = true;
-        }
-
-        if (playNextTrackRef.current) {
-          playNextTrackRef.current();
-        }
-      }
-    } else {
-      // Normal playback volume restored outside transition window
-      if (!isYtTrackRef.current && audioRef.current && Math.abs(audioRef.current.volume - volumeRef.current) > 0.05) {
-        audioRef.current.volume = volumeRef.current;
-      }
-      if (isYtTrackRef.current) {
-        const actPlayer = getActiveYtPlayer();
-        if (actPlayer) {
-          try { actPlayer.setVolume(Math.round(volumeRef.current * 100)); } catch {}
-        }
-      }
-      if (activeWebAudioMixRef.current) {
-        activeWebAudioMixRef.current.stop();
-        activeWebAudioMixRef.current = null;
-      }
-      if (secondaryAudioRef.current && transitionActiveTrackIdRef.current) {
-        secondaryAudioRef.current.pause();
-      }
-      transitionActiveTrackIdRef.current = null;
-    }
-  }, [getActiveYtPlayer, getSecondaryYtPlayer]);
+  const checkAndRunDjTransition = useCallback(() => {}, []);
 
   // ── Bulletproof Silencers to PREVENT dual-playback ghost player ──
   const stopYouTube = useCallback(() => {
@@ -492,14 +267,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
-          if (!isNaN(audio.duration) && audio.duration > 0) {
-            checkAndRunDjTransition(audio.currentTime, audio.duration);
+          if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && Math.abs(audio.duration - durationRef.current) > 0.5) {
+            setDuration(audio.duration);
+            durationRef.current = audio.duration;
           }
         }
       }
     };
     const handleLoadedMetadata = () => {
-      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
+      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
+        setDuration(audio.duration);
+        durationRef.current = audio.duration;
+      }
     };
     const handleEnded = () => {
       onTrackEnded(currentTrackRef.current);
@@ -618,7 +397,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setIsPlaying(true);
           try {
             const d = player.getDuration();
-            if (d > 0) setDuration(d);
+            if (d > 0) {
+              setDuration(d);
+              durationRef.current = d;
+            }
           } catch {}
           if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
           ytIntervalRef.current = setInterval(() => {
@@ -627,8 +409,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
               const t = activeP.getCurrentTime() || 0;
               const d = activeP.getDuration() || 0;
               setCurrentTime(t);
-              if (d > 0) {
-                checkAndRunDjTransition(t, d);
+              if (d > 0 && Math.abs(d - durationRef.current) > 0.5) {
+                setDuration(d);
+                durationRef.current = d;
               }
             }
           }, 150);
@@ -1441,14 +1224,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
     currentTimeRef.current = s;
 
     const actPlayer = getActiveYtPlayer();
-    if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
+    if (isYtTrackRef.current && actPlayer && (typeof actPlayer.seekTo === 'function' || isCurrentYtReady())) {
       try {
         actPlayer.seekTo(s, true);
         actPlayer.setVolume(Math.round(volumeRef.current * 100));
       } catch {}
     } else if (audioRef.current) {
-      audioRef.current.currentTime = s;
-      audioRef.current.volume = volumeRef.current;
+      try {
+        audioRef.current.currentTime = s;
+        audioRef.current.volume = volumeRef.current;
+      } catch {}
     }
 
     if (!isRemote && jamSessionRef.current && socketRef.current) {

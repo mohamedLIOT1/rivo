@@ -50,9 +50,21 @@ const authHeaders = () => ({
 
 // ── API helpers ──────────────────────────────────────
 export const api = {
-  get:  (path)       => fetch(`${API}${path}`, { headers: authHeaders() }).then(r => r.json()),
-  post: (path, body) => fetch(`${API}${path}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) }).then(r => r.json()),
-  del:  (path)       => fetch(`${API}${path}`, { method: 'DELETE', headers: authHeaders() }).then(r => r.json()),
+  get: (path) => fetch(`${API}${path}`, { headers: authHeaders() })
+    .then(async r => {
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return { success: false, error: text || r.statusText }; }
+    }),
+  post: (path, body) => fetch(`${API}${path}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
+    .then(async r => {
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return { success: false, error: text || r.statusText }; }
+    }),
+  del: (path) => fetch(`${API}${path}`, { method: 'DELETE', headers: authHeaders() })
+    .then(async r => {
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return { success: false, error: text || r.statusText }; }
+    }),
 };
 
 // ── Context ──────────────────────────────────────────
@@ -214,13 +226,16 @@ export function UserProvider({ children }) {
       try {
         const data = await api.get('/api/tracks');
         if (data && data.success && Array.isArray(data.tracks)) {
+          const likedSet = new Set((likedTrackIds || []).map(String));
           const merged = data.tracks.map(t => {
-            const off = offlineMap.get(String(t.id || t._id));
+            const cleanId = String(t.id || t._id);
+            const off = offlineMap.get(cleanId);
+            const isLiked = likedSet.has(cleanId);
             if (off) {
               const { audioBlob, coverBlob, ...cleanOff } = off;
-              return { ...t, ...cleanOff, downloaded: true };
+              return { ...t, ...cleanOff, liked: isLiked, downloaded: true };
             }
-            return t;
+            return { ...t, liked: isLiked };
           });
           setTracks(deduplicateTracks(merged));
           return;
@@ -377,6 +392,170 @@ export function UserProvider({ children }) {
     }
   }, [likedTrackIds]);
 
+  const deletePlaylist = useCallback(async (playlistId) => {
+    if (!playlistId) return;
+    const cleanId = String(playlistId);
+    setPlaylists(prev => {
+      const next = prev.filter(p => String(p.id) !== cleanId && String(p._id) !== cleanId);
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(next));
+        localStorage.setItem('liofy_playlists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const next = (prev.playlists || []).filter(p => String(p.id) !== cleanId && String(p._id) !== cleanId);
+      const updatedUser = { ...prev, playlists: next };
+      try {
+        localStorage.setItem('rivo_user', JSON.stringify(updatedUser));
+        localStorage.setItem('liofy_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
+    try {
+      if (getToken()) {
+        await api.del(`/api/playlists/${encodeURIComponent(cleanId)}`);
+      }
+    } catch (err) {
+      console.warn('deletePlaylist API error:', err);
+    }
+  }, []);
+
+  const savePublicPlaylist = useCallback(async (targetPlaylist) => {
+    if (!targetPlaylist) return { success: false, error: 'No playlist provided' };
+    const plId = String(targetPlaylist.id || targetPlaylist._id);
+
+    // 1. Check if already saved in local state
+    const existing = playlists.find(p =>
+      String(p.sourcePlaylistId) === plId ||
+      String(p.id) === plId ||
+      String(p._id) === plId
+    );
+    if (existing) {
+      return { success: true, alreadySaved: true, playlist: existing };
+    }
+
+    // 2. Prepare saved playlist model
+    const newId = `pl-saved-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const savedPlaylist = {
+      id: newId,
+      _id: newId,
+      name: targetPlaylist.name || 'Saved Playlist',
+      cover: targetPlaylist.cover || '',
+      description: targetPlaylist.description || (targetPlaylist.sourceOwnerName || targetPlaylist.ownerName ? `Saved from ${targetPlaylist.sourceOwnerName || targetPlaylist.ownerName}` : 'Saved playlist'),
+      trackIds: [...(targetPlaylist.trackIds || [])],
+      isPublic: false,
+      isLikedSongs: false,
+      isQuran: Boolean(targetPlaylist.isQuran),
+      sourcePlaylistId: plId,
+      sourceOwnerName: targetPlaylist.sourceOwnerName || targetPlaylist.ownerName || targetPlaylist.owner?.name || '',
+      sourceOwnerId: targetPlaylist.sourceOwnerId || targetPlaylist.ownerId || (targetPlaylist.owner?._id ? String(targetPlaylist.owner._id) : ''),
+      createdAt: new Date().toISOString()
+    };
+
+    // 3. Immediately persist locally (instant feedback & offline resilience)
+    setPlaylists(prev => {
+      const clean = prev.filter(p => String(p.id) !== newId && String(p.sourcePlaylistId) !== plId);
+      const next = [...clean, savedPlaylist];
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(next));
+        localStorage.setItem('liofy_playlists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const clean = (prev.playlists || []).filter(p => String(p.id) !== newId && String(p.sourcePlaylistId) !== plId);
+      const updatedUser = { ...prev, playlists: [...clean, savedPlaylist] };
+      try {
+        localStorage.setItem('rivo_user', JSON.stringify(updatedUser));
+        localStorage.setItem('liofy_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
+
+    // Also populate tracks into global tracks if included with targetPlaylist
+    if (Array.isArray(targetPlaylist.tracks) && targetPlaylist.tracks.length > 0) {
+      setTracks(prev => {
+        const existingIds = new Set(prev.map(t => String(t.id || t._id)));
+        const toAdd = targetPlaylist.tracks.filter(t => !existingIds.has(String(t.id || t._id)));
+        if (toAdd.length > 0) {
+          const updated = [...prev, ...toAdd];
+          try {
+            localStorage.setItem('rivo_tracks', JSON.stringify(updated));
+            localStorage.setItem('liofy_tracks', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        }
+        return prev;
+      });
+    }
+
+    // 4. Background sync with backend if token exists
+    if (getToken()) {
+      try {
+        const res = await api.post(`/api/playlists/${encodeURIComponent(plId)}/save`, {
+          playlist: targetPlaylist
+        });
+        if (res && res.success && Array.isArray(res.playlists)) {
+          setPlaylists(res.playlists);
+          setCurrentUser(prev => prev ? ({ ...prev, playlists: res.playlists }) : prev);
+        }
+      } catch (err) {
+        console.warn('Background playlist save sync error (saved locally):', err);
+      }
+    }
+
+    return { success: true, playlist: savedPlaylist, alreadySaved: false };
+  }, [playlists]);
+
+  const unsavePublicPlaylist = useCallback(async (playlistId) => {
+    if (!playlistId) return { success: false };
+    const plId = String(playlistId);
+
+    // 1. Immediately remove locally
+    setPlaylists(prev => {
+      const next = prev.filter(p =>
+        String(p.sourcePlaylistId) !== plId &&
+        String(p.id) !== plId &&
+        String(p._id) !== plId
+      );
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(next));
+        localStorage.setItem('liofy_playlists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const next = (prev.playlists || []).filter(p =>
+        String(p.sourcePlaylistId) !== plId &&
+        String(p.id) !== plId &&
+        String(p._id) !== plId
+      );
+      const updatedUser = { ...prev, playlists: next };
+      try {
+        localStorage.setItem('rivo_user', JSON.stringify(updatedUser));
+        localStorage.setItem('liofy_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
+
+    // 2. Background sync with backend
+    if (getToken()) {
+      try {
+        await api.post(`/api/playlists/${encodeURIComponent(plId)}/unsave`, {});
+      } catch (err) {
+        console.warn('Background unsave sync error:', err);
+      }
+    }
+
+    return { success: true };
+  }, []);
+
   const value = {
     currentUser, setCurrentUser, login, logout,
     tracks, setTracks,
@@ -386,6 +565,9 @@ export function UserProvider({ children }) {
     followedArtists, setFollowedArtists,
     toggleFollowArtist, isFollowingArtist,
     deleteTrack,
+    deletePlaylist,
+    savePublicPlaylist,
+    unsavePublicPlaylist,
     removeTrackFromPlaylist,
     isSyncing,
     syncFromServer,
