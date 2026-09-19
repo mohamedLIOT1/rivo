@@ -8,30 +8,30 @@ export default function ShortcutsModal({ isOpen, onClose }) {
     {
       category: 'Playback Controls',
       items: [
-        { keys: ['Space'], desc: 'Dispense / Halt Dose', icon: Play },
-        { keys: ['Ctrl', '→'], desc: 'Advance to Next Cassette', icon: SkipForward },
-        { keys: ['Ctrl', '←'], desc: 'Revert to Previous Track', icon: SkipBack },
+        { keys: ['Space'], desc: 'Play / Pause', icon: Play },
+        { keys: ['Ctrl', '→'], desc: 'Next Track', icon: SkipForward },
+        { keys: ['Ctrl', '←'], desc: 'Previous Track', icon: SkipBack },
         { keys: ['→'], desc: 'Seek forward 5s (Shift + → for 10s)' },
         { keys: ['←'], desc: 'Seek backward 5s (Shift + ← for 10s)' },
-        { keys: ['K'], desc: 'Toggle Dispenser playback' },
+        { keys: ['K'], desc: 'Toggle playback' },
         { keys: ['J'], desc: 'Rewind 10s' },
       ],
     },
     {
-      category: 'Acoustic Amplitude & Volume',
+      category: 'Volume & Audio',
       items: [
-        { keys: ['↑'], desc: 'Increase decibels (+5%)', icon: Volume2 },
-        { keys: ['↓'], desc: 'Decrease decibels (-5%)', icon: Volume2 },
-        { keys: ['M'], desc: 'Mute / Unmute dispensary audio', icon: VolumeX },
+        { keys: ['↑'], desc: 'Volume Up (+5%)', icon: Volume2 },
+        { keys: ['↓'], desc: 'Volume Down (-5%)', icon: Volume2 },
+        { keys: ['M'], desc: 'Mute / Unmute', icon: VolumeX },
       ],
     },
     {
-      category: 'Dispensary Navigation',
+      category: 'Navigation & Controls',
       items: [
-        { keys: ['L'], desc: 'Save to / Remove from Primary Archive', icon: Heart },
-        { keys: ['S'], desc: 'Toggle Algorithmic Shuffle', icon: Shuffle },
-        { keys: ['R'], desc: 'Toggle Continuous Repeat Dose', icon: Repeat },
-        { keys: ['?'], desc: 'Display Console Key Bindings', icon: HelpCircle },
+        { keys: ['L'], desc: 'Like / Unlike Track', icon: Heart },
+        { keys: ['S'], desc: 'Toggle Shuffle', icon: Shuffle },
+        { keys: ['R'], desc: 'Toggle Repeat', icon: Repeat },
+        { keys: ['?'], desc: 'Show Keyboard Shortcuts', icon: HelpCircle },
       ],
     },
   ];
@@ -47,8 +47,8 @@ export default function ShortcutsModal({ isOpen, onClose }) {
               <Command size={16} />
             </div>
             <div>
-              <h3 className="font-mono font-black uppercase text-[#082621] text-sm">Hardware Keyboard Controls</h3>
-              <p className="text-[11px] text-[#082621]/70 font-sans">Navigate Rivo console with precision keystrokes</p>
+              <h3 className="font-mono font-black uppercase text-[#082621] text-sm">Keyboard Shortcuts</h3>
+              <p className="text-[11px] text-[#082621]/70 font-sans">Navigate Liofy with keyboard shortcuts</p>
             </div>
           </div>
           <button

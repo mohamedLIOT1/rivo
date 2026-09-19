@@ -100,7 +100,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Edit Formulation Record</h3>
+            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Edit Song Details</h3>
           </div>
           <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
             <X size={18} />
@@ -109,7 +109,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 my-4 max-h-[70vh] overflow-y-auto pr-1">
           <div>
-            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Song Designation</label>
+            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Song Title</label>
             <input
               type="text"
               value={title}
@@ -121,7 +121,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Practitioner / Artist</label>
+              <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Artist</label>
               <input
                 type="text"
                 value={artist}
@@ -131,7 +131,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
               />
             </div>
             <div>
-              <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Album / Batch</label>
+              <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Album</label>
               <input
                 type="text"
                 value={album}
@@ -189,7 +189,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
               type="submit"
               className="brutal-btn flex-1 py-2.5 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow"
             >
-              SAVE FORMULATION
+              SAVE SONG
             </button>
             <button
               type="button"
@@ -197,7 +197,7 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
               className="brutal-btn py-2.5 px-4 bg-red-100 hover:bg-red-200 text-[#dc2626] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1"
             >
               <Trash2 size={15} />
-              <span>DISCARD</span>
+              <span>DELETE</span>
             </button>
           </div>
         </form>
@@ -206,8 +206,8 @@ export default function EditSongModal({ isOpen, onClose, track, onUpdateSong, on
       <ConfirmModal
         isOpen={isDeleteConfirmOpen}
         title={`Delete "${title}"?`}
-        message="Are you sure you want to permanently discard this acoustic formulation?"
-        confirmText="Confirm Discard"
+        message="Are you sure you want to permanently delete this song?"
+        confirmText="Delete Song"
         cancelText="Cancel"
         onConfirm={() => {
           setIsDeleteConfirmOpen(false);

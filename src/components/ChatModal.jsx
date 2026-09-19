@@ -10,8 +10,10 @@ export default function ChatModal({
   currentUser,
   socket,
   onStartJamWithUser,
-  onPlayTrack
+  onPlayTrack,
+  globalTheme = 'dark'
 }) {
+  const isDark = globalTheme === 'dark' || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
   const [activeUser, setActiveUser] = useState(targetUser || null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
@@ -206,44 +208,63 @@ export default function ChatModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none">
-      <div className="bg-[#fdfbf7] brutal-border-thick rounded-2xl w-full max-w-lg md:max-w-xl h-[620px] flex flex-col brutal-shadow-lg overflow-hidden animate-in zoom-in-95 duration-200 text-[#0b1110]">
+      <div className={`rounded-2xl w-full max-w-lg md:max-w-xl h-[620px] flex flex-col brutal-shadow-lg overflow-hidden animate-in zoom-in-95 duration-200 ${
+        isDark ? 'bg-[#121212] text-white border-2 border-zinc-800' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
+      }`}>
         
         {/* ─────────────────────────────────────────
-            HEADER: RIVO TELEGRAPH BUREAU
+            HEADER: CHAT HEADER
             ───────────────────────────────────────── */}
-        <div className="p-3.5 bg-[#0b1110] text-[#fdfbf7] brutal-border border-x-0 border-t-0 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
+        <div className={`p-3.5 flex items-center justify-between shrink-0 border-b-2 ${
+          isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-[#0b1110] border-black text-[#fdfbf7]'
+        }`}>
+          <div className="flex items-center gap-2.5 min-w-0">
             {activeUser ? (
               <button
                 onClick={() => {
                   setActiveUser(null);
                   fetchHubData();
                 }}
-                className="w-8 h-8 rounded-lg bg-[#fdfbf7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer mr-1"
-                title="Back to Telegraph Hub"
+                className={`w-8 h-8 rounded-lg flex items-center justify-center brutal-btn cursor-pointer mr-1 brutal-border ${
+                  isDark ? 'bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110]'
+                }`}
+                title="Back to Chats"
               >
                 <ArrowLeft size={16} strokeWidth={2.5} />
               </button>
             ) : null}
 
-            <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm brutal-shadow-sm">
-              RX
-            </div>
+            {/* Profile Avatar */}
+            {activeUser?.avatar ? (
+              <img 
+                src={activeUser.avatar} 
+                alt={activeUser.name} 
+                className="w-8 h-8 rounded-lg object-cover brutal-border shrink-0 shadow-sm" 
+              />
+            ) : activeUser ? (
+              <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0">
+                {activeUser.name?.[0]?.toUpperCase() || 'U'}
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0">
+                <MessageSquare size={16} />
+              </div>
+            )}
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-display font-bold text-sm leading-none text-white">
-                  {activeUser ? activeUser.name : 'Rivo Telegraph Bureau'}
+            <div className="truncate">
+              <div className="flex items-center gap-1.5 truncate">
+                <h3 className="font-display font-bold text-sm leading-none text-white truncate">
+                  {activeUser ? activeUser.name : 'Chat'}
                 </h3>
                 {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
               </div>
-              <span className="text-[10px] text-zinc-400 font-mono">
-                {activeUser ? 'DIRECT ENCRYPTED TELEGRAM' : 'ENCRYPTED MEDICAL TELEGRAPH'}
+              <span className="text-[10px] text-zinc-400 font-mono block mt-0.5">
+                {activeUser ? 'Direct Chat' : 'Messages & Friends'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {activeUser && (
               <button
                 onClick={handleSendJamInvite}
@@ -268,19 +289,25 @@ export default function ChatModal({
             SUB-HEADER TABS (WHEN IN HUB MODE)
             ───────────────────────────────────────── */}
         {!activeUser && (
-          <div className="bg-[#ded2bb] p-2 border-b-2 border-black flex gap-1.5 overflow-x-auto text-xs font-display font-bold shrink-0">
+          <div className={`p-2 border-b-2 flex gap-1.5 overflow-x-auto text-xs font-display font-bold shrink-0 ${
+            isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-black'
+          }`}>
             <button
               onClick={() => setActiveTab('chats')}
               className={`px-3 py-1 rounded brutal-border transition ${
-                activeTab === 'chats' ? 'bg-[#0b1110] text-white brutal-shadow-sm' : 'bg-white text-[#0b1110]'
+                activeTab === 'chats' 
+                  ? (isDark ? 'bg-[#17a398] text-black font-black brutal-shadow-sm' : 'bg-[#0b1110] text-white brutal-shadow-sm') 
+                  : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-[#0b1110]')
               }`}
             >
-              Active Telegrams ({conversations.length})
+              Chats ({conversations.length})
             </button>
             <button
               onClick={() => setActiveTab('friends')}
               className={`px-3 py-1 rounded brutal-border transition ${
-                activeTab === 'friends' ? 'bg-[#0b1110] text-white brutal-shadow-sm' : 'bg-white text-[#0b1110]'
+                activeTab === 'friends' 
+                  ? (isDark ? 'bg-[#17a398] text-black font-black brutal-shadow-sm' : 'bg-[#0b1110] text-white brutal-shadow-sm') 
+                  : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-[#0b1110]')
               }`}
             >
               Friends ({friends.length})
@@ -293,20 +320,24 @@ export default function ChatModal({
             ───────────────────────────────────────── */}
         {activeUser ? (
           <>
-            {/* Messages Stream with paper texture */}
-            <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 paper-texture bg-[#fdfbf7]">
+            {/* Messages Stream */}
+            <div className={`flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 ${
+              isDark ? 'bg-[#121212]' : 'bg-[#fdfbf7] paper-texture'
+            }`}>
               {loading ? (
                 <div className="flex items-center justify-center h-full">
                   <Loader2 size={26} className="animate-spin text-[#17a398]" />
                 </div>
               ) : messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center px-4">
-                  <div className="w-14 h-14 rounded-2xl bg-[#ede5d3] brutal-border flex items-center justify-center text-[#0b1110] mb-3 brutal-shadow-sm">
-                    <Disc size={28} />
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 brutal-shadow-sm brutal-border ${
+                    isDark ? 'bg-zinc-800 text-white border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110]'
+                  }`}>
+                    <MessageSquare size={28} />
                   </div>
-                  <p className="text-base font-display font-black text-[#0b1110]">Telegram Channel Open</p>
-                  <p className="text-xs text-zinc-600 font-medium mt-1 max-w-xs leading-relaxed">
-                    Prescribe beats, say hello, or invite {activeUser.name} to a synchronized Rivo Jam session!
+                  <p className={`text-base font-display font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No messages yet</p>
+                  <p className={`text-xs font-medium mt-1 max-w-xs leading-relaxed ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                    Say hello, share music, or invite {activeUser.name} to a Jam session!
                   </p>
                 </div>
               ) : (
@@ -322,27 +353,40 @@ export default function ChatModal({
                       className={`flex flex-col ${isMe ? 'items-end max-w-[85%] ml-auto' : 'items-start max-w-[85%]'}`}
                     >
                       <div
-                        className={`p-3 rounded-xl brutal-border brutal-shadow-sm text-xs font-medium space-y-1 ${
+                        className={`p-3 rounded-xl brutal-border brutal-shadow-sm space-y-1 ${
                           isMe
-                            ? 'bg-[#17a398] text-[#0b1110] font-bold rounded-tr-none'
-                            : 'bg-white text-[#0b1110] rounded-tl-none'
+                            ? 'bg-[#17a398] text-[#082621] font-bold rounded-tr-none'
+                            : isDark
+                              ? 'bg-zinc-800 text-white font-bold border-zinc-700 rounded-tl-none'
+                              : 'bg-white text-[#0b1110] font-bold rounded-tl-none'
                         }`}
                       >
                         {/* Message Meta Header */}
                         <div className={`flex items-center justify-between border-b pb-1 mb-1 font-mono text-[10px] gap-4 ${
-                          isMe ? 'border-black/20 text-[#082621]' : 'border-dashed border-zinc-300 text-zinc-500'
+                          isMe 
+                            ? 'border-black/20 text-[#082621]/80 font-bold' 
+                            : isDark ? 'border-zinc-700 text-zinc-400' : 'border-dashed border-zinc-300 text-zinc-500'
                         }`}>
-                          <span>{isMe ? (currentUser?.name || 'You') : (activeUser.name || 'Dispenser')}</span>
+                          <span>{isMe ? (currentUser?.name || 'You') : (activeUser.name || 'Friend')}</span>
                           <span>{timeFormatted}</span>
                         </div>
 
-                        {msg.text && <p className="break-words leading-relaxed">{msg.text}</p>}
+                        {/* Bolder Chat Text */}
+                        {msg.text && (
+                          <p className="break-words font-bold text-[13.5px] md:text-[14px] leading-snug tracking-normal">
+                            {msg.text}
+                          </p>
+                        )}
 
                         {/* Track attached */}
                         {msg.track && (
                           <div
                             onClick={() => onPlayTrack && onPlayTrack(msg.track)}
-                            className="mt-2 p-2 bg-white rounded-lg brutal-border flex items-center justify-between gap-2.5 cursor-pointer hover:bg-[#ede5d3] transition"
+                            className={`mt-2 p-2 rounded-lg brutal-border flex items-center justify-between gap-2.5 cursor-pointer transition ${
+                              isDark 
+                                ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-850' 
+                                : 'bg-white hover:bg-[#ede5d3]'
+                            }`}
                           >
                             <img
                               src={msg.track.cover}
@@ -351,12 +395,12 @@ export default function ChatModal({
                             />
                             <div className="truncate flex-1 min-w-0">
                               <span className="text-[8px] font-mono font-bold bg-[#f59e0b] px-1 rounded text-black">
-                                PRESCRIBED TRACK
+                                SHARED TRACK
                               </span>
-                              <p className="text-xs font-display font-black text-[#0b1110] truncate mt-0.5">
+                              <p className={`text-xs font-display font-black truncate mt-0.5 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                                 {msg.track.title}
                               </p>
-                              <p className="text-[10px] text-zinc-600 font-bold truncate">
+                              <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                                 {msg.track.artist}
                               </p>
                             </div>
@@ -367,8 +411,8 @@ export default function ChatModal({
                         )}
                       </div>
 
-                      <span className="text-[9px] font-mono text-zinc-500 mt-1 px-1 font-bold">
-                        {isMe ? 'Dispatched via Telegraph' : 'Telegram Verified'}
+                      <span className="text-[9px] font-mono text-zinc-500 mt-1 px-1 font-medium">
+                        {timeFormatted}
                       </span>
                     </div>
                   );
@@ -378,24 +422,30 @@ export default function ChatModal({
             </div>
 
             {/* Chat Input Field */}
-            <div className="p-3 bg-[#ded2bb] brutal-border border-x-0 border-b-0 shrink-0">
+            <div className={`p-3 border-t-2 shrink-0 ${
+              isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-black'
+            }`}>
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <input
                   type="text"
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  placeholder={`Type a prescription message for ${activeUser.name}...`}
-                  className="flex-1 bg-white text-xs font-bold px-3 py-2.5 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-[#17a398]"
+                  placeholder={`Type a message for ${activeUser.name}...`}
+                  className={`flex-1 text-xs font-bold px-3 py-2.5 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
+                    isDark 
+                      ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' 
+                      : 'bg-white border-black text-[#0b1110]'
+                  }`}
                 />
                 <button
                   type="submit"
                   disabled={!inputText.trim() || sending}
-                  className="bg-[#0b1110] hover:bg-zinc-800 text-[#fdfbf7] px-4 py-2 rounded-lg font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  className="bg-[#17a398] hover:bg-[#26c4b7] text-black px-4 py-2 rounded-lg font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
                 >
                   {sending ? (
-                    <Loader2 size={14} className="animate-spin text-[#17a398]" />
+                    <Loader2 size={14} className="animate-spin text-black" />
                   ) : (
-                    <Send size={14} className="text-[#17a398]" strokeWidth={2.5} />
+                    <Send size={14} className="text-black" strokeWidth={2.5} />
                   )}
                   <span>Send</span>
                 </button>
@@ -404,16 +454,22 @@ export default function ChatModal({
           </>
         ) : (
           /* ── Conversations & Friends Hub ── */
-          <div className="flex-1 flex flex-col overflow-hidden p-3.5 sm:p-4 bg-[#fdfbf7] paper-texture">
+          <div className={`flex-1 flex flex-col overflow-hidden p-3.5 sm:p-4 ${
+            isDark ? 'bg-[#121212]' : 'bg-[#fdfbf7] paper-texture'
+          }`}>
             {/* Search Input */}
             <div className="relative mb-3 shrink-0">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" strokeWidth={2.5} />
+              <Search size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} strokeWidth={2.5} />
               <input
                 type="text"
-                placeholder="Search friends or telegraph users..."
+                placeholder="Search friends or conversations..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white brutal-border rounded-xl pl-10 pr-4 py-2 text-xs font-bold text-[#0b1110] placeholder-zinc-500 focus:outline-none focus:bg-white brutal-shadow-sm"
+                className={`w-full brutal-border rounded-xl pl-10 pr-4 py-2 text-xs font-bold focus:outline-none brutal-shadow-sm ${
+                  isDark 
+                    ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' 
+                    : 'bg-white border-black text-[#0b1110] placeholder-zinc-500'
+                }`}
               />
             </div>
 
@@ -430,27 +486,31 @@ export default function ChatModal({
                       <Loader2 size={20} className="animate-spin text-[#17a398] mx-auto" />
                     </div>
                   ) : searchResults.length === 0 ? (
-                    <p className="text-xs text-zinc-500 text-center py-4">No users found on telegraph wire</p>
+                    <p className="text-xs text-zinc-500 text-center py-4">No users found</p>
                   ) : (
                     searchResults.map((u) => (
                       <div
                         key={u.id || u._id}
                         onClick={() => setActiveUser(u)}
-                        className="p-2.5 bg-white hover:bg-[#ede5d3] rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm"
+                        className={`p-2.5 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm ${
+                          isDark ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-white' : 'bg-white hover:bg-[#ede5d3]'
+                        }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
                             {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name?.[0] || 'U'}
                           </div>
                           <div className="truncate">
-                            <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#0b1110]">
+                            <div className={`flex items-center gap-1.5 font-display font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                               <span>{u.name}</span>
                               <VerifiedBadge userOrName={u} size={12} />
                             </div>
-                            <span className="text-[10px] font-mono text-zinc-500">Dispatch Message</span>
+                            <span className="text-[10px] font-mono text-zinc-500">Send Message</span>
                           </div>
                         </div>
-                        <button className="px-3 py-1 bg-[#0b1110] text-white font-display font-bold text-[11px] rounded-lg brutal-border">
+                        <button className={`px-3 py-1 font-display font-bold text-[11px] rounded-lg brutal-border ${
+                          isDark ? 'bg-[#17a398] text-black' : 'bg-[#0b1110] text-white'
+                        }`}>
                           Chat →
                         </button>
                       </div>
@@ -465,10 +525,12 @@ export default function ChatModal({
                       <Loader2 size={24} className="animate-spin text-[#17a398] mx-auto" />
                     </div>
                   ) : conversations.length === 0 ? (
-                    <div className="text-center py-10 bg-white rounded-xl brutal-border p-5">
+                    <div className={`text-center py-10 rounded-xl brutal-border p-5 ${
+                      isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white'
+                    }`}>
                       <MessageSquare size={32} className="mx-auto text-zinc-400 mb-2" />
-                      <p className="font-display font-bold text-sm text-[#0b1110]">No Active Telegrams</p>
-                      <p className="text-xs text-zinc-600 mt-1">Search for users above or choose a friend to begin communication.</p>
+                      <p className={`font-display font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Chats Yet</p>
+                      <p className="text-xs text-zinc-500 mt-1">Search for users above or choose a friend to begin chatting.</p>
                     </div>
                   ) : (
                     conversations.map((conv) => {
@@ -478,24 +540,28 @@ export default function ChatModal({
                         <div
                           key={other.id || other._id}
                           onClick={() => setActiveUser(other)}
-                          className="p-2.5 bg-white hover:bg-[#ede5d3] rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm mb-2"
+                          className={`p-2.5 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm mb-2 ${
+                            isDark ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-white' : 'bg-white hover:bg-[#ede5d3]'
+                          }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-1">
                             <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
                               {other.avatar ? <img src={other.avatar} alt="" className="w-full h-full object-cover" /> : other.name?.[0] || 'U'}
                             </div>
                             <div className="truncate flex-1">
-                              <div className="flex items-center gap-1.5 font-display font-black text-xs text-[#0b1110]">
+                              <div className={`flex items-center gap-1.5 font-display font-black text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                                 <span>{other.name}</span>
                                 <VerifiedBadge userOrName={other} size={12} />
                               </div>
-                              <p className="text-[11px] text-zinc-600 font-medium truncate mt-0.5">
-                                {conv.lastMessage?.text || (conv.lastMessage?.track ? '🎵 Shared a prescription' : 'Active wire')}
+                              <p className={`text-[11px] font-medium truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                {conv.lastMessage?.text || (conv.lastMessage?.track ? '🎵 Shared a track' : 'Started a conversation')}
                               </p>
                             </div>
                           </div>
-                          <span className="text-[9px] font-mono font-bold bg-[#ede5d3] px-1.5 py-0.5 rounded shrink-0">
-                            WIRE
+                          <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded shrink-0 ${
+                            isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
+                          }`}>
+                            Chat
                           </span>
                         </div>
                       );
@@ -506,32 +572,36 @@ export default function ChatModal({
                 /* Friends List */
                 <div>
                   {friends.length === 0 ? (
-                    <div className="text-center py-10 bg-white rounded-xl brutal-border p-5">
+                    <div className={`text-center py-10 rounded-xl brutal-border p-5 ${
+                      isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white'
+                    }`}>
                       <Users size={32} className="mx-auto text-zinc-400 mb-2" />
-                      <p className="font-display font-bold text-sm text-[#0b1110]">No Friends Added Yet</p>
-                      <p className="text-xs text-zinc-600 mt-1">Search and connect with friends across the Rivo network.</p>
+                      <p className={`font-display font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Friends Added Yet</p>
+                      <p className="text-xs text-zinc-500 mt-1">Search and connect with friends on Liofy.</p>
                     </div>
                   ) : (
                     friends.map((f) => (
                       <div
                         key={f.id || f._id}
                         onClick={() => setActiveUser(f)}
-                        className="p-2.5 bg-white hover:bg-[#ede5d3] rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm mb-2"
+                        className={`p-2.5 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm mb-2 ${
+                          isDark ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-white' : 'bg-white hover:bg-[#ede5d3]'
+                        }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
                             {f.avatar ? <img src={f.avatar} alt="" className="w-full h-full object-cover" /> : f.name?.[0] || 'F'}
                           </div>
                           <div className="truncate">
-                            <div className="flex items-center gap-1.5 font-display font-bold text-xs text-[#0b1110]">
+                            <div className={`flex items-center gap-1.5 font-display font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                               <span>{f.name}</span>
                               <VerifiedBadge userOrName={f} size={12} />
                             </div>
-                            <span className="text-[10px] font-mono text-emerald-700 font-bold">ACTIVE LISTENER</span>
+                            <span className="text-[10px] font-mono text-emerald-500 font-bold">ONLINE</span>
                           </div>
                         </div>
                         <button className="px-3 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-shadow-sm brutal-btn">
-                          Open Wire →
+                          Chat →
                         </button>
                       </div>
                     ))

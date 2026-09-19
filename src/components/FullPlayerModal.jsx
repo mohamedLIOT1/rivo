@@ -499,15 +499,19 @@ export default function FullPlayerModal({
                 onClick={() => seekTo(line.time)}
                 className={`cursor-pointer transition-all duration-250 p-2.5 rounded-xl ${
                   isActive 
-                    ? 'bg-[#ede5d3] brutal-border border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.01]' 
-                    : 'hover:bg-[#ede5d3]/50 opacity-60 hover:opacity-90'
+                    ? isDark
+                      ? 'bg-zinc-800/90 border-2 border-zinc-700 border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.01]'
+                      : 'bg-[#ede5d3] brutal-border border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.01]' 
+                    : isDark
+                      ? 'hover:bg-zinc-800/40 opacity-60 hover:opacity-90'
+                      : 'hover:bg-[#ede5d3]/50 opacity-60 hover:opacity-90'
                 }`}
               >
                 <p 
                   className={`leading-snug transition-all ${
                     isActive 
-                      ? 'font-display font-black text-xl md:text-2xl text-[#0b1110]' 
-                      : 'font-display font-bold text-base md:text-lg text-zinc-700'
+                      ? `font-display font-black text-xl md:text-2xl ${isDark ? 'text-white' : 'text-[#0b1110]'}` 
+                      : `font-display font-bold text-base md:text-lg ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`
                   }`}
                 >
                   {line.text}
@@ -517,13 +521,13 @@ export default function FullPlayerModal({
           })}
         </div>
       ) : (
-        <div className="text-center py-12 px-4 text-[#0b1110]">
-          <div className="w-16 h-16 rounded-2xl bg-[#ede5d3] brutal-border flex items-center justify-center mx-auto mb-4 brutal-shadow-sm">
+        <div className={`text-center py-12 px-4 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+          <div className={`w-16 h-16 rounded-2xl brutal-border flex items-center justify-center mx-auto mb-4 brutal-shadow-sm ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'}`}>
             <ListMusic size={32} className="text-[#17a398]" />
           </div>
-          <p className="font-display font-black text-[#0b1110] text-lg mb-1">No Prescribed Lyrics Found</p>
-          <p className="text-xs font-mono text-zinc-600 max-w-xs mx-auto mb-5">
-            Search the clinical archives or enter lyrics manually with timestamps.
+          <p className={`font-display font-black text-lg mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Lyrics Found</p>
+          <p className={`text-xs font-mono max-w-xs mx-auto mb-5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            Search for lyrics online or enter them manually with timestamps.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
@@ -532,7 +536,7 @@ export default function FullPlayerModal({
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-black text-xs rounded-xl brutal-border brutal-shadow-sm brutal-btn cursor-pointer disabled:opacity-50"
             >
               {isGeneratingLyrics ? (
-                <><Loader2 size={15} className="animate-spin" /><span>Searching Archives...</span></>
+                <><Loader2 size={15} className="animate-spin" /><span>Searching Lyrics...</span></>
               ) : (
                 <><Search size={15} /><span>Auto-Search Lyrics</span></>
               )}
@@ -540,9 +544,11 @@ export default function FullPlayerModal({
 
             <button
               onClick={openManualEdit}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110] font-display font-bold text-xs rounded-xl brutal-border brutal-shadow-sm brutal-btn cursor-pointer"
+              className={`inline-flex items-center gap-2 px-4 py-2.5 font-display font-bold text-xs rounded-xl brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110]'
+              }`}
             >
-              <Edit3 size={15} className="text-[#0f756d]" />
+              <Edit3 size={15} className={isDark ? 'text-[#26c4b7]' : 'text-[#0f756d]'} />
               <span>Enter Manually</span>
             </button>
           </div>
@@ -552,19 +558,22 @@ export default function FullPlayerModal({
       {/* Manual Edit Lyrics Modal Overlay */}
       {isManualEditOpen && (
         <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg max-w-lg w-full p-6 text-left relative">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110] mb-4">
+          <div className={`${isDark ? 'bg-[#121212] border-2 border-zinc-700 text-white' : 'bg-[#fdfbf7] brutal-border-thick text-[#0b1110]'} brutal-shadow-lg max-w-lg w-full p-6 text-left relative rounded-2xl`}>
+            <div className={`flex items-center justify-between pb-3 border-b-2 ${isDark ? 'border-zinc-800' : 'border-[#0b1110]'} mb-4`}>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-                <h3 className="text-base font-mono font-black uppercase text-[#082621]">Edit Formulation Lyrics</h3>
+                <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Edit Lyrics</h3>
               </div>
-              <button onClick={() => setIsManualEditOpen(false)} className="brutal-btn p-1 bg-[#ede5d3] brutal-border text-[#0b1110]">
+              <button 
+                onClick={() => setIsManualEditOpen(false)} 
+                className={`brutal-btn p-1.5 rounded-lg ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] brutal-border text-[#0b1110]'}`}
+              >
                 <X size={18} />
               </button>
             </div>
 
-            <p className="text-xs text-[#082621]/70 mb-2 font-sans leading-relaxed">
-              Format timestamps like <code className="bg-[#ede5d3] px-1 py-0.5 brutal-border text-[#082621] font-mono">[0:15]</code> before each line for automated karaoke sync.
+            <p className={`text-xs mb-2 font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              Format timestamps like <code className={`px-1 py-0.5 rounded font-mono ${isDark ? 'bg-zinc-800 text-[#26c4b7] border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-[#082621]'}`}>[0:15]</code> before each line for automated karaoke sync.
             </p>
 
             <textarea
@@ -572,21 +581,29 @@ export default function FullPlayerModal({
               value={manualText}
               onChange={(e) => setManualText(e.target.value)}
               placeholder="[0:00] First Line&#10;[0:12] Second Line..."
-              className="w-full bg-[#ede5d3] brutal-border p-3 text-xs font-mono text-[#0b1110] focus:outline-none focus:bg-white mb-4 resize-none leading-relaxed"
+              className={`w-full p-3 text-xs font-mono rounded-xl focus:outline-none mb-4 resize-none leading-relaxed ${
+                isDark 
+                  ? 'bg-zinc-900 border border-zinc-700 text-white focus:border-[#17a398]' 
+                  : 'bg-[#ede5d3] brutal-border text-[#0b1110] focus:bg-white'
+              }`}
             />
 
             <div className="flex gap-3">
               <button
                 onClick={handleSaveManualLyrics}
                 disabled={isSavingManualLyrics}
-                className="brutal-btn flex-1 py-2.5 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                className="brutal-btn flex-1 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer rounded-xl"
               >
                 {isSavingManualLyrics ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                <span>SAVE LYRICS TRANSCRIPT</span>
+                <span>SAVE LYRICS</span>
               </button>
               <button
                 onClick={() => setIsManualEditOpen(false)}
-                className="brutal-btn px-5 py-2.5 bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm cursor-pointer"
+                className={`brutal-btn px-5 py-2.5 font-mono text-xs font-black uppercase rounded-xl cursor-pointer ${
+                  isDark 
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700' 
+                    : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] brutal-border brutal-shadow-sm'
+                }`}
               >
                 CANCEL
               </button>
@@ -600,10 +617,12 @@ export default function FullPlayerModal({
   const renderQueue = () => (
     <div className="flex-1 overflow-y-auto h-full pr-1 space-y-2">
       {jamSession ? (
-        <div className="mb-3 p-2.5 bg-[#ede5d3] brutal-border rounded-xl flex items-center justify-between">
+        <div className={`mb-3 p-2.5 rounded-xl flex items-center justify-between brutal-border ${
+          isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-[#ede5d3]'
+        }`}>
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-ping" />
-            <p className="text-xs font-mono font-bold uppercase text-[#0b1110]">
+            <p className={`text-xs font-mono font-bold uppercase ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
               Jam Session Queue — {queue.length} Tracks
             </p>
           </div>
@@ -612,20 +631,24 @@ export default function FullPlayerModal({
           </span>
         </div>
       ) : (
-        <div className="flex items-center justify-between pb-2 border-b-2 border-dashed border-[#ded2bb] mb-2">
-          <span className="text-[11px] font-mono font-bold uppercase text-zinc-600">
-            Formulation Queue ({queue.length} Songs)
+        <div className={`flex items-center justify-between pb-2 border-b-2 border-dashed ${
+          isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
+        } mb-2`}>
+          <span className={`text-[11px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+            Queue ({queue.length} Songs)
           </span>
-          <span className="text-[10px] font-mono font-bold bg-[#ede5d3] brutal-border px-1.5 py-0.2 rounded text-zinc-700">
+          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
+            isDark ? 'bg-zinc-800 text-zinc-300 border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-zinc-700'
+          }`}>
             AUDIO QUEUE
           </span>
         </div>
       )}
 
       {queue.length === 0 ? (
-        <div className="py-12 text-center text-zinc-600 text-xs font-mono">
+        <div className={`py-12 text-center text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
           <p className="font-bold">The queue is currently empty.</p>
-          <p className="mt-1 text-zinc-500">Queue up songs from your dispensary or search.</p>
+          <p className={`mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>Queue up songs from your library or search.</p>
         </div>
       ) : (
         queue.map((track, i) => {
@@ -636,8 +659,12 @@ export default function FullPlayerModal({
               onClick={() => !isActive && handleQueueTrackClick(track)}
               className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all brutal-btn ${
                 isActive 
-                  ? 'bg-[#ede5d3] brutal-border brutal-shadow-sm font-black' 
-                  : 'bg-white hover:bg-[#ede5d3] brutal-border'
+                  ? isDark 
+                    ? 'bg-zinc-800 border-2 border-zinc-700 text-white font-black' 
+                    : 'bg-[#ede5d3] brutal-border brutal-shadow-sm font-black' 
+                  : isDark 
+                    ? 'bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300' 
+                    : 'bg-white hover:bg-[#ede5d3] brutal-border'
               }`}
             >
               <div className="relative shrink-0">
@@ -649,10 +676,12 @@ export default function FullPlayerModal({
                 )}
               </div>
               <div className="flex-1 truncate">
-                <p className={`text-xs truncate font-display font-black ${isActive ? 'text-[#0f756d]' : 'text-[#0b1110]'}`}>
+                <p className={`text-xs truncate font-display font-black ${
+                  isActive ? 'text-[#17a398]' : isDark ? 'text-white' : 'text-[#0b1110]'
+                }`}>
                   {track.title}
                 </p>
-                <p className="text-[11px] truncate text-zinc-600 font-sans mt-0.5">{track.artist}</p>
+                <p className={`text-[11px] truncate font-sans mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>{track.artist}</p>
               </div>
 
               {jamSession && onRemoveFromJamQueue && (
@@ -661,7 +690,9 @@ export default function FullPlayerModal({
                     e.stopPropagation();
                     onRemoveFromJamQueue(i, track.id || track._id);
                   }}
-                  className="p-1.5 text-zinc-600 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    isDark ? 'text-zinc-400 hover:text-red-400' : 'text-zinc-600 hover:text-red-600'
+                  }`}
                   title="Remove from Jam Queue"
                 >
                   <Trash2 size={14} />
@@ -669,7 +700,7 @@ export default function FullPlayerModal({
               )}
 
               {!isActive && !jamSession && (
-                <Play size={13} className="text-zinc-600 shrink-0" />
+                <Play size={13} className={`shrink-0 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`} />
               )}
             </div>
           );
@@ -852,49 +883,66 @@ export default function FullPlayerModal({
               <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border">
                 {currentTrack.genre || 'STEREO'}
               </span>
-              <h2 className="text-base sm:text-lg font-display font-black text-[#0b1110] truncate tracking-tight mt-0.5">
+              <h2 className={`text-base sm:text-lg font-display font-black truncate tracking-tight mt-0.5 ${
+                isDark ? 'text-white' : 'text-[#0b1110]'
+              }`}>
                 {currentTrack.title}
               </h2>
-              <p className="text-xs font-bold truncate text-[#0f756d]">
+              <p className={`text-xs font-bold truncate ${
+                isDark ? 'text-zinc-300' : 'text-[#0f756d]'
+              }`}>
                 {currentTrack.artist}
               </p>
             </div>
 
             <button 
               onClick={() => toggleLike(currentTrack.id)}
-              className="p-2 rounded-xl bg-white brutal-border brutal-shadow-sm brutal-btn hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+              className={`p-2 rounded-xl brutal-shadow-sm brutal-btn hover:scale-105 active:scale-95 cursor-pointer shrink-0 ${
+                isDark ? 'bg-[#1c2422] border-2 border-zinc-700 text-white' : 'bg-white brutal-border text-zinc-700'
+              }`}
               title={isTrackLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
             >
               <Heart 
                 size={18} 
                 fill={isTrackLiked ? '#dc2626' : 'none'}
-                className={isTrackLiked ? 'text-[#dc2626]' : 'text-zinc-500'}
+                className={isTrackLiked ? 'text-[#dc2626]' : isDark ? 'text-zinc-400' : 'text-zinc-500'}
               />
             </button>
           </div>
 
           {/* Seekbar */}
           <div className="mb-2 shrink-0">
-            <div 
-              className="relative h-2 w-full rounded-full overflow-hidden cursor-pointer bg-[#ede5d3] brutal-border"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const pct = Math.max(0, Math.min(1, x / rect.width));
-                seekTo(pct * activeDuration);
-              }}
-            >
+            <div className="relative w-full group h-3 flex items-center cursor-pointer">
+              <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+                isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+              }`}>
+                <div 
+                  className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                  style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
+                />
+              </div>
               <div 
-                className="absolute top-0 left-0 h-full bg-[#0b1110]"
-                style={{ 
-                  width: `${progressPercent}%`, 
-                  transition: 'width 0.1s linear'
+                className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
+              />
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={isNaN(progressPercent) ? 0 : progressPercent} 
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  const targetSec = (val / 100) * (activeDuration || 0);
+                  if (seekTo) seekTo(targetSec);
                 }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
               />
             </div>
-            <div className="flex justify-between mt-1 font-mono font-bold text-[10px] text-zinc-600">
-              <span>{formatTime(activeTime)}</span>
-              <span>{formatTime(activeDuration)}</span>
+            <div className={`flex justify-between mt-1 font-mono font-bold text-[10px] ${
+              isDark ? 'text-zinc-400' : 'text-zinc-600'
+            }`}>
+              <span className="tabular-nums">{formatTime(activeTime)}</span>
+              <span className="tabular-nums">{formatTime(activeDuration)}</span>
             </div>
           </div>
 
@@ -902,8 +950,12 @@ export default function FullPlayerModal({
           <div className="flex items-center justify-between mb-2 shrink-0">
             <button 
               onClick={toggleShuffle} 
-              className={`p-1.5 sm:p-2 rounded-xl brutal-border brutal-btn cursor-pointer ${
-                isShuffle ? 'bg-[#17a398] text-[#0b1110] font-bold' : 'bg-white text-zinc-600 hover:bg-[#ede5d3]'
+              className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
+                isShuffle 
+                  ? 'bg-[#17a398] text-[#0b1110] font-bold brutal-border' 
+                  : isDark 
+                    ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
+                    : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
               }`}
               title="Shuffle"
             >
@@ -912,7 +964,11 @@ export default function FullPlayerModal({
 
             <button 
               onClick={playPrev} 
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer ${
+                isDark 
+                  ? 'bg-[#1c2422] hover:bg-[#25302d] text-white border border-zinc-700' 
+                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border'
+              }`}
               title="Previous"
             >
               <SkipBack size={17} fill="currentColor" />
@@ -931,7 +987,11 @@ export default function FullPlayerModal({
 
             <button 
               onClick={playNext} 
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer ${
+                isDark 
+                  ? 'bg-[#1c2422] hover:bg-[#25302d] text-white border border-zinc-700' 
+                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border'
+              }`}
               title="Next"
             >
               <SkipForward size={17} fill="currentColor" />
@@ -939,8 +999,12 @@ export default function FullPlayerModal({
 
             <button 
               onClick={toggleRepeat} 
-              className={`p-1.5 sm:p-2 rounded-xl brutal-border brutal-btn cursor-pointer ${
-                isRepeat ? 'bg-[#dc2626] text-white font-bold' : 'bg-white text-zinc-600 hover:bg-[#ede5d3]'
+              className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
+                isRepeat 
+                  ? 'bg-[#dc2626] text-white font-bold brutal-border' 
+                  : isDark 
+                    ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
+                    : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
               }`}
               title="Repeat"
             >
@@ -962,23 +1026,33 @@ export default function FullPlayerModal({
                 {volume === 0 ? <VolumeX size={15} className="text-red-500" /> : <Volume2 size={15} />}
               </button>
               
-              <div className="relative flex-1 flex items-center">
+              <div className="relative flex-1 group h-3 flex items-center cursor-pointer">
+                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+                  isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+                }`}>
+                  <div 
+                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                    style={{ width: `${Math.min(100, Math.max(0, (volume || 0) * 100))}%` }}
+                  />
+                </div>
+                <div 
+                  className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                  style={{ left: `calc(${Math.min(100, Math.max(0, (volume || 0) * 100))}% - 7px)` }}
+                />
                 <input 
                   type="range" 
                   min="0" 
                   max="1" 
                   step="0.01" 
-                  value={volume || 0}
-                  onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  className={`w-full h-2 ${
-                    isDark ? 'bg-zinc-800 accent-[#17a398]' : 'bg-[#ede5d3] accent-[#0b1110]'
-                  } brutal-border rounded-full appearance-none cursor-pointer`}
+                  value={volume || 0} 
+                  onChange={(e) => setVolume(parseFloat(e.target.value))} 
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
               </div>
 
               <span className={`text-[10px] font-mono font-bold w-6 text-right ${
                 isDark ? 'text-zinc-300' : 'text-zinc-800'
-              } select-none`}>
+              } select-none tabular-nums`}>
                 {Math.round((volume || 0) * 100)}%
               </span>
             </div>
@@ -1025,7 +1099,7 @@ export default function FullPlayerModal({
                       ? 'bg-[#1c2422] hover:bg-[#25302d] text-zinc-300 border border-zinc-700' 
                       : 'bg-white hover:bg-[#ede5d3] text-zinc-700 brutal-border'
                   } brutal-btn cursor-pointer transition-colors disabled:opacity-50`}
-                  title={currentTrack.downloaded ? 'Downloaded ✓' : 'Download Audio Rx'}
+                  title={currentTrack.downloaded ? 'Downloaded ✓' : 'Download Audio'}
                 >
                   {currentTrack.downloaded ? (
                     <CheckCircle2 size={15} className="text-[#17a398]" />
@@ -1098,8 +1172,12 @@ export default function FullPlayerModal({
                     <button
                       onClick={handleTranslateLyrics}
                       disabled={isTranslating}
-                      className={`px-2 py-1 rounded-lg transition-all text-xs font-bold border border-black flex items-center gap-1 ${
-                        showTranslation ? 'text-[#0b1110] bg-[#17a398]' : 'bg-white text-zinc-700 hover:text-black'
+                      className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
+                        showTranslation 
+                          ? 'text-[#0b1110] bg-[#17a398] brutal-border' 
+                          : isDark 
+                            ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                            : 'bg-white text-zinc-700 hover:text-black border border-black'
                       }`}
                       title="Translate Lyrics"
                     >
@@ -1108,14 +1186,22 @@ export default function FullPlayerModal({
                     </button>
                     <button
                       onClick={openManualEdit}
-                      className="p-1.5 bg-white text-zinc-700 hover:text-black border border-black rounded-lg transition-colors"
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      }`}
                       title="Edit Lyrics"
                     >
                       <Edit3 size={14} />
                     </button>
                     <button
                       onClick={() => setIsClearLyricsConfirmOpen(true)}
-                      className="p-1.5 bg-white text-zinc-700 hover:text-red-500 border border-black rounded-lg transition-colors"
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                      }`}
                       title="Clear Lyrics"
                     >
                       <Trash2 size={14} />

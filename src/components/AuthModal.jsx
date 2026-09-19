@@ -57,7 +57,7 @@ export default function AuthModal({ isOpen, onClose }) {
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-[#17a398] brutal-border" />
             <h2 className="text-xs font-mono font-black uppercase text-[#082621]">
-              {currentUser ? 'PATIENT DOSSIER' : mode === 'login' ? 'PATIENT SIGN IN' : 'NEW PATIENT REGISTRATION'}
+              {currentUser ? 'USER PROFILE' : mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT'}
             </h2>
           </div>
           <button onClick={onClose} className="brutal-btn p-1 bg-[#fdfbf7] brutal-border hover:bg-[#ede5d3] text-[#0b1110]">
@@ -89,7 +89,7 @@ export default function AuthModal({ isOpen, onClose }) {
               </div>
 
               <div className="w-full text-center text-[10px] font-mono font-black py-1.5 px-3 bg-[#ede5d3] text-[#082621] brutal-border">
-                ✓ RIVO CERTIFIED CLINICAL PATIENT
+                ✓ VERIFIED LIOFY MEMBER
               </div>
 
               <button
@@ -97,7 +97,7 @@ export default function AuthModal({ isOpen, onClose }) {
                 className="brutal-btn w-full py-2.5 flex items-center justify-center gap-2 text-xs font-mono font-black uppercase text-[#dc2626] bg-red-50 hover:bg-red-100 brutal-border brutal-shadow-sm transition-all cursor-pointer"
               >
                 <LogOut size={14} />
-                <span>TERMINATE DISPENSARY SESSION</span>
+                <span>LOG OUT</span>
               </button>
             </div>
 
@@ -168,7 +168,7 @@ export default function AuthModal({ isOpen, onClose }) {
                   ? <Loader2 size={15} className="animate-spin" />
                   : mode === 'login' ? <LogIn size={15} /> : <UserPlus size={15} />
                 }
-                <span>{isLoading ? 'VERIFYING...' : mode === 'login' ? 'ACCESS DISPENSARY' : 'REGISTER PATIENT'}</span>
+                <span>{isLoading ? 'VERIFYING...' : mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT'}</span>
               </button>
 
               <button
@@ -177,8 +177,8 @@ export default function AuthModal({ isOpen, onClose }) {
                 className="text-xs font-mono font-bold text-[#17a398] hover:underline text-center mt-1"
               >
                 {mode === 'login'
-                  ? "No medical registration? Create Patient ID"
-                  : 'Already registered? Sign In to Dispensary'
+                  ? "Don't have an account? Sign Up"
+                  : 'Already have an account? Sign In'
                 }
               </button>
             </form>

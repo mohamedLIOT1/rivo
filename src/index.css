@@ -549,6 +549,7 @@ input[type=range] {
   border-radius: 9999px;
   cursor: pointer;
   height: 6px;
+  accent-color: #17a398;
 }
 input[type=range]:focus {
   outline: none;
@@ -587,6 +588,24 @@ input[type=range]:hover::-webkit-slider-thumb,
 input[type=range]:active::-webkit-slider-thumb {
   transform: scale(1.15);
   background: #ffffff;
+}
+
+/* Custom transparent range overlays for layered sliders */
+input[type=range].opacity-0 {
+  opacity: 0 !important;
+  background: transparent !important;
+}
+input[type=range].opacity-0::-webkit-slider-runnable-track {
+  background: transparent !important;
+}
+input[type=range].opacity-0::-moz-range-track {
+  background: transparent !important;
+}
+input[type=range].opacity-0::-webkit-slider-thumb {
+  opacity: 0 !important;
+}
+input[type=range].opacity-0::-moz-range-thumb {
+  opacity: 0 !important;
 }
 
 /* =============================================

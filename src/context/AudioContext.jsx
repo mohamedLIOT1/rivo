@@ -147,6 +147,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const lastLoadedIdRef   = useRef(null);  // Last track ID loaded (detects actual track change vs metadata update)
   const isTransitionTriggeredRef = useRef(false);
   const isSeamlessYtHandoffRef   = useRef(false);
+  const watchdogRef       = useRef(null);
   const playNextTrackRef  = useRef(null);
   const playPrevTrackRef  = useRef(null);
 
@@ -218,6 +219,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // ── Spotify Mix: Real Audio DJ Transition Execution Engine ───────
   const checkAndRunDjTransition = useCallback((cTime, dur) => {
+    if (!isPlayingRef.current) return;
     if (!dur || isNaN(cTime)) return;
 
     const remaining = dur - cTime;
@@ -444,6 +446,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       clearInterval(ytIntervalRef.current);
       ytIntervalRef.current = null;
     }
+    if (watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
   }, []);
 
   const stopHtmlAudio = useCallback(() => {
@@ -491,10 +497,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         stopYouTube();
       }
     };
-    // If audio gets stuck/stalled, try to resume
+    // If audio gets stuck/stalled, try to resume (only if actively playing)
     const handleStalled = () => {
-      if (!isYtTrackRef.current) {
+      if (!isYtTrackRef.current && isPlayingRef.current) {
         setTimeout(() => {
+          if (!isPlayingRef.current) return;
           resumeAudioContext();
           audio.play().catch(() => {});
         }, 500);
@@ -502,12 +509,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
     const handleError = () => {
       audio.crossOrigin = null;
+      if (!isPlayingRef.current && !shouldPlayRef.current) return;
       const cur = currentTrackRef.current;
       if (cur && (cur.title || cur.artist) && !cur._retryDone) {
         cur._retryDone = true;
         fetch(`${API_BASE_URL}/api/soundcloud/stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
           .then(r => r.json())
           .then(d => {
+            if (!isPlayingRef.current && !shouldPlayRef.current) return;
             if (d.success && d.url && audio) {
               stopYouTube();
               audio.src = d.url;
@@ -538,6 +547,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const fallbackToHtmlAudio = useCallback(async (track) => {
     if (!track) return;
+    if (!isPlayingRef.current && !shouldPlayRef.current) return;
     isYtTrackRef.current = false;
     setIsYtTrack(false);
     stopYouTube();
@@ -547,6 +557,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const qArtist = encodeURIComponent(track.artist || '');
       const res = await fetch(`${API_BASE_URL}/api/soundcloud/fallback?title=${qTitle}&artist=${qArtist}`);
       const d = await res.json();
+      if (!isPlayingRef.current && !shouldPlayRef.current) return;
       if (d.success && d.url && audioRef.current) {
         stopYouTube(); // Double check YouTube is completely silenced
         audioRef.current.src = d.url;
@@ -751,7 +762,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentTime(0);
       setDuration(currentTrack.duration || 210);
 
-      let watchdog = null;
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
       const loadYt = () => {
         const actPlayer = getActiveYtPlayer();
         const secPlayer = getSecondaryYtPlayer();
@@ -767,7 +781,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
         try {
           actPlayer.setVolume(volumeRef.current * 100);
-          if (shouldPlayRef.current || isPlaying) {
+          if (shouldPlayRef.current || isPlayingRef.current) {
             shouldPlayRef.current = false;
             actPlayer.unMute();
             actPlayer.loadVideoById(ytId);
@@ -780,7 +794,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
         } catch (e) {
           console.warn('[YT] loadVideoById error:', e);
-          if (shouldPlayRef.current || isPlaying) {
+          if (shouldPlayRef.current || isPlayingRef.current) {
             fallbackToHtmlAudio(currentTrack);
           }
         }
@@ -788,23 +802,28 @@ export function AudioProvider({ children, tracks, setTracks }) {
       loadYt();
 
       // Only arm watchdog if playback was actively requested
-      if (shouldPlayRef.current || isPlaying) {
-        watchdog = setTimeout(() => {
+      if (shouldPlayRef.current || isPlayingRef.current) {
+        watchdogRef.current = setTimeout(() => {
+          if (!isPlayingRef.current) return;
           const actPlayer = getActiveYtPlayer();
           if (isYtTrackRef.current && actPlayer) {
             try {
               const state = actPlayer.getPlayerState();
-              if (state !== 1 && state !== 3) {
-                console.warn('[YT] Watchdog: YouTube not playing after 6s, falling back to audio stream');
-                fallbackToHtmlAudio(currentTrack);
-              }
+              // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
+              // If playing (1), buffering (3), or paused (2), DO NOT fallback!
+              if (state === 1 || state === 2 || state === 3) return;
+              console.warn('[YT] Watchdog: YouTube not playing after 6s, falling back to audio stream');
+              fallbackToHtmlAudio(currentTrack);
             } catch {}
           }
         }, 6000);
       }
 
       return () => {
-        if (watchdog) clearTimeout(watchdog);
+        if (watchdogRef.current) {
+          clearTimeout(watchdogRef.current);
+          watchdogRef.current = null;
+        }
       };
 
     } else {
@@ -872,7 +891,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   }
                   try {
                     actPlayer.setVolume(volumeRef.current * 100);
-                    if (isPlaying || shouldPlayRef.current) {
+                    if (isPlayingRef.current || shouldPlayRef.current) {
                       shouldPlayRef.current = false;
                       actPlayer.unMute();
                       actPlayer.loadVideoById(ytId);
@@ -899,7 +918,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 if (audio) {
                   audio.src = freshUrl;
                   audio.volume = volumeRef.current;
-                  if (shouldPlayRef.current || isPlaying) {
+                  if (shouldPlayRef.current || isPlayingRef.current) {
                     audio.play().catch(e => console.warn('Stream play error:', e));
                   }
                 }
@@ -918,13 +937,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (audio.src !== targetUrl) { audio.src = targetUrl; }
         audio.volume = volumeRef.current;
 
-        if (isPlaying || shouldPlayRef.current) {
+        if (isPlayingRef.current || shouldPlayRef.current) {
           shouldPlayRef.current = false;
           const playPromise = audio.play();
           if (playPromise !== undefined) {
             playPromise.catch(e => {
               console.warn('[Audio] play() blocked on phone, will retry on next gesture:', e.name);
               const retryPlay = () => {
+                if (!isPlayingRef.current) return;
                 resumeAudioContext();
                 audio.play().catch(() => {});
                 document.removeEventListener('touchstart', retryPlay);
@@ -1018,6 +1038,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     resumeAudioContext();
     const nextPlaying = !isPlayingRef.current;
     setIsPlaying(nextPlaying);
+
+    if (!nextPlaying && watchdogRef.current) {
+      clearTimeout(watchdogRef.current);
+      watchdogRef.current = null;
+    }
 
     if (!isRemote && jamSessionRef.current && socketRef.current) {
       socketRef.current.emit('jam:sync_play_state', {

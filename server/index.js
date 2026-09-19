@@ -513,15 +513,18 @@ app.post('/api/auth/update-profile', auth, async (req, res) => {
 app.get('/api/users/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
-    if (!q || q.length < 2) return res.json({ success: true, users: [] });
+    let queryFilter = {};
+
+    if (q) {
+      if (q.length < 2) return res.json({ success: true, users: [] });
+      queryFilter = { name: { $regex: q, $options: 'i' } };
+    }
 
     // Search ONLY by name, NEVER search or expose email
-    const users = await User.find({
-      name: { $regex: q, $options: 'i' }
-    })
-    .select('_id name avatar bio playlists followers following')
-    .limit(20)
-    .lean();
+    const users = await User.find(queryFilter)
+      .select('_id name avatar bio playlists followers following')
+      .limit(24)
+      .lean();
 
     const sanitized = users.map(u => ({
       id: String(u._id),

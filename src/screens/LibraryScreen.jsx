@@ -42,10 +42,10 @@ export default function LibraryScreen({
             <h1 className={`text-3xl font-display font-black tracking-tight ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1.5px_1.5px_0px_#082621]'
             }`}>
-              Dispensary Formulations
+              Your Library
             </h1>
             <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-              RX-VAULT
+              LIBRARY
             </span>
           </div>
 
@@ -54,10 +54,10 @@ export default function LibraryScreen({
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
               isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
             }`}
-            title="Formulate New Pack"
+            title="Create Playlist"
           >
             <Plus size={16} strokeWidth={2.5} />
-            <span className="hidden sm:inline">New Blister Pack</span>
+            <span className="hidden sm:inline">New Playlist</span>
           </button>
         </div>
 
@@ -65,9 +65,9 @@ export default function LibraryScreen({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 overflow-x-auto">
             {[
-              { id: 'all', label: 'All Packs' },
-              { id: 'playlists', label: 'Blister Packs' },
-              { id: 'downloads', label: 'Offline Capsules' },
+              { id: 'all', label: 'All' },
+              { id: 'playlists', label: 'Playlists' },
+              { id: 'downloads', label: 'Downloaded' },
             ].map((f) => {
               const active = filter === f.id;
               return (
@@ -95,7 +95,7 @@ export default function LibraryScreen({
             />
             <input
               type="text"
-              placeholder="Search packs..."
+              placeholder="Search library..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className={`w-full text-xs font-bold pl-9 pr-3 py-2 rounded-lg brutal-border focus:outline-none ${
@@ -144,7 +144,7 @@ export default function LibraryScreen({
                       </span>
                     )}
                     <span className="absolute bottom-1 right-1 text-[8px] font-mono font-bold bg-black/70 text-white px-1 rounded">
-                      {count} DOSES
+                      {count} SONGS
                     </span>
                   </div>
 
@@ -152,7 +152,7 @@ export default function LibraryScreen({
                     {pl.name}
                   </p>
                   <p className={`text-[10px] font-bold truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                    {pl.isLikedSongs ? 'Favorites • Prescriptions' : 'Blister Pack Formulation'}
+                    {pl.isLikedSongs ? 'Favorites' : 'Playlist'}
                   </p>
                 </div>
               </div>
@@ -161,7 +161,7 @@ export default function LibraryScreen({
         </div>
       )}
 
-      {/* ── Downloads / Offline Capsules Section ── */}
+      {/* ── Downloads Section ── */}
       {(filter === 'all' || filter === 'downloads') && downloadedTracks.length > 0 && (
         <section className="mt-4 mb-6">
           <div className="flex items-center gap-2 mb-3">
@@ -169,7 +169,7 @@ export default function LibraryScreen({
             <h2 className={`font-display font-black text-xl ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
             }`}>
-              Offline Capsules ({downloadedTracks.length})
+              Downloaded Songs ({downloadedTracks.length})
             </h2>
           </div>
 
@@ -208,16 +208,16 @@ export default function LibraryScreen({
           isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
         }`}>
           <p className="font-display font-black text-base mb-1">
-            No Blister Packs Found
+            No Playlists Found
           </p>
           <p className={`text-xs font-medium mb-4 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Formulate your first playlist to organize your daily sound dosages.
+            Create your first playlist to organize your favorite tracks.
           </p>
           <button
             onClick={openCreatePlaylistModal}
             className="px-4 py-2 bg-[#17a398] text-[#0b1110] font-display font-bold text-xs rounded-xl brutal-border brutal-shadow brutal-btn cursor-pointer"
           >
-            + Create Blister Pack
+            + Create Playlist
           </button>
         </div>
       )}

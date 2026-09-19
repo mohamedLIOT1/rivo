@@ -114,7 +114,7 @@ export default function MiniPlayer({
               <p className={`text-[10px] font-bold truncate mt-0.5 ${
                 isDark ? 'text-zinc-400' : 'text-zinc-600'
               }`}>
-                {currentTrack.artist || 'Unknown Compounder'}
+                {currentTrack.artist || 'Unknown Artist'}
               </p>
             </div>
           </div>
@@ -129,73 +129,52 @@ export default function MiniPlayer({
               className={`p-1.5 cursor-pointer ${
                 isTrackLiked ? 'text-[#dc2626]' : 'text-zinc-400 hover:text-[#dc2626]'
               }`}
-              title={isTrackLiked ? "Saved in Rx Library" : "Save in Rx Library"}
             >
               <Heart size={18} fill={isTrackLiked ? 'currentColor' : 'none'} strokeWidth={2.5} />
             </button>
-
             <button 
-              onClick={togglePlay}
-              className="w-9 h-9 rounded-xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer" 
-              title={isPlaying ? "Pause" : "Play"}
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePlay();
+              }}
+              className="w-9 h-9 rounded-xl bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
             >
-              {isPlaying ? (
-                <Pause size={16} fill="currentColor" />
-              ) : (
-                <Play size={16} fill="currentColor" className="ml-0.5" />
-              )}
-            </button>
-
-            <button 
-              onClick={playNext}
-              className={`w-8 h-8 rounded-lg brutal-border flex items-center justify-center brutal-btn cursor-pointer ${
-                isDark 
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' 
-                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
-              }`} 
-              title="Next"
-            >
-              <SkipForward size={14} fill="currentColor" />
+              {isPlaying 
+                ? <Pause size={17} fill="currentColor" /> 
+                : <Play size={17} fill="currentColor" className="ml-0.5" />
+              }
             </button>
           </div>
         </div>
 
-        {/* ─────────────────────────────────────────
-            DESKTOP CASSETTE DECK (>= md)
-            ───────────────────────────────────────── */}
-        <div className="hidden md:flex max-w-7xl mx-auto h-full items-center justify-between gap-4">
+        {/* =========================================
+            DESKTOP PLAYER LAYOUT
+            ========================================= */}
+        <div className="hidden md:flex items-center justify-between h-full px-6 gap-4">
           
-          {/* LEFT: Track Info & Medical Badge */}
-          <div className="w-1/3 flex items-center gap-2.5 sm:gap-3 min-w-0">
-            {/* Vinyl / Cassette Art box */}
+          {/* LEFT: Cover art & track metadata */}
+          <div className="flex items-center gap-3.5 w-3/12 min-w-0">
             <div 
-              onClick={openFullPlayer}
-              className="w-11 h-11 sm:w-12 sm:h-12 bg-[#0b1110] text-[#17a398] rounded-lg brutal-border flex items-center justify-center shrink-0 brutal-shadow-sm relative overflow-hidden cursor-pointer group"
-              title="Click for Full Cassette Inspection"
+              onClick={openFullPlayer} 
+              className="relative w-12 h-12 rounded-xl brutal-border overflow-hidden shrink-0 group cursor-pointer"
             >
-              {currentTrack.cover ? (
-                <img 
-                  src={currentTrack.cover} 
-                  alt={currentTrack.title} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                />
-              ) : (
-                <svg className="w-6 h-6 sm:w-7 sm:h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="2" y="4" width="20" height="16" rx="2"></rect>
-                  <circle cx="8" cy="10" r="2"></circle>
-                  <circle cx="16" cy="10" r="2"></circle>
-                  <path d="M8 14h8"></path>
-                </svg>
-              )}
+              <img 
+                src={currentTrack.cover} 
+                alt={currentTrack.title} 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+              />
+              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Maximize2 size={16} className="text-white" />
+              </div>
             </div>
 
-            <div className="min-w-0 flex-1 cursor-pointer" onClick={openFullPlayer}>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[9px] font-mono font-bold bg-[#dc2626] text-white px-1.5 py-0.2 rounded brutal-border">
-                  ACTIVE DOSE
-                </span>
-                <span className="text-[9px] font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border truncate max-w-[120px]">
-                  {currentTrack.genre || 'RIVO-RX'}
+            <div 
+              onClick={openFullPlayer} 
+              className="min-w-0 flex-1 cursor-pointer select-none"
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="text-[8px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1 py-0.2 rounded brutal-border">
+                  {currentTrack.genre || 'STEREO'}
                 </span>
               </div>
               <h4 className={`font-display font-black text-xs sm:text-sm truncate leading-tight mt-0.5 hover:underline ${
@@ -206,7 +185,7 @@ export default function MiniPlayer({
               <p className={`text-[10px] sm:text-[11px] font-bold truncate ${
                 isDark ? 'text-zinc-400' : 'text-zinc-600'
               }`}>
-                {currentTrack.artist || 'Unknown Compounder'}
+                {currentTrack.artist || 'Unknown Artist'}
               </p>
             </div>
 
@@ -219,12 +198,12 @@ export default function MiniPlayer({
               className={`p-1.5 transition-transform hover:scale-110 active:scale-95 cursor-pointer ${
                 isTrackLiked ? 'text-[#dc2626]' : 'text-zinc-400 hover:text-[#dc2626]'
               }`}
-              title={isTrackLiked ? "Saved in Rx Library" : "Save in Rx Library"}
+              title={isTrackLiked ? "Saved in Liked Songs" : "Save to Liked Songs"}
             >
               <Heart size={18} fill={isTrackLiked ? 'currentColor' : 'none'} strokeWidth={2.5} />
             </button>
 
-            {/* Prescription details modal trigger */}
+            {/* Song details modal trigger */}
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -233,7 +212,7 @@ export default function MiniPlayer({
               className={`p-1.5 transition cursor-pointer ${
                 isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
               }`} 
-              title="View Prescription Details"
+              title="View Song Details"
             >
               <FileText size={18} strokeWidth={2.5} />
             </button>
@@ -248,7 +227,7 @@ export default function MiniPlayer({
                 className={`p-1.5 transition cursor-pointer ${
                   isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`} 
-                title="Add to Blister Pack"
+                title="Add to Playlist"
               >
                 <PlusCircle size={18} strokeWidth={2.5} />
               </button>
@@ -284,7 +263,7 @@ export default function MiniPlayer({
               <button 
                 onClick={togglePlay}
                 className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border-thick flex items-center justify-center brutal-shadow brutal-btn cursor-pointer" 
-                title={isPlaying ? "Pause Dose" : "Dispense Dose"}
+                title={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
                   <Pause size={18} fill="currentColor" />
@@ -320,20 +299,32 @@ export default function MiniPlayer({
             <div className={`w-full flex items-center gap-2 text-[10px] sm:text-[11px] font-mono font-bold ${
               isDark ? 'text-zinc-400' : 'text-zinc-700'
             }`}>
-              <span className="w-8 text-right">{formatTime(currentTime)}</span>
-              <div className="relative flex-1 flex items-center">
+              <span className="w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
+              <div className="relative flex-1 group h-3 flex items-center cursor-pointer">
+                {/* Track background & vibrant active fill */}
+                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+                  isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+                }`}>
+                  <div 
+                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                    style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
+                  />
+                </div>
+                {/* Tactile thumb knob */}
+                <div 
+                  className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                  style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
+                />
                 <input 
                   type="range" 
                   min="0" 
                   max="100" 
                   value={isNaN(progressPercent) ? 0 : progressPercent} 
                   onChange={handleSeek}
-                  className={`w-full h-2 rounded-lg appearance-none cursor-pointer brutal-border ${
-                    isDark ? 'bg-zinc-800 border-zinc-700 accent-[#17a398]' : 'bg-[#ede5d3] accent-[#0b1110]'
-                  }`}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
               </div>
-              <span className="w-8">{formatTime(duration)}</span>
+              <span className="w-8 tabular-nums">{formatTime(duration)}</span>
             </div>
           </div>
 
@@ -352,23 +343,33 @@ export default function MiniPlayer({
               >
                 {volume === 0 ? <VolumeX size={15} className="text-red-500" /> : <Volume2 size={15} />}
               </button>
-              <div className="relative flex items-center">
+              <div className="relative w-16 lg:w-20 group h-3 flex items-center cursor-pointer">
+                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border ${
+                  isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+                }`}>
+                  <div 
+                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
+                    style={{ width: `${Math.min(100, Math.max(0, (volume || 0) * 100))}%` }}
+                  />
+                </div>
+                <div 
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                  style={{ left: `calc(${Math.min(100, Math.max(0, (volume || 0) * 100))}% - 6px)` }}
+                />
                 <input 
                   type="range" 
                   min="0" 
                   max="1" 
                   step="0.01" 
-                  value={volume} 
+                  value={volume || 0} 
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
-                  className={`w-16 lg:w-20 h-2 brutal-border rounded-full appearance-none cursor-pointer ${
-                    isDark ? 'bg-zinc-800 border-zinc-700 accent-[#17a398]' : 'bg-[#ede5d3] accent-[#0b1110]'
-                  }`}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
               </div>
               <span className={`text-[10px] font-mono font-bold w-6 text-right select-none ${
                 isDark ? 'text-zinc-400' : 'text-zinc-700'
               }`}>
-                {Math.round(volume * 100)}%
+                {Math.round((volume || 0) * 100)}%
               </span>
             </div>
 
@@ -392,7 +393,7 @@ export default function MiniPlayer({
             <div className="border-b-2 border-black pb-3 mb-3 flex justify-between items-start">
               <div>
                 <span className="text-[10px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-2 py-0.5 rounded uppercase brutal-border">
-                  CLINICAL AUDIT RECORD
+                  TRACK DETAILS
                 </span>
                 <h3 className="font-display font-black text-xl mt-1">
                   {currentTrack.title}
@@ -408,21 +409,21 @@ export default function MiniPlayer({
 
             <div className="space-y-3 text-xs">
               <div className="bg-white p-3 rounded-lg brutal-border space-y-1">
-                <div className="font-bold text-zinc-500 font-mono">ACTIVE CHEMICAL INGREDIENTS:</div>
+                <div className="font-bold text-zinc-500 font-mono">ARTIST & ALBUM:</div>
                 <p className="font-semibold text-zinc-800">
-                  {currentTrack.artist || 'Egyptian Compound'} • 100% Cairo Rhythms • Analog Synths
+                  {currentTrack.artist || 'Unknown Artist'} {currentTrack.album ? `• ${currentTrack.album}` : ''}
                 </p>
               </div>
 
               <div className="bg-white p-3 rounded-lg brutal-border space-y-1">
-                <div className="font-bold text-zinc-500 font-mono">PROJECTED PHYSIOLOGICAL EFFECTS:</div>
+                <div className="font-bold text-zinc-500 font-mono">AUDIO QUALITY:</div>
                 <p className="font-semibold text-zinc-800">
-                  Accelerated workflow velocity, involuntary head nodding, instant mitigation of server errors.
+                  High-Fidelity 24-Bit Stereo • Lossless Audio Streaming
                 </p>
               </div>
 
               <div className="p-2.5 bg-[#ded2bb] rounded border border-dashed border-black text-[11px] font-mono font-bold text-zinc-800">
-                Certified by Rivo Apothecary Union • Batch No. 1954-CAIRO
+                Liofy Hi-Fi Audio Player
               </div>
             </div>
 
@@ -431,7 +432,7 @@ export default function MiniPlayer({
                 onClick={() => setIsPrescriptionModalOpen(false)}
                 className="bg-[#0b1110] text-[#fdfbf7] font-display font-bold text-xs px-5 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer"
               >
-                Close Inspection
+                Close
               </button>
             </div>
           </div>

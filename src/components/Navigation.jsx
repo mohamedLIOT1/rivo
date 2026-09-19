@@ -25,16 +25,16 @@ export default function Navigation({
   const [libraryFilter, setLibraryFilter] = useState('all');
 
   const mainNavItems = [
-    { id: 'home', label: 'Dispensary Home', icon: Home },
-    { id: 'search', label: 'Search Rx', icon: Search },
-    { id: 'mixes', label: 'Rivo DJ Mix', icon: Radio },
-    { id: 'stats', label: 'Dose History', icon: Disc },
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'search', label: 'Search', icon: Search },
+    { id: 'mixes', label: 'DJ Mix', icon: Radio },
+    { id: 'stats', label: 'Stats & History', icon: Disc },
   ];
 
   const mobileNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Dispensary', icon: Disc },
+    { id: 'library', label: 'Library', icon: Disc },
     { id: 'mixes', label: 'DJ Mix', icon: Radio },
   ];
 
@@ -165,13 +165,13 @@ export default function Navigation({
                 isDark ? 'text-zinc-200' : 'text-[#0b1110]'
               }`}>
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>Your Dispensary</span>
+                <span>Your Library</span>
               </div>
 
               <div className="flex items-center gap-1">
                 <button
                   onClick={openImportPlaylistModal}
-                  title="Import Prescription Pack"
+                  title="Import Playlist"
                   className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
                     isDark 
                       ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-zinc-200' 
@@ -182,7 +182,7 @@ export default function Navigation({
                 </button>
                 <button
                   onClick={openCreatePlaylistModal}
-                  title="New Blister Pack"
+                  title="New Playlist"
                   className="w-6 h-6 rounded brutal-border bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] flex items-center justify-center font-bold text-xs transition brutal-shadow-sm"
                 >
                   +
@@ -212,9 +212,9 @@ export default function Navigation({
               })}
             </div>
 
-            {/* Playlists / Blister Packs List */}
+            {/* Playlists List */}
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs font-bold">
-              {/* Liked Songs Pack */}
+              {/* Liked Songs */}
               <div
                 onClick={() => setCurrentScreen('library')}
                 className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
@@ -229,12 +229,12 @@ export default function Navigation({
                   </div>
                   <div className="truncate">
                     <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
-                      Liked Prescriptions
+                      Liked Songs
                     </div>
                     <span className="text-[10px] font-mono text-zinc-500 font-normal">Favorites</span>
                   </div>
                 </div>
-                <span className="text-[9px] font-mono text-zinc-400 font-bold">RX</span>
+                <span className="text-[9px] font-mono text-zinc-400 font-bold">AUTO</span>
               </div>
 
               {filteredPlaylists.map((pl, idx) => {
@@ -272,14 +272,14 @@ export default function Navigation({
                       <div className="truncate">
                         <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>{pl.name}</div>
                         <span className="text-[10px] font-mono text-zinc-500 font-normal">
-                          {count} {count === 1 ? 'dose' : 'doses'}
+                          {count} {count === 1 ? 'song' : 'songs'}
                         </span>
                       </div>
                     </div>
                     <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
                       isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
                     }`}>
-                      PACK
+                      LIST
                     </span>
                   </div>
                 );
@@ -289,35 +289,35 @@ export default function Navigation({
                 <div className={`p-3 text-center rounded-lg border border-dashed ${
                   isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
                 }`}>
-                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>No Blister Packs yet</p>
+                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>No playlists yet</p>
                   <button
                     onClick={openCreatePlaylistModal}
                     className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
                   >
-                    + Formulate Pack
+                    + Create Playlist
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Pharmaceutical Certification Badge */}
+            {/* Quality Guarantee Badge */}
             <div className={`mt-2 p-2.5 rounded-xl brutal-border text-center shrink-0 ${
               isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-[#0b1110]'
             }`}>
               <div className={`text-[10px] font-display font-black tracking-wide ${
                 isDark ? 'text-zinc-200' : 'text-[#0b1110]'
               }`}>
-                CLINICALLY PROVEN
+                HI-FI AUDIO QUALITY
               </div>
               <p className={`text-[9px] leading-snug mt-0.5 font-medium ${
                 isDark ? 'text-zinc-400' : 'text-zinc-700'
               }`}>
-                0% buffering • 100% pure audio flow
+                High fidelity • Seamless streaming
               </p>
               <div className={`text-[8px] font-mono font-bold pt-1 ${
                 isDark ? 'text-zinc-500' : 'text-zinc-600'
               }`}>
-                BATCH NO. 54-CAIRO
+                LIOFY MUSIC
               </div>
             </div>
 
@@ -350,7 +350,7 @@ export default function Navigation({
                   <span className={`inline-flex items-center text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded brutal-border leading-none ${
                     currentUser ? 'bg-[#17a398] text-[#0b1110]' : 'bg-[#f59e0b] text-[#0b1110]'
                   }`}>
-                    {currentUser ? 'ACTIVE RX' : 'GUEST'}
+                    {currentUser ? 'ONLINE' : 'GUEST'}
                   </span>
                 </div>
               </div>
@@ -359,7 +359,7 @@ export default function Navigation({
             {openShortcutsModal && (
               <button
                 onClick={openShortcutsModal}
-                title="Prescription Shortcuts (?)"
+                title="Keyboard Shortcuts (?)"
                 className={`w-9 h-9 rounded-lg brutal-border flex items-center justify-center transition shrink-0 cursor-pointer ${
                   isDark 
                     ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white' 

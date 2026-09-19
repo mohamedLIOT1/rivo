@@ -86,7 +86,7 @@ export default function ListeningActivityPanel({
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 bg-[#17a398] brutal-border" />
             <h3 className="text-xs font-mono font-black uppercase">
-              PATIENT RADAR LOGS
+              FRIEND ACTIVITY
             </h3>
             <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7]">
               {activities.length}
@@ -197,9 +197,9 @@ export default function ListeningActivityPanel({
           ) : (
             <div className="text-center py-10 px-3">
               <Users size={30} className={`mx-auto mb-2 ${isDark ? 'text-zinc-600' : 'text-[#082621]/40'}`} />
-              <h4 className={`text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>NO PEER RADAR DATA</h4>
+              <h4 className={`text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>NO FRIEND ACTIVITY</h4>
               <p className={`text-[11px] font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                Connect with fellow dispensary patients to track their active sound dosages in real-time.
+                Follow other users to see what they are listening to in real-time.
               </p>
             </div>
           )}
@@ -209,7 +209,7 @@ export default function ListeningActivityPanel({
         <div className={`p-2.5 border-t-2 flex items-center justify-between text-[11px] font-mono ${
           isDark ? 'bg-[#141d1b] border-zinc-800 text-zinc-400' : 'bg-[#ede5d3] border-[#0b1110] text-[#082621]/70'
         }`}>
-          <span className="font-bold">RIVO SYNC v2.4</span>
+          <span className="font-bold">LIOFY SYNC</span>
           <button
             onClick={() => openChatModal?.()}
             className={`flex items-center gap-1 font-black uppercase cursor-pointer ${
@@ -217,7 +217,7 @@ export default function ListeningActivityPanel({
             }`}
           >
             <MessageSquare size={12} />
-            <span>DISPENSARY CHAT</span>
+            <span>CHAT</span>
           </button>
         </div>
       </aside>

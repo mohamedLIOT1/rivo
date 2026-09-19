@@ -33,11 +33,11 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
           <div className="flex items-center gap-2">
             <Activity className="text-[#17a398]" size={22} />
             <h1 className={`text-2xl md:text-4xl font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-              CLINICAL CONSUMPTION METRICS
+              LISTENING ACTIVITY & STATS
             </h1>
           </div>
           <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-            Official dosage and acoustic audit logs recorded strictly by Rivo Dispensary
+            Your streaming and listening stats on Liofy
           </p>
         </div>
 
@@ -45,7 +45,7 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
           isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
         }`}>
           <Flame size={15} className="text-[#dc2626]" />
-          <span>VERIFIED LOGS</span>
+          <span>VERIFIED STATS</span>
         </div>
       </div>
 
@@ -65,20 +65,20 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
               <div className="relative z-10 truncate">
                 <span className="text-[10px] uppercase font-mono font-black text-[#17a398] flex items-center gap-1">
                   <Trophy size={13} />
-                  <span>PREMIER PATIENT OF THE WEEK</span>
+                  <span>TOP LISTENER OF THE WEEK</span>
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <h3 className={`text-xl font-display font-black truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>{currentUser.name}</h3>
                   <VerifiedBadge userOrName={currentUser} size={18} />
                 </div>
                 <p className={`text-xs font-mono mt-1 font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
-                  {userMinutes} DOSAGE MINUTES RECORDED
+                  {userMinutes} MINUTES STREAMED
                 </p>
               </div>
             </>
           ) : (
             <div className={`py-4 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              NO CLINICAL ACTIVITY RECORDED YET. DISPENSE A CASSETTE TO GENERATE METRICS!
+              NO LISTENING ACTIVITY RECORDED YET. PLAY SONGS TO GENERATE STATS!
             </div>
           )}
         </div>
@@ -95,17 +95,17 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
               <div className="relative z-10 truncate">
                 <span className="text-[10px] uppercase font-mono font-black text-[#f59e0b] flex items-center gap-1">
                   <Flame size={13} />
-                  <span>MOST PRESCRIBED COMPOSITION</span>
+                  <span>MOST STREAMED TRACK</span>
                 </span>
                 <h3 className="text-xl font-display font-black text-[#fdfbf7] truncate mt-1">{topTrack.title}</h3>
                 <p className="text-xs font-mono text-[#ded2bb] mt-1 font-bold">
-                  {topTrack.artist} • {topTrack.plays || 0} TOTAL DOSES
+                  {topTrack.artist} • {topTrack.plays || 0} PLAYS
                 </p>
               </div>
             </>
           ) : (
             <div className="py-4 text-[#ded2bb] text-xs font-mono">
-              NO TRACKS STREAMED YET. START LISTENING TO IDENTIFY TOP FORMULATION!
+              NO TRACKS STREAMED YET. START LISTENING TO DISCOVER YOUR TOP TRACK!
             </div>
           )}
         </div>
@@ -120,7 +120,7 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
         }`}>
           <h3 className="text-lg font-mono font-black uppercase flex items-center gap-2">
             <UserCheck size={18} className="text-[#17a398]" />
-            <span>APOTHECARY REGISTRATION LEADERBOARD</span>
+            <span>LISTENING LEADERBOARD</span>
           </h3>
           <span className={`text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>WEEKLY REPORT</span>
         </div>
@@ -146,23 +146,23 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
                       <h4 className={`font-bold text-sm truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>{friend.name}</h4>
                       <VerifiedBadge userOrName={friend} size={14} />
                       <span className="text-[9px] font-mono font-black uppercase px-2 py-0.5 bg-[#082621] text-[#26c4b7]">
-                        ACTIVE PATIENT
+                        LISTENER
                       </span>
                     </div>
-                    <p className={`text-xs truncate font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>PRIMARY DOSE: {friend.topSong}</p>
+                    <p className={`text-xs truncate font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>TOP SONG: {friend.topSong}</p>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
                   <span className={`text-sm font-mono font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>{friend.minutes} MIN</span>
-                  <p className={`text-[10px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>THIS AUDIT CYCLE</p>
+                  <p className={`text-[10px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>THIS WEEK</p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className={`text-center py-8 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-            NO STREAMING RECORDS DOCUMENTED THIS AUDIT CYCLE.
+            NO STREAMING RECORDS DOCUMENTED THIS WEEK.
           </div>
         )}
       </section>

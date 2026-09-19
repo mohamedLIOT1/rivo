@@ -215,10 +215,10 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
         <div className="flex items-center justify-between p-4 md:p-5 border-b-2 border-[#0b1110] bg-[#ede5d3]">
           <div>
             <div className="text-[10px] font-mono font-black uppercase text-[#17a398]">
-              RIVO FORMULATION INTAKE
+              LIOFY MUSIC INTAKE
             </div>
             <h2 className="text-lg font-mono font-black uppercase text-[#082621]">
-              REGISTER NEW CASSETTE
+              ADD NEW SONG
             </h2>
           </div>
           <button 
@@ -229,90 +229,104 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b-2 border-[#0b1110] bg-[#ede5d3]">
-          {[
-            { id: 'search', label: '🔍 SEARCH CATALOG ONLINE' },
-            { id: 'upload', label: '⬆️ UPLOAD LOCAL MP3 TAPE' },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 py-3 text-xs font-mono font-black uppercase transition-all ${
-                tab === t.id
-                  ? 'bg-[#082621] text-[#26c4b7] border-b-2 border-[#082621]'
-                  : 'text-[#082621]/70 hover:bg-[#ded2bb]'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Tab Buttons */}
+        <div className="flex border-b-2 border-[#0b1110] bg-[#fdfbf7]">
+          <button
+            type="button"
+            onClick={() => setTab('search')}
+            className={`flex-1 py-3 text-xs font-mono font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+              tab === 'search' 
+                ? 'bg-[#17a398] text-[#0b1110] border-b-2 border-[#0b1110]' 
+                : 'text-[#082621]/60 hover:bg-[#ede5d3] hover:text-[#082621]'
+            }`}
+          >
+            <Search size={14} />
+            <span>Search & Add</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('upload')}
+            className={`flex-1 py-3 text-xs font-mono font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-l-2 border-[#0b1110] ${
+              tab === 'upload' 
+                ? 'bg-[#17a398] text-[#0b1110] border-b-2 border-[#0b1110]' 
+                : 'text-[#082621]/60 hover:bg-[#ede5d3] hover:text-[#082621]'
+            }`}
+          >
+            <Upload size={14} />
+            <span>Direct Upload</span>
+          </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        {/* Modal Body */}
+        <div className="p-4 md:p-5 overflow-y-auto flex-1">
           {/* ── SEARCH TAB ── */}
           {tab === 'search' && (
-            <div>
-              <form onSubmit={handleSearch} className="flex gap-2 mb-5">
+            <div className="flex flex-col gap-3">
+              <form onSubmit={handleSearch} className="flex gap-2">
                 <input
+                  type="text"
+                  placeholder="Track title, artist name, YouTube / Spotify link..."
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="Search artist, composition or frequency..."
-                  className="flex-1 bg-[#ede5d3] text-[#0b1110] text-xs font-mono px-4 py-2.5 brutal-border focus:outline-none focus:bg-white"
+                  className="flex-1 bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2.5 brutal-border focus:outline-none focus:bg-white placeholder-[#082621]/50"
+                  autoFocus
                 />
                 <button
                   type="submit"
-                  disabled={isSearching}
-                  className="brutal-btn px-4 py-2.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center disabled:opacity-50"
+                  disabled={isSearching || !query.trim()}
+                  className="brutal-btn px-4 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  {isSearching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                  {isSearching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                  <span>Search</span>
                 </button>
               </form>
 
-              {isSearching && (
-                <div className="text-center py-8">
-                  <Loader2 size={30} className="animate-spin text-[#17a398] mx-auto" />
-                  <p className="text-xs font-mono text-[#082621] mt-2">Searching audio frequencies...</p>
+              {searchError && (
+                <div className="p-2.5 bg-red-100 border-2 border-[#dc2626] text-[#dc2626] text-xs font-mono font-bold">
+                  {searchError}
                 </div>
               )}
 
-              <div className="flex flex-col gap-2">
-                {results.map(track => (
-                  <div key={track.id} className="flex items-center gap-3 p-2.5 bg-[#ede5d3] brutal-border hover:bg-white transition-colors">
-                    <img
-                      src={track.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(track.title)}&background=082621&color=26c4b7`}
-                      alt={track.title}
-                      className="w-11 h-11 brutal-border object-cover shrink-0 bg-white"
-                      onError={e => { e.target.src = `https://ui-avatars.com/api/?name=Music&background=082621&color=26c4b7`; }}
+              {/* Search Results List */}
+              <div className="flex flex-col gap-2 mt-1">
+                {results.map((track) => (
+                  <div 
+                    key={track.id}
+                    className="flex items-center gap-3 p-2.5 bg-[#ede5d3] brutal-border hover:bg-white transition-colors"
+                  >
+                    <img 
+                      src={track.cover} 
+                      alt={track.title} 
+                      className="w-12 h-12 brutal-border object-cover shrink-0 bg-[#082621]"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-[#0b1110] truncate">{track.title}</p>
-                      <p className="text-[11px] text-[#082621]/70 truncate">{track.artist}</p>
-                      <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] mt-1 inline-block">
-                        {track.source || 'ONLINE'}
-                      </span>
+                      <h4 className="font-display font-black text-xs text-[#082621] truncate">{track.title}</h4>
+                      <p className="text-[11px] font-sans text-[#082621]/70 truncate">{track.artist}</p>
+                      <span className="text-[9px] font-mono font-bold text-[#17a398]">{track.duration}</span>
                     </div>
                     <button
-                      onClick={() => handleAddFromSearch(track)}
-                      disabled={addedIds.has(track.id)}
-                      className={`brutal-btn shrink-0 w-8 h-8 brutal-border flex items-center justify-center ${
-                        addedIds.has(track.id) ? 'bg-[#082621] text-[#26c4b7]' : 'bg-[#f59e0b] text-[#0b1110]'
-                      }`}
+                      onClick={() => handleAddSearchResult(track)}
+                      disabled={addingId === track.id}
+                      className="brutal-btn px-3 py-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-60"
                     >
-                      {addedIds.has(track.id) ? <Check size={14} /> : <Plus size={14} />}
+                      {addingId === track.id ? (
+                        <><Loader2 size={12} className="animate-spin" /> Adding</>
+                      ) : (
+                        <><Plus size={13} /> Add</>
+                      )}
                     </button>
                   </div>
                 ))}
 
                 {results.length === 0 && !isSearching && query && (
-                  <p className="text-center text-xs font-mono text-[#082621]/70 py-6">
-                    No results found for this frequency query.
+                  <p className="text-center text-xs font-mono text-[#082621]/60 py-6">
+                    No results found. Try a different query or switch to Direct Upload.
                   </p>
                 )}
 
                 {results.length === 0 && !isSearching && !query && (
                   <p className="text-center text-xs font-mono text-[#082621]/70 py-6">
-                    Search online archives and inject directly into Rivo Dispensary!
+                    Search online and add directly to your library!
                   </p>
                 )}
               </div>
@@ -330,7 +344,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
 
               {uploadDone && (
                 <div className="p-3 bg-[#082621] text-[#26c4b7] brutal-border text-xs font-mono font-bold flex items-center gap-2">
-                  <Check size={16} /> CASSETTE REGISTERED AND DISPENSED INTO ARCHIVE!
+                  <Check size={16} /> SONG ADDED TO LIBRARY!
                 </div>
               )}
 
@@ -368,9 +382,9 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
 
               {/* Fields */}
               {[
-                { label: 'TRACK TITLE *', value: title, setter: setTitle, placeholder: 'e.g. Asprin Acoustic' },
-                { label: 'ARTIST / PRACTITIONER *', value: artist, setter: setArtist, placeholder: 'e.g. Dr. Sound' },
-                { label: 'ALBUM / CASSETTE', value: album, setter: setAlbum, placeholder: 'e.g. Pure Relief Vol. 1' },
+                { label: 'TRACK TITLE *', value: title, setter: setTitle, placeholder: 'e.g. Song Title' },
+                { label: 'ARTIST *', value: artist, setter: setArtist, placeholder: 'e.g. Artist Name' },
+                { label: 'ALBUM', value: album, setter: setAlbum, placeholder: 'e.g. Album Name' },
               ].map(f => (
                 <div key={f.label}>
                   <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">{f.label}</label>
@@ -385,7 +399,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
 
               {/* Genre */}
               <div>
-                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">CLINICAL CATEGORY (GENRE)</label>
+                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">GENRE</label>
                 <select
                   value={genre}
                   onChange={e => setGenre(e.target.value)}
@@ -431,9 +445,9 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                 className="brutal-btn w-full py-3 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
               >
                 {isUploading ? (
-                  <><Loader2 size={16} className="animate-spin" /> DISPENSING TO NETWORK...</>
+                  <><Loader2 size={16} className="animate-spin" /> UPLOADING SONG...</>
                 ) : (
-                  <><Upload size={16} /> REGISTER & DISPENSE CASSETTE</>
+                  <><Upload size={16} /> UPLOAD & SAVE SONG</>
                 )}
               </button>
             </form>

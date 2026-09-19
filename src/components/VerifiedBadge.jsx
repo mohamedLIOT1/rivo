@@ -25,7 +25,7 @@ export default function VerifiedBadge({
   userOrName,
   size = 14,
   className = 'text-[#17a398] fill-[#17a398]/20 shrink-0',
-  title = 'Verified Dispensary Member',
+  title = 'Verified Member',
 }) {
   if (userOrName !== undefined && !isUserVerified(userOrName)) {
     return null;

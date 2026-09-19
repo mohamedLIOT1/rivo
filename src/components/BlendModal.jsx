@@ -25,7 +25,7 @@ export default function BlendModal({ isOpen, onClose, onCreateBlend, currentUser
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Harmonic Patient Blend</h3>
+            <h3 className="text-base font-mono font-black uppercase text-[#082621]">Blend With a Friend</h3>
           </div>
           <button onClick={onClose} className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]">
             <X size={18} />
@@ -33,12 +33,12 @@ export default function BlendModal({ isOpen, onClose, onCreateBlend, currentUser
         </div>
 
         <p className="text-xs text-[#082621]/70 font-sans my-3">
-          Synthesize your audio taste profile with another patient to generate a harmonized dual prescription cassette.
+          Combine your music tastes with a friend to generate a shared blend playlist.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 my-2">
           <div>
-            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Peer Patient Name</label>
+            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Friend's Name</label>
             <input
               type="text"
               placeholder="e.g. Sarah, Ahmed, Alex"
@@ -50,7 +50,7 @@ export default function BlendModal({ isOpen, onClose, onCreateBlend, currentUser
           </div>
 
           <div>
-            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Target Harmonic Genre</label>
+            <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">Shared Genre Preference</label>
             <select
               value={friendGenre}
               onChange={(e) => setFriendGenre(e.target.value)}
@@ -70,7 +70,7 @@ export default function BlendModal({ isOpen, onClose, onCreateBlend, currentUser
             className="brutal-btn w-full py-2.5 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 mt-2 cursor-pointer"
           >
             <Sparkles size={14} className="text-[#f59e0b]" />
-            <span>SYNTHESIZE CLINICAL BLEND</span>
+            <span>CREATE BLEND PLAYLIST</span>
           </button>
         </form>
       </div>

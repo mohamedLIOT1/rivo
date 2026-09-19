@@ -18,9 +18,10 @@ export default function ProfileScreen({
   onStartJamWithUser,
   onTogglePlaylistVisibility,
   globalTheme = 'dark',
+  viewingUserId = null,
+  onClearViewingUser,
 }) {
   const isDark = globalTheme === 'dark';
-  const [activeTab, setActiveTab] = useState('profile'); // 'profile' | 'search'
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [nameInput, setNameInput] = useState(currentUser?.name || '');
@@ -34,12 +35,7 @@ export default function ProfileScreen({
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef(null);
 
-  // User search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
-  const searchTimeoutRef = useRef(null);
 
   // Social Followers / Following Modal State
   const [socialModal, setSocialModal] = useState({
@@ -218,21 +214,11 @@ export default function ProfileScreen({
     setTogglingId(null);
   };
 
-  // ── Search users ──
-  const handleSearchChange = (q) => {
-    setSearchQuery(q);
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (!q.trim() || q.length < 2) { setSearchResults([]); return; }
-    searchTimeoutRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/users/search?q=${encodeURIComponent(q)}`);
-        const data = await res.json();
-        if (data.success) setSearchResults(data.users || []);
-      } catch {}
-      setIsSearching(false);
-    }, 500);
-  };
+  useEffect(() => {
+    if (viewingUserId) {
+      handleViewUserProfile(viewingUserId);
+    }
+  }, [viewingUserId]);
 
   const [followLoading, setFollowLoading] = useState(false);
 
@@ -285,7 +271,11 @@ export default function ProfileScreen({
           isDark ? 'bg-[#101716] border-zinc-800 text-white' : 'bg-[#0b1110] text-[#fdfbf7]'
         }`}>
           <button 
-            onClick={() => setViewingProfile(null)} 
+            onClick={() => {
+              setViewingProfile(null);
+              if (onClearViewingUser) onClearViewingUser();
+              if (viewingUserId) onBack();
+            }} 
             className={`w-8 h-8 rounded-lg brutal-border flex items-center justify-center brutal-btn cursor-pointer ${
               isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110]'
             }`}
@@ -303,7 +293,7 @@ export default function ProfileScreen({
           <div className={`rounded-2xl brutal-border-thick p-4 sm:p-6 mb-6 brutal-shadow-lg relative overflow-hidden ${
             isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110] paper-texture'
           }`}>
-            {/* Dossier Header Bar */}
+            {/* Profile Header Bar */}
             <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b-2 mb-4 ${
               isDark ? 'border-zinc-700' : 'border-[#0b1110]'
             }`}>
@@ -312,15 +302,15 @@ export default function ProfileScreen({
                 <span className={`font-mono font-bold text-[10px] sm:text-xs tracking-wider truncate ${
                   isDark ? 'text-zinc-300' : 'text-zinc-700'
                 }`}>
-                  RIVO DISPENSARY ARCHIVE // DOSSIER #RX-{String(viewingProfile.id || '001').slice(-4).toUpperCase()}
+                  USER PROFILE // @{viewingProfile.name}
                 </span>
               </div>
-              <div className="self-start sm:self-auto border-2 border-dashed border-[#dc2626] text-[#dc2626] px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0">
-                VERIFIED COMPOUNDER
+              <div className="self-start sm:self-auto border-2 border-dashed border-[#17a398] text-[#17a398] px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0">
+                MEMBER
               </div>
             </div>
 
-            {/* Dossier Body: Horizontal layout */}
+            {/* Profile Body */}
             <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
               {/* Photo Frame */}
               <div className="shrink-0 flex flex-col items-center">
@@ -352,27 +342,27 @@ export default function ProfileScreen({
                   </h2>
                   <VerifiedBadge userOrName={viewingProfile} size={20} />
                   <span className="text-[10px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-2 py-0.5 rounded brutal-border">
-                    REGISTERED LISTENER
+                    LISTENER
                   </span>
                 </div>
 
-                {/* Bio / Medical Notes */}
+                {/* Bio */}
                 <div className={`brutal-border rounded-xl p-3 my-3 text-left ${
                   isDark ? 'bg-zinc-900/90 border-zinc-700' : 'bg-[#ede5d3] border-black'
                 }`}>
                   <span className={`text-[9px] font-mono font-bold uppercase block mb-0.5 ${
                     isDark ? 'text-zinc-400' : 'text-zinc-600'
                   }`}>
-                    // Practitioner Notes:
+                    // Bio:
                   </span>
                   <p className={`text-xs font-mono font-medium ${
                     isDark ? 'text-zinc-200' : 'text-[#0b1110]'
                   }`}>
-                    {viewingProfile.bio || 'No clinical notes provided for this compounder.'}
+                    {viewingProfile.bio || 'No bio provided.'}
                   </p>
                 </div>
 
-                {/* Archival Punch Card Stats */}
+                {/* Punch Card Stats */}
                 <div className="grid grid-cols-3 gap-2 sm:gap-3 my-4">
                   <div className={`rounded-xl brutal-border p-2.5 brutal-shadow-sm text-center ${
                     isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-black text-[#0b1110]'
@@ -384,7 +374,7 @@ export default function ProfileScreen({
                     </span>
                     <span className={`text-[9px] font-mono font-bold uppercase ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
-                    }`}>Formulations</span>
+                    }`}>Playlists</span>
                   </div>
 
                   <div 
@@ -428,7 +418,7 @@ export default function ProfileScreen({
                           : 'bg-[#17a398] text-[#0b1110]'
                       }`}
                     >
-                      {viewingProfile.isFollowing ? 'Following ✓' : '+ Follow Compounder'}
+                      {viewingProfile.isFollowing ? 'Following ✓' : '+ Follow'}
                     </button>
 
                     <button
@@ -438,7 +428,7 @@ export default function ProfileScreen({
                       }`}
                     >
                       <MessageSquare size={14} className="text-[#dc2626]" />
-                      <span>Telegram</span>
+                      <span>Chat</span>
                     </button>
 
                     <button
@@ -446,7 +436,7 @@ export default function ProfileScreen({
                       className="px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#fbb739] text-[#0b1110] font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5"
                     >
                       <Radio size={14} className="animate-pulse" />
-                      <span>Jam Station</span>
+                      <span>Jam</span>
                     </button>
                   </div>
                 )}
@@ -459,7 +449,7 @@ export default function ProfileScreen({
             <h3 className={`font-display font-black text-xl mb-3 ${
               isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1.5px_1.5px_0px_#082621]'
             }`}>
-              Public Formulations
+              Public Playlists
             </h3>
             {viewingProfile.publicPlaylists?.filter(pl => !pl.isLikedSongs).length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -482,7 +472,7 @@ export default function ProfileScreen({
                 ))}
               </div>
             ) : (
-              <p className={`text-xs font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]'}`}>No public blister packs available.</p>
+              <p className={`text-xs font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]'}`}>No public playlists available.</p>
             )}
           </div>
         </div>
@@ -510,33 +500,13 @@ export default function ProfileScreen({
             <ArrowLeft size={16} strokeWidth={2.5} />
           </button>
 
-          <div className="flex gap-1.5 sm:gap-2 min-w-0">
-            <button
-              onClick={() => setActiveTab('profile')}
-              className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-display font-black transition-all brutal-btn truncate ${
-                activeTab === 'profile'
-                  ? 'bg-[#17a398] text-[#0b1110] brutal-border brutal-shadow-sm'
-                  : isDark
-                    ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
-                    : 'bg-[#fdfbf7] text-[#0b1110] brutal-border hover:bg-white'
-              }`}
-            >
-              <span className="sm:hidden">Profile</span>
-              <span className="hidden sm:inline">My Dispensary Profile</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('search')}
-              className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-display font-black transition-all brutal-btn truncate ${
-                activeTab === 'search'
-                  ? 'bg-[#17a398] text-[#0b1110] brutal-border brutal-shadow-sm'
-                  : isDark
-                    ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
-                    : 'bg-[#fdfbf7] text-[#0b1110] brutal-border hover:bg-white'
-              }`}
-            >
-              <span className="sm:hidden">Find</span>
-              <span className="hidden sm:inline">Find People</span>
-            </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className={`font-display font-black text-sm sm:text-base truncate ${
+              isDark ? 'text-white' : 'text-[#0b1110]'
+            }`}>
+              {currentUser ? currentUser.name : 'My Profile'}
+            </h1>
+            {currentUser && <VerifiedBadge userOrName={currentUser} size={14} />}
           </div>
         </div>
 
@@ -561,8 +531,6 @@ export default function ProfileScreen({
         )}
       </div>
 
-      {/* ── PROFILE TAB ── */}
-      {activeTab === 'profile' && (
         <div className="flex-1 overflow-y-auto p-3 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>
           {/* Guest Alert Banner */}
           {!currentUser && (
@@ -572,8 +540,8 @@ export default function ProfileScreen({
               <div className="flex items-center gap-2.5">
                 <span className="w-3 h-3 rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
                 <div>
-                  <p className={`text-xs font-display font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>Guest Dispensary Mode</p>
-                  <p className={`text-[11px] font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>Sign in to save custom formulations, follow compounders, and sync your music packs.</p>
+                  <p className={`text-xs font-display font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>Guest Mode</p>
+                  <p className={`text-[11px] font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>Sign in to save custom playlists, follow friends, and sync your music.</p>
                 </div>
               </div>
               <button
@@ -585,32 +553,32 @@ export default function ProfileScreen({
             </div>
           )}
 
-          {/* Profile Hero Card (Clinical Dispensary Dossier Card) */}
+          {/* Profile Hero Card */}
           <div className={`rounded-2xl brutal-border-thick p-4 sm:p-6 mb-6 brutal-shadow-lg relative overflow-hidden ${
             isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110] paper-texture'
           }`}>
             
-            {/* Dossier Header Bar */}
+            {/* Header Bar */}
             <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b-2 mb-4 ${
               isDark ? 'border-zinc-700' : 'border-[#0b1110]'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className={`w-2.5 h-2.5 rounded-full ${currentUser ? 'bg-[#17a398]' : 'bg-[#f59e0b]'} animate-pulse shrink-0`} />
+                <span className="w-2.5 h-2.5 rounded-full ${currentUser ? 'bg-[#17a398]' : 'bg-[#f59e0b]'} animate-pulse shrink-0" />
                 <span className={`font-mono font-bold text-[10px] sm:text-xs tracking-wider truncate ${
                   isDark ? 'text-zinc-300' : 'text-zinc-700'
                 }`}>
-                  RIVO PHARMACEUTICAL ARCHIVE // DOSSIER #RX-{String(localUser?._id || localUser?.id || 'GUEST-01').slice(-6).toUpperCase()}
+                  USER PROFILE // @{localUser?.name || 'user'}
                 </span>
               </div>
-              <div className={`self-start sm:self-auto border-2 border-dashed ${currentUser ? 'border-[#dc2626] text-[#dc2626]' : 'border-[#f59e0b] text-[#0b1110]'} px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0`}>
-                {currentUser ? 'CHIEF FORMULATOR' : 'GUEST ROTATION'}
+              <div className={`self-start sm:self-auto border-2 border-dashed ${currentUser ? 'border-[#17a398] text-[#17a398]' : 'border-[#f59e0b] text-[#0b1110]'} px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0`}>
+                {currentUser ? 'MEMBER' : 'GUEST'}
               </div>
             </div>
 
-            {/* Dossier Body: Horizontal layout */}
+            {/* Profile Body: Horizontal layout */}
             <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
               
-              {/* Photo Frame & License */}
+              {/* Photo Frame */}
               <div className="shrink-0 flex flex-col items-center">
                 <div className="relative">
                   <div className={`w-32 h-32 sm:w-36 sm:h-36 rounded-2xl overflow-hidden brutal-border-thick brutal-shadow-sm flex items-center justify-center ${
@@ -628,7 +596,7 @@ export default function ProfileScreen({
                     onClick={() => avatarInputRef.current?.click()}
                     disabled={isUploadingAvatar}
                     className="absolute -bottom-2 -right-2 w-9 h-9 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-xl brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
-                    title="Change Dispensary Photo"
+                    title="Change Profile Photo"
                   >
                     <Camera size={15} strokeWidth={2.5} />
                   </button>
@@ -643,7 +611,7 @@ export default function ProfileScreen({
                 <span className={`mt-3 text-[10px] font-mono font-bold brutal-border px-2 py-0.5 rounded ${
                   isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
                 }`}>
-                  LICENSE: #MED-{String(localUser?._id || localUser?.id || '001').slice(-4).toUpperCase()}
+                  ID: #{String(localUser?._id || localUser?.id || '001').slice(-6).toUpperCase()}
                 </span>
               </div>
 
@@ -676,7 +644,7 @@ export default function ProfileScreen({
                       <h1 className={`text-2xl sm:text-3xl font-display font-black tracking-tight ${
                         isDark ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]' : 'text-[#0b1110]'
                       }`}>
-                        {localUser?.name || 'Pharmacist User'}
+                        {localUser?.name || 'User'}
                       </h1>
                       <VerifiedBadge userOrName={localUser} size={20} />
                       <button 
@@ -689,13 +657,13 @@ export default function ProfileScreen({
                         <Edit2 size={14} />
                       </button>
                       <span className="text-[10px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-2 py-0.5 rounded brutal-border shrink-0">
-                        MASTER DISPENSER
+                        LISTENER
                       </span>
                     </>
                   )}
                 </div>
 
-                {/* Bio / Medical Notes */}
+                {/* Bio */}
                 <div className={`brutal-border rounded-xl p-3 my-3 text-left ${
                   isDark ? 'bg-zinc-900/90 border-zinc-700' : 'bg-[#ede5d3] border-black'
                 }`}>
@@ -703,14 +671,14 @@ export default function ProfileScreen({
                     <span className={`text-[9px] font-mono font-bold uppercase ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
                     }`}>
-                      // Clinical Notes & Prescriptions:
+                      // Bio & About:
                     </span>
                     {!isEditingBio && (
                       <button 
                         onClick={() => setIsEditingBio(true)} 
                         className="text-[10px] font-mono font-bold text-[#17a398] hover:underline flex items-center gap-1 cursor-pointer"
                       >
-                        <Edit2 size={10} /> Edit Notes
+                        <Edit2 size={10} /> Edit Bio
                       </button>
                     )}
                   </div>
@@ -720,7 +688,7 @@ export default function ProfileScreen({
                       <textarea
                         value={bioInput}
                         onChange={e => setBioInput(e.target.value)}
-                        placeholder="Enter clinical notes or musical prescription..."
+                        placeholder="Write a bio about yourself..."
                         rows={2}
                         className={`brutal-border rounded-lg p-2 text-xs font-mono focus:outline-none resize-none font-medium w-full ${
                           isDark ? 'bg-zinc-900 text-white border-zinc-700' : 'bg-white text-[#0b1110] border-black'
@@ -729,7 +697,7 @@ export default function ProfileScreen({
                       />
                       <div className="flex gap-2">
                         <button onClick={handleSaveBio} disabled={isSaving} className="px-3 py-1 bg-[#17a398] text-[#0b1110] font-bold text-xs rounded-lg brutal-border cursor-pointer">
-                          {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save Note'}
+                          {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save Bio'}
                         </button>
                         <button onClick={() => setIsEditingBio(false)} className={`px-3 py-1 font-bold text-xs rounded-lg brutal-border cursor-pointer ${
                           isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-zinc-200 text-[#0b1110]'
@@ -740,7 +708,7 @@ export default function ProfileScreen({
                     </div>
                   ) : (
                     <p className={`text-xs font-mono font-medium ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
-                      {localUser?.bio || <span className="italic text-zinc-400">No apothecary notes registered. Click "Edit Notes" to describe your acoustic treatment.</span>}
+                      {localUser?.bio || <span className="italic text-zinc-400">No bio written yet. Click "Edit Bio" to add one.</span>}
                     </p>
                   )}
                 </div>
@@ -757,7 +725,7 @@ export default function ProfileScreen({
                     </span>
                     <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
-                    }`}>Formulations</span>
+                    }`}>Playlists</span>
                   </div>
 
                   <div 
@@ -798,7 +766,7 @@ export default function ProfileScreen({
               <h2 className={`font-display font-black text-xl tracking-tight ${
                 isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1.5px_1.5px_0px_#082621]'
               }`}>
-                Formulated Blister Packs
+                Playlists
               </h2>
               <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded brutal-border ${
                 isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#fdfbf7] text-[#0b1110]'
@@ -812,7 +780,7 @@ export default function ProfileScreen({
                 isDark ? 'bg-[#141d1b] border-zinc-700 text-zinc-400' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
               }`}>
                 <Music size={32} className="mx-auto mb-2 text-zinc-500" />
-                <p className="text-xs font-bold">No blister packs created yet</p>
+                <p className="text-xs font-bold">No playlists created yet</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -822,7 +790,7 @@ export default function ProfileScreen({
 
                   return (
                     <div 
-                      key={pl.id}
+                      key={pl.id} 
                       className={`p-3 rounded-xl brutal-border flex items-center justify-between brutal-shadow-sm hover:brutal-shadow transition ${
                         isDark ? 'bg-[#141d1b] border-zinc-700 hover:bg-zinc-900' : 'bg-[#fdfbf7] border-black hover:bg-[#ede5d3]'
                       }`}
@@ -845,7 +813,7 @@ export default function ProfileScreen({
                           }`}>{pl.name}</p>
                           <p className={`text-[10px] font-bold ${
                             isDark ? 'text-zinc-400' : 'text-zinc-600'
-                          }`}>{(pl.trackIds || []).length} songs in dose</p>
+                          }`}>{(pl.trackIds || []).length} songs</p>
                         </div>
                       </button>
 
@@ -886,79 +854,6 @@ export default function ProfileScreen({
             )}
           </div>
         </div>
-      )}
-
-      {/* ── SEARCH TAB ── */}
-      {activeTab === 'search' && (
-        <div className="flex-1 flex flex-col overflow-hidden p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>
-          {/* Search Input */}
-          <div className="relative mb-4 shrink-0">
-            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" strokeWidth={2.5} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => handleSearchChange(e.target.value)}
-              placeholder="Search listeners by name..."
-              className={`w-full font-bold text-xs py-2.5 pl-10 pr-4 rounded-xl brutal-border focus:outline-none brutal-shadow-sm ${
-                isDark 
-                  ? 'bg-zinc-900 border-zinc-700 text-white placeholder-zinc-500' 
-                  : 'bg-[#fdfbf7] text-[#0b1110] placeholder-zinc-500 border-black'
-              }`}
-              autoFocus
-            />
-            {isSearching && (
-              <Loader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#17a398] animate-spin" />
-            )}
-          </div>
-
-          {/* Results */}
-          <div className="flex-1 overflow-y-auto space-y-2">
-            {searchQuery.length < 2 ? (
-              <div className={`text-center py-12 brutal-border rounded-xl p-5 ${
-                isDark ? 'bg-[#141d1b] border-zinc-700 text-zinc-300' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
-              }`}>
-                <Search size={36} className="mx-auto mb-2 text-zinc-500" />
-                <p className="font-display font-bold text-sm">Type at least 2 letters to locate a user</p>
-              </div>
-            ) : searchResults.length === 0 && !isSearching ? (
-              <div className={`text-center py-12 brutal-border rounded-xl p-5 ${
-                isDark ? 'bg-[#141d1b] border-zinc-700 text-zinc-300' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
-              }`}>
-                <User size={36} className="mx-auto mb-2 text-zinc-500" />
-                <p className="font-display font-bold text-sm">No listeners found</p>
-              </div>
-            ) : (
-              searchResults.map(u => (
-                <div
-                  key={u.id || u._id}
-                  onClick={() => handleViewUserProfile(u.id || u._id)}
-                  className={`p-3 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition brutal-shadow-sm ${
-                    isDark 
-                      ? 'bg-[#141d1b] border-zinc-700 hover:bg-zinc-900 text-white' 
-                      : 'bg-[#fdfbf7] border-black hover:bg-white text-[#0b1110]'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
-                      {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name?.[0] || 'U'}
-                    </div>
-                    <div className="truncate">
-                      <div className={`flex items-center gap-1.5 font-display font-black text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                        <span>{u.name}</span>
-                        <VerifiedBadge userOrName={u} size={12} />
-                      </div>
-                      <span className="text-[10px] font-mono text-zinc-400">Tap to inspect dispensary profile</span>
-                    </div>
-                  </div>
-                  <button className="px-3 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-btn">
-                    View Profile →
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Social Modal (Followers / Following) */}
       {socialModal.isOpen && (

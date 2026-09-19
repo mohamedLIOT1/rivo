@@ -463,7 +463,7 @@ export default function PlaylistScreen({
             <p className={`text-xs md:text-sm mt-2 font-medium max-w-xl ${
               isDark ? 'text-zinc-300' : 'text-[#082621]/80'
             }`}>
-              {playlist.description || 'Sonic therapeutic formulation customized for clinical acoustic balance.'}
+              {playlist.description || 'Custom playlist on Liofy.'}
             </p>
 
             <div className={`flex items-center justify-center md:justify-start gap-3 mt-4 pt-3 border-t text-xs font-mono font-bold ${
@@ -471,9 +471,9 @@ export default function PlaylistScreen({
             }`}>
               <span className={`px-2 py-0.5 brutal-border ${
                 isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] border-black'
-              }`}>RIVO DISPENSARY</span>
+              }`}>PLAYLIST</span>
               <span>•</span>
-              <span>{playlistTracks.length} PRESCRIBED TRACKS</span>
+              <span>{playlistTracks.length} TRACKS</span>
               <span>•</span>
               <span>{formatDurationSum()}</span>
             </div>
@@ -493,29 +493,29 @@ export default function PlaylistScreen({
             </button>
             <div className="flex items-center gap-2 mb-4 pb-2 border-b-2 border-[#0b1110]">
               <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-              <h3 className="text-lg font-mono font-black uppercase text-[#082621]">Edit Formulation Record</h3>
+              <h3 className="text-lg font-mono font-black uppercase text-[#082621]">Edit Playlist Details</h3>
             </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-black uppercase text-[#082621] mb-1">Cassette Designation</label>
+                <label className="block text-xs font-mono font-black uppercase text-[#082621] mb-1">Playlist Name</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-sm text-[#0b1110] font-sans font-bold focus:outline-none focus:bg-white"
-                  placeholder="Record title..."
+                  placeholder="Playlist name..."
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-black uppercase text-[#082621] mb-1">Clinical Indication / Description</label>
+                <label className="block text-xs font-mono font-black uppercase text-[#082621] mb-1">Description</label>
                 <textarea
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
                   rows={3}
                   className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-sm text-[#0b1110] font-sans font-medium focus:outline-none focus:bg-white resize-none"
-                  placeholder="Therapeutic notes..."
+                  placeholder="Playlist description..."
                 />
               </div>
 
@@ -530,7 +530,7 @@ export default function PlaylistScreen({
                   onClick={handleSaveDetails}
                   className="brutal-btn px-5 py-2 bg-[#082621] text-[#26c4b7] brutal-border brutal-shadow-sm text-xs font-mono font-black uppercase hover:bg-[#0b1110]"
                 >
-                  Save Record
+                  Save Details
                 </button>
               </div>
             </div>
@@ -551,7 +551,7 @@ export default function PlaylistScreen({
                 ? 'bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] cursor-pointer'
                 : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
             }`}
-            title="Dispense from track 1"
+            title="Play playlist"
           >
             <Play size={22} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
           </button>
@@ -796,8 +796,8 @@ export default function PlaylistScreen({
         ) : (
           <div className="text-center py-12 bg-[#fdfbf7] brutal-border-thick brutal-shadow p-8">
             <Music size={40} className="mx-auto text-[#082621] mb-3 opacity-60" />
-            <h3 className="text-lg font-mono font-black uppercase text-[#082621]">NO FORMULAS IN THIS CASSETTE</h3>
-            <p className="text-xs text-[#082621]/80 mt-1 font-sans">Add tracks from the dispensary inventory below to formulate your cassette.</p>
+            <h3 className="text-lg font-mono font-black uppercase text-[#082621]">NO SONGS IN THIS PLAYLIST</h3>
+            <p className="text-xs text-[#082621]/80 mt-1 font-sans">Add tracks from your library below to build your playlist.</p>
           </div>
         )}
       </div>
@@ -810,10 +810,10 @@ export default function PlaylistScreen({
               <div className="flex items-center gap-2">
                 <Sparkles size={18} className="text-[#f59e0b]" />
                 <h3 className="text-lg font-mono font-black uppercase text-[#26c4b7]">
-                  RIVO AI DISPENSARY SUGGESTIONS FOR "{playlist.name}"
+                  AI RECOMMENDATIONS FOR "{playlist.name}"
                 </h3>
               </div>
-              <p className="text-xs text-[#ded2bb] mt-0.5">Complementary harmonic formulas calculated for this cassette's tempo</p>
+              <p className="text-xs text-[#ded2bb] mt-0.5">Matching tracks suggested based on this playlist</p>
             </div>
             <button
               onClick={handleFetchAiRecommendations}
@@ -821,7 +821,7 @@ export default function PlaylistScreen({
               className="brutal-btn flex items-center gap-2 px-4 py-2 bg-[#26c4b7] hover:bg-[#17a398] text-[#082621] text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer"
             >
               {isLoadingRecs ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              <span>{aiRecommendations.length > 0 ? 'REFRESH AI DOSE' : 'DISPENSE AI RECS ✨'}</span>
+              <span>{aiRecommendations.length > 0 ? 'REFRESH RECOMMENDATIONS' : 'GET AI RECOMMENDATIONS ✨'}</span>
             </button>
           </div>
 
@@ -851,7 +851,7 @@ export default function PlaylistScreen({
                     <button
                       onClick={() => onAddTrackToPlaylist(rec.id, playlist.id)}
                       className="brutal-btn px-3 py-1.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 shrink-0 ml-2 cursor-pointer"
-                      title="Add to cassette"
+                      title="Add to playlist"
                     >
                       <Plus size={14} />
                       <span>ADD</span>
@@ -862,7 +862,7 @@ export default function PlaylistScreen({
             </div>
           ) : (
             <div className={`text-center py-6 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#ded2bb]'}`}>
-              Click "DISPENSE AI RECS" to retrieve harmonized tracks for this playlist.
+              Click "GET AI RECOMMENDATIONS" to retrieve matching tracks for this playlist.
             </div>
           )}
         </section>
@@ -876,9 +876,9 @@ export default function PlaylistScreen({
           <div className={`mb-4 pb-3 border-b-2 ${
             isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
           }`}>
-            <h3 className="text-lg font-mono font-black uppercase tracking-wider">ADD CATALOG TRACKS TO THIS CASSETTE</h3>
+            <h3 className="text-lg font-mono font-black uppercase tracking-wider">ADD SONGS TO THIS PLAYLIST</h3>
             <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Select from dispensary inventory to expand this formulation
+              Select songs from your library to add to this playlist
             </p>
           </div>
 

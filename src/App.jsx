@@ -60,6 +60,7 @@ function AppContent() {
   const [topSearchQuery, setTopSearchQuery]   = useState('');
   const [selectedArtist, setSelectedArtist]   = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
 
   // Modals
   const [isFullPlayerOpen,    setIsFullPlayerOpen]    = useState(false);
@@ -812,6 +813,10 @@ function AppContent() {
               onOpenAddSongModal={() => setIsAddSongOpen(true)}
               onAddToLibrary={handleAddSong}
               onDeleteTrack={handleDeleteTrack}
+              onViewProfile={(userId) => {
+                setViewingProfileUserId(userId);
+                setCurrentScreen('profile');
+              }}
               globalTheme={globalTheme}
             />
           )}
@@ -871,7 +876,10 @@ function AppContent() {
             <ProfileScreen
               currentUser={currentUser}
               playlists={playlists}
-              onBack={() => setCurrentScreen('home')}
+              onBack={() => {
+                setViewingProfileUserId(null);
+                setCurrentScreen('home');
+              }}
               logout={logout}
               openAuthModal={() => setIsAuthOpen(true)}
               onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
@@ -883,6 +891,8 @@ function AppContent() {
                 handleOpenChat(target);
               }}
               onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
+              viewingUserId={viewingProfileUserId}
+              onClearViewingUser={() => setViewingProfileUserId(null)}
               globalTheme={globalTheme}
             />
           )}
@@ -1024,6 +1034,7 @@ function AppContent() {
         currentUser={currentUser}
         socket={socket}
         onKickMember={handleKickMember}
+        globalTheme={globalTheme}
       />
 
       <ImportPlaylistModal
@@ -1060,6 +1071,7 @@ function AppContent() {
         onPlayTrack={(track) => {
           playTrack(track);
         }}
+        globalTheme={globalTheme}
       />
 
       <ShortcutsModal

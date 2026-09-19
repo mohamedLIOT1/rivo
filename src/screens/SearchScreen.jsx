@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search as SearchIcon, Play, Heart, PlusCircle, X, Trash2, Sparkles, Disc, 
-  Music, Mic, Headphones, Radio, Flame, Coffee, Zap, Compass, Waves, Loader2 
+  Music, Mic, Headphones, Radio, Flame, Coffee, Zap, Compass, Waves, Loader2,
+  User, Users 
 } from 'lucide-react';
 import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
+import VerifiedBadge from '../components/VerifiedBadge';
+import { API_BASE_URL } from '../config';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -38,13 +41,18 @@ export default function SearchScreen({
   toggleLike, 
   onOpenAddSongModal,
   onDeleteTrack,
+  onViewProfile,
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
   const [query, setQuery] = useState(initialQuery);
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'people'
   const [onlineResults, setOnlineResults] = useState([]);
   const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+  const [userResults, setUserResults] = useState([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const searchTimeoutRef = useRef(null);
+  const userSearchTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (initialQuery !== undefined) {
@@ -56,7 +64,7 @@ export default function SearchScreen({
   const isPopSearch = /^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop|أغاني بوب عربي)$/i.test(cleanQuery);
 
   // Local tracks matching
-  const localFiltered = (tracks || []).filter((t) => {
+  const localFiltered = (filterType === 'people') ? [] : (tracks || []).filter((t) => {
     if (!cleanQuery) return false;
     if (!isMusicTrack(t.title, t.artist)) return false;
     const titleMatch = t.title && t.title.toLowerCase().includes(cleanQuery);
@@ -77,7 +85,7 @@ export default function SearchScreen({
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
-    if (!cleanQuery || cleanQuery.length < 2) {
+    if (filterType === 'people' || !cleanQuery || cleanQuery.length < 2) {
       setOnlineResults([]);
       setIsSearchingOnline(false);
       return;
@@ -103,7 +111,56 @@ export default function SearchScreen({
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
-  }, [cleanQuery, tracks]);
+  }, [cleanQuery, tracks, filterType]);
+
+  // Debounced User / People Search
+  useEffect(() => {
+    if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
+
+    if (filterType === 'songs') {
+      setUserResults([]);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    // When filter is people and query is empty, fetch suggested listeners
+    if (!cleanQuery && filterType === 'people') {
+      setIsSearchingUsers(true);
+      fetch(`${API_BASE_URL}/api/users/search`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setUserResults(data.users || []);
+        })
+        .catch(() => {})
+        .finally(() => setIsSearchingUsers(false));
+      return;
+    }
+
+    if (!cleanQuery || cleanQuery.length < 2) {
+      setUserResults([]);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    setIsSearchingUsers(true);
+    userSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/users/search?q=${encodeURIComponent(cleanQuery)}`);
+        const data = await res.json();
+        if (data.success) {
+          setUserResults(data.users || []);
+        }
+      } catch (err) {
+        console.warn('User search error:', err);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    }, 350);
+
+    return () => {
+      if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
+    };
+  }, [cleanQuery, filterType]);
 
   const handleDelete = (e, track) => {
     e.stopPropagation();
@@ -136,7 +193,7 @@ export default function SearchScreen({
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 bg-[#f59e0b] brutal-border inline-block" />
               <span className="text-xs font-mono font-black uppercase tracking-wider">
-                RIVO ACOUSTIC SEARCH ENGINE • CONSOLE #02
+                MUSIC & PEOPLE SEARCH ENGINE
               </span>
             </div>
             <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
@@ -148,11 +205,17 @@ export default function SearchScreen({
 
           {/* Deck Body */}
           <div className="flex flex-col md:flex-row items-center gap-6">
-            {/* Search Scanner Box (matches spool box from Image 3) */}
+            {/* Search Scanner Box */}
             <div className="w-28 h-28 md:w-36 md:h-36 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative flex flex-col items-center justify-center text-[#26c4b7]">
-              <SearchIcon size={52} strokeWidth={2.5} className={isSearchingOnline ? "animate-pulse" : ""} />
+              {filterType === 'people' ? (
+                <Users size={48} strokeWidth={2.5} className={isSearchingUsers ? "animate-pulse" : ""} />
+              ) : (
+                <SearchIcon size={48} strokeWidth={2.5} className={isSearchingOnline ? "animate-pulse" : ""} />
+              )}
               <span className="text-[9px] font-mono font-black uppercase tracking-widest text-[#f59e0b] mt-1">
-                {isSearchingOnline ? 'SCANNING' : 'ONLINE RX'}
+                {filterType === 'people' 
+                  ? (isSearchingUsers ? 'SEARCHING' : 'LISTENERS') 
+                  : (isSearchingOnline ? 'SCANNING' : 'ONLINE SEARCH')}
               </span>
               <div className="absolute top-2 left-2 flex items-center gap-1 bg-[#dc2626] text-white px-1.5 py-0.5 text-[8px] font-mono font-black">
                 <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
@@ -171,7 +234,7 @@ export default function SearchScreen({
                 <h2 className={`text-2xl md:text-4xl font-display font-black leading-tight ${
                   isDark ? 'text-white' : 'text-[#082621]'
                 }`}>
-                  Rivo Acoustic Search Engine
+                  Search Music & People
                 </h2>
 
                 {onOpenAddSongModal && (
@@ -197,7 +260,13 @@ export default function SearchScreen({
                 <input
                   id="search-input"
                   type="text"
-                  placeholder="Search by dose, artist, prescription, or cassette..."
+                  placeholder={
+                    filterType === 'people' 
+                      ? "Search listeners by name or handle..." 
+                      : filterType === 'songs' 
+                        ? "Search songs, artists, or albums..." 
+                        : "Search songs, artists, or listeners..."
+                  }
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   autoComplete="off"
@@ -220,32 +289,75 @@ export default function SearchScreen({
                 )}
               </div>
 
-              {/* Trending Quick Filter Pills */}
-              <div className="flex items-center gap-1.5 flex-wrap justify-center md:justify-start">
-                <span className={`text-[10px] font-mono font-black uppercase mr-1 ${
+              {/* ── Search Type Filter Options (All / Songs / People) ── */}
+              <div className="flex items-center gap-2 mb-3 flex-wrap justify-center md:justify-start">
+                <span className={`text-[10px] font-mono font-black uppercase tracking-wider ${
                   isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                 }`}>
-                  TRENDING:
+                  FILTER:
                 </span>
-                {TRENDING_TAGS.map((tag) => {
-                  const isSelected = query.toLowerCase() === tag.query.toLowerCase();
-                  return (
-                    <button
-                      key={tag.label}
-                      onClick={() => setQuery(isSelected ? '' : tag.query)}
-                      className={`px-2.5 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#17a398] text-[#0b1110] font-black scale-105'
-                          : isDark 
-                            ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' 
-                            : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
-                      }`}
-                    >
-                      {tag.label}
-                    </button>
-                  );
-                })}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { id: 'all', label: 'All', icon: Sparkles },
+                    { id: 'songs', label: 'Songs', icon: Music },
+                    { id: 'people', label: 'People', icon: Users, count: userResults.length },
+                  ].map(({ id, label, icon: FilterIcon, count }) => {
+                    const isActive = filterType === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => setFilterType(id)}
+                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer rounded-lg ${
+                          isActive
+                            ? 'bg-[#17a398] text-[#0b1110] font-black scale-105 brutal-shadow-sm'
+                            : isDark
+                              ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700'
+                              : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
+                        }`}
+                      >
+                        <FilterIcon size={12} strokeWidth={2.5} />
+                        <span>{label}</span>
+                        {count > 0 && id === 'people' && (
+                          <span className={`px-1.5 py-0.2 text-[9px] font-mono font-black rounded-full ${
+                            isActive ? 'bg-[#0b1110] text-[#17a398]' : 'bg-[#17a398] text-[#0b1110]'
+                          }`}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Trending Quick Filter Pills */}
+              {filterType !== 'people' && (
+                <div className="flex items-center gap-1.5 flex-wrap justify-center md:justify-start">
+                  <span className={`text-[10px] font-mono font-black uppercase mr-1 ${
+                    isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                  }`}>
+                    TRENDING:
+                  </span>
+                  {TRENDING_TAGS.map((tag) => {
+                    const isSelected = query.toLowerCase() === tag.query.toLowerCase();
+                    return (
+                      <button
+                        key={tag.label}
+                        onClick={() => setQuery(isSelected ? '' : tag.query)}
+                        className={`px-2.5 py-1 text-xs font-mono font-bold brutal-border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#17a398] text-[#0b1110] font-black scale-105'
+                            : isDark 
+                              ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' 
+                              : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
+                        }`}
+                      >
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -263,7 +375,7 @@ export default function SearchScreen({
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 bg-[#17a398] brutal-border inline-block animate-pulse" />
                   <span className="text-xs font-mono font-black uppercase tracking-wider">
-                    DOSAGE AUDIT RESULTS FOR "{query.toUpperCase()}"
+                    SEARCH RESULTS FOR "{query.toUpperCase()}"
                   </span>
                   {isSearchingOnline && (
                     <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 brutal-border ${
@@ -271,6 +383,14 @@ export default function SearchScreen({
                     }`}>
                       <Loader2 size={10} className="animate-spin text-[#17a398]" />
                       <span>Scanning streams...</span>
+                    </span>
+                  )}
+                  {isSearchingUsers && (
+                    <span className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 brutal-border ${
+                      isDark ? 'bg-zinc-800 text-zinc-400 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+                    }`}>
+                      <Loader2 size={10} className="animate-spin text-[#17a398]" />
+                      <span>Locating listeners...</span>
                     </span>
                   )}
                 </div>
@@ -284,139 +404,134 @@ export default function SearchScreen({
                 </button>
               </div>
 
-              {/* Local Library Matches */}
-              {localFiltered.length > 0 && (
-                <div className="mb-6">
-                  <p className={`text-xs font-mono font-black uppercase mb-2.5 ${
-                    isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                  }`}>
-                    Local Dispensary Matches ({localFiltered.length})
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {localFiltered.map((track, idx) => (
-                      <div
-                        key={track.id || track._id || idx}
-                        onClick={() => onSelectTrack(track, localFiltered)}
-                        className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
-                          isDark 
-                            ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#202f2b]' 
-                            : 'bg-[#ede5d3] border-black text-[#0b1110] hover:bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                          <img 
-                            src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'} 
-                            alt={track.title} 
-                            className="w-10 h-10 brutal-border object-cover bg-white shrink-0" 
-                            onError={(e) => { e.target.style.display = 'none'; }}
-                          />
-                          <div className="truncate flex-1">
-                            <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
-                              {track.title}
-                            </p>
-                            <p className={`text-[11px] font-mono truncate ${
-                              isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                            }`}>
-                              {track.artist || 'Unknown Practitioner'}
-                            </p>
+              {/* ── PEOPLE ONLY RESULTS ── */}
+              {filterType === 'people' && (
+                <div>
+                  {isSearchingUsers ? (
+                    <div className="text-center py-12">
+                      <Loader2 size={28} className="animate-spin text-[#17a398] mx-auto mb-2" />
+                      <p className="font-mono text-xs font-bold">Searching listeners...</p>
+                    </div>
+                  ) : userResults.length === 0 ? (
+                    <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                      isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                    }`}>
+                      <User size={32} className="mx-auto text-zinc-500 mb-2" />
+                      <h3 className="font-display font-bold text-sm">No listeners found matching "{query}"</h3>
+                      <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                        Try searching by exact name or check your spelling.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {userResults.map((u) => (
+                        <div
+                          key={u.id || u._id}
+                          onClick={() => onViewProfile && onViewProfile(u.id || u._id)}
+                          className={`p-3.5 rounded-xl brutal-border flex flex-col justify-between cursor-pointer transition hover:translate-x-1 hover:-translate-y-0.5 brutal-shadow-sm group ${
+                            isDark 
+                              ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                              : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 mb-2.5 min-w-0">
+                            <div className="w-11 h-11 rounded-xl bg-[#17a398] brutal-border flex items-center justify-center font-bold text-sm text-[#0b1110] overflow-hidden shrink-0">
+                              {u.avatar ? (
+                                <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="font-display font-black text-base">{u.name?.[0]?.toUpperCase() || 'U'}</span>
+                              )}
+                            </div>
+                            <div className="truncate flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 font-display font-black text-sm truncate">
+                                <span className="truncate group-hover:text-[#17a398] transition-colors">{u.name}</span>
+                                <VerifiedBadge userOrName={u} size={13} />
+                              </div>
+                              <p className={`text-[11px] font-mono truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                {u.bio || (u.followersCount ? `${u.followersCount} followers` : 'Liofy Listener')}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-dashed border-zinc-700/40 mt-auto">
+                            <span className="text-[10px] font-mono font-bold text-[#17a398]">
+                              {u.publicPlaylists?.length || 0} playlists • {u.followersCount || 0} followers
+                            </span>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onViewProfile && onViewProfile(u.id || u._id);
+                              }}
+                              className="px-2.5 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-btn cursor-pointer shrink-0"
+                            >
+                              View Profile →
+                            </button>
                           </div>
                         </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              toggleLike(track.id || track._id); 
-                            }}
-                            className="p-1 text-zinc-400 hover:text-[#dc2626] transition cursor-pointer"
-                            title="Like"
-                          >
-                            <Heart 
-                              size={15} 
-                              fill={track.liked ? '#dc2626' : 'none'} 
-                              className={track.liked ? 'text-[#dc2626]' : ''}
-                            />
-                          </button>
-                          {onDeleteTrack && (
-                            <button
-                              onClick={(e) => handleDelete(e, track)}
-                              className="p-1 text-zinc-400 hover:text-red-500 transition cursor-pointer"
-                              title="Delete"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              onSelectTrack(track, localFiltered); 
-                            }}
-                            className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer"
-                            title="Play"
-                          >
-                            <Play size={13} fill="currentColor" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Online Results */}
-              {onlineResults.length > 0 && (
+              {/* ── ALL FILTER: MATCHED PEOPLE PREVIEW ── */}
+              {filterType === 'all' && userResults.length > 0 && (
                 <div className="mb-6">
-                  <div className="flex items-center gap-2 mb-2.5">
-                    <Sparkles size={14} className="text-[#17a398]" />
-                    <p className={`text-xs font-mono font-black uppercase tracking-wider ${
-                      isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                    }`}>
-                      Online Streaming Formulations ({onlineResults.length})
-                    </p>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="text-[#17a398]" />
+                      <p className={`text-xs font-mono font-black uppercase tracking-wider ${
+                        isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                      }`}>
+                        People & Listeners ({userResults.length})
+                      </p>
+                    </div>
+                    {userResults.length > 3 && (
+                      <button
+                        onClick={() => setFilterType('people')}
+                        className="text-xs font-mono font-black text-[#17a398] hover:underline cursor-pointer"
+                      >
+                        View All ({userResults.length}) →
+                      </button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {onlineResults.map((track) => (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {userResults.slice(0, 3).map((u) => (
                       <div
-                        key={`online-${track.id}`}
-                        onClick={() => handlePlayOnlineTrack(track)}
-                        className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
+                        key={`all-user-${u.id || u._id}`}
+                        onClick={() => onViewProfile && onViewProfile(u.id || u._id)}
+                        className={`p-3 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-0.5 brutal-shadow-sm group ${
                           isDark 
-                            ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#202f2b]' 
-                            : 'bg-[#ede5d3] border-black text-[#0b1110] hover:bg-white'
+                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
                         }`}
                       >
-                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                          <div className="relative shrink-0">
-                            <img 
-                              src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'} 
-                              alt={track.title} 
-                              className="w-10 h-10 brutal-border object-cover bg-white" 
-                            />
-                            <span className="absolute -bottom-1 -right-1 text-[8px] font-mono font-black bg-[#17a398] text-[#0b1110] px-1 brutal-border">
-                              WEB
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                          <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="font-display font-black text-sm">{u.name?.[0]?.toUpperCase() || 'U'}</span>
+                            )}
+                          </div>
+                          <div className="truncate flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 font-display font-black text-xs truncate">
+                              <span className="truncate group-hover:text-[#17a398] transition-colors">{u.name}</span>
+                              <VerifiedBadge userOrName={u} size={12} />
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-400 truncate block">
+                              {u.followersCount || 0} followers
                             </span>
                           </div>
-                          <div className="truncate flex-1">
-                            <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
-                              {track.title}
-                            </p>
-                            <p className={`text-[11px] font-mono truncate ${
-                              isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                            }`}>
-                              {track.artist || 'Online Stream'}
-                            </p>
-                          </div>
                         </div>
-
                         <button
-                          onClick={(e) => { 
-                            e.stopPropagation(); 
-                            handlePlayOnlineTrack(track); 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewProfile && onViewProfile(u.id || u._id);
                           }}
-                          className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn shrink-0 cursor-pointer"
-                          title="Stream Now"
+                          className="px-2 py-0.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-[11px] rounded-md brutal-border brutal-btn shrink-0"
                         >
-                          <Play size={13} fill="currentColor" />
+                          View →
                         </button>
                       </div>
                     ))}
@@ -424,104 +539,338 @@ export default function SearchScreen({
                 </div>
               )}
 
-              {/* Zero Results */}
-              {localFiltered.length === 0 && onlineResults.length === 0 && !isSearchingOnline && (
-                <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
-                  isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
-                }`}>
-                  <Music size={28} className="mx-auto text-[#17a398] mb-3" />
-                  <h3 className="font-mono font-black text-sm uppercase mb-1">
-                    No Direct Formulations for "{query}"
-                  </h3>
-                  <p className={`text-xs font-mono mb-4 ${
-                    isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                  }`}>
-                    Paste any YouTube or SoundCloud link directly using the Add Song button!
-                  </p>
-                  {onOpenAddSongModal && (
-                    <button
-                      onClick={onOpenAddSongModal}
-                      className="px-4 py-2 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono font-black text-xs uppercase brutal-border brutal-btn cursor-pointer"
-                    >
-                      + Add "{query}" to Library
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* ── Browse Categories / Genres (Exact Image 3 Apothecary Style) ── */
-            <div>
-              <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
-                isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
-              }`}>
-                <div className="flex items-center gap-2">
-                  <Disc size={16} className="text-[#17a398]" />
-                  <span className="text-xs font-mono font-black uppercase tracking-wider">
-                    EXPLORE GENRES & SOUND CHANNELS
-                  </span>
-                </div>
-                <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
-                  isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
-                }`}>
-                  12 CHANNELS READY
-                </div>
-              </div>
+              {/* ── SONG RESULTS (For ALL & SONGS filters) ── */}
+              {filterType !== 'people' && (
+                <>
+                  {/* Local Library Matches */}
+                  {localFiltered.length > 0 && (
+                    <div className="mb-6">
+                      <p className={`text-xs font-mono font-black uppercase mb-2.5 ${
+                        isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                      }`}>
+                        Local Library Songs ({localFiltered.length})
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {localFiltered.map((track, idx) => (
+                          <div
+                            key={track.id || track._id || idx}
+                            onClick={() => onSelectTrack(track, localFiltered)}
+                            className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
+                              isDark 
+                                ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#202f2b]' 
+                                : 'bg-[#ede5d3] border-black text-[#0b1110] hover:bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                              <img 
+                                src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'} 
+                                alt={track.title} 
+                                className="w-10 h-10 brutal-border object-cover bg-white shrink-0" 
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                              />
+                              <div className="truncate flex-1">
+                                <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
+                                  {track.title}
+                                </p>
+                                <p className={`text-[11px] font-mono truncate ${
+                                  isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                                }`}>
+                                  {track.artist || 'Unknown Artist'}
+                                </p>
+                              </div>
+                            </div>
 
-              {/* 2-Column Grid (Exact layout as Image 3 queue) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {GENRE_CATEGORIES.map((genre) => {
-                  const IconComponent = genre.Icon;
-                  return (
-                    <div
-                      key={genre.id}
-                      onClick={() => setQuery(genre.searchQuery || genre.name)}
-                      className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
-                        isDark 
-                          ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
-                          : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                        <div 
-                          className="w-10 h-10 brutal-border flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform"
-                          style={{ backgroundColor: genre.color }}
-                        >
-                          <IconComponent size={20} />
-                        </div>
-                        <div className="truncate">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-black text-xs sm:text-sm uppercase truncate">
-                              {genre.name}
-                            </span>
-                            <span 
-                              className="text-[8px] font-mono font-black px-1.5 py-0.5 brutal-border text-white shadow-xs"
-                              style={{ backgroundColor: genre.color }}
-                            >
-                              {genre.code}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  toggleLike(track.id || track._id); 
+                                }}
+                                className="p-1 text-zinc-400 hover:text-[#dc2626] transition cursor-pointer"
+                                title="Like"
+                              >
+                                <Heart 
+                                  size={15} 
+                                  fill={track.liked ? '#dc2626' : 'none'} 
+                                  className={track.liked ? 'text-[#dc2626]' : ''}
+                                />
+                              </button>
+                              {onDeleteTrack && (
+                                <button
+                                  onClick={(e) => handleDelete(e, track)}
+                                  className="p-1 text-zinc-400 hover:text-red-500 transition cursor-pointer"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  onSelectTrack(track, localFiltered); 
+                                }}
+                                className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer"
+                                title="Play"
+                              >
+                                <Play size={13} fill="currentColor" />
+                              </button>
+                            </div>
                           </div>
-                          <p className={`text-[11px] font-mono truncate mt-0.5 ${
-                            isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                          }`}>
-                            {genre.desc}
-                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Online Results */}
+                  {onlineResults.length > 0 && (
+                    <div className="mb-6">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <Sparkles size={14} className="text-[#17a398]" />
+                        <p className={`text-xs font-mono font-black uppercase tracking-wider ${
+                          isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                        }`}>
+                          Online Streaming Songs ({onlineResults.length})
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {onlineResults.map((track) => (
+                          <div
+                            key={`online-${track.id}`}
+                            onClick={() => handlePlayOnlineTrack(track)}
+                            className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
+                              isDark 
+                                ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#202f2b]' 
+                                : 'bg-[#ede5d3] border-black text-[#0b1110] hover:bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                              <div className="relative shrink-0">
+                                <img 
+                                src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'} 
+                                alt={track.title} 
+                                className="w-10 h-10 brutal-border object-cover bg-white" 
+                              />
+                              <span className="absolute -bottom-1 -right-1 text-[8px] font-mono font-black bg-[#17a398] text-[#0b1110] px-1 brutal-border">
+                                WEB
+                              </span>
+                            </div>
+                            <div className="truncate flex-1">
+                              <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
+                                {track.title}
+                              </p>
+                              <p className={`text-[11px] font-mono truncate ${
+                                isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                              }`}>
+                                {track.artist || 'Online Stream'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              handlePlayOnlineTrack(track); 
+                            }}
+                            className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn shrink-0 cursor-pointer"
+                            title="Stream Now"
+                          >
+                            <Play size={13} fill="currentColor" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Zero Results for songs */}
+                {localFiltered.length === 0 && onlineResults.length === 0 && userResults.length === 0 && !isSearchingOnline && (
+                  <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                    isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                  }`}>
+                    <Music size={28} className="mx-auto text-[#17a398] mb-3" />
+                    <h3 className="font-mono font-black text-sm uppercase mb-1">
+                      No Songs or Listeners Found for "{query}"
+                    </h3>
+                    <p className={`text-xs font-mono mb-4 ${
+                      isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                    }`}>
+                      Paste any YouTube or SoundCloud link directly using the Add Song button!
+                    </p>
+                    {onOpenAddSongModal && (
+                      <button
+                        onClick={onOpenAddSongModal}
+                        className="px-4 py-2 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono font-black text-xs uppercase brutal-border brutal-btn cursor-pointer"
+                      >
+                        + Add "{query}" to Library
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ) : (
+          /* ── When query is empty (Browse Genres or Discover Listeners) ── */
+          <div>
+            {filterType === 'people' ? (
+              /* ── Discover Listeners View ── */
+              <div>
+                <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-[#17a398]" />
+                    <span className="text-xs font-mono font-black uppercase tracking-wider">
+                      DISCOVER LISTENERS & MEMBERS
+                    </span>
+                  </div>
+                  <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
+                    isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+                  }`}>
+                    COMMUNITY
+                  </div>
+                </div>
+
+                {isSearchingUsers ? (
+                  <div className="text-center py-12">
+                    <Loader2 size={28} className="animate-spin text-[#17a398] mx-auto mb-2" />
+                    <p className="font-mono text-xs font-bold">Loading members...</p>
+                  </div>
+                ) : userResults.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {userResults.map((u) => (
+                      <div
+                        key={u.id || u._id}
+                        onClick={() => onViewProfile && onViewProfile(u.id || u._id)}
+                        className={`p-3.5 rounded-xl brutal-border flex flex-col justify-between cursor-pointer transition hover:translate-x-1 hover:-translate-y-0.5 brutal-shadow-sm group ${
+                          isDark 
+                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 mb-2.5 min-w-0">
+                          <div className="w-11 h-11 rounded-xl bg-[#17a398] brutal-border flex items-center justify-center font-bold text-sm text-[#0b1110] overflow-hidden shrink-0">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="font-display font-black text-base">{u.name?.[0]?.toUpperCase() || 'U'}</span>
+                            )}
+                          </div>
+                          <div className="truncate flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 font-display font-black text-sm truncate">
+                              <span className="truncate group-hover:text-[#17a398] transition-colors">{u.name}</span>
+                              <VerifiedBadge userOrName={u} size={13} />
+                            </div>
+                            <p className={`text-[11px] font-mono truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                              {u.bio || (u.followersCount ? `${u.followersCount} followers` : 'Liofy Listener')}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-dashed border-zinc-700/40 mt-auto">
+                          <span className="text-[10px] font-mono font-bold text-[#17a398]">
+                            {u.publicPlaylists?.length || 0} playlists • {u.followersCount || 0} followers
+                          </span>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onViewProfile && onViewProfile(u.id || u._id);
+                            }}
+                            className="px-2.5 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-btn cursor-pointer shrink-0"
+                          >
+                            View Profile →
+                          </button>
                         </div>
                       </div>
-
-                      <span className={`text-[9px] font-mono font-black px-2 py-0.5 brutal-border shrink-0 ${
-                        isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#fdfbf7] text-[#082621] border-black'
-                      }`}>
-                        SELECT
-                      </span>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                ) : (
+                  <div className={`brutal-border-thick p-8 text-center max-w-md mx-auto my-6 ${
+                    isDark ? 'bg-[#0b1110] border-zinc-700 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                  }`}>
+                    <Users size={32} className="mx-auto text-zinc-500 mb-2" />
+                    <h3 className="font-display font-bold text-sm">Find Listeners</h3>
+                    <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                      Type any listener name in the search bar above to locate their profile and playlists.
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            ) : (
+              /* ── Browse Categories / Genres ── */
+              <div>
+                <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${
+                  isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <Disc size={16} className="text-[#17a398]" />
+                    <span className="text-xs font-mono font-black uppercase tracking-wider">
+                      EXPLORE GENRES & SOUND CHANNELS
+                    </span>
+                  </div>
+                  <div className={`text-[10px] font-mono font-black px-2 py-0.5 brutal-border ${
+                    isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+                  }`}>
+                    12 CHANNELS READY
+                  </div>
+                </div>
+
+                {/* 2-Column Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {GENRE_CATEGORIES.map((genre) => {
+                    const IconComponent = genre.Icon;
+                    return (
+                      <div
+                        key={genre.id}
+                        onClick={() => setQuery(genre.searchQuery || genre.name)}
+                        className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
+                          isDark 
+                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                          <div 
+                            className="w-10 h-10 brutal-border flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform"
+                            style={{ backgroundColor: genre.color }}
+                          >
+                            <IconComponent size={20} />
+                          </div>
+                          <div className="truncate">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-black text-xs sm:text-sm uppercase truncate">
+                                {genre.name}
+                              </span>
+                              <span 
+                                className="text-[8px] font-mono font-black px-1.5 py-0.5 brutal-border text-white shadow-xs"
+                                style={{ backgroundColor: genre.color }}
+                              >
+                                {genre.code}
+                              </span>
+                            </div>
+                            <p className={`text-[11px] font-mono truncate mt-0.5 ${
+                              isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                            }`}>
+                              {genre.desc}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className={`text-[9px] font-mono font-black px-2 py-0.5 brutal-border shrink-0 ${
+                          isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#fdfbf7] text-[#082621] border-black'
+                        }`}>
+                          SELECT
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
-  );
+  </div>
+);
 }
