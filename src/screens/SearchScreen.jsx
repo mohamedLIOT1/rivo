@@ -7,6 +7,7 @@ import {
 import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { API_BASE_URL } from '../config';
+import { getTrackArtists, ArtistLinks } from '../utils/artistUtils';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -67,26 +68,30 @@ export default function SearchScreen({
   const cleanQuery = (query || '').trim().toLowerCase();
   const isPopSearch = /^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop|أغاني بوب عربي)$/i.test(cleanQuery);
 
-  // Extract all artists from tracks & albums
+  // Extract all artists from tracks & albums (supporting multiple artists per track)
   const allArtists = React.useMemo(() => {
     const map = new Map();
     (tracks || []).forEach(t => {
       if (!t.artist || !isMusicTrack(t.title, t.artist)) return;
-      const name = t.artist.trim();
-      const key = name.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { name, count: 1, cover: t.cover });
-      } else {
-        map.get(key).count += 1;
-      }
+      const artistNames = getTrackArtists(t.artist, t.title);
+      artistNames.forEach(name => {
+        const key = name.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { name, count: 1, cover: t.cover });
+        } else {
+          map.get(key).count += 1;
+        }
+      });
     });
     (albums || []).forEach(a => {
       if (!a.artist) return;
-      const name = a.artist.trim();
-      const key = name.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { name, count: (a.trackIds || []).length, cover: a.cover });
-      }
+      const artistNames = getTrackArtists(a.artist);
+      artistNames.forEach(name => {
+        const key = name.toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, { name, count: (a.trackIds || []).length, cover: a.cover });
+        }
+      });
     });
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [tracks, albums]);
@@ -110,7 +115,8 @@ export default function SearchScreen({
     if (!cleanQuery) return false;
     if (!isMusicTrack(t.title, t.artist)) return false;
     const titleMatch = t.title && t.title.toLowerCase().includes(cleanQuery);
-    const artistMatch = t.artist && t.artist.toLowerCase().includes(cleanQuery);
+    const trackArtists = getTrackArtists(t.artist, t.title).map(a => a.toLowerCase());
+    const artistMatch = (t.artist && t.artist.toLowerCase().includes(cleanQuery)) || trackArtists.some(a => a.includes(cleanQuery));
     const genreMatch = t.genre && t.genre.toLowerCase().includes(cleanQuery);
     const albumMatch = t.album && t.album.toLowerCase().includes(cleanQuery);
 
@@ -610,17 +616,14 @@ export default function SearchScreen({
                               <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors">
                                 {alb.name}
                               </p>
-                              <span 
-                                onClick={(e) => {
-                                  if (onSelectArtist && alb.artist) {
-                                    e.stopPropagation();
-                                    onSelectArtist(alb.artist);
-                                  }
-                                }}
-                                className={`text-[11px] font-mono hover:underline cursor-pointer truncate block mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                              >
-                                {alb.artist || 'Artist'} • {(alb.trackIds || []).length} songs
-                              </span>
+                              <div className={`text-[11px] font-mono truncate mt-0.5 flex items-center gap-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                                <ArtistLinks
+                                  track={alb}
+                                  onSelectArtist={onSelectArtist}
+                                  linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
+                                />
+                                <span>• {(alb.trackIds || []).length} songs</span>
+                              </div>
                             </div>
                           </div>
                           <button
@@ -866,19 +869,14 @@ export default function SearchScreen({
                                 <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
                                   {track.title}
                                 </p>
-                                <p 
-                                  onClick={(e) => {
-                                    if (onSelectArtist && track.artist) {
-                                      e.stopPropagation();
-                                      onSelectArtist(track.artist);
-                                    }
-                                  }}
-                                  className={`text-[11px] font-mono truncate hover:underline cursor-pointer ${
+                                <ArtistLinks
+                                  track={track}
+                                  onSelectArtist={onSelectArtist}
+                                  className={`text-[11px] font-mono truncate block ${
                                     isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                                   }`}
-                                >
-                                  {track.artist || 'Unknown Artist'}
-                                </p>
+                                  linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
+                                />
                               </div>
                             </div>
 
@@ -960,19 +958,14 @@ export default function SearchScreen({
                               <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
                                 {track.title}
                               </p>
-                              <p 
-                                onClick={(e) => {
-                                  if (onSelectArtist && track.artist) {
-                                    e.stopPropagation();
-                                    onSelectArtist(track.artist);
-                                  }
-                                }}
-                                className={`text-[11px] font-mono truncate hover:underline cursor-pointer ${
+                              <ArtistLinks
+                                track={track}
+                                onSelectArtist={onSelectArtist}
+                                className={`text-[11px] font-mono truncate block ${
                                   isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                                 }`}
-                              >
-                                {track.artist || 'Online Stream'}
-                              </p>
+                                linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
+                              />
                             </div>
                           </div>
 

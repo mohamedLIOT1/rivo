@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
+import { isUserAdmin } from '../utils/adminUtils';
 import RivoLogo from './RivoLogo';
 
 export default function Navigation({ 
@@ -12,6 +13,7 @@ export default function Navigation({
   openAddSongModal = () => {},
   openAuthModal = () => {},
   openImportPlaylistModal = () => {},
+  openImportSongModal = () => {},
   openJamModal = () => {},
   openChatModal = () => {},
   openShortcutsModal = () => {},
@@ -142,7 +144,6 @@ export default function Navigation({
               )}
             </button>
 
-            {/* Friend Listening Activity Toggle */}
             <button
               onClick={toggleActivityPanel}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
@@ -154,6 +155,28 @@ export default function Navigation({
               <Users size={17} className="text-[#17a398] shrink-0" strokeWidth={2.5} />
               <span>Listening Activity</span>
             </button>
+
+            {/* Admin Portal Button */}
+            {isUserAdmin(currentUser) && (
+              <button
+                onClick={() => setCurrentScreen('admin')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
+                  currentScreen === 'admin'
+                    ? 'bg-[#f59e0b] text-[#0b1110] brutal-shadow-sm brutal-border font-black'
+                    : isDark
+                      ? 'text-[#f59e0b] hover:bg-zinc-800/80 hover:text-amber-300'
+                      : 'text-[#b45309] hover:bg-[#ede5d3]'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <ShieldCheck size={17} className={currentScreen === 'admin' ? 'text-[#0b1110] shrink-0' : 'text-[#f59e0b] shrink-0'} strokeWidth={2.5} />
+                  <span>Admin Dashboard</span>
+                </div>
+                <span className="font-mono text-[8px] bg-[#f59e0b] text-[#0b1110] font-black px-1.5 py-0.5 rounded-full brutal-border">
+                  ADMIN
+                </span>
+              </button>
+            )}
           </div>
 
           {/* ── "Your Dispensary" Library Section ── */}
@@ -169,6 +192,17 @@ export default function Navigation({
               </div>
 
               <div className="flex items-center gap-1">
+                <button
+                  onClick={openImportSongModal}
+                  title="Import Song by Link"
+                  className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
+                    isDark 
+                      ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-[#17a398]' 
+                      : 'bg-white hover:bg-[#ede5d3] text-[#082621]'
+                  }`}
+                >
+                  <Link2 size={12} />
+                </button>
                 <button
                   onClick={openImportPlaylistModal}
                   title="Import Playlist"
@@ -346,11 +380,15 @@ export default function Navigation({
                   <span className="truncate">{currentUser ? currentUser.name : 'Sign In'}</span>
                   {currentUser && isUserVerified(currentUser) && <VerifiedBadge size={13} />}
                 </div>
-                <div className="mt-0.5 flex items-center">
+                <div className="mt-0.5 flex items-center gap-1">
                   <span className={`inline-flex items-center text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded brutal-border leading-none ${
-                    currentUser ? 'bg-[#17a398] text-[#0b1110]' : 'bg-[#f59e0b] text-[#0b1110]'
+                    currentUser && isUserAdmin(currentUser) 
+                      ? 'bg-[#f59e0b] text-[#0b1110]' 
+                      : currentUser 
+                        ? 'bg-[#17a398] text-[#0b1110]' 
+                        : 'bg-[#f59e0b] text-[#0b1110]'
                   }`}>
-                    {currentUser ? 'ONLINE' : 'GUEST'}
+                    {currentUser && isUserAdmin(currentUser) ? 'ADMIN' : currentUser ? 'ONLINE' : 'GUEST'}
                   </span>
                 </div>
               </div>

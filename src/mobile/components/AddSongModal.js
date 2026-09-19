@@ -7,13 +7,19 @@ import { X, Search, Link as LinkIcon, Plus, Check, Save, Music } from 'lucide-re
 import { API_BASE_URL } from '../config';
 
 export default function AddSongModal({ visible, onClose, onSuccess }) {
-  const [activeTab, setActiveTab] = useState('search'); // 'search' | 'manual'
+  const [activeTab, setActiveTab] = useState('search'); // 'search' | 'link' | 'manual'
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [addedTrackIds, setAddedTrackIds] = useState(new Set());
+
+  // Link Import State
+  const [linkUrl, setLinkUrl] = useState('');
+  const [isImportingLink, setIsImportingLink] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [linkSuccess, setLinkSuccess] = useState(null);
 
   // Manual Input State
   const [title, setTitle] = useState('');
@@ -31,6 +37,25 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
     if (!q) return;
     setIsSearching(true);
     setSearchResults([]);
+
+    // Check if input is a URL (Spotify, YouTube, SoundCloud, Apple Music, direct)
+    if (/^(https?:\/\/|spotify:|youtu)/i.test(q)) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tracks/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: q })
+        });
+        const data = await res.json();
+        if (data.success && data.track) {
+          setSearchResults([data.track]);
+          setIsSearching(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Link resolve error in search:', err);
+      }
+    }
 
     try {
       // 1. Try Backend Search Endpoint
@@ -155,6 +180,42 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
     }
   };
 
+  const handleLinkImport = async () => {
+    const q = linkUrl.trim();
+    if (!q) {
+      setLinkError('Please paste a song link');
+      return;
+    }
+
+    try {
+      setIsImportingLink(true);
+      setLinkError('');
+      setLinkSuccess(null);
+
+      const res = await fetch(`${API_BASE_URL}/api/tracks/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: q })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.track) {
+        throw new Error(data.error || 'Failed to import track');
+      }
+
+      setLinkSuccess(data.track);
+      if (onSuccess) onSuccess();
+      setTimeout(() => {
+        setLinkUrl('');
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setLinkError(err.message || 'Error importing link');
+    } finally {
+      setIsImportingLink(false);
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -174,7 +235,16 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
               onPress={() => setActiveTab('search')}
             >
               <Text style={[styles.tabBtnText, activeTab === 'search' && styles.activeTabBtnText]}>
-                🔍 Online Search
+                🔍 Search
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'link' && styles.activeTabBtn]}
+              onPress={() => setActiveTab('link')}
+            >
+              <Text style={[styles.tabBtnText, activeTab === 'link' && styles.activeTabBtnText]}>
+                🔗 By Link
               </Text>
             </TouchableOpacity>
 
@@ -183,7 +253,7 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
               onPress={() => setActiveTab('manual')}
             >
               <Text style={[styles.tabBtnText, activeTab === 'manual' && styles.activeTabBtnText]}>
-                🔗 Direct / Manual
+                ✏️ Manual
               </Text>
             </TouchableOpacity>
           </View>
@@ -199,15 +269,16 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                   onSubmitEditing={handleOnlineSearch}
+                  returnKeyType="search"
                 />
                 <TouchableOpacity style={styles.searchSubmitBtn} onPress={handleOnlineSearch} disabled={isSearching}>
                   {isSearching ? <ActivityIndicator size="small" color="#000" /> : <Search size={18} color="#000" />}
                 </TouchableOpacity>
               </View>
 
-              {/* Results List */}
+              {/* Search Results */}
               <ScrollView style={{ flex: 1, marginTop: 10 }} showsVerticalScrollIndicator={false}>
-                {searchResults.map(track => {
+                {searchResults.map((track) => {
                   const isAdded = addedTrackIds.has(track.id);
                   return (
                     <View key={track.id} style={styles.trackResultCard}>
@@ -219,20 +290,15 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                         <Text style={styles.trackTitle} numberOfLines={1}>{track.title}</Text>
                         <Text style={styles.trackArtist} numberOfLines={1}>{track.artist}</Text>
                         <View style={styles.sourceTag}>
-                          <Text style={styles.sourceTagText}>{track.source || 'YouTube'}</Text>
+                          <Text style={styles.sourceTagText}>{track.source || 'Online'}</Text>
                         </View>
                       </View>
-
                       <TouchableOpacity
                         style={[styles.addTrackBtn, isAdded && styles.addedTrackBtn]}
                         onPress={() => handleAddTrack(track)}
                         disabled={isAdded}
                       >
-                        {isAdded ? (
-                          <Check size={18} color="#000" />
-                        ) : (
-                          <Plus size={18} color="#000" />
-                        )}
+                        {isAdded ? <Check size={18} color="#000" /> : <Plus size={18} color="#000" />}
                       </TouchableOpacity>
                     </View>
                   );
@@ -240,11 +306,55 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
 
                 {searchResults.length === 0 && !isSearching && (
                   <Text style={styles.emptyText}>
-                    Search for any song name and it will be added to the global library 🌍
+                    Search for any song name or paste a link and it will be added to the global library 🌍
                   </Text>
                 )}
               </ScrollView>
             </View>
+          ) : activeTab === 'link' ? (
+            /* Link Import Form */
+            <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Song Link / URL *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={linkUrl}
+                  onChangeText={setLinkUrl}
+                  placeholder="Spotify, YouTube, SoundCloud or MP3 link..."
+                  placeholderTextColor="#52525b"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <Text style={[styles.emptyText, { marginVertical: 8, textAlign: 'left' }]}>
+                Supported: Spotify tracks, YouTube videos/shorts, SoundCloud tracks, Apple Music, and direct MP3 audio files.
+              </Text>
+
+              {!!linkError && <Text style={styles.errorText}>{linkError}</Text>}
+
+              {!!linkSuccess && (
+                <View style={{ backgroundColor: '#092520', padding: 12, borderRadius: 10, marginVertical: 10, borderWidth: 1, borderColor: '#17a398' }}>
+                  <Text style={{ color: '#17a398', fontWeight: 'bold', fontSize: 13 }}>
+                    ✅ Imported "{linkSuccess.title}" by {linkSuccess.artist}!
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: '#17a398' }]}
+                onPress={handleLinkImport}
+                disabled={isImportingLink || !linkUrl.trim()}
+              >
+                {isImportingLink ? (
+                  <ActivityIndicator color="#000" />
+                ) : (
+                  <>
+                    <LinkIcon size={18} color="#000" />
+                    <Text style={styles.saveBtnText}>Resolve & Add to Library</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           ) : (
             /* Manual Form */
             <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>

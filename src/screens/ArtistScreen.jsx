@@ -1,31 +1,43 @@
-import React, { useState, useMemo } from 'react';
-import { Play, Heart, CheckCircle2, UserPlus, Check, Music2, ArrowLeft, Disc, Layers } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Play, Heart, CheckCircle2, UserPlus, Check, Music2, ArrowLeft, Disc, Layers, Edit } from 'lucide-react';
 import VerifiedBadge from '../components/VerifiedBadge';
+import { matchesArtist, ArtistLinks } from '../utils/artistUtils';
+import { isUserAdmin } from '../utils/adminUtils';
+import EditArtistModal from '../components/EditArtistModal';
 
 export default function ArtistScreen({ 
-  artist, 
+  artist: initialArtist, 
   tracks = [], 
   albums = [],
   onSelectTrack, 
   onSelectPlaylist,
+  onSelectArtist,
   toggleLike, 
   onBack,
+  currentUser,
   globalTheme = 'dark' 
 }) {
   const isDark = globalTheme === 'dark';
+  const [artist, setArtist] = useState(initialArtist);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  useEffect(() => {
+    setArtist(initialArtist);
+  }, [initialArtist]);
+
   if (!artist) return null;
 
   const artistName = (artist.name || artist.artist || (typeof artist === 'string' ? artist : '')).trim();
   const artistKey = artistName.toLowerCase();
 
-  // Filter artist tracks (case-insensitive)
+  // Filter artist tracks (case-insensitive, supporting multiple artists per track)
   const artistTracks = useMemo(() => {
     return (tracks || []).filter((t) => {
       if (!t.artist) return false;
-      return t.artist.trim().toLowerCase() === artistKey || t.artistId === artist.id;
+      return matchesArtist(t, artist);
     });
-  }, [tracks, artistKey, artist.id]);
+  }, [tracks, artist]);
 
   // Find artist albums from both website albums collection and artist's tracks
   const artistAlbums = useMemo(() => {
@@ -33,7 +45,7 @@ export default function ArtistScreen({
 
     // 1. From website albums collection
     (albums || []).forEach(a => {
-      if (a.artist && a.artist.trim().toLowerCase() === artistKey) {
+      if (a.artist && (matchesArtist(a, artist) || a.artist.trim().toLowerCase() === artistKey)) {
         albumMap.set(a.name.toLowerCase().trim(), {
           ...a,
           trackCount: a.trackIds?.length || 0,
@@ -187,6 +199,17 @@ export default function ArtistScreen({
                 {isFollowing ? <Check size={14} /> : <UserPlus size={14} />}
                 <span>{isFollowing ? 'FOLLOWING' : 'FOLLOW'}</span>
               </button>
+
+              {isUserAdmin(currentUser) && (
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="brutal-btn flex items-center gap-2 px-4 py-2.5 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer rounded-xl bg-[#f59e0b] hover:bg-amber-400 text-black"
+                  title="Admin: Edit Artist Page & Details"
+                >
+                  <Edit size={14} />
+                  <span>EDIT ARTIST PAGE</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -294,9 +317,16 @@ export default function ArtistScreen({
                   }`}>
                     {track.title}
                   </h4>
-                  <p className={`text-[11px] truncate font-medium ${
+                  <div className={`text-[11px] truncate font-medium flex items-center gap-1.5 ${
                     isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                  }`}>{track.album || 'Single'}</p>
+                  }`}>
+                    <ArtistLinks
+                      track={track}
+                      onSelectArtist={onSelectArtist}
+                      linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
+                    />
+                    {track.album && <span>• {track.album}</span>}
+                  </div>
                 </div>
 
                 {track.plays > 0 && (
@@ -341,6 +371,19 @@ export default function ArtistScreen({
             {artist.bio}
           </p>
         </div>
+      )}
+
+      {/* Edit Artist Modal for Admins */}
+      {isEditModalOpen && (
+        <EditArtistModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          artist={artist}
+          onSaved={(updated) => {
+            setArtist(prev => ({ ...prev, ...updated }));
+          }}
+          globalTheme={globalTheme}
+        />
       )}
     </div>
   );

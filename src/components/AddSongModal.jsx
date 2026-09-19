@@ -1,17 +1,23 @@
 import React, { useState } from 'react';
-import { X, Upload, Music, Image, Search, Loader2, Check, Plus, Trash2 } from 'lucide-react';
+import { X, Upload, Music, Image, Search, Loader2, Check, Plus, Trash2, Link2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 const getToken = () => localStorage.getItem('liofy_token') || '';
 
 export default function AddSongModal({ isOpen, onClose, onAddSong }) {
-  const [tab, setTab] = useState('search'); // 'search' | 'upload'
+  const [tab, setTab] = useState('search'); // 'search' | 'link' | 'upload'
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [addedIds, setAddedIds] = useState(new Set());
   const [searchError, setSearchError] = useState('');
   const [addingId, setAddingId] = useState(null);
+
+  // Link Import form
+  const [linkUrl, setLinkUrl] = useState('');
+  const [isImportingLink, setIsImportingLink] = useState(false);
+  const [linkError, setLinkError] = useState('');
+  const [linkSuccess, setLinkSuccess] = useState(null);
 
   // Upload form
   const [title, setTitle]   = useState('');
@@ -37,6 +43,34 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     if (!q) return;
     setIsSearching(true);
     setResults([]);
+    setSearchError('');
+
+    // Check if user pasted a link (Spotify, YouTube, SoundCloud, etc.)
+    if (/^(https?:\/\/|spotify:|youtu)/i.test(q)) {
+      try {
+        const token = getToken();
+        const res = await fetch(`${API_BASE_URL}/api/tracks/import`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ url: q })
+        });
+        const data = await res.json();
+        if (data.success && data.track) {
+          setResults([data.track]);
+          setIsSearching(false);
+          return;
+        } else {
+          setSearchError(data.error || 'Failed to resolve link.');
+        }
+      } catch (err) {
+        setSearchError('Network error while resolving link.');
+      }
+      setIsSearching(false);
+      return;
+    }
 
     // 1. Try Backend Search Engine
     try {
@@ -138,6 +172,45 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     }
   };
   const handleAddFromSearch = handleAddSearchResult;
+
+  // ── Link Import ───────────────────────────────────
+  const handleImportLink = async (e) => {
+    e?.preventDefault();
+    const cleanUrl = linkUrl.trim();
+    if (!cleanUrl) return;
+
+    setIsImportingLink(true);
+    setLinkError('');
+    setLinkSuccess(null);
+
+    try {
+      const token = getToken();
+      const res = await fetch(`${API_BASE_URL}/api/tracks/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ url: cleanUrl })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.track) {
+        throw new Error(data.error || 'Failed to import track from link.');
+      }
+
+      setLinkSuccess(data.track);
+      onAddSong?.(data.track);
+      setLinkUrl('');
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      setLinkError(err.message || 'Something went wrong while importing the track.');
+    } finally {
+      setIsImportingLink(false);
+    }
+  };
 
   // ── Upload ────────────────────────────────────────
   const handleCoverChange = (e) => {
@@ -255,6 +328,18 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
           </button>
           <button
             type="button"
+            onClick={() => setTab('link')}
+            className={`flex-1 py-3 text-xs font-mono font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-l-2 border-[#0b1110] ${
+              tab === 'link' 
+                ? 'bg-[#17a398] text-[#0b1110] border-b-2 border-[#0b1110]' 
+                : 'text-[#082621]/60 hover:bg-[#ede5d3] hover:text-[#082621]'
+            }`}
+          >
+            <Link2 size={14} />
+            <span>By Link</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setTab('upload')}
             className={`flex-1 py-3 text-xs font-mono font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border-l-2 border-[#0b1110] ${
               tab === 'upload' 
@@ -345,6 +430,93 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                 )}
               </div>
             </div>
+          )}
+
+          {/* ── LINK TAB ── */}
+          {tab === 'link' && (
+            <form onSubmit={handleImportLink} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-[10px] font-mono font-black uppercase text-[#082621] mb-1.5">
+                  EXTERNAL TRACK LINK
+                </label>
+                <div className="relative">
+                  <Link2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#082621]/60" />
+                  <input
+                    type="url"
+                    required
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://open.spotify.com/track/... or YouTube / SoundCloud link"
+                    className="w-full bg-[#ede5d3] brutal-border pl-9 pr-3 py-2.5 text-xs font-mono text-[#0b1110] placeholder-[#082621]/40 focus:outline-none focus:bg-white"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Badges for supported services */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
+                  linkUrl.includes('spotify.com') ? 'bg-[#082621] text-[#26c4b7]' : 'bg-[#ede5d3] text-[#082621]/70'
+                }`}>
+                  Spotify
+                </span>
+                <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
+                  linkUrl.includes('youtube.com') || linkUrl.includes('youtu.be') ? 'bg-red-100 text-[#dc2626]' : 'bg-[#ede5d3] text-[#082621]/70'
+                }`}>
+                  YouTube
+                </span>
+                <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
+                  linkUrl.includes('soundcloud.com') ? 'bg-orange-100 text-orange-600' : 'bg-[#ede5d3] text-[#082621]/70'
+                }`}>
+                  SoundCloud
+                </span>
+                <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
+                  linkUrl.includes('apple.com') ? 'bg-pink-100 text-pink-700' : 'bg-[#ede5d3] text-[#082621]/70'
+                }`}>
+                  Apple Music
+                </span>
+              </div>
+
+              {linkError && (
+                <div className="p-2.5 bg-red-100 border-2 border-[#dc2626] flex items-center gap-2 text-xs font-mono text-[#dc2626] font-bold">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{linkError}</span>
+                </div>
+              )}
+
+              {linkSuccess && (
+                <div className="p-2.5 bg-[#082621] text-[#26c4b7] brutal-border flex items-center gap-3 text-xs font-mono font-bold">
+                  {linkSuccess.cover && (
+                    <img src={linkSuccess.cover} alt={linkSuccess.title} className="w-10 h-10 brutal-border object-cover shrink-0" />
+                  )}
+                  <div className="truncate flex-1">
+                    <div className="truncate text-white font-black">{linkSuccess.title}</div>
+                    <div className="text-[10px] text-[#26c4b7] truncate">{linkSuccess.artist} (ADDED TO ARCHIVE)</div>
+                  </div>
+                  <CheckCircle2 size={16} className="shrink-0 text-[#26c4b7]" />
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isImportingLink || !linkUrl.trim()}
+                  className="brutal-btn w-full py-2.5 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isImportingLink ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>RESOLVING & INTAKING TRACK...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Link2 size={15} />
+                      <span>INTAKE SONG BY LINK</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           )}
 
           {/* ── UPLOAD TAB ── */}

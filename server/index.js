@@ -73,7 +73,10 @@ const LyricsSchema = new mongoose.Schema({
   artist: String,
   lyrics: [{ time: Number, text: String }],
   updatedBy: String,
-  source: { type: String, default: 'manual' }
+  source: { type: String, default: 'manual' },
+  isVerified: { type: Boolean, default: false },
+  verifiedBy: { type: String, default: '' },
+  verifiedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 const SongLyrics = mongoose.model('SongLyrics', LyricsSchema);
@@ -96,6 +99,23 @@ const AlbumSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Album = mongoose.model('Album', AlbumSchema);
+
+// ──────────────────────────────────────────
+// Website-Wide Artist Profiles Collection (Editable by Admins)
+// ──────────────────────────────────────────
+const ArtistSchema = new mongoose.Schema({
+  id: { type: String, unique: true, index: true },
+  name: { type: String, required: true, unique: true, index: true },
+  bio: { type: String, default: '' },
+  cover: { type: String, default: '' },
+  banner: { type: String, default: '' },
+  isVerified: { type: Boolean, default: false },
+  genres: [{ type: String }],
+  customLinks: [{ label: String, url: String }],
+  updatedBy: { type: String, default: 'admin' }
+}, { timestamps: true });
+
+const Artist = mongoose.model('Artist', ArtistSchema);
 
 function getTrackKey(title, artist) {
   const norm = (str) => (str || '')
@@ -139,6 +159,9 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   avatar: String,
   bio: { type: String, default: '' },
+  role: { type: String, enum: ['admin', 'user'], default: 'user' },
+  isAdmin: { type: Boolean, default: false },
+  isVerified: { type: Boolean, default: false },
   likedTrackIds: [String],
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -171,15 +194,62 @@ const MessageSchema = new mongoose.Schema({
 const Message = mongoose.model('Message', MessageSchema);
 
 // ──────────────────────────────────────────
-// Auth Helpers & Verified Badges
+// Auth Helpers, Admins & Verified Badges
 // ──────────────────────────────────────────
+const ADMIN_USER_NAMES = ['ali', 'lio', 'tester'];
 const VERIFIED_USER_NAMES = ['ali', 'lio', 'tester'];
-function isVerifiedUser(name) {
+
+function isAdminUser(userOrName) {
+  if (!userOrName) return false;
+  if (typeof userOrName === 'string') {
+    return ADMIN_USER_NAMES.includes(userOrName.trim().toLowerCase());
+  }
+  if (userOrName.role === 'admin' || userOrName.isAdmin === true) {
+    return true;
+  }
+  const name = (userOrName.name || userOrName.username || '').trim().toLowerCase();
+  if (name && ADMIN_USER_NAMES.includes(name)) return true;
+  const emailPrefix = (userOrName.email || '').split('@')[0].trim().toLowerCase();
+  if (ADMIN_USER_NAMES.includes(emailPrefix)) return true;
+  return false;
+}
+
+function isVerifiedUser(userOrName) {
+  if (!userOrName) return false;
+  if (isAdminUser(userOrName)) return true;
+  const name = typeof userOrName === 'string' ? userOrName : (userOrName.name || userOrName.username || '');
   return VERIFIED_USER_NAMES.includes((name || '').trim().toLowerCase());
 }
 
+// Auto-upgrade Ali, Lio, Tester in database on startup
+setTimeout(async () => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await User.updateMany(
+        {
+          $or: [
+            { name: { $in: [/^ali$/i, /^lio$/i, /^tester$/i] } },
+            { email: { $in: [/^ali@/i, /^lio@/i, /^tester@/i] } }
+          ]
+        },
+        { $set: { role: 'admin', isAdmin: true, isVerified: true } }
+      );
+      console.log('✅ [Admin] Designated admins (Lio, Ali, Tester) verified & promoted in MongoDB');
+    }
+  } catch (err) {
+    console.warn('[Admin] Startup auto-promotion error:', err.message);
+  }
+}, 4000);
+
 function makeToken(u) {
-  return jwt.sign({ id: u._id, email: u.email, name: u.name }, JWT_SECRET, { expiresIn: '90d' });
+  const isAdmin = isAdminUser(u);
+  return jwt.sign({
+    id: u._id,
+    email: u.email,
+    name: u.name,
+    role: isAdmin ? 'admin' : (u.role || 'user'),
+    isAdmin
+  }, JWT_SECRET, { expiresIn: '90d' });
 }
 
 function auth(req, res, next) {
@@ -190,6 +260,21 @@ function auth(req, res, next) {
     next();
   } catch {
     res.status(403).json({ error: 'Invalid token' });
+  }
+}
+
+function adminAuth(req, res, next) {
+  const t = (req.headers.authorization || '').replace('Bearer ', '');
+  if (!t) return res.status(401).json({ error: 'Auth required' });
+  try {
+    const decoded = jwt.verify(t, JWT_SECRET);
+    req.user = decoded;
+    if (!isAdminUser(decoded)) {
+      return res.status(403).json({ error: 'Permission denied. Administrator access required.' });
+    }
+    next();
+  } catch {
+    res.status(403).json({ error: 'Invalid or expired token' });
   }
 }
 
@@ -556,12 +641,16 @@ app.post('/api/auth/register', async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
     const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=1DB954&color=000&size=512&bold=true&format=png`;
 
+    const isInitAdmin = isAdminUser(name) || isAdminUser(email);
     const user = await new User({
       name,
       email: email.toLowerCase(),
       password: hashed,
       avatar: defaultAvatar,
       bio: '',
+      role: isInitAdmin ? 'admin' : 'user',
+      isAdmin: isInitAdmin,
+      isVerified: isInitAdmin || isVerifiedUser(name),
       likedTrackIds: [],
       followers: [],
       following: [],
@@ -570,6 +659,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     const userObj = user.toObject();
     delete userObj.password;
+    userObj.isAdmin = isAdminUser(userObj);
+    userObj.role = userObj.isAdmin ? 'admin' : (userObj.role || 'user');
     userObj.isVerified = isVerifiedUser(userObj.name);
     res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
@@ -598,6 +689,8 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const userObj = user.toObject();
     delete userObj.password;
+    userObj.isAdmin = isAdminUser(userObj);
+    userObj.role = userObj.isAdmin ? 'admin' : (userObj.role || 'user');
     userObj.isVerified = isVerifiedUser(userObj.name);
     userObj.followersCount = (user.followers || []).length;
     userObj.followingCount = (user.following || []).length;
@@ -615,6 +708,8 @@ app.get('/api/auth/me', auth, async (req, res) => {
       user.avatar = user.avatar.replace('format=svg', 'format=png');
     }
     const userObj = user.toObject ? user.toObject() : { ...user._doc };
+    userObj.isAdmin = isAdminUser(userObj);
+    userObj.role = userObj.isAdmin ? 'admin' : (userObj.role || 'user');
     userObj.isVerified = isVerifiedUser(userObj.name);
     userObj.followersCount = (user.followers || []).length;
     userObj.followingCount = (user.following || []).length;
@@ -634,10 +729,142 @@ app.post('/api/auth/update-profile', auth, async (req, res) => {
     await user.save();
     const userObj = user.toObject();
     delete userObj.password;
+    userObj.isAdmin = isAdminUser(userObj);
+    userObj.role = userObj.isAdmin ? 'admin' : (userObj.role || 'user');
     userObj.isVerified = isVerifiedUser(userObj.name);
     res.json({ success: true, user: userObj });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// ADMIN MANAGEMENT ROUTES (Admins Only)
+// ──────────────────────────────────────────
+function escapeRegex(s) {
+  return (s || '').replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
+// View EVERY account created in the website without searching
+app.get('/api/admin/users', adminAuth, async (req, res) => {
+  try {
+    const users = await User.find().select('-password').sort({ createdAt: -1 }).lean();
+    const formatted = users.map(u => ({
+      id: String(u._id),
+      _id: String(u._id),
+      name: u.name,
+      email: u.email,
+      avatar: u.avatar,
+      bio: u.bio || '',
+      role: isAdminUser(u) ? 'admin' : (u.role || 'user'),
+      isAdmin: isAdminUser(u),
+      isVerified: isVerifiedUser(u),
+      playlistsCount: (u.playlists || []).length,
+      likedSongsCount: (u.likedTrackIds || []).length,
+      followersCount: (u.followers || []).length,
+      followingCount: (u.following || []).length,
+      createdAt: u.createdAt || (u._id && mongoose.Types.ObjectId.isValid(u._id) ? u._id.getTimestamp() : new Date())
+    }));
+    res.json({ success: true, users: formatted, total: formatted.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update user role or verified status
+app.patch('/api/admin/users/:id/role', adminAuth, async (req, res) => {
+  try {
+    const { role, isVerified } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (role !== undefined) {
+      user.role = role === 'admin' ? 'admin' : 'user';
+      user.isAdmin = user.role === 'admin' || isAdminUser(user);
+    }
+    if (isVerified !== undefined) {
+      user.isVerified = Boolean(isVerified);
+    }
+    await user.save();
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        isVerified: user.isVerified
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// ARTIST PROFILE MANAGEMENT (Admins Only to Edit)
+// ──────────────────────────────────────────
+app.get('/api/artists/:name', async (req, res) => {
+  try {
+    const rawName = decodeURIComponent(req.params.name).trim();
+    const artistDoc = await Artist.findOne({
+      name: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, 'i') }
+    }).lean();
+
+    res.json({
+      success: true,
+      artist: artistDoc || {
+        name: rawName,
+        id: rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+        bio: '',
+        cover: '',
+        banner: '',
+        isVerified: false
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/artists/:name', adminAuth, async (req, res) => {
+  try {
+    const rawName = decodeURIComponent(req.params.name).trim();
+    const { name, bio, cover, banner, isVerified, customLinks } = req.body;
+    const newName = (name || rawName).trim();
+    const artistId = newName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+
+    const updated = await Artist.findOneAndUpdate(
+      { name: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, 'i') } },
+      {
+        $set: {
+          id: artistId,
+          name: newName,
+          bio: bio !== undefined ? bio : '',
+          cover: cover || '',
+          banner: banner || '',
+          isVerified: isVerified !== undefined ? Boolean(isVerified) : false,
+          customLinks: customLinks || [],
+          updatedBy: req.user.name || 'admin'
+        }
+      },
+      { upsert: true, new: true }
+    );
+
+    // If name was updated, also update tracks and albums with old artist name
+    if (name && rawName.toLowerCase() !== newName.toLowerCase()) {
+      await Track.updateMany(
+        { artist: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, 'i') } },
+        { $set: { artist: newName } }
+      ).catch(() => {});
+      await Album.updateMany(
+        { artist: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, 'i') } },
+        { $set: { artist: newName } }
+      ).catch(() => {});
+    }
+
+    io.emit('artist:updated', updated);
+    res.json({ success: true, artist: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1442,7 +1669,292 @@ app.post('/api/playlists/import', auth, async (req, res) => {
 });
 
 // ──────────────────────────────────────────
+// TRACK IMPORT BY LINK (Spotify, YouTube, SoundCloud, Apple Music, Direct)
+// ──────────────────────────────────────────
+app.post(['/api/tracks/import', '/api/tracks/import-link'], optionalAuth, async (req, res) => {
+  try {
+    const rawUrl = (req.body.url || '').trim();
+    if (!rawUrl) return res.status(400).json({ error: 'Song link / URL is required' });
+
+    let title = '';
+    let artist = '';
+    let album = 'Single';
+    let cover = '';
+    let audioUrl = '';
+    let duration = 200;
+    let source = 'Imported';
+
+    // 1. Detect Spotify Track
+    if (rawUrl.includes('spotify.com/track') || rawUrl.includes('spotify:track:')) {
+      const match = rawUrl.match(/track\/([a-zA-Z0-9]+)/) || rawUrl.match(/spotify:track:([a-zA-Z0-9]+)/);
+      const trackId = match ? match[1] : null;
+      if (!trackId) return res.status(400).json({ error: 'Invalid Spotify track link' });
+
+      source = 'Spotify';
+      try {
+        const embedRes = await axios.get(`https://open.spotify.com/embed/track/${trackId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          timeout: 8000
+        });
+        const html = embedRes.data;
+        const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+        if (nextDataMatch) {
+          const parsed = JSON.parse(nextDataMatch[1]);
+          const entity = parsed?.props?.pageProps?.state?.data?.entity;
+          if (entity) {
+            title = entity.name || entity.title || '';
+            if (Array.isArray(entity.artists) && entity.artists.length > 0) {
+              artist = entity.artists.map(a => a.name).filter(Boolean).join(', ');
+            } else {
+              artist = entity.subtitle || '';
+            }
+            if (entity.duration) duration = Math.round(entity.duration / 1000);
+            const imgs = entity.visualIdentity?.image || [];
+            if (imgs.length > 0) {
+              cover = imgs[imgs.length - 1]?.url || imgs[0]?.url;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[Import Track] Spotify embed fetch failed:', err.message);
+      }
+
+      // Fallback via Spotify oEmbed if embed failed to provide title/artist
+      if (!title) {
+        try {
+          const oRes = await axios.get(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${trackId}`, { timeout: 5000 });
+          title = oRes.data?.title || '';
+          artist = oRes.data?.author_name || 'Spotify Artist';
+          if (!cover && oRes.data?.thumbnail_url) cover = oRes.data.thumbnail_url;
+        } catch {}
+      }
+
+      if (!title) {
+        return res.status(400).json({ error: 'Could not extract metadata from Spotify track link' });
+      }
+
+      // High-res cover & metadata via iTunes
+      if (!cover || cover.includes('unsplash')) {
+        const metaCover = await fetchTrackCover(title, artist);
+        if (metaCover) cover = metaCover;
+      }
+
+      // Resolve audio stream via YouTube search
+      const ytId = await searchYouTubeId(`${artist} - ${title}`);
+      if (ytId) {
+        audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
+        if (!cover) cover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+      }
+    }
+    // 2. Detect YouTube Video / Shorts
+    else if (rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be')) {
+      source = 'YouTube';
+      let videoId = null;
+      const vMatch = rawUrl.match(/(?:v=|\/v\/|embed\/|shorts\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+      if (vMatch) videoId = vMatch[1];
+
+      if (!videoId) return res.status(400).json({ error: 'Invalid YouTube link or video ID not found' });
+
+      audioUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      cover = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+      // Try YouTube oEmbed first for clean title and author
+      try {
+        const ytOembed = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, { timeout: 5000 });
+        const rawTitle = ytOembed.data?.title || '';
+        const author = ytOembed.data?.author_name || '';
+
+        // Clean common suffixes like (Official Music Video), (Lyric Video), [4K], etc.
+        const cleanedTitle = rawTitle
+          .replace(/\s*[\(\[]\s*(official\s*(music\s*)?video|official\s*audio|lyric\s*video|audio|lyrics|4k|hd|visualizer|remastered|hq)\s*[\)\]]/gi, '')
+          .replace(/\s*-\s*official\s*(music\s*)?video/gi, '')
+          .trim();
+
+        if (cleanedTitle.includes(' - ')) {
+          const parts = cleanedTitle.split(' - ');
+          artist = parts[0].trim();
+          title = parts.slice(1).join(' - ').trim();
+        } else {
+          title = cleanedTitle || rawTitle;
+          artist = author.replace(/ - Topic$/i, '').trim() || 'YouTube Artist';
+        }
+      } catch (err) {
+        console.warn('[Import Track] YouTube oembed failed:', err.message);
+      }
+
+      // Fetch high-res cover via iTunes if available
+      if (title && artist) {
+        const metaCover = await fetchTrackCover(title, artist);
+        if (metaCover) cover = metaCover;
+      }
+      if (!title) {
+        title = `YouTube Track (${videoId})`;
+        artist = 'YouTube';
+      }
+    }
+    // 3. Detect SoundCloud Track
+    else if (rawUrl.includes('soundcloud.com')) {
+      source = 'SoundCloud';
+      try {
+        const scOembed = await axios.get(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(rawUrl)}`, { timeout: 5000 });
+        title = scOembed.data?.title || '';
+        artist = scOembed.data?.author_name || 'SoundCloud Artist';
+        if (scOembed.data?.thumbnail_url) {
+          cover = scOembed.data.thumbnail_url.replace('-large', '-t500x500');
+        }
+      } catch (err) {}
+
+      // Resolve actual progressive stream URL via SoundCloud API
+      try {
+        const cid = await getSoundCloudClientId();
+        const resolveRes = await axios.get(`https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(rawUrl)}&client_id=${cid}`, { timeout: 6000 });
+        if (resolveRes.data) {
+          const item = resolveRes.data;
+          title = title || item.title || 'SoundCloud Track';
+          artist = artist || item.user?.username || 'SoundCloud Artist';
+          if (item.duration) duration = Math.round(item.duration / 1000);
+          if (item.artwork_url) cover = item.artwork_url.replace('-large', '-t500x500');
+          const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
+          if (prog?.url) {
+            const streamRes = await axios.get(`${prog.url}?client_id=${cid}`, { timeout: 4000 });
+            if (streamRes.data?.url) audioUrl = streamRes.data.url;
+          }
+        }
+      } catch (err) {
+        console.warn('[Import Track] SoundCloud resolve stream failed:', err.message);
+      }
+
+      if (!audioUrl) {
+        // Fallback: search YouTube for audio
+        const ytId = await searchYouTubeId(`${artist} - ${title}`);
+        if (ytId) audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
+      }
+    }
+    // 4. Detect Apple Music Track
+    else if (rawUrl.includes('music.apple.com')) {
+      source = 'Apple Music';
+      try {
+        const appleRes = await axios.get(rawUrl, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          timeout: 7000
+        });
+        const html = appleRes.data;
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+        if (titleMatch) {
+          const raw = titleMatch[1].replace(' on Apple Music', '').replace(' - Apple Music', '').trim();
+          const parts = raw.split(' by ');
+          if (parts.length >= 2) {
+            title = parts[0].trim();
+            artist = parts.slice(1).join(' by ').trim();
+          } else {
+            title = raw;
+            artist = 'Apple Music';
+          }
+        }
+        const ogImage = html.match(/<meta property="og:image" content="([^"]+)"/);
+        if (ogImage) cover = ogImage[1];
+      } catch (err) {}
+
+      if (title && artist) {
+        const ytId = await searchYouTubeId(`${artist} - ${title}`);
+        if (ytId) {
+          audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
+          if (!cover) cover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+        }
+      }
+    }
+    // 5. Direct Audio File Link
+    else if (/\.(mp3|m4a|wav|aac|ogg|flac)(\?.*)?$/i.test(rawUrl) || rawUrl.includes('stream') || rawUrl.includes('audio')) {
+      source = 'Direct Audio';
+      audioUrl = rawUrl;
+      const cleanPath = rawUrl.split('?')[0];
+      const filename = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
+      const nameWithoutExt = decodeURIComponent(filename).replace(/\.[^/.]+$/, '');
+      if (nameWithoutExt.includes(' - ')) {
+        const parts = nameWithoutExt.split(' - ');
+        artist = parts[0].trim();
+        title = parts.slice(1).join(' - ').trim();
+      } else {
+        title = nameWithoutExt || 'Imported Audio';
+        artist = 'Direct Stream';
+      }
+      cover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600';
+    } else {
+      // General fallback: query searchYouTubeId
+      source = 'Online';
+      const ytId = await searchYouTubeId(rawUrl);
+      if (ytId) {
+        audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
+        cover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+        title = rawUrl;
+        artist = 'Online Track';
+      } else {
+        return res.status(400).json({ error: 'Unsupported link or could not resolve audio stream. Please provide a Spotify, YouTube, SoundCloud, Apple Music, or direct audio link.' });
+      }
+    }
+
+    if (!audioUrl && !title) {
+      return res.status(400).json({ error: 'Failed to resolve audio for the provided link.' });
+    }
+
+    // Default fallbacks
+    if (!cover) cover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+    if (!title) title = 'Imported Track';
+    if (!artist) artist = 'Various Artists';
+
+    // Save to MongoDB
+    let trackId = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    if (mongoose.connection.readyState === 1) {
+      try {
+        const newTrack = await new Track({
+          title,
+          artist,
+          album,
+          cover,
+          audioUrl,
+          duration,
+          genre: 'Imported',
+          source,
+          addedBy: req.user?.id || 'guest',
+        }).save();
+        if (newTrack?._id) trackId = String(newTrack._id);
+      } catch (dbErr) {
+        console.warn('Track DB save error:', dbErr.message);
+      }
+    }
+
+    const trackObj = {
+      id: trackId,
+      _id: trackId,
+      title,
+      artist,
+      album,
+      cover,
+      audioUrl,
+      duration,
+      genre: 'Imported',
+      source,
+      addedBy: req.user?.id || 'guest',
+      lyrics: [],
+      liked: false
+    };
+
+    // If album detected, sync to system Album
+    syncTrackToAlbum(trackObj).catch(() => {});
+
+    res.json({
+      success: true,
+      track: trackObj
+    });
+  } catch (e) {
+    console.error('[Import Track Error]:', e);
+    res.status(500).json({ error: e.message || 'Server error while importing track' });
+  }
+});
+
+// ──────────────────────────────────────────
 // FULL SYNC & BATCH TRACKS ENDPOINTS
+
 // ──────────────────────────────────────────
 app.get('/api/sync', auth, async (req, res) => {
   try {
@@ -1549,7 +2061,7 @@ app.post('/api/playlists/:id/add-track', auth, async (req, res) => {
     const pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
     if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
     const trackIdStr = String(req.body.trackId);
-    if (!pl.trackIds.map(String).includes(trackIdStr)) {
+    if (req.body.allowDuplicate || !pl.trackIds.map(String).includes(trackIdStr)) {
       pl.trackIds.push(trackIdStr);
     }
     await u.save();
@@ -1817,9 +2329,13 @@ const createTrackHandler = async (req, res) => {
 };
 app.post(['/api/tracks', '/api/tracks/create', '/api/tracks/add'], optionalAuth, createTrackHandler);
 
-// Delete track permanently from database & remove from all playlists & likes
+// Delete track permanently from database & remove from all playlists & likes (Admin Only)
 const deleteTrackHandler = async (req, res) => {
   try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ error: 'Permission denied. Only administrators can delete songs from the website.' });
+    }
+
     const trackId = String(req.params.id || req.body.trackId || '');
     if (!trackId) return res.status(400).json({ error: 'Track ID required' });
 
@@ -1860,9 +2376,9 @@ const deleteTrackHandler = async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 };
-app.delete('/api/tracks/:id', optionalAuth, deleteTrackHandler);
-app.post('/api/tracks/:id/delete', optionalAuth, deleteTrackHandler);
-app.post('/api/tracks/delete', optionalAuth, deleteTrackHandler);
+app.delete('/api/tracks/:id', adminAuth, deleteTrackHandler);
+app.post('/api/tracks/:id/delete', adminAuth, deleteTrackHandler);
+app.post('/api/tracks/delete', adminAuth, deleteTrackHandler);
 
 // Like / Unlike track toggle endpoint
 app.post('/api/tracks/:id/like', auth, async (req, res) => {
@@ -2102,16 +2618,40 @@ app.get('/api/tracks/download', async (req, res) => {
   }
 });
 
-app.post('/api/tracks/update-lyrics', async (req, res) => {
+app.post('/api/tracks/update-lyrics', adminAuth, async (req, res) => {
   try {
-    const { trackId, title, artist, audioUrl, lyrics, updatedBy } = req.body;
+    const { trackId, title, artist, audioUrl, lyrics, isVerified } = req.body;
+    const isVer = isVerified !== undefined ? Boolean(isVerified) : true;
+    const trackKey = getTrackKey(title, artist);
+
+    // If admin marks lyrics as NOT correct / unverified, remove custom record
+    // so the song continues using the normal function (LRCLIB / OVH scraper)
+    if (!isVer) {
+      if (trackKey && trackKey !== '___') {
+        await SongLyrics.deleteOne({ trackKey }).catch(() => {});
+      }
+      if (trackId) {
+        await SongLyrics.deleteOne({ trackId: String(trackId) }).catch(() => {});
+        if (mongoose.isValidObjectId(trackId)) {
+          await Track.updateOne({ _id: trackId }, { $set: { lyrics: [] } }).catch(() => {});
+        }
+      }
+      io.emit('lyrics:updated', {
+        trackKey,
+        trackId: String(trackId || ''),
+        title,
+        artist,
+        lyrics: [],
+        isVerified: false
+      });
+      return res.json({ success: true, isVerified: false, message: 'Lyrics unverified; normal scraper will be used.' });
+    }
+
     if (!lyrics || !Array.isArray(lyrics)) {
       return res.status(400).json({ error: 'Lyrics must be an array' });
     }
 
-    const trackKey = getTrackKey(title, artist);
-
-    // 1. Save / upsert into universal SongLyrics collection
+    // 1. Save / upsert into universal SongLyrics collection with isVerified: true
     if (trackKey && trackKey !== '___') {
       await SongLyrics.findOneAndUpdate(
         { trackKey },
@@ -2122,8 +2662,11 @@ app.post('/api/tracks/update-lyrics', async (req, res) => {
             title: title || '',
             artist: artist || '',
             lyrics,
-            updatedBy: updatedBy || 'user',
-            source: 'manual'
+            updatedBy: req.user.name || 'admin',
+            isVerified: true,
+            verifiedBy: req.user.name || 'Admin',
+            verifiedAt: new Date(),
+            source: 'verified'
           }
         },
         { upsert: true, new: true }
@@ -2139,7 +2682,10 @@ app.post('/api/tracks/update-lyrics', async (req, res) => {
             lyrics,
             title: title || '',
             artist: artist || '',
-            source: 'manual'
+            isVerified: true,
+            verifiedBy: req.user.name || 'Admin',
+            verifiedAt: new Date(),
+            source: 'verified'
           }
         },
         { upsert: true }
@@ -2157,11 +2703,13 @@ app.post('/api/tracks/update-lyrics', async (req, res) => {
       trackId: String(trackId || ''),
       title,
       artist,
-      lyrics
+      lyrics,
+      isVerified: true,
+      verifiedBy: req.user.name || 'Admin'
     });
 
-    console.log(`[Lyrics] Successfully saved & broadcasted manual lyrics for "${title}" by "${artist}"`);
-    res.json({ success: true, trackKey });
+    console.log(`[Lyrics] Verified lyrics saved for "${title}" by "${artist}" by admin ${req.user.name}`);
+    res.json({ success: true, trackKey, isVerified: true });
   } catch (e) {
     console.error('Update lyrics error:', e.message);
     res.status(500).json({ error: e.message });
@@ -2178,7 +2726,13 @@ app.get('/api/tracks/lyrics', async (req, res) => {
     if (trackKey && trackKey !== '___') {
       const found = await SongLyrics.findOne({ trackKey }).lean();
       if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
-        return res.json({ success: true, lyrics: found.lyrics, source: found.source || 'manual' });
+        return res.json({
+          success: true,
+          lyrics: found.lyrics,
+          source: found.source || 'manual',
+          isVerified: Boolean(found.isVerified),
+          verifiedBy: found.verifiedBy || ''
+        });
       }
     }
 
@@ -2186,14 +2740,25 @@ app.get('/api/tracks/lyrics', async (req, res) => {
     if (trackId) {
       const found = await SongLyrics.findOne({ trackId: String(trackId) }).lean();
       if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
-        return res.json({ success: true, lyrics: found.lyrics, source: found.source || 'manual' });
+        return res.json({
+          success: true,
+          lyrics: found.lyrics,
+          source: found.source || 'manual',
+          isVerified: Boolean(found.isVerified),
+          verifiedBy: found.verifiedBy || ''
+        });
       }
 
       // 3. Try Track DB if valid ObjectId
       if (mongoose.isValidObjectId(trackId)) {
         const trk = await Track.findById(trackId).lean();
         if (trk && Array.isArray(trk.lyrics) && trk.lyrics.length > 0) {
-          return res.json({ success: true, lyrics: trk.lyrics, source: 'manual' });
+          return res.json({
+            success: true,
+            lyrics: trk.lyrics,
+            source: 'manual',
+            isVerified: false
+          });
         }
       }
     }
@@ -2202,17 +2767,17 @@ app.get('/api/tracks/lyrics', async (req, res) => {
     if (title) {
       const lyrics = await fetchLrclibLyrics(title, artist, 180);
       if (lyrics && lyrics.length > 0) {
-        return res.json({ success: true, lyrics, source: 'synced' });
+        return res.json({ success: true, lyrics, source: 'synced', isVerified: false });
       }
     }
 
-    res.json({ success: false, lyrics: [] });
+    res.json({ success: false, lyrics: [], isVerified: false });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message, lyrics: [] });
+    res.status(500).json({ success: false, error: err.message, lyrics: [], isVerified: false });
   }
 });
 
-app.post('/api/tracks/clear-lyrics', async (req, res) => {
+app.post('/api/tracks/clear-lyrics', adminAuth, async (req, res) => {
   try {
     const { trackId, title, artist } = req.body;
     const trackKey = getTrackKey(title, artist);
@@ -2227,7 +2792,7 @@ app.post('/api/tracks/clear-lyrics', async (req, res) => {
       }
     }
 
-    io.emit('lyrics:updated', { trackKey, trackId, lyrics: [] });
+    io.emit('lyrics:updated', { trackKey, trackId, lyrics: [], isVerified: false });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

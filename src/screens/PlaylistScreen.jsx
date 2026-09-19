@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
-  Sparkles, RefreshCw, Zap, Disc, ArrowRight
+  Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
+import { ArtistLinks } from '../utils/artistUtils';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -49,6 +50,20 @@ export default function PlaylistScreen({
   const [transitions, setTransitions] = useState(playlist?.transitions || {});
   const [activeMixerPair, setActiveMixerPair] = useState(null); // { trackA, trackB, pairKey }
   const [isAutoMixingAll, setIsAutoMixingAll] = useState(false);
+
+  // Duplicate Track Confirmation State
+  const [duplicateConfirmTrack, setDuplicateConfirmTrack] = useState(null);
+
+  const handleAddTrackWithCheck = (trackToAdd) => {
+    if (!trackToAdd) return;
+    const trackIdStr = String(trackToAdd.id || trackToAdd._id);
+    const alreadyInPlaylist = (playlist?.trackIds || []).map(String).includes(trackIdStr);
+    if (alreadyInPlaylist) {
+      setDuplicateConfirmTrack(trackToAdd);
+    } else {
+      onAddTrackToPlaylist(trackIdStr, playlist.id, false);
+    }
+  };
 
   // AI Smart Recommendations State
   const [aiRecommendations, setAiRecommendations] = useState([]);
@@ -464,12 +479,12 @@ export default function PlaylistScreen({
             {playlist.isAlbum && playlist.artist && (
               <div className="mt-1 text-xs font-mono font-bold flex items-center justify-center md:justify-start gap-1">
                 <span className={isDark ? 'text-zinc-400' : 'text-[#082621]/70'}>Album by</span>
-                <button
-                  onClick={() => onSelectArtist?.(playlist.artist)}
-                  className="text-[#17a398] hover:underline font-black cursor-pointer uppercase inline-block"
-                >
-                  {playlist.artist}
-                </button>
+                <ArtistLinks
+                  artist={playlist.artist}
+                  onSelectArtist={onSelectArtist}
+                  className="text-[#17a398] font-black uppercase inline-block"
+                  linkClassName="hover:underline cursor-pointer"
+                />
               </div>
             )}
 
@@ -682,19 +697,14 @@ export default function PlaylistScreen({
                           {track.title}
                         </h4>
                         <div className="flex items-center gap-2">
-                          <p 
-                            onClick={(e) => {
-                              if (onSelectArtist && track.artist) {
-                                e.stopPropagation();
-                                onSelectArtist(track.artist);
-                              }
-                            }}
-                            className={`text-[11px] truncate font-medium hover:underline cursor-pointer ${
+                          <ArtistLinks
+                            track={track}
+                            onSelectArtist={onSelectArtist}
+                            className={`text-[11px] truncate font-medium ${
                               isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                             }`}
-                          >
-                            {track.artist}
-                          </p>
+                            linkClassName="hover:underline cursor-pointer"
+                          />
                           {curTransition && (
                             <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.2 rounded-none bg-[#082621] text-[#26c4b7]">
                               🎛️ {getTransitionDisplayName(curTransition.style || curTransition.name)} ({curTransition.duration || 8}s)
@@ -872,7 +882,7 @@ export default function PlaylistScreen({
                   </div>
                   {isOwner && (
                     <button
-                      onClick={() => onAddTrackToPlaylist(rec.id, playlist.id)}
+                      onClick={() => handleAddTrackWithCheck(rec)}
                       className="brutal-btn px-3 py-1.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 shrink-0 ml-2 cursor-pointer"
                       title="Add to playlist"
                     >
@@ -898,15 +908,23 @@ export default function PlaylistScreen({
         }`}>
           <div className={`mb-4 pb-3 border-b-2 ${
             isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
-          }`}>
-            <h3 className="text-lg font-mono font-black uppercase tracking-wider">ADD SONGS TO THIS PLAYLIST</h3>
-            <p className={`text-xs mt-0.5 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Select songs from your library to add to this playlist
-            </p>
+          } flex items-center justify-between`}>
+            <div>
+              <h3 className={`text-sm font-mono font-black uppercase ${
+                isDark ? 'text-white' : 'text-[#082621]'
+              }`}>
+                ADD TRACKS FROM YOUR DISPENSARY
+              </h3>
+              <p className={`text-[11px] font-sans ${
+                isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+              }`}>
+                Click ADD to append these records to this cassette
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {availableTracks.map((track) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+            {availableTracks.map(track => (
               <div
                 key={track.id}
                 className={`flex items-center justify-between p-2.5 brutal-border transition-colors ${
@@ -925,7 +943,7 @@ export default function PlaylistScreen({
                 </div>
 
                 <button
-                  onClick={() => onAddTrackToPlaylist(track.id, playlist.id)}
+                  onClick={() => handleAddTrackWithCheck(track)}
                   className="brutal-btn px-3 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 shrink-0 ml-2 cursor-pointer"
                 >
                   <Plus size={14} />
@@ -947,6 +965,70 @@ export default function PlaylistScreen({
           initialTransition={transitions[activeMixerPair.pairKey]}
           onSaveTransition={handleSaveTransitionSettings}
         />
+      )}
+
+      {/* Duplicate Track Confirmation Modal */}
+      {duplicateConfirmTrack && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
+          <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg p-6 w-full max-w-sm relative">
+            <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-amber-600" />
+                <h3 className="text-base font-mono font-black uppercase text-[#082621]">Already in Playlist</h3>
+              </div>
+              <button 
+                onClick={() => setDuplicateConfirmTrack(null)} 
+                className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="my-4 text-center">
+              <p className="text-xs font-mono font-bold text-[#082621]">
+                "<span className="font-black">{duplicateConfirmTrack.title}</span>" is already in this playlist.
+              </p>
+              <p className="text-[11px] font-sans text-[#082621]/70 mt-1">
+                Do you want to add it again?
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onAddTrackToPlaylist(duplicateConfirmTrack.id || duplicateConfirmTrack._id, playlist.id, true);
+                  setDuplicateConfirmTrack(null);
+                }}
+                className="flex-1 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} strokeWidth={3} />
+                <span>Add Again</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDuplicateConfirmTrack(null)}
+                className="flex-1 py-2.5 bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] font-mono text-xs font-black uppercase brutal-border cursor-pointer flex items-center justify-center"
+              >
+                <span>Cancel</span>
+              </button>
+            </div>
+
+            <div className="text-center pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onRemoveTrackFromPlaylist?.(duplicateConfirmTrack.id || duplicateConfirmTrack._id, playlist.id);
+                  setDuplicateConfirmTrack(null);
+                }}
+                className="text-[11px] font-mono font-bold text-[#dc2626] hover:text-red-700 hover:underline cursor-pointer bg-transparent border-0 inline-block p-1"
+              >
+                Remove from playlist
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

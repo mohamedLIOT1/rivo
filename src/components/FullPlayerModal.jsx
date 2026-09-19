@@ -9,6 +9,8 @@ import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
+import { ArtistLinks } from '../utils/artistUtils';
+import { isUserAdmin } from '../utils/adminUtils';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -101,8 +103,11 @@ export default function FullPlayerModal({
   onAddToJamQueue,
   onRemoveFromJamQueue,
   onSelectArtist,
+  currentUser = null,
   globalTheme = 'dark'
 }) {
+  const isAdmin = isUserAdmin(currentUser);
+
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
   const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration, isMixMode, setIsMixMode } = useAudioPlayer();
 
@@ -183,10 +188,14 @@ export default function FullPlayerModal({
   const [syncOffset, setSyncOffset] = useState(0);
 
   const [localLyrics, setLocalLyrics] = useState(null);
+  const [isLyricsVerified, setIsLyricsVerified] = useState(false);
+  const [lyricsVerifiedBy, setLyricsVerifiedBy] = useState(null);
 
   useEffect(() => {
     setSyncOffset(0);
     setLocalLyrics(null);
+    setIsLyricsVerified(false);
+    setLyricsVerifiedBy(null);
     setTranslatedLyrics(null);
     setShowTranslation(false);
 
@@ -201,8 +210,12 @@ export default function FullPlayerModal({
           .then(d => {
             if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
               setLocalLyrics(d.lyrics);
+              setIsLyricsVerified(Boolean(d.isVerified));
+              setLyricsVerifiedBy(d.verifiedBy || null);
               currentTrack.lyrics = d.lyrics;
             } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
+              setIsLyricsVerified(false);
+              setLyricsVerifiedBy(null);
               fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -217,6 +230,8 @@ export default function FullPlayerModal({
               .then(g => {
                 if (g.success && Array.isArray(g.lyrics) && g.lyrics.length > 0) {
                   setLocalLyrics(g.lyrics);
+                  setIsLyricsVerified(false);
+                  setLyricsVerifiedBy(null);
                   currentTrack.lyrics = g.lyrics;
                 }
               })
@@ -243,6 +258,8 @@ export default function FullPlayerModal({
 
       if (matches && Array.isArray(data.lyrics)) {
         setLocalLyrics(data.lyrics);
+        setIsLyricsVerified(Boolean(data.isVerified));
+        setLyricsVerifiedBy(data.verifiedBy || null);
         currentTrack.lyrics = data.lyrics;
       }
     };
@@ -308,9 +325,11 @@ export default function FullPlayerModal({
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
   const [isManualEditOpen, setIsManualEditOpen] = useState(false);
   const [manualText, setManualText] = useState('');
+  const [markVerified, setMarkVerified] = useState(true);
   const [isSavingManualLyrics, setIsSavingManualLyrics] = useState(false);
 
   const openManualEdit = () => {
+    if (!isAdmin) return;
     const formatted = rawLyrics
       .map(line => {
         const m = Math.floor(line.time / 60);
@@ -320,11 +339,12 @@ export default function FullPlayerModal({
       })
       .join('\n');
     setManualText(formatted);
+    setMarkVerified(isLyricsVerified !== false);
     setIsManualEditOpen(true);
   };
 
   const handleSaveManualLyrics = async () => {
-    if (!currentTrack) return;
+    if (!currentTrack || !isAdmin) return;
     setIsSavingManualLyrics(true);
     try {
       const lines = manualText
@@ -348,20 +368,36 @@ export default function FullPlayerModal({
         }
       });
 
+      const token = localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
+
       await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           trackId: currentTrack.id || currentTrack._id,
           title: currentTrack.title,
           artist: currentTrack.artist,
           audioUrl: currentTrack.audioUrl,
-          lyrics: parsed
+          lyrics: parsed,
+          isVerified: markVerified
         })
       });
 
-      currentTrack.lyrics = parsed;
-      setLocalLyrics(parsed);
+      if (markVerified) {
+        currentTrack.lyrics = parsed;
+        setLocalLyrics(parsed);
+        setIsLyricsVerified(true);
+        setLyricsVerifiedBy(currentUser?.username || 'Admin');
+      } else {
+        // If unverified, it removed override, let's reset or fetch dynamic scraper
+        setIsLyricsVerified(false);
+        setLyricsVerifiedBy(null);
+        handleGenerateLyrics();
+      }
+
       setTranslatedLyrics(null);
       setShowTranslation(false);
       setIsManualEditOpen(false);
@@ -379,7 +415,7 @@ export default function FullPlayerModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trackId: currentTrack.id,
+          trackId: currentTrack.id || currentTrack._id,
           title: currentTrack.title,
           artist: currentTrack.artist,
           duration: currentTrack.duration || 180,
@@ -401,21 +437,28 @@ export default function FullPlayerModal({
 
   const [isClearLyricsConfirmOpen, setIsClearLyricsConfirmOpen] = useState(false);
 
-  // Clear wrong/cached lyrics from MongoDB immediately
+  // Clear wrong/cached lyrics from MongoDB immediately (admin only)
   const executeClearLyrics = async () => {
-    if (!currentTrack || !rawLyrics.length) return;
+    if (!currentTrack || !rawLyrics.length || !isAdmin) return;
     setIsClearingLyrics(true);
     try {
+      const token = localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
       await fetch(`${API_BASE_URL}/api/tracks/clear-lyrics`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ 
-          trackId: currentTrack.id,
-          title: currentTrack.title 
+          trackId: currentTrack.id || currentTrack._id,
+          title: currentTrack.title,
+          artist: currentTrack.artist
         })
       });
       currentTrack.lyrics = [];
       setLocalLyrics([]);
+      setIsLyricsVerified(false);
+      setLyricsVerifiedBy(null);
       setTranslatedLyrics(null);
       setShowTranslation(false);
     } catch (e) {
@@ -491,6 +534,14 @@ export default function FullPlayerModal({
     >
       {lyrics.length > 0 ? (
         <div className="py-3 px-2 space-y-3">
+          {isLyricsVerified && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 mb-3 rounded-xl bg-[#17a398]/10 border border-[#17a398]/30 w-fit">
+              <CheckCircle2 size={14} className="text-[#17a398]" />
+              <span className="text-[11px] font-mono font-bold text-[#17a398]">
+                VERIFIED LYRICS {lyricsVerifiedBy ? `• BY @${lyricsVerifiedBy}` : ''}
+              </span>
+            </div>
+          )}
           {lyrics.map((line, idx) => {
             const isActive = idx === activeLyricIndex;
             return (
@@ -528,7 +579,7 @@ export default function FullPlayerModal({
           </div>
           <p className={`font-display font-black text-lg mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Lyrics Found</p>
           <p className={`text-xs font-mono max-w-xs mx-auto mb-5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Search for lyrics online or enter them manually with timestamps.
+            Search for lyrics online{isAdmin ? ' or enter and verify them manually.' : '.'}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
@@ -543,15 +594,17 @@ export default function FullPlayerModal({
               )}
             </button>
 
-            <button
-              onClick={openManualEdit}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 font-display font-bold text-xs rounded-xl brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
-                isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110]'
-              }`}
-            >
-              <Edit3 size={15} className={isDark ? 'text-[#26c4b7]' : 'text-[#0f756d]'} />
-              <span>Enter Manually</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={openManualEdit}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 font-display font-bold text-xs rounded-xl brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                  isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110]'
+                }`}
+              >
+                <Edit3 size={15} className={isDark ? 'text-[#26c4b7]' : 'text-[#0f756d]'} />
+                <span>Enter & Verify Manually</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -563,7 +616,7 @@ export default function FullPlayerModal({
             <div className={`flex items-center justify-between pb-3 border-b-2 ${isDark ? 'border-zinc-800' : 'border-[#0b1110]'} mb-4`}>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-                <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Edit Lyrics</h3>
+                <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Admin Lyrics Editor</h3>
               </div>
               <button 
                 onClick={() => setIsManualEditOpen(false)} 
@@ -578,16 +631,39 @@ export default function FullPlayerModal({
             </p>
 
             <textarea
-              rows={10}
+              rows={9}
               value={manualText}
               onChange={(e) => setManualText(e.target.value)}
               placeholder="[0:00] First Line&#10;[0:12] Second Line..."
-              className={`w-full p-3 text-xs font-mono rounded-xl focus:outline-none mb-4 resize-none leading-relaxed ${
+              className={`w-full p-3 text-xs font-mono rounded-xl focus:outline-none mb-3 resize-none leading-relaxed ${
                 isDark 
                   ? 'bg-zinc-900 border border-zinc-700 text-white focus:border-[#17a398]' 
                   : 'bg-[#ede5d3] brutal-border text-[#0b1110] focus:bg-white'
               }`}
             />
+
+            {/* Admin Verification Checkbox */}
+            <label className={`flex items-start gap-2.5 p-3 rounded-xl mb-4 cursor-pointer border ${
+              isDark ? 'bg-zinc-900/80 border-zinc-700' : 'bg-[#ede5d3]/50 border-black/20'
+            }`}>
+              <input
+                type="checkbox"
+                checked={markVerified}
+                onChange={(e) => setMarkVerified(e.target.checked)}
+                className="mt-0.5 accent-[#17a398] w-4 h-4 rounded cursor-pointer shrink-0"
+              />
+              <div className="flex flex-col text-left">
+                <span className={`text-xs font-mono font-bold flex items-center gap-1 ${markVerified ? 'text-[#17a398]' : (isDark ? 'text-zinc-400' : 'text-zinc-600')}`}>
+                  <CheckCircle2 size={13} />
+                  {markVerified ? 'Verify & Lock Lyrics (Official)' : 'Not Verified (Will remove manual override)'}
+                </span>
+                <span className={`text-[10px] mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  {markVerified 
+                    ? 'Verified lyrics are locked with a verified badge across the website.' 
+                    : 'If not verified, the manual override will be cleared and the player will continue using the normal lyrics scraper.'}
+                </span>
+              </div>
+            </label>
 
             <div className="flex gap-3">
               <button
@@ -682,18 +758,13 @@ export default function FullPlayerModal({
                 }`}>
                   {track.title}
                 </p>
-                <p 
-                  onClick={(e) => {
-                    if (onSelectArtist && track.artist) {
-                      e.stopPropagation();
-                      if (onClose) onClose();
-                      onSelectArtist(track.artist);
-                    }
-                  }}
-                  className={`text-[11px] truncate font-sans mt-0.5 hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                >
-                  {track.artist}
-                </p>
+                <ArtistLinks
+                  track={track}
+                  onSelectArtist={onSelectArtist}
+                  onClickExtra={onClose}
+                  className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                  linkClassName="hover:underline cursor-pointer"
+                />
               </div>
 
               {jamSession && onRemoveFromJamQueue && (
@@ -900,20 +971,15 @@ export default function FullPlayerModal({
               }`}>
                 {currentTrack.title}
               </h2>
-              <p 
-                onClick={(e) => {
-                  if (onSelectArtist && currentTrack.artist) {
-                    e.stopPropagation();
-                    if (onClose) onClose();
-                    onSelectArtist(currentTrack.artist);
-                  }
-                }}
-                className={`text-xs font-bold truncate hover:underline cursor-pointer ${
+              <ArtistLinks
+                track={currentTrack}
+                onSelectArtist={onSelectArtist}
+                onClickExtra={onClose}
+                className={`text-xs font-bold truncate block ${
                   isDark ? 'text-zinc-300' : 'text-[#0f756d]'
                 }`}
-              >
-                {currentTrack.artist}
-              </p>
+                linkClassName="hover:underline cursor-pointer"
+              />
             </div>
 
             <button 
@@ -1141,6 +1207,63 @@ export default function FullPlayerModal({
           <div className={`lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto ${
             isDark ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
           } rounded-2xl p-4 brutal-shadow-lg`}>
+            <div className={`flex items-center justify-between pb-2 mb-2 border-b ${
+              isDark ? 'border-zinc-800' : 'border-zinc-300'
+            }`}>
+              <div className="flex items-center gap-1.5">
+                {isLyricsVerified && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#17a398]/20 text-[#17a398] border border-[#17a398]/40">
+                    <CheckCircle2 size={11} className="text-[#17a398]" />
+                    VERIFIED
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {rawLyrics.length > 0 && (
+                  <button
+                    onClick={handleTranslateLyrics}
+                    disabled={isTranslating}
+                    className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
+                      showTranslation 
+                        ? 'text-[#0b1110] bg-[#17a398] brutal-border' 
+                        : isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                    }`}
+                    title="Translate Lyrics"
+                  >
+                    <Languages size={13} />
+                    <span className="text-[10px]">Translate</span>
+                  </button>
+                )}
+                {isAdmin && rawLyrics.length > 0 && (
+                  <>
+                    <button
+                      onClick={openManualEdit}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                      }`}
+                      title="Edit Lyrics (Admin)"
+                    >
+                      <Edit3 size={13} />
+                    </button>
+                    <button
+                      onClick={() => setIsClearLyricsConfirmOpen(true)}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        isDark 
+                          ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
+                          : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                      }`}
+                      title="Clear Lyrics (Admin)"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
             {renderLyrics()}
           </div>
         )}
@@ -1188,6 +1311,15 @@ export default function FullPlayerModal({
 
             {desktopSideTab === 'lyrics' && (
               <div className="flex items-center gap-1.5">
+                {isLyricsVerified && (
+                  <span 
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30 mr-1"
+                    title={lyricsVerifiedBy ? `Verified by @${lyricsVerifiedBy}` : 'Verified accurate lyrics'}
+                  >
+                    <CheckCircle2 size={12} className="text-[#17a398]" />
+                    VERIFIED {lyricsVerifiedBy ? `(@${lyricsVerifiedBy})` : ''}
+                  </span>
+                )}
                 {rawLyrics.length > 0 && (
                   <>
                     <button
@@ -1205,28 +1337,32 @@ export default function FullPlayerModal({
                       <Languages size={14} />
                       <span className="text-[10px]">Translate</span>
                     </button>
-                    <button
-                      onClick={openManualEdit}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-black'
-                      }`}
-                      title="Edit Lyrics"
-                    >
-                      <Edit3 size={14} />
-                    </button>
-                    <button
-                      onClick={() => setIsClearLyricsConfirmOpen(true)}
-                      className={`p-1.5 rounded-lg transition-colors ${
-                        isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
-                      }`}
-                      title="Clear Lyrics"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={openManualEdit}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isDark 
+                              ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
+                              : 'bg-white text-zinc-700 hover:text-black border border-black'
+                          }`}
+                          title="Edit Lyrics (Admin)"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          onClick={() => setIsClearLyricsConfirmOpen(true)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isDark 
+                              ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
+                              : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                          }`}
+                          title="Clear Lyrics (Admin)"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>

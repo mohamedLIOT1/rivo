@@ -8,7 +8,7 @@ import PlaylistPickerModal from './PlaylistPickerModal';
 
 export default React.memo(function SongItem({ track, onPlay, showDelete = false }) {
   const { currentTrack, isPlaying, isLoading, togglePlay, handleDownloadTrack, handleRemoveDownload, downloadedTracks, downloadingIds } = useAudioPlayer();
-  const { likedTrackIds, toggleLikeTrack, addToPlaylist } = useUser();
+  const { likedTrackIds, toggleLikeTrack, addToPlaylist, removeTrackFromPlaylist } = useUser();
   const { showToast } = useToast();
 
   const [isPickerVisible, setIsPickerVisible] = useState(false);
@@ -113,7 +113,10 @@ export default React.memo(function SongItem({ track, onPlay, showDelete = false 
       <PlaylistPickerModal
         visible={isPickerVisible}
         onClose={() => setIsPickerVisible(false)}
-        onSelect={(plId) => addToPlaylist(plId, trackId)}
+        trackId={trackId}
+        trackTitle={track?.title}
+        onSelect={(plId, allowDup) => addToPlaylist(plId, trackId, allowDup)}
+        onRemove={(plId) => removeTrackFromPlaylist(plId, trackId)}
       />
     </TouchableOpacity>
   );

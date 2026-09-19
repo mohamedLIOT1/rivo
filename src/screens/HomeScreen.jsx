@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import VerifiedBadge from '../components/VerifiedBadge';
+import { ArtistLinks } from '../utils/artistUtils';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -254,17 +255,12 @@ export default function HomeScreen({
                     <div className={`font-display font-black text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                       {track.title}
                     </div>
-                    <div 
-                      onClick={(e) => {
-                        if (onSelectArtist && track.artist) {
-                          e.stopPropagation();
-                          onSelectArtist(track.artist);
-                        }
-                      }}
-                      className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                    >
-                      {track.artist || 'Unknown Artist'}
-                    </div>
+                    <ArtistLinks
+                      track={track}
+                      onSelectArtist={onSelectArtist}
+                      className={`text-[10px] font-bold truncate block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                      linkClassName="hover:underline cursor-pointer"
+                    />
                   </div>
                 </div>
 
@@ -469,17 +465,12 @@ export default function HomeScreen({
                       <div className="font-display font-black text-sm text-white drop-shadow-[1px_1px_0px_#000] truncate">
                         {track.title ? track.title.split('(')[0] : 'Untitled'}
                       </div>
-                      <div 
-                        onClick={(e) => {
-                          if (onSelectArtist && track.artist) {
-                            e.stopPropagation();
-                            onSelectArtist(track.artist);
-                          }
-                        }}
-                        className="text-[10px] text-white/90 font-bold truncate hover:underline cursor-pointer"
-                      >
-                        {track.artist || 'Rivo Artist'}
-                      </div>
+                      <ArtistLinks
+                        track={track}
+                        onSelectArtist={onSelectArtist}
+                        className="text-[10px] text-white/90 font-bold truncate block"
+                        linkClassName="hover:underline cursor-pointer"
+                      />
                     </div>
 
                     <div className="z-10 text-[8px] font-mono bg-black/60 px-1.5 py-0.5 rounded text-center truncate text-emerald-300 font-bold">
@@ -490,17 +481,12 @@ export default function HomeScreen({
                   <div className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                     {track.title}
                   </div>
-                  <div 
-                    onClick={(e) => {
-                      if (onSelectArtist && track.artist) {
-                        e.stopPropagation();
-                        onSelectArtist(track.artist);
-                      }
-                    }}
-                    className={`text-[10px] font-bold truncate mb-2 hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                  >
-                    {track.artist}
-                  </div>
+                  <ArtistLinks
+                    track={track}
+                    onSelectArtist={onSelectArtist}
+                    className={`text-[10px] font-bold truncate mb-2 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                    linkClassName="hover:underline cursor-pointer"
+                  />
                 </div>
 
                 <div className="flex items-center gap-1.5 w-full">

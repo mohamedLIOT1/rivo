@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
+import { ArtistLinks } from '../utils/artistUtils';
 
 export default function MiniPlayer({
   currentTrack,
@@ -112,19 +113,14 @@ export default function MiniPlayer({
               }`}>
                 {currentTrack.title}
               </h4>
-              <p 
-                onClick={(e) => {
-                  if (onSelectArtist && currentTrack.artist) {
-                    e.stopPropagation();
-                    onSelectArtist(currentTrack.artist);
-                  }
-                }}
-                className={`text-[10px] font-bold truncate mt-0.5 hover:underline cursor-pointer ${
+              <ArtistLinks
+                track={currentTrack}
+                onSelectArtist={onSelectArtist}
+                className={`text-[10px] font-bold truncate mt-0.5 block ${
                   isDark ? 'text-zinc-400' : 'text-zinc-600'
                 }`}
-              >
-                {currentTrack.artist || 'Unknown Artist'}
-              </p>
+                linkClassName="hover:underline cursor-pointer"
+              />
             </div>
           </div>
 
@@ -191,19 +187,14 @@ export default function MiniPlayer({
               }`}>
                 {currentTrack.title}
               </h4>
-              <p 
-                onClick={(e) => {
-                  if (onSelectArtist && currentTrack.artist) {
-                    e.stopPropagation();
-                    onSelectArtist(currentTrack.artist);
-                  }
-                }}
-                className={`text-[10px] sm:text-[11px] font-bold truncate hover:underline cursor-pointer ${
+              <ArtistLinks
+                track={currentTrack}
+                onSelectArtist={onSelectArtist}
+                className={`text-[10px] sm:text-[11px] font-bold truncate block ${
                   isDark ? 'text-zinc-400' : 'text-zinc-600'
                 }`}
-              >
-                {currentTrack.artist || 'Unknown Artist'}
-              </p>
+                linkClassName="hover:underline cursor-pointer"
+              />
             </div>
 
             {/* Favorite Heart Button */}

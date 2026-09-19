@@ -12,6 +12,7 @@ import EditSongModal from './components/EditSongModal';
 import AuthModal from './components/AuthModal';
 import JamRoomModal from './components/JamRoomModal';
 import ImportPlaylistModal from './components/ImportPlaylistModal';
+import ImportSongModal from './components/ImportSongModal';
 import ChatModal from './components/ChatModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import ListeningActivityPanel from './components/ListeningActivityPanel';
@@ -27,6 +28,8 @@ import PlaylistScreen from './screens/PlaylistScreen';
 import PodcastsScreen from './screens/PodcastsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import MixesScreen from './screens/MixesScreen';
+import AdminScreen from './screens/AdminScreen';
+import { isUserAdmin } from './utils/adminUtils';
 
 import { API_BASE_URL } from './config';
 import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from './utils/offlineStorage';
@@ -75,6 +78,7 @@ function AppContent() {
   const [isJamOpen,           setIsJamOpen]           = useState(false);
   const [jamSession,          setJamSession]          = useState(null);
   const [isImportPlaylistOpen, setIsImportPlaylistOpen] = useState(false);
+  const [isImportSongOpen, setIsImportSongOpen] = useState(false);
   const [isChatOpen,          setIsChatOpen]          = useState(false);
   const [isShortcutsOpen,     setIsShortcutsOpen]     = useState(false);
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(() => {
@@ -239,7 +243,7 @@ function AppContent() {
   const handleOpenEditSong = (track) => { setEditingTrack(track); setIsEditSongOpen(true); };
 
   const handleDeleteTrack = async (trackId) => {
-    if (!trackId) return;
+    if (!trackId || !isUserAdmin(currentUser)) return;
     const cleanId = String(trackId);
     if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
       setIsPlaying(false);
@@ -341,12 +345,13 @@ function AppContent() {
     } catch {}
   };
 
-  const handleAddTrackToPlaylist = async (trackId, playlistId) => {
+  const handleAddTrackToPlaylist = async (trackId, playlistId, allowDuplicate = false) => {
+    const cleanTrackId = String(trackId);
     setPlaylists(prev => prev.map(pl => {
-      if (pl.id !== playlistId) return pl;
-      const ids = pl.trackIds || [];
-      if (ids.includes(trackId)) return pl;
-      return { ...pl, trackIds: [...ids, trackId] };
+      if (String(pl.id) !== String(playlistId)) return pl;
+      const ids = (pl.trackIds || []).map(String);
+      if (!allowDuplicate && ids.includes(cleanTrackId)) return pl;
+      return { ...pl, trackIds: [...ids, cleanTrackId] };
     }));
 
     try {
@@ -355,7 +360,7 @@ function AppContent() {
         await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ trackId }),
+          body: JSON.stringify({ trackId: cleanTrackId, allowDuplicate }),
         });
       }
     } catch {}
@@ -779,6 +784,7 @@ function AppContent() {
           playlists={playlists}
           openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
           openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
+          openImportSongModal={() => setIsImportSongOpen(true)}
           openJamModal={() => setIsJamOpen(true)}
           openSettings={() => setIsSettingsOpen(true)}
           openAddSongModal={() => setIsAddSongOpen(true)}
@@ -813,7 +819,7 @@ function AppContent() {
               onSelectArtist={handleSelectArtist}
               openAddSongModal={() => setIsAddSongOpen(true)}
               openEditSongModal={handleOpenEditSong}
-              onDeleteTrack={handleDeleteTrack}
+              onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               currentTrack={currentTrack}
               isPlaying={isPlaying}
               currentUser={currentUser}
@@ -841,7 +847,7 @@ function AppContent() {
               toggleLike={toggleLike}
               onOpenAddSongModal={() => setIsAddSongOpen(true)}
               onAddToLibrary={handleAddSong}
-              onDeleteTrack={handleDeleteTrack}
+              onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               onViewProfile={(userId) => {
                 setViewingProfileUserId(userId);
                 setCurrentScreen('profile');
@@ -859,6 +865,8 @@ function AppContent() {
               onSelectArtist={handleSelectArtist}
               onSelectTrack={playTrack}
               openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
+              openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
+              openImportSongModal={() => setIsImportSongOpen(true)}
               toggleLike={toggleLike}
               globalTheme={globalTheme}
             />
@@ -876,7 +884,7 @@ function AppContent() {
               onBack={() => setCurrentScreen('library')}
               onAddTrackToPlaylist={handleAddTrackToPlaylist}
               onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
-              onDeleteTrack={handleDeleteTrack}
+              onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               onUpdatePlaylist={handleUpdatePlaylist}
               onDeletePlaylist={handleDeletePlaylist}
               onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
@@ -895,7 +903,20 @@ function AppContent() {
               albums={albums}
               onSelectTrack={playTrack}
               onSelectPlaylist={handleSelectPlaylistView}
+              onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
+              onBack={() => setCurrentScreen('home')}
+              currentUser={currentUser}
+              globalTheme={globalTheme}
+            />
+          )}
+
+          {currentScreen === 'admin' && (
+            <AdminScreen
+              currentUser={currentUser}
+              tracks={tracks}
+              onDeleteTrack={handleDeleteTrack}
+              onPlayTrack={playTrack}
               onBack={() => setCurrentScreen('home')}
               globalTheme={globalTheme}
             />
@@ -1009,6 +1030,7 @@ function AppContent() {
           setIsFullPlayerOpen(false);
           handleSelectArtist(artist);
         }}
+        currentUser={currentUser}
         globalTheme={globalTheme}
       />
 
@@ -1024,6 +1046,7 @@ function AppContent() {
         track={currentTrack}
         playlists={playlists}
         onAddTrackToPlaylist={handleAddTrackToPlaylist}
+        onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
         jamSession={jamSession}
         onAddToJamQueue={addToJamQueue}
       />
@@ -1093,6 +1116,15 @@ function AppContent() {
           setCurrentScreen('playlist');
           showToast(`Imported "${newPl.name}" (${newPl.trackIds?.length || 0} songs)!`);
           syncFromServer();
+        }}
+      />
+
+      <ImportSongModal
+        isOpen={isImportSongOpen}
+        onClose={() => setIsImportSongOpen(false)}
+        onTrackImported={(newTrack) => {
+          handleAddSong(newTrack);
+          showToast(`Imported "${newTrack.title}" by ${newTrack.artist}!`);
         }}
       />
 

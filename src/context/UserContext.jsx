@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
+import { isUserAdmin } from '../utils/adminUtils';
 
 const API = (() => {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
@@ -26,7 +27,7 @@ const API = (() => {
 export const API_BASE_URL = API;
 
 const getToken = () => {
-  try { return localStorage.getItem('liofy_token') || ''; } catch { return ''; }
+  try { return localStorage.getItem('liofy_token') || localStorage.getItem('token') || ''; } catch { return ''; }
 };
 
 const authHeaders = () => ({
@@ -46,7 +47,13 @@ const UserContext = createContext(null);
 
 export function UserProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('liofy_user') || 'null'); } catch { return null; }
+    try {
+      const u = JSON.parse(localStorage.getItem('liofy_user') || 'null');
+      if (u && isUserAdmin(u)) {
+        return { ...u, isAdmin: true, role: 'admin' };
+      }
+      return u;
+    } catch { return null; }
   });
 
   const [tracks, setTracks] = useState(() => {
@@ -112,13 +119,18 @@ export function UserProvider({ children }) {
 
   // ── Login handler ────────────────────────────────────
   const login = useCallback((user, token) => {
-    if (token) localStorage.setItem('liofy_token', token);
-    setCurrentUser(user);
+    if (token) {
+      localStorage.setItem('liofy_token', token);
+      localStorage.setItem('token', token);
+    }
+    const enriched = user && isUserAdmin(user) ? { ...user, isAdmin: true, role: 'admin' } : user;
+    setCurrentUser(enriched);
   }, []);
 
   // ── Logout ───────────────────────────────────────────
   const logout = useCallback(() => {
     localStorage.removeItem('liofy_token');
+    localStorage.removeItem('token');
     setCurrentUser(null);
     setLikedTrackIds([]);
     setPlaylists([]);

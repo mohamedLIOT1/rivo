@@ -235,10 +235,22 @@ export const UserProvider = ({ children }) => {
     } catch (e) {}
   };
 
-  const addToPlaylist = async (playlistId, trackId) => {
+  const addToPlaylist = async (playlistId, trackId, allowDuplicate = false) => {
     if (!token) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ trackId, allowDuplicate }),
+      });
+      if (res.ok) await syncUserData();
+    } catch (e) {}
+  };
+
+  const removeTrackFromPlaylist = async (playlistId, trackId) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/remove-track`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ trackId }),
@@ -287,6 +299,7 @@ export const UserProvider = ({ children }) => {
       syncUserData,
       createPlaylist,
       addToPlaylist,
+      removeTrackFromPlaylist,
       updatePlaylist,
       deletePlaylist,
     }}>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User } from 'lucide-react';
+import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud } from 'lucide-react';
+import { ArtistLinks } from '../utils/artistUtils';
 
 export default function LibraryScreen({ 
   playlists = [], 
@@ -9,6 +10,8 @@ export default function LibraryScreen({
   onSelectArtist,
   onSelectTrack, 
   openCreatePlaylistModal, 
+  openImportPlaylistModal,
+  openImportSongModal,
   toggleLike,
   globalTheme = 'dark'
 }) {
@@ -52,16 +55,44 @@ export default function LibraryScreen({
             </span>
           </div>
 
-          <button
-            onClick={openCreatePlaylistModal}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
-              isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
-            }`}
-            title="Create Playlist"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            <span className="hidden sm:inline">New Playlist</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {openImportSongModal && (
+              <button
+                onClick={openImportSongModal}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                  isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
+                }`}
+                title="Add Song by Link"
+              >
+                <Link2 size={15} strokeWidth={2.5} className="text-[#17a398]" />
+                <span className="hidden sm:inline">Add Song by Link</span>
+              </button>
+            )}
+
+            {openImportPlaylistModal && (
+              <button
+                onClick={openImportPlaylistModal}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                  isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
+                }`}
+                title="Import Playlist"
+              >
+                <DownloadCloud size={15} strokeWidth={2.5} className="text-[#17a398]" />
+                <span className="hidden sm:inline">Import Playlist</span>
+              </button>
+            )}
+
+            <button
+              onClick={openCreatePlaylistModal}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                isDark ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] border-zinc-700' : 'bg-[#0b1110] hover:bg-[#082621] text-[#26c4b7]'
+              }`}
+              title="Create Playlist"
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              <span className="hidden sm:inline">New Playlist</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Pills + Search */}
@@ -153,17 +184,12 @@ export default function LibraryScreen({
                     <p className={`font-display font-black text-xs truncate group-hover:text-[#17a398] transition-colors ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                       {alb.name}
                     </p>
-                    <p 
-                      onClick={(e) => {
-                        if (onSelectArtist && alb.artist) {
-                          e.stopPropagation();
-                          onSelectArtist(alb.artist);
-                        }
-                      }}
-                      className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                    >
-                      {alb.artist || 'Artist'}
-                    </p>
+                    <ArtistLinks
+                      artist={alb.artist}
+                      onSelectArtist={onSelectArtist}
+                      className={`text-[10px] font-bold truncate block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                      linkClassName="hover:underline cursor-pointer"
+                    />
                   </div>
                 </div>
               );
@@ -266,17 +292,12 @@ export default function LibraryScreen({
                   <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                     {track.title}
                   </p>
-                  <p 
-                    onClick={(e) => {
-                      if (onSelectArtist && track.artist) {
-                        e.stopPropagation();
-                        onSelectArtist(track.artist);
-                      }
-                    }}
-                    className={`text-[10px] font-bold truncate hover:underline cursor-pointer ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                  >
-                    {track.artist}
-                  </p>
+                  <ArtistLinks
+                    track={track}
+                    onSelectArtist={onSelectArtist}
+                    className={`text-[10px] font-bold truncate block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                    linkClassName="hover:underline cursor-pointer"
+                  />
                 </div>
               </div>
             ))}
