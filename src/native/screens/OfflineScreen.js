@@ -8,18 +8,22 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc } from 'lucide-react-native';
+import * as FileSystem from 'expo-file-system';
+import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { getDownloadedTracks, removeDownloadedTrack } from '../services/downloadManager';
 
+const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
+
 export default function OfflineScreen() {
   const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
   const { showToast } = useToast();
   const [offlineTracks, setOfflineTracks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [storageUsed, setStorageUsed] = useState(0);
 
   useEffect(() => {
     loadOffline();
@@ -30,9 +34,33 @@ export default function OfflineScreen() {
     try {
       const list = await getDownloadedTracks();
       setOfflineTracks(list);
+
+      // Calculate total storage used by downloaded tracks
+      try {
+        const dirInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
+        if (dirInfo.exists) {
+          const files = await FileSystem.readDirectoryAsync(TRACKS_DIR);
+          let totalSize = 0;
+          for (const file of files) {
+            try {
+              const fInfo = await FileSystem.getInfoAsync(TRACKS_DIR + file);
+              if (fInfo.exists && fInfo.size) totalSize += fInfo.size;
+            } catch {}
+          }
+          setStorageUsed(totalSize);
+        }
+      } catch {}
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatBytes = (bytes) => {
+    if (bytes === 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(2) + ' GB';
   };
 
   const handleDelete = (track) => {
@@ -86,6 +114,10 @@ export default function OfflineScreen() {
               <Text style={styles.meterLabel}>CACHED RECORDINGS:</Text>
               <Text style={styles.meterValue}>{offlineTracks.length} TAPES</Text>
             </View>
+            <View style={styles.meterHeader}>
+              <Text style={styles.meterLabel}>STORAGE USED:</Text>
+              <Text style={styles.meterValue}>{formatBytes(storageUsed)}</Text>
+            </View>
             <View style={styles.progressBar}>
               <View
                 style={[
@@ -110,8 +142,14 @@ export default function OfflineScreen() {
             <WifiOff size={40} color={colors.teal} />
             <Text style={styles.emptyTitle}>No offline tapes saved</Text>
             <Text style={styles.emptySub}>
-              Tap the download icon on any song to save it for offline playback without Wi-Fi or cellular data.
+              Switch to online mode and tap the download icon on any song to save it for offline playback — no Wi-Fi needed.
             </Text>
+            <View style={styles.goOnlineBanner}>
+              <Wifi size={13} color={colors.teal} />
+              <Text style={styles.goOnlineText}>
+                Use the toggle button to go online and download tapes
+              </Text>
+            </View>
           </View>
         ) : (
           <View style={styles.tracksList}>
@@ -390,5 +428,24 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.rust,
     borderRadius: 6,
+  },
+  goOnlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(23,163,152,0.1)',
+    borderWidth: 1.5,
+    borderColor: colors.teal,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 14,
+  },
+  goOnlineText: {
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    fontSize: 9,
+    color: colors.teal,
+    flex: 1,
   },
 });
