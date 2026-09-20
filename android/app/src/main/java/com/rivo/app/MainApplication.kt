@@ -1,4 +1,4 @@
-package com.liofy.app
+package com.rivo.app
 
 import android.app.Application
 import android.content.res.Configuration

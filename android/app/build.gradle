@@ -110,9 +110,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.liofy.app'
+    namespace 'com.rivo.app'
     defaultConfig {
-        applicationId 'com.liofy.app'
+        applicationId 'com.rivo.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

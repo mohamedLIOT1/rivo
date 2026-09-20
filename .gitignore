@@ -15,3 +15,5 @@ android/.artifacts/
 android/.gradle_home/
 .idea/
 .artifacts/
+android/local.properties
+.gradle/

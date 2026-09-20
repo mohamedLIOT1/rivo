@@ -9,22 +9,24 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#14833B"
+      "backgroundColor": "#09090b"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.liofy.app"
+      "bundleIdentifier": "com.rivo.app"
     },
     "android": {
-      "package": "com.liofy.app",
+      "package": "com.rivo.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#14833B"
+        "backgroundColor": "#1b4e3b"
       },
       "permissions": [
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "INTERNET"
+        "INTERNET",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK"
       ]
     },
     "plugins": [
