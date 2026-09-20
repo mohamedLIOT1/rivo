@@ -2,14 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search as SearchIcon, Play, Heart, PlusCircle, X, Trash2, Sparkles, Disc, 
   Music, Mic, Headphones, Radio, Flame, Coffee, Zap, Compass, Waves, Loader2,
-  User, Users, Edit2
+  User, Users, Edit2, MoreVertical
 } from 'lucide-react';
 import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
 import VerifiedBadge from '../components/VerifiedBadge';
+import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { API_BASE_URL } from '../config';
 import { getTrackArtists, ArtistLinks, getCanonicalArtistName, getArtistAliases } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { isUserAdmin } from '../utils/adminUtils';
+import { useAudioPlayer } from '../context/AudioContext';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -51,13 +53,16 @@ export default function SearchScreen({
   onViewProfile,
   currentUser,
   openEditSongModal,
+  openAddToPlaylist,
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
+  const { addToQueue } = useAudioPlayer();
   const [query, setQuery] = useState(initialQuery);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [onlineResults, setOnlineResults] = useState([]);
   const [isSearchingOnline, setIsSearchingOnline] = useState(false);
+  const [actionMenuTrack, setActionMenuTrack] = useState(null);
   const [userResults, setUserResults] = useState([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const searchTimeoutRef = useRef(null);
@@ -920,27 +925,17 @@ export default function SearchScreen({
                                   className={track.liked ? 'text-[#dc2626]' : ''}
                                 />
                               </button>
-                              {openEditSongModal && isUserAdmin(currentUser) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEditSongModal(track);
-                                  }}
-                                  className="p-1 text-zinc-400 hover:text-[#17a398] transition cursor-pointer"
-                                  title="Admin: Edit Song"
-                                >
-                                  <Edit2 size={14} />
-                                </button>
-                              )}
-                              {onDeleteTrack && (
-                                <button
-                                  onClick={(e) => handleDelete(e, track)}
-                                  className="p-1 text-zinc-400 hover:text-red-500 transition cursor-pointer"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActionMenuTrack(track);
+                                }}
+                                className="p-1 text-zinc-400 hover:text-white transition cursor-pointer"
+                                title="Track options"
+                                aria-label="Track options"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
                               <button
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
@@ -1348,6 +1343,22 @@ export default function SearchScreen({
           </div>
         )}
       </div>
+
+      {/* Track 3-Dots Action Menu Modal */}
+      {actionMenuTrack && (
+        <TrackActionMenuModal
+          isOpen={Boolean(actionMenuTrack)}
+          onClose={() => setActionMenuTrack(null)}
+          track={actionMenuTrack}
+          onPlayTrack={(t) => onSelectTrack(t, [t])}
+          onAddToQueue={addToQueue}
+          openAddToPlaylist={openAddToPlaylist}
+          openEditSongModal={openEditSongModal}
+          onDeleteTrack={onDeleteTrack}
+          currentUser={currentUser}
+          globalTheme={globalTheme}
+        />
+      )}
     </div>
   </div>
 );

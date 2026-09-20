@@ -86,7 +86,7 @@ function MixCoverCollage({ tracks = [], fallbackCover, moodLabel }) {
   }, [tracks]);
 
   return (
-    <div className="w-44 h-44 md:w-52 md:h-52 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative group overflow-hidden select-none">
+    <div className="w-24 h-24 xs:w-28 xs:h-28 sm:w-44 sm:h-44 md:w-52 md:h-52 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative group overflow-hidden select-none">
       {covers.length >= 4 ? (
         <div className="w-full h-full grid grid-cols-2 grid-rows-2">
           {covers.slice(0, 4).map((c, i) => (
@@ -357,40 +357,40 @@ export default function MixesScreen({
 
   return (
     <div 
-      className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 ${
+      className={`flex-1 overflow-y-auto pb-32 select-none p-3 sm:p-6 md:p-8 transition-colors ${
         isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
       }`}
       style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}
     >
       {/* ── Apothecary Playlist Master Header (Matches PlaylistScreen UI) ── */}
-      <div className={`brutal-border-thick brutal-shadow-lg p-6 md:p-8 mb-8 relative transition-colors ${
+      <div className={`brutal-border-thick brutal-shadow-lg p-3.5 sm:p-6 md:p-8 mb-4 sm:mb-8 relative transition-colors ${
         isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
       }`}>
-        {/* Back button */}
-        {onBack && (
-          <button 
-            onClick={onBack}
-            className={`absolute top-4 left-4 brutal-btn p-2 brutal-border brutal-shadow-sm z-20 flex items-center gap-1 text-xs font-mono font-black uppercase cursor-pointer ${
-              isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] hover:bg-[#ede5d3] text-[#0b1110] border-black'
-            }`}
-          >
-            <ArrowLeft size={16} />
-            <span className="hidden sm:inline">Return</span>
-          </button>
-        )}
+        {/* Top bar: Back button & Vintage stamp */}
+        <div className="flex items-center justify-between gap-2 mb-3 sm:mb-5">
+          {onBack ? (
+            <button 
+              onClick={onBack}
+              className={`brutal-btn p-1.5 sm:p-2 brutal-border brutal-shadow-sm flex items-center gap-1 text-xs font-mono font-black uppercase cursor-pointer shrink-0 ${
+                isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] hover:bg-[#ede5d3] text-[#0b1110] border-black'
+              }`}
+            >
+              <ArrowLeft size={15} />
+              <span className="hidden sm:inline">Return</span>
+            </button>
+          ) : <div />}
 
-        {/* Top vintage stamp */}
-        <div className="flex justify-end items-center mb-4">
-          <div className={`inline-flex items-center gap-2 px-3 py-1 brutal-border text-[10px] font-mono font-black uppercase ${
+          <div className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-0.5 sm:py-1 brutal-border text-[9px] sm:text-[10px] font-mono font-black uppercase truncate ${
             isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
           }`}>
-            <span>OFFICIAL AUDIO PRESCRIPTION</span>
+            <span className="hidden sm:inline">OFFICIAL AUDIO PRESCRIPTION</span>
+            <span className="sm:hidden">PRESCRIPTION</span>
             <span>•</span>
             <span>BATCH #MIX-{selectedMood.toUpperCase()}</span>
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center md:items-end gap-6 pt-2">
+        <div className="flex flex-row items-center sm:items-end gap-3 sm:gap-6 pt-1">
           {/* Cover Art Box: 2x2 Collage blend of tracks inside */}
           <MixCoverCollage 
             tracks={filteredMoodTracks} 
@@ -398,26 +398,26 @@ export default function MixesScreen({
             moodLabel={selectedMood} 
           />
 
-          <div className="flex-1 text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2 mb-2 flex-wrap">
-              <span className="bg-[#082621] text-[#26c4b7] text-[10px] font-mono font-black uppercase px-2.5 py-1 brutal-border">
+          <div className="flex-1 min-w-0 text-left">
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2 flex-wrap">
+              <span className="bg-[#082621] text-[#26c4b7] text-[9px] sm:text-[10px] font-mono font-black uppercase px-2 py-0.5 sm:px-2.5 sm:py-1 brutal-border">
                 PLAYLIST
               </span>
-              <span className="bg-[#26c4b7] text-[#082621] text-[10px] font-mono font-black uppercase px-2.5 py-1 brutal-border">
-                SPOTIFY MIX DJ
+              <span className="bg-[#26c4b7] text-[#082621] text-[9px] sm:text-[10px] font-mono font-black uppercase px-2 py-0.5 sm:px-2.5 sm:py-1 brutal-border">
+                MIX DJ
               </span>
-              <span className="bg-[#f59e0b] text-[#082621] text-[10px] font-mono font-black uppercase px-2.5 py-1 brutal-border">
-                {selectedMood === 'Daily' ? 'DAILY PERSONALIZED' : 'DYNAMIC MIX'}
+              <span className="bg-[#f59e0b] text-[#082621] text-[9px] sm:text-[10px] font-mono font-black uppercase px-2 py-0.5 sm:px-2.5 sm:py-1 brutal-border hidden xs:inline-block">
+                {selectedMood === 'Daily' ? 'DAILY' : 'DYNAMIC'}
               </span>
             </div>
 
-            <h1 className={`text-3xl sm:text-4xl md:text-5xl font-display font-black tracking-tight leading-tight ${
+            <h1 className={`text-xl sm:text-4xl md:text-5xl font-display font-black tracking-tight leading-tight line-clamp-2 ${
               isDark ? 'text-white' : 'text-[#0b1110]'
             }`}>
               {currentMoodObj.label}
             </h1>
 
-            <p className={`text-xs sm:text-sm mt-2 font-medium max-w-xl ${
+            <p className={`hidden sm:block text-xs sm:text-sm mt-2 font-medium max-w-xl ${
               isDark ? 'text-zinc-300' : 'text-[#082621]/80'
             }`}>
               {selectedMood === 'Daily' && dailySeed ? (
@@ -431,34 +431,34 @@ export default function MixesScreen({
 
             {/* Daily Seed Action Bar */}
             {selectedMood === 'Daily' && dailySeed && (
-              <div className="mt-3 flex items-center justify-center md:justify-start gap-2 flex-wrap">
-                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-mono font-bold brutal-border ${
+              <div className="mt-2 sm:mt-3 flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[9px] sm:text-[10px] font-mono font-bold brutal-border truncate ${
                   isDark ? 'bg-zinc-800/90 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
                 }`}>
-                  <Zap size={11} className="text-[#f59e0b]" />
-                  <span>SEED: {dailySeed.title} ({dailySeed.artist})</span>
+                  <Zap size={10} className="text-[#f59e0b] shrink-0" />
+                  <span className="truncate">SEED: {dailySeed.title}</span>
                 </div>
 
                 {currentTrack && !isQuranContent(currentTrack) && String(currentTrack.id || currentTrack._id) !== String(dailySeed.id) && (
                   <button
                     onClick={handleReSeedFromCurrent}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-[10px] font-mono font-bold brutal-border cursor-pointer brutal-btn transition-colors ${
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[9px] sm:text-[10px] font-mono font-bold brutal-border cursor-pointer brutal-btn transition-colors ${
                       isDark ? 'bg-[#17a398] text-[#0b1110] border-zinc-700' : 'bg-[#17a398] text-[#0b1110] border-black'
                     }`}
                     title="Change seed to currently playing track"
                   >
-                    <RefreshCw size={10} />
-                    <span>Re-seed with "{currentTrack.title?.slice(0, 16)}..."</span>
+                    <RefreshCw size={9} />
+                    <span>Re-seed</span>
                   </button>
                 )}
               </div>
             )}
 
             {/* Pill: PLAYLIST • X TRACKS • Y MIN */}
-            <div className={`inline-flex items-center gap-2 mt-4 text-[11px] font-mono font-black uppercase tracking-wider ${
+            <div className={`inline-flex items-center gap-1.5 sm:gap-2 mt-2 sm:mt-4 text-[10px] sm:text-[11px] font-mono font-black uppercase tracking-wider ${
               isDark ? 'text-zinc-400' : 'text-[#082621]'
             }`}>
-              <span className={`px-2 py-0.5 brutal-border ${
+              <span className={`px-1.5 py-0.2 sm:px-2 sm:py-0.5 brutal-border ${
                 isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] border-black'
               }`}>PLAYLIST</span>
               <span>•</span>
@@ -468,42 +468,51 @@ export default function MixesScreen({
             </div>
           </div>
         </div>
+
+        {/* Mobile Description */}
+        <p className={`block sm:hidden text-xs mt-2.5 pt-2 border-t font-sans font-normal leading-snug line-clamp-2 ${
+          isDark ? 'border-zinc-800 text-zinc-300' : 'border-[#0b1110]/10 text-[#082621]'
+        }`}>
+          {selectedMood === 'Daily' && dailySeed
+            ? `Daily mix seeded by "${dailySeed.title}" • Learns as you listen.`
+            : currentMoodObj.desc}
+        </p>
       </div>
 
       {/* ── Action Buttons & Search Row (Matches PlaylistScreen) ── */}
-      <div className={`brutal-border brutal-shadow p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+      <div className={`brutal-border brutal-shadow p-2.5 sm:p-4 mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 ${
         isDark ? 'bg-[#141d1b] border-zinc-700' : 'bg-[#fdfbf7] border-black'
       }`}>
-        <div className="flex items-center flex-wrap gap-3">
+        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
           <button
             disabled={filteredMoodTracks.length === 0}
             onClick={() => handlePlayAll(false)}
-            className={`brutal-btn w-12 h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all ${
+            className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
               filteredMoodTracks.length > 0
                 ? 'bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] cursor-pointer'
                 : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
             }`}
             title="Play mix"
           >
-            <Play size={22} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
+            <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />
           </button>
 
           <button
             disabled={filteredMoodTracks.length === 0}
             onClick={() => handlePlayAll(true)}
-            className={`brutal-btn w-12 h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all ${
+            className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
               filteredMoodTracks.length > 0
                 ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] cursor-pointer'
                 : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
             }`}
             title="Shuffle mix"
           >
-            <Shuffle size={20} className="text-[#0b1110]" />
+            <Shuffle size={18} className="text-[#0b1110] sm:w-5 sm:h-5" />
           </button>
         </div>
 
         <div className="relative w-full sm:w-72">
-          <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+          <Search size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
             isDark ? 'text-zinc-500' : 'text-[#082621]/60'
           }`} />
           <input
@@ -511,7 +520,7 @@ export default function MixesScreen({
             placeholder="Search in mix tracks..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full brutal-border pl-9 pr-4 py-2 text-xs font-mono focus:outline-none ${
+            className={`w-full brutal-border pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs font-mono focus:outline-none ${
               isDark 
                 ? 'bg-[#0b1110] border-zinc-700 text-white placeholder-zinc-500 focus:bg-[#182320]' 
                 : 'bg-[#ede5d3] border-black text-[#0b1110] placeholder-[#082621]/50 focus:bg-white'

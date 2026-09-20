@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
+  ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
+  Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X, Sun, Moon
+  MoreHorizontal, MoreVertical, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
+  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -59,13 +60,13 @@ function extractColorFromImage(src, callback) {
         }
 
         if (bestScore > 0) {
-          const color = `rgb(${bestR}, ${bestG}, ${bestB})`;
-          colorCache.set(src, color);
-          callback(color);
+          const hex = `#${((1 << 24) + (bestR << 16) + (bestG << 8) + bestB).toString(16).slice(1)}`;
+          colorCache.set(src, hex);
+          callback(hex);
         } else {
           callback(null);
         }
-      } catch {
+      } catch (e) {
         callback(null);
       }
     };
@@ -104,13 +105,29 @@ export default function FullPlayerModal({
   onAddToJamQueue,
   onRemoveFromJamQueue,
   onSelectArtist,
+  onOpenEditSong,
+  onDeleteTrack,
+  onRemoveTrackFromPlaylist,
+  selectedPlaylist,
+  currentQueueIndex: propQueueIndex = -1,
+  onReorderQueue: propReorderQueue,
+  onClearQueue: propClearQueue,
+  onAddToQueue,
+  onRemoveFromQueue,
   currentUser = null,
   globalTheme = 'dark'
 }) {
   const isAdmin = isUserAdmin(currentUser);
 
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
-  const { audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration } = useAudioPlayer();
+  const { 
+    audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration,
+    currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue
+  } = useAudioPlayer();
+
+  const currentQueueIndex = propQueueIndex >= 0 ? propQueueIndex : (ctxQueueIndex !== undefined ? ctxQueueIndex : -1);
+  const reorderQueue = propReorderQueue || ctxReorderQueue;
+  const clearQueue = propClearQueue || ctxClearQueue;
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
@@ -123,7 +140,6 @@ export default function FullPlayerModal({
   const [activeTab, setActiveTab] = useState('player');
   const [desktopSideTab, setDesktopSideTab] = useState('lyrics');
   const [isVinylMode, setIsVinylMode] = useState(false);
-  const lyricRefs = useRef({});
 
   // Use global theme directly
   const isDark = globalTheme === 'dark';
@@ -133,6 +149,33 @@ export default function FullPlayerModal({
   const displayQueue = useMemo(() => {
     return (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
   }, [queue, isCurQuran]);
+
+  // Partition queue into normal playlist queue and AI suggestions with original indices
+  const { normalQueue, aiQueue } = useMemo(() => {
+    const normal = [];
+    const ai = [];
+    (displayQueue || []).forEach((t, origIdx) => {
+      const item = { track: t, originalIndex: origIdx };
+      if (t.isAiSuggestion || t.isSmartShuffle) {
+        ai.push(item);
+      } else {
+        normal.push(item);
+      }
+    });
+    return { normalQueue: normal, aiQueue: ai };
+  }, [displayQueue]);
+
+  // Track Action Menu & Toast states
+  const [trackMenuTarget, setTrackMenuTarget] = useState(null);
+  const [deleteConfirmTrack, setDeleteConfirmTrack] = useState(null);
+  const [actionToast, setActionToast] = useState(null);
+
+  const showToast = useCallback((msg) => {
+    setActionToast(msg);
+    setTimeout(() => {
+      setActionToast(prev => prev === msg ? null : prev);
+    }, 2500);
+  }, []);
 
   // ── Dynamic background color extracted from album art ──
   const [dynamicColor, setDynamicColor] = useState(null);
@@ -496,11 +539,22 @@ export default function FullPlayerModal({
     setIsClearLyricsConfirmOpen(false);
   };
 
-  const lyricsContainerRef = useRef(null);
+  const mobileLyricsContainerRef = useRef(null);
+  const mobileLyricRefs = useRef({});
+  const desktopLyricsContainerRef = useRef(null);
+  const desktopLyricRefs = useRef({});
+
+  useEffect(() => {
+    mobileLyricRefs.current = {};
+    desktopLyricRefs.current = {};
+  }, [lyrics]);
+
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const scrollTimeoutRef = useRef(null);
+  const isProgrammaticScrollRef = useRef(false);
+  const programmaticScrollTimerRef = useRef(null);
 
-  const handleUserScroll = () => {
+  const handleUserInteraction = () => {
     setIsUserScrolling(true);
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
@@ -508,22 +562,54 @@ export default function FullPlayerModal({
     }, 3500);
   };
 
+  const handleContainerScroll = () => {
+    if (isProgrammaticScrollRef.current) return;
+    handleUserInteraction();
+  };
+
+  const scrollContainerToActive = useCallback((container, itemEl, behavior = 'smooth') => {
+    if (!container || !itemEl) return;
+    // Don't scroll if container or item is hidden or has 0 dimensions
+    if (container.clientHeight <= 0 || itemEl.clientHeight <= 0) return;
+
+    let offsetTop = itemEl.offsetTop;
+    let parent = itemEl.offsetParent;
+    while (parent && parent !== container) {
+      offsetTop += parent.offsetTop;
+      parent = parent.offsetParent;
+    }
+
+    const targetScroll = offsetTop - (container.clientHeight / 2) + (itemEl.clientHeight / 2);
+
+    isProgrammaticScrollRef.current = true;
+    if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
+    programmaticScrollTimerRef.current = setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 700);
+
+    container.scrollTo({
+      top: Math.max(0, targetScroll),
+      behavior
+    });
+  }, []);
+
   const scrollToActiveLyric = useCallback((behavior = 'smooth') => {
     if (activeLyricIndex === -1) return;
-    const container = lyricsContainerRef.current;
-    const activeEl = lyricRefs.current[activeLyricIndex];
-    if (container && activeEl) {
-      const containerRect = container.getBoundingClientRect();
-      const activeRect = activeEl.getBoundingClientRect();
-      const relativeTop = activeRect.top - containerRect.top + container.scrollTop;
-      const targetScroll = relativeTop - (container.clientHeight / 2) + (activeRect.height / 2);
-      
-      container.scrollTo({
-        top: Math.max(0, targetScroll),
-        behavior
-      });
+
+    // Mobile lyrics container
+    if (activeTab === 'lyrics') {
+      const mContainer = mobileLyricsContainerRef.current;
+      const mItem = mobileLyricRefs.current[activeLyricIndex];
+      scrollContainerToActive(mContainer, mItem, behavior);
     }
-  }, [activeLyricIndex]);
+
+    // Desktop lyrics container
+    if (desktopSideTab === 'lyrics') {
+      const dContainer = desktopLyricsContainerRef.current;
+      const dItem = desktopLyricRefs.current[activeLyricIndex];
+      scrollContainerToActive(dContainer, dItem, behavior);
+    }
+  }, [activeLyricIndex, activeTab, desktopSideTab, scrollContainerToActive]);
 
   // Auto-scroll on active lyric line change for BOTH desktop side panel and mobile lyrics tab
   useEffect(() => {
@@ -537,10 +623,12 @@ export default function FullPlayerModal({
   useEffect(() => {
     const isShowingLyrics = activeTab === 'lyrics' || desktopSideTab === 'lyrics';
     if (isOpen && isShowingLyrics && activeLyricIndex !== -1) {
-      const timer = setTimeout(() => scrollToActiveLyric('auto'), 100);
+      const timer = setTimeout(() => {
+        scrollToActiveLyric('auto');
+      }, 120);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, desktopSideTab, isOpen, scrollToActiveLyric]);
+  }, [activeTab, desktopSideTab, isOpen, currentTrack?.id, currentTrack?._id]);
 
   // ── Download handler with visual feedback ──
   const [isDownloading, setIsDownloading] = useState(false);
@@ -668,24 +756,25 @@ export default function FullPlayerModal({
   };
 
   // Play a track from the queue
-  const handleQueueTrackClick = (track) => {
+  const handleQueueTrackClick = (track, queueIdx = null) => {
     if (onPlayTrack) {
-      onPlayTrack(track, displayQueue);
+      onPlayTrack(track, displayQueue, false, queueIdx);
     } else if (playTrack) {
-      playTrack(track, displayQueue);
+      playTrack(track, displayQueue, false, queueIdx);
     }
   };
 
-  const renderLyrics = () => (
+  const renderLyrics = (containerRef, itemsRef) => (
     <div 
-      ref={lyricsContainerRef}
-      onScroll={handleUserScroll} 
-      onTouchStart={handleUserScroll} 
-      className="flex-1 overflow-y-auto py-16 px-2 scroll-smooth relative h-full select-none"
+      ref={containerRef}
+      onScroll={handleContainerScroll} 
+      onTouchStart={handleUserInteraction} 
+      onWheel={handleUserInteraction}
+      className="flex-1 overflow-y-auto py-16 px-2 relative h-full select-none"
       style={{ scrollbarWidth: 'none' }}
     >
       {lyrics.length > 0 ? (
-        <div className="py-2 px-1 space-y-3">
+        <div className="py-2 px-1 space-y-3 pb-48">
           {isLyricsVerified && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 mb-3 rounded-xl bg-[#17a398]/10 border border-[#17a398]/30 w-fit">
               <CheckCircle2 size={14} className="text-[#17a398]" />
@@ -699,10 +788,15 @@ export default function FullPlayerModal({
             return (
               <div 
                 key={idx}
-                ref={(el) => (lyricRefs.current[idx] = el)}
+                ref={(el) => {
+                  if (itemsRef && itemsRef.current) {
+                    itemsRef.current[idx] = el;
+                  }
+                }}
                 onClick={() => {
                   seekTo(line.time);
                   setIsUserScrolling(false);
+                  setTimeout(() => scrollToActiveLyric('smooth'), 50);
                 }}
                 className={`cursor-pointer transition-all duration-300 p-3 rounded-2xl ${
                   isActive 
@@ -846,12 +940,144 @@ export default function FullPlayerModal({
     </div>
   );
 
+  const renderQueueItem = (track, queueIdx, isAiItem) => {
+    const isActive = (currentQueueIndex >= 0)
+      ? queueIdx === currentQueueIndex
+      : String(track.id || track._id) === String(currentTrack?.id || currentTrack?._id);
+    const isTrackQuran = isQuranContent(track);
+    const title = isTrackQuran ? cleanQuranTrackTitle(track.title) : track.title;
+    const subtitle = isTrackQuran ? getQuranReciterName(track) : (track.artist || 'Unknown Artist');
+
+    return (
+      <div 
+        key={`${track.id || track._id}-${queueIdx}`}
+        onClick={() => !isActive && handleQueueTrackClick(track, queueIdx)}
+        className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all brutal-btn group ${
+          isActive 
+            ? isDark 
+              ? 'bg-[#1b2622] border-2 border-[#26c4b7]/50 text-white font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]' 
+              : 'bg-[#ede5d3] brutal-border brutal-shadow-sm font-black' 
+            : isDark 
+              ? 'bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 text-zinc-300' 
+              : 'bg-white hover:bg-[#ede5d3] brutal-border'
+        }`}
+      >
+        <div className="relative shrink-0">
+          <img 
+            src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+            alt={title} 
+            className="w-10 h-10 rounded-lg object-cover brutal-border bg-black" 
+            onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
+          />
+          {isActive ? (
+            <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-ping" />
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+              <Play size={14} fill="currentColor" className="text-white ml-0.5" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0 pr-1">
+          <div className="flex items-center gap-1.5">
+            <p className={`text-xs truncate font-display font-black ${
+              isActive ? 'text-[#17a398]' : isDark ? 'text-white' : 'text-[#0b1110]'
+            }`}>
+              {title}
+            </p>
+            {isAiItem && (
+              <span className="shrink-0 px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30">
+                AI
+              </span>
+            )}
+          </div>
+          {isTrackQuran ? (
+            <span className={`text-[11px] truncate font-mono mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              {subtitle}
+            </span>
+          ) : (
+            <ArtistLinks
+              track={track}
+              onSelectArtist={onSelectArtist}
+              onClickExtra={onClose}
+              className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+              linkClassName="hover:underline cursor-pointer"
+            />
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Quick Reorder Up / Down */}
+          {reorderQueue && displayQueue.length > 1 && (
+            <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+              <button
+                disabled={queueIdx === 0}
+                onClick={() => reorderQueue(queueIdx, queueIdx - 1)}
+                className={`p-1 rounded-md transition-colors cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed ${
+                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-black hover:bg-[#ded2bb]'
+                }`}
+                title="Move Up in Queue"
+                aria-label="Move Up"
+              >
+                <ChevronUp size={14} />
+              </button>
+              <button
+                disabled={queueIdx >= displayQueue.length - 1}
+                onClick={() => reorderQueue(queueIdx, queueIdx + 1)}
+                className={`p-1 rounded-md transition-colors cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed ${
+                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-black hover:bg-[#ded2bb]'
+                }`}
+                title="Move Down in Queue"
+                aria-label="Move Down"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
+          )}
+
+          {jamSession && onRemoveFromJamQueue && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveFromJamQueue(queueIdx, track.id || track._id);
+              }}
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                isDark ? 'text-zinc-400 hover:text-red-400' : 'text-zinc-600 hover:text-red-600'
+              }`}
+              title="Remove from Jam Queue"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+
+          {/* 3-Dots Action Menu Trigger */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setTrackMenuTarget({ track, index: queueIdx, isAi: isAiItem });
+            }}
+            className={`p-1.5 sm:p-2 rounded-lg transition-colors cursor-pointer ${
+              isDark 
+                ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' 
+                : 'text-zinc-600 hover:text-black hover:bg-[#ded2bb]'
+            }`}
+            title="Track Options"
+            aria-label="Track Options"
+          >
+            <MoreVertical size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderQueue = () => (
-    <div className="flex-1 overflow-y-auto h-full pr-1 space-y-2">
-      {jamSession ? (
-        <div className={`mb-3 p-2.5 rounded-xl flex items-center justify-between brutal-border ${
-          isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-[#ede5d3]'
-        }`}>
+    <div className="space-y-4 pb-20 select-none">
+      {/* Jam Session Notice (if connected) */}
+      {jamSession && (
+        <div className="p-3 bg-[#17a398]/10 border-2 border-[#17a398] rounded-xl flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-ping" />
             <p className={`text-xs font-mono font-bold uppercase ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
@@ -862,104 +1088,99 @@ export default function FullPlayerModal({
             PIN: {jamSession.code}
           </span>
         </div>
-      ) : (
-        <div className={`flex items-center justify-between pb-2 border-b-2 border-dashed ${
+      )}
+
+      {/* ── SECTION 1: Normal / Playlist Queue ── */}
+      <div>
+        <div className={`flex items-center justify-between pb-1.5 border-b-2 border-dashed ${
           isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
-        } mb-2`}>
-          <span className={`text-[11px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-            Queue ({displayQueue.length} {isCurQuran ? (displayQueue.length === 1 ? 'Surah' : 'Surahs') : (displayQueue.length === 1 ? 'Song' : 'Songs')})
-          </span>
-          <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
-            isDark ? 'bg-zinc-800 text-zinc-300 border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-zinc-700'
+        } mb-2.5`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+              {selectedPlaylist ? selectedPlaylist.name : (isCurQuran ? 'Quran Queue' : 'Playlist Queue')} ({normalQueue.length})
+            </span>
+            {isRepeat && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">
+                <Repeat size={10} />
+                REPEAT LOOPS THIS
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {clearQueue && displayQueue.length > 1 && (
+              <button
+                onClick={() => {
+                  clearQueue();
+                  showToast('Queue cleared');
+                }}
+                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                  isDark ? 'text-zinc-400 hover:text-red-400 hover:bg-zinc-800' : 'text-zinc-600 hover:text-red-600 hover:bg-[#ede5d3]'
+                }`}
+                title="Clear queue (keeps current track)"
+              >
+                Clear
+              </button>
+            )}
+            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
+              isDark ? 'bg-zinc-800 text-zinc-300 border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-zinc-700'
+            }`}>
+              {isCurQuran ? 'QURAN' : 'PLAYLIST'}
+            </span>
+          </div>
+        </div>
+
+        {normalQueue.length === 0 ? (
+          <div className={`py-6 text-center text-xs font-mono rounded-xl border border-dashed ${
+            isDark ? 'text-zinc-500 border-zinc-800 bg-zinc-950/40' : 'text-zinc-500 border-zinc-300 bg-zinc-50/50'
           }`}>
-            {isCurQuran ? 'QURAN QUEUE' : 'MUSIC QUEUE'}
-          </span>
+            No tracks in playlist queue
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {normalQueue.map((item, i) => renderQueueItem(item.track, item.originalIndex, false))}
+          </div>
+        )}
+      </div>
+
+      {/* ── SECTION 2: AI Suggestions Queue ── */}
+      {aiQueue.length > 0 && (
+        <div className="pt-2">
+          <div className={`flex items-center justify-between pb-1.5 border-b-2 border-dashed ${
+            isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
+          } mb-2.5`}>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Sparkles size={13} className="text-[#26c4b7]" />
+              <span className={`text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-[#26c4b7]' : 'text-[#082621]'}`}>
+                AI Suggestions ({aiQueue.length})
+              </span>
+              {isRepeat ? (
+                <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30">
+                  ⏸ Paused (Repeat active)
+                </span>
+              ) : (
+                <span className="text-[9px] font-mono font-bold text-[#17a398] bg-[#17a398]/10 px-1.5 py-0.5 rounded border border-[#17a398]/30">
+                  ▶ Plays after playlist
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] font-mono font-black text-[#0b1110] bg-[#17a398] px-1.5 py-0.2 rounded brutal-border">
+              AI DISCOVERY
+            </span>
+          </div>
+
+          <div className="space-y-1.5">
+            {aiQueue.map((item, i) => renderQueueItem(item.track, item.originalIndex, true))}
+          </div>
         </div>
       )}
 
-      {displayQueue.length === 0 ? (
+      {displayQueue.length === 0 && (
         <div className={`py-12 text-center text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
           <p className="font-bold">The queue is currently empty.</p>
           <p className={`mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
             {isCurQuran ? 'Add surahs from the Quran library.' : 'Queue up songs from your library or search.'}
           </p>
         </div>
-      ) : (
-        displayQueue.map((track, i) => {
-          const isActive = String(track.id || track._id) === String(currentTrack?.id || currentTrack?._id);
-          const isTrackQuran = isQuranContent(track);
-          const title = isTrackQuran ? cleanQuranTrackTitle(track.title) : track.title;
-          const subtitle = isTrackQuran ? getQuranReciterName(track) : (track.artist || 'Unknown Artist');
-
-          return (
-            <div 
-              key={`${track.id || track._id}-${i}`}
-              onClick={() => !isActive && handleQueueTrackClick(track)}
-              className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-all brutal-btn ${
-                isActive 
-                  ? isDark 
-                    ? 'bg-zinc-800 border-2 border-zinc-700 text-white font-black' 
-                    : 'bg-[#ede5d3] brutal-border brutal-shadow-sm font-black' 
-                  : isDark 
-                    ? 'bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300' 
-                    : 'bg-white hover:bg-[#ede5d3] brutal-border'
-              }`}
-            >
-              <div className="relative shrink-0">
-                <img 
-                  src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
-                  alt={title} 
-                  className="w-10 h-10 rounded-lg object-cover brutal-border bg-black" 
-                  onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
-                />
-                {isActive && (
-                  <div className="absolute inset-0 bg-black/40 rounded-lg flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-[#17a398] animate-ping" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 truncate">
-                <p className={`text-xs truncate font-display font-black ${
-                  isActive ? 'text-[#17a398]' : isDark ? 'text-white' : 'text-[#0b1110]'
-                }`}>
-                  {title}
-                </p>
-                {isTrackQuran ? (
-                  <span className={`text-[11px] truncate font-mono mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                    {subtitle}
-                  </span>
-                ) : (
-                  <ArtistLinks
-                    track={track}
-                    onSelectArtist={onSelectArtist}
-                    onClickExtra={onClose}
-                    className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                    linkClassName="hover:underline cursor-pointer"
-                  />
-                )}
-              </div>
-
-              {jamSession && onRemoveFromJamQueue && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRemoveFromJamQueue(i, track.id || track._id);
-                  }}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    isDark ? 'text-zinc-400 hover:text-red-400' : 'text-zinc-600 hover:text-red-600'
-                  }`}
-                  title="Remove from Jam Queue"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-
-              {!isActive && !jamSession && (
-                <Play size={13} className={`shrink-0 ${isDark ? 'text-zinc-500' : 'text-zinc-600'}`} />
-              )}
-            </div>
-          );
-        })
       )}
     </div>
   );
@@ -1053,22 +1274,26 @@ export default function FullPlayerModal({
         {/* ─── LEFT DECK: Master Cassette Audio Console ─── */}
         <div className={`flex-1 flex flex-col justify-between max-w-md mx-auto w-full lg:max-w-md lg:h-[530px] ${
           isDark 
-            ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700 shadow-2xl' 
+            ? 'bg-[#0e1614] text-[#fdfbf7] border-2 border-[#243632] shadow-[0_0_0_2px_#070b0a,0_16px_40px_rgba(0,0,0,0.9)]' 
             : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick brutal-shadow-lg paper-texture'
         } rounded-2xl p-4 sm:p-5 relative ${activeTab === 'player' ? 'flex' : 'hidden lg:flex'}`}>
           
           {/* Deck Header: Mechanical cassette label & model stamp */}
           <div className={`flex items-center justify-between pb-2 border-b-2 ${
-            isDark ? 'border-zinc-800' : 'border-[#0b1110]'
+            isDark ? 'border-[#1f2e2a]' : 'border-[#0b1110]'
           } mb-1.5 shrink-0`}>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-pulse" />
-              <span className={`font-mono font-bold text-[10px] ${isDark ? 'text-zinc-400' : 'text-[#082621]'} uppercase tracking-wider`}>
+              <span className={`w-2.5 h-2.5 rounded-full ${isDark ? 'bg-[#17a398] shadow-[0_0_8px_#17a398]' : 'bg-[#17a398]'} animate-pulse`} />
+              <span className={`font-mono font-bold text-[10px] ${isDark ? 'text-[#26c4b7]' : 'text-[#082621]'} uppercase tracking-wider`}>
                 RIVO STEREO DECK // CR-500
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-[9px] font-mono font-black px-1.5 py-0.2 bg-[#0b1110] text-[#26c4b7] rounded">
+              <span className={`text-[9px] font-mono font-black px-1.5 py-0.5 rounded border ${
+                isDark 
+                  ? 'bg-[#060a09] text-[#26c4b7] border-[#17a398]/40 shadow-[0_0_6px_rgba(38,196,183,0.2)]' 
+                  : 'bg-[#0b1110] text-[#26c4b7] border-black'
+              }`}>
                 24-BIT HI-FI
               </span>
             </div>
@@ -1091,12 +1316,18 @@ export default function FullPlayerModal({
                   <div className="absolute w-4 h-4 rounded-full bg-[#ede5d3] border-2 border-[#0b1110] z-20" />
                 </div>
               ) : (
-                /* Authentic Retro Cassette / Album Art Enclosure */
-                <div className={`w-full h-full p-2 ${
-                  isDark ? 'bg-[#141b19] border-2 border-zinc-700' : 'bg-[#ede5d3] brutal-border'
-                } rounded-xl brutal-shadow-sm flex flex-col justify-between relative`}>
-                  {/* Clean Cover Window */}
-                  <div className="relative w-full flex-1 rounded-lg overflow-hidden brutal-border bg-[#0b1110] shadow-inner flex items-center justify-center min-h-0">
+                /* Authentic Retro TV / Monitor Enclosure */
+                <div className={`w-full h-full p-2.5 ${
+                  isDark 
+                    ? 'bg-gradient-to-b from-[#1d2b27] via-[#16221f] to-[#121a18] border-2 border-[#2f433e] shadow-[0_6px_24px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.12),2px_2px_0px_#050807]' 
+                    : 'bg-[#ede5d3] brutal-border brutal-shadow-sm'
+                } rounded-2xl flex flex-col justify-between relative overflow-hidden`}>
+                  {/* Clean CRT TV Screen Window */}
+                  <div className={`relative w-full flex-1 rounded-xl overflow-hidden border-2 ${
+                    isDark 
+                      ? 'border-[#070b0a] bg-[#050807] shadow-[inset_0_2px_10px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.06)]' 
+                      : 'brutal-border bg-[#0b1110] shadow-inner'
+                  } flex items-center justify-center min-h-0`}>
                     <img 
                       src={currentTrack.cover} 
                       alt={currentTrack.title}
@@ -1106,25 +1337,53 @@ export default function FullPlayerModal({
                         transition: 'transform 0.4s ease',
                       }}
                     />
+                    {/* CRT Glass Reflection, Scanlines & Vignette (Dark Mode TV Effect) */}
+                    {isDark && (
+                       <>
+                         {/* Subtle CRT Curved Glass Glare */}
+                         <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-transparent via-white/[0.08] to-transparent z-10" />
+                         {/* Authentic Scanline Screen Filter */}
+                         <div className="absolute inset-0 pointer-events-none opacity-20 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,0,0,0.6)_3px)] z-10" />
+                         {/* Subtle Phosphor Corner Vignette */}
+                         <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_14px_rgba(0,0,0,0.85)] z-10" />
+                       </>
+                    )}
                   </div>
 
-                  {/* Clean Lower Cassette Tape Bar (Separate from Cover Art) */}
-                  <div className="mt-1.5 pt-1 pb-0.5 border-t border-dashed border-zinc-400/40 flex items-center justify-between px-1 shrink-0">
-                    <span className="text-[7.5px] font-mono font-bold text-zinc-500 uppercase tracking-wider">
-                      {isCurQuran ? 'QURAN // TAPE' : 'SIDE A // STEREO'}
-                    </span>
-                    {/* Compact Spool Wheels */}
+                  {/* Clean Lower TV / Cassette Control & Label Bar */}
+                  <div className={`mt-2 pt-1.5 pb-0.5 border-t border-dashed ${
+                    isDark ? 'border-[#243531]' : 'border-zinc-400/30'
+                  } flex items-center justify-between px-1 shrink-0`}>
+                    <div className="flex items-center gap-1.5">
+                      {isDark && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${isPlaying ? 'bg-[#10b981] shadow-[0_0_6px_#10b981] animate-pulse' : 'bg-[#dc2626] shadow-[0_0_4px_#dc2626]'}`} title={isPlaying ? "ON AIR / PLAYING" : "STANDBY"} />
+                      )}
+                      <span className={`text-[8px] font-mono font-bold uppercase tracking-wider ${
+                        isDark ? 'text-[#26c4b7] drop-shadow-[0_0_6px_rgba(38,196,183,0.35)]' : 'text-zinc-600'
+                      }`}>
+                        {isCurQuran ? 'QURAN // TAPE' : 'SIDE A // STEREO'}
+                      </span>
+                    </div>
+
+                    {/* Compact Spool Wheels (Illuminated in Dark Mode) */}
                     <div className="flex items-center gap-1">
-                      <div className={`w-2.5 h-2.5 rounded-full border border-zinc-400/80 bg-black/40 flex items-center justify-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }}>
-                        <div className="w-0.5 h-0.5 rounded-full bg-[#17a398]" />
+                      <div className={`w-2.5 h-2.5 rounded-full border ${
+                        isDark ? 'border-[#26c4b7]/80 bg-[#070c0a] shadow-[0_0_4px_rgba(38,196,183,0.3)]' : 'border-zinc-400/80 bg-black/40'
+                      } flex items-center justify-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }}>
+                        <div className={`w-0.5 h-0.5 rounded-full ${isDark ? 'bg-[#26c4b7]' : 'bg-[#17a398]'}`} />
                       </div>
-                      <div className="w-3 h-0.5 bg-[#17a398]/50 rounded-full" />
-                      <div className={`w-2.5 h-2.5 rounded-full border border-zinc-400/80 bg-black/40 flex items-center justify-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }}>
-                        <div className="w-0.5 h-0.5 rounded-full bg-[#17a398]" />
+                      <div className={`w-3 h-0.5 ${isDark ? 'bg-[#26c4b7]' : 'bg-[#17a398]/50'} rounded-full`} />
+                      <div className={`w-2.5 h-2.5 rounded-full border ${
+                        isDark ? 'border-[#26c4b7]/80 bg-[#070c0a] shadow-[0_0_4px_rgba(38,196,183,0.3)]' : 'border-zinc-400/80 bg-black/40'
+                      } flex items-center justify-center ${isPlaying ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }}>
+                        <div className={`w-0.5 h-0.5 rounded-full ${isDark ? 'bg-[#26c4b7]' : 'bg-[#17a398]'}`} />
                       </div>
                     </div>
-                    <span className="text-[7.5px] font-mono font-bold text-zinc-500 uppercase tracking-wider">
-                      HI-FI 24-BIT
+
+                    <span className={`text-[8px] font-mono font-bold uppercase tracking-wider ${
+                      isDark ? 'text-[#26c4b7] drop-shadow-[0_0_6px_rgba(38,196,183,0.35)]' : 'text-zinc-600'
+                    }`}>
+                      {isDark ? 'CRT HI-FI' : 'HI-FI 24-BIT'}
                     </span>
                   </div>
                 </div>
@@ -1135,7 +1394,9 @@ export default function FullPlayerModal({
           {/* Song Info & Like */}
           <div className="flex items-center justify-between my-2 shrink-0">
             <div className="truncate flex-1 min-w-0 pr-2">
-              <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border">
+              <span className={`text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded border ${
+                isDark ? 'border-[#090e0c] shadow-[2px_2px_0px_#050807]' : 'brutal-border'
+              }`}>
                 {isCurQuran ? 'QURAN' : (currentTrack.genre || 'STEREO')}
               </span>
               <h2 className={`text-base sm:text-lg font-display font-black truncate tracking-tight mt-0.5 ${
@@ -1162,8 +1423,10 @@ export default function FullPlayerModal({
 
             <button 
               onClick={() => toggleLike(currentTrack.id)}
-              className={`p-2 rounded-xl brutal-shadow-sm brutal-btn hover:scale-105 active:scale-95 cursor-pointer shrink-0 ${
-                isDark ? 'bg-[#1c2422] border-2 border-zinc-700 text-white' : 'bg-white brutal-border text-zinc-700'
+              className={`p-2 rounded-xl brutal-btn hover:scale-105 active:scale-95 cursor-pointer shrink-0 ${
+                isDark 
+                  ? 'bg-[#182421] hover:bg-[#20302c] border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.12)] text-white' 
+                  : 'bg-white brutal-border brutal-shadow-sm text-zinc-700'
               }`}
               title={isTrackLiked ? (isCurQuran ? 'Remove from Favorites' : 'Remove from Liked Songs') : (isCurQuran ? 'Save to Favorites' : 'Save to Liked Songs')}
             >
@@ -1191,21 +1454,27 @@ export default function FullPlayerModal({
               onPointerUp={handleSeekPointerUp}
               onPointerCancel={handleSeekPointerUp}
             >
-              <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden brutal-border transition-all pointer-events-none ${
-                isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+              <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden transition-all pointer-events-none ${
+                isDark ? 'bg-[#070c0a] border-2 border-[#090e0c] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]' : 'bg-[#ede5d3] brutal-border'
               }`}>
                 <div 
-                  className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
+                  className={`h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none ${
+                    isDark ? 'shadow-[0_0_10px_rgba(23,163,152,0.4)]' : ''
+                  }`}
                   style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
                 />
               </div>
               <div 
-                className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                className={`absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full pointer-events-none transition-transform group-hover:scale-125 z-10 ${
+                  isDark 
+                    ? 'border-2 border-[#090e0c] shadow-[0_0_8px_rgba(23,163,152,0.5),2px_2px_0px_#050807]' 
+                    : 'brutal-border shadow-md'
+                }`}
                 style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
               />
             </div>
             <div className={`flex justify-between mt-1 font-mono font-bold text-[10px] ${
-              isDark ? 'text-zinc-400' : 'text-zinc-600'
+              isDark ? 'text-[#26c4b7]' : 'text-zinc-600'
             }`}>
               <span className="tabular-nums">{formatTime(activeTime)}</span>
               <span className="tabular-nums">{formatTime(activeDuration)}</span>
@@ -1218,9 +1487,11 @@ export default function FullPlayerModal({
               onClick={toggleShuffle} 
               className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
                 isShuffle 
-                  ? 'bg-[#17a398] text-[#0b1110] font-bold brutal-border' 
+                  ? isDark
+                    ? 'bg-[#17a398] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
+                    : 'bg-[#17a398] text-[#0b1110] font-bold brutal-border' 
                   : isDark 
-                    ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
+                    ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
                     : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
               }`}
               title="Shuffle"
@@ -1230,10 +1501,10 @@ export default function FullPlayerModal({
 
             <button 
               onClick={playPrev} 
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer ${
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center brutal-btn cursor-pointer ${
                 isDark 
-                  ? 'bg-[#1c2422] hover:bg-[#25302d] text-white border border-zinc-700' 
-                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border'
+                  ? 'bg-[#182421] hover:bg-[#20302c] text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.12)]' 
+                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border brutal-shadow-sm'
               }`}
               title="Previous"
             >
@@ -1242,7 +1513,11 @@ export default function FullPlayerModal({
 
             <button 
               onClick={togglePlay} 
-              className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border-thick flex items-center justify-center brutal-shadow-md brutal-btn cursor-pointer"
+              className={`w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] flex items-center justify-center brutal-btn cursor-pointer ${
+                isDark 
+                  ? 'border-2 border-[#090e0c] shadow-[3px_3px_0px_#050807,0_0_16px_rgba(23,163,152,0.35)]' 
+                  : 'brutal-border-thick brutal-shadow-md'
+              }`}
               title={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying 
@@ -1253,10 +1528,10 @@ export default function FullPlayerModal({
 
             <button 
               onClick={playNext} 
-              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer ${
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center brutal-btn cursor-pointer ${
                 isDark 
-                  ? 'bg-[#1c2422] hover:bg-[#25302d] text-white border border-zinc-700' 
-                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border'
+                  ? 'bg-[#182421] hover:bg-[#20302c] text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.12)]' 
+                  : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] brutal-border brutal-shadow-sm'
               }`}
               title="Next"
             >
@@ -1267,9 +1542,11 @@ export default function FullPlayerModal({
               onClick={toggleRepeat} 
               className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
                 isRepeat 
-                  ? 'bg-[#dc2626] text-white font-bold brutal-border' 
+                  ? isDark
+                    ? 'bg-[#dc2626] text-white font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
+                    : 'bg-[#dc2626] text-white font-bold brutal-border' 
                   : isDark 
-                    ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
+                    ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
                     : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
               }`}
               title="Repeat"
@@ -1279,14 +1556,16 @@ export default function FullPlayerModal({
           </div>
 
           {/* ── Audio Console Level Fader (Tactile Brutalist Volume Console) ── */}
-          <div className={`pt-2 border-t-2 border-dashed ${isDark ? 'border-zinc-800' : 'border-[#ded2bb]'} flex items-center justify-between gap-2 shrink-0`}>
+          <div className={`pt-2 border-t-2 border-dashed ${isDark ? 'border-[#1f2e2a]' : 'border-[#ded2bb]'} flex items-center justify-between gap-2 shrink-0`}>
             {/* Tactile Master Volume Fader */}
             <div className={`flex items-center gap-2 ${
-              isDark ? 'bg-[#1c2422] border border-zinc-700' : 'bg-white brutal-border'
-            } px-2.5 py-1.5 rounded-xl brutal-shadow-sm flex-1 max-w-[220px]`}>
+              isDark 
+                ? 'bg-[#141d1a] border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.08)]' 
+                : 'bg-white brutal-border brutal-shadow-sm'
+            } px-2.5 py-1.5 rounded-xl flex-1 max-w-[220px]`}>
               <button 
                 onClick={() => setVolume(volume > 0 ? 0 : 0.8)}
-                className={`${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'} cursor-pointer transition-colors shrink-0`}
+                className={`${isDark ? 'text-zinc-400 hover:text-[#26c4b7]' : 'text-zinc-700 hover:text-black'} cursor-pointer transition-colors shrink-0`}
                 title={volume > 0 ? "Mute" : "Unmute"}
               >
                 {volume === 0 ? <VolumeX size={15} className="text-red-500" /> : <Volume2 size={15} />}
@@ -1306,8 +1585,10 @@ export default function FullPlayerModal({
                 onPointerUp={handleVolPointerUp}
                 onPointerCancel={handleVolPointerUp}
               >
-                <div className={`w-full h-2 rounded-full overflow-hidden brutal-border pointer-events-none ${
-                  isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+                <div className={`w-full h-2 rounded-full overflow-hidden pointer-events-none ${
+                  isDark 
+                    ? 'bg-[#070c0a] border border-[#090e0c] shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]' 
+                    : 'bg-[#ede5d3] brutal-border'
                 }`}>
                   <div 
                     className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
@@ -1315,13 +1596,17 @@ export default function FullPlayerModal({
                   />
                 </div>
                 <div 
-                  className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                  className={`absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full pointer-events-none transition-transform group-hover:scale-125 z-10 ${
+                    isDark 
+                      ? 'border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]' 
+                      : 'brutal-border shadow-md'
+                  }`}
                   style={{ left: `calc(${Math.min(100, Math.max(0, (volume || 0) * 100))}% - 7px)` }}
                 />
               </div>
 
               <span className={`text-[10px] font-mono font-bold w-6 text-right ${
-                isDark ? 'text-zinc-300' : 'text-zinc-800'
+                isDark ? 'text-[#26c4b7]' : 'text-zinc-800'
               } select-none tabular-nums`}>
                 {Math.round((volume || 0) * 100)}%
               </span>
@@ -1332,19 +1617,19 @@ export default function FullPlayerModal({
               {/* Vinyl Mode Toggle */}
               <button 
                 onClick={() => setIsVinylMode(!isVinylMode)}
-                className={`p-1.5 sm:p-2 rounded-xl brutal-border brutal-btn cursor-pointer transition-colors ${
+                className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer transition-colors ${
                   isVinylMode 
-                    ? 'bg-[#17a398] text-[#0b1110]' 
+                    ? isDark
+                      ? 'bg-[#17a398] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
+                      : 'bg-[#17a398] text-[#0b1110] brutal-border' 
                     : isDark 
-                      ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
-                      : 'bg-white text-zinc-700 hover:bg-[#ede5d3]'
+                      ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
+                      : 'bg-white text-zinc-700 hover:bg-[#ede5d3] brutal-border'
                 }`}
                 title="Vinyl Turntable Mode"
               >
                 <Disc size={15} strokeWidth={2.5} />
               </button>
-
-
 
               {/* Quick Lyrics View Toggle */}
               <button 
@@ -1355,12 +1640,14 @@ export default function FullPlayerModal({
                     setDesktopSideTab('lyrics');
                   }
                 }}
-                className={`p-1.5 sm:p-2 rounded-xl brutal-border brutal-btn cursor-pointer transition-colors ${
+                className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer transition-colors ${
                   (activeTab === 'lyrics' || desktopSideTab === 'lyrics')
-                    ? 'bg-[#17a398] text-[#0b1110]' 
+                    ? isDark
+                      ? 'bg-[#17a398] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
+                      : 'bg-[#17a398] text-[#0b1110] brutal-border' 
                     : isDark 
-                      ? 'bg-[#1c2422] text-zinc-400 hover:text-white border border-zinc-700' 
-                      : 'bg-white text-zinc-700 hover:bg-[#ede5d3]'
+                      ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
+                      : 'bg-white text-zinc-700 hover:bg-[#ede5d3] brutal-border'
                 }`}
                 title="Lyrics Display"
               >
@@ -1372,11 +1659,11 @@ export default function FullPlayerModal({
                 <button 
                   onClick={handleDownloadClick}
                   disabled={isDownloading}
-                  className={`p-1.5 sm:p-2 rounded-xl ${
+                  className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer transition-colors disabled:opacity-50 ${
                     isDark 
-                      ? 'bg-[#1c2422] hover:bg-[#25302d] text-zinc-300 border border-zinc-700' 
+                      ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-300 border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
                       : 'bg-white hover:bg-[#ede5d3] text-zinc-700 brutal-border'
-                  } brutal-btn cursor-pointer transition-colors disabled:opacity-50`}
+                  }`}
                   title={currentTrack.downloaded ? 'Downloaded ✓' : 'Download Audio'}
                 >
                   {currentTrack.downloaded ? (
@@ -1489,7 +1776,7 @@ export default function FullPlayerModal({
                 )}
               </div>
             </div>
-            {renderLyrics()}
+            {renderLyrics(mobileLyricsContainerRef, mobileLyricRefs)}
           </div>
         )}
 
@@ -1627,7 +1914,7 @@ export default function FullPlayerModal({
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {desktopSideTab === 'lyrics' ? renderLyrics() : renderQueue()}
+            {desktopSideTab === 'lyrics' ? renderLyrics(desktopLyricsContainerRef, desktopLyricRefs) : renderQueue()}
           </div>
         </div>
 
@@ -1643,6 +1930,290 @@ export default function FullPlayerModal({
         onConfirm={executeClearLyrics}
         onCancel={() => setIsClearLyricsConfirmOpen(false)}
       />
+
+      {/* Confirm Delete Song Permanently Modal */}
+      {deleteConfirmTrack && (
+        <ConfirmModal
+          isOpen={Boolean(deleteConfirmTrack)}
+          title={`Delete "${deleteConfirmTrack.title}"?`}
+          message={`Are you sure you want to permanently delete "${deleteConfirmTrack.title}" by ${deleteConfirmTrack.artist || 'Unknown'} from the Rivo library? This cannot be undone.`}
+          confirmText="Delete Permanently"
+          cancelText="Cancel"
+          onConfirm={async () => {
+            const trackToDelete = deleteConfirmTrack;
+            setDeleteConfirmTrack(null);
+            if (onDeleteTrack && trackToDelete) {
+              await onDeleteTrack(trackToDelete.id || trackToDelete._id);
+              showToast(`Deleted "${trackToDelete.title}"`);
+            }
+          }}
+          onCancel={() => setDeleteConfirmTrack(null)}
+        />
+      )}
+
+      {/* ── Track 3-Dots Action Menu (Responsive: Bottom Sheet on Phone, Modal on PC) ── */}
+      {trackMenuTarget && (
+        <div 
+          className="fixed inset-0 z-[400] flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-0 sm:p-4"
+          onClick={() => setTrackMenuTarget(null)}
+        >
+          <div 
+            className={`w-full max-w-md rounded-t-3xl sm:rounded-2xl p-4 sm:p-5 text-left border-2 animate-in fade-in slide-in-from-bottom-6 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 ${
+              isDark 
+                ? 'bg-[#121816] text-[#fdfbf7] border-zinc-700 shadow-[0_10px_35px_rgba(0,0,0,0.85)]' 
+                : 'bg-[#fdfbf7] text-[#0b1110] border-black brutal-shadow-lg paper-texture'
+            } max-h-[85vh] overflow-y-auto`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile Grab Handle Bar */}
+            <div className="w-10 h-1.5 rounded-full bg-zinc-500/40 mx-auto mb-3 sm:hidden" />
+
+            {/* Header: Track Cover + Info + Close */}
+            <div className={`flex items-center gap-3 pb-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'} mb-3`}>
+              <img 
+                src={trackMenuTarget.track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+                alt={trackMenuTarget.track.title} 
+                className="w-12 h-12 rounded-xl object-cover brutal-border shrink-0 bg-black"
+                onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-display font-black truncate">{trackMenuTarget.track.title}</p>
+                <p className={`text-xs truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  {trackMenuTarget.track.artist || 'Unknown Artist'}
+                </p>
+                {trackMenuTarget.isAi && (
+                  <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-mono font-bold text-[#17a398] bg-[#17a398]/15 px-1.5 py-0.2 rounded border border-[#17a398]/30">
+                    <Sparkles size={10} />
+                    AI Recommendation
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setTrackMenuTarget(null)}
+                className={`p-2 rounded-xl cursor-pointer transition-colors ${
+                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-black hover:bg-[#ede5d3]'
+                }`}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Action Items List */}
+            <div className="space-y-1 font-mono text-xs font-bold">
+              {/* Play Now */}
+              <button
+                onClick={() => {
+                  handleQueueTrackClick(trackMenuTarget.track, trackMenuTarget.index);
+                  setTrackMenuTarget(null);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                }`}
+              >
+                <Play size={16} className="text-[#17a398]" />
+                <span>Play Track Now</span>
+              </button>
+
+              {/* Adjust in Queue: Move Up */}
+              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index > 0 && (
+                <button
+                  onClick={() => {
+                    reorderQueue(trackMenuTarget.index, trackMenuTarget.index - 1);
+                    showToast('Moved track up in queue');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <ArrowUp size={16} className="text-[#26c4b7]" />
+                  <span>Move Up in Queue</span>
+                </button>
+              )}
+
+              {/* Adjust in Queue: Move Down */}
+              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index < displayQueue.length - 1 && (
+                <button
+                  onClick={() => {
+                    reorderQueue(trackMenuTarget.index, trackMenuTarget.index + 1);
+                    showToast('Moved track down in queue');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <ArrowDown size={16} className="text-[#26c4b7]" />
+                  <span>Move Down in Queue</span>
+                </button>
+              )}
+
+              {/* Adjust in Queue: Move to Top */}
+              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index > 0 && (
+                <button
+                  onClick={() => {
+                    reorderQueue(trackMenuTarget.index, 0);
+                    showToast('Moved to top of queue');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <ChevronsUp size={16} className="text-[#26c4b7]" />
+                  <span>Move to Top of Queue</span>
+                </button>
+              )}
+
+              {/* Adjust in Queue: Move to Bottom */}
+              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index < displayQueue.length - 1 && (
+                <button
+                  onClick={() => {
+                    reorderQueue(trackMenuTarget.index, displayQueue.length - 1);
+                    showToast('Moved to bottom of queue');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <ChevronsDown size={16} className="text-[#26c4b7]" />
+                  <span>Move to Bottom of Queue</span>
+                </button>
+              )}
+
+              {/* Add to Queue: Play Next */}
+              {onAddToQueue && (
+                <button
+                  onClick={() => {
+                    onAddToQueue(trackMenuTarget.track, true);
+                    showToast(currentTrack ? 'Will play next after current song' : 'Now playing');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <ListPlus size={16} className="text-[#26c4b7]" />
+                  <span>Play Next in Queue</span>
+                </button>
+              )}
+
+              {/* Add to Queue: End of Queue */}
+              {onAddToQueue && (
+                <button
+                  onClick={() => {
+                    onAddToQueue(trackMenuTarget.track, false);
+                    showToast(currentTrack ? 'Added to end of queue' : 'Now playing');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <Plus size={16} className="text-[#26c4b7]" />
+                  <span>Add to Queue</span>
+                </button>
+              )}
+
+              {/* Remove from Queue */}
+              {onRemoveFromQueue && (
+                <button
+                  onClick={() => {
+                    const idxOrId = trackMenuTarget.index !== undefined ? trackMenuTarget.index : (trackMenuTarget.track.id || trackMenuTarget.track._id);
+                    onRemoveFromQueue(idxOrId);
+                    showToast('Removed from queue');
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-300' : 'hover:bg-[#ede5d3] text-zinc-800'
+                  }`}
+                >
+                  <Minus size={16} className="text-zinc-400" />
+                  <span>Remove from Queue</span>
+                </button>
+              )}
+
+              <div className={`my-1.5 border-t ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`} />
+
+              {/* Add to Playlist */}
+              {openAddToPlaylist && (
+                <button
+                  onClick={() => {
+                    openAddToPlaylist(trackMenuTarget.track);
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <BookmarkPlus size={16} className="text-[#f59e0b]" />
+                  <span>Add to Playlist...</span>
+                </button>
+              )}
+
+              {/* Remove from Playlist (when currently browsing a playlist) */}
+              {selectedPlaylist && onRemoveTrackFromPlaylist && (
+                <button
+                  onClick={() => {
+                    onRemoveTrackFromPlaylist(trackMenuTarget.track.id || trackMenuTarget.track._id, selectedPlaylist.id || selectedPlaylist._id);
+                    showToast(`Removed from ${selectedPlaylist.name}`);
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer text-amber-500 ${
+                    isDark ? 'hover:bg-amber-500/10' : 'hover:bg-amber-100'
+                  }`}
+                >
+                  <BookmarkMinus size={16} />
+                  <span>Remove from {selectedPlaylist.name}</span>
+                </button>
+              )}
+
+              {/* Edit Song Details (Admin) */}
+              {isAdmin && onOpenEditSong && (
+                <button
+                  onClick={() => {
+                    onOpenEditSong(trackMenuTarget.track);
+                    setTrackMenuTarget(null);
+                    onClose();
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                  }`}
+                >
+                  <Edit3 size={16} className="text-[#17a398]" />
+                  <span>Edit Song Details (Admin)</span>
+                </button>
+              )}
+
+              {/* Delete Song Permanently (Admin) */}
+              {isAdmin && onDeleteTrack && (
+                <button
+                  onClick={() => {
+                    setDeleteConfirmTrack(trackMenuTarget.track);
+                    setTrackMenuTarget(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer text-red-500 ${
+                    isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-100'
+                  }`}
+                >
+                  <Trash2 size={16} />
+                  <span>Delete Song Permanently</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Action Toast Notification */}
+      {actionToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[500] px-4 py-2 rounded-xl bg-[#0b1110] text-[#fdfbf7] font-mono text-xs font-bold brutal-border brutal-shadow-md flex items-center gap-2 shadow-2xl animate-in slide-in-from-bottom-3 fade-in duration-200">
+          <CheckCircle2 size={15} className="text-[#17a398]" />
+          <span>{actionToast}</span>
+        </div>
+      )}
     </div>
   );
 }

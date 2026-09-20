@@ -395,53 +395,76 @@ export default function ProfileScreen({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>
+        <div className="flex-1 overflow-y-auto p-2.5 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>
           {/* Profile Hero Card (Apothecary Dispensary Dossier Card) */}
-          <div className={`rounded-2xl brutal-border-thick p-4 sm:p-6 mb-6 brutal-shadow-lg relative overflow-hidden ${
+          <div className={`rounded-2xl brutal-border-thick p-3 sm:p-6 mb-3 sm:mb-6 brutal-shadow-lg relative overflow-hidden ${
             isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110] paper-texture'
           }`}>
             {/* Profile Header Bar */}
-            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b-2 mb-4 ${
+            <div className={`flex items-center justify-between pb-2 border-b-2 mb-2.5 sm:mb-4 ${
               isDark ? 'border-zinc-700' : 'border-[#0b1110]'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-pulse shrink-0" />
+                <span className="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-[#17a398] animate-pulse shrink-0" />
                 <span className={`font-mono font-bold text-[10px] sm:text-xs tracking-wider truncate ${
                   isDark ? 'text-zinc-300' : 'text-zinc-700'
                 }`}>
                   USER PROFILE // @{viewingProfile.name}
                 </span>
               </div>
-              <div className="self-start sm:self-auto border-2 border-dashed border-[#17a398] text-[#17a398] px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0">
+              <div className="border-2 border-dashed border-[#17a398] text-[#17a398] px-1.5 sm:px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0">
                 MEMBER
               </div>
             </div>
 
             {/* Profile Body */}
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-              {/* Photo Frame */}
-              <div className="shrink-0 flex flex-col items-center">
-                <div className={`w-32 h-32 sm:w-36 sm:h-36 rounded-2xl overflow-hidden brutal-border-thick brutal-shadow-sm relative ${
+            <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3 sm:gap-6">
+              {/* Photo Frame & Mobile Header Row */}
+              <div className="flex items-center gap-3 sm:gap-4 md:flex-col md:items-center shrink-0">
+                <div className={`w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-2xl overflow-hidden brutal-border-thick brutal-shadow-sm shrink-0 flex items-center justify-center relative ${
                   isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-black'
                 }`}>
                   {viewingProfile.avatar ? (
                     <img src={viewingProfile.avatar} alt={viewingProfile.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <User size={48} className={isDark ? "text-zinc-400" : "text-[#0b1110]"} />
+                      <User size={36} className={isDark ? "text-zinc-400" : "text-[#0b1110]"} />
                     </div>
                   )}
                 </div>
-                <span className={`mt-2 text-[10px] font-mono font-bold brutal-border px-2 py-0.5 rounded ${
+
+                {/* Mobile Name & Badges Row (beside avatar on mobile) */}
+                <div className="flex-1 min-w-0 md:hidden text-left">
+                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                    <h2 className={`text-lg sm:text-2xl font-display font-black truncate ${
+                      isDark ? 'text-white' : 'text-[#0b1110]'
+                    }`}>
+                      {viewingProfile.name}
+                    </h2>
+                    <VerifiedBadge userOrName={viewingProfile} size={15} />
+                    <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border">
+                      LISTENER
+                    </span>
+                  </div>
+                  <span className={`inline-block text-[9px] font-mono font-bold brutal-border px-1.5 py-0.2 rounded ${
+                    isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
+                  }`}>
+                    ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Desktop ID Badge */}
+                <span className={`hidden md:inline-block mt-2 text-[10px] font-mono font-bold brutal-border px-2 py-0.5 rounded ${
                   isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
                 }`}>
-                  ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6)}
+                  ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}
                 </span>
               </div>
 
-              {/* Profile Details & Social Stats */}
-              <div className="flex-1 w-full text-center md:text-left">
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-1">
+              {/* Profile Details, Punch Card Stats & Actions */}
+              <div className="flex-1 w-full text-left">
+                {/* Desktop Name */}
+                <div className="hidden md:flex flex-wrap items-center gap-2 mb-1">
                   <h2 className={`text-2xl sm:text-3xl font-display font-black ${
                     isDark ? 'text-white' : 'text-[#0b1110]'
                   }`}>
@@ -453,59 +476,45 @@ export default function ProfileScreen({
                   </span>
                 </div>
 
-                {/* Bio */}
-                <div className={`brutal-border rounded-xl p-3 sm:p-4 my-3 text-left ${
-                  isDark ? 'bg-zinc-900/90 border-zinc-700' : 'bg-[#ede5d3] border-black'
-                }`}>
-                  <span className={`text-[11px] font-mono font-bold uppercase tracking-wider block mb-1 ${
-                    isDark ? 'text-zinc-400' : 'text-zinc-600'
-                  }`}>
-                    // Bio & About:
-                  </span>
-                  <p className={`text-sm sm:text-base font-sans font-medium leading-relaxed ${isDark ? 'text-zinc-100' : 'text-[#0b1110]'}`}>
-                    {viewingProfile.bio || <span className="italic text-zinc-400">No bio written yet.</span>}
-                  </p>
-                </div>
-
                 {/* Punch Card Stats */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 my-4">
-                  <div className={`rounded-xl brutal-border p-2.5 brutal-shadow-sm text-center ${
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 my-2 sm:my-3">
+                  <div className={`rounded-xl brutal-border p-1.5 sm:p-2.5 brutal-shadow-sm text-center ${
                     isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-black text-[#0b1110]'
                   }`}>
-                    <span className={`font-display font-black text-xl block leading-none mb-1 ${
+                    <span className={`font-display font-black text-base sm:text-xl block leading-none mb-0.5 sm:mb-1 ${
                       isDark ? 'text-white' : 'text-[#0b1110]'
                     }`}>
                       {viewingProfile.playlistCount || 0}
                     </span>
-                    <span className={`text-[9px] font-mono font-bold uppercase ${
+                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
                     }`}>Playlists</span>
                   </div>
 
                   <div 
                     onClick={() => handleOpenSocialModal(viewingProfile.id || viewingProfile._id, 'followers', viewingProfile.name)}
-                    className={`rounded-xl brutal-border p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
+                    className={`rounded-xl brutal-border p-1.5 sm:p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
                       isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800' : 'bg-white border-black hover:bg-[#ede5d3]'
                     }`}
                   >
-                    <span className="font-display font-black text-xl text-[#17a398] block leading-none mb-1">
+                    <span className="font-display font-black text-base sm:text-xl text-[#17a398] block leading-none mb-0.5 sm:mb-1">
                       {viewingProfile.followersCount || 0}
                     </span>
-                    <span className={`text-[9px] font-mono font-bold uppercase ${
+                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
                     }`}>Followers</span>
                   </div>
 
                   <div 
                     onClick={() => handleOpenSocialModal(viewingProfile.id || viewingProfile._id, 'following', viewingProfile.name)}
-                    className={`rounded-xl brutal-border p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
+                    className={`rounded-xl brutal-border p-1.5 sm:p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
                       isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800' : 'bg-white border-black hover:bg-[#ede5d3]'
                     }`}
                   >
-                    <span className="font-display font-black text-xl text-[#17a398] block leading-none mb-1">
+                    <span className="font-display font-black text-base sm:text-xl text-[#17a398] block leading-none mb-0.5 sm:mb-1">
                       {viewingProfile.followingCount || 0}
                     </span>
-                    <span className={`text-[9px] font-mono font-bold uppercase ${
+                    <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
                     }`}>Following</span>
                   </div>
@@ -513,11 +522,11 @@ export default function ProfileScreen({
 
                 {/* Actions Bar (Follow, Chat, Jam) */}
                 {!isMe && (
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 my-2">
                     <button
                       onClick={handleToggleFollow}
                       disabled={followLoading}
-                      className={`px-4 py-2 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                      className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                         viewingProfile.isFollowing
                           ? isDark ? 'bg-zinc-800 text-white border-zinc-700' : 'bg-white text-[#0b1110]'
                           : 'bg-[#17a398] text-[#0b1110]'
@@ -528,23 +537,37 @@ export default function ProfileScreen({
 
                     <button
                       onClick={() => onOpenChat && onOpenChat(viewingProfile)}
-                      className={`px-4 py-2 rounded-xl font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 ${
                         isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700' : 'bg-white text-[#0b1110] hover:bg-[#ede5d3]'
                       }`}
                     >
-                      <MessageSquare size={14} className="text-[#dc2626]" />
+                      <MessageSquare size={13} className="text-[#dc2626]" />
                       <span>Chat</span>
                     </button>
 
                     <button
                       onClick={() => onStartJamWithUser && onStartJamWithUser(viewingProfile)}
-                      className="px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#fbb739] text-[#0b1110] font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5"
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#f59e0b] hover:bg-[#fbb739] text-[#0b1110] font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5"
                     >
-                      <Radio size={14} className="animate-pulse" />
+                      <Radio size={13} className="animate-pulse" />
                       <span>Jam</span>
                     </button>
                   </div>
                 )}
+
+                {/* Bio */}
+                <div className={`brutal-border rounded-xl p-2.5 sm:p-4 my-1.5 sm:my-3 text-left ${
+                  isDark ? 'bg-zinc-900/90 border-zinc-700' : 'bg-[#ede5d3] border-black'
+                }`}>
+                  <span className={`text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider block mb-0.5 sm:mb-1 ${
+                    isDark ? 'text-zinc-400' : 'text-zinc-600'
+                  }`}>
+                    // Bio & About:
+                  </span>
+                  <p className={`text-xs sm:text-base font-sans font-medium leading-relaxed ${isDark ? 'text-zinc-100' : 'text-[#0b1110]'}`}>
+                    {viewingProfile.bio || <span className="italic text-zinc-400">No bio written yet.</span>}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -676,22 +699,22 @@ export default function ProfileScreen({
         )}
       </div>
 
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>
+        <div className="flex-1 overflow-y-auto p-2.5 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>
           {/* Guest Alert Banner */}
           {!currentUser && (
-            <div className={`brutal-border-thick rounded-2xl p-4 mb-4 flex flex-col sm:flex-row items-center justify-between gap-3 brutal-shadow-sm ${
+            <div className={`brutal-border-thick rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3 brutal-shadow-sm ${
               isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-black'
             }`}>
-              <div className="flex items-center gap-2.5">
-                <span className="w-3 h-3 rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b] animate-pulse shrink-0" />
                 <div>
                   <p className={`text-xs font-display font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>Guest Mode</p>
-                  <p className={`text-[11px] font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>Sign in to save custom playlists, follow friends, and sync your music.</p>
+                  <p className={`text-[10px] sm:text-[11px] font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>Sign in to save custom playlists, follow friends, and sync your music.</p>
                 </div>
               </div>
               <button
                 onClick={openAuthModal}
-                className="shrink-0 px-4 py-2 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-xl brutal-border font-display font-black text-xs brutal-btn brutal-shadow-sm cursor-pointer"
+                className="shrink-0 px-3.5 py-1.5 sm:px-4 sm:py-2 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-xl brutal-border font-display font-black text-xs brutal-btn brutal-shadow-sm cursor-pointer"
               >
                 Sign In Now
               </button>
@@ -699,51 +722,51 @@ export default function ProfileScreen({
           )}
 
           {/* Profile Hero Card */}
-          <div className={`rounded-2xl brutal-border-thick p-3 sm:p-6 mb-4 brutal-shadow-lg relative overflow-hidden ${
+          <div className={`rounded-2xl brutal-border-thick p-3 sm:p-6 mb-3 sm:mb-4 brutal-shadow-lg relative overflow-hidden ${
             isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110] paper-texture'
           }`}>
             
             {/* Header Bar */}
-            <div className={`flex items-center justify-between pb-2.5 border-b-2 mb-3 ${
+            <div className={`flex items-center justify-between pb-2 border-b-2 mb-2.5 sm:mb-3 ${
               isDark ? 'border-zinc-700' : 'border-[#0b1110]'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full ${currentUser ? 'bg-[#17a398]' : 'bg-[#f59e0b]'} animate-pulse shrink-0" />
+                <span className={`w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full ${currentUser ? 'bg-[#17a398]' : 'bg-[#f59e0b]'} animate-pulse shrink-0`} />
                 <span className={`font-mono font-bold text-[10px] sm:text-xs tracking-wider truncate ${
                   isDark ? 'text-zinc-300' : 'text-zinc-700'
                 }`}>
                   USER PROFILE // @{localUser?.name || 'user'}
                 </span>
               </div>
-              <div className={`border-2 border-dashed ${currentUser ? 'border-[#17a398] text-[#17a398]' : 'border-[#f59e0b] text-[#0b1110]'} px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0`}>
+              <div className={`border-2 border-dashed ${currentUser ? 'border-[#17a398] text-[#17a398]' : 'border-[#f59e0b] text-[#0b1110]'} px-1.5 sm:px-2 py-0.5 rounded font-mono font-black text-[9px] sm:text-[10px] -rotate-1 select-none shrink-0`}>
                 {currentUser ? 'MEMBER' : 'GUEST'}
               </div>
             </div>
 
-            {/* Profile Body: Horizontal layout */}
-            <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
+            {/* Profile Body */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-start gap-3 sm:gap-6">
               
-              {/* Photo Frame */}
-              <div className="shrink-0 flex flex-col items-center">
-                <div className="relative">
-                  <div className={`w-32 h-32 sm:w-36 sm:h-36 rounded-2xl overflow-hidden brutal-border-thick brutal-shadow-sm flex items-center justify-center ${
+              {/* Photo Frame & Mobile Header Row */}
+              <div className="flex items-center gap-3 sm:gap-4 md:flex-col md:items-center shrink-0">
+                <div className="relative shrink-0">
+                  <div className={`w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-2xl overflow-hidden brutal-border-thick brutal-shadow-sm flex items-center justify-center ${
                     isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-black'
                   }`}>
                     {isUploadingAvatar ? (
-                      <Loader2 size={36} className="animate-spin text-[#17a398]" />
+                      <Loader2 size={24} className="animate-spin text-[#17a398]" />
                     ) : localUser?.avatar ? (
                       <img src={localUser.avatar} alt={localUser?.name} className="w-full h-full object-cover" />
                     ) : (
-                      <User size={48} className={isDark ? "text-zinc-400" : "text-[#0b1110]"} />
+                      <User size={36} className={isDark ? "text-zinc-400" : "text-[#0b1110]"} />
                     )}
                   </div>
                   <button
                     onClick={() => avatarInputRef.current?.click()}
                     disabled={isUploadingAvatar}
-                    className="absolute -bottom-2 -right-2 w-9 h-9 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-xl brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
+                    className="absolute -bottom-1.5 -right-1.5 w-7 h-7 sm:w-8 sm:h-8 md:w-9 md:h-9 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-lg sm:rounded-xl brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
                     title="Change Profile Photo"
                   >
-                    <Camera size={15} strokeWidth={2.5} />
+                    <Camera size={13} strokeWidth={2.5} className="sm:w-3.5 sm:h-3.5" />
                   </button>
                   <input
                     ref={avatarInputRef}
@@ -753,17 +776,73 @@ export default function ProfileScreen({
                     onChange={handleAvatarChange}
                   />
                 </div>
-                <span className={`mt-3 text-[10px] font-mono font-bold brutal-border px-2 py-0.5 rounded ${
+
+                {/* Mobile Name, ID & Badges Row (beside avatar on mobile) */}
+                <div className="flex-1 min-w-0 md:hidden text-left">
+                  {isEditingName ? (
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <input
+                        value={nameInput}
+                        onChange={e => setNameInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+                        className={`brutal-border rounded-lg px-2 py-0.5 text-sm font-display font-black focus:outline-none w-full max-w-[150px] ${
+                          isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-black text-[#0b1110]'
+                        }`}
+                        autoFocus
+                      />
+                      <button onClick={handleSaveName} disabled={isSaving} className="p-1 bg-[#17a398] rounded-lg brutal-border text-[#0b1110] cursor-pointer">
+                        {isSaving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} strokeWidth={2.5} />}
+                      </button>
+                      <button onClick={() => setIsEditingName(false)} className={`p-1 rounded-lg brutal-border cursor-pointer ${
+                        isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-zinc-200 text-[#0b1110]'
+                      }`}>
+                        <X size={11} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <h1 className={`text-lg sm:text-2xl font-display font-black tracking-tight truncate ${
+                        isDark ? 'text-white' : 'text-[#0b1110]'
+                      }`}>
+                        {localUser?.name || 'User'}
+                      </h1>
+                      <VerifiedBadge userOrName={localUser} size={15} />
+                      <button 
+                        onClick={() => setIsEditingName(true)} 
+                        className={`p-0.5 transition cursor-pointer ${
+                          isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
+                        }`}
+                        title="Edit Name"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border shrink-0">
+                      LISTENER
+                    </span>
+                    <span className={`text-[9px] font-mono font-bold brutal-border px-1.5 py-0.2 rounded shrink-0 ${
+                      isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
+                    }`}>
+                      ID: #{String(localUser?._id || localUser?.id || '001').slice(-6).toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Desktop ID badge */}
+                <span className={`hidden md:inline-block mt-3 text-[10px] font-mono font-bold brutal-border px-2 py-0.5 rounded ${
                   isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
                 }`}>
                   ID: #{String(localUser?._id || localUser?.id || '001').slice(-6).toUpperCase()}
                 </span>
               </div>
 
-              {/* Profile Details & Social Stats */}
-              <div className="flex-1 w-full text-center md:text-left">
-                {/* Name */}
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-1">
+              {/* Profile Details, Punch Card Stats & Bio */}
+              <div className="flex-1 w-full text-left">
+                {/* Desktop Name */}
+                <div className="hidden md:flex flex-wrap items-center gap-2 mb-1">
                   {isEditingName ? (
                     <div className="flex items-center gap-2">
                       <input
@@ -808,62 +887,12 @@ export default function ProfileScreen({
                   )}
                 </div>
 
-                {/* Bio */}
-                <div className={`brutal-border rounded-xl p-3.5 sm:p-4 my-3 text-left ${
-                  isDark ? 'bg-zinc-900/90 border-zinc-700' : 'bg-[#ede5d3] border-black'
-                }`}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${
-                      isDark ? 'text-zinc-400' : 'text-zinc-600'
-                    }`}>
-                      // Bio & About:
-                    </span>
-                    {!isEditingBio && (
-                      <button 
-                        onClick={() => setIsEditingBio(true)} 
-                        className="text-xs font-mono font-bold text-[#17a398] hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <Edit2 size={12} /> Edit Bio
-                      </button>
-                    )}
-                  </div>
-
-                  {isEditingBio ? (
-                    <div className="flex flex-col gap-2 mt-1">
-                      <textarea
-                        value={bioInput}
-                        onChange={e => setBioInput(e.target.value)}
-                        placeholder="Write a bio about yourself..."
-                        rows={3}
-                        className={`brutal-border rounded-lg p-2.5 text-sm sm:text-base font-sans focus:outline-none resize-none font-medium w-full leading-relaxed ${
-                          isDark ? 'bg-zinc-900 text-white border-zinc-700' : 'bg-white text-[#0b1110] border-black'
-                        }`}
-                        autoFocus
-                      />
-                      <div className="flex gap-2">
-                        <button onClick={handleSaveBio} disabled={isSaving} className="px-3.5 py-1.5 bg-[#17a398] text-[#0b1110] font-bold text-xs rounded-lg brutal-border cursor-pointer">
-                          {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save Bio'}
-                        </button>
-                        <button onClick={() => setIsEditingBio(false)} className={`px-3.5 py-1.5 font-bold text-xs rounded-lg brutal-border cursor-pointer ${
-                          isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-zinc-200 text-[#0b1110]'
-                        }`}>
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className={`text-sm sm:text-base font-sans font-medium leading-relaxed ${isDark ? 'text-zinc-100' : 'text-[#0b1110]'}`}>
-                      {localUser?.bio || <span className="italic text-zinc-400">No bio written yet. Click "Edit Bio" to add one.</span>}
-                    </p>
-                  )}
-                </div>
-
                 {/* Archival Punch Card Stats */}
-                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 my-4">
-                  <div className={`rounded-xl brutal-border p-2 sm:p-2.5 brutal-shadow-sm text-center ${
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 my-2 sm:my-3">
+                  <div className={`rounded-xl brutal-border p-1.5 sm:p-2.5 brutal-shadow-sm text-center ${
                     isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-black text-[#0b1110]'
                   }`}>
-                    <span className={`font-display font-black text-lg sm:text-xl block leading-none mb-1 ${
+                    <span className={`font-display font-black text-base sm:text-xl block leading-none mb-0.5 sm:mb-1 ${
                       isDark ? 'text-white' : 'text-[#0b1110]'
                     }`}>
                       {localPlaylists.filter(p => !p.isLikedSongs).length}
@@ -875,11 +904,11 @@ export default function ProfileScreen({
 
                   <div 
                     onClick={() => handleOpenSocialModal(localUser?._id || localUser?.id, 'followers', localUser?.name)}
-                    className={`rounded-xl brutal-border p-2 sm:p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
+                    className={`rounded-xl brutal-border p-1.5 sm:p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
                       isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800' : 'bg-white border-black hover:bg-[#ede5d3]'
                     }`}
                   >
-                    <span className="font-display font-black text-lg sm:text-xl text-[#17a398] block leading-none mb-1">
+                    <span className="font-display font-black text-base sm:text-xl text-[#17a398] block leading-none mb-0.5 sm:mb-1">
                       {localUser?.followersCount ?? (Array.isArray(localUser?.followers) ? localUser.followers.length : 0)}
                     </span>
                     <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
@@ -889,17 +918,67 @@ export default function ProfileScreen({
 
                   <div 
                     onClick={() => handleOpenSocialModal(localUser?._id || localUser?.id, 'following', localUser?.name)}
-                    className={`rounded-xl brutal-border p-2 sm:p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
+                    className={`rounded-xl brutal-border p-1.5 sm:p-2.5 brutal-shadow-sm text-center cursor-pointer transition ${
                       isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800' : 'bg-white border-black hover:bg-[#ede5d3]'
                     }`}
                   >
-                    <span className="font-display font-black text-lg sm:text-xl text-[#17a398] block leading-none mb-1">
+                    <span className="font-display font-black text-base sm:text-xl text-[#17a398] block leading-none mb-0.5 sm:mb-1">
                       {localUser?.followingCount ?? (Array.isArray(localUser?.following) ? localUser.following.length : 0)}
                     </span>
                     <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                       isDark ? 'text-zinc-400' : 'text-zinc-600'
                     }`}>Following</span>
                   </div>
+                </div>
+
+                {/* Bio */}
+                <div className={`brutal-border rounded-xl p-2.5 sm:p-4 my-1.5 sm:my-3 text-left ${
+                  isDark ? 'bg-zinc-900/90 border-zinc-700' : 'bg-[#ede5d3] border-black'
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-[10px] sm:text-[11px] font-mono font-bold uppercase tracking-wider ${
+                      isDark ? 'text-zinc-400' : 'text-zinc-600'
+                    }`}>
+                      // Bio & About:
+                    </span>
+                    {!isEditingBio && (
+                      <button 
+                        onClick={() => setIsEditingBio(true)} 
+                        className="text-[11px] sm:text-xs font-mono font-bold text-[#17a398] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Edit2 size={11} /> Edit Bio
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingBio ? (
+                    <div className="flex flex-col gap-2 mt-1">
+                      <textarea
+                        value={bioInput}
+                        onChange={e => setBioInput(e.target.value)}
+                        placeholder="Write a bio about yourself..."
+                        rows={3}
+                        className={`brutal-border rounded-lg p-2 sm:p-2.5 text-xs sm:text-base font-sans focus:outline-none resize-none font-medium w-full leading-relaxed ${
+                          isDark ? 'bg-zinc-900 text-white border-zinc-700' : 'bg-white text-[#0b1110] border-black'
+                        }`}
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={handleSaveBio} disabled={isSaving} className="px-3 py-1 bg-[#17a398] text-[#0b1110] font-bold text-xs rounded-lg brutal-border cursor-pointer">
+                          {isSaving ? <Loader2 size={12} className="animate-spin" /> : 'Save Bio'}
+                        </button>
+                        <button onClick={() => setIsEditingBio(false)} className={`px-3 py-1 font-bold text-xs rounded-lg brutal-border cursor-pointer ${
+                          isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-zinc-200 text-[#0b1110]'
+                        }`}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={`text-xs sm:text-base font-sans font-medium leading-relaxed ${isDark ? 'text-zinc-100' : 'text-[#0b1110]'}`}>
+                      {localUser?.bio || <span className="italic text-zinc-400">No bio written yet. Click "Edit Bio" to add one.</span>}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

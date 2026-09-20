@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
-  Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle
+  Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
+import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
@@ -33,14 +34,16 @@ export default function PlaylistScreen({
   onSelectArtist,
   openEditSongModal,
   openEditAlbumModal,
+  openAddToPlaylist,
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
-  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue } = useAudioPlayer();
+  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue } = useAudioPlayer();
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
   const [fetchedTracks, setFetchedTracks] = useState([]);
+  const [actionMenuTrack, setActionMenuTrack] = useState(null);
 
   // Ownership verification: owner or admin can edit, delete, add/remove tracks, change cover
   const myId = String(currentUser?.id || currentUser?._id || '');
@@ -375,13 +378,17 @@ export default function PlaylistScreen({
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
-        setAiRecommendations(data.recommendations);
+        const markedRecs = data.recommendations.map(t => ({
+          ...t,
+          isAiSuggestion: true
+        }));
+        setAiRecommendations(markedRecs);
         // Automatically add the recommendations to active playback queue
         if (setCurrentQueue) {
           setCurrentQueue(prev => {
             const currentList = Array.isArray(prev) ? prev : [];
             const existingIds = new Set(currentList.map(t => String(t.id || t._id)));
-            const newRecs = data.recommendations.filter(t => !existingIds.has(String(t.id || t._id)));
+            const newRecs = markedRecs.filter(t => !existingIds.has(String(t.id || t._id)));
             return [...currentList, ...newRecs];
           });
         }
@@ -436,42 +443,42 @@ export default function PlaylistScreen({
   };
 
   return (
-    <div className={`flex-1 overflow-y-auto pb-32 select-none p-4 md:p-8 ${
+    <div className={`flex-1 overflow-y-auto pb-32 select-none p-3 sm:p-6 md:p-8 transition-colors ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
       {/* ── Apothecary Playlist Master Header ── */}
-      <div className={`brutal-border-thick brutal-shadow-lg p-6 md:p-8 mb-8 relative transition-colors ${
+      <div className={`brutal-border-thick brutal-shadow-lg p-3.5 sm:p-6 md:p-8 mb-4 sm:mb-8 relative transition-colors ${
         isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
       }`}>
-        {/* Back button */}
-        <button 
-          onClick={onBack}
-          className={`absolute top-4 left-4 brutal-btn p-2 brutal-border brutal-shadow-sm z-20 flex items-center gap-1 text-xs font-mono font-black uppercase ${
-            isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] hover:bg-[#ede5d3] text-[#0b1110] border-black'
-          }`}
-        >
-          <ArrowLeft size={16} />
-          <span className="hidden sm:inline">Return</span>
-        </button>
+        {/* Top bar: Back button & Vintage Stamp */}
+        <div className="flex items-center justify-between gap-2 mb-3 sm:mb-5">
+          <button 
+            onClick={onBack}
+            className={`brutal-btn p-1.5 sm:p-2 brutal-border brutal-shadow-sm flex items-center gap-1 text-xs font-mono font-black uppercase shrink-0 cursor-pointer ${
+              isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] hover:bg-[#ede5d3] text-[#0b1110] border-black'
+            }`}
+          >
+            <ArrowLeft size={15} />
+            <span className="hidden sm:inline">Return</span>
+          </button>
 
-        {/* Top vintage stamp */}
-        <div className="flex justify-end items-center mb-4">
-          <div className={`inline-flex items-center gap-2 px-3 py-1 brutal-border text-[10px] font-mono font-black uppercase ${
+          <div className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-0.5 sm:py-1 brutal-border text-[9px] sm:text-[10px] font-mono font-black uppercase truncate ${
             isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
           }`}>
-            <span>OFFICIAL AUDIO PRESCRIPTION</span>
+            <span className="hidden sm:inline">OFFICIAL AUDIO PRESCRIPTION</span>
+            <span className="sm:hidden">PRESCRIPTION</span>
             <span>•</span>
             <span>BATCH #{String(playlist.id || '99').slice(-4)}</span>
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-center md:items-end gap-6 pt-2">
+        <div className="flex flex-row items-center sm:items-end gap-3 sm:gap-6 pt-1">
           {/* Cover Art (With Upload Overlay for Custom Playlists) */}
-          <div className="w-44 h-44 md:w-52 md:h-52 bg-[#ded2bb] brutal-border-thick brutal-shadow shrink-0 relative group overflow-hidden">
+          <div className="w-24 h-24 xs:w-28 xs:h-28 sm:w-44 sm:h-44 md:w-52 md:h-52 bg-[#ded2bb] brutal-border-thick brutal-shadow shrink-0 relative group overflow-hidden">
             {playlist.isLikedSongs ? (
-              <div className="w-full h-full bg-[#dc2626] flex flex-col items-center justify-center text-[#fdfbf7] p-4 text-center">
-                <Heart size={64} fill="#fdfbf7" />
-                <span className="font-mono text-xs font-black uppercase tracking-widest mt-2">{isQuran ? 'FAVORITE SURAHS' : 'LIKED SONGS'}</span>
+              <div className="w-full h-full bg-[#dc2626] flex flex-col items-center justify-center text-[#fdfbf7] p-2 sm:p-4 text-center">
+                <Heart className="w-8 h-8 sm:w-16 sm:h-16" fill="#fdfbf7" />
+                <span className="font-mono text-[8px] sm:text-xs font-black uppercase tracking-widest mt-1 sm:mt-2">{isQuran ? 'FAVORITE SURAHS' : 'LIKED SONGS'}</span>
               </div>
             ) : (
               <>
@@ -481,13 +488,13 @@ export default function PlaylistScreen({
                   className="w-full h-full object-cover" 
                 />
                 {isOwner && (
-                  <label className="absolute inset-0 bg-[#082621]/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 cursor-pointer text-[#26c4b7]">
+                  <label className="absolute inset-0 bg-[#082621]/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 sm:gap-2 cursor-pointer text-[#26c4b7]">
                     {isUpdatingCover ? (
-                      <Loader2 size={24} className="animate-spin text-white" />
+                      <Loader2 size={20} className="animate-spin text-white" />
                     ) : (
                       <>
-                        <Camera size={28} />
-                        <span className="text-xs font-mono font-black uppercase text-white">CHANGE COVER</span>
+                        <Camera size={20} className="sm:w-7 sm:h-7" />
+                        <span className="text-[9px] sm:text-xs font-mono font-black uppercase text-white text-center px-1">CHANGE</span>
                       </>
                     )}
                     <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
@@ -496,14 +503,14 @@ export default function PlaylistScreen({
               </>
             )}
             {/* Corner retro badge */}
-            <div className="absolute top-0 right-0 bg-[#0b1110] text-[#26c4b7] text-[9px] font-mono font-black px-1.5 py-0.5">
+            <div className="absolute top-0 right-0 bg-[#0b1110] text-[#26c4b7] text-[8px] sm:text-[9px] font-mono font-black px-1.5 py-0.5 border-b border-l border-black">
               RIVO-TAPE
             </div>
           </div>
 
-          <div className="flex-1 text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2 mb-2 flex-wrap">
-              <span className="bg-[#082621] text-[#26c4b7] text-[10px] font-mono font-black uppercase px-2.5 py-1 brutal-border">
+          <div className="flex-1 min-w-0 text-left">
+            <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2 flex-wrap">
+              <span className="bg-[#082621] text-[#26c4b7] text-[9px] sm:text-[10px] font-mono font-black uppercase px-2 py-0.5 sm:px-2.5 sm:py-1 brutal-border">
                 {isSiteAlbum ? (isQuran ? 'SURAH COLLECTION' : 'OFFICIAL ALBUM') : playlist.isLikedSongs ? (isQuran ? 'FAVORITE SURAHS' : 'LIKED SONGS') : (isQuran ? 'QURAN PLAYLIST' : 'PLAYLIST')}
               </span>
 
@@ -514,7 +521,7 @@ export default function PlaylistScreen({
                     <button
                       onClick={handleTogglePrivacy}
                       disabled={isTogglingPrivacy}
-                      className={`brutal-btn flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
+                      className={`brutal-btn flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
                         isPublic 
                           ? 'bg-[#26c4b7] text-[#082621]' 
                           : 'bg-[#f59e0b] text-[#082621]'
@@ -522,11 +529,11 @@ export default function PlaylistScreen({
                       title="Tap to toggle profile visibility"
                     >
                       {isTogglingPrivacy ? (
-                        <Loader2 size={12} className="animate-spin" />
+                        <Loader2 size={11} className="animate-spin" />
                       ) : isPublic ? (
-                        <><Globe size={12} /><span>PUBLIC ARCHIVE</span></>
+                        <><Globe size={11} /><span>PUBLIC</span></>
                       ) : (
-                        <><Lock size={12} /><span>PRIVATE DISPENSE</span></>
+                        <><Lock size={11} /><span>PRIVATE</span></>
                       )}
                     </button>
 
@@ -539,7 +546,7 @@ export default function PlaylistScreen({
                           setIsEditModalOpen(true);
                         }
                       }}
-                      className={`brutal-btn flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
+                      className={`brutal-btn hidden sm:flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
                         isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:bg-[#ded2bb]'
                       }`}
                       title={isSiteAlbum ? "Admin: Edit Album" : "Edit name & description"}
@@ -552,7 +559,7 @@ export default function PlaylistScreen({
                     <button
                       onClick={handleDelete}
                       disabled={isDeleting}
-                      className="brutal-btn flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase bg-red-100 text-[#dc2626] brutal-border brutal-shadow-sm hover:bg-red-200 cursor-pointer"
+                      className="brutal-btn hidden sm:flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase bg-red-100 text-[#dc2626] brutal-border brutal-shadow-sm hover:bg-red-200 cursor-pointer"
                       title={isSiteAlbum || playlist?.isAlbum ? "Delete album and all its tracks" : "Delete playlist"}
                     >
                       <Trash2 size={12} />
@@ -560,18 +567,18 @@ export default function PlaylistScreen({
                     </button>
                   </>
                 ) : (
-                  <span className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase brutal-border ${
+                  <span className={`flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-mono font-black uppercase brutal-border ${
                     isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black'
                   }`}>
-                    {isPublic ? <Globe size={12} /> : <Lock size={12} />}
-                    <span>{isPublic ? 'PUBLIC RECORD' : 'CONFIDENTIAL'}</span>
+                    {isPublic ? <Globe size={11} /> : <Lock size={11} />}
+                    <span>{isPublic ? 'PUBLIC' : 'PRIVATE'}</span>
                   </span>
                 )
               )}
             </div>
 
-            <div className="flex items-center justify-center md:justify-start gap-3">
-              <h1 className={`text-3xl md:text-5xl font-display font-black tracking-tight leading-tight ${
+            <div className="flex items-center gap-2">
+              <h1 className={`text-xl sm:text-3xl md:text-5xl font-display font-black tracking-tight leading-tight line-clamp-2 ${
                 isDark ? 'text-white' : 'text-[#082621]'
               }`}>
                 {playlist.name}
@@ -585,38 +592,39 @@ export default function PlaylistScreen({
                       setIsEditModalOpen(true);
                     }
                   }}
-                  className={`p-1.5 transition-colors cursor-pointer ${
+                  className={`p-1 transition-colors cursor-pointer shrink-0 ${
                     isDark ? 'text-zinc-400 hover:text-white' : 'text-[#0b1110] hover:text-[#17a398]'
                   }`}
                   title={isSiteAlbum ? "Admin: Edit Album" : "Edit playlist name"}
                 >
-                  <Edit2 size={20} />
+                  <Edit2 size={16} className="sm:w-5 sm:h-5" />
                 </button>
               )}
             </div>
 
             {isSiteAlbum && playlist.artist && (
-              <div className="mt-1 text-xs font-mono font-bold flex items-center justify-center md:justify-start gap-1">
+              <div className="mt-0.5 text-[11px] sm:text-xs font-mono font-bold flex items-center gap-1 truncate">
                 <span className={isDark ? 'text-zinc-400' : 'text-[#082621]/70'}>{isQuran ? 'Recitations by' : 'Album by'}</span>
                 <ArtistLinks
                   artist={playlist.artist}
                   onSelectArtist={onSelectArtist}
-                  className="text-[#17a398] font-black uppercase inline-block"
+                  className="text-[#17a398] font-black uppercase inline-block truncate"
                   linkClassName="hover:underline cursor-pointer"
                 />
               </div>
             )}
 
-            <p className={`text-sm sm:text-base md:text-lg mt-2.5 font-sans font-normal leading-relaxed max-w-2xl ${
+            {/* Desktop Description */}
+            <p className={`hidden sm:block text-sm sm:text-base md:text-lg mt-2.5 font-sans font-normal leading-relaxed max-w-2xl ${
               isDark ? 'text-zinc-200' : 'text-[#082621]'
             }`}>
               {playlist.description || (isSiteAlbum ? (isQuran ? `Recitations by ${playlist.artist || 'Reciter'}` : `Official album by ${playlist.artist || 'Artist'}`) : (isQuran ? 'Quran playlist on Rivo.' : 'Custom playlist on Rivo.'))}
             </p>
 
-            <div className={`flex items-center justify-center md:justify-start gap-3 mt-4 pt-3 border-t text-xs font-mono font-bold ${
+            <div className={`flex items-center gap-2 sm:gap-3 mt-1.5 sm:mt-4 pt-1 sm:pt-3 sm:border-t text-[10px] sm:text-xs font-mono font-bold ${
               isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110]/15 text-[#082621]'
             }`}>
-              <span className={`px-2 py-0.5 brutal-border ${
+              <span className={`px-1.5 py-0.2 sm:px-2 sm:py-0.5 brutal-border ${
                 isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] border-black'
               }`}>{isSiteAlbum ? (isQuran ? 'COLLECTION' : 'ALBUM') : (isQuran ? 'QURAN' : 'PLAYLIST')}</span>
               <span>•</span>
@@ -625,6 +633,38 @@ export default function PlaylistScreen({
               <span>{formatDurationSum()}</span>
             </div>
           </div>
+        </div>
+
+        {/* Mobile Description & Mobile Action Buttons */}
+        <div className="block sm:hidden">
+          {playlist.description && (
+            <p className={`text-xs mt-2.5 pt-2 border-t font-sans font-normal leading-snug line-clamp-2 ${
+              isDark ? 'border-zinc-800 text-zinc-300' : 'border-[#0b1110]/10 text-[#082621]'
+            }`}>
+              {playlist.description}
+            </p>
+          )}
+          {!playlist.isLikedSongs && !isSiteAlbum && isOwner && (
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#0b1110]/10">
+              <button
+                onClick={() => setIsEditModalOpen(true)}
+                className={`brutal-btn flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-mono font-black uppercase brutal-border ${
+                  isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black'
+                }`}
+              >
+                <Edit2 size={11} />
+                <span>EDIT</span>
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="brutal-btn flex-1 flex items-center justify-center gap-1 py-1 text-[10px] font-mono font-black uppercase bg-red-100 text-[#dc2626] brutal-border"
+              >
+                <Trash2 size={11} />
+                <span>DISCARD</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -686,21 +726,21 @@ export default function PlaylistScreen({
       )}
 
       {/* ── Action Buttons & Search Row ── */}
-      <div className={`brutal-border brutal-shadow p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+      <div className={`brutal-border brutal-shadow p-2.5 sm:p-4 mb-4 sm:mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 ${
         isDark ? 'bg-[#141d1b] border-zinc-700' : 'bg-[#fdfbf7] border-black'
       }`}>
-        <div className="flex items-center flex-wrap gap-3">
+        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
           <button
             disabled={filteredPlaylistTracks.length === 0}
             onClick={() => filteredPlaylistTracks.length > 0 && handlePlayPlaylistTrack(filteredPlaylistTracks[0])}
-            className={`brutal-btn w-12 h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all ${
+            className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
               filteredPlaylistTracks.length > 0
                 ? 'bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] cursor-pointer'
                 : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
             }`}
             title="Play playlist"
           >
-            <Play size={22} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
+            <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />
           </button>
 
           {/* Save to Library button (for other users' public playlists or albums) */}
@@ -708,7 +748,7 @@ export default function PlaylistScreen({
             <button
               onClick={handleToggleSavePlaylist}
               disabled={isSavingPlaylist}
-              className={`px-4 py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-2 transition-all ${
+              className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-all ${
                 isSavedInLibrary
                   ? isDark ? 'bg-zinc-800 text-emerald-400 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-emerald-600 border-black hover:bg-[#ede5d3]'
                   : 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110]'
@@ -716,15 +756,15 @@ export default function PlaylistScreen({
               title={isSavedInLibrary ? "In your Library (Click to remove)" : "Save this playlist to your Library"}
             >
               {isSavingPlaylist ? (
-                <Loader2 size={16} className="animate-spin" />
+                <Loader2 size={14} className="animate-spin sm:w-4 sm:h-4" />
               ) : isSavedInLibrary ? (
                 <>
-                  <Check size={16} strokeWidth={3} />
+                  <Check size={14} strokeWidth={3} className="sm:w-4 sm:h-4" />
                   <span>Saved in Library</span>
                 </>
               ) : (
                 <>
-                  <Plus size={16} strokeWidth={3} />
+                  <Plus size={14} strokeWidth={3} className="sm:w-4 sm:h-4" />
                   <span>Save to Library</span>
                 </>
               )}
@@ -732,7 +772,7 @@ export default function PlaylistScreen({
           )}
 
           {saveSuccessMsg && (
-            <span className="text-xs font-mono font-bold text-emerald-500 flex items-center gap-1">
+            <span className="text-[11px] sm:text-xs font-mono font-bold text-emerald-500 flex items-center gap-1">
               ✓ {saveSuccessMsg}
             </span>
           )}
@@ -740,7 +780,7 @@ export default function PlaylistScreen({
 
         {playlistTracks.length > 0 && (
           <div className="relative w-full sm:w-72">
-            <Search size={16} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+            <Search size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
               isDark ? 'text-zinc-500' : 'text-[#082621]/60'
             }`} />
             <input
@@ -748,7 +788,7 @@ export default function PlaylistScreen({
               placeholder="Search in prescription list..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full brutal-border pl-9 pr-4 py-2 text-xs font-mono focus:outline-none ${
+              className={`w-full brutal-border pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs font-mono focus:outline-none ${
                 isDark 
                   ? 'bg-[#0b1110] border-zinc-700 text-white placeholder-zinc-500 focus:bg-[#182320]' 
                   : 'bg-[#ede5d3] border-black text-[#0b1110] placeholder-[#082621]/50 focus:bg-white'
@@ -761,9 +801,9 @@ export default function PlaylistScreen({
       {/* ── Playlist Tracks List with DJ Mix BPM & Key Match Columns ── */}
       <div className="mb-8">
         {filteredPlaylistTracks.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             {/* Table Header */}
-            <div className={`grid grid-cols-12 text-[10px] font-mono font-black uppercase tracking-wider brutal-border p-2.5 ${
+            <div className={`grid grid-cols-12 text-[9px] sm:text-[10px] font-mono font-black uppercase tracking-wider brutal-border p-1.5 sm:p-2.5 ${
               isDark ? 'bg-[#101716] text-zinc-300 border-zinc-700' : 'bg-[#ded2bb] text-[#082621] border-black'
             }`}>
               <span className="col-span-1 text-center">#</span>
@@ -777,7 +817,7 @@ export default function PlaylistScreen({
                 <React.Fragment key={track.id || track._id || i}>
                   <div
                     onClick={() => handlePlayPlaylistTrack(track)}
-                    className={`grid grid-cols-12 items-center p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-transform cursor-pointer group ${
+                    className={`grid grid-cols-12 items-center p-2 sm:p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-transform cursor-pointer group ${
                       isDark 
                         ? 'bg-[#141d1b] border-zinc-700 hover:bg-[#182320]' 
                         : 'bg-[#fdfbf7] border-black hover:bg-[#ede5d3]'
@@ -790,11 +830,11 @@ export default function PlaylistScreen({
                     </span>
                     
                     {/* Title & Artist */}
-                    <div className="col-span-6 md:col-span-5 flex items-center gap-3 truncate pr-2">
+                    <div className="col-span-6 md:col-span-5 flex items-center gap-2 sm:gap-3 truncate pr-1 sm:pr-2">
                       <img 
                         src={track.cover} 
                         alt={track.title} 
-                        className="w-10 h-10 brutal-border object-cover shrink-0 bg-[#ede5d3]" 
+                        className="w-9 h-9 sm:w-10 sm:h-10 brutal-border object-cover shrink-0 bg-[#ede5d3]" 
                         onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7`; }}
                       />
                       <div className="truncate">
@@ -822,8 +862,8 @@ export default function PlaylistScreen({
                     </div>
 
                     {/* Action & Duration */}
-                    <div className="col-span-5 md:col-span-3 flex items-center justify-end gap-2 text-xs">
-                      <span className="text-xs font-mono text-zinc-400 mr-2">
+                    <div className="col-span-5 md:col-span-3 flex items-center justify-end gap-1 sm:gap-2 text-xs">
+                      <span className="text-[11px] sm:text-xs font-mono text-zinc-400 mr-1 sm:mr-2">
                         {track.duration ? `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, '0')}` : '3:00'}
                       </span>
                       <button
@@ -831,13 +871,13 @@ export default function PlaylistScreen({
                           e.stopPropagation();
                           toggleLike(track.id || track._id);
                         }}
-                        className={`p-1.5 transition-colors cursor-pointer ${
+                        className={`p-1 sm:p-1.5 transition-colors cursor-pointer ${
                           isDark ? 'text-zinc-400 hover:text-[#dc2626]' : 'text-[#0b1110] hover:text-[#dc2626]'
                         }`}
                         title="Favorite"
                       >
                         <Heart 
-                          size={16} 
+                          size={15} 
                           className={
                             (likedTrackIds || []).some(id => String(id) === String(track?.id || track?._id)) || Boolean(track?.liked)
                               ? 'fill-[#dc2626] text-[#dc2626]' 
@@ -845,66 +885,19 @@ export default function PlaylistScreen({
                           } 
                         />
                       </button>
-                      {playlist.isLikedSongs ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleLike(track.id || track._id);
-                          }}
-                          className={`p-1.5 transition-colors cursor-pointer ${
-                            isDark ? 'text-zinc-400 hover:text-[#dc2626]' : 'text-[#0b1110] hover:text-[#dc2626]'
-                          }`}
-                          title={isQuran ? "Remove from Favorites" : "Remove from Liked Songs"}
-                        >
-                          <Minus size={16} />
-                        </button>
-                      ) : (
-                        isOwner && onRemoveTrackFromPlaylist && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onRemoveTrackFromPlaylist(track.id || track._id, playlist.id || playlist._id);
-                            }}
-                            className={`p-1.5 transition-colors cursor-pointer ${
-                              isDark ? 'text-zinc-400 hover:text-[#f59e0b]' : 'text-[#0b1110] hover:text-[#f59e0b]'
-                            }`}
-                            title={isQuran ? "Remove surah from playlist" : "Remove song from playlist"}
-                            aria-label={isQuran ? "Remove surah from playlist" : "Remove song from playlist"}
-                          >
-                            <Minus size={16} />
-                          </button>
-                        )
-                      )}
-                      {isUserAdmin(currentUser) && openEditSongModal && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditSongModal(track);
-                          }}
-                          className={`p-1.5 transition-colors cursor-pointer rounded-md ${
-                            isDark ? 'text-zinc-400 hover:text-[#17a398]' : 'text-[#0b1110] hover:text-[#17a398]'
-                          }`}
-                          title={isQuran ? "Admin: Edit Surah Details" : "Admin: Edit Song Details"}
-                        >
-                          <Edit2 size={15} />
-                        </button>
-                      )}
-                      {onDeleteTrack && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm(`Delete "${track.title}" permanently from Rivo archive?`)) {
-                              onDeleteTrack(track.id || track._id);
-                            }
-                          }}
-                          className={`p-1.5 transition-colors cursor-pointer ${
-                            isDark ? 'text-zinc-400 hover:text-[#dc2626]' : 'text-[#0b1110] hover:text-[#dc2626]'
-                          }`}
-                          title="Delete permanently"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActionMenuTrack(track);
+                        }}
+                        className={`p-1 sm:p-1.5 transition-colors cursor-pointer rounded-lg ${
+                          isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-[#0b1110] hover:text-black hover:bg-[#ede5d3]'
+                        }`}
+                        title="Song Options"
+                        aria-label="Song Options"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
                     </div>
                   </div>
                 </React.Fragment>
@@ -1124,6 +1117,23 @@ export default function PlaylistScreen({
           album={playlist}
           tracksCount={playlistTracks.length || (playlist?.trackIds || []).length}
           onConfirm={handleConfirmDeleteAlbum}
+          globalTheme={globalTheme}
+        />
+      )}
+
+      {actionMenuTrack && (
+        <TrackActionMenuModal
+          isOpen={Boolean(actionMenuTrack)}
+          onClose={() => setActionMenuTrack(null)}
+          track={actionMenuTrack}
+          playlist={playlist}
+          onPlayTrack={handlePlayPlaylistTrack}
+          onAddToQueue={addToQueue}
+          openAddToPlaylist={openAddToPlaylist}
+          onRemoveTrackFromPlaylist={isOwner ? onRemoveTrackFromPlaylist : undefined}
+          openEditSongModal={openEditSongModal}
+          onDeleteTrack={onDeleteTrack}
+          currentUser={currentUser}
           globalTheme={globalTheme}
         />
       )}
