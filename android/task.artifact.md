@@ -1,6 +1,0 @@
-- [/] Fix Connectivity (ADB Reverse)
-- [ ] Restore and Fix `index.js`
-- [ ] Clean and Build App
-- [ ] Verify Registration (Screenshot)
-- [ ] Test Audio Playback
-- [ ] Final Walkthrough
