@@ -94,13 +94,13 @@ export default function PodcastsScreen({ onPlayEpisode, globalTheme = 'dark' }) 
           isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
         }`}>
           <h2 className="text-lg font-mono font-black uppercase">
-            TAPES ARCHIVE: {selectedPodcast.title}
+            TAPES ARCHIVE: {selectedPodcast?.title || 'PODCAST SHOW'}
           </h2>
           <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>CLINICAL AUDIO LOGS</span>
         </div>
 
         <div className="flex flex-col gap-3">
-          {selectedPodcast.episodes.map((ep) => (
+          {(selectedPodcast?.episodes || []).map((ep) => (
             <div
               key={ep.id}
               className={`p-4 brutal-border brutal-shadow-sm transition-colors ${
