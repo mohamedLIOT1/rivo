@@ -94,10 +94,10 @@ export default function FullPlayerModal({
   seekTo,
   volume,
   setVolume,
-  isShuffle,
-  toggleShuffle,
-  isRepeat,
-  toggleRepeat,
+  isShuffle: propIsShuffle,
+  toggleShuffle: propToggleShuffle,
+  isRepeat: propIsRepeat,
+  toggleRepeat: propToggleRepeat,
   queue = [],
   openAddToPlaylist,
   onPlayTrack,
@@ -122,8 +122,15 @@ export default function FullPlayerModal({
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
   const { 
     audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration,
+    isShuffle: ctxIsShuffle, toggleShuffle: ctxToggleShuffle,
+    isRepeat: ctxIsRepeat, toggleRepeat: ctxToggleRepeat, setIsRepeat,
     currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue
   } = useAudioPlayer();
+
+  const isShuffle = propIsShuffle !== undefined ? propIsShuffle : ctxIsShuffle;
+  const toggleShuffle = propToggleShuffle || ctxToggleShuffle;
+  const isRepeat = propIsRepeat !== undefined ? propIsRepeat : ctxIsRepeat;
+  const toggleRepeat = propToggleRepeat || ctxToggleRepeat || (() => setIsRepeat?.(p => !p));
 
   const currentQueueIndex = propQueueIndex >= 0 ? propQueueIndex : (ctxQueueIndex !== undefined ? ctxQueueIndex : -1);
   const reorderQueue = propReorderQueue || ctxReorderQueue;

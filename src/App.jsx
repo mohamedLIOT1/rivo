@@ -65,7 +65,7 @@ function AppContent() {
     currentQueue, setCurrentQueue,
     currentQueueIndex, setCurrentQueueIndex,
     currentTime, duration,
-    volume, setVolume, isShuffle, setIsShuffle, toggleShuffle, isRepeat, setIsRepeat,
+    volume, setVolume, isShuffle, setIsShuffle, toggleShuffle, isRepeat, setIsRepeat, toggleRepeat,
     isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
     addToQueue, removeFromQueue,
@@ -1287,6 +1287,7 @@ function AppContent() {
         isShuffle={isShuffle}
         toggleShuffle={toggleShuffle}
         isRepeat={isRepeat}
+        toggleRepeat={toggleRepeat}
         queue={(() => {
           const isCurQ = isQuranContent(currentTrack);
           const rawQ = jamSession?.queue?.length ? jamSession.queue : (currentQueue?.length > 0 ? currentQueue : (isCurQ ? quranTracks : musicTracks));
