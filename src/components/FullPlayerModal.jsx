@@ -4,7 +4,7 @@ import {
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, MoreVertical, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save
+  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save, GripVertical
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -185,6 +185,8 @@ export default function FullPlayerModal({
   const [trackMenuTarget, setTrackMenuTarget] = useState(null);
   const [deleteConfirmTrack, setDeleteConfirmTrack] = useState(null);
   const [actionToast, setActionToast] = useState(null);
+  const [draggedQueueIdx, setDraggedQueueIdx] = useState(null);
+  const [dragOverQueueIdx, setDragOverQueueIdx] = useState(null);
 
   const showToast = useCallback((msg) => {
     setActionToast(msg);
@@ -1010,12 +1012,51 @@ export default function FullPlayerModal({
     const isTrackQuran = isQuranContent(track);
     const title = isTrackQuran ? cleanQuranTrackTitle(track.title) : track.title;
     const subtitle = isTrackQuran ? getQuranReciterName(track) : (track.artist || 'Unknown Artist');
+    const isDragging = draggedQueueIdx === queueIdx;
+    const isDragOver = dragOverQueueIdx === queueIdx && draggedQueueIdx !== queueIdx;
 
     return (
       <div 
         key={`${track.id || track._id}-${queueIdx}`}
+        data-queue-idx={queueIdx}
+        draggable={Boolean(reorderQueue && displayQueue.length > 1)}
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', String(queueIdx));
+          e.dataTransfer.effectAllowed = 'move';
+          setDraggedQueueIdx(queueIdx);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          if (dragOverQueueIdx !== queueIdx) {
+            setDragOverQueueIdx(queueIdx);
+          }
+        }}
+        onDragLeave={() => {
+          if (dragOverQueueIdx === queueIdx) {
+            setDragOverQueueIdx(null);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const fromIdx = Number(e.dataTransfer.getData('text/plain'));
+          if (!isNaN(fromIdx) && fromIdx !== queueIdx && reorderQueue) {
+            reorderQueue(fromIdx, queueIdx);
+            showToast('Queue reordered');
+          }
+          setDraggedQueueIdx(null);
+          setDragOverQueueIdx(null);
+        }}
+        onDragEnd={() => {
+          setDraggedQueueIdx(null);
+          setDragOverQueueIdx(null);
+        }}
         onClick={() => !isActive && handleQueueTrackClick(track, queueIdx)}
-        className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all brutal-btn group ${
+        className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all brutal-btn group select-none ${
+          isDragging ? 'opacity-35 scale-[0.98]' : ''
+        } ${
+          isDragOver ? 'border-t-2 border-[#17a398] bg-[#17a398]/10 ring-2 ring-[#17a398]/40' : ''
+        } ${
           isActive 
             ? isDark 
               ? 'bg-[#1b2622] border-2 border-[#26c4b7]/50 text-white font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]' 
@@ -1072,34 +1113,6 @@ export default function FullPlayerModal({
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {/* Quick Reorder Up / Down */}
-          {reorderQueue && displayQueue.length > 1 && (
-            <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-              <button
-                disabled={queueIdx === 0}
-                onClick={() => reorderQueue(queueIdx, queueIdx - 1)}
-                className={`p-1 rounded-md transition-colors cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed ${
-                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-black hover:bg-[#ded2bb]'
-                }`}
-                title="Move Up in Queue"
-                aria-label="Move Up"
-              >
-                <ChevronUp size={14} />
-              </button>
-              <button
-                disabled={queueIdx >= displayQueue.length - 1}
-                onClick={() => reorderQueue(queueIdx, queueIdx + 1)}
-                className={`p-1 rounded-md transition-colors cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed ${
-                  isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-black hover:bg-[#ded2bb]'
-                }`}
-                title="Move Down in Queue"
-                aria-label="Move Down"
-              >
-                <ChevronDown size={14} />
-              </button>
-            </div>
-          )}
-
           {jamSession && onRemoveFromJamQueue && (
             <button
               onClick={(e) => {
@@ -1131,6 +1144,43 @@ export default function FullPlayerModal({
           >
             <MoreVertical size={16} />
           </button>
+
+          {/* Drag & Drop Reorder Grip Handle */}
+          {reorderQueue && displayQueue.length > 1 && (
+            <div 
+              className={`p-1.5 rounded-lg transition-colors cursor-grab active:cursor-grabbing select-none touch-none ${
+                isDark ? 'text-zinc-500 hover:text-[#26c4b7] hover:bg-zinc-800' : 'text-zinc-400 hover:text-[#17a398] hover:bg-[#ede5d3]'
+              }`}
+              title="Drag to reorder queue"
+              aria-label="Drag to reorder"
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={() => {
+                setDraggedQueueIdx(queueIdx);
+              }}
+              onTouchMove={(e) => {
+                const touch = e.touches[0];
+                if (!touch) return;
+                const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                const queueRow = el?.closest('[data-queue-idx]');
+                if (queueRow) {
+                  const targetIdx = Number(queueRow.getAttribute('data-queue-idx'));
+                  if (!isNaN(targetIdx) && targetIdx !== dragOverQueueIdx) {
+                    setDragOverQueueIdx(targetIdx);
+                  }
+                }
+              }}
+              onTouchEnd={() => {
+                if (draggedQueueIdx !== null && dragOverQueueIdx !== null && draggedQueueIdx !== dragOverQueueIdx) {
+                  reorderQueue(draggedQueueIdx, dragOverQueueIdx);
+                  showToast('Queue reordered');
+                }
+                setDraggedQueueIdx(null);
+                setDragOverQueueIdx(null);
+              }}
+            >
+              <GripVertical size={16} />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1370,8 +1420,8 @@ export default function FullPlayerModal({
           </div>
 
           {/* Cassette / Vinyl / Album Art Bay */}
-          <div className="flex-1 flex items-center justify-center py-2 min-h-0 my-auto">
-            <div className="relative w-[215px] h-[215px] xs:w-[235px] xs:h-[235px] sm:w-[245px] sm:h-[245px] flex items-center justify-center shrink-0">
+          <div className="flex-1 flex items-center justify-center py-1 min-h-0">
+            <div className="relative w-[185px] h-[185px] xs:w-[195px] xs:h-[195px] sm:w-[205px] sm:h-[205px] max-h-[35vh] flex items-center justify-center shrink-0">
               {isVinylMode ? (
                 <div 
                   className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden brutal-border brutal-shadow-md ${isPlaying ? 'vinyl-spin' : ''}`}
@@ -1387,7 +1437,7 @@ export default function FullPlayerModal({
                 </div>
               ) : (
                 /* Authentic Retro TV / Monitor Enclosure */
-                <div className={`w-full h-full p-2.5 sm:p-3 ${
+                <div className={`w-full h-full p-2 sm:p-2.5 ${
                   isDark 
                     ? 'bg-gradient-to-b from-[#1d2b27] via-[#16221f] to-[#121a18] border-2 border-[#2f433e] shadow-[0_6px_24px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.12),2px_2px_0px_#050807]' 
                     : 'bg-[#ede5d3] brutal-border brutal-shadow-sm'
@@ -2122,39 +2172,7 @@ export default function FullPlayerModal({
                 <span>Play Track Now</span>
               </button>
 
-              {/* Adjust in Queue: Move Up */}
-              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index > 0 && (
-                <button
-                  onClick={() => {
-                    reorderQueue(trackMenuTarget.index, trackMenuTarget.index - 1);
-                    showToast('Moved track up in queue');
-                    setTrackMenuTarget(null);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
-                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
-                  }`}
-                >
-                  <ArrowUp size={16} className="text-[#26c4b7]" />
-                  <span>Move Up in Queue</span>
-                </button>
-              )}
 
-              {/* Adjust in Queue: Move Down */}
-              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index < displayQueue.length - 1 && (
-                <button
-                  onClick={() => {
-                    reorderQueue(trackMenuTarget.index, trackMenuTarget.index + 1);
-                    showToast('Moved track down in queue');
-                    setTrackMenuTarget(null);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
-                    isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
-                  }`}
-                >
-                  <ArrowDown size={16} className="text-[#26c4b7]" />
-                  <span>Move Down in Queue</span>
-                </button>
-              )}
 
               {/* Adjust in Queue: Move to Top */}
               {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index > 0 && (
