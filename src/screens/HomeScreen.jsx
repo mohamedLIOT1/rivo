@@ -49,14 +49,8 @@ export default function HomeScreen({
 
   // Filtered tracks (Strictly excluding Quran content from Music Home)
   const displayTracks = useMemo(() => {
-    const musicOnly = (tracks || []).filter(t => !isQuranContent(t));
-    if (musicOnly.length === 0) return [];
-    if (activeFilter === 'podcasts') {
-      const podTracks = musicOnly.filter(t => t.isPodcast || t.album?.toLowerCase().includes('podcast') || t.artist?.toLowerCase().includes('podcast'));
-      return podTracks.length > 0 ? podTracks : musicOnly;
-    }
-    return musicOnly;
-  }, [tracks, activeFilter]);
+    return (tracks || []).filter(t => !isQuranContent(t));
+  }, [tracks]);
 
   // Strictly filter out any Quran recitations/albums from Featured Albums on Home
   const displayAlbums = useMemo(() => {
@@ -205,16 +199,6 @@ export default function HomeScreen({
               }`}
             >
               Music
-            </button>
-            <button 
-              onClick={() => setActiveFilter('podcasts')}
-              className={`px-3 py-1 rounded-lg text-xs font-display font-bold brutal-border brutal-btn transition cursor-pointer ${
-                activeFilter === 'podcasts' 
-                  ? 'bg-[#0b1110] text-[#fdfbf7] brutal-shadow-sm' 
-                  : 'bg-[#fdfbf7] text-[#0b1110] hover:bg-white'
-              }`}
-            >
-              Podcasts
             </button>
           </div>
         </div>
