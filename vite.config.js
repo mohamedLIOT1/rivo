@@ -11,7 +11,13 @@ export default defineConfig({
     port: 3000,
     host: true,
     watch: {
-      ignored: ['**/.git/**']
+      ignored: [
+        /\.apk$/i,
+        '**/*.apk',
+        '*.apk',
+        '**/android/**',
+        '**/.git/**'
+      ]
     },
     proxy: {
       '/api': {
