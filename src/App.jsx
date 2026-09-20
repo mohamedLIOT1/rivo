@@ -65,7 +65,8 @@ function AppContent() {
     currentQueue, setCurrentQueue,
     currentQueueIndex, setCurrentQueueIndex,
     currentTime, duration,
-    volume, setVolume, isShuffle, setIsShuffle, toggleShuffle, isRepeat, setIsRepeat, toggleRepeat,
+    volume, setVolume, isShuffle, setIsShuffle, toggleShuffle,
+    isRepeat, setIsRepeat, repeatMode, toggleRepeat,
     isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
     addToQueue, removeFromQueue,
@@ -631,10 +632,12 @@ function AppContent() {
     });
 
     s.on('jam:sync_play_state', (data) => {
+      setSelectedPlaylist(null);
       syncRemotePlayState(data);
     });
 
     s.on('jam:on_play_state_changed', (data) => {
+      setSelectedPlaylist(null);
       syncRemotePlayState(data);
     });
 
@@ -1231,7 +1234,10 @@ function AppContent() {
               localStorage.setItem('liofy_activity_panel_open', 'false');
             } catch {}
           }}
-          onSelectTrack={playTrack}
+          onSelectTrack={(friendTrack) => {
+            setSelectedPlaylist(null);
+            playTrack(friendTrack, [friendTrack], false, 0);
+          }}
           openProfileScreen={() => setCurrentScreen('profile')}
           openChatModal={() => handleOpenChat(null)}
           currentUser={currentUser}
@@ -1250,7 +1256,8 @@ function AppContent() {
           isShuffle={isShuffle}
           toggleShuffle={toggleShuffle}
           isRepeat={isRepeat}
-          toggleRepeat={() => setIsRepeat(p => !p)}
+          repeatMode={repeatMode}
+          toggleRepeat={toggleRepeat}
           toggleLike={toggleLike}
           likedTrackIds={likedTrackIds}
           openFullPlayer={() => setIsFullPlayerOpen(true)}
@@ -1287,6 +1294,7 @@ function AppContent() {
         isShuffle={isShuffle}
         toggleShuffle={toggleShuffle}
         isRepeat={isRepeat}
+        repeatMode={repeatMode}
         toggleRepeat={toggleRepeat}
         queue={(() => {
           const isCurQ = isQuranContent(currentTrack);

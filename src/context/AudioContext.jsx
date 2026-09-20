@@ -108,7 +108,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [duration, setDuration] = useState(210);
   const [volume, setVolumeState] = useState(0.8);
   const [isShuffle, setIsShuffle] = useState(false); // false | 'shuffle' | 'smart'
-  const [isRepeat, setIsRepeat] = useState(false);
+  const [repeatMode, setRepeatMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rivo_repeat_mode');
+      if (saved === 'all' || saved === 'one') return saved;
+      const legacy = localStorage.getItem('rivo_repeat') === 'true' || localStorage.getItem('liofy_repeat') === 'true';
+      return legacy ? 'all' : 'off';
+    } catch {
+      return 'off';
+    }
+  }); // 'off' | 'all' | 'one'
+  const isRepeat = repeatMode !== 'off';
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [isYtTrack, setIsYtTrack] = useState(false); // exposed for RAF-based lyrics sync
 
@@ -131,6 +141,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const [jamSession, setJamSessionState] = useState(null);
 
+  const repeatModeRef     = useRef(repeatMode);
   const isRepeatRef       = useRef(isRepeat);
   const isShuffleRef      = useRef(isShuffle);
   const isMixModeRef      = useRef(isMixMode);
@@ -143,6 +154,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const currentTimeRef    = useRef(currentTime);
   const durationRef       = useRef(duration);
   const jamSessionRef     = useRef(jamSession);
+
+  useEffect(() => { 
+    repeatModeRef.current = repeatMode;
+    isRepeatRef.current = repeatMode !== 'off';
+  }, [repeatMode]);
   const socketRef         = useRef(null);
   const isRemoteActionRef = useRef(false);
   const seekTimeoutRef    = useRef(null);
@@ -286,8 +302,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const handleEnded = () => {
       onTrackEnded(currentTrackRef.current);
       if (isYtTrackRef.current) return;
-      if (isRepeatRef.current) { audio.currentTime = 0; audio.play().catch(() => {}); }
-      else if (playNextTrackRef.current) playNextTrackRef.current();
+      if (repeatModeRef.current === 'one') {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+      } else if (playNextTrackRef.current) {
+        playNextTrackRef.current();
+      }
     };
     // ── Key fix: when audio actually starts playing, ensure AudioContext is running & YouTube is killed ──
     const handlePlaying = () => {
@@ -430,7 +450,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (activeYtDeckRef.current === deckNum) {
           if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
           onTrackEnded(currentTrackRef.current);
-          if (isRepeatRef.current) {
+          if (repeatModeRef.current === 'one') {
             try {
               player.seekTo(0, true);
               player.playVideo();
@@ -995,13 +1015,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueue(resolvedQueue);
       }
     } else {
-      // Check if current queue is already strictly composed of the same type
       const curQ = currentQueueRef.current;
-      const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-      if (!curQMatchesType) {
-        const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        resolvedQueue = pool.length > 0 ? pool : [trackToPlay];
+      const targetId = String(trackToPlay.id || trackToPlay._id || '');
+      const isTrackInCurQ = curQ.some(t => String(t.id || t._id) === targetId);
+
+      // If playing remotely or if track is completely absent from current queue, start queue fresh with this track
+      if (!isTrackInCurQ) {
+        resolvedQueue = [trackToPlay];
         setCurrentQueue(resolvedQueue);
+      } else {
+        // Check if current queue is strictly composed of the same type
+        const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        if (!curQMatchesType) {
+          const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+          resolvedQueue = pool.length > 0 ? pool : [trackToPlay];
+          setCurrentQueue(resolvedQueue);
+        }
       }
     }
 
@@ -1214,7 +1243,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, [fetchSmartShuffleTracks]);
 
   const toggleRepeat = useCallback(() => {
-    setIsRepeat(prev => !prev);
+    setRepeatMode(prev => {
+      const next = prev === 'off' ? 'all' : (prev === 'all' ? 'one' : 'off');
+      try {
+        localStorage.setItem('rivo_repeat_mode', next);
+        localStorage.setItem('rivo_repeat', next !== 'off' ? 'true' : 'false');
+      } catch {}
+      return next;
+    });
   }, []);
 
   const playNextTrack = useCallback(() => {
@@ -1307,9 +1343,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
       currentQueueIndexRef.current = nextIdx;
       setCurrentQueueIndex(nextIdx);
       playTrack(activeList[nextIdx], activeList, false, nextIdx);
+    } else if (isOfflineMode) {
+      const offlineQueue = activeList.filter(t => t.downloaded || t.isOffline);
+      if (offlineQueue.length === 0) return;
+      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id);
+      const idx = offlineQueue.findIndex(t => String(t.id || t._id) === curId);
+      const nextIdx = (idx + 1) % offlineQueue.length;
+      currentQueueIndexRef.current = nextIdx;
+      setCurrentQueueIndex(nextIdx);
+      playTrack(offlineQueue[nextIdx], offlineQueue, false, nextIdx);
     } else {
-      const cur = currentTrackRef.current;
-      const curId = String(cur?.id || cur?._id || '');
+      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id);
       let idx = -1;
       if (currentQueueIndexRef.current >= 0 && currentQueueIndexRef.current < activeList.length &&
           String(activeList[currentQueueIndexRef.current]?.id || activeList[currentQueueIndexRef.current]?._id) === curId) {
@@ -1321,8 +1365,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const normalTracks = activeList.filter(t => !t.isAiSuggestion && !t.isSmartShuffle);
       const isCurInNormal = normalTracks.some(t => String(t.id || t._id) === curId);
 
-      // If repeat is ON and user is in the playlist queue, loop strictly within the playlist queue!
-      if (isRepeatRef.current && isCurInNormal && normalTracks.length > 0) {
+      // If repeatMode is 'all' (or legacy isRepeat) and user is in the playlist queue, loop strictly within the playlist queue!
+      if ((repeatModeRef.current === 'all' || isRepeatRef.current) && isCurInNormal && normalTracks.length > 0) {
         const normalWithIndices = [];
         activeList.forEach((t, i) => {
           if (!t.isAiSuggestion && !t.isSmartShuffle) {
@@ -1337,6 +1381,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueueIndex(nextIdx);
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
       } else {
+        // If repeatMode is 'off' and we are at the end of the queue, stop playing cleanly
+        if (repeatModeRef.current === 'off' && idx >= activeList.length - 1) {
+          setIsPlaying(false);
+          return;
+        }
         const nextIdx = idx >= 0 ? (idx + 1) % activeList.length : 0;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
@@ -1631,6 +1680,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isShuffle, setIsShuffle,
     toggleShuffle,
     isRepeat, setIsRepeat,
+    repeatMode, setRepeatMode,
     toggleRepeat,
     isOfflineMode, setIsOfflineMode,
     isYtTrack,

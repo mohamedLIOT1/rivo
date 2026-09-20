@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -13,6 +13,7 @@ export default function MiniPlayer({
   isShuffle,
   toggleShuffle,
   isRepeat,
+  repeatMode: propRepeatMode,
   toggleRepeat,
   toggleLike,
   likedTrackIds = [],
@@ -30,6 +31,7 @@ export default function MiniPlayer({
 }) {
   const isDark = globalTheme === 'dark';
   const audio = useAudioPlayer();
+  const repeatMode = propRepeatMode || audio?.repeatMode || (isRepeat ? 'all' : 'off');
   const currentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
   const duration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
   const seekTo = propSeekTo || audio?.seekTo;
@@ -409,12 +411,26 @@ export default function MiniPlayer({
 
               <button 
                 onClick={toggleRepeat}
-                className={`p-1.5 transition cursor-pointer ${
-                  isRepeat ? 'text-[#dc2626] font-bold' : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
+                className={`p-1.5 transition cursor-pointer relative ${
+                  repeatMode === 'one' 
+                    ? 'text-[#26c4b7] font-bold' 
+                    : repeatMode === 'all'
+                      ? 'text-[#10b981] font-bold'
+                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
                 }`} 
-                title="Repeat Dose"
+                title={
+                  repeatMode === 'one' 
+                    ? 'Repeat: Current Track (Looping)' 
+                    : repeatMode === 'all' 
+                      ? 'Repeat: All (Queue / Playlist)' 
+                      : 'Repeat: Off'
+                }
               >
-                <Repeat size={15} strokeWidth={2.5} />
+                {repeatMode === 'one' ? (
+                  <Repeat1 size={15} strokeWidth={2.5} />
+                ) : (
+                  <Repeat size={15} strokeWidth={2.5} />
+                )}
               </button>
             </div>
 
