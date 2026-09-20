@@ -1,8 +1,6 @@
 import { API_BASE_URL } from '../config';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { Capacitor } from '@capacitor/core';
 
-// IndexedDB Offline Audio & Cover Storage Manager for Rivo
+// IndexedDB Offline Audio & Cover Storage Manager for Rivo (Pure Web & PWA)
 const DB_NAME = 'RivoOfflineDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'downloaded_tracks';
@@ -17,7 +15,7 @@ export function revokeAllBlobUrls() {
   activeBlobUrls.clear();
 }
 
-// Request persistent storage so Android WebView doesn't auto-evict IndexedDB
+// Request persistent storage so browsers don't auto-evict IndexedDB
 if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
   navigator.storage.persist().catch(() => {});
 }
@@ -33,38 +31,6 @@ function openDB() {
     };
     request.onsuccess = (e) => resolve(e.target.result);
     request.onerror = (e) => reject(e.target.error);
-  });
-}
-
-// Ensure dedicated "Rivo" folder exists on device filesystem
-async function ensureRivoDir() {
-  try {
-    if (Capacitor.isNativePlatform() || window.Capacitor) {
-      await Filesystem.mkdir({
-        path: 'Rivo',
-        directory: Directory.Data,
-        recursive: true,
-      });
-    }
-  } catch (e) {}
-}
-const ensureLiofyDir = ensureRivoDir;
-
-// Convert Blob to Base64 (with UI thread yielding to prevent app lag/stutter)
-function blobToBase64(blob) {
-  return new Promise((resolve) => {
-    if (!blob) { resolve(''); return; }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      // Yield to main UI thread so animation/audio stays smooth
-      setTimeout(() => {
-        const res = reader.result || '';
-        const base64 = typeof res === 'string' ? (res.split(',')[1] || res) : '';
-        resolve(base64);
-      }, 0);
-    };
-    reader.onerror = () => resolve('');
-    reader.readAsDataURL(blob);
   });
 }
 
@@ -113,19 +79,16 @@ function extractYtId(input) {
   if (!input || typeof input !== 'string') return null;
   const str = input.trim();
   
-  // 1. YouTube URL with v= parameter, shorts, embed, or youtu.be
   const urlMatch = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
   if (urlMatch && urlMatch[1] && urlMatch[1].length === 11) {
     return urlMatch[1];
   }
   
-  // 2. String starting with yt- or yt_
   const prefixMatch = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
   if (prefixMatch && prefixMatch[1] && prefixMatch[1].length === 11) {
     return prefixMatch[1];
   }
 
-  // 3. Only match 11 chars if explicit YouTube URL or youtube domain string
   if ((str.includes('youtube.com') || str.includes('youtu.be')) && /^[a-zA-Z0-9_-]{11}$/.test(str)) {
     return str;
   }
@@ -133,11 +96,10 @@ function extractYtId(input) {
   return null;
 }
 
-// Client-side YouTube Audio Stream Resolver via public Cobalt, Piped & Invidious mirrors
+// Client-side YouTube Audio Stream Resolver via public mirrors
 async function resolveYouTubeAudioClientSide(videoId) {
   if (!videoId) return null;
 
-  // 1. Cobalt APIs (Modern high-speed downloaders)
   const cobaltEndpoints = [
     'https://api.cobalt.tools/api/json',
     'https://cobalt.stream/api/json',
@@ -166,7 +128,6 @@ async function resolveYouTubeAudioClientSide(videoId) {
     } catch {}
   }
 
-  // 2. Invidious API v1 (Reliable fallback for 2026)
   const invidiousInstances = [
     'https://inv.nadeko.net',
     'https://yewtu.be',
@@ -186,28 +147,10 @@ async function resolveYouTubeAudioClientSide(videoId) {
     } catch {}
   }
 
-  // 3. Piped API instances
-  const pipedInstances = [
-    'https://pipedapi.kavin.rocks',
-    'https://api.piped.privacydev.net',
-    'https://pipedapi.adminforge.de'
-  ];
-  for (const base of pipedInstances) {
-    try {
-      const res = await fetch(`${base}/streams/${videoId}`);
-      if (!res.ok) continue;
-      const data = await res.json();
-      if (data && data.audioStreams && data.audioStreams.length > 0) {
-        const stream = data.audioStreams.find(s => s.mimeType && s.mimeType.includes('audio/mp4')) || data.audioStreams[0];
-        if (stream && stream.url) return stream.url;
-      }
-    } catch {}
-  }
-
   return null;
 }
 
-// Save downloaded audio blob & track info locally in app private storage (IndexedDB + Native Filesystem Rivo folder)
+// Save downloaded audio blob & track info locally in browser storage (IndexedDB)
 export async function saveTrackOffline(track) {
   if (!track || (!track.id && !track._id)) return null;
   const trackId = String(track.id || track._id);
@@ -216,7 +159,7 @@ export async function saveTrackOffline(track) {
     let targetUrl = track.audioUrl || '';
     let audioBlob = null;
 
-    // 1. Data URI (Uploaded tracks with Base64 audio)
+    // 1. Data URI
     if (targetUrl.startsWith('data:')) {
       audioBlob = dataURItoBlob(targetUrl);
     } else if (targetUrl.startsWith('blob:')) {
@@ -246,7 +189,7 @@ export async function saveTrackOffline(track) {
       } catch (e) {}
     }
 
-    // 3. YouTube tracks: Stream resolution & download without any timeout limit
+    // 3. YouTube tracks
     const ytId = extractYtId(targetUrl) || (track.source === 'YouTube' ? extractYtId(track.id || track._id) : null);
     if (!audioBlob && ytId) {
       try {
@@ -279,7 +222,7 @@ export async function saveTrackOffline(track) {
       } catch (e) {}
     }
 
-    // Cover image blob handling (Direct + Proxy fallback)
+    // Cover image blob handling
     let coverBlob = null;
     if (track.cover) {
       if (track.cover.startsWith('data:')) {
@@ -303,36 +246,6 @@ export async function saveTrackOffline(track) {
       coverBase64 = await blobToDataURI(coverBlob);
     }
 
-    // Write audio to Native Device Filesystem if binary blob is available
-    let nativeAudioUri = null;
-    let nativeCoverUri = null;
-    let fileAudioSrc = null;
-    let fileCoverSrc = null;
-
-    if (audioBlob && (Capacitor.isNativePlatform() || window.Capacitor)) {
-      try {
-        await ensureRivoDir();
-        const audioB64 = await blobToBase64(audioBlob);
-        if (audioB64) {
-          await Filesystem.writeFile({
-            path: `Rivo/${trackId}.mp3`,
-            data: audioB64,
-            directory: Directory.Data,
-          });
-          const uriRes = await Filesystem.getUri({
-            path: `Rivo/${trackId}.mp3`,
-            directory: Directory.Data,
-          });
-          nativeAudioUri = uriRes.uri;
-          fileAudioSrc = Capacitor.convertFileSrc(uriRes.uri);
-        }
-      } catch (fileErr) {
-        console.warn('Native filesystem write warning:', fileErr);
-      }
-    }
-
-    const isNative = Capacitor.isNativePlatform() || !!window.Capacitor;
-
     const db = await openDB();
     const offlineTrack = {
       ...track,
@@ -341,10 +254,8 @@ export async function saveTrackOffline(track) {
       audioBlob: audioBlob || null,
       coverBlob: coverBlob || null,
       coverBase64: coverBase64 || null,
-      cover: fileCoverSrc || coverBase64 || track.cover,
-      audioUrl: fileAudioSrc || (audioBlob ? URL.createObjectURL(audioBlob) : targetUrl),
-      nativeAudioUri: nativeAudioUri,
-      nativeCoverUri: nativeCoverUri,
+      cover: coverBase64 || track.cover,
+      audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : targetUrl,
       savedAt: Date.now()
     };
 
@@ -374,20 +285,14 @@ export async function getOfflineTrackAudioUrl(trackId) {
       const req = store.get(idStr);
       req.onsuccess = () => {
         const item = req.result;
-        if (item) {
-          if (item.nativeAudioUri && (Capacitor.isNativePlatform() || window.Capacitor)) {
-            resolve(Capacitor.convertFileSrc(item.nativeAudioUri));
-            return;
+        if (item && item.audioBlob) {
+          if (activeBlobUrls.has(idStr)) {
+            try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
           }
-          if (item.audioBlob) {
-            if (activeBlobUrls.has(idStr)) {
-              try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
-            }
-            const blobUrl = URL.createObjectURL(item.audioBlob);
-            activeBlobUrls.set(idStr, blobUrl);
-            resolve(blobUrl);
-            return;
-          }
+          const blobUrl = URL.createObjectURL(item.audioBlob);
+          activeBlobUrls.set(idStr, blobUrl);
+          resolve(blobUrl);
+          return;
         }
         resolve(null);
       };
@@ -398,7 +303,7 @@ export async function getOfflineTrackAudioUrl(trackId) {
   }
 }
 
-// Get all downloaded tracks with fresh native FileSrc / Blob URLs
+// Get all downloaded tracks with fresh Blob URLs
 export async function getOfflineTracks() {
   try {
     const db = await openDB();
@@ -413,9 +318,7 @@ export async function getOfflineTracks() {
           let cover = item.coverBase64 || item.cover;
           const idStr = String(item.id);
 
-          if (item.nativeAudioUri && (Capacitor.isNativePlatform() || window.Capacitor)) {
-            audioUrl = Capacitor.convertFileSrc(item.nativeAudioUri);
-          } else if (item.audioBlob) {
+          if (item.audioBlob) {
             if (activeBlobUrls.has(idStr)) {
               try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
             }
@@ -423,9 +326,7 @@ export async function getOfflineTracks() {
             activeBlobUrls.set(idStr, audioUrl);
           }
 
-          if (item.nativeCoverUri && (Capacitor.isNativePlatform() || window.Capacitor)) {
-            cover = Capacitor.convertFileSrc(item.nativeCoverUri);
-          } else if (item.coverBase64) {
+          if (item.coverBase64) {
             cover = item.coverBase64;
           } else if (item.coverBlob) {
             try { cover = URL.createObjectURL(item.coverBlob); } catch (e) {}
@@ -461,7 +362,7 @@ export async function getOfflineTrackIds() {
   }
 }
 
-// Remove track from offline storage & native filesystem
+// Remove track from offline storage
 export async function removeTrackOffline(trackId) {
   if (!trackId) return false;
   const idStr = String(trackId);
@@ -469,28 +370,6 @@ export async function removeTrackOffline(trackId) {
   if (activeBlobUrls.has(idStr)) {
     try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
     activeBlobUrls.delete(idStr);
-  }
-
-  // Delete native files from Rivo / Liofy folder
-  if (Capacitor.isNativePlatform() || window.Capacitor) {
-    try {
-      await Filesystem.deleteFile({
-        path: `Rivo/${idStr}.mp3`,
-        directory: Directory.Data,
-      }).catch(() => {});
-      await Filesystem.deleteFile({
-        path: `Rivo/${idStr}_cover.jpg`,
-        directory: Directory.Data,
-      }).catch(() => {});
-      await Filesystem.deleteFile({
-        path: `Liofy/${idStr}.mp3`,
-        directory: Directory.Data,
-      }).catch(() => {});
-      await Filesystem.deleteFile({
-        path: `Liofy/${idStr}_cover.jpg`,
-        directory: Directory.Data,
-      }).catch(() => {});
-    } catch (e) {}
   }
 
   try {
