@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2, Edit2 } from 'lucide-react';
+import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2, Edit2, MoreVertical } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { useAudioPlayer } from '../context/AudioContext';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -17,6 +19,7 @@ export default function HomeScreen({
   openAddSongModal,
   openEditSongModal,
   onDeleteTrack,
+  openAddToPlaylist,
   currentTrack,
   isPlaying,
   currentUser,
@@ -32,8 +35,10 @@ export default function HomeScreen({
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
+  const { addToQueue } = useAudioPlayer();
   const [activeFilter, setActiveFilter] = useState('all');
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
+  const [actionMenuTrack, setActionMenuTrack] = useState(null);
 
   const isTrackActive = (t) => {
     if (!currentTrack || !t) return false;
@@ -279,30 +284,17 @@ export default function HomeScreen({
                       />
                     </button>
                   )}
-                  {openEditSongModal && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditSongModal(track);
-                      }}
-                      className="p-1 text-zinc-400 hover:text-[#17a398] transition cursor-pointer" 
-                      title="Admin: Edit Song"
-                    >
-                      <Edit2 size={15} />
-                    </button>
-                  )}
-                  {onDeleteTrack && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmTrackId(track.id || track._id);
-                      }}
-                      className="p-1 text-zinc-400 hover:text-red-600 transition cursor-pointer" 
-                      title="Delete Track"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActionMenuTrack(track);
+                    }}
+                    className="p-1 text-zinc-400 hover:text-white transition cursor-pointer" 
+                    title="Track options"
+                    aria-label="Track options"
+                  >
+                    <MoreVertical size={16} />
+                  </button>
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
@@ -519,30 +511,17 @@ export default function HomeScreen({
                       </>
                     )}
                   </button>
-                  {openEditSongModal && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditSongModal(track);
-                      }}
-                      className="p-1.5 rounded-lg bg-white hover:bg-[#17a398] text-zinc-700 hover:text-black brutal-border brutal-shadow-sm transition cursor-pointer shrink-0"
-                      title="Admin: Edit Song"
-                    >
-                      <Edit2 size={13} />
-                    </button>
-                  )}
-                  {onDeleteTrack && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmTrackId(track.id || track._id);
-                      }}
-                      className="p-1.5 rounded-lg bg-white hover:bg-red-50 text-zinc-500 hover:text-red-600 brutal-border brutal-shadow-sm transition cursor-pointer shrink-0"
-                      title="Delete track"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActionMenuTrack(track);
+                    }}
+                    className="p-1.5 rounded-lg bg-white hover:bg-[#17a398] text-zinc-700 hover:text-black brutal-border brutal-shadow-sm transition cursor-pointer shrink-0"
+                    title="Track options"
+                    aria-label="Track options"
+                  >
+                    <MoreVertical size={14} />
+                  </button>
                 </div>
               </div>
             );
@@ -562,6 +541,22 @@ export default function HomeScreen({
           title="Delete Track?"
           message="Are you sure you want to remove this track from your library?"
           confirmText="Delete"
+        />
+      )}
+
+      {/* Track 3-Dots Action Menu Modal */}
+      {actionMenuTrack && (
+        <TrackActionMenuModal
+          isOpen={Boolean(actionMenuTrack)}
+          onClose={() => setActionMenuTrack(null)}
+          track={actionMenuTrack}
+          onPlayTrack={onSelectTrack}
+          onAddToQueue={addToQueue}
+          openAddToPlaylist={openAddToPlaylist}
+          openEditSongModal={openEditSongModal}
+          onDeleteTrack={onDeleteTrack}
+          currentUser={currentUser}
+          globalTheme={globalTheme}
         />
       )}
     </div>

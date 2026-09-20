@@ -102,6 +102,7 @@ async function resolveTrackAudioUrl(track) {
 export function AudioProvider({ children, tracks, setTracks }) {
   const [currentTrack, setCurrentTrack] = useState(null);
   const [currentQueue, setCurrentQueue] = useState([]);
+  const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(210);
@@ -135,6 +136,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const isMixModeRef      = useRef(isMixMode);
   const activeTransRef    = useRef(activeTransitions);
   const currentQueueRef   = useRef(currentQueue);
+  const currentQueueIndexRef = useRef(currentQueueIndex);
   const tracksRef         = useRef(tracks);
   const currentTrackRef   = useRef(currentTrack);
   const isPlayingRef      = useRef(isPlaying);
@@ -161,6 +163,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     activeTransRef.current = activeTransitions; 
   }, [activeTransitions]);
   useEffect(() => { currentQueueRef.current = currentQueue;}, [currentQueue]);
+  useEffect(() => { currentQueueIndexRef.current = currentQueueIndex; }, [currentQueueIndex]);
   useEffect(() => { tracksRef.current       = tracks;      }, [tracks]);
   useEffect(() => { currentTrackRef.current = currentTrack;}, [currentTrack]);
   useEffect(() => { isPlayingRef.current    = isPlaying;   }, [isPlaying]);
@@ -904,7 +907,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, [getActiveYtPlayer, isCurrentYtReady]);
 
-  const playTrack = useCallback(async (track, newQueue = null, isRemote = false) => {
+  const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null) => {
     if (!track) return;
 
     // Track daily listening seed for dynamic personalized mixes
@@ -980,13 +983,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // ── STRICT QUEUE ISOLATION (Quran vs Music) ──
     const isTargetQuran = isQuranContent(trackToPlay);
+    let resolvedQueue = currentQueueRef.current;
     if (newQueue?.length > 0) {
       const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
       if (sanitized.length > 0) {
+        resolvedQueue = sanitized;
         setCurrentQueue(sanitized);
       } else {
         const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        setCurrentQueue(pool.length > 0 ? pool : [trackToPlay]);
+        resolvedQueue = pool.length > 0 ? pool : [trackToPlay];
+        setCurrentQueue(resolvedQueue);
       }
     } else {
       // Check if current queue is already strictly composed of the same type
@@ -994,7 +1000,25 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
       if (!curQMatchesType) {
         const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        setCurrentQueue(pool.length > 0 ? pool : [trackToPlay]);
+        resolvedQueue = pool.length > 0 ? pool : [trackToPlay];
+        setCurrentQueue(resolvedQueue);
+      }
+    }
+
+    // Set and track active queue index accurately (handles duplicate tracks in queue)
+    if (queueIndex !== null && queueIndex !== undefined && queueIndex >= 0) {
+      currentQueueIndexRef.current = queueIndex;
+      setCurrentQueueIndex(queueIndex);
+    } else {
+      const targetId = String(trackToPlay.id || trackToPlay._id || '');
+      const existingIdx = currentQueueIndexRef.current;
+      if (existingIdx >= 0 && existingIdx < resolvedQueue.length && String(resolvedQueue[existingIdx]?.id || resolvedQueue[existingIdx]?._id) === targetId) {
+        // Keep existing currentQueueIndexRef as is
+      } else {
+        const foundIdx = resolvedQueue.findIndex(t => String(t.id || t._id) === targetId);
+        const safeIdx = foundIdx >= 0 ? foundIdx : 0;
+        currentQueueIndexRef.current = safeIdx;
+        setCurrentQueueIndex(safeIdx);
       }
     }
 
@@ -1062,14 +1086,117 @@ export function AudioProvider({ children, tracks, setTracks }) {
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+        const markedTracks = data.tracks.map(t => ({
+          ...t,
+          isAiSuggestion: true,
+          isSmartShuffle: true
+        }));
         setCurrentQueue(prev => {
           const existingIds = new Set(prev.map(t => String(t.id || t._id)));
-          const fresh = data.tracks.filter(t => !existingIds.has(String(t.id || t._id)));
+          const fresh = markedTracks.filter(t => !existingIds.has(String(t.id || t._id)));
           return [...prev, ...fresh];
         });
       }
     } catch (err) {
       console.warn('[Smart Shuffle] fetch error:', err);
+    }
+  }, []);
+
+  const addToQueue = useCallback((track, playNext = false) => {
+    if (!track) return;
+    if (!currentTrackRef.current) {
+      playTrack(track, [track], false, 0);
+      return;
+    }
+    const isCurQuran = isQuranContent(currentTrackRef.current);
+    if (isCurQuran !== isQuranContent(track)) return;
+    setCurrentQueue(prev => {
+      const currentList = Array.isArray(prev) ? prev : [];
+      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+      if (playNext) {
+        let curIdx = currentQueueIndexRef.current;
+        if (curIdx < 0 || curIdx >= currentList.length || String(currentList[curIdx]?.id || currentList[curIdx]?._id) !== curId) {
+          curIdx = curId ? currentList.findIndex(t => String(t.id || t._id) === curId) : -1;
+        }
+        if (curIdx >= 0) {
+          const updated = [...currentList];
+          updated.splice(curIdx + 1, 0, track);
+          return updated;
+        }
+      }
+      return [...currentList, track];
+    });
+  }, [playTrack]);
+
+  const removeFromQueue = useCallback((trackIdOrIndex) => {
+    setCurrentQueue(prev => {
+      if (!Array.isArray(prev)) return [];
+      let removedIndex = -1;
+      let nextList = [];
+      if (typeof trackIdOrIndex === 'number') {
+        removedIndex = trackIdOrIndex;
+        nextList = prev.filter((_, idx) => idx !== trackIdOrIndex);
+      } else {
+        const targetId = String(trackIdOrIndex);
+        removedIndex = prev.findIndex(t => String(t.id || t._id) === targetId);
+        nextList = prev.filter((_, idx) => idx !== removedIndex);
+      }
+
+      if (removedIndex >= 0) {
+        const cur = currentQueueIndexRef.current;
+        if (cur === removedIndex) {
+          if (cur >= nextList.length) {
+            currentQueueIndexRef.current = Math.max(0, nextList.length - 1);
+            setCurrentQueueIndex(currentQueueIndexRef.current);
+          }
+        } else if (cur > removedIndex) {
+          currentQueueIndexRef.current = cur - 1;
+          setCurrentQueueIndex(cur - 1);
+        }
+      }
+      return nextList;
+    });
+  }, []);
+
+  const reorderQueue = useCallback((fromIndex, toIndex) => {
+    setCurrentQueue(prev => {
+      if (!Array.isArray(prev) || fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length) {
+        return prev;
+      }
+      if (fromIndex === toIndex) return prev;
+
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+
+      // Accurately adjust currentQueueIndex
+      const curIdx = currentQueueIndexRef.current;
+      if (curIdx >= 0) {
+        let newCurIdx = curIdx;
+        if (curIdx === fromIndex) {
+          newCurIdx = toIndex;
+        } else if (fromIndex < curIdx && toIndex >= curIdx) {
+          newCurIdx = curIdx - 1;
+        } else if (fromIndex > curIdx && toIndex <= curIdx) {
+          newCurIdx = curIdx + 1;
+        }
+        currentQueueIndexRef.current = newCurIdx;
+        setCurrentQueueIndex(newCurIdx);
+      }
+
+      return updated;
+    });
+  }, []);
+
+  const clearQueue = useCallback(() => {
+    if (currentTrackRef.current) {
+      setCurrentQueue([currentTrackRef.current]);
+      currentQueueIndexRef.current = 0;
+      setCurrentQueueIndex(0);
+    } else {
+      setCurrentQueue([]);
+      currentQueueIndexRef.current = -1;
+      setCurrentQueueIndex(-1);
     }
   }, []);
 
@@ -1166,15 +1293,51 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (candidates.length <= 3 && cur) {
         fetchSmartShuffleTracks(cur, activeList);
       }
-      playTrack(chosen, activeList);
+      const chosenIdx = activeList.indexOf(chosen);
+      const safeChosenIdx = chosenIdx >= 0 ? chosenIdx : 0;
+      currentQueueIndexRef.current = safeChosenIdx;
+      setCurrentQueueIndex(safeChosenIdx);
+      playTrack(chosen, activeList, false, safeChosenIdx);
     } else if (isShuffleRef.current) {
-      playTrack(activeList[Math.floor(Math.random() * activeList.length)], activeList);
+      const nextIdx = Math.floor(Math.random() * activeList.length);
+      currentQueueIndexRef.current = nextIdx;
+      setCurrentQueueIndex(nextIdx);
+      playTrack(activeList[nextIdx], activeList, false, nextIdx);
     } else {
       const cur = currentTrackRef.current;
       const curId = String(cur?.id || cur?._id || '');
-      const idx = activeList.findIndex(t => String(t.id || t._id) === curId);
-      const nextIdx = idx >= 0 ? (idx + 1) % activeList.length : 0;
-      playTrack(activeList[nextIdx], activeList);
+      let idx = -1;
+      if (currentQueueIndexRef.current >= 0 && currentQueueIndexRef.current < activeList.length &&
+          String(activeList[currentQueueIndexRef.current]?.id || activeList[currentQueueIndexRef.current]?._id) === curId) {
+        idx = currentQueueIndexRef.current;
+      } else {
+        idx = activeList.findIndex(t => String(t.id || t._id) === curId);
+      }
+      
+      const normalTracks = activeList.filter(t => !t.isAiSuggestion && !t.isSmartShuffle);
+      const isCurInNormal = normalTracks.some(t => String(t.id || t._id) === curId);
+
+      // If repeat is ON and user is in the playlist queue, loop strictly within the playlist queue!
+      if (isRepeatRef.current && isCurInNormal && normalTracks.length > 0) {
+        const normalWithIndices = [];
+        activeList.forEach((t, i) => {
+          if (!t.isAiSuggestion && !t.isSmartShuffle) {
+            normalWithIndices.push({ track: t, index: i });
+          }
+        });
+        const currentPosInNormal = normalWithIndices.findIndex(item => item.index === idx);
+        const pos = currentPosInNormal >= 0 ? currentPosInNormal : normalWithIndices.findIndex(item => String(item.track.id || item.track._id) === curId);
+        const nextPos = (pos >= 0 ? pos + 1 : 0) % normalWithIndices.length;
+        const nextIdx = normalWithIndices[nextPos].index;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx);
+      } else {
+        const nextIdx = idx >= 0 ? (idx + 1) % activeList.length : 0;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx);
+      }
     }
     // Force playing state so song starts automatically
     setIsPlaying(true);
@@ -1205,9 +1368,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     const cur = currentTrackRef.current;
     const curId = String(cur?.id || cur?._id || '');
-    const idx = activeList.findIndex(t => String(t.id || t._id) === curId);
+    let idx = -1;
+    if (currentQueueIndexRef.current >= 0 && currentQueueIndexRef.current < activeList.length &&
+        String(activeList[currentQueueIndexRef.current]?.id || activeList[currentQueueIndexRef.current]?._id) === curId) {
+      idx = currentQueueIndexRef.current;
+    } else {
+      idx = activeList.findIndex(t => String(t.id || t._id) === curId);
+    }
     const prevIdx = idx > 0 ? idx - 1 : activeList.length - 1;
-    playTrack(activeList[prevIdx], activeList);
+    currentQueueIndexRef.current = prevIdx;
+    setCurrentQueueIndex(prevIdx);
+    playTrack(activeList[prevIdx], activeList, false, prevIdx);
     // Force playing state so song starts automatically
     setIsPlaying(true);
   }, [isOfflineMode, playTrack]);
@@ -1449,6 +1620,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const value = {
     currentTrack, setCurrentTrack,
     currentQueue, setCurrentQueue,
+    currentQueueIndex, setCurrentQueueIndex,
     isPlaying, setIsPlaying,
     currentTime, duration,
     volume, setVolume,
@@ -1467,6 +1639,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
     applyEqPreset,
     togglePlay, playTrack,
     playNextTrack, playPrevTrack,
+    addToQueue, removeFromQueue,
+    reorderQueue, clearQueue,
     seekTo, audioRef,
     // Jam Real-Time Sync & Queue API
     jamSession, setJamSync,

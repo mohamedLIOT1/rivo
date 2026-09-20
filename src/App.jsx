@@ -63,10 +63,13 @@ function AppContent() {
   const {
     currentTrack, setCurrentTrack, isPlaying, setIsPlaying,
     currentQueue, setCurrentQueue,
+    currentQueueIndex, setCurrentQueueIndex,
     currentTime, duration,
     volume, setVolume, isShuffle, setIsShuffle, toggleShuffle, isRepeat, setIsRepeat,
     isOfflineMode, setIsOfflineMode,
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
+    addToQueue, removeFromQueue,
+    reorderQueue, clearQueue,
     setJamSync, syncRemotePlayState, addToJamQueue, removeFromJamQueue
   } = audio;
 
@@ -90,6 +93,7 @@ function AppContent() {
   const [isFullPlayerOpen,    setIsFullPlayerOpen]    = useState(false);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [isAddToPlaylistOpen, setIsAddToPlaylistOpen] = useState(false);
+  const [addToPlaylistTarget, setAddToPlaylistTarget] = useState(null);
   const [isSettingsOpen,      setIsSettingsOpen]      = useState(false);
   const [isAddSongOpen,       setIsAddSongOpen]       = useState(false);
   const [isImportSongOpen,    setIsImportSongOpen]    = useState(false);
@@ -553,6 +557,11 @@ function AppContent() {
     } catch {}
   };
 
+  const handleOpenAddToPlaylist = (targetTrack) => {
+    setAddToPlaylistTarget(targetTrack || null);
+    setIsAddToPlaylistOpen(true);
+  };
+
   const handleRemoveTrackFromPlaylist = async (trackId, playlistId) => {
     const targetId = String(trackId);
     setSelectedPlaylist(prev => {
@@ -991,6 +1000,7 @@ function AppContent() {
               onSelectArtist={handleSelectArtist}
               openAddSongModal={() => setIsAddSongOpen(true)}
               openEditSongModal={handleOpenEditSong}
+              openAddToPlaylist={handleOpenAddToPlaylist}
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               currentTrack={currentTrack}
               isPlaying={isPlaying}
@@ -1018,6 +1028,7 @@ function AppContent() {
               onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
               openEditSongModal={handleOpenEditSong}
+              openAddToPlaylist={handleOpenAddToPlaylist}
               onOpenAddSongModal={() => setIsAddSongOpen(true)}
               onAddToLibrary={handleAddSong}
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
@@ -1108,6 +1119,7 @@ function AppContent() {
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               openEditSongModal={handleOpenEditSong}
               openEditAlbumModal={handleOpenEditAlbum}
+              openAddToPlaylist={handleOpenAddToPlaylist}
               onUpdatePlaylist={handleUpdatePlaylist}
               onDeletePlaylist={handleDeletePlaylist}
               onDeleteAlbum={handleDeleteAlbum}
@@ -1136,6 +1148,8 @@ function AppContent() {
               currentUser={currentUser}
               openEditSongModal={handleOpenEditSong}
               openEditAlbumModal={handleOpenEditAlbum}
+              openAddToPlaylist={handleOpenAddToPlaylist}
+              onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               onAlbumCreated={handleCreateAlbum}
               onDeleteAlbum={handleDeleteAlbum}
               globalTheme={globalTheme}
@@ -1279,12 +1293,24 @@ function AppContent() {
           return rawQ.filter(t => isCurQ ? isQuranContent(t) : !isQuranContent(t));
         })()}
         onRemoveFromJamQueue={removeFromJamQueue}
-        openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
+        openAddToPlaylist={(targetTrack) => {
+          setAddToPlaylistTarget(targetTrack || null);
+          setIsAddToPlaylistOpen(true);
+        }}
         onPlayTrack={playTrack}
         onSelectArtist={(artist) => {
           setIsFullPlayerOpen(false);
           handleSelectArtist(artist);
         }}
+        onOpenEditSong={handleOpenEditSong}
+        onDeleteTrack={handleDeleteTrack}
+        onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
+        selectedPlaylist={selectedPlaylist}
+        currentQueueIndex={currentQueueIndex}
+        onReorderQueue={reorderQueue}
+        onClearQueue={clearQueue}
+        onAddToQueue={addToQueue}
+        onRemoveFromQueue={removeFromQueue}
         currentUser={currentUser}
         globalTheme={globalTheme}
       />
@@ -1298,8 +1324,11 @@ function AppContent() {
 
       <AddToPlaylistModal
         isOpen={isAddToPlaylistOpen}
-        onClose={() => setIsAddToPlaylistOpen(false)}
-        track={currentTrack}
+        onClose={() => {
+          setIsAddToPlaylistOpen(false);
+          setAddToPlaylistTarget(null);
+        }}
+        track={addToPlaylistTarget || currentTrack}
         playlists={libraryMode === 'quran' ? quranPlaylists : musicPlaylists}
         onAddTrackToPlaylist={handleAddTrackToPlaylist}
         onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
