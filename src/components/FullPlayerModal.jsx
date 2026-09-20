@@ -1019,12 +1019,6 @@ export default function FullPlayerModal({
       <div 
         key={`${track.id || track._id}-${queueIdx}`}
         data-queue-idx={queueIdx}
-        draggable={Boolean(reorderQueue && displayQueue.length > 1)}
-        onDragStart={(e) => {
-          e.dataTransfer.setData('text/plain', String(queueIdx));
-          e.dataTransfer.effectAllowed = 'move';
-          setDraggedQueueIdx(queueIdx);
-        }}
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
@@ -1044,10 +1038,6 @@ export default function FullPlayerModal({
             reorderQueue(fromIdx, queueIdx);
             showToast('Queue reordered');
           }
-          setDraggedQueueIdx(null);
-          setDragOverQueueIdx(null);
-        }}
-        onDragEnd={() => {
           setDraggedQueueIdx(null);
           setDragOverQueueIdx(null);
         }}
@@ -1148,12 +1138,17 @@ export default function FullPlayerModal({
           {/* Drag & Drop Reorder Grip Handle */}
           {reorderQueue && displayQueue.length > 1 && (
             <div 
-              className={`p-1.5 rounded-lg transition-colors cursor-grab active:cursor-grabbing select-none touch-none ${
-                isDark ? 'text-zinc-500 hover:text-[#26c4b7] hover:bg-zinc-800' : 'text-zinc-400 hover:text-[#17a398] hover:bg-[#ede5d3]'
-              }`}
-              title="Drag to reorder queue"
-              aria-label="Drag to reorder"
-              onClick={(e) => e.stopPropagation()}
+              draggable
+              onDragStart={(e) => {
+                e.stopPropagation();
+                e.dataTransfer.setData('text/plain', String(queueIdx));
+                e.dataTransfer.effectAllowed = 'move';
+                setDraggedQueueIdx(queueIdx);
+              }}
+              onDragEnd={() => {
+                setDraggedQueueIdx(null);
+                setDragOverQueueIdx(null);
+              }}
               onTouchStart={() => {
                 setDraggedQueueIdx(queueIdx);
               }}
@@ -1177,6 +1172,12 @@ export default function FullPlayerModal({
                 setDraggedQueueIdx(null);
                 setDragOverQueueIdx(null);
               }}
+              onClick={(e) => e.stopPropagation()}
+              className={`p-1.5 rounded-lg transition-colors cursor-grab active:cursor-grabbing select-none touch-none ${
+                isDark ? 'text-zinc-500 hover:text-[#26c4b7] hover:bg-zinc-800' : 'text-zinc-400 hover:text-[#17a398] hover:bg-[#ede5d3]'
+              }`}
+              title="Drag to reorder in queue"
+              aria-label="Drag to reorder"
             >
               <GripVertical size={16} />
             </div>
@@ -1187,7 +1188,10 @@ export default function FullPlayerModal({
   };
 
   const renderQueue = () => (
-    <div className="space-y-4 pb-20 select-none">
+    <div 
+      className="flex-1 overflow-y-auto space-y-4 pb-24 select-none pr-1 min-h-0 w-full"
+      style={{ scrollbarWidth: 'thin' }}
+    >
       {/* Jam Session Notice (if connected) */}
       {jamSession && (
         <div className="p-3 bg-[#17a398]/10 border-2 border-[#17a398] rounded-xl flex items-center justify-between">
@@ -1932,7 +1936,7 @@ export default function FullPlayerModal({
 
         {/* ─── MOBILE QUEUE TAB ─── */}
         {activeTab === 'queue' && (
-          <div className={`lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto ${
+          <div className={`lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto min-h-0 ${
             isDark ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
           } rounded-2xl p-4 brutal-shadow-lg`}>
             {renderQueue()}
