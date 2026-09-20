@@ -193,14 +193,16 @@ export const AudioProvider = ({ children }) => {
     try {
       setIsLoading(true);
 
+      setCurrentTrack(track);
+      setIsLoading(true);
+      if (trackList.length > 0) setQueue(trackList);
+
       if (soundRef.current) {
         const s = soundRef.current;
         soundRef.current = null;
         await s.stopAsync().catch(() => {});
         await s.unloadAsync().catch(() => {});
       }
-
-      if (trackList.length > 0) setQueue(trackList);
 
       const local = downloadedTracks.find(t => String(t._id || t.id) === trackId);
       let uri = local?.nativeAudioUri || local?.localAudioUri || track.nativeAudioUri || track.localAudioUri;
@@ -228,7 +230,6 @@ export const AudioProvider = ({ children }) => {
       }
 
       soundRef.current = sound;
-      setCurrentTrack(track);
       setIsPlaying(true);
       setIsLoading(false);
 
@@ -242,7 +243,6 @@ export const AudioProvider = ({ children }) => {
         return playTrack(track, trackList, true);
       } else {
         showToast(`Could not play: ${track.title}`, 'error');
-        setTimeout(() => playNextTrack(), 1200);
       }
     }
   };

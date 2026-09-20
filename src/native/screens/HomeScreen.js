@@ -22,11 +22,16 @@ export default function HomeScreen({
   const { currentUser, tracks: userTracks, fetchPublicTracks } = useUser();
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music'
   const [refreshing, setRefreshing] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(30);
 
   // Filter music only (strictly exclude Quran from main music home)
   const displayTracks = useMemo(() => {
     return (userTracks || []).filter((t) => !isQuranContent(t));
   }, [userTracks]);
+
+  const visibleTracks = useMemo(() => {
+    return displayTracks.slice(0, visibleCount);
+  }, [displayTracks, visibleCount]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -149,7 +154,7 @@ export default function HomeScreen({
           TRACKS LIST
           ───────────────────────────────────────── */}
       <View style={styles.tracksContainer}>
-        {displayTracks.map((track, index) => (
+        {visibleTracks.map((track, index) => (
           <SongItem
             key={track._id || track.id || index}
             track={track}
@@ -157,6 +162,18 @@ export default function HomeScreen({
             onMorePress={() => onTrackAction && onTrackAction(track)}
           />
         ))}
+
+        {displayTracks.length > visibleCount && (
+          <TouchableOpacity
+            style={styles.loadMoreBtn}
+            onPress={() => setVisibleCount((c) => c + 30)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.loadMoreText}>
+              + LOAD MORE TRACKS ({displayTracks.length - visibleCount} MORE)
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {displayTracks.length === 0 && (
           <View style={styles.emptyCard}>
@@ -332,5 +349,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94a3b8',
     fontWeight: '600',
+  },
+  loadMoreBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#141d1b',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#263330',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10,
+  },
+  loadMoreText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#17a398',
+    letterSpacing: 0.5,
   },
 });

@@ -34,9 +34,30 @@ export const resolveAudioStream = async (track) => {
     return rawUrl;
   }
 
-  // 3. Fast SoundCloud direct progressive stream resolution
+  // 3. Try Railway backend direct stream resolver (using yt-dlp & server cache)
   const title = (track.title || '').trim();
   const artist = (track.artist || '').trim();
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const serverStreamRes = await fetch(
+      `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
+    if (serverStreamRes.ok) {
+      const data = await serverStreamRes.json();
+      if (data?.success && data?.url) {
+        if (trackId) streamCache.set(trackId, data.url);
+        return data.url;
+      }
+    }
+  } catch (e) {
+    // Continue to client-side resolver
+  }
+
+  // 4. Fast client-side SoundCloud progressive stream resolution
 
   const queries = [];
   if (artist && title) queries.push(`${artist} ${title}`);

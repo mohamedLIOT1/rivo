@@ -1,12 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
 import { Play, Pause, Heart } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 
 export default function MiniPlayer({ onOpenFullPlayer }) {
-  const { currentTrack, isPlaying, togglePlay } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds, toggleLikeTrack } = useUser();
 
@@ -43,9 +43,15 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
             <Text style={styles.title} numberOfLines={1}>
               {currentTrack.title || 'Untitled'}
             </Text>
-            <Text style={styles.artist} numberOfLines={1}>
-              {currentTrack.artist || 'Unknown Artist'}
-            </Text>
+            {isLoading ? (
+              <Text style={styles.connectingText} numberOfLines={1}>
+                CONNECTING STREAM...
+              </Text>
+            ) : (
+              <Text style={styles.artist} numberOfLines={1}>
+                {currentTrack.artist || 'Unknown Artist'}
+              </Text>
+            )}
           </View>
 
           {/* Actions */}
@@ -68,7 +74,9 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               activeOpacity={0.85}
             >
-              {isPlaying ? (
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#0b1110" />
+              ) : isPlaying ? (
                 <Pause size={15} color="#0b1110" fill="#0b1110" />
               ) : (
                 <Play size={15} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
@@ -141,6 +149,13 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: '#94a3b8',
     fontWeight: '600',
+    marginTop: 1,
+  },
+  connectingText: {
+    fontSize: 9.5,
+    color: '#26c4b7',
+    fontWeight: '800',
+    letterSpacing: 0.5,
     marginTop: 1,
   },
   buttonsRow: {
