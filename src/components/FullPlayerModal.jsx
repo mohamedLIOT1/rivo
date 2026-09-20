@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
-  Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, 
+  Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, MoreVertical, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus
+  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -97,6 +97,7 @@ export default function FullPlayerModal({
   isShuffle: propIsShuffle,
   toggleShuffle: propToggleShuffle,
   isRepeat: propIsRepeat,
+  repeatMode: propRepeatMode,
   toggleRepeat: propToggleRepeat,
   queue = [],
   openAddToPlaylist,
@@ -123,13 +124,14 @@ export default function FullPlayerModal({
   const { 
     audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration,
     isShuffle: ctxIsShuffle, toggleShuffle: ctxToggleShuffle,
-    isRepeat: ctxIsRepeat, toggleRepeat: ctxToggleRepeat, setIsRepeat,
+    isRepeat: ctxIsRepeat, repeatMode: ctxRepeatMode, toggleRepeat: ctxToggleRepeat, setIsRepeat,
     currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue
   } = useAudioPlayer();
 
   const isShuffle = propIsShuffle !== undefined ? propIsShuffle : ctxIsShuffle;
   const toggleShuffle = propToggleShuffle || ctxToggleShuffle;
   const isRepeat = propIsRepeat !== undefined ? propIsRepeat : ctxIsRepeat;
+  const repeatMode = propRepeatMode || ctxRepeatMode || (isRepeat ? 'all' : 'off');
   const toggleRepeat = propToggleRepeat || ctxToggleRepeat || (() => setIsRepeat?.(p => !p));
 
   const currentQueueIndex = propQueueIndex >= 0 ? propQueueIndex : (ctxQueueIndex !== undefined ? ctxQueueIndex : -1);
@@ -154,8 +156,15 @@ export default function FullPlayerModal({
   // Strictly isolate queue: Quran only displays Quran; Music only displays Music
   const isCurQuran = isQuranContent(currentTrack);
   const displayQueue = useMemo(() => {
-    return (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-  }, [queue, isCurQuran]);
+    const raw = (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    if (!currentTrack) return raw;
+    const curId = String(currentTrack.id || currentTrack._id || '');
+    const hasCur = raw.some(t => String(t.id || t._id) === curId);
+    if (!hasCur && curId) {
+      return [currentTrack, ...raw];
+    }
+    return raw;
+  }, [queue, currentTrack, isCurQuran]);
 
   // Partition queue into normal playlist queue and AI suggestions with original indices
   const { normalQueue, aiQueue } = useMemo(() => {
@@ -365,6 +374,53 @@ export default function FullPlayerModal({
         return effectiveLyricTime >= line.time && (!nextLine || effectiveLyricTime < nextLine.time);
       })
     : -1;
+
+  const handleNudgeSync = (delta) => {
+    setSyncOffset(prev => {
+      const next = Math.round((prev + delta) * 10) / 10;
+      showToast(next === 0 ? 'Lyrics sync reset' : `Lyrics timing: ${next > 0 ? '+' : ''}${next}s ${next < 0 ? '(earlier)' : '(later)'}`);
+      return next;
+    });
+    setTimeout(() => {
+      scrollToActiveLyric('smooth');
+    }, 60);
+  };
+
+  const [isSavingSync, setIsSavingSync] = useState(false);
+  const handleSavePermanentSync = async () => {
+    if (!currentTrack || !rawLyrics.length || syncOffset === 0) return;
+    setIsSavingSync(true);
+    try {
+      const shifted = rawLyrics.map(l => ({
+        ...l,
+        time: Math.max(0, Math.round((Number(l.time || 0) + syncOffset) * 100) / 100)
+      }));
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
+      await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          trackId: currentTrack.id || currentTrack._id,
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          audioUrl: currentTrack.audioUrl,
+          lyrics: shifted,
+          isVerified: isLyricsVerified
+        })
+      });
+      currentTrack.lyrics = shifted;
+      setLocalLyrics(shifted);
+      setSyncOffset(0);
+      showToast('Lyrics sync permanently saved!');
+    } catch (err) {
+      console.warn('Failed to save sync:', err);
+      showToast('Failed to save sync');
+    }
+    setIsSavingSync(false);
+  };
 
 
   const handleTranslateLyrics = async () => {
@@ -1104,12 +1160,19 @@ export default function FullPlayerModal({
         } mb-2.5`}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
-              {selectedPlaylist ? selectedPlaylist.name : (isCurQuran ? 'Quran Queue' : 'Playlist Queue')} ({normalQueue.length})
+              {(selectedPlaylist && (normalQueue.some(item => item.track.album === selectedPlaylist.name || item.track.playlistTitle === selectedPlaylist.name) || !selectedPlaylist.tracks?.length))
+                ? selectedPlaylist.name 
+                : (jamSession ? `Jam Session (${jamSession.code})` : (isCurQuran ? 'Quran Queue' : 'Queue'))
+              } ({normalQueue.length})
             </span>
-            {isRepeat && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">
-                <Repeat size={10} />
-                REPEAT LOOPS THIS
+            {repeatMode !== 'off' && (
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-black ${
+                repeatMode === 'one' 
+                  ? 'bg-[#26c4b7]/20 text-[#26c4b7] border border-[#26c4b7]/40' 
+                  : 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/40'
+              } animate-pulse`}>
+                {repeatMode === 'one' ? <Repeat1 size={10} /> : <Repeat size={10} />}
+                {repeatMode === 'one' ? 'REPEAT 1 (CURRENT SONG)' : 'REPEAT ALL (QUEUE)'}
               </span>
             )}
           </div>
@@ -1308,7 +1371,7 @@ export default function FullPlayerModal({
 
           {/* Cassette / Vinyl / Album Art Bay */}
           <div className="flex-1 flex items-center justify-center py-2 min-h-0 my-auto">
-            <div className="relative w-[190px] h-[190px] sm:w-[210px] sm:h-[210px] flex items-center justify-center shrink-0">
+            <div className="relative w-[215px] h-[215px] xs:w-[235px] xs:h-[235px] sm:w-[245px] sm:h-[245px] flex items-center justify-center shrink-0">
               {isVinylMode ? (
                 <div 
                   className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden brutal-border brutal-shadow-md ${isPlaying ? 'vinyl-spin' : ''}`}
@@ -1318,13 +1381,13 @@ export default function FullPlayerModal({
                     background: 'repeating-radial-gradient(circle at 50%, transparent 0, transparent 10px, rgba(255,255,255,0.03) 10px, rgba(255,255,255,0.03) 11px)'
                   }}/>
                   <div className="w-2/5 h-2/5 rounded-full overflow-hidden border-2 border-black shadow-xl z-10">
-                    <img src={currentTrack.cover} alt={currentTrack.title} className="w-full h-full object-cover" />
+                    <img src={currentTrack?.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'} alt={currentTrack?.title || ''} className="w-full h-full object-cover" />
                   </div>
                   <div className="absolute w-4 h-4 rounded-full bg-[#ede5d3] border-2 border-[#0b1110] z-20" />
                 </div>
               ) : (
                 /* Authentic Retro TV / Monitor Enclosure */
-                <div className={`w-full h-full p-2.5 ${
+                <div className={`w-full h-full p-2.5 sm:p-3 ${
                   isDark 
                     ? 'bg-gradient-to-b from-[#1d2b27] via-[#16221f] to-[#121a18] border-2 border-[#2f433e] shadow-[0_6px_24px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.12),2px_2px_0px_#050807]' 
                     : 'bg-[#ede5d3] brutal-border brutal-shadow-sm'
@@ -1334,11 +1397,21 @@ export default function FullPlayerModal({
                     isDark 
                       ? 'border-[#070b0a] bg-[#050807] shadow-[inset_0_2px_10px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.06)]' 
                       : 'brutal-border bg-[#0b1110] shadow-inner'
-                  } flex items-center justify-center min-h-0`}>
+                  } flex items-center justify-center min-h-0 bg-black`}>
+                    {/* Ambient Glow / Cover Fill (seamlessly eliminates harsh black bars) */}
+                    {currentTrack?.cover && (
+                      <img 
+                        src={currentTrack.cover} 
+                        alt="" 
+                        aria-hidden="true"
+                        className="absolute inset-0 w-full h-full object-cover filter blur-md opacity-35 scale-125 pointer-events-none"
+                      />
+                    )}
+                    {/* Primary Song Image: Centered, never squished or chopped off */}
                     <img 
-                      src={currentTrack.cover} 
-                      alt={currentTrack.title}
-                      className="w-full h-full object-cover bg-black"
+                      src={currentTrack?.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'} 
+                      alt={currentTrack?.title || 'Song Cover'}
+                      className="relative z-1 max-w-full max-h-full w-full h-full object-contain"
                       style={{ 
                         transform: isPlaying ? 'scale(1.02)' : 'scale(1)',
                         transition: 'transform 0.4s ease',
@@ -1547,18 +1620,32 @@ export default function FullPlayerModal({
 
             <button 
               onClick={toggleRepeat} 
-              className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
-                isRepeat 
+              className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer transition-all ${
+                repeatMode === 'one'
                   ? isDark
-                    ? 'bg-[#dc2626] text-white font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
-                    : 'bg-[#dc2626] text-white font-bold brutal-border' 
-                  : isDark 
-                    ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
-                    : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
+                    ? 'bg-[#26c4b7] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[0_0_10px_rgba(38,196,183,0.5),2px_2px_0px_#050807]'
+                    : 'bg-[#26c4b7] text-[#0b1110] font-bold brutal-border'
+                  : repeatMode === 'all'
+                    ? isDark
+                      ? 'bg-[#10b981] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[0_0_10px_rgba(16,185,129,0.5),2px_2px_0px_#050807]'
+                      : 'bg-[#10b981] text-[#0b1110] font-bold brutal-border'
+                    : isDark 
+                      ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
+                      : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
               }`}
-              title="Repeat"
+              title={
+                repeatMode === 'one' 
+                  ? "Repeat: Current Track (Looping)" 
+                  : repeatMode === 'all' 
+                    ? "Repeat: All (Queue / Playlist)" 
+                    : "Repeat: Off"
+              }
             >
-              <Repeat size={15} strokeWidth={2.5} />
+              {repeatMode === 'one' ? (
+                <Repeat1 size={15} strokeWidth={2.5} />
+              ) : (
+                <Repeat size={15} strokeWidth={2.5} />
+              )}
             </button>
           </div>
 
@@ -1695,43 +1782,51 @@ export default function FullPlayerModal({
             <div className={`flex items-center justify-between pb-2 mb-2 border-b ${
               isDark ? 'border-zinc-800' : 'border-zinc-300'
             }`}>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-display font-black text-xs uppercase tracking-wider text-zinc-400">Lyrics</span>
                 {isLyricsVerified && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#17a398]/20 text-[#17a398] border border-[#17a398]/40">
-                    <CheckCircle2 size={11} className="text-[#17a398]" />
-                    VERIFIED
-                  </span>
+                  <CheckCircle2 size={13} className="text-[#17a398] shrink-0" title={lyricsVerifiedBy ? `Verified by @${lyricsVerifiedBy}` : 'Verified Lyrics'} />
                 )}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1 shrink-0">
                 {rawLyrics.length > 0 && (
-                  <div className="flex items-center gap-1">
+                  <div className="inline-flex items-center rounded-lg overflow-hidden border border-zinc-700/60 bg-black/20 p-0.5 text-[10px] font-mono font-bold">
                     <button
-                      onClick={() => setSyncOffset(prev => Math.round((prev - 0.5) * 10) / 10)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
-                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
-                      }`}
+                      onClick={() => handleNudgeSync(-0.5)}
+                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
                       title="Nudge lyrics 0.5s earlier"
                     >
                       -0.5s
                     </button>
+                    <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
                     <button
-                      onClick={() => setSyncOffset(prev => Math.round((prev + 0.5) * 10) / 10)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
-                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
-                      }`}
+                      onClick={() => handleNudgeSync(0.5)}
+                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
                       title="Nudge lyrics 0.5s later"
                     >
                       +0.5s
                     </button>
                     {syncOffset !== 0 && (
-                      <button
-                        onClick={() => setSyncOffset(0)}
-                        className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#f59e0b] text-black cursor-pointer"
-                        title="Reset sync offset"
-                      >
-                        RESET
-                      </button>
+                      <>
+                        <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
+                        <button
+                          onClick={() => setSyncOffset(0)}
+                          className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors flex items-center gap-0.5"
+                          title="Reset sync offset"
+                        >
+                          <span>{syncOffset > 0 ? `+${syncOffset}` : syncOffset}s</span>
+                          <X size={10} />
+                        </button>
+                        <button
+                          onClick={handleSavePermanentSync}
+                          disabled={isSavingSync}
+                          className="ml-0.5 px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] font-bold hover:brightness-110 transition-all flex items-center gap-0.5 disabled:opacity-50"
+                          title="Save adjusted timing permanently"
+                        >
+                          {isSavingSync ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                          <span>Save</span>
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -1739,47 +1834,45 @@ export default function FullPlayerModal({
                   <button
                     onClick={handleTranslateLyrics}
                     disabled={isTranslating}
-                    className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
+                    className={`p-1.5 rounded-lg transition-all text-xs ${
                       showTranslation 
-                        ? 'text-[#0b1110] bg-[#17a398] brutal-border' 
+                        ? 'text-[#0b1110] bg-[#17a398]' 
                         : isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                          ? 'bg-[#182421] text-zinc-300 hover:text-white border border-zinc-700/60' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-zinc-300'
                     }`}
-                    title="Translate Lyrics"
+                    title={showTranslation ? "Hide translation" : "Translate lyrics"}
                   >
-                    <Languages size={13} />
-                    <span className="text-[10px]">Translate</span>
+                    {isTranslating ? <Loader2 size={13} className="animate-spin" /> : <Languages size={13} />}
                   </button>
                 )}
                 {isAdmin && (
-                  <>
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={openManualEdit}
-                      className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                      className={`p-1.5 rounded-lg transition-colors ${
                         isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                          ? 'bg-[#182421] text-zinc-300 hover:text-white border border-zinc-700/60' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-zinc-300'
                       }`}
                       title="Edit Lyrics (Admin)"
                     >
                       <Edit3 size={13} />
-                      {rawLyrics.length === 0 && <span className="text-[10px]">Add Lyrics</span>}
                     </button>
                     {rawLyrics.length > 0 && (
                       <button
                         onClick={() => setIsClearLyricsConfirmOpen(true)}
                         className={`p-1.5 rounded-lg transition-colors ${
                           isDark 
-                            ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
-                            : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                            ? 'bg-[#182421] text-zinc-400 hover:text-red-400 border border-zinc-700/60' 
+                            : 'bg-white text-zinc-500 hover:text-red-500 border border-zinc-300'
                         }`}
                         title="Clear Lyrics (Admin)"
                       >
                         <Trash2 size={13} />
                       </button>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             </div>
@@ -1829,44 +1922,51 @@ export default function FullPlayerModal({
             </div>
 
             {desktopSideTab === 'lyrics' && (
-              <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {isLyricsVerified && (
-                  <span 
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30 mr-1"
-                    title={lyricsVerifiedBy ? `Verified by @${lyricsVerifiedBy}` : 'Verified accurate lyrics'}
-                  >
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#17a398]/10 text-[#17a398] border border-[#17a398]/30 mr-1" title={lyricsVerifiedBy ? `Verified by @${lyricsVerifiedBy}` : 'Verified Lyrics'}>
                     <CheckCircle2 size={12} className="text-[#17a398]" />
-                    VERIFIED {lyricsVerifiedBy ? `(@${lyricsVerifiedBy})` : ''}
-                  </span>
+                    <span className="text-[10px] font-mono font-bold uppercase">Verified</span>
+                  </div>
                 )}
                 {rawLyrics.length > 0 && (
-                  <div className="flex items-center gap-1">
+                  <div className="inline-flex items-center rounded-lg overflow-hidden border border-zinc-700/60 bg-black/20 p-0.5 text-[10px] font-mono font-bold">
                     <button
-                      onClick={() => setSyncOffset(prev => Math.round((prev - 0.5) * 10) / 10)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
-                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
-                      }`}
+                      onClick={() => handleNudgeSync(-0.5)}
+                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
                       title="Nudge lyrics 0.5s earlier"
                     >
                       -0.5s
                     </button>
+                    <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
                     <button
-                      onClick={() => setSyncOffset(prev => Math.round((prev + 0.5) * 10) / 10)}
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold cursor-pointer ${
-                        isDark ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' : 'bg-white text-zinc-700 hover:text-black border border-black'
-                      }`}
+                      onClick={() => handleNudgeSync(0.5)}
+                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
                       title="Nudge lyrics 0.5s later"
                     >
                       +0.5s
                     </button>
                     {syncOffset !== 0 && (
-                      <button
-                        onClick={() => setSyncOffset(0)}
-                        className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-[#f59e0b] text-black cursor-pointer"
-                        title="Reset sync offset"
-                      >
-                        RESET
-                      </button>
+                      <>
+                        <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
+                        <button
+                          onClick={() => setSyncOffset(0)}
+                          className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors flex items-center gap-0.5"
+                          title="Reset sync offset"
+                        >
+                          <span>{syncOffset > 0 ? `+${syncOffset}` : syncOffset}s</span>
+                          <X size={10} />
+                        </button>
+                        <button
+                          onClick={handleSavePermanentSync}
+                          disabled={isSavingSync}
+                          className="ml-0.5 px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] font-bold hover:brightness-110 transition-all flex items-center gap-0.5 disabled:opacity-50"
+                          title="Save adjusted timing permanently"
+                        >
+                          {isSavingSync ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
+                          <span>Save</span>
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -1876,29 +1976,29 @@ export default function FullPlayerModal({
                     disabled={isTranslating}
                     className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
                       showTranslation 
-                        ? 'text-[#0b1110] bg-[#17a398] brutal-border' 
+                        ? 'text-[#0b1110] bg-[#17a398] font-bold' 
                         : isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                          ? 'bg-[#182421] text-zinc-300 hover:text-white border border-zinc-700/60' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-zinc-300'
                     }`}
                     title="Translate Lyrics"
                   >
-                    <Languages size={14} />
+                    {isTranslating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={13} />}
                     <span className="text-[10px]">Translate</span>
                   </button>
                 )}
                 {isAdmin && (
-                  <>
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={openManualEdit}
                       className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
                         isDark 
-                          ? 'bg-[#1c2422] text-zinc-300 hover:text-white border border-zinc-700' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-black'
+                          ? 'bg-[#182421] text-zinc-300 hover:text-white border border-zinc-700/60' 
+                          : 'bg-white text-zinc-700 hover:text-black border border-zinc-300'
                       }`}
                       title="Edit Lyrics (Admin)"
                     >
-                      <Edit3 size={14} />
+                      <Edit3 size={13} />
                       {rawLyrics.length === 0 && <span className="text-[10px]">Add Lyrics</span>}
                     </button>
                     {rawLyrics.length > 0 && (
@@ -1906,15 +2006,15 @@ export default function FullPlayerModal({
                         onClick={() => setIsClearLyricsConfirmOpen(true)}
                         className={`p-1.5 rounded-lg transition-colors ${
                           isDark 
-                            ? 'bg-[#1c2422] text-zinc-300 hover:text-red-400 border border-zinc-700' 
-                            : 'bg-white text-zinc-700 hover:text-red-500 border border-black'
+                            ? 'bg-[#182421] text-zinc-400 hover:text-red-400 border border-zinc-700/60' 
+                            : 'bg-white text-zinc-500 hover:text-red-500 border border-zinc-300'
                         }`}
                         title="Clear Lyrics (Admin)"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
                       </button>
                     )}
-                  </>
+                  </div>
                 )}
               </div>
             )}
