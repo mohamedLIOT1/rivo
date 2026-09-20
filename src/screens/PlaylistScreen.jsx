@@ -180,8 +180,8 @@ export default function PlaylistScreen({
 
   if (!playlist) return null;
 
-  const allAvailable = [...tracks, ...fetchedTracks];
-  const trackMap = new Map(allAvailable.map(t => [String(t.id || t._id), t]));
+  const allAvailable = useMemo(() => [...tracks, ...fetchedTracks], [tracks, fetchedTracks]);
+  const trackMap = useMemo(() => new Map(allAvailable.map(t => [String(t.id || t._id), t])), [allAvailable]);
 
   const isLikedPlaylist = Boolean(playlist.isLikedSongs || playlist.id === 'liked');
 
@@ -217,7 +217,7 @@ export default function PlaylistScreen({
     });
 
     return result;
-  }, [isLikedPlaylist, JSON.stringify(playlistTrackIds), JSON.stringify(likedTrackIds || []), allAvailable]);
+  }, [isLikedPlaylist, playlistTrackIds, likedTrackIds, trackMap, allAvailable]);
 
   const isQuran = Boolean(
     playlist?.isQuran ||
@@ -225,17 +225,36 @@ export default function PlaylistScreen({
     (playlistTracks.length > 0 && playlistTracks.some(isQuranContent))
   );
 
-  const availableTracks = isLikedPlaylist ? [] : tracks.filter((t) => !playlistTrackIds.includes(String(t.id || t._id)));
+  const [availableLimit, setAvailableLimit] = useState(30);
+  const [availableSearch, setAvailableSearch] = useState('');
 
-  const filteredPlaylistTracks = playlistTracks.filter((t) => 
-    t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    t.artist.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const availableTracks = useMemo(() => {
+    if (isLikedPlaylist) return [];
+    const set = new Set(playlistTrackIds);
+    let list = tracks.filter((t) => !set.has(String(t.id || t._id)));
+    if (availableSearch) {
+      const q = availableSearch.toLowerCase();
+      list = list.filter(t => (t.title && t.title.toLowerCase().includes(q)) || (t.artist && t.artist.toLowerCase().includes(q)));
+    }
+    return list;
+  }, [isLikedPlaylist, tracks, playlistTrackIds, availableSearch]);
 
-  // Auto-fetch AI recommendations on load if playlist has tracks
+  const filteredPlaylistTracks = useMemo(() => {
+    if (!searchQuery) return playlistTracks;
+    const q = searchQuery.toLowerCase();
+    return playlistTracks.filter((t) => 
+      (t.title && t.title.toLowerCase().includes(q)) ||
+      (t.artist && t.artist.toLowerCase().includes(q))
+    );
+  }, [playlistTracks, searchQuery]);
+
+  // Debounced auto-fetch AI recommendations on load so page renders with 0ms delay
   useEffect(() => {
     if (!playlist?.isLikedSongs && playlistTracks.length > 0 && aiRecommendations.length === 0 && !isLoadingRecs) {
-      handleFetchAiRecommendations();
+      const timer = setTimeout(() => {
+        handleFetchAiRecommendations();
+      }, 600);
+      return () => clearTimeout(timer);
     }
   }, [playlist?.id, playlistTracks.length]);
 
@@ -998,7 +1017,7 @@ export default function PlaylistScreen({
         }`}>
           <div className={`mb-4 pb-3 border-b-2 ${
             isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
-          } flex items-center justify-between`}>
+          } flex flex-col sm:flex-row sm:items-center justify-between gap-2`}>
             <div>
               <h3 className={`text-sm font-mono font-black uppercase ${
                 isDark ? 'text-white' : 'text-[#082621]'
@@ -1011,10 +1030,21 @@ export default function PlaylistScreen({
                 {isQuran ? 'Click ADD to append these surahs to this collection' : 'Click ADD to append these records to this cassette'}
               </p>
             </div>
+            <div className="relative w-full sm:w-56">
+              <input
+                type="text"
+                value={availableSearch}
+                onChange={(e) => setAvailableSearch(e.target.value)}
+                placeholder="Filter tracks to add..."
+                className={`w-full text-xs font-mono px-3 py-1.5 rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#0b1110] text-white border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black'
+                }`}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-            {availableTracks.map(track => (
+            {availableTracks.slice(0, availableLimit).map(track => (
               <div
                 key={track.id}
                 className={`flex items-center justify-between p-2.5 brutal-border transition-colors ${
@@ -1042,6 +1072,19 @@ export default function PlaylistScreen({
               </div>
             ))}
           </div>
+
+          {availableTracks.length > availableLimit && (
+            <div className="mt-3 text-center">
+              <button
+                onClick={() => setAvailableLimit(prev => prev + 30)}
+                className={`px-4 py-2 text-xs font-mono font-bold brutal-border brutal-shadow-sm rounded-lg transition-colors ${
+                  isDark ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] hover:bg-white border-black'
+                }`}
+              >
+                SHOW MORE ({availableTracks.length - availableLimit} REMAINING)
+              </button>
+            </div>
+          )}
         </section>
       )}
 

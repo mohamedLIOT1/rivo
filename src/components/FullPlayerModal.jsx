@@ -261,9 +261,10 @@ export default function FullPlayerModal({
     if (!isOpen || !isPlaying) return;
     const interval = setInterval(() => {
       if (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime)) {
-        setSmoothTime(audioRef.current.currentTime);
+        const curr = audioRef.current.currentTime;
+        setSmoothTime(prev => (Math.abs(curr - prev) >= 0.2 ? curr : prev));
       }
-    }, 50);
+    }, 200);
     return () => clearInterval(interval);
   }, [isOpen, isPlaying, isYtTrack, audioRef]);
 
@@ -836,10 +837,10 @@ export default function FullPlayerModal({
       onTouchStart={handleUserInteraction} 
       onWheel={handleUserInteraction}
       className="flex-1 overflow-y-auto py-16 px-2 relative h-full select-none"
-      style={{ scrollbarWidth: 'none' }}
+      style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
     >
       {lyrics.length > 0 ? (
-        <div className="py-2 px-1 space-y-3 pb-48">
+        <div className="py-2 px-1 space-y-2 pb-48">
           {isLyricsVerified && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 mb-3 rounded-xl bg-[#17a398]/10 border border-[#17a398]/30 w-fit">
               <CheckCircle2 size={14} className="text-[#17a398]" />
@@ -863,21 +864,21 @@ export default function FullPlayerModal({
                   setIsUserScrolling(false);
                   setTimeout(() => scrollToActiveLyric('smooth'), 50);
                 }}
-                className={`cursor-pointer transition-all duration-300 p-3 rounded-2xl ${
+                className={`cursor-pointer transition-[opacity,background-color,border-color] duration-150 p-3 rounded-2xl border-2 ${
                   isActive 
                     ? isDark
-                      ? 'bg-[#17a398]/15 border-2 border-[#17a398] border-l-8 border-l-[#17a398] shadow-lg scale-[1.02]'
-                      : 'bg-[#ede5d3] brutal-border border-l-8 border-l-[#17a398] brutal-shadow-sm scale-[1.02]' 
+                      ? 'bg-[#17a398]/20 border-[#17a398] opacity-100'
+                      : 'bg-[#ede5d3] border-[#17a398] opacity-100 shadow-sm' 
                     : isDark
-                      ? 'hover:bg-zinc-800/40 opacity-40 hover:opacity-85'
-                      : 'hover:bg-[#ede5d3]/50 opacity-40 hover:opacity-85'
+                      ? 'border-transparent opacity-35 hover:opacity-75 hover:bg-zinc-800/30'
+                      : 'border-transparent opacity-40 hover:opacity-80 hover:bg-[#ede5d3]/40'
                 }`}
               >
                 <p 
-                  className={`leading-snug transition-all ${
+                  className={`leading-snug font-display text-lg sm:text-xl transition-colors duration-150 ${
                     isActive 
-                      ? `font-display font-black text-xl md:text-2xl ${isDark ? 'text-white' : 'text-[#0b1110]'}` 
-                      : `font-display font-bold text-base md:text-lg ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`
+                      ? `font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}` 
+                      : `font-semibold ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`
                   }`}
                 >
                   {line.text}
