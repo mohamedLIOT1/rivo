@@ -1253,6 +1253,30 @@ export function AudioProvider({ children, tracks, setTracks }) {
     });
   }, []);
 
+  const setIsRepeat = useCallback((valOrFn) => {
+    setRepeatMode(prev => {
+      let nextMode;
+      if (typeof valOrFn === 'function') {
+        const prevBool = prev !== 'off';
+        const res = valOrFn(prevBool);
+        if (typeof res === 'boolean') {
+          nextMode = res ? (prev === 'off' ? 'all' : (prev === 'all' ? 'one' : 'off')) : 'off';
+        } else {
+          nextMode = res;
+        }
+      } else if (typeof valOrFn === 'boolean') {
+        nextMode = valOrFn ? (prev === 'off' ? 'all' : prev) : 'off';
+      } else {
+        nextMode = valOrFn;
+      }
+      try {
+        localStorage.setItem('rivo_repeat_mode', nextMode);
+        localStorage.setItem('rivo_repeat', nextMode !== 'off' ? 'true' : 'false');
+      } catch {}
+      return nextMode;
+    });
+  }, []);
+
   const playNextTrack = useCallback(() => {
     // Advance shared room queue if active in Jam
     if (jamSessionRef.current && socketRef.current) {
