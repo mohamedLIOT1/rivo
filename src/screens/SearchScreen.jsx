@@ -32,7 +32,7 @@ const GENRE_CATEGORIES = [
   { id: 'g-5', name: 'Rock', color: '#ef4444', bgLight: '#fef2f2', darkBg: '#290c0c', Icon: Flame, code: 'ROCK', desc: 'Alternative & Raw Distortion' },
   { id: 'g-6', name: 'Chill & Lofi', color: '#a855f7', bgLight: '#faf5ff', darkBg: '#200d33', Icon: Coffee, code: 'LO-FI', desc: 'Relaxation & Study Tape' },
   { id: 'g-7', name: 'Workout', color: '#22c55e', bgLight: '#f0fdf4', darkBg: '#092712', Icon: Zap, code: 'ENERGY', desc: 'High Tempo Adrenaline' },
-  { id: 'g-8', name: 'Podcasts', color: '#3b82f6', bgLight: '#eff6ff', darkBg: '#0a1a33', Icon: Mic, code: 'TALK', desc: 'Shows & Audio Series' },
+  { id: 'g-8', name: 'Shaabi (شعبي)', searchQuery: 'شعبي مصري', color: '#3b82f6', bgLight: '#eff6ff', darkBg: '#0a1a33', Icon: Radio, code: 'SHAABI', desc: 'Street Folk & Egyptian Beats' },
   { id: 'g-9', name: 'Indie', color: '#14b8a6', bgLight: '#f0fdfa', darkBg: '#062622', Icon: Compass, code: 'INDIE', desc: 'Underground Sound' },
   { id: 'g-10', name: 'Jazz & Soul', color: '#8b5cf6', bgLight: '#f5f3ff', darkBg: '#1c1033', Icon: Disc, code: 'JAZZ', desc: 'Organic Groove Blend' },
   { id: 'g-11', name: 'Ambient', color: '#64748b', bgLight: '#f8fafc', darkBg: '#131b25', Icon: Waves, code: 'ATMOS', desc: 'Atmospheric Frequencies' },

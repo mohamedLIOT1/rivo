@@ -26,7 +26,6 @@ import LibraryScreen from './screens/LibraryScreen';
 import ArtistScreen from './screens/ArtistScreen';
 import StatsScreen from './screens/StatsScreen';
 import PlaylistScreen from './screens/PlaylistScreen';
-import PodcastsScreen from './screens/PodcastsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import MixesScreen from './screens/MixesScreen';
 import QuranScreen from './screens/QuranScreen';
@@ -587,20 +586,6 @@ function AppContent() {
     setCurrentScreen('playlist');
   };
 
-  const handlePlayPodcastEpisode = (episode, podcast) => {
-    playTrack({
-      id: episode.id,
-      title: episode.title,
-      artist: podcast.author,
-      album: podcast.title,
-      cover: podcast.cover,
-      audioUrl: episode.audioUrl,
-      duration: 180,
-      liked: false,
-      lyrics: [{ time: 0, text: episode.description }],
-    });
-  };
-
   const [toastMessage, setToastMessage] = useState(null);
 
   const showToast = (msg) => {
@@ -1132,10 +1117,6 @@ function AppContent() {
               userPlaylists={playlists}
               globalTheme={globalTheme}
             />
-          )}
-
-          {currentScreen === 'podcasts' && (
-            <PodcastsScreen onPlayEpisode={handlePlayPodcastEpisode} globalTheme={globalTheme} />
           )}
 
           {currentScreen === 'artist' && selectedArtist && (
