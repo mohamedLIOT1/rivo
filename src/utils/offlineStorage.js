@@ -155,6 +155,31 @@ export async function saveTrackOffline(track) {
   if (!track || (!track.id && !track._id)) return null;
   const trackId = String(track.id || track._id);
 
+  // ── Native APK Bridge: route download to device storage via postMessage ──
+  // When running inside the Rivo APK WebView, window.RIVO_NATIVE is set by
+  // the injected JS. Downloads go to expo-file-system instead of IndexedDB.
+  if (typeof window !== 'undefined' && window.RIVO_NATIVE && window.RIVO_DOWNLOAD) {
+    try {
+      window.RIVO_DOWNLOAD({
+        id: trackId,
+        _id: trackId,
+        title: track.title || 'Unknown',
+        artist: track.artist || 'Unknown Artist',
+        audioUrl: track.audioUrl || '',
+        coverUrl: track.cover || track.coverUrl || '',
+        cover: track.cover || track.coverUrl || '',
+        source: track.source || '',
+        album: track.album || '',
+        duration: track.duration || 0,
+      });
+      // Return a synthetic record so the UI can update immediately
+      return { ...track, id: trackId, downloaded: true, savedAt: Date.now() };
+    } catch (e) {
+      console.error('Native bridge download error:', e);
+      // Fall through to web download as fallback
+    }
+  }
+
   try {
     let targetUrl = track.audioUrl || '';
     let audioBlob = null;

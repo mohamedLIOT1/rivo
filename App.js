@@ -30,7 +30,11 @@ import { UserProvider, useUser } from './src/native/context/UserContext';
 import { ToastProvider } from './src/native/context/ToastContext';
 import { AudioProvider, useAudioPlayer } from './src/native/context/AudioContext';
 import { SocketProvider } from './src/native/context/SocketContext';
+import { ConnectivityProvider, useConnectivity } from './src/native/context/ConnectivityContext';
 import { colors } from './src/native/theme/colors';
+
+import OnlineWebView from './src/native/screens/OnlineWebView';
+import ModeToggle from './src/native/components/ModeToggle';
 
 import HomeScreen from './src/native/screens/HomeScreen';
 import SearchScreen from './src/native/screens/SearchScreen';
@@ -60,6 +64,36 @@ const TABS = [
 ];
 
 function MainAppShell() {
+  const { appMode } = useConnectivity();
+  const isOnline = appMode === 'online';
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
+
+      {/* ─── ONLINE MODE: WebView (stays mounted, hidden when offline) ─── */}
+      <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
+        <OnlineWebView />
+      </View>
+
+      {/* ─── OFFLINE MODE: Native React Native UI ─── */}
+      <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
+        <OfflineNativeShell />
+      </View>
+
+      {/* ─── FLOATING MODE TOGGLE (always visible) ─── */}
+      <ModeToggle />
+    </SafeAreaView>
+  );
+}
+
+/**
+ * OfflineNativeShell
+ *
+ * The original native React Native app shell (header, screens, tabs,
+ * mini-player, modals). Extracted so it can coexist with the WebView.
+ */
+function OfflineNativeShell() {
   const [activeTab, setActiveTab] = useState('home');
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
@@ -114,13 +148,7 @@ function MainAppShell() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
-
-      {/* ─────────────────────────────────────────
-          TOP HEADER BAR (Matching website)
-          [R] RIVO              [Sun] [☰] [Avatar]
-          ───────────────────────────────────────── */}
+    <View style={styles.offlineShell}>
       <View style={styles.topHeader}>
         {/* Brand Logo: [R] RIVO */}
         <TouchableOpacity
@@ -354,26 +382,42 @@ function MainAppShell() {
         visible={isJamOpen}
         onClose={() => setIsJamOpen(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 export default function App() {
   return (
-    <UserProvider>
-      <ToastProvider>
-        <AudioProvider>
-          <SocketProvider>
-            <MainAppShell />
-          </SocketProvider>
-        </AudioProvider>
-      </ToastProvider>
-    </UserProvider>
+    <ConnectivityProvider>
+      <UserProvider>
+        <ToastProvider>
+          <AudioProvider>
+            <SocketProvider>
+              <MainAppShell />
+            </SocketProvider>
+          </AudioProvider>
+        </ToastProvider>
+      </UserProvider>
+    </ConnectivityProvider>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
+    flex: 1,
+    backgroundColor: '#0b1110',
+  },
+  // ─── Mode routing containers ───
+  modeContainer: {
+    flex: 1,
+  },
+  hiddenMode: {
+    // Keep mounted but invisible (height 0, overflow hidden)
+    flex: 0,
+    height: 0,
+    overflow: 'hidden',
+  },
+  offlineShell: {
     flex: 1,
     backgroundColor: '#0b1110',
   },
