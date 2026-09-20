@@ -3480,7 +3480,7 @@ app.get('/api/artists/:name', async (req, res) => {
 // ──────────────────────────────────────────
 app.get('/api/tracks', async (req, res) => {
   try {
-    const raw = await Track.find().sort({ createdAt: -1 }).limit(3000).lean();
+    const raw = await Track.find({}, { lyrics: 0 }).sort({ createdAt: -1 }).limit(1000).lean();
     const tracks = raw.map(t => ({
       ...t,
       id: String(t._id),
@@ -3858,50 +3858,78 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
 });
 
 // Direct Audio Stream Downloader
+async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
+  let streamUrl = null;
+  if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be')) {
+    streamUrl = rawUrl;
+  }
+
+  // 1. Try SoundCloud multi-query
+  if (!streamUrl && (title || artist)) {
+    const cleanArtist = (artist || '').split(/[|/•]/)[0].trim();
+    const cleanTitle = (title || '').replace(/\(.*?\)|\[.*?\]/g, '').trim();
+    const queries = [
+      `${cleanArtist} ${cleanTitle}`.trim(),
+      cleanTitle,
+      `${cleanTitle} ${cleanArtist}`.trim()
+    ];
+    for (const q of queries) {
+      if (!q) continue;
+      const sc = await resolveSoundCloudTrack(q, cleanTitle, cleanArtist);
+      if (sc && sc.streamUrl) {
+        streamUrl = sc.streamUrl;
+        break;
+      }
+    }
+  }
+
+  // 2. Try yt-dlp (available in Railway Docker container)
+  if (!streamUrl && rawUrl) {
+    try {
+      const { exec } = require('child_process');
+      const direct = await new Promise((resolve) => {
+        exec(`yt-dlp -f "ba/b" -g "${rawUrl}"`, { timeout: 7000 }, (err, stdout) => {
+          if (!err && stdout && stdout.trim()) {
+            resolve(stdout.trim().split('\n')[0]);
+          } else {
+            resolve(null);
+          }
+        });
+      });
+      if (direct) streamUrl = direct;
+    } catch {}
+  }
+
+  return streamUrl;
+}
+
+// Dedicated audio stream resolution endpoint for mobile
+app.get('/api/tracks/:id/stream', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let track = null;
+    if (mongoose.isValidObjectId(id)) {
+      track = await Track.findById(id).lean();
+    }
+    const rawUrl = req.query.url || track?.audioUrl || '';
+    const title = req.query.title || track?.title || '';
+    const artist = req.query.artist || track?.artist || '';
+
+    const streamUrl = await resolveAudioStreamUrl(rawUrl, title, artist);
+    if (streamUrl) {
+      return res.json({ success: true, url: streamUrl });
+    }
+    res.status(404).json({ success: false, error: 'Could not resolve audio stream' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Direct Audio Stream Downloader
 app.get('/api/tracks/download', async (req, res) => {
   try {
     const { url, title, artist, id } = req.query;
-    let streamUrl = null;
-
-    // 1. Direct audio/stream URL passed (mp3, wav, soundcloud progressive)
-    if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('youtube.com') && !url.includes('youtu.be')) {
-      streamUrl = url;
-    }
-
-    // 2. Resolve via SoundCloud (direct high-quality progressive MP3 stream)
-    if (!streamUrl && (title || artist)) {
-      const cleanArtist = (artist || '').split(/[|/•]/)[0].trim();
-      const cleanTitle = (title || '').replace(/\(.*?\)|\[.*?\]/g, '').trim();
-      const query = `${cleanArtist} ${cleanTitle}`.trim() || `${artist || ''} ${title || ''}`.trim();
-      const sc = await resolveSoundCloudTrack(query, cleanTitle, cleanArtist);
-      if (sc && sc.streamUrl) {
-        streamUrl = sc.streamUrl;
-      }
-    }
-
-    // 3. If YouTube URL or ID, attempt stream resolution
-    if (!streamUrl && url) {
-      const ytMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-      const videoId = ytMatch ? ytMatch[1] : null;
-      if (videoId) {
-        for (const ep of ['https://api.cobalt.tools/api/json', 'https://co.wuk.sh/api/json']) {
-          try {
-            const cRes = await axios.post(ep, {
-              url: `https://www.youtube.com/watch?v=${videoId}`,
-              downloadMode: 'audio',
-              audioFormat: 'mp3'
-            }, {
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-              timeout: 6000
-            });
-            if (cRes.data?.url) {
-              streamUrl = cRes.data.url;
-              break;
-            }
-          } catch {}
-        }
-      }
-    }
+    const streamUrl = await resolveAudioStreamUrl(url, title, artist);
 
     if (!streamUrl) {
       return res.status(404).json({ success: false, error: 'Could not resolve audio stream for download' });

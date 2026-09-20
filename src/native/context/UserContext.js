@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+import { INITIAL_TRACKS } from '../data/initialTracks';
 
 const UserContext = createContext();
 const TOKEN_KEY = '@rivo_auth_token_v2';
@@ -11,7 +12,7 @@ const CACHE_PLAYLISTS_KEY = '@rivo_cached_playlists_v2';
 export const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [token, setToken] = useState(null);
-  const [tracks, setTracks] = useState([]);
+  const [tracks, setTracks] = useState(INITIAL_TRACKS);
   const [playlists, setPlaylists] = useState([]);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
 
@@ -27,7 +28,12 @@ export const UserProvider = ({ children }) => {
       const cachedTracks = await AsyncStorage.getItem(CACHE_TRACKS_KEY);
       const cachedPlaylists = await AsyncStorage.getItem(CACHE_PLAYLISTS_KEY);
 
-      if (cachedTracks) setTracks(JSON.parse(cachedTracks));
+      if (cachedTracks) {
+        const parsed = JSON.parse(cachedTracks);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTracks(parsed);
+        }
+      }
       if (cachedPlaylists) setPlaylists(JSON.parse(cachedPlaylists));
 
       if (storedToken && storedUser) {
@@ -41,13 +47,18 @@ export const UserProvider = ({ children }) => {
   };
 
   const fetchPublicTracks = async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7000);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tracks`);
+      const res = await fetch(`${API_BASE_URL}/api/tracks`, { signal: controller.signal });
+      clearTimeout(timer);
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data?.tracks) ? data.tracks : Array.isArray(data) ? data : [];
-        setTracks(list);
-        AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(list)).catch(() => {});
+        if (list.length > 0) {
+          setTracks(list);
+          AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(list)).catch(() => {});
+        }
       }
     } catch {}
   };
@@ -73,32 +84,52 @@ export const UserProvider = ({ children }) => {
   };
 
   const login = async (email, password) => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.message || 'Login failed');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 9000);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Login failed');
 
-    setToken(data.token);
-    setCurrentUser(data.user);
-    setLikedTrackIds(data.user?.likedTrackIds || []);
-    setPlaylists(data.user?.playlists || []);
-    await AsyncStorage.setItem(TOKEN_KEY, data.token);
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
-    return data.user;
+      setToken(data.token);
+      setCurrentUser(data.user);
+      setLikedTrackIds(data.user?.likedTrackIds || []);
+      setPlaylists(data.user?.playlists || []);
+      await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      return data.user;
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') throw new Error('Connection timed out. Please check your network.');
+      throw e;
+    }
   };
 
   const register = async (name, email, password) => {
-    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || data.message || 'Registration failed');
-    return await login(email, password);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 9000);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || data.message || 'Registration failed');
+      return await login(email, password);
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') throw new Error('Connection timed out. Please check your network.');
+      throw e;
+    }
   };
 
   const logout = async () => {
