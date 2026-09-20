@@ -1213,6 +1213,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     });
   }, [fetchSmartShuffleTracks]);
 
+  const toggleRepeat = useCallback(() => {
+    setIsRepeat(prev => !prev);
+  }, []);
+
   const playNextTrack = useCallback(() => {
     // Advance shared room queue if active in Jam
     if (jamSessionRef.current && socketRef.current) {
@@ -1627,6 +1631,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isShuffle, setIsShuffle,
     toggleShuffle,
     isRepeat, setIsRepeat,
+    toggleRepeat,
     isOfflineMode, setIsOfflineMode,
     isYtTrack,
     isMixMode, setIsMixMode,
