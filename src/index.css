@@ -805,3 +805,34 @@ input[type=range].opacity-0::-moz-range-thumb {
 .vinyl-spin-slow {
   animation: vinyl-spin 6s linear infinite;
 }
+
+/* =============================================
+   Mobile Performance & Smooth Scrolling
+   ============================================= */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Snappier lightweight shadows for mobile GPUs */
+  .brutal-shadow-lg {
+    box-shadow: 3px 3px 0px #0b1110 !important;
+  }
+
+  .brutal-shadow {
+    box-shadow: 2.5px 2.5px 0px #0b1110 !important;
+  }
+
+  /* Instant tap feedback without frame stutters */
+  .brutal-btn {
+    transition: transform 0.05s ease-out !important;
+  }
+
+  /* Lightweight blur on mobile to protect frame rates */
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl {
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+  }
+}
