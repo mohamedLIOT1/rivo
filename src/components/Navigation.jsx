@@ -34,6 +34,7 @@ export default function Navigation({
   const mainNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
+    { id: 'mixes', label: 'Mixes', icon: Sparkles },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
     { id: 'stats', label: 'Stats & History', icon: Disc },
@@ -42,6 +43,7 @@ export default function Navigation({
   const mobileNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
+    { id: 'mixes', label: 'Mixes', icon: Sparkles },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
   ];
