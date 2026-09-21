@@ -151,9 +151,12 @@ async function resolveYouTubeAudioClientSide(videoId) {
 }
 
 // Save downloaded audio blob & track info locally in browser storage (IndexedDB)
-export async function saveTrackOffline(track) {
+export async function saveTrackOffline(track, options = {}) {
   if (!track || (!track.id && !track._id)) return null;
   const trackId = String(track.id || track._id);
+  const signal = options?.signal;
+
+  if (signal?.aborted) return null;
 
   // ── Native APK Bridge: route download to device storage via postMessage ──
   // When running inside the Rivo APK WebView, window.RIVO_NATIVE is set by
@@ -184,25 +187,31 @@ export async function saveTrackOffline(track) {
     let targetUrl = track.audioUrl || '';
     let audioBlob = null;
 
+    if (signal?.aborted) return null;
+
     // 1. Data URI
     if (targetUrl.startsWith('data:')) {
       audioBlob = dataURItoBlob(targetUrl);
     } else if (targetUrl.startsWith('blob:')) {
       try {
-        const res = await fetch(targetUrl);
+        const res = await fetch(targetUrl, { signal });
         if (res.ok) {
           const b = await res.blob();
           if (b && b.size > 20000) audioBlob = b;
         }
-      } catch (e) {}
+      } catch (e) {
+        if (signal?.aborted) return null;
+      }
     }
 
     // 2. Direct audio / MP3 URLs
     if (!audioBlob && targetUrl && !targetUrl.includes('youtube.com') && !targetUrl.includes('youtu.be')) {
       try {
-        let directRes = await fetch(targetUrl).catch(() => null);
+        if (signal?.aborted) return null;
+        let directRes = await fetch(targetUrl, { signal }).catch(() => null);
         if (!directRes || !directRes.ok) {
-          directRes = await fetch(`${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`).catch(() => null);
+          if (signal?.aborted) return null;
+          directRes = await fetch(`${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`, { signal }).catch(() => null);
         }
         if (directRes && directRes.ok) {
           const ct = directRes.headers.get('content-type') || '';
@@ -211,16 +220,20 @@ export async function saveTrackOffline(track) {
             if (b && b.size > 20000) audioBlob = b;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        if (signal?.aborted) return null;
+      }
     }
 
     // 3. YouTube tracks
     const ytId = extractYtId(targetUrl) || (track.source === 'YouTube' ? extractYtId(track.id || track._id) : null);
     if (!audioBlob && ytId) {
       try {
+        if (signal?.aborted) return null;
         const directStreamUrl = await resolveYouTubeAudioClientSide(ytId);
         if (directStreamUrl) {
-          const streamRes = await fetch(directStreamUrl).catch(() => null);
+          if (signal?.aborted) return null;
+          const streamRes = await fetch(directStreamUrl, { signal }).catch(() => null);
           if (streamRes && streamRes.ok) {
             const ct = streamRes.headers.get('content-type') || '';
             if (!ct.includes('html') && !ct.includes('json')) {
@@ -229,14 +242,17 @@ export async function saveTrackOffline(track) {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        if (signal?.aborted) return null;
+      }
     }
 
     // 4. Server-Side Audio Resolver Fallback
     if (!audioBlob) {
       try {
+        if (signal?.aborted) return null;
         const serverDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}`;
-        const serverRes = await fetch(serverDownloadUrl).catch(() => null);
+        const serverRes = await fetch(serverDownloadUrl, { signal }).catch(() => null);
         if (serverRes && serverRes.ok) {
           const ct = serverRes.headers.get('content-type') || '';
           if (!ct.includes('html') && !ct.includes('json')) {
@@ -244,7 +260,9 @@ export async function saveTrackOffline(track) {
             if (b && b.size > 20000) audioBlob = b;
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        if (signal?.aborted) return null;
+      }
     }
 
     // Cover image blob handling

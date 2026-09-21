@@ -2,13 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
-  Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical
+  Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical,
+  Download, CheckCircle2
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useDownloadManager } from '../context/DownloadContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -39,6 +41,17 @@ export default function PlaylistScreen({
 }) {
   const isDark = globalTheme === 'dark';
   const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue } = useAudioPlayer();
+  const downloadManager = useDownloadManager();
+  const {
+    downloadTrack,
+    cancelTrackDownload,
+    downloadAllTracks,
+    cancelAllDownloads,
+    isTrackDownloading,
+    isTrackQueued,
+    isBatchDownloading,
+    batchStats,
+  } = downloadManager || {};
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
@@ -795,6 +808,48 @@ export default function PlaylistScreen({
               ✓ {saveSuccessMsg}
             </span>
           )}
+
+          {/* Download All / Cancel All Playlist Button */}
+          {playlistTracks.length > 0 && (
+            <div className="flex items-center gap-2">
+              {isBatchDownloading ? (
+                <div className="flex items-center gap-2">
+                  <div className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm bg-amber-400 text-black flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>
+                      Downloading {batchStats.current + 1}/{batchStats.total}
+                    </span>
+                  </div>
+                  <button
+                    onClick={cancelAllDownloads}
+                    className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn bg-[#dc2626] hover:bg-red-600 text-white flex items-center gap-1.5 cursor-pointer transition-all"
+                    title="Cancel all playlist downloads"
+                  >
+                    <X size={14} strokeWidth={3} />
+                    <span>Cancel All</span>
+                  </button>
+                </div>
+              ) : playlistTracks.every(t => t.downloaded) ? (
+                <div className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
+                  <CheckCircle2 size={15} />
+                  <span>All Downloaded</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => downloadAllTracks?.(playlistTracks, playlist?.name || 'Playlist')}
+                  className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-all ${
+                    isDark 
+                      ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border-zinc-700' 
+                      : 'bg-white text-zinc-900 hover:bg-[#ede5d3] border-black'
+                  }`}
+                  title="Download all songs in this playlist one by one"
+                >
+                  <Download size={14} strokeWidth={2.5} className="text-[#17a398]" />
+                  <span>Download All ({playlistTracks.filter(t => !t.downloaded).length})</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {playlistTracks.length > 0 && (
@@ -882,6 +937,54 @@ export default function PlaylistScreen({
 
                     {/* Action & Duration */}
                     <div className="col-span-5 md:col-span-3 flex items-center justify-end gap-1 sm:gap-2 text-xs">
+                      {/* Track download / cancel button */}
+                      {isTrackDownloading?.(track.id || track._id) ? (
+                        <div className="flex items-center gap-0.5 sm:gap-1">
+                          <Loader2 size={14} className="animate-spin text-[#17a398]" title="Downloading song..." />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelTrackDownload?.(track.id || track._id);
+                            }}
+                            className="p-1 text-red-500 hover:text-red-400 cursor-pointer rounded transition-colors"
+                            title="Cancel download"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : isTrackQueued?.(track.id || track._id) ? (
+                        <div className="flex items-center gap-0.5 sm:gap-1">
+                          <span className="text-[9px] font-mono font-bold text-amber-500 bg-amber-500/10 px-1 py-0.5 rounded">Queued</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelTrackDownload?.(track.id || track._id);
+                            }}
+                            className="p-1 text-red-500 hover:text-red-400 cursor-pointer rounded transition-colors"
+                            title="Cancel queued download"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : track.downloaded ? (
+                        <span title="Downloaded offline" className="p-1 sm:p-1.5 text-emerald-500 flex items-center">
+                          <CheckCircle2 size={14} />
+                        </span>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadTrack?.(track);
+                          }}
+                          className={`p-1 sm:p-1.5 transition-colors cursor-pointer rounded ${
+                            isDark ? 'text-zinc-500 hover:text-[#17a398]' : 'text-zinc-400 hover:text-[#17a398]'
+                          }`}
+                          title="Download offline"
+                        >
+                          <Download size={14} />
+                        </button>
+                      )}
+
                       <span className="text-[11px] sm:text-xs font-mono text-zinc-400 mr-1 sm:mr-2">
                         {track.duration ? `${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, '0')}` : '3:00'}
                       </span>

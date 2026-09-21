@@ -6,6 +6,7 @@ import {
   Text,
   TouchableOpacity,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
@@ -215,6 +216,20 @@ export default function OnlineWebView() {
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
+  const [canGoBack, setCanGoBack] = useState(false);
+
+  // ─── Hardware Back Button Handler (navigate back inside WebView instead of exiting) ───
+  useEffect(() => {
+    const onBackPress = () => {
+      if (canGoBack && webViewRef.current) {
+        webViewRef.current.goBack();
+        return true; // handled, don't exit app
+      }
+      return false;
+    };
+    const backHandlerSub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandlerSub.remove();
+  }, [canGoBack]);
 
   // ─── Automatic network transition handler ───
   useEffect(() => {
@@ -364,6 +379,9 @@ export default function OnlineWebView() {
         injectedJavaScriptBeforeContentLoaded={INJECTED_JS}
         injectedJavaScript={INJECTED_JS}
         onMessage={handleMessage}
+        onNavigationStateChange={(navState) => {
+          setCanGoBack(Boolean(navState.canGoBack));
+        }}
         onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
         onError={() => {

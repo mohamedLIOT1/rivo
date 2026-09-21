@@ -3,10 +3,17 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-config.watchFolders = [
+const candidateFolders = [
   __dirname,
-  'C:\\Users\\mohamed\\Downloads\\rivo',
   path.resolve(__dirname, 'node_modules'),
 ];
+
+config.watchFolders = candidateFolders.filter(f => {
+  try {
+    return fs.existsSync(f);
+  } catch {
+    return false;
+  }
+});
 
 module.exports = config;

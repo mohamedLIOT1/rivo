@@ -19,6 +19,7 @@ import ShortcutsModal from './components/ShortcutsModal';
 import ListeningActivityPanel from './components/ListeningActivityPanel';
 import RivoLogo from './components/RivoLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { buildUrl, parseLocation } from './utils/router';
 
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -38,6 +39,7 @@ import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from '.
 import { resumeAudioContext } from './utils/audioEngine';
 import { UserProvider, useUser } from './context/UserContext';
 import { AudioProvider, useAudioPlayer } from './context/AudioContext';
+import { DownloadProvider } from './context/DownloadContext';
 
 const getStoredToken = () => {
   try {
@@ -73,14 +75,49 @@ function AppContent() {
     setJamSync, syncRemotePlayState, addToJamQueue, removeFromJamQueue
   } = audio;
 
-  // Screen Navigation
-  const [currentScreen, setCurrentScreen]     = useState('home');
-  const [topSearchQuery, setTopSearchQuery]   = useState('');
-  const [selectedArtist, setSelectedArtist]   = useState(null);
-  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
-  const [libraryMode, setLibraryMode] = useState('music');
-  const [viewingProfileUserId, setViewingProfileUserId] = useState(null);
+  // Screen Navigation Initial State from URL
+  const initialNav = useMemo(() => {
+    if (typeof window === 'undefined') return { screen: 'home', params: {} };
+    return parseLocation(window.location.pathname, window.location.search);
+  }, []);
+
+  const [currentScreen, setCurrentScreen]     = useState(initialNav.screen || 'home');
+  const [topSearchQuery, setTopSearchQuery]   = useState(initialNav.params?.query || '');
+  const [selectedArtist, setSelectedArtist]   = useState(() => {
+    if (initialNav.screen === 'artist' && initialNav.params?.name) {
+      return { name: initialNav.params.name, id: initialNav.params.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') };
+    }
+    return null;
+  });
+  const [selectedPlaylist, setSelectedPlaylist] = useState(() => {
+    if (initialNav.screen === 'playlist') {
+      if (initialNav.params?.id === 'liked') {
+        return { id: 'liked', name: 'Liked Songs', isLikedSongs: true };
+      }
+      if (initialNav.params?.id) {
+        return { id: initialNav.params.id, name: 'Playlist' };
+      }
+      if (initialNav.params?.albumName) {
+        return { name: initialNav.params.albumName, isAlbum: true };
+      }
+    }
+    return null;
+  });
+  const [libraryMode, setLibraryMode]         = useState(initialNav.screen === 'quran' ? 'quran' : 'music');
+  const [viewingProfileUserId, setViewingProfileUserId] = useState(initialNav.params?.userId || null);
   const [albums, setAlbums]                   = useState([]);
+
+  const playlistsRef = useRef(playlists);
+  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
+
+  const albumsRef = useRef(albums);
+  useEffect(() => { albumsRef.current = albums; }, [albums]);
+
+  const currentScreenRef = useRef(currentScreen);
+  useEffect(() => { currentScreenRef.current = currentScreen; }, [currentScreen]);
+
+  const isFullPlayerOpenRef = useRef(false);
+  const isMobileMenuOpenRef = useRef(false);
 
   const musicTracks = useMemo(() => tracks.filter(track => !isQuranContent(track)), [tracks]);
   const quranTracks = useMemo(() => tracks.filter(track => isQuranContent(track)), [tracks]);
@@ -571,20 +608,303 @@ function AppContent() {
     await removeTrackFromPlaylist(trackId, playlistId);
   };
 
-  const handleSelectArtist = (artist) => {
+  // Liked Songs playlist generator
+  const getLikedSongsPlaylist = useCallback(() => ({
+    id: 'liked',
+    _id: 'liked',
+    name: 'Liked Songs',
+    description: 'Your favorite tracks in one place.',
+    isLikedSongs: true,
+    isAlbum: false,
+    trackIds: (likedTrackIds || []).map(String),
+    cover: '',
+  }), [likedTrackIds]);
+
+  // Central Router Navigation Handler
+  const navigateTo = useCallback((screen, params = {}, options = {}) => {
+    const { replace = false } = options;
+    const targetUrl = buildUrl(screen, params);
+
+    if (typeof window !== 'undefined') {
+      const currentUrl = window.location.pathname + window.location.search;
+      if (currentUrl !== targetUrl) {
+        if (replace) {
+          window.history.replaceState({ screen, params }, '', targetUrl);
+        } else {
+          window.history.pushState({ screen, params }, '', targetUrl);
+        }
+      }
+    }
+
+    setCurrentScreen(screen);
+
+    if (screen === 'home') {
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'search') {
+      if (params.query !== undefined) setTopSearchQuery(params.query);
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'library') {
+      setLibraryMode('music');
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'quran') {
+      setLibraryMode('quran');
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'stats') {
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'admin') {
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'profile') {
+      setViewingProfileUserId(params.userId || null);
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+    } else if (screen === 'artist') {
+      if (params.artist) {
+        const artistObj = typeof params.artist === 'string'
+          ? { name: params.artist.trim(), id: params.artist.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') }
+          : params.artist;
+        setSelectedArtist(artistObj);
+      } else if (params.name) {
+        setSelectedArtist({ name: params.name, id: params.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') });
+      }
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
+    } else if (screen === 'playlist') {
+      if (params.playlist) {
+        setSelectedPlaylist(params.playlist);
+        const isQ = Boolean(params.playlist?.isQuran || isQuranContent(params.playlist));
+        setLibraryMode(isQ ? 'quran' : 'music');
+      } else if (params.id) {
+        const idStr = String(params.id);
+        if (idStr === 'liked') {
+          setSelectedPlaylist(getLikedSongsPlaylist());
+          setLibraryMode('music');
+        } else {
+          const found = playlistsRef.current.find(p => String(p.id || p._id) === idStr);
+          if (found) {
+            setSelectedPlaylist(found);
+            setLibraryMode(found.isQuran ? 'quran' : 'music');
+          } else {
+            const foundAlb = albumsRef.current.find(a => String(a.id || a._id) === idStr);
+            if (foundAlb) {
+              setSelectedPlaylist({ ...foundAlb, isAlbum: true });
+            } else {
+              setSelectedPlaylist({ id: params.id, name: 'Playlist' });
+            }
+          }
+        }
+      } else if (params.albumName) {
+        const foundAlb = albumsRef.current.find(a => a.name?.toLowerCase().trim() === params.albumName.toLowerCase().trim());
+        setSelectedPlaylist(foundAlb || { name: params.albumName, isAlbum: true });
+      }
+      setSelectedArtist(null);
+      setViewingProfileUserId(null);
+    }
+
+    try {
+      const mainEl = document.querySelector('main');
+      if (mainEl) mainEl.scrollTop = 0;
+      window.scrollTo(0, 0);
+    } catch {}
+  }, [getLikedSongsPlaylist]);
+
+  const handleSelectArtist = useCallback((artist) => {
     if (!artist) return;
     const artistObj = typeof artist === 'string'
       ? { name: artist.trim(), id: artist.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') }
       : artist;
-    setSelectedArtist(artistObj);
-    setCurrentScreen('artist');
-  };
-  const handleSelectPlaylistView = (pl) => {
-    setSelectedPlaylist(pl);
-    const isQ = Boolean(pl?.isQuran || isQuranContent(pl));
-    setLibraryMode(isQ ? 'quran' : 'music');
-    setCurrentScreen('playlist');
-  };
+    navigateTo('artist', { name: artistObj.name, artist: artistObj });
+  }, [navigateTo]);
+
+  const handleSelectPlaylistView = useCallback((pl) => {
+    if (!pl) return;
+    const isLiked = pl.isLikedSongs || String(pl.id || pl._id) === 'liked';
+    navigateTo('playlist', {
+      id: isLiked ? 'liked' : (pl.id || pl._id),
+      name: pl.name,
+      playlist: pl
+    });
+  }, [navigateTo]);
+
+  const goToScreen = useCallback((screen) => {
+    if (screen === 'liked' || screen === 'playlist:liked') {
+      handleSelectPlaylistView(getLikedSongsPlaylist());
+      return;
+    }
+    if (typeof screen === 'string' && screen.startsWith('playlist:')) {
+      const plId = screen.split(':')[1];
+      if (plId === 'liked') {
+        handleSelectPlaylistView(getLikedSongsPlaylist());
+        return;
+      }
+      const pl = playlistsRef.current.find(p => String(p.id || p._id) === String(plId));
+      if (pl) {
+        handleSelectPlaylistView(pl);
+      } else {
+        navigateTo('playlist', { id: plId });
+      }
+    } else {
+      navigateTo(screen);
+    }
+  }, [handleSelectPlaylistView, getLikedSongsPlaylist, navigateTo]);
+
+  const handleNavigateBack = useCallback((fallbackScreen = 'home') => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      goToScreen(fallbackScreen);
+    }
+  }, [goToScreen]);
+
+  const handleOpenFullPlayer = useCallback(() => {
+    setIsFullPlayerOpen(true);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(
+        { modal: 'fullplayer' },
+        '',
+        window.location.pathname + window.location.search
+      );
+    }
+  }, []);
+
+  const handleCloseFullPlayer = useCallback(() => {
+    setIsFullPlayerOpen(false);
+    if (typeof window !== 'undefined' && window.history.state?.modal === 'fullplayer') {
+      window.history.back();
+    }
+  }, []);
+
+  // Synchronize deep-linked playlist/album once async data loads
+  useEffect(() => {
+    if (currentScreen === 'playlist' && selectedPlaylist) {
+      const selId = String(selectedPlaylist.id || selectedPlaylist._id || '');
+      if (selId === 'liked') return;
+      const foundPl = playlists.find(p => String(p.id || p._id) === selId);
+      if (foundPl) {
+        setSelectedPlaylist(prev => ({ ...prev, ...foundPl }));
+        return;
+      }
+      const foundAlb = albums.find(a => String(a.id || a._id) === selId || (selectedPlaylist.name && a.name?.toLowerCase().trim() === selectedPlaylist.name?.toLowerCase().trim()));
+      if (foundAlb) {
+        setSelectedPlaylist(prev => ({ ...prev, ...foundAlb, isAlbum: true }));
+      }
+    }
+  }, [playlists, albums, currentScreen]);
+
+  // Handle browser Back / Forward (popstate)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const currentUrl = window.location.pathname + window.location.search;
+      if (!window.history.state) {
+        window.history.replaceState(
+          { screen: initialNav.screen, params: initialNav.params },
+          '',
+          currentUrl
+        );
+      }
+    }
+
+    const handlePopState = () => {
+      // 1. Close full player modal if open
+      if (isFullPlayerOpenRef.current) {
+        setIsFullPlayerOpen(false);
+        return;
+      }
+      // 2. Close mobile menu drawer if open
+      if (isMobileMenuOpenRef.current) {
+        setIsMobileMenuOpen(false);
+        return;
+      }
+      // 3. Close chat if open
+      if (isChatOpenRef.current) {
+        setIsChatOpen(false);
+        return;
+      }
+
+      // 4. Parse target URL
+      const { screen, params } = parseLocation(window.location.pathname, window.location.search);
+
+      setCurrentScreen(screen);
+
+      if (screen === 'home') {
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'search') {
+        setTopSearchQuery(params.query || '');
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'library') {
+        setLibraryMode('music');
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'quran') {
+        setLibraryMode('quran');
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'stats') {
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'admin') {
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'profile') {
+        setViewingProfileUserId(params.userId || null);
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+      } else if (screen === 'artist') {
+        if (params.name) {
+          setSelectedArtist({ name: params.name, id: params.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') });
+        }
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
+      } else if (screen === 'playlist') {
+        if (params.id) {
+          const selId = String(params.id);
+          if (selId === 'liked') {
+            setSelectedPlaylist(getLikedSongsPlaylist());
+          } else {
+            const foundPl = playlistsRef.current.find(p => String(p.id || p._id) === selId);
+            if (foundPl) {
+              setSelectedPlaylist(foundPl);
+              setLibraryMode(foundPl.isQuran ? 'quran' : 'music');
+            } else {
+              const foundAlb = albumsRef.current.find(a => String(a.id || a._id) === selId);
+              if (foundAlb) {
+                setSelectedPlaylist({ ...foundAlb, isAlbum: true });
+              } else {
+                setSelectedPlaylist({ id: selId, name: 'Playlist' });
+              }
+            }
+          }
+        } else if (params.albumName) {
+          const foundAlb = albumsRef.current.find(a => a.name?.toLowerCase().trim() === params.albumName.toLowerCase().trim());
+          setSelectedPlaylist(foundAlb || { name: params.albumName, isAlbum: true });
+        }
+        setSelectedArtist(null);
+        setViewingProfileUserId(null);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [initialNav, getLikedSongsPlaylist]);
 
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -805,49 +1125,17 @@ function AppContent() {
     }
   };
 
-  // Liked Songs playlist generator
-  const getLikedSongsPlaylist = () => ({
-    id: 'liked',
-    _id: 'liked',
-    name: 'Liked Songs',
-    description: 'Your favorite tracks in one place.',
-    isLikedSongs: true,
-    isAlbum: false,
-    trackIds: (likedTrackIds || []).map(String),
-    cover: '',
-  });
-
-  // Screen nav helper
-  const goToScreen = (screen) => {
-    if (screen === 'liked' || screen === 'playlist:liked') {
-      handleSelectPlaylistView(getLikedSongsPlaylist());
-      return;
-    }
-    if (typeof screen === 'string' && screen.startsWith('playlist:')) {
-      const plId = screen.split(':')[1];
-      if (plId === 'liked') {
-        handleSelectPlaylistView(getLikedSongsPlaylist());
-        return;
-      }
-      const pl = playlists.find(p => String(p.id || p._id) === String(plId));
-      if (pl) handleSelectPlaylistView(pl);
-    } else {
-      if (screen === 'quran') setLibraryMode('quran');
-      if (screen === 'library' || screen === 'home' || screen === 'search' || screen === 'mixes') setLibraryMode('music');
-      setCurrentScreen(screen);
-    }
-  };
-
   return (
-    <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
+    <DownloadProvider tracks={tracks} setTracks={setTracks} showToast={showToast}>
+      <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
 
       {/* ── TOP APOTHECARY NAV BAR (Rivo Design) ── */}
       <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
-        
+
         {/* Brand identity: RIVO */}
         <div className="flex items-center gap-2 shrink-0">
           <div 
-            onClick={() => setCurrentScreen('home')} 
+            onClick={() => goToScreen('home')} 
             className="cursor-pointer flex items-center shrink-0"
           >
             <RivoLogo size={34} showText={true} textClassName="text-white text-lg sm:text-xl" isDark={true} />
@@ -864,8 +1152,14 @@ function AppContent() {
               type="text" 
               value={topSearchQuery}
               onChange={(e) => {
-                setTopSearchQuery(e.target.value);
-                if (currentScreen !== 'search') setCurrentScreen('search');
+                const val = e.target.value;
+                setTopSearchQuery(val);
+                if (currentScreen !== 'search') {
+                  navigateTo('search', { query: val });
+                } else if (typeof window !== 'undefined') {
+                  const targetUrl = buildUrl('search', { query: val });
+                  window.history.replaceState({ screen: 'search', params: { query: val } }, '', targetUrl);
+                }
               }}
               placeholder="Search by dose, artist, prescription, or cassette..."
               className={`w-full text-xs font-bold py-2 pl-9 pr-8 rounded-full brutal-border focus:outline-none transition-colors brutal-shadow-sm ${
@@ -876,7 +1170,12 @@ function AppContent() {
             />
             {topSearchQuery && (
               <button 
-                onClick={() => setTopSearchQuery('')}
+                onClick={() => {
+                  setTopSearchQuery('');
+                  if (currentScreen === 'search' && typeof window !== 'undefined') {
+                    window.history.replaceState({ screen: 'search', params: { query: '' } }, '', '/search');
+                  }
+                }}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-zinc-500 hover:text-black cursor-pointer"
               >
                 <X size={15} strokeWidth={2.5} />
@@ -1024,8 +1323,7 @@ function AppContent() {
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
               currentUser={currentUser}
               onViewProfile={(userId) => {
-                setViewingProfileUserId(userId);
-                setCurrentScreen('profile');
+                navigateTo('profile', { userId });
               }}
               globalTheme={globalTheme}
             />
@@ -1103,7 +1401,7 @@ function AppContent() {
               onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
               toggleDownload={handleDownload}
-              onBack={() => setCurrentScreen(isQuranContent(selectedPlaylist) ? 'quran' : 'library')}
+              onBack={() => handleNavigateBack(isQuranContent(selectedPlaylist) ? 'quran' : 'library')}
               onAddTrackToPlaylist={handleAddTrackToPlaylist}
               onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
               onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
@@ -1130,7 +1428,7 @@ function AppContent() {
               onSelectPlaylist={handleSelectPlaylistView}
               onSelectArtist={handleSelectArtist}
               toggleLike={toggleLike}
-              onBack={() => setCurrentScreen('home')}
+              onBack={() => handleNavigateBack('home')}
               currentUser={currentUser}
               openEditSongModal={handleOpenEditSong}
               openEditAlbumModal={handleOpenEditAlbum}
@@ -1158,23 +1456,18 @@ function AppContent() {
               onDeleteAlbum={handleDeleteAlbum}
               onUpdatePlaylist={handleUpdatePlaylist}
               onDeletePlaylist={handleDeletePlaylist}
-              onBack={() => setCurrentScreen('home')}
+              onBack={() => handleNavigateBack('home')}
               globalTheme={globalTheme}
             />
           )}
 
           {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} globalTheme={globalTheme} />}
 
-
-
           {currentScreen === 'profile' && (
             <ProfileScreen
               currentUser={currentUser}
               playlists={playlists}
-              onBack={() => {
-                setViewingProfileUserId(null);
-                setCurrentScreen('home');
-              }}
+              onBack={() => handleNavigateBack('home')}
               logout={logout}
               openAuthModal={() => setIsAuthOpen(true)}
               onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
@@ -1235,7 +1528,7 @@ function AppContent() {
           toggleRepeat={toggleRepeat}
           toggleLike={toggleLike}
           likedTrackIds={likedTrackIds}
-          openFullPlayer={() => setIsFullPlayerOpen(true)}
+          openFullPlayer={handleOpenFullPlayer}
           openAddToPlaylist={() => setIsAddToPlaylistOpen(true)}
           volume={volume}
           setVolume={setVolume}
@@ -1260,7 +1553,7 @@ function AppContent() {
         likedTrackIds={likedTrackIds}
         toggleDownload={handleDownload}
         isOpen={isFullPlayerOpen}
-        onClose={() => setIsFullPlayerOpen(false)}
+        onClose={handleCloseFullPlayer}
         currentTime={currentTime}
         duration={duration}
         seekTo={seekTo}
@@ -1647,6 +1940,7 @@ function AppContent() {
         </div>
       )}
     </div>
+    </DownloadProvider>
   );
 }
 
