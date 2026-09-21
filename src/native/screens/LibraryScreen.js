@@ -37,15 +37,16 @@ export default function LibraryScreen({
   const { currentUser, playlists, likedTrackIds, tracks: userTracks } = useUser();
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
 
-  const allTracks = userTracks.length > 0 ? userTracks : audioTracks;
+  const allTracks = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
+  const safeLikedIds = Array.isArray(likedTrackIds) ? likedTrackIds : [];
 
   // Liked tracks
-  const likedTracks = allTracks.filter((t) =>
-    likedTrackIds.includes(String(t._id || t.id))
+  const likedTracks = (allTracks || []).filter((t) =>
+    safeLikedIds.includes(String(t?._id || t?.id))
   );
 
   const handlePlayLiked = (shuffle = false) => {
-    if (likedTracks.length === 0) return;
+    if (!likedTracks || likedTracks.length === 0) return;
     const list = [...likedTracks];
     if (shuffle) {
       for (let i = list.length - 1; i > 0; i--) {
@@ -53,14 +54,19 @@ export default function LibraryScreen({
         [list[i], list[j]] = [list[j], list[i]];
       }
     }
-    playPlaylist(list, 0);
+    if (typeof playPlaylist === 'function') {
+      playPlaylist(list, 0);
+    } else if (typeof playTrack === 'function' && list.length > 0) {
+      playTrack(list[0], list);
+    }
   };
 
   const handlePlayPlaylist = (playlist, shuffle = false) => {
+    if (!playlist) return;
     const list = (playlist.tracks || []).map((tId) => {
-      const found = allTracks.find((t) => String(t._id || t.id) === String(tId._id || tId));
+      const found = (allTracks || []).find((t) => String(t?._id || t?.id) === String(tId?._id || tId));
       return found || tId;
-    });
+    }).filter(Boolean);
     if (list.length === 0) return;
     if (shuffle) {
       for (let i = list.length - 1; i > 0; i--) {
@@ -68,7 +74,11 @@ export default function LibraryScreen({
         [list[i], list[j]] = [list[j], list[i]];
       }
     }
-    playPlaylist(list, 0);
+    if (typeof playPlaylist === 'function') {
+      playPlaylist(list, 0);
+    } else if (typeof playTrack === 'function' && list.length > 0) {
+      playTrack(list[0], list);
+    }
   };
 
   return (

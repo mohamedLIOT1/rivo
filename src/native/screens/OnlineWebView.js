@@ -10,6 +10,7 @@ import {
 import { WebView } from 'react-native-webview';
 import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
+import { useAudioPlayer } from '../context/AudioContext';
 import { downloadTrack as nativeDownloadTrack } from '../services/downloadManager';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
@@ -17,20 +18,62 @@ import { API_BASE_URL } from '../config';
 const RIVO_WEB_URL = API_BASE_URL;
 
 /**
- * JavaScript injected into the WebView after each page load.
+ * JavaScript injected into the WebView before and after page load.
  *
- * It creates a global `window.RIVO_NATIVE` flag so the web frontend
- * can detect it's running inside the APK and route downloads through
- * the native bridge instead of IndexedDB.
+ * 1. Creates global window.RIVO_NATIVE and bridge functions.
+ * 2. Injects CSS rules so YouTube audio iframe players (#rivo-yt-player-1, #rivo-yt-player-2)
+ *    are positioned on-screen (top: 0, left: 0) instead of off-screen (bottom: -500px),
+ *    preventing Android WebView Chromium compositor from throttling/pausing audio playback.
  */
 const INJECTED_JS = `
 (function() {
-  // Prevent double-injection
-  if (window.__RIVO_NATIVE_INJECTED) return;
-  window.__RIVO_NATIVE_INJECTED = true;
-
   // ── Flag: running inside native APK ──
   window.RIVO_NATIVE = true;
+
+  // ── Un-throttle YouTube iframe players in Android WebView ──
+  var styleId = '__rivo_yt_unthrottle_css';
+  if (!document.getElementById(styleId)) {
+    var style = document.createElement('style');
+    style.id = styleId;
+    style.innerHTML = '#rivo-yt-player-1, #rivo-yt-player-2 { position: fixed !important; top: 0 !important; left: 0 !important; bottom: auto !important; right: auto !important; width: 200px !important; height: 200px !important; opacity: 0.01 !important; z-index: -1 !important; overflow: hidden !important; pointer-events: none !important; }';
+    if (document.head) {
+      document.head.appendChild(style);
+    } else {
+      document.addEventListener('DOMContentLoaded', function() {
+        if (!document.getElementById(styleId) && document.head) {
+          document.head.appendChild(style);
+        }
+      });
+    }
+  }
+
+  // Periodic safeguard against dynamic inline styling overrides
+  if (!window.__rivo_yt_interval_set) {
+    window.__rivo_yt_interval_set = true;
+    setInterval(function() {
+      ['rivo-yt-player-1', 'rivo-yt-player-2'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) {
+          if (el.style.bottom === '-500px' || el.style.bottom === '-500px !important' || el.style.width === '1px') {
+            el.style.bottom = 'auto';
+            el.style.right = 'auto';
+            el.style.top = '0px';
+            el.style.left = '0px';
+            el.style.width = '200px';
+            el.style.height = '200px';
+            el.style.opacity = '0.01';
+            el.style.zIndex = '-1';
+            el.style.overflow = 'hidden';
+            el.style.pointerEvents = 'none';
+          }
+        }
+      });
+    }, 300);
+  }
+
+  // Prevent double-injection of bridge functions
+  if (window.__RIVO_NATIVE_INJECTED) return;
+  window.__RIVO_NATIVE_INJECTED = true;
 
   // ── Bridge: send download request to native layer ──
   window.RIVO_DOWNLOAD = function(track) {
@@ -60,6 +103,7 @@ const INJECTED_JS = `
 export default function OnlineWebView() {
   const webViewRef = useRef(null);
   const { showToast } = useToast();
+  const { refreshDownloadedTracks } = useAudioPlayer();
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
@@ -87,6 +131,9 @@ export default function OnlineWebView() {
             });
             setDownloadProgress(null);
             showToast(`"${trackName}" saved to offline vault`, 'success');
+            if (refreshDownloadedTracks) {
+              await refreshDownloadedTracks();
+            }
           } catch (err) {
             setDownloadProgress(null);
             showToast(`Download failed: ${err.message}`, 'error');
@@ -144,6 +191,7 @@ export default function OnlineWebView() {
         ref={webViewRef}
         source={{ uri: RIVO_WEB_URL }}
         style={styles.webview}
+        injectedJavaScriptBeforeContentLoaded={INJECTED_JS}
         injectedJavaScript={INJECTED_JS}
         onMessage={handleMessage}
         onLoadStart={() => setLoading(true)}
@@ -158,14 +206,20 @@ export default function OnlineWebView() {
             setHasError(true);
           }
         }}
-        // WebView settings matching the old Kotlin WebView
+        // WebView settings optimized for YouTube embed & audio playback
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        databaseEnabled={true}
         mediaPlaybackRequiresUserGesture={false}
         allowsInlineMediaPlayback={true}
         allowFileAccess={true}
-        mixedContentMode="compatibility"
-        userAgent="RivoApp/Hybrid-2.0"
+        allowUniversalAccessFromFileURLs={true}
+        mixedContentMode="always"
+        userAgent="Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+        androidHardwareAccelerationDisabledBinding={false}
+        originWhitelist={['*']}
+        allowsFullscreenVideo={true}
+        setSupportMultipleWindows={false}
         startInLoadingState={false}
         cacheEnabled={true}
       />

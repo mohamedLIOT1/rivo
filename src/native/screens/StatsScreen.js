@@ -15,9 +15,9 @@ import BrutalCard from '../ui/BrutalCard';
 const { width } = Dimensions.get('window');
 
 export default function StatsScreen() {
-  const { tracks, currentUser, playlists, likedTrackIds } = useUser();
+  const { tracks = [], currentUser, playlists = [], likedTrackIds = [] } = useUser();
 
-  const totalTracks = tracks.length || 42;
+  const totalTracks = (Array.isArray(tracks) ? tracks.length : 0) || 42;
   const estimatedHours = Math.round((totalTracks * 3.6) / 60);
 
   const stats = [
@@ -39,7 +39,7 @@ export default function StatsScreen() {
     },
     {
       title: 'YOUR ARCHIVE',
-      value: `${likedTrackIds.length}`,
+      value: `${Array.isArray(likedTrackIds) ? likedTrackIds.length : 0}`,
       unit: 'LIKED',
       desc: 'Locally bookmarked favorites',
       color: colors.rust,
@@ -47,7 +47,7 @@ export default function StatsScreen() {
     },
     {
       title: 'YOUR CRATES',
-      value: `${playlists.length}`,
+      value: `${Array.isArray(playlists) ? playlists.length : 0}`,
       unit: 'PLAYLISTS',
       desc: 'Curated track compilations',
       color: colors.gold,

@@ -18,16 +18,22 @@ export default function HomeScreen({
   onOpenAddSong,
   onTrackAction,
 }) {
-  const { playTrack } = useAudioPlayer();
+  const { playTrack, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, fetchPublicTracks } = useUser();
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music'
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
 
   // Filter music only (strictly exclude Quran from main music home)
   const displayTracks = useMemo(() => {
-    return (userTracks || []).filter((t) => !isQuranContent(t));
-  }, [userTracks]);
+    let list = (userTracks || []).filter((t) => !isQuranContent(t));
+    if (activeFilter === 'downloaded') {
+      const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
+      const downIds = new Set(safeDownloaded.map(t => String(t?._id || t?.id)));
+      return list.filter(t => downIds.has(String(t?._id || t?.id)) || t?.isDownloaded || t?.localAudioUri);
+    }
+    return list;
+  }, [userTracks, activeFilter, downloadedTracks]);
 
   const visibleTracks = useMemo(() => {
     return displayTracks.slice(0, visibleCount);
@@ -148,6 +154,18 @@ export default function HomeScreen({
             Music
           </Text>
         </TouchableOpacity>
+
+        {Array.isArray(downloadedTracks) && downloadedTracks.length > 0 && (
+          <TouchableOpacity
+            style={[styles.filterPill, activeFilter === 'downloaded' && styles.filterPillActive]}
+            onPress={() => setActiveFilter('downloaded')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterPillText, activeFilter === 'downloaded' && styles.filterPillTextActive]}>
+              Downloaded ({downloadedTracks.length})
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ─────────────────────────────────────────

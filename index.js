@@ -8,4 +8,3 @@ registerRootComponent(App);
 
 AppRegistry.registerComponent('main', () => App);
 AppRegistry.registerComponent('Rivo', () => App);
-AppRegistry.registerComponent('Liofy', () => App);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -8,6 +8,8 @@ import {
   StatusBar,
   Image,
   Modal,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import {
   Home,
@@ -35,6 +37,7 @@ import { colors } from './src/native/theme/colors';
 
 import OnlineWebView from './src/native/screens/OnlineWebView';
 import ModeToggle from './src/native/components/ModeToggle';
+import ErrorBoundary from './src/native/components/ErrorBoundary';
 
 import HomeScreen from './src/native/screens/HomeScreen';
 import SearchScreen from './src/native/screens/SearchScreen';
@@ -56,16 +59,22 @@ import EqualizerModal from './src/native/components/EqualizerModal';
 import JamRoomModal from './src/native/components/JamRoomModal';
 
 const TABS = [
+  { id: 'offline', label: 'Offline', icon: Download },
   { id: 'home', label: 'Home', icon: Home },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'library', label: 'Library', icon: Disc },
   { id: 'quran', label: 'Quran', icon: BookOpen },
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
 ];
 
 function MainAppShell() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
+    }
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -78,7 +87,9 @@ function MainAppShell() {
 
       {/* ─── OFFLINE MODE: Native React Native UI ─── */}
       <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
-        <OfflineNativeShell />
+        <ErrorBoundary>
+          <OfflineNativeShell />
+        </ErrorBoundary>
       </View>
 
       {/* ─── FLOATING MODE TOGGLE (always visible) ─── */}
@@ -94,7 +105,7 @@ function MainAppShell() {
  * mini-player, modals). Extracted so it can coexist with the WebView.
  */
 function OfflineNativeShell() {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState('offline');
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
@@ -388,17 +399,19 @@ function OfflineNativeShell() {
 
 export default function App() {
   return (
-    <ConnectivityProvider>
-      <UserProvider>
-        <ToastProvider>
-          <AudioProvider>
-            <SocketProvider>
-              <MainAppShell />
-            </SocketProvider>
-          </AudioProvider>
-        </ToastProvider>
-      </UserProvider>
-    </ConnectivityProvider>
+    <ErrorBoundary>
+      <ConnectivityProvider>
+        <UserProvider>
+          <ToastProvider>
+            <AudioProvider>
+              <SocketProvider>
+                <MainAppShell />
+              </SocketProvider>
+            </AudioProvider>
+          </ToastProvider>
+        </UserProvider>
+      </ConnectivityProvider>
+    </ErrorBoundary>
   );
 }
 
