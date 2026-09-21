@@ -11,6 +11,8 @@ import {
 import { BookOpen, Search, Play, Pause, Disc, User, Volume2 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useConnectivity } from '../context/ConnectivityContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
@@ -21,12 +23,17 @@ import {
 } from '../../utils/quranUtils';
 
 export default function QuranScreen({ onTrackAction }) {
-  const { playTrack, currentTrack, isPlaying, tracks: audioTracks } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { tracks: userTracks } = useUser();
+  const { appMode } = useConnectivity();
+  const { isDark } = useTheme();
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const allTracks = userTracks.length > 0 ? userTracks : audioTracks;
+  const isOffline = appMode === 'offline';
+  const allTracks = isOffline
+    ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
+    : ((Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (audioTracks || []));
 
   // Filter strictly Quranic tracks
   const quranTracks = useMemo(() => {
@@ -67,7 +74,7 @@ export default function QuranScreen({ onTrackAction }) {
   }, [quranTracks, selectedReciter, searchQuery]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header Banner with Arabic Aesthetic */}
       <View style={styles.bannerOuter}>
         <View style={styles.bannerShadow} />
@@ -165,8 +172,14 @@ export default function QuranScreen({ onTrackAction }) {
         {displayedTracks.length === 0 ? (
           <View style={styles.emptyCard}>
             <BookOpen size={36} color={colors.mint} />
-            <Text style={styles.emptyTitle}>لا توجد تلاوات مطابقة</Text>
-            <Text style={styles.emptySub}>جرب البحث باسم سورة أو قارئ آخر.</Text>
+            <Text style={styles.emptyTitle}>
+              {isOffline ? 'لا توجد سور قرآنية محملة' : 'لا توجد تلاوات مطابقة'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {isOffline
+                ? 'لم تقم بتحميل أي سور أو تلاوات بعد. قم بالتحميل في الوضع الأون لاين لتستمع إليها بدون إنترنت.'
+                : 'جرب البحث باسم سورة أو قارئ آخر.'}
+            </Text>
           </View>
         ) : (
           <View style={styles.tracksList}>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,15 @@ import {
   ScrollView,
   FlatList,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { Search as SearchIcon, X, Disc, Music, Sparkles, Filter } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useConnectivity } from '../context/ConnectivityContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
+import { API_BASE_URL } from '../config';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import { isQuranContent } from '../../utils/quranUtils';
@@ -36,20 +40,56 @@ const DISPENSARY_GENRES = [
 export default function SearchScreen({ onTrackAction }) {
   const { playTrack, tracks: audioTracks } = useAudioPlayer();
   const { tracks: userTracks } = useUser();
+  const { appMode } = useConnectivity();
+  const { isDark } = useTheme();
   const [query, setQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState(null);
+  const [remoteResults, setRemoteResults] = useState([]);
+  const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const searchTimeoutRef = useRef(null);
 
+  const isOffline = appMode === 'offline';
   const allTracks = (Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (Array.isArray(audioTracks) ? audioTracks : []);
 
+  // Live query to server /api/search when connected
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2 || isOffline) {
+      setRemoteResults([]);
+      setIsSearchingRemote(false);
+      return;
+    }
+
+    setIsSearchingRemote(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(trimmed)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.tracks)) {
+            setRemoteResults(data.tracks);
+          }
+        }
+      } catch {}
+      setIsSearchingRemote(false);
+    }, 450);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [query, isOffline]);
+
   const filteredTracks = useMemo(() => {
-    let result = allTracks || [];
+    let localResult = allTracks || [];
 
     if (selectedGenre) {
       if (selectedGenre === 'quran') {
-        result = result.filter(isQuranContent);
+        localResult = localResult.filter(isQuranContent);
       } else {
         const key = selectedGenre.toLowerCase();
-        result = result.filter(
+        localResult = localResult.filter(
           (t) =>
             t.genre?.toLowerCase().includes(key) ||
             t.title?.toLowerCase().includes(key) ||
@@ -61,7 +101,7 @@ export default function SearchScreen({ onTrackAction }) {
 
     if (query.trim()) {
       const q = query.toLowerCase().trim();
-      result = result.filter(
+      localResult = localResult.filter(
         (t) =>
           t.title?.toLowerCase().includes(q) ||
           t.artist?.toLowerCase().includes(q) ||
@@ -69,16 +109,28 @@ export default function SearchScreen({ onTrackAction }) {
       );
     }
 
-    return result;
-  }, [allTracks, query, selectedGenre]);
+    // Merge local and remote results (deduplicating)
+    const combined = [...localResult];
+    const seenIds = new Set(localResult.map(t => String(t._id || t.id || t.audioUrl)));
+
+    for (const r of remoteResults) {
+      const rid = String(r._id || r.id || r.audioUrl);
+      if (!seenIds.has(rid)) {
+        seenIds.add(rid);
+        combined.push(r);
+      }
+    }
+
+    return combined;
+  }, [allTracks, query, selectedGenre, remoteResults]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header & Search Bar */}
       <View style={styles.searchHeader}>
         <View style={styles.headerTitleRow}>
           <Text style={styles.headerTitle}>DISPENSARY SEARCH</Text>
-          <CassetteTag label="REALTIME MATRIX" bg={colors.ink} textColor={colors.mint} />
+          <CassetteTag label={isOffline ? "LOCAL ARCHIVE" : "ONLINE MATRIX"} bg={colors.ink} textColor={colors.mint} />
         </View>
 
         <View style={styles.inputContainer}>
@@ -91,6 +143,9 @@ export default function SearchScreen({ onTrackAction }) {
             onChangeText={setQuery}
             autoCorrect={false}
           />
+          {isSearchingRemote && (
+            <ActivityIndicator size="small" color={colors.teal} style={{ marginRight: 6 }} />
+          )}
           {query.length > 0 && (
             <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
               <X size={16} color={colors.ink} />

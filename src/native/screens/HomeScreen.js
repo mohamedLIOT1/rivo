@@ -11,6 +11,7 @@ import { Play, Plus } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import { isQuranContent } from '../../utils/quranUtils';
@@ -22,6 +23,7 @@ export default function HomeScreen({
   const { playTrack, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
+  const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
@@ -59,7 +61,7 @@ export default function HomeScreen({
 
   return (
     <ScrollView
-      style={styles.container}
+      style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
       refreshControl={

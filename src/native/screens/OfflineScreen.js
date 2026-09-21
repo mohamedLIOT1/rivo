@@ -12,6 +12,7 @@ import * as FileSystem from 'expo-file-system';
 import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { getDownloadedTracks, removeDownloadedTrack } from '../services/downloadManager';
@@ -21,6 +22,7 @@ const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 export default function OfflineScreen() {
   const { playTrack, currentTrack, isPlaying, togglePlay } = useAudioPlayer();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
   const [offlineTracks, setOfflineTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storageUsed, setStorageUsed] = useState(0);
@@ -104,7 +106,7 @@ export default function OfflineScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]} contentContainerStyle={styles.content}>
       {/* Offline Storage Status Card */}
       <View style={styles.heroOuter}>
         <View style={styles.heroShadow} />

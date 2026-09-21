@@ -610,8 +610,40 @@ async function resolveSoundCloudStream(url, clientId) {
 
 async function searchYouTubeId(query) {
   if (!query || !query.trim()) return null;
+  const q = query.trim();
+
+  // 1. YouTube Data API v3 (Official, unblocked on Railway)
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (apiKey) {
+    try {
+      const res = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+        params: {
+          part: 'id',
+          q,
+          type: 'video',
+          maxResults: 1,
+          key: apiKey
+        },
+        timeout: 4500
+      });
+      const videoId = res.data?.items?.[0]?.id?.videoId;
+      if (videoId && videoId.length === 11) return videoId;
+    } catch (err) {
+      console.warn('[searchYouTubeId] YouTube API error:', err?.response?.data?.error?.message || err.message);
+    }
+  }
+
+  // 2. Invidious fallback
   try {
-    const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(query.trim())}`, {
+    const invRes = await axios.get(`https://invidious.jing.rocks/api/v1/search?q=${encodeURIComponent(q)}&type=video`, { timeout: 3000 });
+    if (invRes.data && Array.isArray(invRes.data) && invRes.data[0]?.videoId) {
+      return invRes.data[0].videoId;
+    }
+  } catch {}
+
+  // 3. Fallback scraping
+  try {
+    const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
@@ -1807,37 +1839,87 @@ async function searchTracksInternal(query) {
 
     // 3. Query YouTube for official music releases
     let ytTracks = [];
-    try {
-      const ytSearchStr = `${targetQuery} music`;
-      const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(ytSearchStr)}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        timeout: 4000
-      });
-      const jsonMatch = ytRes.data.match(/var ytInitialData = ({.*?});<\/script>/s) || ytRes.data.match(/ytInitialData = ({.*?});<\/script>/s);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[1]);
-        const contents = parsed.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-        ytTracks = contents
-          .filter(c => c.videoRenderer && c.videoRenderer.videoId)
-          .map(c => {
-            const v = c.videoRenderer;
-            const title = v.title?.runs?.[0]?.text || q;
-            const artist = v.ownerText?.runs?.[0]?.text || 'YouTube';
-            return {
-              id: `yt-${v.videoId}`,
-              title,
-              artist,
-              album: 'YouTube',
-              cover: v.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
-              audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
-              duration: 240,
-              source: 'YouTube'
-            };
-          })
-          .filter(t => isMusicTrackServer(t.title, t.artist))
-          .slice(0, 10);
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (apiKey) {
+      try {
+        const ytRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
+          params: {
+            part: 'snippet',
+            q: `${targetQuery}`,
+            type: 'video',
+            maxResults: 10,
+            key: apiKey
+          },
+          timeout: 4500
+        });
+        if (ytRes.data?.items && Array.isArray(ytRes.data.items)) {
+          ytTracks = ytRes.data.items
+            .filter(item => item?.id?.videoId)
+            .map(item => {
+              const videoId = item.id.videoId;
+              let title = item.snippet?.title || targetQuery;
+              title = title
+                .replace(/&amp;/g, '&')
+                .replace(/&quot;/g, '"')
+                .replace(/&#39;/g, "'")
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>');
+              const artist = (item.snippet?.channelTitle || 'YouTube').replace(/ - Topic$/i, '');
+              const cover = item.snippet?.thumbnails?.high?.url ||
+                            item.snippet?.thumbnails?.medium?.url ||
+                            `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+              return {
+                id: `yt-${videoId}`,
+                title,
+                artist,
+                album: 'YouTube',
+                cover,
+                audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
+                duration: 240,
+                source: 'YouTube'
+              };
+            })
+            .filter(t => isMusicTrackServer(t.title, t.artist));
+        }
+      } catch (err) {
+        console.warn('[Search] YouTube API search error:', err?.response?.data?.error?.message || err.message);
       }
-    } catch {}
+    }
+
+    // Fallback scraping if API returned 0 or quota reached
+    if (ytTracks.length === 0) {
+      try {
+        const ytSearchStr = `${targetQuery} music`;
+        const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(ytSearchStr)}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          timeout: 4000
+        });
+        const jsonMatch = ytRes.data.match(/var ytInitialData = ({.*?});<\/script>/s) || ytRes.data.match(/ytInitialData = ({.*?});<\/script>/s);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[1]);
+          const contents = parsed.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+          ytTracks = contents
+            .filter(c => c.videoRenderer && c.videoRenderer.videoId)
+            .map(c => {
+              const v = c.videoRenderer;
+              const title = v.title?.runs?.[0]?.text || q;
+              const artist = v.ownerText?.runs?.[0]?.text || 'YouTube';
+              return {
+                id: `yt-${v.videoId}`,
+                title,
+                artist,
+                album: 'YouTube',
+                cover: v.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+                audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
+                duration: 240,
+                source: 'YouTube'
+              };
+            })
+            .filter(t => isMusicTrackServer(t.title, t.artist))
+            .slice(0, 10);
+        }
+      } catch {}
+    }
 
     const allTracks = [...formattedDbTracks, ...ytTracks, ...scTracks];
     searchCache.set(cacheKey, { timestamp: Date.now(), tracks: allTracks });

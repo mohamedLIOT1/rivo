@@ -37,8 +37,7 @@ export const AudioProvider = ({ children }) => {
   const [queue, setQueueState] = useState([]);
   const [progress, setProgress] = useState({ currentTime: 0, duration: 0 });
 
-  // Equalizer & Sleep Timer
-  const [equalizerPreset, setEqualizerPreset] = useState('flat');
+  // Sleep Timer
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState(null);
 
   // Lyrics
@@ -225,8 +224,21 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
-    if (Array.isArray(currentTrack.lyrics) && currentTrack.lyrics.length > 0) {
-      setLyrics(currentTrack.lyrics);
+    if (currentTrack.lyrics) {
+      if (Array.isArray(currentTrack.lyrics) && currentTrack.lyrics.length > 0) {
+        setLyrics(currentTrack.lyrics);
+        return;
+      }
+      if (typeof currentTrack.lyrics === 'string' && currentTrack.lyrics.trim().length > 0) {
+        setLyrics(currentTrack.lyrics);
+        return;
+      }
+    }
+
+    // Check offline vault for saved lyrics
+    const dl = (downloadedTracks || []).find(t => String(t._id || t.id) === String(currentTrack._id || currentTrack.id));
+    if (dl?.lyrics) {
+      setLyrics(dl.lyrics);
       return;
     }
 
@@ -467,12 +479,12 @@ export const AudioProvider = ({ children }) => {
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
-    equalizerPreset, sleepTimerRemaining, lyrics, isLoadingLyrics,
+    sleepTimerRemaining, lyrics, isLoadingLyrics,
     playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, removeFromQueue, clearQueue,
-    setEqualizerPreset, startSleepTimer, cancelSleepTimer,
+    startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, equalizerPreset, sleepTimerRemaining, lyrics, isLoadingLyrics]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics]);
 
   return (
     <AudioContext.Provider value={controls}>
