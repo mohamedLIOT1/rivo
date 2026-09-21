@@ -28,6 +28,10 @@ jobs:
         run: |
           npx expo prebuild --platform ios --clean
 
+      - name: Configure iOS Deployment Target
+        run: |
+          sed -i '' "s/platform :ios, .*/platform :ios, '15.1'/g" ios/Podfile || true
+
       - name: Install CocoaPods
         run: |
           cd ios
@@ -36,6 +40,7 @@ jobs:
 
       - name: Build iOS Archive (Unsigned)
         run: |
+          mkdir -p build
           xcodebuild archive \
             -workspace ios/Rivo.xcworkspace \
             -scheme Rivo \
@@ -49,7 +54,7 @@ jobs:
       - name: Package Payload into IPA
         run: |
           mkdir -p build/Payload
-          cp -r build/Rivo.xcarchive/Products/Applications/Rivo.app build/Payload/
+          cp -r build/Rivo.xcarchive/Products/Applications/*.app build/Payload/
           cd build
           zip -r Rivo.ipa Payload
           cd ..
