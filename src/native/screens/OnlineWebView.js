@@ -35,7 +35,7 @@ const INJECTED_JS = `
   if (!document.getElementById(styleId)) {
     var style = document.createElement('style');
     style.id = styleId;
-    style.innerHTML = '#rivo-yt-player-1, #rivo-yt-player-2 { position: fixed !important; top: 0 !important; left: 0 !important; bottom: auto !important; right: auto !important; width: 200px !important; height: 200px !important; opacity: 0.01 !important; z-index: -1 !important; overflow: hidden !important; pointer-events: none !important; }';
+    style.innerHTML = '#rivo-yt-player-1, #rivo-yt-player-2 { position: fixed !important; bottom: 0 !important; right: 0 !important; top: auto !important; left: auto !important; width: 200px !important; height: 200px !important; transform: scale(0.005) !important; transform-origin: bottom right !important; opacity: 1 !important; z-index: 99999 !important; pointer-events: none !important; visibility: visible !important; }';
     if (document.head) {
       document.head.appendChild(style);
     } else {
@@ -54,16 +54,19 @@ const INJECTED_JS = `
       ['rivo-yt-player-1', 'rivo-yt-player-2'].forEach(function(id) {
         var el = document.getElementById(id);
         if (el) {
-          if (el.style.bottom === '-500px' || el.style.bottom === '-500px !important' || el.style.width === '1px') {
-            el.style.bottom = 'auto';
-            el.style.right = 'auto';
-            el.style.top = '0px';
-            el.style.left = '0px';
+          if (el.style.bottom === '-500px' || el.style.opacity === '0.01' || el.style.zIndex === '-1' || el.style.width === '1px') {
+            el.style.position = 'fixed';
+            el.style.bottom = '0px';
+            el.style.right = '0px';
+            el.style.top = 'auto';
+            el.style.left = 'auto';
             el.style.width = '200px';
             el.style.height = '200px';
-            el.style.opacity = '0.01';
-            el.style.zIndex = '-1';
-            el.style.overflow = 'hidden';
+            el.style.transform = 'scale(0.005)';
+            el.style.transformOrigin = 'bottom right';
+            el.style.opacity = '1';
+            el.style.zIndex = '99999';
+            el.style.visibility = 'visible';
             el.style.pointerEvents = 'none';
           }
         }
@@ -216,7 +219,10 @@ export default function OnlineWebView() {
         allowUniversalAccessFromFileURLs={true}
         mixedContentMode="always"
         userAgent="Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
-        androidHardwareAccelerationDisabledBinding={false}
+        androidHardwareAccelerationDisabled={false}
+        androidLayerType="hardware"
+        thirdPartyCookiesEnabled={true}
+        sharedCookiesEnabled={true}
         originWhitelist={['*']}
         allowsFullscreenVideo={true}
         setSupportMultipleWindows={false}

@@ -119,7 +119,7 @@ export const AudioProvider = ({ children }) => {
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
-          interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+          interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
           interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         });
       } catch {}
