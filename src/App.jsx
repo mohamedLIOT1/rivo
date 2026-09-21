@@ -1163,15 +1163,7 @@ function AppContent() {
 
           {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} globalTheme={globalTheme} />}
 
-          {currentScreen === 'mixes' && (
-            <MixesScreen 
-              tracks={musicTracks} 
-              toggleLike={toggleLike} 
-              onSelectArtist={handleSelectArtist} 
-              onBack={() => setCurrentScreen('home')}
-              globalTheme={globalTheme} 
-            />
-          )}
+
 
           {currentScreen === 'profile' && (
             <ProfileScreen
@@ -1563,17 +1555,6 @@ function AppContent() {
                   Browse & Decks
                 </div>
 
-                <button
-                  onClick={() => { setCurrentScreen('mixes'); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
-                    currentScreen === 'mixes' 
-                      ? 'bg-[#17a398] text-[#0b1110] font-black brutal-border' 
-                      : globalTheme === 'dark' ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
-                  }`}
-                >
-                  <Radio size={16} />
-                  <span>Mix</span>
-                </button>
 
                 <button
                   onClick={() => { setCurrentScreen('stats'); setIsMobileMenuOpen(false); }}

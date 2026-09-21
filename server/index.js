@@ -950,13 +950,7 @@ async function resolveTrackAudio(title, artist) {
   const query = `${artist || ''} ${title || ''}`.trim();
   if (!query) return null;
 
-  // 1. First attempt to find native direct MP3 audio stream from SoundCloud (guaranteed HTML5 playback without iframe issues)
-  try {
-    const sc = await resolveSoundCloudTrack(query, title, artist);
-    if (sc && sc.streamUrl) return sc;
-  } catch {}
-
-  // 2. If direct stream not found, fallback to YouTube
+  // 1. YouTube FIRST via Official YouTube Data API v3 (Instant, authentic original music)
   try {
     const ytId = await searchYouTubeId(query);
     if (ytId) {
@@ -970,6 +964,14 @@ async function resolveTrackAudio(title, artist) {
         isYouTube: true
       };
     }
+  } catch (err) {
+    console.warn('[resolveTrackAudio] YouTube error:', err.message);
+  }
+
+  // 2. Fallback to SoundCloud only if YouTube returns nothing
+  try {
+    const sc = await resolveSoundCloudTrack(query, title, artist);
+    if (sc && sc.streamUrl) return sc;
   } catch {}
 
   return null;
@@ -1784,60 +1786,7 @@ async function searchTracksInternal(query) {
         source: 'Rivo'
       }));
 
-    // 2. Query SoundCloud with dynamic client ID
-    let scTracks = [];
-    let clientId = await getSoundCloudClientId();
-    try {
-      let scRes;
-      try {
-        scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q: targetQuery, client_id: clientId, limit: 15 },
-          timeout: 4000
-        });
-      } catch (err) {
-        if (err.response?.status === 401) {
-          clientId = await getSoundCloudClientId(true);
-          scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-            params: { q: targetQuery, client_id: clientId, limit: 15 },
-            timeout: 4000
-          });
-        } else {
-          throw err;
-        }
-      }
-
-      if (scRes?.data?.collection?.length > 0) {
-        const valid = scRes.data.collection.filter(item => 
-          (item.duration || 0) > 30000 && isMusicTrackServer(item.title, item.user?.username)
-        );
-        const resolved = await Promise.all(
-          valid.slice(0, 10).map(async (item) => {
-            const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-            if (!prog) return null;
-            const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
-            if (!streamUrl) return null;
-
-            return {
-              id: `sc-${item.id}`,
-              title: item.title || q,
-              artist: item.user?.username || 'Artist',
-              album: 'SoundCloud',
-              cover: item.artwork_url
-                ? item.artwork_url.replace('-large', '-t500x500')
-                : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-              audioUrl: streamUrl,
-              duration: Math.round((item.duration || 180000) / 1000),
-              source: 'SoundCloud'
-            };
-          })
-        );
-        scTracks = resolved.filter(Boolean);
-      }
-    } catch (err) {
-      console.warn('[Search] SoundCloud search error:', err.message);
-    }
-
-    // 3. Query YouTube for official music releases
+    // 2. Query YouTube Data API v3 FIRST for official releases (Instant & High Quality)
     let ytTracks = [];
     const apiKey = process.env.YOUTUBE_API_KEY;
     if (apiKey) {
@@ -1847,10 +1796,10 @@ async function searchTracksInternal(query) {
             part: 'snippet',
             q: `${targetQuery}`,
             type: 'video',
-            maxResults: 10,
+            maxResults: 12,
             key: apiKey
           },
-          timeout: 4500
+          timeout: 4000
         });
         if (ytRes.data?.items && Array.isArray(ytRes.data.items)) {
           ytTracks = ytRes.data.items
@@ -1892,7 +1841,7 @@ async function searchTracksInternal(query) {
         const ytSearchStr = `${targetQuery} music`;
         const ytRes = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(ytSearchStr)}`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-          timeout: 4000
+          timeout: 3500
         });
         const jsonMatch = ytRes.data.match(/var ytInitialData = ({.*?});<\/script>/s) || ytRes.data.match(/ytInitialData = ({.*?});<\/script>/s);
         if (jsonMatch) {
@@ -1917,6 +1866,35 @@ async function searchTracksInternal(query) {
             })
             .filter(t => isMusicTrackServer(t.title, t.artist))
             .slice(0, 10);
+        }
+      } catch {}
+    }
+
+    // 3. Secondary fallback: SoundCloud (only if needed)
+    let scTracks = [];
+    if (ytTracks.length < 5) {
+      try {
+        let clientId = await getSoundCloudClientId();
+        let scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
+          params: { q: targetQuery, client_id: clientId, limit: 6 },
+          timeout: 2500
+        });
+        if (scRes?.data?.collection?.length > 0) {
+          const valid = scRes.data.collection.filter(item => 
+            (item.duration || 0) > 30000 && isMusicTrackServer(item.title, item.user?.username)
+          );
+          scTracks = valid.slice(0, 5).map(item => ({
+            id: `sc-${item.id}`,
+            title: item.title || q,
+            artist: item.user?.username || 'Artist',
+            album: 'SoundCloud',
+            cover: item.artwork_url
+              ? item.artwork_url.replace('-large', '-t500x500')
+              : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
+            audioUrl: '', // Will resolve on play to YouTube
+            duration: Math.round((item.duration || 180000) / 1000),
+            source: 'SoundCloud'
+          }));
         }
       } catch {}
     }
@@ -4509,24 +4487,26 @@ app.get('/api/soundcloud/stream', async (req, res) => {
   try {
     const { url, title, artist, id } = req.query;
 
-    // 1. Direct SoundCloud media/transcoding URL (only if not preview)
+    // 1. YouTube FIRST via title + artist (Authentic original music)
+    if (title || artist) {
+      const result = await resolveTrackAudio(title || '', artist || '');
+      if (result && result.streamUrl) {
+        return res.json({
+          success: true,
+          url: result.streamUrl,
+          duration: result.duration,
+          cover: result.cover,
+          isYouTube: Boolean(result.isYouTube)
+        });
+      }
+    }
+
+    // 2. Direct SoundCloud media/transcoding URL fallback
     if (url && (url.includes('api-v2.soundcloud.com/media') || url.includes('/transcodings/')) && !url.includes('/preview/')) {
       const streamUrl = await resolveSoundCloudStream(url);
       if (streamUrl && !streamUrl.includes('preview')) {
         return res.json({ success: true, url: streamUrl });
       }
-    }
-
-    // 2. Search full track audio (SoundCloud full or YouTube fallback)
-    const result = await resolveTrackAudio(title || '', artist || '');
-    if (result && result.streamUrl) {
-      return res.json({
-        success: true,
-        url: result.streamUrl,
-        duration: result.duration,
-        cover: result.cover,
-        isYouTube: Boolean(result.isYouTube)
-      });
     }
 
     // 3. Fallback to existing audioUrl if valid and not a 30s preview snippet

@@ -59,11 +59,12 @@ async function resolveTrackAudioUrl(track) {
     );
 
   const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
+    !targetUrl ||
+    !extractYtId(targetUrl) ||
     track.id?.toString().startsWith('sc-') ||
     track.source === 'SoundCloud' ||
     track.source === 'Import' ||
     track.source === 'Spotify' ||
-    !targetUrl ||
     targetUrl.includes('pixabay.com') ||
     targetUrl.includes('sndcdn.com') ||
     targetUrl.includes('soundcloud.com')
@@ -688,10 +689,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         );
 
       const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
+        !targetUrl ||
+        !extractYtId(targetUrl) ||
         currentTrack.source === 'SoundCloud' ||
         currentTrack.source === 'Import' ||
         currentTrack.source === 'Spotify' ||
-        !targetUrl ||
         targetUrl.includes('pixabay.com') ||
         targetUrl.includes('sndcdn.com') ||
         targetUrl.includes('soundcloud.com')
