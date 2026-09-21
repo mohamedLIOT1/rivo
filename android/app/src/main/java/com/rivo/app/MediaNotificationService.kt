@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.os.IBinder
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -54,6 +55,7 @@ class MediaNotificationService : Service() {
     }
 
     private var mediaSession: MediaSessionCompat? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -61,6 +63,28 @@ class MediaNotificationService : Service() {
         super.onCreate()
         createNotificationChannel()
         setupMediaSession()
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Rivo::PlaybackWakeLock").apply {
+                setReferenceCounted(false)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock?.isHeld == false) {
+                wakeLock?.acquire(4 * 60 * 60 * 1000L) // 4 hours max safe timeout
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            if (wakeLock?.isHeld == true) {
+                wakeLock?.release()
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun setupMediaSession() {
@@ -114,6 +138,7 @@ class MediaNotificationService : Service() {
                 isRepeat = intent.getBooleanExtra("isRepeat", false)
                 isShuffle = intent.getBooleanExtra("isShuffle", false)
 
+                if (isPlaying) acquireWakeLock() else releaseWakeLock()
                 startForegroundWithNotification()
                 loadCoverBitmapAsync(currentCoverUrl)
             }
@@ -124,9 +149,16 @@ class MediaNotificationService : Service() {
                 if (intent.hasExtra("title")) currentTitle = intent.getStringExtra("title") ?: currentTitle
                 if (intent.hasExtra("artist")) currentArtist = intent.getStringExtra("artist") ?: currentArtist
 
+                if (isPlaying) {
+                    acquireWakeLock()
+                    startForegroundWithNotification()
+                } else {
+                    releaseWakeLock()
+                }
                 updateNotification()
             }
             ACTION_HIDE -> {
+                releaseWakeLock()
                 stopForeground(true)
                 stopSelf()
             }
@@ -145,10 +177,18 @@ class MediaNotificationService : Service() {
 
     private fun dispatchMediaAction(action: String) {
         // Toggle state locally immediately for visual response
-        if (action == "play") isPlaying = true
-        else if (action == "pause") isPlaying = false
-        else if (action == "repeat") isRepeat = !isRepeat
-        else if (action == "shuffle") isShuffle = !isShuffle
+        if (action == "play") {
+            isPlaying = true
+            acquireWakeLock()
+            startForegroundWithNotification()
+        } else if (action == "pause") {
+            isPlaying = false
+            releaseWakeLock()
+        } else if (action == "repeat") {
+            isRepeat = !isRepeat
+        } else if (action == "shuffle") {
+            isShuffle = !isShuffle
+        }
 
         updateNotification()
 
@@ -323,6 +363,7 @@ class MediaNotificationService : Service() {
     }
 
     override fun onDestroy() {
+        releaseWakeLock()
         mediaSession?.release()
         super.onDestroy()
     }

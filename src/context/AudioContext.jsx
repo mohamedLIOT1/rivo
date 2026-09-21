@@ -845,7 +845,39 @@ export function AudioProvider({ children, tracks, setTracks }) {
         });
       } catch {}
     }
-  }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
+
+    // ── Native Media Controls Bridge (Android Lockscreen & Background Notification) ──
+    if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'PLAYBACK_STATE',
+          isPlaying: isPlaying,
+          track: currentTrack ? {
+            title: currentTrack.title || 'Unknown Track',
+            artist: currentTrack.artist || 'Unknown Artist',
+            coverUrl: currentTrack.cover || currentTrack.coverUrl || '',
+          } : null
+        }));
+      } catch (e) {}
+    }
+  }, [currentTrack, isPlaying, getActiveYtPlayer, isCurrentYtReady]);
+
+  // Sync playback state with Native Android MediaNotificationService
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      try {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'PLAYBACK_STATE',
+          isPlaying: isPlaying,
+          track: currentTrack ? {
+            title: currentTrack.title || 'Unknown Track',
+            artist: currentTrack.artist || 'Unknown Artist',
+            coverUrl: currentTrack.cover || currentTrack.coverUrl || '',
+          } : null
+        }));
+      } catch (e) {}
+    }
+  }, [isPlaying, currentTrack]);
 
   // Sync play/pause state changes for YouTube (as safety backup)
   useEffect(() => {
@@ -928,6 +960,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     }
   }, [getActiveYtPlayer, isCurrentYtReady]);
+
+  // Handle media actions dispatched from Native Android notification / lockscreen
+  useEffect(() => {
+    window.__RIVO_MEDIA_ACTION = (action) => {
+      if (action === 'play') {
+        if (!isPlayingRef.current) togglePlay();
+      } else if (action === 'pause') {
+        if (isPlayingRef.current) togglePlay();
+      } else if (action === 'play_pause' || action === 'toggle') {
+        togglePlay();
+      } else if (action === 'next') {
+        if (playNextTrackRef.current) playNextTrackRef.current();
+      } else if (action === 'prev') {
+        if (playPrevTrackRef.current) playPrevTrackRef.current();
+      }
+    };
+    return () => {
+      delete window.__RIVO_MEDIA_ACTION;
+    };
+  }, [togglePlay]);
 
   const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null) => {
     if (!track) return;
