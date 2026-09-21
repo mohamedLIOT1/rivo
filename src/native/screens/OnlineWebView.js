@@ -213,7 +213,8 @@ export default function OnlineWebView() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
   const prevOnlineRef = useRef(isOnline);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -235,7 +236,8 @@ export default function OnlineWebView() {
   useEffect(() => {
     if (!prevOnlineRef.current && isOnline) {
       setHasError(false);
-      setLoading(true);
+      hasLoadedOnceRef.current = false;
+      setInitialLoading(true);
       webViewRef.current?.reload();
     } else if (!isOnline) {
       webViewRef.current?.injectJavaScript(`
@@ -356,7 +358,8 @@ export default function OnlineWebView() {
             style={styles.retryBtn}
             onPress={() => {
               setHasError(false);
-              setLoading(true);
+              hasLoadedOnceRef.current = false;
+              setInitialLoading(true);
               webViewRef.current?.reload();
             }}
             activeOpacity={0.8}
@@ -382,15 +385,22 @@ export default function OnlineWebView() {
         onNavigationStateChange={(navState) => {
           setCanGoBack(Boolean(navState.canGoBack));
         }}
-        onLoadStart={() => setLoading(true)}
-        onLoadEnd={() => setLoading(false)}
+        onLoadStart={() => {
+          if (!hasLoadedOnceRef.current) {
+            setInitialLoading(true);
+          }
+        }}
+        onLoadEnd={() => {
+          hasLoadedOnceRef.current = true;
+          setInitialLoading(false);
+        }}
         onError={() => {
-          setLoading(false);
+          setInitialLoading(false);
           setHasError(true);
         }}
         onHttpError={(syntheticEvent) => {
           const { statusCode } = syntheticEvent.nativeEvent;
-          if (statusCode >= 500) {
+          if (statusCode >= 500 && !hasLoadedOnceRef.current) {
             setHasError(true);
           }
         }}
@@ -417,8 +427,8 @@ export default function OnlineWebView() {
         cacheEnabled={true}
       />
 
-      {/* Loading overlay */}
-      {loading && (
+      {/* Loading overlay - only on initial cold boot or manual retry */}
+      {initialLoading && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color={colors.teal} />
