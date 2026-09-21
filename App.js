@@ -26,6 +26,8 @@ import {
   BarChart2,
   Wifi,
   WifiOff,
+  Shield,
+  User,
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
@@ -82,18 +84,6 @@ function MainAppShell() {
       {/* ─── ONLINE MODE: WebView ─── */}
       <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
         <OnlineWebView />
-        {isOnline && (
-          <View style={styles.onlineModeBtnWrapper} pointerEvents="box-none">
-            <TouchableOpacity
-              style={styles.onlineModeBtn}
-              onPress={toggleMode}
-              activeOpacity={0.85}
-            >
-              <Wifi size={11} color="#0b1110" strokeWidth={2.5} />
-              <Text style={styles.onlineModeBtnText}>ONLINE</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
 
       {/* ─── OFFLINE MODE: Native React Native UI ─── */}
@@ -631,36 +621,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 9,
     color: '#17a398',
-    letterSpacing: 0.5,
-  },
-  onlineModeBtnWrapper: {
-    position: 'absolute',
-    top: 8,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 999,
-    elevation: 6,
-  },
-  onlineModeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#17a398',
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
-    borderRadius: 14,
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  onlineModeBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: '#0b1110',
     letterSpacing: 0.5,
   },
 });

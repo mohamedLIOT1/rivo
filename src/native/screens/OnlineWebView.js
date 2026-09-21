@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -11,7 +11,14 @@ import { WebView } from 'react-native-webview';
 import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useConnectivity } from '../context/ConnectivityContext';
 import { downloadTrack as nativeDownloadTrack } from '../services/downloadManager';
+import {
+  showMediaNotification,
+  updateMediaNotification,
+  hideMediaNotification,
+  subscribeToMediaActions,
+} from '../services/mediaControls';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 
@@ -21,19 +28,211 @@ const RIVO_WEB_URL = API_BASE_URL;
  * JavaScript injected into the WebView before and after page load.
  *
  * 1. Creates global window.RIVO_NATIVE and bridge functions.
- * 2. Injects CSS rules so YouTube audio iframe players (#rivo-yt-player-1, #rivo-yt-player-2)
- *    are positioned on-screen (top: 0, left: 0) instead of off-screen (bottom: -500px),
- *    preventing Android WebView Chromium compositor from throttling/pausing audio playback.
  */
 const INJECTED_JS = `
 (function() {
   window.RIVO_NATIVE = true;
 
-  // Prevent double-injection
+  // 1. Spoof Page Visibility API so WebView never detects when app is backgrounded or screen is locked
+  try {
+    Object.defineProperty(document, 'hidden', {
+      get: function() { return false; },
+      configurable: true
+    });
+    Object.defineProperty(document, 'visibilityState', {
+      get: function() { return 'visible'; },
+      configurable: true
+    });
+    Object.defineProperty(document, 'webkitHidden', {
+      get: function() { return false; },
+      configurable: true
+    });
+    Object.defineProperty(document, 'webkitVisibilityState', {
+      get: function() { return 'visible'; },
+      configurable: true
+    });
+  } catch(e) {}
+
+  // 2. Block visibilitychange and blur events from pausing media players
+  var stopEvent = function(e) {
+    if (e) {
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+    }
+  };
+  window.addEventListener('visibilitychange', stopEvent, true);
+  document.addEventListener('visibilitychange', stopEvent, true);
+  window.addEventListener('webkitvisibilitychange', stopEvent, true);
+  document.addEventListener('webkitvisibilitychange', stopEvent, true);
+  window.addEventListener('blur', function(e) {
+    if (e) e.stopImmediatePropagation();
+  }, true);
+
+  // Prevent double-initialization
   if (window.__RIVO_NATIVE_INJECTED) return true;
   window.__RIVO_NATIVE_INJECTED = true;
 
-  // Bridge: send download request to native layer
+  window.__RIVO_IS_PLAYING = false;
+  window.__RIVO_USER_PAUSED = false;
+
+  // 3. Intercept navigator.mediaSession handlers
+  window.__RIVO_MEDIA_HANDLERS = window.__RIVO_MEDIA_HANDLERS || {};
+  if (navigator && navigator.mediaSession) {
+    var origSetActionHandler = navigator.mediaSession.setActionHandler ? navigator.mediaSession.setActionHandler.bind(navigator.mediaSession) : null;
+    navigator.mediaSession.setActionHandler = function(action, handler) {
+      window.__RIVO_MEDIA_HANDLERS[action] = handler;
+      if (origSetActionHandler) {
+        try { origSetActionHandler(action, handler); } catch(e) {}
+      }
+    };
+  }
+
+  // 4. Auto-resume guard: If YouTube iframe reports pause while playing and not paused by user
+  window.addEventListener('message', function(e) {
+    try {
+      var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      if (data && data.event === 'onStateChange') {
+        if (data.info === 1) {
+          window.__RIVO_IS_PLAYING = true;
+          window.__RIVO_USER_PAUSED = false;
+        } else if (data.info === 2) {
+          if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+            setTimeout(function() {
+              if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+                var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+                iframes.forEach(function(f) {
+                  try {
+                    f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+                  } catch(err) {}
+                });
+              }
+            }, 250);
+          }
+        }
+      }
+    } catch(err) {}
+  });
+
+  // Track HTML audio elements
+  document.addEventListener('pause', function(e) {
+    if (e.target && e.target.tagName === 'AUDIO') {
+      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+        setTimeout(function() {
+          if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+            try { e.target.play(); } catch(err) {}
+          }
+        }, 250);
+      }
+    }
+  }, true);
+
+  document.addEventListener('playing', function(e) {
+    window.__RIVO_IS_PLAYING = true;
+    window.__RIVO_USER_PAUSED = false;
+  }, true);
+
+  // 5. Global Action Handler for Android Notification & Lockscreen Controls
+  window.__RIVO_MEDIA_ACTION = function(action) {
+    try {
+      var handlers = window.__RIVO_MEDIA_HANDLERS || {};
+
+      if (action === 'play') {
+        window.__RIVO_USER_PAUSED = false;
+        window.__RIVO_IS_PLAYING = true;
+
+        if (typeof handlers['play'] === 'function') {
+          try { handlers['play'](); } catch(e) {}
+        }
+        var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+        iframes.forEach(function(f) {
+          try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
+        });
+        document.querySelectorAll('audio').forEach(function(a) {
+          try { a.play(); } catch(e) {}
+        });
+        var b = document.querySelector('button[title="Play"]');
+        if (b) b.click();
+
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PLAYBACK_STATE',
+            isPlaying: true
+          }));
+        }
+      } else if (action === 'pause') {
+        window.__RIVO_USER_PAUSED = true;
+        window.__RIVO_IS_PLAYING = false;
+
+        if (typeof handlers['pause'] === 'function') {
+          try { handlers['pause'](); } catch(e) {}
+        }
+        var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+        iframes.forEach(function(f) {
+          try { f.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); } catch(e) {}
+        });
+        document.querySelectorAll('audio').forEach(function(a) {
+          try { a.pause(); } catch(e) {}
+        });
+        var b = document.querySelector('button[title="Pause"]');
+        if (b) b.click();
+
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PLAYBACK_STATE',
+            isPlaying: false
+          }));
+        }
+      } else if (action === 'play_pause') {
+        if (window.__RIVO_IS_PLAYING) {
+          window.__RIVO_MEDIA_ACTION('pause');
+        } else {
+          window.__RIVO_MEDIA_ACTION('play');
+        }
+      } else if (action === 'next') {
+        if (typeof handlers['nexttrack'] === 'function') {
+          try { handlers['nexttrack'](); return; } catch(e) {}
+        }
+        var b = document.querySelector('button[title="Next Track"]');
+        if (b) b.click();
+      } else if (action === 'prev') {
+        if (typeof handlers['previoustrack'] === 'function') {
+          try { handlers['previoustrack'](); return; } catch(e) {}
+        }
+        var b = document.querySelector('button[title="Previous Track"]');
+        if (b) b.click();
+      }
+    } catch(err) {
+      console.warn('[Rivo Bridge] Error in media action:', err);
+    }
+  };
+
+  // 6. Monitor navigator.mediaSession.metadata to sync native notification
+  var lastMetaTitle = '';
+  setInterval(function() {
+    try {
+      if (navigator.mediaSession && navigator.mediaSession.metadata) {
+        var m = navigator.mediaSession.metadata;
+        if (m.title && m.title !== lastMetaTitle) {
+          lastMetaTitle = m.title;
+          window.__RIVO_IS_PLAYING = true;
+          window.__RIVO_USER_PAUSED = false;
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'PLAYBACK_STATE',
+              isPlaying: true,
+              track: {
+                title: m.title || 'Unknown Track',
+                artist: m.artist || 'Unknown Artist',
+                coverUrl: m.artwork && m.artwork[0] ? m.artwork[0].src : ''
+              }
+            }));
+          }
+        }
+      }
+    } catch(e) {}
+  }, 1000);
+
+  // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -54,6 +253,15 @@ const INJECTED_JS = `
     }
   };
 
+  // Bridge: toggle online/offline mode from web UI
+  window.RIVO_TOGGLE_MODE = function() {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'TOGGLE_MODE',
+      }));
+    }
+  };
+
   true;
 })();
 `;
@@ -62,16 +270,73 @@ export default function OnlineWebView() {
   const webViewRef = useRef(null);
   const { showToast } = useToast();
   const { refreshDownloadedTracks } = useAudioPlayer();
+  const { toggleMode } = useConnectivity();
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
 
-  // â”€â”€â”€ Handle messages from WebView (postMessage bridge) â”€â”€â”€â”€â”€â”€
+  // ─── Subscribe to Native Android Media Controls (Notification & Lockscreen) ───
+  useEffect(() => {
+    const unsubscribe = subscribeToMediaActions((action) => {
+      webViewRef.current?.injectJavaScript(`
+        (function() {
+          try {
+            if (typeof window.__RIVO_MEDIA_ACTION === 'function') {
+              window.__RIVO_MEDIA_ACTION('${action}');
+            } else if (window.__RIVO_MEDIA_HANDLERS) {
+              if ('${action}' === 'play' && typeof window.__RIVO_MEDIA_HANDLERS['play'] === 'function') {
+                window.__RIVO_MEDIA_HANDLERS['play']();
+              } else if ('${action}' === 'pause' && typeof window.__RIVO_MEDIA_HANDLERS['pause'] === 'function') {
+                window.__RIVO_MEDIA_HANDLERS['pause']();
+              } else if ('${action}' === 'next' && typeof window.__RIVO_MEDIA_HANDLERS['nexttrack'] === 'function') {
+                window.__RIVO_MEDIA_HANDLERS['nexttrack']();
+              } else if ('${action}' === 'prev' && typeof window.__RIVO_MEDIA_HANDLERS['previoustrack'] === 'function') {
+                window.__RIVO_MEDIA_HANDLERS['previoustrack']();
+              }
+            }
+          } catch(e) {}
+        })();
+        true;
+      `);
+    });
+    return () => {
+      unsubscribe();
+      hideMediaNotification();
+    };
+  }, []);
+
+  // ─── Handle messages from WebView (postMessage bridge) ────────────
   const handleMessage = useCallback(async (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
 
       switch (data.type) {
+        case 'TOGGLE_MODE': {
+          webViewRef.current?.injectJavaScript(`
+            if (typeof window.__RIVO_MEDIA_ACTION === 'function') {
+              window.__RIVO_MEDIA_ACTION('pause');
+            }
+            true;
+          `);
+          hideMediaNotification();
+          toggleMode();
+          break;
+        }
+
+        case 'PLAYBACK_STATE': {
+          const { track, isPlaying } = data;
+          if (track && isPlaying) {
+            showMediaNotification(track, true);
+          } else if (track && !isPlaying) {
+            updateMediaNotification(false, false, false, track);
+          } else if (isPlaying) {
+            updateMediaNotification(true, false, false);
+          } else {
+            updateMediaNotification(false, false, false);
+          }
+          break;
+        }
+
         case 'DOWNLOAD_TRACK': {
           const track = data.track;
           if (!track || (!track.id && !track._id)) {
@@ -110,7 +375,7 @@ export default function OnlineWebView() {
     } catch (e) {
       // Non-JSON messages are ignored
     }
-  }, [showToast]);
+  }, [showToast, toggleMode, refreshDownloadedTracks]);
 
   // â”€â”€â”€ Error / offline fallback UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (hasError) {
@@ -175,7 +440,7 @@ export default function OnlineWebView() {
         allowFileAccess={true}
         allowUniversalAccessFromFileURLs={true}
         mixedContentMode="always"
-        userAgent="Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         androidHardwareAccelerationDisabled={false}
         androidLayerType="hardware"
         thirdPartyCookiesEnabled={true}
