@@ -12,6 +12,8 @@ export const showMediaNotification = (track, isPlaying = true, isRepeat = false,
       isPlaying: Boolean(isPlaying),
       isRepeat: Boolean(isRepeat),
       isShuffle: Boolean(isShuffle),
+      duration: Number(track?.duration || 240),
+      currentTime: Number(track?.currentTime || 0),
     });
   } catch (e) {
     // Graceful fallback
@@ -30,6 +32,8 @@ export const updateMediaNotification = (isPlaying, isRepeat = false, isShuffle =
       payload.title = track.title || 'Unknown Track';
       payload.artist = track.artist || 'Unknown Artist';
       payload.coverUrl = track.coverUrl || track.cover || '';
+      if (track.duration) payload.duration = Number(track.duration);
+      if (track.currentTime) payload.currentTime = Number(track.currentTime);
     }
     RivoMediaControls.updatePlayback(payload);
   } catch (e) {}
