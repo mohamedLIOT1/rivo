@@ -112,16 +112,12 @@ export default function OfflineScreen() {
         <View style={styles.heroShadow} />
         <View style={styles.heroCard}>
           <View style={styles.topRow}>
-            <View style={styles.storagePill}>
-              <HardDrive size={13} color={colors.ink} />
-              <Text style={styles.storagePillText}>DEVICE FLASH STORAGE</Text>
-            </View>
             <CassetteTag label="NO WI-FI REQUIRED" bg={colors.ink} textColor={colors.mint} />
           </View>
 
           <Text style={styles.heroTitle}>OFFLINE TAPES</Text>
           <Text style={styles.heroSub}>
-            Physical audio files cached directly to local NAND storage for zero-latency, airplane mode listening.
+            Audio tracks saved on your device for zero-latency, offline listening.
           </Text>
 
           <View style={styles.meterBox}>
@@ -260,23 +256,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  storagePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.paper,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 5,
-  },
-  storagePillText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: colors.ink,
-  },
+
   heroTitle: {
     fontFamily: 'monospace',
     fontWeight: '900',
