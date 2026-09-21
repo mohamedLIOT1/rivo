@@ -63,19 +63,16 @@ import SettingsModal from './src/native/components/SettingsModal';
 import JamRoomModal from './src/native/components/JamRoomModal';
 
 const TABS = [
-  { id: 'home', label: 'Home', icon: Home },
-  { id: 'search', label: 'Search', icon: Search },
-  { id: 'library', label: 'Library', icon: Disc },
+  { id: 'offline', label: 'Vault', icon: Download },
   { id: 'quran', label: 'Quran', icon: BookOpen },
-  { id: 'offline', label: 'Offline', icon: Download },
+  { id: 'library', label: 'Library', icon: Disc },
+  { id: 'search', label: 'Search', icon: Search },
+  { id: 'home', label: 'Home', icon: Home },
 ];
 
 function MainAppShell() {
-  const { appMode } = useConnectivity();
+  const { appMode, toggleMode } = useConnectivity();
   const isOnline = appMode === 'online';
-
-  // On iOS, default to native shell for 100% native background audio, lockscreen controls, and stability
-  const showNativeShell = Platform.OS === 'ios' || !isOnline;
 
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
@@ -87,21 +84,29 @@ function MainAppShell() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: WebView (Used on Android) ─── */}
-      {!showNativeShell && (
-        <View style={styles.modeContainer}>
-          <OnlineWebView />
-        </View>
-      )}
+      {/* ─── ONLINE MODE: WebView (default when online) ─── */}
+      <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
+        <OnlineWebView />
+        {isOnline && (
+          <View style={styles.onlineModeBtnWrapper} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.onlineModeBtn}
+              onPress={toggleMode}
+              activeOpacity={0.85}
+            >
+              <Wifi size={11} color="#0b1110" strokeWidth={2.5} />
+              <Text style={styles.onlineModeBtnText}>ONLINE</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
 
-      {/* ─── NATIVE APP SHELL: 100% Native (Used on iOS and Offline Android) ─── */}
-      {showNativeShell && (
-        <View style={styles.modeContainer}>
-          <ErrorBoundary>
-            <OfflineNativeShell />
-          </ErrorBoundary>
-        </View>
-      )}
+      {/* ─── OFFLINE MODE: Native Shell (Offline Vault, Quran, Library) ─── */}
+      <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
+        <ErrorBoundary>
+          <OfflineNativeShell />
+        </ErrorBoundary>
+      </View>
     </SafeAreaView>
   );
 }
@@ -109,13 +114,11 @@ function MainAppShell() {
 /**
  * OfflineNativeShell
  *
- * The original native React Native app shell (header, screens, tabs,
- * mini-player, modals). Extracted so it can coexist with the WebView.
+ * The native React Native app shell for Offline Vault, Quran, and local playback.
  */
 function OfflineNativeShell() {
-  const { appMode } = useConnectivity();
-  const isOffline = appMode === 'offline';
-  const [activeTab, setActiveTab] = useState(isOffline ? 'offline' : 'home');
+  const { appMode, toggleMode } = useConnectivity();
+  const [activeTab, setActiveTab] = useState('offline');
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
@@ -185,6 +188,16 @@ function OfflineNativeShell() {
             </View>
           </View>
           <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
+        </TouchableOpacity>
+
+        {/* Offline Mode Switch in Header */}
+        <TouchableOpacity
+          style={styles.headerModePill}
+          onPress={toggleMode}
+          activeOpacity={0.8}
+        >
+          <WifiOff size={11} color="#17a398" strokeWidth={2.5} />
+          <Text style={styles.headerModePillText}>OFFLINE</Text>
         </TouchableOpacity>
 
         {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
@@ -655,5 +668,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#fdfbf7',
+  },
+  headerModePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#17a398',
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+  },
+  headerModePillText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#17a398',
+    letterSpacing: 0.5,
+  },
+  onlineModeBtnWrapper: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 999,
+    elevation: 6,
+  },
+  onlineModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#17a398',
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+    borderRadius: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  onlineModeBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#0b1110',
+    letterSpacing: 0.5,
   },
 });

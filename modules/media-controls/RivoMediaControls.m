@@ -42,7 +42,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     @try {
         AVAudioSession *session = [AVAudioSession sharedInstance];
         [session setCategory:AVAudioSessionCategoryPlayback
-                 withOptions:(AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionAllowBluetooth | AVAudioSessionCategoryOptionAllowBluetoothA2DP)
+                 withOptions:(AVAudioSessionCategoryOptionAllowBluetooth | AVAudioSessionCategoryOptionAllowBluetoothA2DP)
                        error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
@@ -64,6 +64,13 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     _remoteCommandsConfigured = YES;
 
     MPRemoteCommandCenter *center = [MPRemoteCommandCenter sharedCommandCenter];
+
+    [center.playCommand removeTarget:nil];
+    [center.pauseCommand removeTarget:nil];
+    [center.togglePlayPauseCommand removeTarget:nil];
+    [center.nextTrackCommand removeTarget:nil];
+    [center.previousTrackCommand removeTarget:nil];
+    [center.changePlaybackPositionCommand removeTarget:nil];
 
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
@@ -94,6 +101,15 @@ RCT_EXPORT_MODULE(RivoMediaControls);
         [self sendActionSafely:@"prev"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
+
+    [center.changePlaybackPositionCommand setEnabled:YES];
+    [center.changePlaybackPositionCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        MPChangePlaybackPositionCommandEvent *posEvent = (MPChangePlaybackPositionCommandEvent *)event;
+        if (posEvent) {
+            [self sendActionSafely:[NSString stringWithFormat:@"seek:%f", posEvent.positionTime]];
+        }
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
 }
 
 RCT_EXPORT_METHOD(showNotification:(NSDictionary *)options) {
@@ -104,6 +120,7 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             [self configureAudioSession];
+            [self setupRemoteCommands];
 
             BOOL isPlaying = [options[@"isPlaying"] boolValue];
 
@@ -124,6 +141,7 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             }
 
             nowPlaying[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? @(1.0) : @(0.0);
+            nowPlaying[MPNowPlayingInfoPropertyDefaultPlaybackRate] = @(1.0);
 
             double duration = [options[@"duration"] doubleValue];
             if (duration > 0) {
@@ -133,9 +151,7 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             }
 
             double currentTime = [options[@"currentTime"] doubleValue];
-            if (currentTime > 0) {
-                nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime);
-            }
+            nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime >= 0 ? currentTime : 0.0);
 
             NSString *coverUrl = options[@"coverUrl"];
             if (coverUrl && [coverUrl length] > 0) {
@@ -146,10 +162,16 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                         @try {
                             NSData *imageData = nil;
-                            if ([coverUrl hasPrefix:@"file://"] || [coverUrl hasPrefix:@"/"]) {
-                                NSString *filePath = [coverUrl stringByReplacingOccurrencesOfString:@"file://" withString:@""];
-                                imageData = [NSData dataWithContentsOfFile:filePath];
-                            } else if ([coverUrl hasPrefix:@"http"]) {
+                            if ([coverUrl hasPrefix:@"file://"]) {
+                                NSURL *url = [NSURL URLWithString:coverUrl];
+                                if (url) {
+                                    imageData = [NSData dataWithContentsOfURL:url];
+                                }
+                            }
+                            if (!imageData && [coverUrl hasPrefix:@"/"]) {
+                                imageData = [NSData dataWithContentsOfFile:coverUrl];
+                            }
+                            if (!imageData && [coverUrl hasPrefix:@"http"]) {
                                 NSString *encoded = [coverUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
                                 NSURL *url = [NSURL URLWithString:encoded ?: coverUrl];
                                 if (url) {

@@ -127,7 +127,7 @@ export const AudioProvider = ({ children }) => {
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
           interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-          interruptionModeIOS: InterruptionModeIOS.DuckOthers,
+          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         });
       } catch {}
     };
@@ -186,6 +186,11 @@ export const AudioProvider = ({ children }) => {
   useEffect(() => {
     const unsub = subscribeToMediaActions(async (action) => {
       try {
+        if (typeof action === 'string' && action.startsWith('seek:')) {
+          const secs = parseFloat(action.split(':')[1]);
+          if (!isNaN(secs) && seekToRef.current) seekToRef.current(secs);
+          return;
+        }
         switch (action) {
           case 'play':
             if (soundRef.current) {
@@ -398,8 +403,9 @@ export const AudioProvider = ({ children }) => {
       try {
         showMediaNotification({
           ...track,
-          duration: track.duration || (playbackStatusRef.current?.duration || 240),
+          duration: Number(track.duration || (playbackStatusRef.current?.duration || 240)),
           coverUrl: track.coverUrl || track.cover || '',
+          currentTime: 0,
         }, true, repeatMode !== 'off', isShuffle);
       } catch {}
     } catch (err) {
