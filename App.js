@@ -30,6 +30,7 @@ import {
   User,
   Activity,
   Settings as SettingsIcon,
+  Globe,
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
@@ -62,16 +63,19 @@ import SettingsModal from './src/native/components/SettingsModal';
 import JamRoomModal from './src/native/components/JamRoomModal';
 
 const TABS = [
-  { id: 'offline', label: 'Offline', icon: Download },
   { id: 'home', label: 'Home', icon: Home },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'library', label: 'Library', icon: Disc },
   { id: 'quran', label: 'Quran', icon: BookOpen },
+  { id: 'offline', label: 'Offline', icon: Download },
 ];
 
 function MainAppShell() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
+
+  // On iOS, default to native shell for 100% native background audio, lockscreen controls, and stability
+  const showNativeShell = Platform.OS === 'ios' || !isOnline;
 
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
@@ -83,17 +87,21 @@ function MainAppShell() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: WebView ─── */}
-      <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
-        <OnlineWebView />
-      </View>
+      {/* ─── ONLINE MODE: WebView (Used on Android) ─── */}
+      {!showNativeShell && (
+        <View style={styles.modeContainer}>
+          <OnlineWebView />
+        </View>
+      )}
 
-      {/* ─── OFFLINE MODE: Native React Native UI ─── */}
-      <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
-        <ErrorBoundary>
-          <OfflineNativeShell />
-        </ErrorBoundary>
-      </View>
+      {/* ─── NATIVE APP SHELL: 100% Native (Used on iOS and Offline Android) ─── */}
+      {showNativeShell && (
+        <View style={styles.modeContainer}>
+          <ErrorBoundary>
+            <OfflineNativeShell />
+          </ErrorBoundary>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -105,7 +113,10 @@ function MainAppShell() {
  * mini-player, modals). Extracted so it can coexist with the WebView.
  */
 function OfflineNativeShell() {
-  const [activeTab, setActiveTab] = useState('offline');
+  const { appMode } = useConnectivity();
+  const isOffline = appMode === 'offline';
+  const [activeTab, setActiveTab] = useState(isOffline ? 'offline' : 'home');
+  const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
@@ -333,6 +344,17 @@ function OfflineNativeShell() {
               style={styles.menuItem}
               onPress={() => {
                 setIsMenuOpen(false);
+                setIsWebPortalOpen(true);
+              }}
+            >
+              <Globe size={18} color="#17a398" />
+              <Text style={styles.menuItemText}>Rivo Web Portal</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setIsMenuOpen(false);
                 setIsSettingsOpen(true);
               }}
             >
@@ -346,6 +368,22 @@ function OfflineNativeShell() {
       {/* ─────────────────────────────────────────
           MODALS
           ───────────────────────────────────────── */}
+      <Modal
+        visible={isWebPortalOpen}
+        animationType="slide"
+        onRequestClose={() => setIsWebPortalOpen(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#0b1110' }}>
+          <View style={{ height: 44, backgroundColor: '#0b1110', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#1a2624' }}>
+            <Text style={{ color: '#17a398', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>RIVO WEB PORTAL</Text>
+            <TouchableOpacity onPress={() => setIsWebPortalOpen(false)} style={{ padding: 6 }}>
+              <X size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+          <OnlineWebView />
+        </SafeAreaView>
+      </Modal>
+
       <FullPlayerModal
         visible={isFullPlayerOpen}
         onClose={() => setIsFullPlayerOpen(false)}
