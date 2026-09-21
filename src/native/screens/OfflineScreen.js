@@ -19,7 +19,7 @@ import { getDownloadedTracks, removeDownloadedTrack } from '../services/download
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 
 export default function OfflineScreen() {
-  const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlay } = useAudioPlayer();
   const { showToast } = useToast();
   const [offlineTracks, setOfflineTracks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -85,11 +85,17 @@ export default function OfflineScreen() {
 
   const handlePlayOffline = (track) => {
     if (!track) return;
+    const trackId = String(track._id || track.id || '');
+    const currentId = String(currentTrack?._id || currentTrack?.id || '');
+    if (trackId && trackId === currentId) {
+      togglePlay();
+      return;
+    }
     const audioUri = track.localAudioUri || track.nativeAudioUri || track.audioUrl;
     playTrack({
       ...track,
-      id: String(track._id || track.id || ''),
-      _id: String(track._id || track.id || ''),
+      id: trackId,
+      _id: trackId,
       title: track.title || 'Untitled',
       artist: track.artist || 'Unknown Artist',
       audioUrl: audioUri,

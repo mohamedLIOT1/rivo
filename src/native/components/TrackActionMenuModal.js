@@ -7,10 +7,10 @@ import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 
 export default function TrackActionMenuModal({ visible, track, onClose, onOpenAddToPlaylist }) {
-  if (!track) return null;
-
   const { playTrack, addToQueue, handleDownloadTrack, downloadedTracks = [], downloadingIds = {} } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
+
+  if (!visible || !track) return null;
 
   const trackId = String(track._id || track.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;

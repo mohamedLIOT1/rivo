@@ -10,6 +10,7 @@ import {
 import { Play, Plus } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useConnectivity } from '../context/ConnectivityContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import { isQuranContent } from '../../utils/quranUtils';
@@ -20,20 +21,21 @@ export default function HomeScreen({
 }) {
   const { playTrack, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, fetchPublicTracks } = useUser();
+  const { appMode } = useConnectivity();
+  const isOffline = appMode === 'offline';
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
 
   // Filter music only (strictly exclude Quran from main music home)
   const displayTracks = useMemo(() => {
-    let list = (userTracks || []).filter((t) => !isQuranContent(t));
-    if (activeFilter === 'downloaded') {
-      const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
-      const downIds = new Set(safeDownloaded.map(t => String(t?._id || t?.id)));
-      return list.filter(t => downIds.has(String(t?._id || t?.id)) || t?.isDownloaded || t?.localAudioUri);
+    if (isOffline || activeFilter === 'downloaded') {
+      const safeDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).filter((t) => !isQuranContent(t));
+      return safeDownloaded;
     }
+    let list = (userTracks || []).filter((t) => !isQuranContent(t));
     return list;
-  }, [userTracks, activeFilter, downloadedTracks]);
+  }, [userTracks, activeFilter, downloadedTracks, isOffline]);
 
   const visibleTracks = useMemo(() => {
     return displayTracks.slice(0, visibleCount);

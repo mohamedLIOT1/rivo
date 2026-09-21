@@ -48,7 +48,7 @@ export const UserProvider = ({ children }) => {
 
   const fetchPublicTracks = async () => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 7000);
+    const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await fetch(`${API_BASE_URL}/api/tracks`, { signal: controller.signal });
       clearTimeout(timer);
