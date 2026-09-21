@@ -8,6 +8,4 @@ dist/
 .idea/
 .artifacts/
 *.apk
-!Rivo-Hybrid-v1.0.0.apk
-!Rivo-WebView.apk
 
