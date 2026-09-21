@@ -66,12 +66,12 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
             </View>
 
             <Text style={styles.desc}>
-              Paste a YouTube, SoundCloud, or direct MP3 stream URL to register it into the dispensary catalog:
+              Paste a YouTube or direct MP3 stream URL to register it into the dispensary catalog:
             </Text>
 
             <TextInput
               style={styles.input}
-              placeholder="https://youtu.be/... or https://soundcloud.com/..."
+              placeholder="https://youtu.be/... or https://example.com/audio.mp3"
               placeholderTextColor="#9ca3af"
               value={url}
               onChangeText={setUrl}

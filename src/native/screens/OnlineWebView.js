@@ -201,15 +201,6 @@ const INJECTED_JS = `
     }
   };
 
-  // Bridge: toggle online/offline mode from web UI
-  window.RIVO_TOGGLE_MODE = function() {
-    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'TOGGLE_MODE',
-      }));
-    }
-  };
-
   true;
 })();
 `;
@@ -218,10 +209,30 @@ export default function OnlineWebView() {
   const webViewRef = useRef(null);
   const { showToast } = useToast();
   const { refreshDownloadedTracks } = useAudioPlayer();
-  const { toggleMode } = useConnectivity();
+  const { appMode } = useConnectivity();
+  const isOnline = appMode === 'online';
+  const prevOnlineRef = useRef(isOnline);
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
+
+  // ─── Automatic network transition handler ───
+  useEffect(() => {
+    if (!prevOnlineRef.current && isOnline) {
+      setHasError(false);
+      setLoading(true);
+      webViewRef.current?.reload();
+    } else if (!isOnline) {
+      webViewRef.current?.injectJavaScript(`
+        if (typeof window.__RIVO_MEDIA_ACTION === 'function') {
+          window.__RIVO_MEDIA_ACTION('pause');
+        }
+        true;
+      `);
+      hideMediaNotification();
+    }
+    prevOnlineRef.current = isOnline;
+  }, [isOnline]);
 
   // ─── Subscribe to Native Android Media Controls (Notification & Lockscreen) ───
   useEffect(() => {
@@ -259,18 +270,6 @@ export default function OnlineWebView() {
       const data = JSON.parse(event.nativeEvent.data);
 
       switch (data.type) {
-        case 'TOGGLE_MODE': {
-          webViewRef.current?.injectJavaScript(`
-            if (typeof window.__RIVO_MEDIA_ACTION === 'function') {
-              window.__RIVO_MEDIA_ACTION('pause');
-            }
-            true;
-          `);
-          hideMediaNotification();
-          toggleMode();
-          break;
-        }
-
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
           if (track && isPlaying) {
@@ -323,7 +322,7 @@ export default function OnlineWebView() {
     } catch (e) {
       // Non-JSON messages are ignored
     }
-  }, [showToast, toggleMode, refreshDownloadedTracks]);
+  }, [showToast, refreshDownloadedTracks]);
 
   // â”€â”€â”€ Error / offline fallback UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (hasError) {

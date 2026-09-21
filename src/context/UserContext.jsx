@@ -70,13 +70,20 @@ export const api = {
 // ── Context ──────────────────────────────────────────
 const UserContext = createContext(null);
 
+const isSoundCloudTrack = (t) => {
+  if (!t) return false;
+  if (t.source === 'SoundCloud' || t.album === 'SoundCloud') return true;
+  if (typeof t.audioUrl === 'string' && (t.audioUrl.includes('soundcloud.com') || t.audioUrl.includes('sndcdn.com'))) return true;
+  if (typeof t.id === 'string' && t.id.startsWith('sc-')) return true;
+  if (typeof t._id === 'string' && t._id.startsWith('sc-')) return true;
+  return false;
+};
+
 export function UserProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const u = JSON.parse(localStorage.getItem('rivo_user') || localStorage.getItem('liofy_user') || 'null');
-      if (u && isUserAdmin(u)) {
-        return { ...u, isAdmin: true, role: 'admin' };
-      }
+      if (u && isUserAdmin(u)) return { ...u, isAdmin: true, role: 'admin' };
       return u;
     } catch { return null; }
   });
@@ -84,7 +91,18 @@ export function UserProvider({ children }) {
   const [tracks, setTracks] = useState(() => {
     try {
       const s = localStorage.getItem('rivo_tracks') || localStorage.getItem('liofy_tracks');
-      return s ? JSON.parse(s) : [];
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(t => !isSoundCloudTrack(t));
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('rivo_tracks', JSON.stringify(cleaned));
+            localStorage.setItem('liofy_tracks', JSON.stringify(cleaned));
+          }
+          return cleaned;
+        }
+      }
+      return [];
     } catch { return []; }
   });
 
@@ -177,7 +195,7 @@ export function UserProvider({ children }) {
         map.set(key, t);
       }
     });
-    return Array.from(map.values());
+    return Array.from(map.values()).filter(t => !isSoundCloudTrack(t));
   };
 
   // Strip non-serializable blobs from track before storing in React state / localStorage

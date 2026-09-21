@@ -1,7 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { API_BASE_URL } from '../config';
 
-const SOUNDCLOUD_CLIENT_ID = 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
 const streamCache = new Map();
 
 /**
@@ -38,83 +37,11 @@ export function getCleanQueries(title = '', artist = '') {
 }
 
 /**
- * Ranks candidate SoundCloud tracks to ensure ONLY authentic original songs are played.
- * Strongly rejects remixes, sped up, slowed, covers, instrumentals, and random mashups.
- */
-export function rankSoundCloudTrack(item, expectedTitle = '', expectedArtist = '', expectedDurationSec = 0) {
-  let score = 100;
-  const itemTitle = (item.title || '').toLowerCase();
-  const userName = (item.user?.username || '').toLowerCase();
-  const itemDurSec = (item.duration || 0) / 1000;
-  const cleanTitle = (expectedTitle || '').toLowerCase().trim();
-  const cleanArtist = (expectedArtist || '').toLowerCase().trim();
-
-  // 1. Duration check
-  if (expectedDurationSec > 30) {
-    const diff = Math.abs(itemDurSec - expectedDurationSec);
-    if (diff > 45) score -= 80;
-    else if (diff <= 15) score += 30;
-  } else {
-    if (itemDurSec < 60 || itemDurSec > 600) score -= 80;
-    else if (itemDurSec >= 120 && itemDurSec <= 360) score += 20;
-  }
-
-  // 2. Artist match boost
-  if (cleanArtist) {
-    if (userName.includes(cleanArtist) || itemTitle.includes(cleanArtist)) {
-      score += 40;
-    }
-  }
-
-  // 3. Title keywords match
-  const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
-  let matchedWords = 0;
-  for (const w of words) {
-    if (itemTitle.includes(w)) matchedWords++;
-  }
-  if (words.length > 0) {
-    score += Math.round((matchedWords / words.length) * 40);
-  }
-
-  // 4. Heavily penalize unwanted variants unless explicitly part of the title
-  const unwanted = [
-    { key: 'remix', ar: 'ريمكس' },
-    { key: 'cover', ar: 'كاور' },
-    { key: 'piano', ar: 'بيانو' },
-    { key: 'instrumental', ar: 'عزف' },
-    { key: 'slowed', ar: 'مبطأ' },
-    { key: 'sped', ar: 'مسرع' },
-    { key: 'mashup', ar: 'ميكس' },
-    { key: 'karaoke', ar: 'كاريوكي' },
-    { key: 'nightcore', ar: 'نايتكور' },
-    { key: '8d', ar: '8d' },
-    { key: 'bass boosted', ar: 'بيس' },
-    { key: 'leak', ar: 'مسرب' },
-  ];
-
-  for (const u of unwanted) {
-    const requested = cleanTitle.includes(u.key) || cleanTitle.includes(u.ar);
-    if (!requested) {
-      if (itemTitle.includes(u.key) || itemTitle.includes(u.ar)) {
-        score -= 90;
-      }
-    }
-  }
-
-  // 5. Official audio indicators
-  if (item.user?.verified || itemTitle.includes('official') || itemTitle.includes('الأصلية') || itemTitle.includes('النسخة الأصلية')) {
-    score += 30;
-  }
-
-  return score;
-}
-
-/**
  * Resolves a playable direct audio URL for a given track.
  * 1. Checks local offline storage.
  * 2. Checks direct stream URLs.
- * 3. Resolves authentic official YouTube stream via backend proxy / yt-dlp.
- * 4. Falls back to strictly ranked SoundCloud streams.
+ * 3. Resolves authentic official YouTube stream via backend proxy.
+ * 4. Resolves via server stream resolver.
  */
 export const resolveAudioStream = async (track) => {
   if (!track) return null;
@@ -149,28 +76,29 @@ export const resolveAudioStream = async (track) => {
   const rawUrl = track.audioUrl || '';
   const rawTitle = (track.title || '').trim();
   const rawArtist = (track.artist || '').trim();
-  const expectedDuration = Number(track.duration || 0);
-  const { cleanTitle, cleanArtist, queries } = getCleanQueries(rawTitle, rawArtist);
+  const { cleanTitle, cleanArtist } = getCleanQueries(rawTitle, rawArtist);
 
   // 2. Direct MP3/M4A/AAC stream URL
   if (
     rawUrl.startsWith('http') &&
     !rawUrl.includes('youtube.com') &&
     !rawUrl.includes('youtu.be') &&
-    (rawUrl.endsWith('.mp3') || rawUrl.endsWith('.m4a') || rawUrl.includes('cf-media.sndcdn.com'))
+    !rawUrl.includes('soundcloud.com') &&
+    !rawUrl.includes('sndcdn.com') &&
+    (rawUrl.endsWith('.mp3') || rawUrl.endsWith('.m4a'))
   ) {
     if (trackId) streamCache.set(trackId, rawUrl);
     return rawUrl;
   }
 
   // 3. Prioritize Official Stream from Backend Proxy (guarantees authentic audio without IP lock / 403)
-  if (rawUrl) {
+  if (rawUrl && !rawUrl.includes('soundcloud.com') && !rawUrl.includes('sndcdn.com')) {
     const backendStreamUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}&id=${encodeURIComponent(trackId)}`;
     if (trackId) streamCache.set(trackId, backendStreamUrl);
     return backendStreamUrl;
   }
 
-  // 4. Fallback server stream resolver if rawUrl is empty but trackId exists
+  // 4. Fallback server stream resolver if rawUrl is empty or needs resolution
   if (trackId) {
     try {
       const controller = new AbortController();
@@ -190,47 +118,6 @@ export const resolveAudioStream = async (track) => {
     } catch (e) {
       // Backend request timed out or failed, continue
     }
-  }
-
-  // 5. Fallback: Client-side SoundCloud resolution with STRICT authenticity ranking
-  for (const q of queries) {
-    try {
-      const searchUrl = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(q)}&client_id=${SOUNDCLOUD_CLIENT_ID}&limit=12`;
-      const searchRes = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-      });
-      if (searchRes.ok) {
-        const searchData = await searchRes.json();
-        const collection = searchData.collection || [];
-        const candidates = collection.filter(
-          item => item.policy !== 'SNIP' && (item.duration || 0) > 45000
-        );
-
-        const ranked = candidates
-          .map(item => ({
-            item,
-            score: rankSoundCloudTrack(item, cleanTitle || rawTitle, cleanArtist || rawArtist, expectedDuration)
-          }))
-          .filter(c => c.score >= 60)
-          .sort((a, b) => b.score - a.score);
-
-        for (const { item } of ranked) {
-          const prog = item.media?.transcodings?.find(
-            t => t.format?.protocol === 'progressive' && !t.snipped
-          );
-          if (prog && prog.url) {
-            const streamRes = await fetch(`${prog.url}?client_id=${SOUNDCLOUD_CLIENT_ID}`);
-            if (streamRes.ok) {
-              const streamData = await streamRes.json();
-              if (streamData?.url) {
-                if (trackId) streamCache.set(trackId, streamData.url);
-                return streamData.url;
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {}
   }
 
   return rawUrl || null;

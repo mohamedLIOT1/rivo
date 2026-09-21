@@ -23,98 +23,50 @@ export function ConnectivityProvider({ children }) {
     type: 'wifi',
   });
 
-  // 'auto' | 'online' | 'offline'
-  const [userPreference, setUserPreference] = useState('auto');
   const [appMode, setAppMode] = useState('online');
   const [ready, setReady] = useState(false);
 
-  // Keep a ref so the NetInfo callback always sees latest preference
-  const prefRef = useRef(userPreference);
-  prefRef.current = userPreference;
-
-  // ─── Load persisted preference ───────────────────────────────
+  // ─── Purge any stale manual user preference ───────────────────
   useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(PREF_KEY);
-        if (saved === 'online' || saved === 'offline') {
-          setUserPreference(saved);
-          prefRef.current = saved;
-        }
-      } catch {}
+    AsyncStorage.removeItem(PREF_KEY).catch(() => {});
+  }, []);
+
+  // ─── Subscribe to NetInfo for strict real-time enforcement ───
+  useEffect(() => {
+    const handleConnectivityChange = (state) => {
+      const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+      const newNetState = {
+        isConnected: !!state.isConnected,
+        isWifi: state.type === 'wifi',
+        type: state.type || 'unknown',
+      };
+      setNetworkState(newNetState);
+      setAppMode(isOnline ? 'online' : 'offline');
       setReady(true);
-    })();
-  }, []);
+    };
 
-  // ─── Derive appMode from network + preference ───────────────
-  const deriveMode = useCallback((netState, pref) => {
-    if (pref === 'online') return 'online';
-    if (pref === 'offline') return 'offline';
-    // Auto: online when connected, offline otherwise
-    return netState.isConnected ? 'online' : 'offline';
-  }, []);
+    const unsubscribe = NetInfo.addEventListener(handleConnectivityChange);
 
-  // ─── Subscribe to NetInfo ────────────────────────────────────
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const newNetState = {
-        isConnected: !!state.isConnected,
-        isWifi: state.type === 'wifi',
-        type: state.type || 'unknown',
-      };
-      setNetworkState(newNetState);
-      setAppMode(deriveMode(newNetState, prefRef.current));
-    });
-
-    // Also do an immediate fetch
-    NetInfo.fetch().then((state) => {
-      const newNetState = {
-        isConnected: !!state.isConnected,
-        isWifi: state.type === 'wifi',
-        type: state.type || 'unknown',
-      };
-      setNetworkState(newNetState);
-      setAppMode(deriveMode(newNetState, prefRef.current));
-    });
+    // Initial fetch
+    NetInfo.fetch().then(handleConnectivityChange);
 
     return () => unsubscribe();
-  }, [deriveMode]);
+  }, []);
 
-  // ─── Re-derive when preference changes ──────────────────────
-  useEffect(() => {
-    if (ready) {
-      setAppMode(deriveMode(networkState, userPreference));
-    }
-  }, [userPreference, ready]);
+  // Manual toggle is disabled to enforce mandatory network-driven mode switching
+  const toggleMode = useCallback(() => {
+    // No-op: automatic mode is strictly enforced
+  }, []);
 
-  // ─── Toggle between online/offline (manual override) ────────
-  const toggleMode = useCallback(async () => {
-    const next = appMode === 'online' ? 'offline' : 'online';
-    setUserPreference(next);
-    prefRef.current = next;
-    setAppMode(next);
-    try {
-      await AsyncStorage.setItem(PREF_KEY, next);
-    } catch {}
-  }, [appMode]);
-
-  // ─── Reset to auto (follow network) ─────────────────────────
-  const resetToAuto = useCallback(async () => {
-    setUserPreference('auto');
-    prefRef.current = 'auto';
-    setAppMode(deriveMode(networkState, 'auto'));
-    try {
-      await AsyncStorage.setItem(PREF_KEY, 'auto');
-    } catch {}
-  }, [networkState, deriveMode]);
-
-  const isAutoMode = userPreference === 'auto';
+  const resetToAuto = useCallback(() => {
+    // No-op: always in automatic mode
+  }, []);
 
   const value = {
     networkState,
     appMode,
-    isAutoMode,
-    userPreference,
+    isAutoMode: true,
+    userPreference: 'auto',
     toggleMode,
     resetToAuto,
     ready,

@@ -228,7 +228,7 @@ export default function EditSongModal({
               type="text"
               value={audioUrl}
               onChange={(e) => setAudioUrl(e.target.value)}
-              placeholder="Leave blank for auto dynamic SoundCloud/YouTube resolution"
+              placeholder="Leave blank for auto dynamic YouTube resolution"
               className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none ${
                 isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
               }`}

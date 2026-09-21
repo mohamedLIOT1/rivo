@@ -1029,7 +1029,7 @@ export default function SearchScreen({
                     <p className={`text-xs font-mono mb-4 ${
                       isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                     }`}>
-                      Paste any YouTube or SoundCloud link directly using the Add Song button!
+                      Paste any YouTube or Spotify link directly using the Add Song button!
                     </p>
                     {onOpenAddSongModal && (
                       <button

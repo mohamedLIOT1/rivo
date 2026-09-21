@@ -278,7 +278,7 @@ function AppContent() {
     playTrack(songToAdd);
 
     // Save to server (if not already done in AddSongModal)
-    if (songToAdd.source === 'YouTube' || songToAdd.source === 'SoundCloud') {
+    if (songToAdd.source === 'YouTube') {
       try {
         const token = getStoredToken();
         await fetch(`${API_BASE_URL}/api/tracks/add`, {
@@ -852,24 +852,6 @@ function AppContent() {
           >
             <RivoLogo size={34} showText={true} textClassName="text-white text-lg sm:text-xl" isDark={true} />
           </div>
-
-          {/* Native Mode Switch Pill (Online -> Offline) */}
-          {typeof window !== 'undefined' && (window.RIVO_NATIVE || window.ReactNativeWebView) && (
-            <button
-              onClick={() => {
-                if (window.RIVO_TOGGLE_MODE) {
-                  window.RIVO_TOGGLE_MODE();
-                } else if (window.ReactNativeWebView?.postMessage) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_MODE' }));
-                }
-              }}
-              className="flex items-center gap-1.5 bg-[#141d1b] border border-[#17a398] text-[#17a398] hover:bg-[#17a398] hover:text-[#0b1110] px-2.5 py-1 rounded-full text-[10px] font-mono font-black tracking-wider transition cursor-pointer shrink-0"
-              title="Switch to Offline Mode"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#17a398] animate-pulse" />
-              <span>ONLINE</span>
-            </button>
-          )}
         </div>
 
         {/* Retro Search Box */}
@@ -1509,29 +1491,6 @@ function AppContent() {
                 <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 mb-1 px-1">
                   Quick Actions
                 </div>
-
-                {/* Switch to Offline Mode Button in Native APK */}
-                {typeof window !== 'undefined' && (window.RIVO_NATIVE || window.ReactNativeWebView) && (
-                  <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      if (window.RIVO_TOGGLE_MODE) {
-                        window.RIVO_TOGGLE_MODE();
-                      } else if (window.ReactNativeWebView?.postMessage) {
-                        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TOGGLE_MODE' }));
-                      }
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white mb-1.5"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <WifiOff size={16} className="text-[#17a398]" strokeWidth={2.5} />
-                      <span>Switch to Offline Vault</span>
-                    </div>
-                    <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
-                      OFFLINE
-                    </span>
-                  </button>
-                )}
 
                 <button
                   onClick={() => { setIsAddSongOpen(true); setIsMobileMenuOpen(false); }}

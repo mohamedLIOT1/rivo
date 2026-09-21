@@ -338,7 +338,24 @@ export async function getOfflineTracks() {
       const req = store.getAll();
       req.onsuccess = () => {
         const items = req.result || [];
-        const formatted = items.map(item => {
+        const nonSoundCloud = items.filter(item => 
+          item &&
+          item.source !== 'SoundCloud' &&
+          item.album !== 'SoundCloud' &&
+          !String(item.audioUrl || '').includes('soundcloud.com') &&
+          !String(item.audioUrl || '').includes('sndcdn.com') &&
+          !String(item.id || '').startsWith('sc-')
+        );
+
+        // Clean up any soundcloud items in background
+        if (nonSoundCloud.length !== items.length) {
+          const removed = items.filter(item => !nonSoundCloud.includes(item));
+          removed.forEach(r => {
+            if (r.id) removeTrackOffline(r.id).catch(() => {});
+          });
+        }
+
+        const formatted = nonSoundCloud.map(item => {
           let audioUrl = item.audioUrl;
           let cover = item.coverBase64 || item.cover;
           const idStr = String(item.id);

@@ -18,7 +18,20 @@ const ensureDirs = async () => {
 export const getDownloadedTracks = async () => {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    const cleaned = list.filter(t => 
+      t &&
+      t.source !== 'SoundCloud' &&
+      t.album !== 'SoundCloud' &&
+      !String(t.audioUrl || '').includes('soundcloud.com') &&
+      !String(t.audioUrl || '').includes('sndcdn.com') &&
+      !String(t.id || t._id || '').startsWith('sc-')
+    );
+    if (cleaned.length !== list.length) {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned)).catch(() => {});
+    }
+    return cleaned;
   } catch {
     return [];
   }

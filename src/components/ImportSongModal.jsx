@@ -18,6 +18,12 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported, isQu
     setSuccess(null);
     setLoading(true);
 
+    if (url.includes('soundcloud.com')) {
+      setError('SoundCloud is not supported. Please use a YouTube or Spotify link.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const res = await fetch(`${API_BASE_URL}/api/tracks/import`, {
@@ -58,7 +64,6 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported, isQu
 
   const isSpotify = url.includes('spotify.com');
   const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-  const isSoundCloud = url.includes('soundcloud.com');
   const isApple = url.includes('apple.com');
 
   return (
@@ -75,7 +80,7 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported, isQu
                 {isQuran ? 'Import Surah / Recitation' : 'Import External Track'}
               </h3>
               <p className="text-[11px] text-[#082621]/70 font-sans">
-                {isQuran ? 'Resolve and intake Quran recitation from YouTube, Spotify, or SoundCloud' : 'Resolve and intake Spotify, YouTube, SoundCloud, or Apple Music'}
+                {isQuran ? 'Resolve and intake Quran recitation from YouTube or Spotify' : 'Resolve and intake Spotify, YouTube, or Apple Music'}
               </p>
             </div>
           </div>
@@ -115,11 +120,6 @@ export default function ImportSongModal({ isOpen, onClose, onTrackImported, isQu
               isYouTube ? 'bg-red-100 text-[#dc2626]' : 'bg-[#ede5d3] text-[#082621]/70'
             }`}>
               YouTube
-            </span>
-            <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
-              isSoundCloud ? 'bg-orange-100 text-orange-700' : 'bg-[#ede5d3] text-[#082621]/70'
-            }`}>
-              SoundCloud
             </span>
             <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
               isApple ? 'bg-pink-100 text-pink-700' : 'bg-[#ede5d3] text-[#082621]/70'

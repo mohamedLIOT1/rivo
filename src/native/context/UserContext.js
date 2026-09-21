@@ -31,7 +31,18 @@ export const UserProvider = ({ children }) => {
       if (cachedTracks) {
         const parsed = JSON.parse(cachedTracks);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setTracks(parsed);
+          const cleaned = parsed.filter(t => 
+            t &&
+            t.source !== 'SoundCloud' &&
+            t.album !== 'SoundCloud' &&
+            !String(t.audioUrl || '').includes('soundcloud.com') &&
+            !String(t.audioUrl || '').includes('sndcdn.com') &&
+            !String(t.id || t._id || '').startsWith('sc-')
+          );
+          setTracks(cleaned);
+          if (cleaned.length !== parsed.length) {
+            AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
+          }
         }
       }
       if (cachedPlaylists) setPlaylists(JSON.parse(cachedPlaylists));
@@ -55,9 +66,17 @@ export const UserProvider = ({ children }) => {
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data?.tracks) ? data.tracks : Array.isArray(data) ? data : [];
-        if (list.length > 0) {
-          setTracks(list);
-          AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(list)).catch(() => {});
+        const cleaned = list.filter(t => 
+          t &&
+          t.source !== 'SoundCloud' &&
+          t.album !== 'SoundCloud' &&
+          !String(t.audioUrl || '').includes('soundcloud.com') &&
+          !String(t.audioUrl || '').includes('sndcdn.com') &&
+          !String(t.id || t._id || '').startsWith('sc-')
+        );
+        if (cleaned.length > 0) {
+          setTracks(cleaned);
+          AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
         }
       }
     } catch {}
