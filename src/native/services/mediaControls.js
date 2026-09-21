@@ -1,9 +1,9 @@
-import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
+import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform } from 'react-native';
 
 const { RivoMediaControls } = NativeModules;
 
 export const showMediaNotification = (track, isPlaying = true, isRepeat = false, isShuffle = false) => {
-  if (Platform.OS !== 'android' || !RivoMediaControls) return;
+  if (!RivoMediaControls) return;
   try {
     RivoMediaControls.showNotification({
       title: track?.title || 'Unknown Track',
@@ -19,7 +19,7 @@ export const showMediaNotification = (track, isPlaying = true, isRepeat = false,
 };
 
 export const updateMediaNotification = (isPlaying, isRepeat = false, isShuffle = false, track = null) => {
-  if (Platform.OS !== 'android' || !RivoMediaControls) return;
+  if (!RivoMediaControls) return;
   try {
     const payload = {
       isPlaying: Boolean(isPlaying),
@@ -29,24 +29,33 @@ export const updateMediaNotification = (isPlaying, isRepeat = false, isShuffle =
     if (track) {
       payload.title = track.title || 'Unknown Track';
       payload.artist = track.artist || 'Unknown Artist';
+      payload.coverUrl = track.coverUrl || track.cover || '';
     }
     RivoMediaControls.updatePlayback(payload);
   } catch (e) {}
 };
 
 export const hideMediaNotification = () => {
-  if (Platform.OS !== 'android' || !RivoMediaControls) return;
+  if (!RivoMediaControls) return;
   try {
     RivoMediaControls.hideNotification();
   } catch (e) {}
 };
 
 export const subscribeToMediaActions = (callback) => {
-  if (Platform.OS !== 'android') return () => {};
-  const subscription = DeviceEventEmitter.addListener('onMediaAction', (action) => {
-    if (callback) callback(action);
-  });
-  return () => {
-    subscription.remove();
-  };
+  if (!RivoMediaControls) return () => {};
+  try {
+    const emitter = Platform.OS === 'ios'
+      ? new NativeEventEmitter(RivoMediaControls)
+      : DeviceEventEmitter;
+
+    const subscription = emitter.addListener('onMediaAction', (action) => {
+      if (callback) callback(action);
+    });
+    return () => {
+      subscription.remove();
+    };
+  } catch (e) {
+    return () => {};
+  }
 };
