@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   StatusBar,
   BackHandler,
+  Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
