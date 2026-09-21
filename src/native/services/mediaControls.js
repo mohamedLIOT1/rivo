@@ -2,13 +2,25 @@ import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform } from 
 
 const { RivoMediaControls } = NativeModules;
 
+import { API_BASE_URL } from '../config';
+
+const normalizeCoverUrl = (url) => {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return `${API_BASE_URL}${trimmed}`;
+  }
+  return trimmed;
+};
+
 export const showMediaNotification = (track, isPlaying = true, isRepeat = false, isShuffle = false) => {
   if (!RivoMediaControls) return;
   try {
+    const rawCover = track?.coverUrl || track?.cover || '';
     RivoMediaControls.showNotification({
       title: track?.title || 'Unknown Track',
       artist: track?.artist || 'Unknown Artist',
-      coverUrl: track?.coverUrl || track?.cover || '',
+      coverUrl: normalizeCoverUrl(rawCover),
       isPlaying: Boolean(isPlaying),
       isRepeat: Boolean(isRepeat),
       isShuffle: Boolean(isShuffle),
@@ -31,7 +43,7 @@ export const updateMediaNotification = (isPlaying, isRepeat = false, isShuffle =
     if (track) {
       payload.title = track.title || 'Unknown Track';
       payload.artist = track.artist || 'Unknown Artist';
-      payload.coverUrl = track.coverUrl || track.cover || '';
+      payload.coverUrl = normalizeCoverUrl(track.coverUrl || track.cover || '');
       if (track.duration) payload.duration = Number(track.duration);
       if (track.currentTime) payload.currentTime = Number(track.currentTime);
     }

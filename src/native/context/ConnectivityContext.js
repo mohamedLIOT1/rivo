@@ -9,12 +9,8 @@ const PREF_KEY = '@rivo_connectivity_pref';
 /**
  * ConnectivityProvider
  *
- * Tracks real-time network state via NetInfo and exposes an appMode
- * ('online' | 'offline') that drives the top-level mode router.
- *
- * Modes:
- *  - Auto (default): appMode follows WiFi / connectivity state.
- *  - Manual: User overrides mode via toggle; persisted in AsyncStorage.
+ * Tracks network state and provides an appMode ('online' | 'offline')
+ * Allows user to smoothly toggle between Online and Offline mode anytime.
  */
 export function ConnectivityProvider({ children }) {
   const [networkState, setNetworkState] = useState({
@@ -23,50 +19,78 @@ export function ConnectivityProvider({ children }) {
     type: 'wifi',
   });
 
+  const [userPreference, setUserPreference] = useState(null); // 'online' | 'offline' | null (auto)
   const [appMode, setAppMode] = useState('online');
   const [ready, setReady] = useState(false);
+  const prefRef = useRef(null);
 
-  // ─── Purge any stale manual user preference ───────────────────
+  // Load saved preference
   useEffect(() => {
-    AsyncStorage.removeItem(PREF_KEY).catch(() => {});
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(PREF_KEY);
+        if (saved === 'online' || saved === 'offline') {
+          setUserPreference(saved);
+          prefRef.current = saved;
+          setAppMode(saved);
+        }
+      } catch {}
+      setReady(true);
+    })();
   }, []);
 
-  // ─── Subscribe to NetInfo for strict real-time enforcement ───
+  // NetInfo real-time listener
   useEffect(() => {
     const handleConnectivityChange = (state) => {
-      const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+      const isConnected = !!state.isConnected && state.isInternetReachable !== false;
       const newNetState = {
-        isConnected: !!state.isConnected,
+        isConnected,
         isWifi: state.type === 'wifi',
         type: state.type || 'unknown',
       };
       setNetworkState(newNetState);
-      setAppMode(isOnline ? 'online' : 'offline');
+
+      if (prefRef.current === 'offline') {
+        setAppMode('offline');
+      } else if (prefRef.current === 'online') {
+        setAppMode(isConnected ? 'online' : 'offline');
+      } else {
+        setAppMode(isConnected ? 'online' : 'offline');
+      }
       setReady(true);
     };
 
     const unsubscribe = NetInfo.addEventListener(handleConnectivityChange);
-
-    // Initial fetch
     NetInfo.fetch().then(handleConnectivityChange);
 
     return () => unsubscribe();
   }, []);
 
-  // Manual toggle is disabled to enforce mandatory network-driven mode switching
-  const toggleMode = useCallback(() => {
-    // No-op: automatic mode is strictly enforced
-  }, []);
+  const toggleMode = useCallback(async () => {
+    const next = appMode === 'online' ? 'offline' : 'online';
+    setUserPreference(next);
+    prefRef.current = next;
+    setAppMode(next);
+    try {
+      await AsyncStorage.setItem(PREF_KEY, next);
+    } catch {}
+  }, [appMode]);
 
-  const resetToAuto = useCallback(() => {
-    // No-op: always in automatic mode
-  }, []);
+  const resetToAuto = useCallback(async () => {
+    setUserPreference(null);
+    prefRef.current = null;
+    const isConnected = networkState.isConnected;
+    setAppMode(isConnected ? 'online' : 'offline');
+    try {
+      await AsyncStorage.removeItem(PREF_KEY);
+    } catch {}
+  }, [networkState.isConnected]);
 
   const value = {
     networkState,
     appMode,
-    isAutoMode: true,
-    userPreference: 'auto',
+    isAutoMode: !userPreference,
+    userPreference: userPreference || 'auto',
     toggleMode,
     resetToAuto,
     ready,

@@ -84,21 +84,41 @@ function MainAppShell() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: WebView (default when online) ─── */}
+      {/* ─── ONLINE MODE: Fixed Top Header + WebView ─── */}
       <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
-        <OnlineWebView />
         {isOnline && (
-          <View style={styles.onlineModeBtnWrapper} pointerEvents="box-none">
+          <View style={styles.onlineFixedHeader}>
+            <View style={styles.brandingRow}>
+              <View style={styles.logoBadge}>
+                <View style={styles.logoTealOffset} />
+                <View style={styles.logoCreamDisc}>
+                  <Text style={styles.logoLetter}>R</Text>
+                </View>
+              </View>
+              <Text style={styles.brandTitle}>RIVO</Text>
+            </View>
+
             <TouchableOpacity
-              style={styles.onlineModeBtn}
+              style={styles.onlineFixedModeBtn}
               onPress={toggleMode}
-              activeOpacity={0.85}
+              activeOpacity={0.8}
             >
-              <Wifi size={11} color="#0b1110" strokeWidth={2.5} />
-              <Text style={styles.onlineModeBtnText}>ONLINE</Text>
+              <View style={styles.onlineStatusDot} />
+              <Wifi size={11} color="#10b981" strokeWidth={2.5} />
+              <Text style={styles.onlineFixedModeBtnText}>ONLINE</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.vaultPillBtn}
+              onPress={toggleMode}
+              activeOpacity={0.8}
+            >
+              <Download size={13} color="#17a398" strokeWidth={2.2} />
+              <Text style={styles.vaultPillText}>VAULT</Text>
             </TouchableOpacity>
           </View>
         )}
+        <OnlineWebView />
       </View>
 
       {/* ─── OFFLINE MODE: Native Shell (Offline Vault, Quran, Library) ─── */}
@@ -687,34 +707,56 @@ const styles = StyleSheet.create({
     color: '#17a398',
     letterSpacing: 0.5,
   },
-  onlineModeBtnWrapper: {
-    position: 'absolute',
-    top: 8,
-    left: 0,
-    right: 0,
+  onlineFixedHeader: {
+    height: 44,
+    backgroundColor: '#0b1110',
+    flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 999,
-    elevation: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#162220',
   },
-  onlineModeBtn: {
+  onlineFixedModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#101d1a',
+    borderWidth: 1.2,
+    borderColor: '#10b981',
+    borderRadius: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  onlineStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+  },
+  onlineFixedModeBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9.5,
+    color: '#10b981',
+    letterSpacing: 0.5,
+  },
+  vaultPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#17a398',
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: '#1e332f',
     borderRadius: 14,
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  onlineModeBtnText: {
+  vaultPillText: {
     fontFamily: 'monospace',
     fontWeight: '900',
     fontSize: 9,
-    color: '#0b1110',
+    color: '#17a398',
     letterSpacing: 0.5,
   },
 });

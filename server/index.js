@@ -3737,19 +3737,34 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
   }
 });
 
-// Direct Audio Stream Downloader
+// Direct Audio Stream Downloader with resilient multi-tier fallback
 async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
   let streamUrl = null;
   if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be')) {
     streamUrl = rawUrl;
   }
 
-  // 1. Try yt-dlp first if rawUrl is a YouTube link (guarantees official authentic audio)
-  if (!streamUrl && rawUrl && (rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be'))) {
+  let ytUrl = rawUrl;
+  let videoId = null;
+  if (rawUrl) {
+    const m = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (m && m[1]) videoId = m[1];
+  }
+  if (!videoId && (title || artist)) {
+    try {
+      videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
+    } catch {}
+  }
+  if (videoId && (!ytUrl || !ytUrl.includes('youtube.com'))) {
+    ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  }
+
+  // 1. Try yt-dlp first if ytUrl is available
+  if (!streamUrl && ytUrl && (ytUrl.includes('youtube.com') || ytUrl.includes('youtu.be'))) {
     try {
       const { exec } = require('child_process');
       const direct = await new Promise((resolve) => {
-        exec(`yt-dlp --extractor-args "youtube:player_client=android,web" --no-check-certificates -f "ba[ext=m4a]/ba/b" -g "${rawUrl}"`, { timeout: 12000 }, (err, stdout) => {
+        exec(`yt-dlp --extractor-args "youtube:player_client=android,web" --no-check-certificates -f "ba[ext=m4a]/ba/b" -g "${ytUrl}"`, { timeout: 12000 }, (err, stdout) => {
           if (!err && stdout && stdout.trim()) {
             resolve(stdout.trim().split('\n')[0]);
           } else {
@@ -3759,6 +3774,53 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
       });
       if (direct) streamUrl = direct;
     } catch {}
+  }
+
+  // 2. Cobalt API fallback
+  if (!streamUrl && videoId) {
+    const cobaltEndpoints = [
+      'https://api.cobalt.tools/api/json',
+      'https://cobalt.stream/api/json',
+      'https://co.wuk.sh/api/json'
+    ];
+    for (const ep of cobaltEndpoints) {
+      try {
+        const cRes = await axios.post(ep, {
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
+          isAudioOnly: true
+        }, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }, timeout: 6000 });
+        const cData = cRes.data;
+        const u = cData?.url || cData?.audio || (cData?.picker && cData?.picker[0]?.url);
+        if (u) {
+          streamUrl = u;
+          break;
+        }
+      } catch {}
+    }
+  }
+
+  // 3. Invidious instances fallback
+  if (!streamUrl && videoId) {
+    const invidious = [
+      'https://inv.nadeko.net',
+      'https://yewtu.be',
+      'https://yt.artemislena.eu',
+      'https://invidious.jing.rocks',
+      'https://invidious.nerdvpn.de'
+    ];
+    for (const base of invidious) {
+      try {
+        const invRes = await axios.get(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, { timeout: 4500 });
+        const formats = invRes.data?.adaptiveFormats || [];
+        const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+        if (audio?.url) {
+          streamUrl = audio.url;
+          break;
+        }
+      } catch {}
+    }
   }
 
   return streamUrl;
@@ -3797,20 +3859,25 @@ app.get('/api/tracks/download', async (req, res) => {
     }
 
     const cleanFilename = `${(artist || 'Artist').split(/[|/]/)[0].trim()} - ${(title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim()}`;
-    const headRes = await axios({
-      method: 'get',
-      url: streamUrl,
-      responseType: 'stream',
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      timeout: 30000
-    });
+    try {
+      const headRes = await axios({
+        method: 'get',
+        url: streamUrl,
+        responseType: 'stream',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+        timeout: 30000
+      });
 
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
-      'Access-Control-Allow-Origin': '*'
-    });
-    headRes.data.pipe(res);
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
+        'Access-Control-Allow-Origin': '*'
+      });
+      headRes.data.pipe(res);
+    } catch (streamErr) {
+      // If server pipe fails, redirect client directly to streamUrl
+      return res.redirect(streamUrl);
+    }
   } catch (e) {
     console.error('Download audio error:', e.message);
     res.status(500).json({ success: false, error: e.message });
