@@ -116,9 +116,6 @@ function AppContent() {
   const currentScreenRef = useRef(currentScreen);
   useEffect(() => { currentScreenRef.current = currentScreen; }, [currentScreen]);
 
-  const isFullPlayerOpenRef = useRef(false);
-  const isMobileMenuOpenRef = useRef(false);
-
   const musicTracks = useMemo(() => tracks.filter(track => !isQuranContent(track)), [tracks]);
   const quranTracks = useMemo(() => tracks.filter(track => isQuranContent(track)), [tracks]);
   const musicPlaylists = useMemo(() => playlists.filter(playlist => !isQuranContent(playlist)), [playlists]);
@@ -155,20 +152,128 @@ function AppContent() {
     }
   });
 
-  const toggleActivityPanel = () => {
+  const [chatTargetUser,      setChatTargetUser]      = useState(null);
+  const [unreadChatCount,     setUnreadChatCount]     = useState(0);
+  const [socket,              setSocket]              = useState(null);
+
+  // Sync refs for popstate and background handling
+  const isChatOpenRef = useRef(isChatOpen);
+  useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
+
+  const isJamOpenRef = useRef(isJamOpen);
+  useEffect(() => { isJamOpenRef.current = isJamOpen; }, [isJamOpen]);
+
+  const isActivityPanelOpenRef = useRef(isActivityPanelOpen);
+  useEffect(() => { isActivityPanelOpenRef.current = isActivityPanelOpen; }, [isActivityPanelOpen]);
+
+  const isFullPlayerOpenRef = useRef(isFullPlayerOpen);
+  useEffect(() => { isFullPlayerOpenRef.current = isFullPlayerOpen; }, [isFullPlayerOpen]);
+
+  const isMobileMenuOpenRef = useRef(isMobileMenuOpen);
+  useEffect(() => { isMobileMenuOpenRef.current = isMobileMenuOpen; }, [isMobileMenuOpen]);
+
+  const isClosingModalViaUiRef = useRef(false);
+
+  const chatTargetUserRef = useRef(chatTargetUser);
+  useEffect(() => { chatTargetUserRef.current = chatTargetUser; }, [chatTargetUser]);
+
+  // Modal History Stack Handlers (intercepts phone hardware Back button)
+  const pushModalHistory = useCallback((modalName) => {
+    if (typeof window !== 'undefined') {
+      const currentUrl = window.location.pathname + window.location.search;
+      if (window.history.state?.modal) {
+        window.history.replaceState({ modal: modalName }, '', currentUrl);
+      } else {
+        window.history.pushState({ modal: modalName }, '', currentUrl);
+      }
+    }
+  }, []);
+
+  const closeModalHistory = useCallback((modalName) => {
+    if (typeof window !== 'undefined' && window.history.state?.modal === modalName) {
+      isClosingModalViaUiRef.current = true;
+      window.history.back();
+    }
+  }, []);
+
+  const handleOpenChat = useCallback((target = null) => {
+    setChatTargetUser(target);
+    setIsChatOpen(true);
+    setUnreadChatCount(0);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsActivityPanelOpen(false);
+    }
+    pushModalHistory('chat');
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, [pushModalHistory]);
+
+  const handleCloseChat = useCallback(() => {
+    setIsChatOpen(false);
+    setChatTargetUser(null);
+    closeModalHistory('chat');
+  }, [closeModalHistory]);
+
+  const handleOpenJam = useCallback(() => {
+    setIsJamOpen(true);
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsActivityPanelOpen(false);
+    }
+    pushModalHistory('jam');
+  }, [pushModalHistory]);
+
+  const handleCloseJam = useCallback(() => {
+    setIsJamOpen(false);
+    closeModalHistory('jam');
+  }, [closeModalHistory]);
+
+  const handleToggleActivityPanel = useCallback(() => {
     setIsActivityPanelOpen(prev => {
       const next = !prev;
       try {
         localStorage.setItem('rivo_activity_panel_open', JSON.stringify(next));
         localStorage.setItem('liofy_activity_panel_open', JSON.stringify(next));
       } catch {}
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        if (next) {
+          pushModalHistory('activity');
+        } else {
+          closeModalHistory('activity');
+        }
+      }
       return next;
     });
-  };
+  }, [pushModalHistory, closeModalHistory]);
 
-  const [chatTargetUser,      setChatTargetUser]      = useState(null);
-  const [unreadChatCount,     setUnreadChatCount]     = useState(0);
-  const [socket,              setSocket]              = useState(null);
+  const handleCloseActivityPanel = useCallback(() => {
+    setIsActivityPanelOpen(false);
+    try {
+      localStorage.setItem('rivo_activity_panel_open', 'false');
+      localStorage.setItem('liofy_activity_panel_open', 'false');
+    } catch {}
+    closeModalHistory('activity');
+  }, [closeModalHistory]);
+
+  const handleOpenMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(true);
+    pushModalHistory('mobilemenu');
+  }, [pushModalHistory]);
+
+  const handleCloseMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(false);
+    closeModalHistory('mobilemenu');
+  }, [closeModalHistory]);
+
+  const handleOpenFullPlayer = useCallback(() => {
+    setIsFullPlayerOpen(true);
+    pushModalHistory('fullplayer');
+  }, [pushModalHistory]);
+
+  const handleCloseFullPlayer = useCallback(() => {
+    setIsFullPlayerOpen(false);
+    closeModalHistory('fullplayer');
+  }, [closeModalHistory]);
 
   useKeyboardShortcuts({
     togglePlay,
@@ -185,21 +290,6 @@ function AppContent() {
     toggleLike,
     onToggleShortcutsModal: () => setIsShortcutsOpen((prev) => !prev),
   });
-
-  const isChatOpenRef = useRef(isChatOpen);
-  useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
-
-  const chatTargetUserRef = useRef(chatTargetUser);
-  useEffect(() => { chatTargetUserRef.current = chatTargetUser; }, [chatTargetUser]);
-
-  const handleOpenChat = (target = null) => {
-    setChatTargetUser(target);
-    setIsChatOpen(true);
-    setUnreadChatCount(0);
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
-    }
-  };
 
   // Fetch initial unread count on login/mount
   useEffect(() => {
@@ -618,12 +708,20 @@ function AppContent() {
 
     if (typeof window !== 'undefined') {
       const currentUrl = window.location.pathname + window.location.search;
-      if (currentUrl !== targetUrl) {
-        if (replace) {
+      const shouldReplace = replace || Boolean(window.history.state?.modal);
+      if (currentUrl !== targetUrl || shouldReplace) {
+        if (shouldReplace) {
           window.history.replaceState({ screen, params }, '', targetUrl);
         } else {
           window.history.pushState({ screen, params }, '', targetUrl);
         }
+      }
+
+      if (window.innerWidth < 768) {
+        setIsChatOpen(false);
+        setIsJamOpen(false);
+        setIsActivityPanelOpen(false);
+        setIsMobileMenuOpen(false);
       }
     }
 
@@ -767,24 +865,6 @@ function AppContent() {
     }
   }, [currentUser, navigateTo]);
 
-  const handleOpenFullPlayer = useCallback(() => {
-    setIsFullPlayerOpen(true);
-    if (typeof window !== 'undefined') {
-      window.history.pushState(
-        { modal: 'fullplayer' },
-        '',
-        window.location.pathname + window.location.search
-      );
-    }
-  }, []);
-
-  const handleCloseFullPlayer = useCallback(() => {
-    setIsFullPlayerOpen(false);
-    if (typeof window !== 'undefined' && window.history.state?.modal === 'fullplayer') {
-      window.history.back();
-    }
-  }, []);
-
   // Synchronize deep-linked playlist/album once async data loads
   useEffect(() => {
     if (currentScreen === 'playlist' && selectedPlaylist) {
@@ -816,23 +896,44 @@ function AppContent() {
     }
 
     const handlePopState = () => {
-      // 1. Close full player modal if open
+      // 1. If closing via UI button (X/backdrop) which already triggered history.back(), skip pop action
+      if (isClosingModalViaUiRef.current) {
+        isClosingModalViaUiRef.current = false;
+        return;
+      }
+
+      // 2. Close full player modal if open
       if (isFullPlayerOpenRef.current) {
         setIsFullPlayerOpen(false);
         return;
       }
-      // 2. Close mobile menu drawer if open
+      // 3. Close mobile menu drawer if open
       if (isMobileMenuOpenRef.current) {
         setIsMobileMenuOpen(false);
         return;
       }
-      // 3. Close chat if open
+      // 4. Close chat if open
       if (isChatOpenRef.current) {
         setIsChatOpen(false);
+        setChatTargetUser(null);
+        return;
+      }
+      // 5. Close jam if open
+      if (isJamOpenRef.current) {
+        setIsJamOpen(false);
+        return;
+      }
+      // 6. Close friend activity if open on mobile
+      if (isActivityPanelOpenRef.current && (typeof window !== 'undefined' && window.innerWidth < 768)) {
+        setIsActivityPanelOpen(false);
+        try {
+          localStorage.setItem('rivo_activity_panel_open', 'false');
+          localStorage.setItem('liofy_activity_panel_open', 'false');
+        } catch {}
         return;
       }
 
-      // 4. Parse target URL
+      // 7. Parse target URL
       const { screen, params } = parseLocation(window.location.pathname, window.location.search);
 
       setCurrentScreen(screen);
@@ -933,7 +1034,7 @@ function AppContent() {
       alert(data?.reason || 'You were kicked from the Jam room by the host.');
       setJamSession(null);
       setJamSync({ jamSession: null });
-      setIsJamOpen(false);
+      handleCloseJam();
     });
 
     s.on('jam:sync_play_state', (data) => {
@@ -1066,7 +1167,7 @@ function AppContent() {
       showToast(`Jam Session active: ${code}`);
     }
     if (openModal) {
-      setIsJamOpen(true);
+      handleOpenJam();
     }
     return code;
   };
@@ -1102,7 +1203,7 @@ function AppContent() {
         roomCode: cleanCode,
         user: userPayload
       });
-      setIsJamOpen(true);
+      handleOpenJam();
       showToast(`Joined Jam: ${cleanCode}`);
     }
   };
@@ -1267,7 +1368,7 @@ function AppContent() {
 
             {/* Friend Activity Quick Toggle */}
             <button
-              onClick={toggleActivityPanel}
+              onClick={handleToggleActivityPanel}
               className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition shrink-0 ${
                 isActivityPanelOpen
                   ? 'bg-[#17a398] text-[#0b1110] border-2 border-black font-black'
@@ -1280,7 +1381,7 @@ function AppContent() {
 
             {/* Quick Actions Drawer Toggle (☰ 3 bars) */}
             <button
-              onClick={() => setIsMobileMenuOpen(true)}
+              onClick={handleOpenMobileMenu}
               className="relative w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 flex items-center justify-center cursor-pointer transition shrink-0"
               title="Menu & Quick Tools"
             >
@@ -1333,7 +1434,7 @@ function AppContent() {
           openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
           openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
           openImportSongModal={() => setIsImportSongOpen(true)}
-          openJamModal={() => setIsJamOpen(true)}
+          openJamModal={handleOpenJam}
           openSettings={() => setIsSettingsOpen(true)}
           openAddSongModal={() => setIsAddSongOpen(true)}
           openAuthModal={handleUserAvatarClick}
@@ -1342,7 +1443,7 @@ function AppContent() {
           openShortcutsModal={() => setIsShortcutsOpen(true)}
           unreadChatCount={unreadChatCount}
           isActivityPanelOpen={isActivityPanelOpen}
-          toggleActivityPanel={toggleActivityPanel}
+          toggleActivityPanel={handleToggleActivityPanel}
           globalTheme={globalTheme}
           likedTrackIds={likedTrackIds}
           selectedPlaylist={selectedPlaylist}
@@ -1378,12 +1479,12 @@ function AppContent() {
               logout={logout}
               openAuthModal={() => setIsAuthOpen(true)}
               openProfileScreen={() => navigateTo('profile')}
-              openJamModal={() => setIsJamOpen(true)}
+              openJamModal={handleOpenJam}
               jamSession={jamSession}
               openChatModal={() => handleOpenChat(null)}
               unreadChatCount={unreadChatCount}
               isActivityPanelOpen={isActivityPanelOpen}
-              toggleActivityPanel={toggleActivityPanel}
+              toggleActivityPanel={handleToggleActivityPanel}
               globalTheme={globalTheme}
             />
           )}
@@ -1581,13 +1682,7 @@ function AppContent() {
         {/* ── Listening Activity Panel (Docked on the Right Side) ── */}
         <ListeningActivityPanel
           isOpen={isActivityPanelOpen}
-          onClose={() => {
-            setIsActivityPanelOpen(false);
-            try {
-              localStorage.setItem('rivo_activity_panel_open', 'false');
-              localStorage.setItem('liofy_activity_panel_open', 'false');
-            } catch {}
-          }}
+          onClose={handleCloseActivityPanel}
           onSelectTrack={(friendTrack) => {
             setSelectedPlaylist(null);
             playTrack(friendTrack, [friendTrack], false, 0);
@@ -1630,7 +1725,7 @@ function AppContent() {
           duration={duration}
           seekTo={seekTo}
           jamSession={jamSession}
-          openJamModal={() => setIsJamOpen(true)}
+          openJamModal={handleOpenJam}
           onSelectArtist={handleSelectArtist}
           globalTheme={globalTheme}
         />
@@ -1756,7 +1851,7 @@ function AppContent() {
 
       <JamRoomModal
         isOpen={isJamOpen}
-        onClose={() => setIsJamOpen(false)}
+        onClose={handleCloseJam}
         jamSession={jamSession}
         onStartJam={handleStartJam}
         onJoinJam={handleJoinJam}
@@ -1819,10 +1914,7 @@ function AppContent() {
 
       <ChatModal
         isOpen={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          setChatTargetUser(null);
-        }}
+        onClose={handleCloseChat}
         targetUser={chatTargetUser}
         currentUser={currentUser}
         socket={socket}
@@ -1846,7 +1938,7 @@ function AppContent() {
         <div className="fixed inset-0 z-[100] flex justify-end select-none animate-in fade-in duration-200">
           {/* Backdrop */}
           <div 
-            onClick={() => setIsMobileMenuOpen(false)} 
+            onClick={handleCloseMobileMenu} 
             className="fixed inset-0 bg-black/75 backdrop-blur-xs cursor-pointer" 
           />
 
@@ -1860,7 +1952,7 @@ function AppContent() {
             }`}>
               <RivoLogo size={28} showText={true} isDark={globalTheme === 'dark'} />
               <button
-                onClick={() => setIsMobileMenuOpen(false)}
+                onClick={handleCloseMobileMenu}
                 className={`w-8 h-8 rounded-lg brutal-border flex items-center justify-center brutal-btn cursor-pointer ${
                   globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ded2bb] text-black'
                 }`}
@@ -1878,7 +1970,7 @@ function AppContent() {
                 </div>
 
                 <button
-                  onClick={() => { setIsAddSongOpen(true); setIsMobileMenuOpen(false); }}
+                  onClick={() => { setIsAddSongOpen(true); handleCloseMobileMenu(); }}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer font-black"
                 >
                   <Plus size={17} strokeWidth={3} />
@@ -1886,7 +1978,7 @@ function AppContent() {
                 </button>
 
                 <button
-                  onClick={() => { setIsJamOpen(true); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleOpenJam(); handleCloseMobileMenu(); }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                     globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
                   }`}
@@ -1901,7 +1993,7 @@ function AppContent() {
                 </button>
 
                 <button
-                  onClick={() => { handleOpenChat(null); setIsMobileMenuOpen(false); }}
+                  onClick={() => { handleOpenChat(null); handleCloseMobileMenu(); }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                     globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
                   }`}
@@ -1919,8 +2011,8 @@ function AppContent() {
 
                 <button
                   onClick={() => {
-                    toggleActivityPanel();
-                    setIsMobileMenuOpen(false);
+                    handleToggleActivityPanel();
+                    handleCloseMobileMenu();
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
                     globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
@@ -1948,7 +2040,7 @@ function AppContent() {
                   onClick={(e) => {
                     e.preventDefault();
                     handleUserAvatarClick();
-                    setIsMobileMenuOpen(false);
+                    handleCloseMobileMenu();
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
                     currentScreen === 'profile' 
@@ -1965,7 +2057,7 @@ function AppContent() {
                   onClick={(e) => {
                     e.preventDefault();
                     goToScreen('stats');
-                    setIsMobileMenuOpen(false);
+                    handleCloseMobileMenu();
                   }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
                     currentScreen === 'stats' 
@@ -1983,7 +2075,7 @@ function AppContent() {
                     onClick={(e) => {
                       e.preventDefault();
                       goToScreen('admin');
-                      setIsMobileMenuOpen(false);
+                      handleCloseMobileMenu();
                     }}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
                       currentScreen === 'admin'
@@ -2034,7 +2126,6 @@ function AppContent() {
           onClick={() => {
             if (typeof toastMessage === 'object' && toastMessage?.roomCode) {
               handleJoinJam(toastMessage.roomCode);
-              setIsJamOpen(true);
               setToastMessage(null);
             } else if (typeof toastMessage === 'object' && toastMessage?.sender) {
               handleOpenChat(toastMessage.sender);
