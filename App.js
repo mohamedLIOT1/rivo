@@ -24,8 +24,8 @@ import {
   Radio,
   Download,
   BarChart2,
-  Shield,
-  User,
+  Wifi,
+  WifiOff,
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
@@ -37,7 +37,6 @@ import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 
 import OnlineWebView from './src/native/screens/OnlineWebView';
-import ModeToggle from './src/native/components/ModeToggle';
 import ErrorBoundary from './src/native/components/ErrorBoundary';
 
 import HomeScreen from './src/native/screens/HomeScreen';
@@ -67,7 +66,7 @@ const TABS = [
 ];
 
 function MainAppShell() {
-  const { appMode } = useConnectivity();
+  const { appMode, toggleMode } = useConnectivity();
   const isOnline = appMode === 'online';
 
   useEffect(() => {
@@ -80,9 +79,21 @@ function MainAppShell() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: WebView (stays mounted, hidden when offline) ─── */}
+      {/* ─── ONLINE MODE: WebView ─── */}
       <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
         <OnlineWebView />
+        {isOnline && (
+          <View style={styles.onlineModeBtnWrapper} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.onlineModeBtn}
+              onPress={toggleMode}
+              activeOpacity={0.85}
+            >
+              <Wifi size={11} color="#0b1110" strokeWidth={2.5} />
+              <Text style={styles.onlineModeBtnText}>ONLINE</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* ─── OFFLINE MODE: Native React Native UI ─── */}
@@ -91,9 +102,6 @@ function MainAppShell() {
           <OfflineNativeShell />
         </ErrorBoundary>
       </View>
-
-      {/* ─── FLOATING MODE TOGGLE (always visible) ─── */}
-      <ModeToggle />
     </SafeAreaView>
   );
 }
@@ -118,6 +126,7 @@ function OfflineNativeShell() {
   const { currentTrack } = useAudioPlayer();
   const { currentUser } = useUser();
   const { isDark, toggleTheme } = useTheme();
+  const { toggleMode } = useConnectivity();
 
   const handleTabPress = (tabId) => {
     if (tabId === 'chat') {
@@ -174,6 +183,16 @@ function OfflineNativeShell() {
             </View>
           </View>
           <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
+        </TouchableOpacity>
+
+        {/* Offline Mode Switch in Header */}
+        <TouchableOpacity
+          style={styles.headerModePill}
+          onPress={toggleMode}
+          activeOpacity={0.8}
+        >
+          <WifiOff size={11} color="#17a398" strokeWidth={2.5} />
+          <Text style={styles.headerModePillText}>OFFLINE</Text>
         </TouchableOpacity>
 
         {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
@@ -595,5 +614,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#fdfbf7',
+  },
+  headerModePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#17a398',
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+  },
+  headerModePillText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#17a398',
+    letterSpacing: 0.5,
+  },
+  onlineModeBtnWrapper: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 999,
+    elevation: 6,
+  },
+  onlineModeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#17a398',
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+    borderRadius: 14,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  onlineModeBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#0b1110',
+    letterSpacing: 0.5,
   },
 });

@@ -399,14 +399,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!div1) {
       div1 = document.createElement('div');
       div1.id = 'rivo-yt-player-1';
-      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;transform:scale(0.005);transform-origin:bottom right;opacity:1;pointer-events:none;z-index:99999;visibility:visible;';
+      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden;';
       document.body.appendChild(div1);
     }
     let div2 = document.getElementById('rivo-yt-player-2');
     if (!div2) {
       div2 = document.createElement('div');
       div2.id = 'rivo-yt-player-2';
-      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;transform:scale(0.005);transform-origin:bottom right;opacity:1;pointer-events:none;z-index:99999;visibility:visible;';
+      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden;';
       document.body.appendChild(div2);
     }
 

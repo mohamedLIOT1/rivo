@@ -27,58 +27,13 @@ const RIVO_WEB_URL = API_BASE_URL;
  */
 const INJECTED_JS = `
 (function() {
-  // â”€â”€ Flag: running inside native APK â”€â”€
   window.RIVO_NATIVE = true;
 
-  // â”€â”€ Un-throttle YouTube iframe players in Android WebView â”€â”€
-  var styleId = '__rivo_yt_unthrottle_css';
-  if (!document.getElementById(styleId)) {
-    var style = document.createElement('style');
-    style.id = styleId;
-    style.innerHTML = '#rivo-yt-player-1, #rivo-yt-player-2 { position: fixed !important; bottom: 0 !important; right: 0 !important; top: auto !important; left: auto !important; width: 200px !important; height: 200px !important; transform: scale(0.005) !important; transform-origin: bottom right !important; opacity: 1 !important; z-index: 99999 !important; pointer-events: none !important; visibility: visible !important; }';
-    if (document.head) {
-      document.head.appendChild(style);
-    } else {
-      document.addEventListener('DOMContentLoaded', function() {
-        if (!document.getElementById(styleId) && document.head) {
-          document.head.appendChild(style);
-        }
-      });
-    }
-  }
-
-  // Periodic safeguard against dynamic inline styling overrides
-  if (!window.__rivo_yt_interval_set) {
-    window.__rivo_yt_interval_set = true;
-    setInterval(function() {
-      ['rivo-yt-player-1', 'rivo-yt-player-2'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) {
-          if (el.style.bottom === '-500px' || el.style.opacity === '0.01' || el.style.zIndex === '-1' || el.style.width === '1px') {
-            el.style.position = 'fixed';
-            el.style.bottom = '0px';
-            el.style.right = '0px';
-            el.style.top = 'auto';
-            el.style.left = 'auto';
-            el.style.width = '200px';
-            el.style.height = '200px';
-            el.style.transform = 'scale(0.005)';
-            el.style.transformOrigin = 'bottom right';
-            el.style.opacity = '1';
-            el.style.zIndex = '99999';
-            el.style.visibility = 'visible';
-            el.style.pointerEvents = 'none';
-          }
-        }
-      });
-    }, 300);
-  }
-
-  // Prevent double-injection of bridge functions
-  if (window.__RIVO_NATIVE_INJECTED) return;
+  // Prevent double-injection
+  if (window.__RIVO_NATIVE_INJECTED) return true;
   window.__RIVO_NATIVE_INJECTED = true;
 
-  // â”€â”€ Bridge: send download request to native layer â”€â”€
+  // Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -88,7 +43,7 @@ const INJECTED_JS = `
     }
   };
 
-  // â”€â”€ Bridge: send toast/status messages to native â”€â”€
+  // Bridge: send toast/status messages to native
   window.RIVO_TOAST = function(message, type) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -99,7 +54,7 @@ const INJECTED_JS = `
     }
   };
 
-  true; // Required by react-native-webview
+  true;
 })();
 `;
 
@@ -213,7 +168,9 @@ export default function OnlineWebView() {
         javaScriptEnabled={true}
         domStorageEnabled={true}
         databaseEnabled={true}
+        mediaPlaybackRequiresUserAction={false}
         mediaPlaybackRequiresUserGesture={false}
+        allowsProtectedMedia={true}
         allowsInlineMediaPlayback={true}
         allowFileAccess={true}
         allowUniversalAccessFromFileURLs={true}
