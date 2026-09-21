@@ -846,9 +846,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
           type: 'PLAYBACK_STATE',
           isPlaying: isPlaying,
           track: currentTrack ? {
+            id: currentTrack._id || currentTrack.id,
+            _id: currentTrack._id || currentTrack.id,
             title: currentTrack.title || 'Unknown Track',
             artist: currentTrack.artist || 'Unknown Artist',
             coverUrl: currentTrack.cover || currentTrack.coverUrl || '',
+            audioUrl: currentTrack.audioUrl || '',
+            duration: duration || currentTrack.duration || 240,
+            currentTime: currentTime || 0,
           } : null
         }));
       } catch (e) {}
@@ -863,9 +868,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
           type: 'PLAYBACK_STATE',
           isPlaying: isPlaying,
           track: currentTrack ? {
+            id: currentTrack._id || currentTrack.id,
+            _id: currentTrack._id || currentTrack.id,
             title: currentTrack.title || 'Unknown Track',
             artist: currentTrack.artist || 'Unknown Artist',
             coverUrl: currentTrack.cover || currentTrack.coverUrl || '',
+            audioUrl: currentTrack.audioUrl || '',
+            duration: duration || currentTrack.duration || 240,
+            currentTime: currentTime || 0,
           } : null
         }));
       } catch (e) {}

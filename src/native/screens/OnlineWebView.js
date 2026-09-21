@@ -323,17 +323,20 @@ export default function OnlineWebView() {
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
           if (track) {
-            currentTrackRef.current = track;
+            currentTrackRef.current = {
+              ...currentTrackRef.current,
+              ...track,
+            };
           }
-          const activeTrack = track || currentTrackRef.current;
-          if (activeTrack && isPlaying) {
-            showMediaNotification(activeTrack, true);
-          } else if (activeTrack && !isPlaying) {
-            updateMediaNotification(false, false, false, activeTrack);
-          } else if (isPlaying) {
-            updateMediaNotification(true, false, false, activeTrack);
+          const activeTrack = currentTrackRef.current;
+          if (activeTrack) {
+            showMediaNotification({
+              ...activeTrack,
+              duration: Number(activeTrack.duration || 240),
+              currentTime: Number(activeTrack.currentTime || 0),
+            }, Boolean(isPlaying));
           } else {
-            updateMediaNotification(false, false, false, activeTrack);
+            updateMediaNotification(Boolean(isPlaying), false, false, activeTrack);
           }
           break;
         }
