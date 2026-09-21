@@ -8,19 +8,87 @@ const COVERS_DIR = `${FileSystem.documentDirectory}rivo_covers/`;
 const STORAGE_KEY = '@rivo_offline_tracks_v2';
 
 const ensureDirs = async () => {
-  const tInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
-  if (!tInfo.exists) await FileSystem.makeDirectoryAsync(TRACKS_DIR, { intermediates: true });
+  try {
+    const tInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
+    if (!tInfo.exists) await FileSystem.makeDirectoryAsync(TRACKS_DIR, { intermediates: true });
 
-  const cInfo = await FileSystem.getInfoAsync(COVERS_DIR);
-  if (!cInfo.exists) await FileSystem.makeDirectoryAsync(COVERS_DIR, { intermediates: true });
+    const cInfo = await FileSystem.getInfoAsync(COVERS_DIR);
+    if (!cInfo.exists) await FileSystem.makeDirectoryAsync(COVERS_DIR, { intermediates: true });
+  } catch (e) {
+    console.warn('[downloadManager] ensureDirs error:', e.message);
+  }
 };
+
+function extractYouTubeId(input) {
+  if (!input || typeof input !== 'string') return null;
+  const str = input.trim();
+  const m1 = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  if (m1 && m1[1] && m1[1].length === 11) return m1[1];
+  const m2 = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+  if (m2 && m2[1] && m2[1].length === 11) return m2[1];
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  return null;
+}
+
+// Client-side YouTube audio stream resolution via public mirrors
+async function resolveClientSideYouTubeStream(videoId) {
+  if (!videoId) return null;
+
+  // 1. Cobalt mirrors
+  const cobaltEndpoints = [
+    'https://api.cobalt.tools/api/json',
+    'https://cobalt.stream/api/json',
+    'https://co.wuk.sh/api/json'
+  ];
+  for (const ep of cobaltEndpoints) {
+    try {
+      const res = await fetch(ep, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+          downloadMode: 'audio',
+          audioFormat: 'mp3',
+          isAudioOnly: true
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const u = data.url || data.audio || (data.picker && data.picker[0]?.url);
+        if (u) return u;
+      }
+    } catch {}
+  }
+
+  // 2. Invidious instances
+  const invidious = [
+    'https://inv.nadeko.net',
+    'https://yewtu.be',
+    'https://yt.artemislena.eu',
+    'https://invidious.jing.rocks',
+    'https://invidious.nerdvpn.de'
+  ];
+  for (const base of invidious) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
+      if (res.ok) {
+        const data = await res.json();
+        const formats = data.adaptiveFormats || [];
+        const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+        if (audio?.url) return audio.url;
+      }
+    } catch {}
+  }
+
+  return null;
+}
 
 export const getDownloadedTracks = async () => {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const list = JSON.parse(raw);
-    const cleaned = list.filter(t => 
+    const cleaned = list.filter(t =>
       t &&
       t.source !== 'SoundCloud' &&
       t.album !== 'SoundCloud' &&
@@ -96,77 +164,107 @@ export const downloadTrack = async (track, onProgress) => {
     }
   } catch {}
 
-  // Resolve direct playable/downloadable remote audio stream
-  const isDirectRemote = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com') && !u.includes('youtu.be');
-  let remoteAudioUrl = null;
+  // Gather candidate download URLs in order of priority
+  const candidates = [];
 
-  if (isDirectRemote(track.audioUrl)) {
-    remoteAudioUrl = track.audioUrl;
-  } else if (isDirectRemote(track.nativeAudioUri)) {
-    remoteAudioUrl = track.nativeAudioUri;
-  }
+  // Candidate 1: Direct remote audio URL (if already an audio file)
+  const isDirectRemote = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com') && !u.includes('youtu.be') && !u.includes('soundcloud.com');
+  if (isDirectRemote(track.audioUrl)) candidates.push(track.audioUrl);
+  if (isDirectRemote(track.nativeAudioUri)) candidates.push(track.nativeAudioUri);
 
-  if (!remoteAudioUrl) {
-    remoteAudioUrl = await resolveAudioStream(track);
-  }
+  // Candidate 2: Backend Direct Downloader endpoint
+  const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}`;
+  candidates.push(backendDownloadUrl);
 
-  if (!remoteAudioUrl && track.audioUrl) {
-    remoteAudioUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl)}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}`;
-  }
+  // Candidate 3: Backend Stream Resolver
+  const backendStreamUrl = `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`;
+  candidates.push(backendStreamUrl);
 
-  if (!remoteAudioUrl) {
-    throw new Error('Could not resolve audio stream for download');
-  }
+  // Candidate 4: Client-side YouTube mirror resolution
+  const ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || (track.source === 'YouTube' ? extractYouTubeId(track._id) : null);
 
   if (onProgress) onProgress(15);
 
-  // Download audio file to local documentDirectory
-  let downloadedFile = null;
-  try {
-    const downloadResumable = FileSystem.createDownloadResumable(
-      remoteAudioUrl,
-      audioFileUri,
-      {},
-      (downloadProgress) => {
-        if (downloadProgress.totalBytesExpectedToWrite > 0) {
-          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-          if (onProgress) onProgress(Math.min(95, Math.round(15 + progress * 80)));
-        } else {
-          if (onProgress) onProgress(50);
+  let success = false;
+
+  // Try candidate URLs one by one until one produces a valid audio file
+  for (let i = 0; i < candidates.length; i++) {
+    const targetUrl = candidates[i];
+    try {
+      // First clean up any corrupted partial file
+      await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+
+      let res = null;
+      try {
+        const downloadResumable = FileSystem.createDownloadResumable(
+          targetUrl,
+          audioFileUri,
+          {},
+          (progressEvent) => {
+            if (progressEvent.totalBytesExpectedToWrite > 0) {
+              const progress = progressEvent.totalBytesWritten / progressEvent.totalBytesExpectedToWrite;
+              if (onProgress) onProgress(Math.min(90, Math.round(15 + progress * 75)));
+            } else {
+              if (onProgress) onProgress(50);
+            }
+          }
+        );
+        res = await downloadResumable.downloadAsync();
+      } catch (resumeErr) {
+        res = await FileSystem.downloadAsync(targetUrl, audioFileUri);
+      }
+
+      if (res && (res.status === 200 || res.status === 206)) {
+        const check = await FileSystem.getInfoAsync(audioFileUri);
+        if (check.exists && check.size > 10000) {
+          success = true;
+          break;
         }
       }
-    );
-    const res = await downloadResumable.downloadAsync();
-    if (res && res.uri && (res.status === 200 || res.status === 206)) {
-      downloadedFile = res;
-    }
-  } catch (e) {
-    // Fall back to direct FileSystem.downloadAsync
-  }
-
-  if (!downloadedFile) {
-    const fallbackRes = await FileSystem.downloadAsync(remoteAudioUrl, audioFileUri);
-    if (!fallbackRes || (fallbackRes.status !== 200 && fallbackRes.status !== 206)) {
-      throw new Error('Download failed from audio stream');
+    } catch (candidateErr) {
+      console.warn(`[downloadManager] Candidate ${i + 1} failed:`, candidateErr.message);
     }
   }
 
-  // Validate downloaded file
-  const fileInfo = await FileSystem.getInfoAsync(audioFileUri);
-  if (!fileInfo.exists || fileInfo.size < 10000) {
-    await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
-    throw new Error('Downloaded audio file is corrupted or empty');
-  }
-
-  if (onProgress) onProgress(96);
-
-  // Cover art download
-  let localCover = track.coverUrl || track.cover;
-  if (localCover && localCover.startsWith('http')) {
+  // If backend candidates failed, try client-side direct YouTube mirror as final fallback
+  if (!success && ytId) {
     try {
-      await FileSystem.downloadAsync(localCover, coverFileUri);
-      localCover = coverFileUri;
-    } catch {}
+      if (onProgress) onProgress(30);
+      const mirrorUrl = await resolveClientSideYouTubeStream(ytId);
+      if (mirrorUrl) {
+        await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+        const mirrorRes = await FileSystem.downloadAsync(mirrorUrl, audioFileUri);
+        if (mirrorRes && (mirrorRes.status === 200 || mirrorRes.status === 206)) {
+          const check = await FileSystem.getInfoAsync(audioFileUri);
+          if (check.exists && check.size > 10000) {
+            success = true;
+          }
+        }
+      }
+    } catch (mirrorErr) {
+      console.warn('[downloadManager] Mirror fallback failed:', mirrorErr.message);
+    }
+  }
+
+  if (!success) {
+    await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+    throw new Error('Could not download audio stream from available servers');
+  }
+
+  if (onProgress) onProgress(92);
+
+  // Cover art download & local caching
+  let localCover = track.coverUrl || track.cover || '';
+  if (localCover && typeof localCover === 'string') {
+    if (localCover.startsWith('/') && !localCover.startsWith('//')) {
+      localCover = `${API_BASE_URL}${localCover}`;
+    }
+    if (localCover.startsWith('http')) {
+      try {
+        await FileSystem.downloadAsync(localCover, coverFileUri);
+        localCover = coverFileUri;
+      } catch {}
+    }
   }
 
   // Lyrics fetch & embed

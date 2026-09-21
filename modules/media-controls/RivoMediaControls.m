@@ -2,15 +2,61 @@
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
 
+static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
+
+static NSData *createSilentWAVData(void) {
+    uint32_t sampleRate = 44100;
+    uint16_t numChannels = 1;
+    uint16_t bitsPerSample = 16;
+    uint32_t dataSize = sampleRate * numChannels * (bitsPerSample / 8); // 88200 bytes = 1 sec
+    uint32_t chunkSize = 36 + dataSize;
+    uint32_t byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    uint16_t blockAlign = numChannels * (bitsPerSample / 8);
+
+    NSMutableData *data = [NSMutableData dataWithCapacity:(44 + dataSize)];
+    [data appendBytes:"RIFF" length:4];
+    [data appendBytes:&chunkSize length:4];
+    [data appendBytes:"WAVE" length:4];
+
+    [data appendBytes:"fmt " length:4];
+    uint32_t subchunk1Size = 16;
+    uint16_t audioFormat = 1; // PCM
+    [data appendBytes:&subchunk1Size length:4];
+    [data appendBytes:&audioFormat length:2];
+    [data appendBytes:&numChannels length:2];
+    [data appendBytes:&sampleRate length:4];
+    [data appendBytes:&byteRate length:4];
+    [data appendBytes:&blockAlign length:2];
+    [data appendBytes:&bitsPerSample length:2];
+
+    [data appendBytes:"data" length:4];
+    [data appendBytes:&dataSize length:4];
+
+    void *zeroes = calloc(1, dataSize);
+    if (zeroes) {
+        [data appendBytes:zeroes length:dataSize];
+        free(zeroes);
+    }
+    return data;
+}
+
 @implementation RivoMediaControls
 {
     BOOL _hasListeners;
     BOOL _remoteCommandsConfigured;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
+    AVAudioPlayer *_silentPlayer;
 }
 
 RCT_EXPORT_MODULE(RivoMediaControls);
+
++ (void)initialize {
+    if (self == [RivoMediaControls class]) {
+        sArtworkCache = [[NSCache alloc] init];
+        sArtworkCache.countLimit = 50;
+    }
+}
 
 - (NSArray<NSString *> *)supportedEvents {
     return @[@"onMediaAction"];
@@ -33,6 +79,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
         dispatch_async(dispatch_get_main_queue(), ^{
             [self configureAudioSession];
             [self setupRemoteCommands];
+            [self ensureSilentPlayer];
         });
     }
     return self;
@@ -42,7 +89,9 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     @try {
         AVAudioSession *session = [AVAudioSession sharedInstance];
         [session setCategory:AVAudioSessionCategoryPlayback
-                 withOptions:(AVAudioSessionCategoryOptionAllowBluetooth | AVAudioSessionCategoryOptionAllowBluetoothA2DP)
+                 withOptions:(AVAudioSessionCategoryOptionMixWithOthers |
+                              AVAudioSessionCategoryOptionAllowBluetooth |
+                              AVAudioSessionCategoryOptionAllowBluetoothA2DP)
                        error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
@@ -51,9 +100,26 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     }
 }
 
+- (void)ensureSilentPlayer {
+    if (!_silentPlayer) {
+        @try {
+            NSData *silentData = createSilentWAVData();
+            NSError *err = nil;
+            _silentPlayer = [[AVAudioPlayer alloc] initWithData:silentData error:&err];
+            _silentPlayer.numberOfLoops = -1; // Infinite loop keeps iOS background session alive
+            _silentPlayer.volume = 0.0001f;   // Completely silent to human ear but holds audio hardware pipeline
+            [_silentPlayer prepareToPlay];
+        } @catch (NSException *e) {
+            NSLog(@"[RivoMediaControls] ensureSilentPlayer error: %@", e);
+        }
+    }
+}
+
 - (void)sendActionSafely:(NSString *)action {
     @try {
-        [self sendEventWithName:@"onMediaAction" body:action];
+        if (_hasListeners) {
+            [self sendEventWithName:@"onMediaAction" body:action];
+        }
     } @catch (NSException *e) {
         NSLog(@"[RivoMediaControls] sendActionSafely error: %@", e);
     }
@@ -74,18 +140,44 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self ensureSilentPlayer];
+        if (self->_silentPlayer && !self->_silentPlayer.isPlaying) {
+            [self->_silentPlayer play];
+        }
+        NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+        now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
+        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+
         [self sendActionSafely:@"play"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        if (self->_silentPlayer && self->_silentPlayer.isPlaying) {
+            [self->_silentPlayer pause];
+        }
+        NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+        now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
+        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+
         [self sendActionSafely:@"pause"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     [center.togglePlayPauseCommand setEnabled:YES];
     [center.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        BOOL willPlay = !(self->_silentPlayer && self->_silentPlayer.isPlaying);
+        if (willPlay) {
+            [self ensureSilentPlayer];
+            [self->_silentPlayer play];
+        } else {
+            if (self->_silentPlayer) [self->_silentPlayer pause];
+        }
+        NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+        now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
+        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+
         [self sendActionSafely:@"play_pause"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
@@ -121,8 +213,20 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
         @try {
             [self configureAudioSession];
             [self setupRemoteCommands];
+            [self ensureSilentPlayer];
 
             BOOL isPlaying = [options[@"isPlaying"] boolValue];
+
+            // Maintain silent background audio keeper so iOS never suspends WebView or app
+            if (isPlaying) {
+                if (self->_silentPlayer && !self->_silentPlayer.isPlaying) {
+                    [self->_silentPlayer play];
+                }
+            } else {
+                if (self->_silentPlayer && self->_silentPlayer.isPlaying) {
+                    [self->_silentPlayer pause];
+                }
+            }
 
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
 
@@ -153,11 +257,33 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             double currentTime = [options[@"currentTime"] doubleValue];
             nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime >= 0 ? currentTime : 0.0);
 
-            NSString *coverUrl = options[@"coverUrl"];
+            // Normalize cover URL (handle relative /api or /covers URLs)
+            NSString *rawCover = options[@"coverUrl"];
+            NSString *coverUrl = nil;
+            if (rawCover && [rawCover length] > 0) {
+                if ([rawCover hasPrefix:@"/"] && ![rawCover hasPrefix:@"//"]) {
+                    coverUrl = [@"https://liofy-production-0f56.up.railway.app" stringByAppendingString:rawCover];
+                } else {
+                    coverUrl = rawCover;
+                }
+            }
+
             if (coverUrl && [coverUrl length] > 0) {
-                if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
+                // Check in-memory cache first for instant synchronous lock screen artwork
+                UIImage *cachedImg = [sArtworkCache objectForKey:coverUrl];
+                if (cachedImg) {
+                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:cachedImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
+                        return cachedImg;
+                    }];
+                    self->_currentArtwork = artwork;
                     self->_currentCoverUrl = [coverUrl copy];
-                    self->_currentArtwork = nil;
+                    nowPlaying[MPMediaItemPropertyArtwork] = artwork;
+                } else if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
+                    // If cover changed but not cached yet, keep previous artwork in nowPlaying to avoid flashing empty
+                    if (self->_currentArtwork) {
+                        nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
+                    }
+                    self->_currentCoverUrl = [coverUrl copy];
 
                     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                         @try {
@@ -175,13 +301,17 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                                 NSString *encoded = [coverUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
                                 NSURL *url = [NSURL URLWithString:encoded ?: coverUrl];
                                 if (url) {
-                                    imageData = [NSData dataWithContentsOfURL:url];
+                                    NSURLRequest *req = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReturnCacheDataElseLoad timeoutInterval:6.0];
+                                    NSURLResponse *resp = nil;
+                                    NSError *err = nil;
+                                    imageData = [NSURLConnection sendSynchronousRequest:req returningResponse:&resp error:&err];
                                 }
                             }
 
                             if (imageData && [imageData length] > 0) {
                                 UIImage *image = [UIImage imageWithData:imageData];
                                 if (image) {
+                                    [sArtworkCache setObject:image forKey:coverUrl];
                                     MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:image.size requestHandler:^UIImage * _Nonnull(CGSize size) {
                                         return image;
                                     }];
@@ -194,12 +324,14 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                                 }
                             }
                         } @catch (NSException *e) {
-                            NSLog(@"[RivoMediaControls] Artwork load error: %@", e);
+                            NSLog(@"[RivoMediaControls] Artwork download error: %@", e);
                         }
                     });
                 } else if (self->_currentArtwork) {
                     nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
                 }
+            } else if (self->_currentArtwork) {
+                nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
             }
 
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlaying;
@@ -212,6 +344,9 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 RCT_EXPORT_METHOD(hideNotification) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
+            if (self->_silentPlayer && self->_silentPlayer.isPlaying) {
+                [self->_silentPlayer stop];
+            }
             self->_currentCoverUrl = nil;
             self->_currentArtwork = nil;
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;

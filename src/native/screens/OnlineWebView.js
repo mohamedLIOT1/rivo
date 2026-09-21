@@ -323,9 +323,12 @@ export default function OnlineWebView() {
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
           if (track) {
+            const existingCover = currentTrackRef.current?.coverUrl || currentTrackRef.current?.cover || '';
+            const incomingCover = track.coverUrl || track.cover || '';
             currentTrackRef.current = {
               ...currentTrackRef.current,
               ...track,
+              coverUrl: incomingCover || existingCover || '',
             };
           }
           const activeTrack = currentTrackRef.current;
@@ -456,6 +459,27 @@ export default function OnlineWebView() {
         useWebKit={true}
         onShouldStartLoadWithRequest={(request) => {
           if (request.url && request.url.includes('/api/tracks/download')) {
+            try {
+              const urlObj = new URL(request.url);
+              const trackId = urlObj.searchParams.get('id');
+              const title = urlObj.searchParams.get('title') || 'Track';
+              const artist = urlObj.searchParams.get('artist') || 'Unknown';
+              const audioUrl = urlObj.searchParams.get('url') || '';
+              handleMessage({
+                nativeEvent: {
+                  data: JSON.stringify({
+                    type: 'DOWNLOAD_TRACK',
+                    track: {
+                      id: trackId || `dl-${Date.now()}`,
+                      _id: trackId || `dl-${Date.now()}`,
+                      title,
+                      artist,
+                      audioUrl,
+                    }
+                  })
+                }
+              });
+            } catch (e) {}
             return false;
           }
           return true;
