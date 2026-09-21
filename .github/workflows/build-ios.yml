@@ -32,6 +32,9 @@ jobs:
         run: |
           sed -i '' "s/platform :ios, .*/platform :ios, '15.1'/g" ios/Podfile || true
           sed -i '' "s/use_expo_modules!/use_expo_modules!\n  pod 'RivoMediaControls', :path => '..\/modules\/media-controls'/g" ios/Podfile || true
+          sed -i '' "s/#import \"AppDelegate.h\"/#import \"AppDelegate.h\"\n#import <AVFoundation\/AVFoundation.h>/g" ios/Rivo/AppDelegate.mm || true
+          sed -i '' "s/didFinishLaunchingWithOptions:(NSDictionary \*)launchOptions\n{/didFinishLaunchingWithOptions:(NSDictionary *)launchOptions\n{\n  [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:(AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionAllowBluetooth | AVAudioSessionCategoryOptionAllowBluetoothA2DP) error:nil];\n  [[AVAudioSession sharedInstance] setActive:YES error:nil];\n  [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];/g" ios/Rivo/AppDelegate.mm || true
+          sed -i '' "s/didFinishLaunchingWithOptions:(NSDictionary \*)launchOptions {/didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {\n  [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:(AVAudioSessionCategoryOptionMixWithOthers | AVAudioSessionCategoryOptionAllowBluetooth | AVAudioSessionCategoryOptionAllowBluetoothA2DP) error:nil];\n  [[AVAudioSession sharedInstance] setActive:YES error:nil];\n  [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];/g" ios/Rivo/AppDelegate.mm || true
 
       - name: Install CocoaPods
         run: |

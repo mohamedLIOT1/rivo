@@ -8,6 +8,7 @@ import {
   StatusBar,
   BackHandler,
   Platform,
+  AppState,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
@@ -53,9 +54,10 @@ const INJECTED_JS = `
       get: function() { return 'visible'; },
       configurable: true
     });
+    document.hasFocus = function() { return true; };
   } catch(e) {}
 
-  // 2. Block visibilitychange and blur events from pausing media players
+  // 2. Block visibilitychange, blur, and pagehide events from pausing media players
   var stopEvent = function(e) {
     if (e) {
       e.stopImmediatePropagation();
@@ -66,9 +68,8 @@ const INJECTED_JS = `
   document.addEventListener('visibilitychange', stopEvent, true);
   window.addEventListener('webkitvisibilitychange', stopEvent, true);
   document.addEventListener('webkitvisibilitychange', stopEvent, true);
-  window.addEventListener('blur', function(e) {
-    if (e) e.stopImmediatePropagation();
-  }, true);
+  window.addEventListener('blur', stopEvent, true);
+  window.addEventListener('pagehide', stopEvent, true);
 
   // Prevent double-initialization
   if (window.__RIVO_NATIVE_INJECTED) return true;
@@ -86,12 +87,15 @@ const INJECTED_JS = `
     };
   }
 
-  // 4. Global Action Handler for Android Notification & Lockscreen Controls
+  // 4. Global Action Handler for Android & iOS Notification & Lockscreen Controls
   window.__RIVO_MEDIA_ACTION = function(action) {
     try {
       var handlers = window.__RIVO_MEDIA_HANDLERS || {};
 
       if (action === 'play') {
+        window.__RIVO_IS_PLAYING = true;
+        window.__RIVO_USER_PAUSED = false;
+
         if (typeof handlers['play'] === 'function') {
           try { handlers['play'](); } catch(e) {}
         }
@@ -99,7 +103,7 @@ const INJECTED_JS = `
         iframes.forEach(function(f) {
           try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
         });
-        document.querySelectorAll('audio').forEach(function(a) {
+        document.querySelectorAll('audio, video').forEach(function(a) {
           try { a.play(); } catch(e) {}
         });
         var b = document.querySelector('button[title="Play"]');
@@ -112,6 +116,8 @@ const INJECTED_JS = `
           }));
         }
       } else if (action === 'pause') {
+        window.__RIVO_IS_PLAYING = false;
+        window.__RIVO_USER_PAUSED = true;
 
         if (typeof handlers['pause'] === 'function') {
           try { handlers['pause'](); } catch(e) {}
@@ -120,7 +126,7 @@ const INJECTED_JS = `
         iframes.forEach(function(f) {
           try { f.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*'); } catch(e) {}
         });
-        document.querySelectorAll('audio').forEach(function(a) {
+        document.querySelectorAll('audio, video').forEach(function(a) {
           try { a.pause(); } catch(e) {}
         });
         var b = document.querySelector('button[title="Pause"]');
@@ -219,6 +225,34 @@ export default function OnlineWebView() {
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
   const [canGoBack, setCanGoBack] = useState(false);
+  const currentTrackRef = useRef(null);
+
+  // ─── AppState Background Audio Keeper (Resumes playback when moving to background) ───
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        setTimeout(() => {
+          webViewRef.current?.injectJavaScript(`
+            (function() {
+              try {
+                if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+                  var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+                  iframes.forEach(function(f) {
+                    try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
+                  });
+                  document.querySelectorAll('audio, video').forEach(function(el) {
+                    if (el.paused) el.play().catch(function() {});
+                  });
+                }
+              } catch(e) {}
+            })();
+            true;
+          `);
+        }, 250);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // ─── Hardware Back Button Handler (navigate back inside WebView instead of exiting) ───
   useEffect(() => {
@@ -290,14 +324,18 @@ export default function OnlineWebView() {
       switch (data.type) {
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
-          if (track && isPlaying) {
-            showMediaNotification(track, true);
-          } else if (track && !isPlaying) {
-            updateMediaNotification(false, false, false, track);
+          if (track) {
+            currentTrackRef.current = track;
+          }
+          const activeTrack = track || currentTrackRef.current;
+          if (activeTrack && isPlaying) {
+            showMediaNotification(activeTrack, true);
+          } else if (activeTrack && !isPlaying) {
+            updateMediaNotification(false, false, false, activeTrack);
           } else if (isPlaying) {
-            updateMediaNotification(true, false, false);
+            updateMediaNotification(true, false, false, activeTrack);
           } else {
-            updateMediaNotification(false, false, false);
+            updateMediaNotification(false, false, false, activeTrack);
           }
           break;
         }
