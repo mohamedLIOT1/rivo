@@ -39,11 +39,10 @@ export default function ModeToggle() {
   const handleExpand = () => {
     const toValue = expanded ? 0 : 1;
     setExpanded(!expanded);
-    Animated.spring(expandAnim, {
+    Animated.timing(expandAnim, {
       toValue,
+      duration: 150,
       useNativeDriver: false,
-      tension: 80,
-      friction: 10,
     }).start();
   };
 

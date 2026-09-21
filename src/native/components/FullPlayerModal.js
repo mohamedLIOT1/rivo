@@ -1,17 +1,16 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions,
-  ScrollView, Animated, Platform, FlatList, ActivityIndicator
+  ScrollView, Platform, FlatList, ActivityIndicator
 } from 'react-native';
 import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
-  Sliders, Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2
+  Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2
 } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
-import EqualizerModal from './EqualizerModal';
 import SleepTimerModal from './SleepTimerModal';
 
 const { width, height } = Dimensions.get('window');
@@ -42,33 +41,8 @@ export default function FullPlayerModal({ visible, onClose }) {
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
-  const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const lyricsScrollRef = useRef(null);
-
-  // Rotating vinyl animation
-  const spinValue = useRef(new Animated.Value(0)).current;
-  const spinAnimation = useRef(null);
-
-  useEffect(() => {
-    if (isPlaying) {
-      spinAnimation.current = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 12000,
-          useNativeDriver: true,
-        })
-      );
-      spinAnimation.current.start();
-    } else {
-      if (spinAnimation.current) spinAnimation.current.stop();
-    }
-  }, [isPlaying]);
-
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
 
   // Synced lyrics data structure normalized
   const lyricsList = useMemo(() => {
@@ -181,13 +155,14 @@ export default function FullPlayerModal({ visible, onClose }) {
         {/* Tab Content */}
         {activeTab === 'player' && (
           <View style={styles.playerBody}>
-            {/* Rotating Vinyl Disc / Album Art Frame */}
+            {/* Album Art Frame (Static, Zero-Lag) */}
             <View style={styles.artworkOuterFrame}>
               <View style={styles.artworkShadow} />
               <View style={styles.artworkBox}>
-                <Animated.Image
+                <Image
                   source={{ uri: currentTrack.coverUrl || currentTrack.cover || defaultCover }}
-                  style={[styles.coverArt, { transform: [{ rotate: spin }] }]}
+                  style={styles.coverArt}
+                  resizeMode="cover"
                 />
                 {/* Center Spindle Hole */}
                 <View style={styles.centerHole} />
@@ -287,18 +262,10 @@ export default function FullPlayerModal({ visible, onClose }) {
               </TouchableOpacity>
             </View>
 
-            {/* Extra Shortcuts (Equalizer / Sound Profiles) */}
+            {/* Extra Shortcuts (Sleep Timer) */}
             <View style={styles.shortcutsRow}>
               <TouchableOpacity
-                style={styles.shortcutBtn}
-                onPress={() => setIsEqualizerOpen(true)}
-              >
-                <Sliders size={16} color={colors.ink} />
-                <Text style={styles.shortcutText}>Equalizer</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.shortcutBtn}
+                style={[styles.shortcutBtn, { flex: 1 }]}
                 onPress={() => setIsSleepTimerOpen(true)}
               >
                 <Moon size={16} color={colors.ink} />
@@ -381,7 +348,6 @@ export default function FullPlayerModal({ visible, onClose }) {
         )}
 
         {/* Modals */}
-        <EqualizerModal visible={isEqualizerOpen} onClose={() => setIsEqualizerOpen(false)} />
         <SleepTimerModal visible={isSleepTimerOpen} onClose={() => setIsSleepTimerOpen(false)} />
       </View>
     </Modal>

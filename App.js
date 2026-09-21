@@ -18,10 +18,10 @@ import {
   BookOpen,
   MessageSquare,
   Sun,
+  Moon,
   Menu,
   X,
   Radio,
-  Sliders,
   Download,
   BarChart2,
   Shield,
@@ -33,6 +33,7 @@ import { ToastProvider } from './src/native/context/ToastContext';
 import { AudioProvider, useAudioPlayer } from './src/native/context/AudioContext';
 import { SocketProvider } from './src/native/context/SocketContext';
 import { ConnectivityProvider, useConnectivity } from './src/native/context/ConnectivityContext';
+import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 
 import OnlineWebView from './src/native/screens/OnlineWebView';
@@ -55,7 +56,6 @@ import PlaylistPickerModal from './src/native/components/PlaylistPickerModal';
 import AddSongModal from './src/native/components/AddSongModal';
 import ChatModal from './src/native/components/ChatModal';
 import SettingsModal from './src/native/components/SettingsModal';
-import EqualizerModal from './src/native/components/EqualizerModal';
 import JamRoomModal from './src/native/components/JamRoomModal';
 
 const TABS = [
@@ -112,12 +112,12 @@ function OfflineNativeShell() {
   const [isAddSongOpen, setIsAddSongOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
   const [isJamOpen, setIsJamOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const { currentTrack } = useAudioPlayer();
   const { currentUser } = useUser();
+  const { isDark, toggleTheme } = useTheme();
 
   const handleTabPress = (tabId) => {
     if (tabId === 'chat') {
@@ -159,8 +159,8 @@ function OfflineNativeShell() {
   };
 
   return (
-    <View style={styles.offlineShell}>
-      <View style={styles.topHeader}>
+    <View style={[styles.offlineShell, !isDark && styles.offlineShellLight]}>
+      <View style={[styles.topHeader, !isDark && styles.topHeaderLight]}>
         {/* Brand Logo: [R] RIVO */}
         <TouchableOpacity
           style={styles.brandingRow}
@@ -173,18 +173,22 @@ function OfflineNativeShell() {
               <Text style={styles.logoLetter}>R</Text>
             </View>
           </View>
-          <Text style={styles.brandTitle}>RIVO</Text>
+          <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
         </TouchableOpacity>
 
-        {/* Right Actions: Sun, Menu (☰), User Avatar */}
+        {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
-          {/* Sun (Theme toggle placeholder) */}
+          {/* Sun / Moon (Theme toggle) */}
           <TouchableOpacity
-            style={styles.topIconBtn}
-            onPress={() => {}}
+            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
+            onPress={toggleTheme}
             activeOpacity={0.8}
           >
-            <Sun size={15} color="#f59e0b" strokeWidth={2.5} />
+            {isDark ? (
+              <Sun size={15} color="#f59e0b" strokeWidth={2.5} />
+            ) : (
+              <Moon size={15} color="#0b1110" strokeWidth={2.5} />
+            )}
           </TouchableOpacity>
 
           {/* Menu Drawer Toggle (☰ 3 bars) */}
@@ -216,7 +220,9 @@ function OfflineNativeShell() {
       {/* ─────────────────────────────────────────
           ACTIVE SCREEN
           ───────────────────────────────────────── */}
-      <View style={styles.screenContainer}>{renderActiveScreen()}</View>
+      <View style={[styles.screenContainer, !isDark && styles.screenContainerLight]}>
+        {renderActiveScreen()}
+      </View>
 
       {/* ─────────────────────────────────────────
           FLOATING MINI PLAYER
@@ -229,7 +235,7 @@ function OfflineNativeShell() {
           BOTTOM NAVIGATION BAR (5 Tabs)
           Active tab highlighted with teal pill
           ───────────────────────────────────────── */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, !isDark && styles.bottomBarLight]}>
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
           const Icon = tab.icon;
@@ -243,10 +249,10 @@ function OfflineNativeShell() {
             >
               <Icon
                 size={18}
-                color={active ? '#0b1110' : '#94a3b8'}
+                color={active ? '#0b1110' : (!isDark ? '#57534e' : '#94a3b8')}
                 strokeWidth={active ? 2.8 : 2}
               />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+              <Text style={[styles.tabLabel, !isDark && styles.tabLabelLight, active && styles.tabLabelActive]}>
                 {tab.label}
               </Text>
             </TouchableOpacity>
@@ -285,17 +291,6 @@ function OfflineNativeShell() {
             >
               <Radio size={18} color="#17a398" />
               <Text style={styles.menuItemText}>Live Jam Session</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setIsEqualizerOpen(true);
-              }}
-            >
-              <Sliders size={18} color="#26c4b7" />
-              <Text style={styles.menuItemText}>Equalizer LAB</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -384,11 +379,6 @@ function OfflineNativeShell() {
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      <EqualizerModal
-        visible={isEqualizerOpen}
-        onClose={() => setIsEqualizerOpen(false)}
-      />
-
       <JamRoomModal
         visible={isJamOpen}
         onClose={() => setIsJamOpen(false)}
@@ -400,17 +390,19 @@ function OfflineNativeShell() {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ConnectivityProvider>
-        <UserProvider>
-          <ToastProvider>
-            <AudioProvider>
-              <SocketProvider>
-                <MainAppShell />
-              </SocketProvider>
-            </AudioProvider>
-          </ToastProvider>
-        </UserProvider>
-      </ConnectivityProvider>
+      <ThemeProvider>
+        <ConnectivityProvider>
+          <UserProvider>
+            <ToastProvider>
+              <AudioProvider>
+                <SocketProvider>
+                  <MainAppShell />
+                </SocketProvider>
+              </AudioProvider>
+            </ToastProvider>
+          </UserProvider>
+        </ConnectivityProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
@@ -434,6 +426,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0b1110',
   },
+  offlineShellLight: {
+    backgroundColor: '#fdfbf7',
+  },
   topHeader: {
     height: 52,
     backgroundColor: '#0b1110',
@@ -443,6 +438,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#1a2624',
+  },
+  topHeaderLight: {
+    backgroundColor: '#ede5d3',
+    borderBottomColor: '#d6c8b0',
   },
   brandingRow: {
     flexDirection: 'row',
@@ -489,6 +488,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     letterSpacing: 0.5,
   },
+  brandTitleLight: {
+    color: '#0b1110',
+  },
   topActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -503,6 +505,10 @@ const styles = StyleSheet.create({
     borderColor: '#263330',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topIconBtnLight: {
+    backgroundColor: '#e2d7c0',
+    borderColor: '#cfc1a5',
   },
   avatarBtn: {
     width: 32,
@@ -526,6 +532,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0b1110',
   },
+  screenContainerLight: {
+    backgroundColor: '#fdfbf7',
+  },
   bottomBar: {
     height: 56,
     backgroundColor: '#0b1110',
@@ -535,6 +544,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 8,
+  },
+  bottomBarLight: {
+    backgroundColor: '#ede5d3',
+    borderTopColor: '#d6c8b0',
   },
   tabBtn: {
     flex: 1,
@@ -552,6 +565,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#94a3b8',
     marginTop: 2,
+  },
+  tabLabelLight: {
+    color: '#78716c',
   },
   tabLabelActive: {
     color: '#0b1110',

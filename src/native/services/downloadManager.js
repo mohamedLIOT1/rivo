@@ -47,6 +47,24 @@ export const downloadTrack = async (track, onProgress) => {
     const existingInfo = await FileSystem.getInfoAsync(existingLocalUri);
     if (existingInfo.exists && existingInfo.size > 10000) {
       if (onProgress) onProgress(100);
+      const existing = await getDownloadedTracks();
+      const existingRecord = existing.find(t => String(t._id || t.id) === trackId);
+      let trackLyrics = track.lyrics || existingRecord?.lyrics || null;
+      if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
+        try {
+          const qTitle = encodeURIComponent(track.title || '');
+          const qArtist = encodeURIComponent(track.artist || '');
+          const qId = encodeURIComponent(trackId);
+          const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${qId}&title=${qTitle}&artist=${qArtist}`);
+          if (lyricsRes.ok) {
+            const lyricsData = await lyricsRes.json();
+            if (lyricsData?.success && lyricsData?.lyrics) {
+              trackLyrics = lyricsData.lyrics;
+            }
+          }
+        } catch {}
+      }
+
       const record = {
         ...track,
         id: trackId,
@@ -54,11 +72,11 @@ export const downloadTrack = async (track, onProgress) => {
         localAudioUri: existingLocalUri,
         nativeAudioUri: existingLocalUri,
         audioUrl: existingLocalUri,
+        lyrics: trackLyrics,
         isDownloaded: true,
         downloaded: true,
         downloadedAt: new Date().toISOString(),
       };
-      const existing = await getDownloadedTracks();
       const updated = [record, ...existing.filter(t => String(t._id || t.id) !== trackId)];
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       return record;
@@ -138,6 +156,23 @@ export const downloadTrack = async (track, onProgress) => {
     } catch {}
   }
 
+  // Lyrics fetch & embed
+  let trackLyrics = track.lyrics || null;
+  if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
+    try {
+      const qTitle = encodeURIComponent(track.title || '');
+      const qArtist = encodeURIComponent(track.artist || '');
+      const qId = encodeURIComponent(trackId);
+      const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${qId}&title=${qTitle}&artist=${qArtist}`);
+      if (lyricsRes.ok) {
+        const lyricsData = await lyricsRes.json();
+        if (lyricsData?.success && lyricsData?.lyrics) {
+          trackLyrics = lyricsData.lyrics;
+        }
+      }
+    } catch {}
+  }
+
   const record = {
     ...track,
     id: trackId,
@@ -147,6 +182,7 @@ export const downloadTrack = async (track, onProgress) => {
     audioUrl: audioFileUri,
     coverUrl: localCover,
     cover: localCover,
+    lyrics: trackLyrics,
     isDownloaded: true,
     downloaded: true,
     downloadedAt: new Date().toISOString(),

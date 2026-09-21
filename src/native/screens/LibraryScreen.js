@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
@@ -35,6 +36,7 @@ export default function LibraryScreen({
 }) {
   const { playTrack, playPlaylist, tracks: audioTracks } = useAudioPlayer();
   const { currentUser, playlists, likedTrackIds, tracks: userTracks } = useUser();
+  const { isDark } = useTheme();
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
 
   const allTracks = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
@@ -82,7 +84,7 @@ export default function LibraryScreen({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header */}
       <View style={styles.header}>
         {selectedView ? (
