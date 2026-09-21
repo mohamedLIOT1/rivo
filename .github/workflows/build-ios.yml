@@ -28,9 +28,10 @@ jobs:
         run: |
           npx expo prebuild --platform ios --clean
 
-      - name: Configure iOS Deployment Target
+      - name: Configure iOS Deployment Target and Link Media Controls
         run: |
           sed -i '' "s/platform :ios, .*/platform :ios, '15.1'/g" ios/Podfile || true
+          sed -i '' "s/use_expo_modules!/use_expo_modules!\n  pod 'RivoMediaControls', :path => '..\/modules\/media-controls'/g" ios/Podfile || true
 
       - name: Install CocoaPods
         run: |
