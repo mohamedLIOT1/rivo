@@ -282,27 +282,6 @@ function OfflineNativeShell() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setIsJamOpen(true);
-              }}
-            >
-              <Radio size={18} color="#17a398" />
-              <Text style={styles.menuItemText}>Live Jam Session</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setActiveTab('stats');
-              }}
-            >
-              <BarChart2 size={18} color="#f59e0b" />
-              <Text style={styles.menuItemText}>Listening Stats</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuItem}

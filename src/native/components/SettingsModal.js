@@ -124,21 +124,7 @@ export default function SettingsModal({ visible, onClose }) {
                 </View>
               </View>
 
-              {/* Storage & Cache */}
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionHeader}>
-                  <Trash2 size={18} color={colors.rust} />
-                  <Text style={styles.sectionTitle}>DISPENSARY ARCHIVE CACHE</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={styles.label}>Indexed Metadata:</Text>
-                  <Text style={styles.valueMono}>{cacheSize}</Text>
-                </View>
-                <TouchableOpacity style={styles.purgeBtn} onPress={handleClearCache}>
-                  <Trash2 size={16} color={colors.rust} />
-                  <Text style={styles.purgeBtnText}>PURGE METADATA CACHE</Text>
-                </TouchableOpacity>
-              </View>
+
 
               {/* About Rivo Engine */}
               <View style={styles.sectionCard}>
