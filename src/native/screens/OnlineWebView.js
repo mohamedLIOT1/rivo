@@ -72,9 +72,6 @@ const INJECTED_JS = `
   if (window.__RIVO_NATIVE_INJECTED) return true;
   window.__RIVO_NATIVE_INJECTED = true;
 
-  window.__RIVO_IS_PLAYING = false;
-  window.__RIVO_USER_PAUSED = false;
-
   // 3. Intercept navigator.mediaSession handlers
   window.__RIVO_MEDIA_HANDLERS = window.__RIVO_MEDIA_HANDLERS || {};
   if (navigator && navigator.mediaSession) {
@@ -87,59 +84,12 @@ const INJECTED_JS = `
     };
   }
 
-  // 4. Auto-resume guard: If YouTube iframe reports pause while playing and not paused by user
-  window.addEventListener('message', function(e) {
-    try {
-      var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      if (data && data.event === 'onStateChange') {
-        if (data.info === 1) {
-          window.__RIVO_IS_PLAYING = true;
-          window.__RIVO_USER_PAUSED = false;
-        } else if (data.info === 2) {
-          if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-            setTimeout(function() {
-              if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-                var iframes = document.querySelectorAll('iframe[src*="youtube"]');
-                iframes.forEach(function(f) {
-                  try {
-                    f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-                  } catch(err) {}
-                });
-              }
-            }, 250);
-          }
-        }
-      }
-    } catch(err) {}
-  });
-
-  // Track HTML audio elements
-  document.addEventListener('pause', function(e) {
-    if (e.target && e.target.tagName === 'AUDIO') {
-      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-        setTimeout(function() {
-          if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-            try { e.target.play(); } catch(err) {}
-          }
-        }, 250);
-      }
-    }
-  }, true);
-
-  document.addEventListener('playing', function(e) {
-    window.__RIVO_IS_PLAYING = true;
-    window.__RIVO_USER_PAUSED = false;
-  }, true);
-
-  // 5. Global Action Handler for Android Notification & Lockscreen Controls
+  // 4. Global Action Handler for Android Notification & Lockscreen Controls
   window.__RIVO_MEDIA_ACTION = function(action) {
     try {
       var handlers = window.__RIVO_MEDIA_HANDLERS || {};
 
       if (action === 'play') {
-        window.__RIVO_USER_PAUSED = false;
-        window.__RIVO_IS_PLAYING = true;
-
         if (typeof handlers['play'] === 'function') {
           try { handlers['play'](); } catch(e) {}
         }
@@ -160,8 +110,6 @@ const INJECTED_JS = `
           }));
         }
       } else if (action === 'pause') {
-        window.__RIVO_USER_PAUSED = true;
-        window.__RIVO_IS_PLAYING = false;
 
         if (typeof handlers['pause'] === 'function') {
           try { handlers['pause'](); } catch(e) {}
@@ -440,7 +388,7 @@ export default function OnlineWebView() {
         allowFileAccess={true}
         allowUniversalAccessFromFileURLs={true}
         mixedContentMode="always"
-        userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        userAgent="Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
         androidHardwareAccelerationDisabled={false}
         androidLayerType="hardware"
         thirdPartyCookiesEnabled={true}

@@ -5,7 +5,8 @@
     "dev": "vite",
     "build": "vite build",
     "bundle-android": "node node_modules/@expo/cli/build/bin/cli export:embed --entry-file index.js --platform android --dev false --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
