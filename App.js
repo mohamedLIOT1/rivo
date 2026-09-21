@@ -28,6 +28,8 @@ import {
   WifiOff,
   Shield,
   User,
+  Activity,
+  Settings as SettingsIcon,
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
@@ -285,6 +287,28 @@ function OfflineNativeShell() {
               style={styles.menuItem}
               onPress={() => {
                 setIsMenuOpen(false);
+                setActiveTab('profile');
+              }}
+            >
+              <User size={18} color="#10b981" />
+              <Text style={styles.menuItemText}>My Profile</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setIsMenuOpen(false);
+                setActiveTab('stats');
+              }}
+            >
+              <Activity size={18} color="#f59e0b" />
+              <Text style={styles.menuItemText}>Stats & History</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setIsMenuOpen(false);
                 setActiveTab('offline');
               }}
             >
@@ -292,7 +316,7 @@ function OfflineNativeShell() {
               <Text style={styles.menuItemText}>Offline Vault</Text>
             </TouchableOpacity>
 
-            {currentUser?.role === 'admin' && (
+            {(currentUser?.role === 'admin' || currentUser?.email?.includes('admin')) && (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -312,7 +336,7 @@ function OfflineNativeShell() {
                 setIsSettingsOpen(true);
               }}
             >
-              <User size={18} color="#ede5d3" />
+              <SettingsIcon size={18} color="#ede5d3" />
               <Text style={styles.menuItemText}>Settings</Text>
             </TouchableOpacity>
           </View>
