@@ -27,10 +27,10 @@ const RIVO_WEB_URL = API_BASE_URL;
  */
 const INJECTED_JS = `
 (function() {
-  // ── Flag: running inside native APK ──
+  // â”€â”€ Flag: running inside native APK â”€â”€
   window.RIVO_NATIVE = true;
 
-  // ── Un-throttle YouTube iframe players in Android WebView ──
+  // â”€â”€ Un-throttle YouTube iframe players in Android WebView â”€â”€
   var styleId = '__rivo_yt_unthrottle_css';
   if (!document.getElementById(styleId)) {
     var style = document.createElement('style');
@@ -78,7 +78,7 @@ const INJECTED_JS = `
   if (window.__RIVO_NATIVE_INJECTED) return;
   window.__RIVO_NATIVE_INJECTED = true;
 
-  // ── Bridge: send download request to native layer ──
+  // â”€â”€ Bridge: send download request to native layer â”€â”€
   window.RIVO_DOWNLOAD = function(track) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -88,7 +88,7 @@ const INJECTED_JS = `
     }
   };
 
-  // ── Bridge: send toast/status messages to native ──
+  // â”€â”€ Bridge: send toast/status messages to native â”€â”€
   window.RIVO_TOAST = function(message, type) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -111,7 +111,7 @@ export default function OnlineWebView() {
   const [hasError, setHasError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
 
-  // ─── Handle messages from WebView (postMessage bridge) ──────
+  // â”€â”€â”€ Handle messages from WebView (postMessage bridge) â”€â”€â”€â”€â”€â”€
   const handleMessage = useCallback(async (event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -157,7 +157,7 @@ export default function OnlineWebView() {
     }
   }, [showToast]);
 
-  // ─── Error / offline fallback UI ────────────────────────────
+  // â”€â”€â”€ Error / offline fallback UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (hasError) {
     return (
       <View style={styles.errorContainer}>
@@ -245,7 +245,7 @@ export default function OnlineWebView() {
         <View style={styles.downloadBanner}>
           <View style={styles.downloadInner}>
             <Text style={styles.downloadTitle} numberOfLines={1}>
-              ⬇ {downloadProgress.title}
+              â¬‡ {downloadProgress.title}
             </Text>
             <View style={styles.downloadBar}>
               <View

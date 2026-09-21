@@ -129,10 +129,7 @@ export default function OfflineScreen() {
               <Text style={styles.meterLabel}>CACHED RECORDINGS:</Text>
               <Text style={styles.meterValue}>{offlineTracks.length} TAPES</Text>
             </View>
-            <View style={styles.meterHeader}>
-              <Text style={styles.meterLabel}>STORAGE USED:</Text>
-              <Text style={styles.meterValue}>{formatBytes(storageUsed)}</Text>
-            </View>
+
             <View style={styles.progressBar}>
               <View
                 style={[
