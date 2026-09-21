@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { 
   Play, ListPlus, Plus, Minus, BookmarkPlus, BookmarkMinus, 
-  Edit3, Trash2, X, Sparkles, CheckCircle2 
+  Edit3, Trash2, X, Sparkles, CheckCircle2, Download, Loader2 
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import { isUserAdmin } from '../utils/adminUtils';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useDownloadManager } from '../context/DownloadContext';
 
 export default function TrackActionMenuModal({
   isOpen,
@@ -26,6 +27,14 @@ export default function TrackActionMenuModal({
   const isDark = globalTheme === 'dark';
   const isAdmin = isUserAdmin(currentUser);
   const { currentTrack } = useAudioPlayer();
+  const downloadManager = useDownloadManager();
+  const {
+    downloadTrack,
+    removeOfflineTrack,
+    cancelTrackDownload,
+    isTrackDownloading,
+    isTrackQueued
+  } = downloadManager || {};
 
   if (!isOpen || !track) return null;
 
@@ -194,6 +203,65 @@ export default function TrackActionMenuModal({
               >
                 <BookmarkPlus size={16} className="text-[#f59e0b]" />
                 <span>Add to Playlist...</span>
+              </button>
+            )}
+
+            {/* Offline Tape Download / Cancel Action */}
+            {isTrackDownloading?.(track.id || track._id) ? (
+              <button
+                onClick={() => {
+                  cancelTrackDownload?.(track.id || track._id);
+                  onClose();
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer text-red-500 ${
+                  isDark ? 'hover:bg-red-500/10' : 'hover:bg-red-100'
+                }`}
+              >
+                <X size={16} />
+                <span>Cancel Ongoing Download</span>
+              </button>
+            ) : isTrackQueued?.(track.id || track._id) ? (
+              <button
+                onClick={() => {
+                  cancelTrackDownload?.(track.id || track._id);
+                  onClose();
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer text-amber-500 ${
+                  isDark ? 'hover:bg-amber-500/10' : 'hover:bg-amber-100'
+                }`}
+              >
+                <X size={16} />
+                <span>Cancel Download (In Queue)</span>
+              </button>
+            ) : track.downloaded ? (
+              <button
+                onClick={() => {
+                  if (removeOfflineTrack) {
+                    removeOfflineTrack(track.id || track._id);
+                  } else if (downloadTrack) {
+                    downloadTrack(track);
+                  }
+                  onClose();
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-zinc-800/80 text-emerald-400' : 'hover:bg-[#ede5d3] text-emerald-600'
+                }`}
+              >
+                <CheckCircle2 size={16} />
+                <span>Remove from Offline Downloads</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  downloadTrack?.(track);
+                  onClose();
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                  isDark ? 'hover:bg-zinc-800/80 text-zinc-200' : 'hover:bg-[#ede5d3] text-zinc-900'
+                }`}
+              >
+                <Download size={16} className="text-[#17a398]" />
+                <span>Download Song (Offline Tape)</span>
               </button>
             )}
 
