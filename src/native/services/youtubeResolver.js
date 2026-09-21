@@ -163,13 +163,20 @@ export const resolveAudioStream = async (track) => {
     return rawUrl;
   }
 
-  // 3. Prioritize Official Stream from Backend
-  if (rawUrl || trackId) {
+  // 3. Prioritize Official Stream from Backend Proxy (guarantees authentic audio without IP lock / 403)
+  if (rawUrl) {
+    const backendStreamUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}&id=${encodeURIComponent(trackId)}`;
+    if (trackId) streamCache.set(trackId, backendStreamUrl);
+    return backendStreamUrl;
+  }
+
+  // 4. Fallback server stream resolver if rawUrl is empty but trackId exists
+  if (trackId) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       const serverStreamRes = await fetch(
-        `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
+        `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
         { signal: controller.signal }
       );
       clearTimeout(timeoutId);
@@ -183,13 +190,6 @@ export const resolveAudioStream = async (track) => {
     } catch (e) {
       // Backend request timed out or failed, continue
     }
-  }
-
-  // 4. Backend direct stream proxy (guarantees authentic original audio from server)
-  if (rawUrl) {
-    const backendStreamUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}&id=${encodeURIComponent(trackId)}`;
-    if (trackId) streamCache.set(trackId, backendStreamUrl);
-    return backendStreamUrl;
   }
 
   // 5. Fallback: Client-side SoundCloud resolution with STRICT authenticity ranking

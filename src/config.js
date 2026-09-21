@@ -16,7 +16,7 @@ export const API_BASE_URL = (() => {
       protocol === 'capacitor:' ||
       protocol === 'file:'
     ) {
-      return 'http://10.166.17.242:5000';
+      return 'https://liofy-production-0f56.up.railway.app';
     }
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:5000';
@@ -28,7 +28,7 @@ export const API_BASE_URL = (() => {
     return `${protocol}//${host}`;
   }
 
-  return 'http://10.166.17.242:5000';
+  return 'https://liofy-production-0f56.up.railway.app';
 })();
 
 export const getApiUrl = (endpoint) => {

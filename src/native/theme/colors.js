@@ -16,15 +16,22 @@ export const colors = {
   paper: '#ede5d3',
   paperDark: '#ded2bb',
 
-  // Accents
+  // Accents & Theme Status
   amber: '#f59e0b',           // Jam LIVE badge & warnings
+  gold: '#f59e0b',            // Gold stats badge
   crimson: '#dc2626',         // Likes, errors, delete
+  rust: '#dc2626',            // Danger, error boundary, delete actions
+  mint: '#26c4b7',            // Mint highlight / badges
   sky: '#38bdf8',             // Podcasts & links
   purple: '#a855f7',          // Chill & lofi
   navy: '#1e3a8a',            // Classical & deep vibes
+  inkMuted: '#1f2937',        // Muted dark border/fill
+  paperLight: '#fdfbf7',      // Light paper background
 
   // Text
   textWhite: '#fdfbf7',
   textMuted: '#9ca3af',
   textDim: '#6b7280',
+  paperMuted: '#a8a29e',      // Muted paper text
+  grayText: '#9ca3af',        // Gray secondary text
 };

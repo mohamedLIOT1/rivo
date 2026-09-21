@@ -70,13 +70,6 @@ export default function FullPlayerModal({ visible, onClose }) {
     outputRange: ['0deg', '360deg'],
   });
 
-  if (!currentTrack) return null;
-
-  const trackId = String(currentTrack._id || currentTrack.id || '');
-  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-  const isDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(t => String(t._id || t.id) === trackId);
-  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
-
   // Synced lyrics data structure normalized
   const lyricsList = useMemo(() => {
     if (!lyrics) return [];
@@ -114,6 +107,13 @@ export default function FullPlayerModal({ visible, onClose }) {
       });
     }
   }, [activeLyricIndex, activeTab]);
+
+  if (!visible || !currentTrack) return null;
+
+  const trackId = String(currentTrack._id || currentTrack.id || '');
+  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+  const isDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(t => String(t._id || t.id) === trackId);
+  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
 
   const formatTime = (secs) => {
     if (isNaN(secs) || secs === null) return '0:00';
