@@ -1,11 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions,
-  ScrollView, Animated, Platform, FlatList
+  ScrollView, Animated, Platform, FlatList, ActivityIndicator
 } from 'react-native';
 import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
-  Sliders, Moon, ListMusic, AlignLeft, Sparkles, Disc
+  Sliders, Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2
 } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -32,14 +32,19 @@ export default function FullPlayerModal({ visible, onClose }) {
     queue,
     playTrack,
     lyrics,
+    isLoadingLyrics,
+    downloadedTracks = [],
+    downloadingIds = {},
+    handleDownloadTrack,
   } = useAudioPlayer();
 
   const { currentTime, duration } = useAudioProgress();
-  const { likedTrackIds, toggleLikeTrack } = useUser();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
+  const lyricsScrollRef = useRef(null);
 
   // Rotating vinyl animation
   const spinValue = useRef(new Animated.Value(0)).current;
@@ -67,8 +72,48 @@ export default function FullPlayerModal({ visible, onClose }) {
 
   if (!currentTrack) return null;
 
-  const trackId = String(currentTrack._id || currentTrack.id);
-  const isLiked = likedTrackIds.includes(trackId);
+  const trackId = String(currentTrack._id || currentTrack.id || '');
+  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+  const isDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(t => String(t._id || t.id) === trackId);
+  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
+
+  // Synced lyrics data structure normalized
+  const lyricsList = useMemo(() => {
+    if (!lyrics) return [];
+    if (Array.isArray(lyrics)) {
+      return lyrics
+        .filter(l => l && typeof l.text === 'string')
+        .map((l, idx) => ({
+          time: typeof l.time === 'number' ? l.time : idx * 5,
+          text: l.text,
+        }));
+    }
+    if (typeof lyrics === 'string') {
+      return lyrics
+        .split('\n')
+        .map((line, idx) => ({ time: idx * 5, text: line.trim() }))
+        .filter(l => l.text);
+    }
+    return [];
+  }, [lyrics]);
+
+  const activeLyricIndex = useMemo(() => {
+    if (!lyricsList.length) return -1;
+    return lyricsList.findIndex((line, idx) => {
+      const nextLine = lyricsList[idx + 1];
+      const curTime = typeof currentTime === 'number' ? currentTime : 0;
+      return curTime >= line.time && (!nextLine || curTime < nextLine.time);
+    });
+  }, [lyricsList, currentTime]);
+
+  useEffect(() => {
+    if (activeTab === 'lyrics' && activeLyricIndex >= 0 && lyricsScrollRef.current) {
+      lyricsScrollRef.current.scrollTo({
+        y: Math.max(0, activeLyricIndex * 46 - 120),
+        animated: true,
+      });
+    }
+  }, [activeLyricIndex, activeTab]);
 
   const formatTime = (secs) => {
     if (isNaN(secs) || secs === null) return '0:00';
@@ -161,16 +206,33 @@ export default function FullPlayerModal({ visible, onClose }) {
                     {currentTrack.artist || 'Unknown Artist'}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  onPress={() => toggleLikeTrack(trackId)}
-                  style={styles.likeBtn}
-                >
-                  <Heart
-                    size={24}
-                    color={isLiked ? colors.crimson : colors.ink}
-                    fill={isLiked ? colors.crimson : 'transparent'}
-                  />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => !isDownloaded && !isDownloading && handleDownloadTrack(currentTrack)}
+                    style={styles.downloadBtn}
+                    disabled={isDownloading || isDownloaded}
+                    activeOpacity={0.8}
+                  >
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color={colors.ink} />
+                    ) : isDownloaded ? (
+                      <CheckCircle2 size={22} color={colors.tealDark} />
+                    ) : (
+                      <Download size={22} color={colors.ink} />
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => toggleLikeTrack(trackId)}
+                    style={styles.likeBtn}
+                  >
+                    <Heart
+                      size={24}
+                      color={isLiked ? colors.crimson : colors.ink}
+                      fill={isLiked ? colors.crimson : 'transparent'}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -248,12 +310,44 @@ export default function FullPlayerModal({ visible, onClose }) {
 
         {/* Lyrics Tab */}
         {activeTab === 'lyrics' && (
-          <ScrollView contentContainerStyle={styles.lyricsBody}>
+          <ScrollView
+            ref={lyricsScrollRef}
+            contentContainerStyle={styles.lyricsBody}
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.lyricsCard}>
-              <Text style={styles.lyricsHeader}>OFFICIAL TRANSCRIPT</Text>
-              <Text style={styles.lyricsText}>
-                {lyrics || 'No lyrics available for this audio file.'}
-              </Text>
+              <View style={styles.lyricsCardHeaderRow}>
+                <Text style={styles.lyricsHeader}>OFFICIAL TRANSCRIPT</Text>
+                {isLoadingLyrics && (
+                  <ActivityIndicator size="small" color={colors.tealLight} />
+                )}
+              </View>
+
+              {lyricsList.length > 0 ? (
+                <View style={styles.lyricsLinesList}>
+                  {lyricsList.map((line, idx) => {
+                    const isActive = idx === activeLyricIndex;
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        onPress={() => seekTo(line.time)}
+                        activeOpacity={0.7}
+                        style={[styles.lyricLineBox, isActive && styles.lyricLineBoxActive]}
+                      >
+                        <Text style={[styles.lyricLineText, isActive && styles.lyricLineTextActive]}>
+                          {line.text}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyLyricsBox}>
+                  <Text style={styles.emptyLyricsText}>
+                    {isLoadingLyrics ? 'Retrieving synchronized lyrics from dispensary...' : 'No synchronized lyrics available for this audio file.'}
+                  </Text>
+                </View>
+              )}
             </View>
           </ScrollView>
         )}
@@ -514,21 +608,72 @@ const styles = StyleSheet.create({
     color: colors.ink,
     textTransform: 'uppercase',
   },
+  downloadBtn: {
+    padding: 8,
+    backgroundColor: colors.paper,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+  },
   lyricsBody: {
     paddingVertical: 16,
+    paddingBottom: 40,
   },
   lyricsCard: {
     backgroundColor: colors.surfaceDark,
     borderWidth: 2.5,
     borderColor: colors.ink,
+    borderRadius: 8,
     padding: 16,
+  },
+  lyricsCardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingBottom: 8,
   },
   lyricsHeader: {
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontSize: 11,
     color: colors.tealLight,
     fontWeight: '900',
-    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  lyricsLinesList: {
+    gap: 8,
+  },
+  lyricLineBox: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  lyricLineBoxActive: {
+    backgroundColor: 'rgba(23, 163, 152, 0.18)',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.mint,
+  },
+  lyricLineText: {
+    fontSize: 15,
+    color: 'rgba(253, 251, 247, 0.65)',
+    lineHeight: 24,
+    fontWeight: '600',
+  },
+  lyricLineTextActive: {
+    color: colors.mint,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  emptyLyricsBox: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyLyricsText: {
+    fontSize: 13,
+    color: colors.paperMuted,
+    textAlign: 'center',
   },
   lyricsText: {
     fontSize: 16,

@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share } from 'react-native';
-import { X, Play, ListPlus, Heart, Download, Share2 } from 'lucide-react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share, ActivityIndicator } from 'react-native';
+import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
@@ -9,11 +9,14 @@ import CassetteTag from '../ui/CassetteTag';
 export default function TrackActionMenuModal({ visible, track, onClose, onOpenAddToPlaylist }) {
   if (!track) return null;
 
-  const { playTrack, addToQueue, handleDownloadTrack } = useAudioPlayer();
-  const { likedTrackIds, toggleLikeTrack } = useUser();
+  const { playTrack, addToQueue, handleDownloadTrack, downloadedTracks = [], downloadingIds = {} } = useAudioPlayer();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
 
-  const trackId = String(track._id || track.id);
-  const isLiked = likedTrackIds.includes(trackId);
+  const trackId = String(track._id || track.id || '');
+  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+  const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
+  const isDownloaded = safeDownloaded.some(t => String(t._id || t.id) === trackId) || Boolean(track?.isDownloaded || track?.localAudioUri);
+  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
   const defaultCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400';
 
   const handleShare = async () => {
@@ -101,14 +104,27 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
               )}
 
               <TouchableOpacity
-                style={styles.actionRow}
+                style={[styles.actionRow, (isDownloaded || isDownloading) && { opacity: 0.9 }]}
+                disabled={isDownloading}
                 onPress={() => {
                   handleDownloadTrack(track);
                   onClose();
                 }}
               >
-                <Download size={18} color={colors.ink} />
-                <Text style={styles.actionText}>Download Offline Tape</Text>
+                {isDownloading ? (
+                  <ActivityIndicator size="small" color={colors.teal} />
+                ) : isDownloaded ? (
+                  <CheckCircle2 size={18} color={colors.tealDark} />
+                ) : (
+                  <Download size={18} color={colors.ink} />
+                )}
+                <Text style={[styles.actionText, isDownloaded && { color: colors.tealDark, fontWeight: '700' }]}>
+                  {isDownloading
+                    ? `Downloading (${downloadingIds[trackId] || 0}%)...`
+                    : isDownloaded
+                    ? 'Saved in Offline Vault'
+                    : 'Download Offline Tape'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity

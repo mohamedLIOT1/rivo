@@ -162,8 +162,9 @@ export const UserProvider = ({ children }) => {
 
   const toggleLikeTrack = async (trackId) => {
     const idStr = String(trackId);
-    const isLiked = likedTrackIds.includes(idStr);
-    const updated = isLiked ? likedTrackIds.filter(id => id !== idStr) : [...likedTrackIds, idStr];
+    const safeLiked = Array.isArray(likedTrackIds) ? likedTrackIds : [];
+    const isLiked = safeLiked.includes(idStr);
+    const updated = isLiked ? safeLiked.filter(id => id !== idStr) : [...safeLiked, idStr];
     setLikedTrackIds(updated);
 
     if (token) {

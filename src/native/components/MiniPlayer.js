@@ -8,12 +8,12 @@ import { colors } from '../theme/colors';
 export default function MiniPlayer({ onOpenFullPlayer }) {
   const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
-  const { likedTrackIds, toggleLikeTrack } = useUser();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
 
   if (!currentTrack) return null;
 
-  const trackId = String(currentTrack._id || currentTrack.id);
-  const isLiked = likedTrackIds.includes(trackId);
+  const trackId = String(currentTrack._id || currentTrack.id || '');
+  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const defaultCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300';
 

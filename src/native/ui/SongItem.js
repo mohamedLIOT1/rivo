@@ -1,19 +1,23 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { Play, Pause, Heart, MoreVertical } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 
 export default React.memo(function SongItem({ track, onPlay, onOpenActionMenu, onMorePress }) {
-  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack } = useAudioPlayer();
-  const { likedTrackIds, toggleLikeTrack } = useUser();
+  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
+
+  if (!track) return null;
 
   const handleAction = onOpenActionMenu || onMorePress;
 
-  const trackId = String(track._id || track.id);
-  const isCurrent = String(currentTrack?._id || currentTrack?.id) === trackId;
-  const isLiked = likedTrackIds.includes(trackId);
+  const trackId = String(track._id || track.id || '');
+  const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
+  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+  const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
+  const isDownloaded = safeDownloaded.some(t => String(t._id || t.id) === trackId) || Boolean(track?.isDownloaded || track?.localAudioUri);
 
   const defaultCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400';
 
@@ -40,9 +44,16 @@ export default React.memo(function SongItem({ track, onPlay, onOpenActionMenu, o
         <Text style={[styles.title, isCurrent && styles.activeTitle]} numberOfLines={1}>
           {track.title || 'Untitled'}
         </Text>
-        <Text style={styles.artist} numberOfLines={1}>
-          {track.artist || 'Unknown Artist'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <Text style={styles.artist} numberOfLines={1}>
+            {track.artist || 'Unknown Artist'}
+          </Text>
+          {isDownloaded && (
+            <View style={styles.localBadge}>
+              <Text style={styles.localBadgeText}>OFFLINE</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Action Icons */}
@@ -138,7 +149,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#94a3b8',
-    marginTop: 2,
+  },
+  localBadge: {
+    backgroundColor: '#0b1110',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#17a398',
+  },
+  localBadgeText: {
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#26c4b7',
   },
   actions: {
     flexDirection: 'row',

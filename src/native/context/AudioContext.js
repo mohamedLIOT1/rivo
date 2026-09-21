@@ -1,11 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
-
 import * as FileSystem from 'expo-file-system';
-import { Alert } from 'react-native';
 import { API_BASE_URL } from '../config';
+import { INITIAL_TRACKS } from '../data/initialTracks';
 import { downloadTrack, getDownloadedTracks, removeDownloadedTrack, isTrackDownloaded } from '../services/downloadManager';
 import { resolveAudioStream } from '../services/youtubeResolver';
+import { showMediaNotification, updateMediaNotification, hideMediaNotification, subscribeToMediaActions } from '../services/mediaControls';
+import { useConnectivity } from './ConnectivityContext';
 import { useToast } from './ToastContext';
 
 const AudioContext = createContext();
@@ -22,13 +23,15 @@ export const AudioProvider = ({ children }) => {
   const sleepTimerRef = useRef(null);
 
   const { showToast } = useToast();
+  const conn = useConnectivity();
+  const isOffline = conn?.appMode === 'offline';
 
   const [currentTrack, setCurrentTrackState] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [repeatMode, setRepeatMode] = useState('off'); // 'off' | 'all' | 'one'
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(isOffline);
   const [downloadedTracks, setDownloadedTracks] = useState([]);
   const [downloadingIds, setDownloadingIds] = useState({});
   const [queue, setQueueState] = useState([]);
@@ -41,6 +44,10 @@ export const AudioProvider = ({ children }) => {
   // Lyrics
   const [lyrics, setLyrics] = useState('');
   const [isLoadingLyrics, setIsLoadingLyrics] = useState(false);
+
+  useEffect(() => {
+    setIsOfflineMode(isOffline);
+  }, [isOffline]);
 
   const setCurrentTrack = (track) => {
     currentTrackRef.current = track;
@@ -88,6 +95,7 @@ export const AudioProvider = ({ children }) => {
         if (soundRef.current) {
           soundRef.current.pauseAsync().catch(() => {});
           setIsPlaying(false);
+          updateMediaNotification(false, repeatMode !== 'off', isShuffle, currentTrackRef.current);
         }
         showToast('Playback stopped by sleep timer', 'info');
       }
@@ -127,10 +135,9 @@ export const AudioProvider = ({ children }) => {
     return () => {
       if (soundRef.current) soundRef.current.unloadAsync().catch(() => {});
       if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+      hideMediaNotification();
     };
   }, []);
-
-  const checkNetwork = async () => {};
 
   const refreshDownloadedTracks = async () => {
     try {
@@ -141,7 +148,10 @@ export const AudioProvider = ({ children }) => {
 
   const onPlaybackStatusUpdate = (status) => {
     if (!status.isLoaded) return;
-    if (isPlaying !== status.isPlaying) setIsPlaying(status.isPlaying);
+    if (isPlaying !== status.isPlaying) {
+      setIsPlaying(status.isPlaying);
+      updateMediaNotification(status.isPlaying, repeatMode !== 'off', isShuffle, currentTrackRef.current);
+    }
 
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
     const newDuration = Math.floor((status.durationMillis || 0) / 1000);
@@ -160,33 +170,125 @@ export const AudioProvider = ({ children }) => {
     }
   };
 
+  // Sync media notification controls with background notification drawer
+  useEffect(() => {
+    const unsub = subscribeToMediaActions((action) => {
+      switch (action) {
+        case 'play':
+          if (!isPlaying) togglePlay();
+          break;
+        case 'pause':
+          if (isPlaying) togglePlay();
+          break;
+        case 'play_pause':
+          togglePlay();
+          break;
+        case 'next':
+          playNextTrack();
+          break;
+        case 'prev':
+          playPrevTrack();
+          break;
+        case 'repeat':
+          toggleRepeat();
+          break;
+        case 'shuffle':
+          setIsShuffle(s => !s);
+          break;
+        case 'forward': {
+          const newPos = (playbackStatusRef.current.currentTime || 0) + 10;
+          seekTo(newPos);
+          break;
+        }
+        case 'rewind': {
+          const newPos = Math.max(0, (playbackStatusRef.current.currentTime || 0) - 10);
+          seekTo(newPos);
+          break;
+        }
+        default:
+          break;
+      }
+    });
+
+    return () => unsub();
+  }, [isPlaying, isShuffle, repeatMode]);
+
+  useEffect(() => {
+    if (currentTrack) {
+      updateMediaNotification(isPlaying, repeatMode !== 'off', isShuffle, currentTrack);
+    }
+  }, [isPlaying, isShuffle, repeatMode, currentTrack?.id, currentTrack?._id]);
+
   useEffect(() => {
     if (!currentTrack) {
-      setLyrics('');
+      setLyrics([]);
       return;
     }
+
+    if (Array.isArray(currentTrack.lyrics) && currentTrack.lyrics.length > 0) {
+      setLyrics(currentTrack.lyrics);
+      return;
+    }
+
+    if (isOffline) {
+      setLyrics([]);
+      return;
+    }
+
+    setLyrics([]);
+    let isMounted = true;
     const fetchLyrics = async () => {
       try {
         setIsLoadingLyrics(true);
         const title = encodeURIComponent(currentTrack.title || '');
         const artist = encodeURIComponent(currentTrack.artist || '');
-        const res = await fetch(`${API_BASE_URL}/api/lyrics?title=${title}&artist=${artist}`);
+        const trackId = encodeURIComponent(currentTrack._id || currentTrack.id || '');
+
+        const res = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${trackId}&title=${title}&artist=${artist}`);
         if (res.ok) {
           const data = await res.json();
-          setLyrics(data.lyrics || 'No lyrics available.');
+          if (isMounted && data?.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
+            setLyrics(data.lyrics);
+            return;
+          }
         }
+
+        // Fallback: request AI generation if no lyrics found
+        const genRes = await fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackId: currentTrack._id || currentTrack.id,
+            title: currentTrack.title,
+            artist: currentTrack.artist,
+            duration: currentTrack.duration || 180,
+          }),
+        });
+        if (genRes.ok) {
+          const genData = await genRes.json();
+          if (isMounted && genData?.success && Array.isArray(genData.lyrics)) {
+            setLyrics(genData.lyrics);
+            return;
+          }
+        }
+
+        if (isMounted) setLyrics([]);
       } catch {
-        setLyrics('');
+        if (isMounted) setLyrics([]);
       } finally {
-        setIsLoadingLyrics(false);
+        if (isMounted) setIsLoadingLyrics(false);
       }
     };
     fetchLyrics();
-  }, [currentTrack?._id, currentTrack?.id, currentTrack?.title]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentTrack?._id, currentTrack?.id, currentTrack?.title, isOffline]);
 
   const playTrack = async (track, trackList = [], isRetry = false) => {
     if (!track) return;
-    const trackId = String(track._id || track.id);
+    const trackId = String(track._id || track.id || '');
     const requestTs = Date.now();
     playbackStatusRef.current.lastRequestTs = requestTs;
 
@@ -194,8 +296,7 @@ export const AudioProvider = ({ children }) => {
       setIsLoading(true);
 
       setCurrentTrack(track);
-      setIsLoading(true);
-      if (trackList.length > 0) setQueue(trackList);
+      if (Array.isArray(trackList) && trackList.length > 0) setQueue(trackList);
 
       if (soundRef.current) {
         const s = soundRef.current;
@@ -204,10 +305,27 @@ export const AudioProvider = ({ children }) => {
         await s.unloadAsync().catch(() => {});
       }
 
-      const local = downloadedTracks.find(t => String(t._id || t.id) === trackId);
+      // Check if track is available locally
+      const local = (downloadedTracks || []).find(t => String(t._id || t.id) === trackId);
       let uri = local?.nativeAudioUri || local?.localAudioUri || track.nativeAudioUri || track.localAudioUri;
 
+      if (uri && uri.startsWith('file://')) {
+        try {
+          const fileInfo = await FileSystem.getInfoAsync(uri);
+          if (!fileInfo.exists || fileInfo.size < 1000) {
+            uri = null; // file was missing or corrupt
+          }
+        } catch {
+          uri = null;
+        }
+      }
+
       if (!uri) {
+        if (isOffline) {
+          setIsLoading(false);
+          showToast(`"${track.title || 'Track'}" is not cached offline`, 'warning');
+          return;
+        }
         uri = await resolveAudioStream(track);
       }
 
@@ -232,19 +350,25 @@ export const AudioProvider = ({ children }) => {
       soundRef.current = sound;
       setIsPlaying(true);
       setIsLoading(false);
-
-      const isRemote = !uri.startsWith('file://') && !uri.startsWith(FileSystem.cacheDirectory);
-      if (isRemote && !isOfflineMode) {
-        handleDownloadTrack(track, true).catch(() => {});
-      }
+      try {
+        showMediaNotification(track, true, repeatMode !== 'off', isShuffle);
+      } catch {}
     } catch (err) {
       setIsLoading(false);
-      if (!isRetry && !isOfflineMode) {
+      if (!isRetry && !isOffline) {
         return playTrack(track, trackList, true);
       } else {
-        showToast(`Could not play: ${track.title}`, 'error');
+        showToast(`Could not play: ${track?.title || 'Track'}`, 'error');
       }
     }
+  };
+
+  const playPlaylist = async (playlistTracks, startIndex = 0) => {
+    if (!Array.isArray(playlistTracks) || playlistTracks.length === 0) return;
+    const safeIndex = Math.max(0, Math.min(startIndex, playlistTracks.length - 1));
+    const targetTrack = playlistTracks[safeIndex];
+    setQueue(playlistTracks);
+    return playTrack(targetTrack, playlistTracks);
   };
 
   const togglePlay = async () => {
@@ -257,16 +381,19 @@ export const AudioProvider = ({ children }) => {
     if (isPlaying) {
       await soundRef.current.pauseAsync().catch(() => {});
       setIsPlaying(false);
+      updateMediaNotification(false, repeatMode !== 'off', isShuffle, currentTrackRef.current);
     } else {
       await soundRef.current.playAsync().catch(() => {});
       setIsPlaying(true);
+      updateMediaNotification(true, repeatMode !== 'off', isShuffle, currentTrackRef.current);
     }
   };
 
   const seekTo = async (secs) => {
     if (!soundRef.current) return;
-    await soundRef.current.setPositionAsync(secs * 1000).catch(() => {});
-    setProgress(p => ({ ...p, currentTime: secs }));
+    const safeSecs = Math.max(0, Number(secs) || 0);
+    await soundRef.current.setPositionAsync(safeSecs * 1000).catch(() => {});
+    setProgress(p => ({ ...p, currentTime: safeSecs }));
   };
 
   const playNextTrack = () => {
@@ -301,17 +428,28 @@ export const AudioProvider = ({ children }) => {
   };
 
   const handleDownloadTrack = async (t, isSilent = false) => {
+    if (!t) return;
     const id = String(t._id || t.id);
-    if (await isTrackDownloaded(id)) return;
+    if (await isTrackDownloaded(id)) {
+      if (!isSilent) showToast(`"${t.title || 'Track'}" is already in offline vault`, 'info');
+      return;
+    }
+    if (downloadingIds[id] !== undefined) {
+      if (!isSilent) showToast(`"${t.title || 'Track'}" is already downloading...`, 'info');
+      return;
+    }
     try {
-      if (!isSilent) setDownloadingIds(p => ({ ...p, [id]: 0 }));
+      if (!isSilent) {
+        showToast(`Downloading "${t.title || 'Track'}" to device...`, 'info');
+        setDownloadingIds(p => ({ ...p, [id]: 0 }));
+      }
       await downloadTrack(t, (prog) => {
         if (!isSilent) setDownloadingIds(p => ({ ...p, [id]: prog }));
       });
       await refreshDownloadedTracks();
-      if (!isSilent) showToast(`Downloaded "${t.title}"`, 'info');
-    } catch {
-      if (!isSilent) Alert.alert('Download Failed', `Could not save ${t.title}`);
+      if (!isSilent) showToast(`"${t.title || 'Track'}" saved to offline vault`, 'success');
+    } catch (err) {
+      if (!isSilent) showToast(`Download failed: ${err?.message || 'Could not save track'}`, 'error');
     } finally {
       if (!isSilent) setDownloadingIds(p => { const c = { ...p }; delete c[id]; return c; });
     }
@@ -328,8 +466,9 @@ export const AudioProvider = ({ children }) => {
 
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue,
+    tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     equalizerPreset, sleepTimerRemaining, lyrics, isLoadingLyrics,
-    playTrack, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
+    playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, removeFromQueue, clearQueue,
     setEqualizerPreset, startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,

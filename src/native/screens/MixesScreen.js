@@ -99,7 +99,11 @@ export default function MixesScreen({ onTrackAction }) {
         [list[i], list[j]] = [list[j], list[i]];
       }
     }
-    playPlaylist(list, 0);
+    if (typeof playPlaylist === 'function') {
+      playPlaylist(list, 0);
+    } else if (typeof playTrack === 'function' && list.length > 0) {
+      playTrack(list[0], list);
+    }
   };
 
   const activeTracks = selectedMood ? getMoodTracks(selectedMood) : [];

@@ -39,7 +39,7 @@ export default function SearchScreen({ onTrackAction }) {
   const [query, setQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState(null);
 
-  const allTracks = userTracks.length > 0 ? userTracks : audioTracks;
+  const allTracks = (Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (Array.isArray(audioTracks) ? audioTracks : []);
 
   const filteredTracks = useMemo(() => {
     let result = allTracks || [];

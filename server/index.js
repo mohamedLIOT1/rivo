@@ -3864,31 +3864,12 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
     streamUrl = rawUrl;
   }
 
-  // 1. Try SoundCloud multi-query
-  if (!streamUrl && (title || artist)) {
-    const cleanArtist = (artist || '').split(/[|/•]/)[0].trim();
-    const cleanTitle = (title || '').replace(/\(.*?\)|\[.*?\]/g, '').trim();
-    const queries = [
-      `${cleanArtist} ${cleanTitle}`.trim(),
-      cleanTitle,
-      `${cleanTitle} ${cleanArtist}`.trim()
-    ];
-    for (const q of queries) {
-      if (!q) continue;
-      const sc = await resolveSoundCloudTrack(q, cleanTitle, cleanArtist);
-      if (sc && sc.streamUrl) {
-        streamUrl = sc.streamUrl;
-        break;
-      }
-    }
-  }
-
-  // 2. Try yt-dlp (available in Railway Docker container)
-  if (!streamUrl && rawUrl) {
+  // 1. Try yt-dlp first if rawUrl is a YouTube link (guarantees official authentic audio)
+  if (!streamUrl && rawUrl && (rawUrl.includes('youtube.com') || rawUrl.includes('youtu.be'))) {
     try {
       const { exec } = require('child_process');
       const direct = await new Promise((resolve) => {
-        exec(`yt-dlp -f "ba/b" -g "${rawUrl}"`, { timeout: 7000 }, (err, stdout) => {
+        exec(`yt-dlp --extractor-args "youtube:player_client=android,web" --no-check-certificates -f "ba[ext=m4a]/ba/b" -g "${rawUrl}"`, { timeout: 12000 }, (err, stdout) => {
           if (!err && stdout && stdout.trim()) {
             resolve(stdout.trim().split('\n')[0]);
           } else {
@@ -3898,6 +3879,43 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
       });
       if (direct) streamUrl = direct;
     } catch {}
+  }
+
+  // 2. Fallback to SoundCloud multi-query with smart title cleaning and strict ranking
+  if (!streamUrl && (title || artist)) {
+    const rawCleanTitle = (title || '')
+      .replace(/\s*[-–—]\s*(من فيلم|فيلم|أغنية|كليب|فيديو كليب|official|video|audio|lyrics|lyric|remix|clip|ost).*$/i, '')
+      .replace(/\(.*?\)|\[.*?\]/g, '')
+      .replace(/(?:ft\.?|feat\.?|featuring)\s+.*$/i, '')
+      .trim();
+
+    const primaryTitle = rawCleanTitle.includes(' - ')
+      ? rawCleanTitle.split(' - ')[0].trim()
+      : rawCleanTitle;
+
+    const cleanArtist = (artist || '')
+      .split(/[-–—|/•,]/)[0]
+      .replace(/\(.*?\)|\[.*?\]/g, '')
+      .trim();
+
+    const queries = [
+      `${cleanArtist} ${primaryTitle}`.trim(),
+      primaryTitle,
+      `${cleanArtist} ${rawCleanTitle}`.trim(),
+      `${primaryTitle} ${cleanArtist}`.trim(),
+      rawCleanTitle,
+    ].filter(Boolean);
+
+    const uniqueQueries = [...new Set(queries)];
+    for (const q of uniqueQueries) {
+      try {
+        const sc = await resolveSoundCloudTrack(q, primaryTitle, cleanArtist);
+        if (sc && sc.streamUrl) {
+          streamUrl = sc.streamUrl;
+          break;
+        }
+      } catch {}
+    }
   }
 
   return streamUrl;

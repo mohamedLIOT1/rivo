@@ -84,10 +84,17 @@ export default function OfflineScreen() {
   };
 
   const handlePlayOffline = (track) => {
+    if (!track) return;
+    const audioUri = track.localAudioUri || track.nativeAudioUri || track.audioUrl;
     playTrack({
       ...track,
-      audioUrl: track.localAudioUri || track.audioUrl,
-    });
+      id: String(track._id || track.id || ''),
+      _id: String(track._id || track.id || ''),
+      title: track.title || 'Untitled',
+      artist: track.artist || 'Unknown Artist',
+      audioUrl: audioUri,
+      nativeAudioUri: audioUri,
+    }, (offlineTracks || []).filter(Boolean));
   };
 
   return (
@@ -134,10 +141,10 @@ export default function OfflineScreen() {
       <View style={styles.listSection}>
         <View style={styles.listHeader}>
           <Text style={styles.listTitle}>DOWNLOADED AUDIO CASSETTES</Text>
-          <Text style={styles.listCount}>{offlineTracks.length} SAVED</Text>
+          <Text style={styles.listCount}>{(offlineTracks || []).length} SAVED</Text>
         </View>
 
-        {offlineTracks.length === 0 ? (
+        {(!offlineTracks || offlineTracks.length === 0) ? (
           <View style={styles.emptyCard}>
             <WifiOff size={40} color={colors.teal} />
             <Text style={styles.emptyTitle}>No offline tapes saved</Text>
@@ -153,19 +160,18 @@ export default function OfflineScreen() {
           </View>
         ) : (
           <View style={styles.tracksList}>
-            {offlineTracks.map((track, idx) => {
-              const active =
-                currentTrack &&
-                String(currentTrack.id || currentTrack._id) ===
-                  String(track.id || track._id);
+            {(offlineTracks || []).filter(Boolean).map((track, idx) => {
+              const trackId = String(track?._id || track?.id || idx);
+              const currentId = String(currentTrack?._id || currentTrack?.id || '');
+              const active = Boolean(currentTrack && trackId === currentId);
 
               return (
-                <View key={track._id || track.id || idx} style={styles.trackCard}>
+                <View key={trackId} style={styles.trackCard}>
                   <Image
                     source={{
                       uri:
-                        track.coverUrl ||
-                        track.cover ||
+                        track?.coverUrl ||
+                        track?.cover ||
                         'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400',
                     }}
                     style={styles.cover}
@@ -173,10 +179,10 @@ export default function OfflineScreen() {
 
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.trackTitle} numberOfLines={1}>
-                      {track.title}
+                      {track?.title || 'Untitled'}
                     </Text>
                     <Text style={styles.trackArtist} numberOfLines={1}>
-                      {track.artist || 'Unknown Artist'}
+                      {track?.artist || 'Unknown Artist'}
                     </Text>
                     <View style={styles.badgeRow}>
                       <View style={styles.localPill}>
