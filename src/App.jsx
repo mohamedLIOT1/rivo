@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon, Menu, Disc, Sparkles, ShieldCheck, WifiOff } from 'lucide-react';
+import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon, Menu, Disc, Sparkles, ShieldCheck, WifiOff, Activity } from 'lucide-react';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
