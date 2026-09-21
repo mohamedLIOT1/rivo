@@ -21,6 +21,13 @@ export const AudioProvider = ({ children }) => {
   const queueRef = useRef([]);
   const currentTrackRef = useRef(null);
   const sleepTimerRef = useRef(null);
+  const isPlayingRef = useRef(false);
+  const isShuffleRef = useRef(false);
+  const repeatModeRef = useRef('off');
+  const togglePlayRef = useRef(null);
+  const playNextTrackRef = useRef(null);
+  const playPrevTrackRef = useRef(null);
+  const seekToRef = useRef(null);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -164,53 +171,79 @@ export const AudioProvider = ({ children }) => {
       if (repeatMode === 'one') {
         if (soundRef.current) soundRef.current.replayAsync().catch(() => {});
       } else {
-        playNextTrack();
+        if (playNextTrackRef.current) playNextTrackRef.current();
       }
     }
   };
 
-  // Sync media notification controls with background notification drawer
+  // Keep state refs updated for lock screen actions
+  isPlayingRef.current = isPlaying;
+  isShuffleRef.current = isShuffle;
+  repeatModeRef.current = repeatMode;
+  currentTrackRef.current = currentTrack;
+
+  // Sync media notification controls with background notification drawer & iOS Lock Screen
   useEffect(() => {
-    const unsub = subscribeToMediaActions((action) => {
-      switch (action) {
-        case 'play':
-          if (!isPlaying) togglePlay();
-          break;
-        case 'pause':
-          if (isPlaying) togglePlay();
-          break;
-        case 'play_pause':
-          togglePlay();
-          break;
-        case 'next':
-          playNextTrack();
-          break;
-        case 'prev':
-          playPrevTrack();
-          break;
-        case 'repeat':
-          toggleRepeat();
-          break;
-        case 'shuffle':
-          setIsShuffle(s => !s);
-          break;
-        case 'forward': {
-          const newPos = (playbackStatusRef.current.currentTime || 0) + 10;
-          seekTo(newPos);
-          break;
+    const unsub = subscribeToMediaActions(async (action) => {
+      try {
+        switch (action) {
+          case 'play':
+            if (soundRef.current) {
+              await soundRef.current.playAsync().catch(() => {});
+              setIsPlaying(true);
+              updateMediaNotification(true, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+            } else if (togglePlayRef.current) {
+              togglePlayRef.current();
+            }
+            break;
+          case 'pause':
+            if (soundRef.current) {
+              await soundRef.current.pauseAsync().catch(() => {});
+              setIsPlaying(false);
+              updateMediaNotification(false, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+            } else if (togglePlayRef.current) {
+              togglePlayRef.current();
+            }
+            break;
+          case 'play_pause':
+            if (soundRef.current) {
+              if (isPlayingRef.current) {
+                await soundRef.current.pauseAsync().catch(() => {});
+                setIsPlaying(false);
+                updateMediaNotification(false, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+              } else {
+                await soundRef.current.playAsync().catch(() => {});
+                setIsPlaying(true);
+                updateMediaNotification(true, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+              }
+            } else if (togglePlayRef.current) {
+              togglePlayRef.current();
+            }
+            break;
+          case 'next':
+            if (playNextTrackRef.current) playNextTrackRef.current();
+            break;
+          case 'prev':
+            if (playPrevTrackRef.current) playPrevTrackRef.current();
+            break;
+          case 'forward': {
+            const newPos = (playbackStatusRef.current.currentTime || 0) + 10;
+            if (seekToRef.current) seekToRef.current(newPos);
+            break;
+          }
+          case 'rewind': {
+            const newPos = Math.max(0, (playbackStatusRef.current.currentTime || 0) - 10);
+            if (seekToRef.current) seekToRef.current(newPos);
+            break;
+          }
+          default:
+            break;
         }
-        case 'rewind': {
-          const newPos = Math.max(0, (playbackStatusRef.current.currentTime || 0) - 10);
-          seekTo(newPos);
-          break;
-        }
-        default:
-          break;
-      }
+      } catch (e) {}
     });
 
     return () => unsub();
-  }, [isPlaying, isShuffle, repeatMode]);
+  }, []);
 
   useEffect(() => {
     if (currentTrack) {
@@ -363,7 +396,11 @@ export const AudioProvider = ({ children }) => {
       setIsPlaying(true);
       setIsLoading(false);
       try {
-        showMediaNotification(track, true, repeatMode !== 'off', isShuffle);
+        showMediaNotification({
+          ...track,
+          duration: track.duration || (playbackStatusRef.current?.duration || 240),
+          coverUrl: track.coverUrl || track.cover || '',
+        }, true, repeatMode !== 'off', isShuffle);
       } catch {}
     } catch (err) {
       setIsLoading(false);
@@ -432,6 +469,11 @@ export const AudioProvider = ({ children }) => {
     if (i > 0) playTrack(q[i - 1], q);
     else playTrack(q[q.length - 1], q);
   };
+
+  togglePlayRef.current = togglePlay;
+  playNextTrackRef.current = playNextTrack;
+  playPrevTrackRef.current = playPrevTrack;
+  seekToRef.current = seekTo;
 
   const toggleRepeat = () => {
     if (repeatMode === 'off') setRepeatMode('all');

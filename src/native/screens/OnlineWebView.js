@@ -281,7 +281,6 @@ export default function OnlineWebView() {
         }
         true;
       `);
-      hideMediaNotification();
     }
     prevOnlineRef.current = isOnline;
   }, [isOnline]);
@@ -312,7 +311,6 @@ export default function OnlineWebView() {
     });
     return () => {
       unsubscribe();
-      hideMediaNotification();
     };
   }, []);
 
