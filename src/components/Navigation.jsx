@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { buildUrl } from '../utils/router';
 import RivoLogo from './RivoLogo';
 
 export default function Navigation({ 
@@ -36,7 +37,10 @@ export default function Navigation({
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
-    { id: 'stats', label: 'Stats & History', icon: Disc },
+    { id: 'stats', label: 'Stats & History', icon: Activity },
+    ...(currentUser && isUserAdmin(currentUser) ? [
+      { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
+    ] : [])
   ];
 
   const mobileNavItems = [
@@ -86,25 +90,30 @@ export default function Navigation({
             {mainNavItems.map((item) => {
               const Icon = item.icon;
               const active = currentScreen === item.id;
+              const isAdminItem = item.id === 'admin';
               return (
-                <button
+                <a
                   key={item.id}
-                  onClick={() => setCurrentScreen(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn ${
+                  href={buildUrl(item.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setCurrentScreen(item.id);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn cursor-pointer ${
                     active 
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black' 
+                      ? (isAdminItem ? 'bg-[#f59e0b] text-[#0b1110] brutal-shadow-sm brutal-border font-black' : 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black')
                       : isDark
-                        ? 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
-                        : 'text-[#0b1110] hover:bg-[#ede5d3]'
+                        ? (isAdminItem ? 'text-[#f59e0b] hover:bg-zinc-800/80' : 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white')
+                        : (isAdminItem ? 'text-[#f59e0b] hover:bg-[#ede5d3]' : 'text-[#0b1110] hover:bg-[#ede5d3]')
                   }`}
                 >
                   <Icon 
                     size={17} 
-                    className={active ? 'text-[#0b1110] shrink-0' : isDark ? 'text-zinc-400 shrink-0' : 'text-zinc-600 shrink-0'}
+                    className={active ? 'text-[#0b1110] shrink-0' : isAdminItem ? 'text-[#f59e0b] shrink-0' : isDark ? 'text-zinc-400 shrink-0' : 'text-zinc-600 shrink-0'}
                     strokeWidth={2.5}
                   />
                   <span>{item.label}</span>
-                </button>
+                </a>
               );
             })}
           </div>
@@ -340,13 +349,22 @@ export default function Navigation({
                   {currentUser && isUserVerified(currentUser) && <VerifiedBadge size={13} />}
                 </div>
                 <div className="mt-0.5 flex items-center gap-1">
-                  <span className={`inline-flex items-center text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded brutal-border leading-none ${
-                    currentUser && isUserAdmin(currentUser) 
-                      ? 'bg-[#f59e0b] text-[#0b1110]' 
-                      : currentUser 
-                        ? 'bg-[#17a398] text-[#0b1110]' 
-                        : 'bg-[#f59e0b] text-[#0b1110]'
-                  }`}>
+                  <span 
+                    onClick={(e) => {
+                      if (currentUser && isUserAdmin(currentUser)) {
+                        e.stopPropagation();
+                        setCurrentScreen('admin');
+                      }
+                    }}
+                    className={`inline-flex items-center text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded brutal-border leading-none ${
+                      currentUser && isUserAdmin(currentUser) 
+                        ? 'bg-[#f59e0b] text-[#0b1110] hover:scale-105 transition-transform cursor-pointer' 
+                        : currentUser 
+                          ? 'bg-[#17a398] text-[#0b1110]' 
+                          : 'bg-[#f59e0b] text-[#0b1110]'
+                    }`}
+                    title={currentUser && isUserAdmin(currentUser) ? "Open Admin Portal (/admin)" : undefined}
+                  >
                     {currentUser && isUserAdmin(currentUser) ? 'ADMIN' : currentUser ? 'ONLINE' : 'GUEST'}
                   </span>
                 </div>
@@ -383,9 +401,13 @@ export default function Navigation({
           const Icon = item.icon;
           const active = currentScreen === item.id;
           return (
-            <button
+            <a
               key={item.id}
-              onClick={() => setCurrentScreen(item.id)}
+              href={buildUrl(item.id)}
+              onClick={(e) => {
+                e.preventDefault();
+                setCurrentScreen(item.id);
+              }}
               className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
                 active 
                   ? 'bg-[#17a398] text-[#0b1110] brutal-border font-bold' 
@@ -402,7 +424,7 @@ export default function Navigation({
               <span className="text-[9px] font-display font-bold">
                 {item.label}
               </span>
-            </button>
+            </a>
           );
         })}
 

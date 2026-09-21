@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Trophy, Headphones, Flame, UserCheck, Activity, Clock, Sparkles } from 'lucide-react';
+import { Trophy, Headphones, Flame, UserCheck, Activity, Clock, Sparkles, ArrowLeft } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from '../components/VerifiedBadge';
 import { API_BASE_URL } from '../config';
 import {
@@ -8,7 +8,7 @@ import {
   formatListeningMinutes
 } from '../utils/listeningTracker';
 
-export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'dark' }) {
+export default function StatsScreen({ tracks = [], currentUser, onBack, globalTheme = 'dark' }) {
   const isDark = globalTheme === 'dark';
   const [localStats, setLocalStats] = useState(() => getListeningStats());
   const [serverLeaderboard, setServerLeaderboard] = useState([]);
@@ -131,16 +131,29 @@ export default function StatsScreen({ tracks = [], currentUser, globalTheme = 'd
       <div className={`brutal-border-thick brutal-shadow-lg p-6 mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
         isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
       }`}>
-        <div>
-          <div className="flex items-center gap-2">
-            <Activity className="text-[#17a398]" size={22} />
-            <h1 className={`text-2xl md:text-4xl font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-              LISTENING ACTIVITY & STATS
-            </h1>
+        <div className="flex items-center gap-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className={`p-2 rounded-xl brutal-border flex items-center justify-center transition cursor-pointer shrink-0 ${
+                isDark ? 'bg-[#182320] text-zinc-300 hover:text-white border-zinc-700' : 'bg-[#ede5d3] text-black border-black hover:bg-white'
+              }`}
+              title="Back"
+            >
+              <ArrowLeft size={18} strokeWidth={2.5} />
+            </button>
+          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <Activity className="text-[#17a398]" size={22} />
+              <h1 className={`text-2xl md:text-4xl font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                LISTENING ACTIVITY & STATS
+              </h1>
+            </div>
+            <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              Real-time streaming and listening stats verified from actual playback
+            </p>
           </div>
-          <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-            Real-time streaming and listening stats verified from actual playback
-          </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
