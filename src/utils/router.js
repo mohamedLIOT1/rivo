@@ -53,58 +53,59 @@ export function parseLocation(pathname = '/', search = '') {
 
   const queryParams = new URLSearchParams(search || '');
   const searchQ = queryParams.get('q') || '';
+  const lowerPath = cleanPath.toLowerCase();
 
-  if (cleanPath === '' || cleanPath === '/' || cleanPath === '/home') {
+  if (lowerPath === '' || lowerPath === '/' || lowerPath === '/home') {
     return { screen: 'home', params: {} };
   }
 
-  if (cleanPath === '/search') {
+  if (lowerPath === '/search') {
     return { screen: 'search', params: { query: searchQ } };
   }
 
-  if (cleanPath === '/library') {
+  if (lowerPath === '/library') {
     return { screen: 'library', params: {} };
   }
 
-  if (cleanPath === '/quran') {
+  if (lowerPath === '/quran') {
     return { screen: 'quran', params: {} };
   }
 
-  if (cleanPath === '/stats') {
+  if (lowerPath === '/stats') {
     return { screen: 'stats', params: {} };
   }
 
-  if (cleanPath === '/admin') {
+  if (lowerPath === '/admin') {
     return { screen: 'admin', params: {} };
   }
 
-  if (cleanPath === '/profile') {
+  if (lowerPath === '/profile') {
     return { screen: 'profile', params: { userId: null } };
   }
 
   // /user/:id or /profile/:id
-  if (cleanPath.startsWith('/user/') || cleanPath.startsWith('/profile/')) {
+  if (lowerPath.startsWith('/user/') || lowerPath.startsWith('/profile/')) {
     const rawId = cleanPath.split('/')[2];
     const userId = rawId ? decodeURIComponent(rawId) : null;
     return { screen: 'profile', params: { userId } };
   }
 
   // /playlist/:id
-  if (cleanPath.startsWith('/playlist/')) {
+  if (lowerPath.startsWith('/playlist/')) {
     const rawId = cleanPath.split('/')[2];
     const id = rawId ? decodeURIComponent(rawId) : '';
     return { screen: 'playlist', params: { id } };
   }
 
   // /album/:name
-  if (cleanPath.startsWith('/album/')) {
+  if (lowerPath.startsWith('/album/')) {
     const rawName = cleanPath.substring(7);
     const name = rawName ? decodeURIComponent(rawName) : '';
     return { screen: 'playlist', params: { albumName: name } };
   }
 
   // /artist/:name
-  if (cleanPath.startsWith('/artist/')) {
+  if (lowerPath.startsWith('/artist/')) {
     const rawName = cleanPath.substring(8);
     const name = rawName ? decodeURIComponent(rawName) : '';
     return { screen: 'artist', params: { name } };

@@ -1585,6 +1585,18 @@ app.post('/api/chat/send', auth, async (req, res) => {
     io.to(`user:${recipientId}`).emit('chat:message', payload);
     io.to(`user:${req.user.id}`).emit('chat:message', payload);
 
+    if (jamInvite && jamInvite.roomCode) {
+      io.to(`user:${recipientId}`).emit('jam:invite_received', {
+        roomCode: jamInvite.roomCode,
+        host: {
+          id: req.user.id,
+          name: sender?.name || jamInvite.hostName || 'Friend',
+          avatar: sender?.avatar || jamInvite.hostAvatar || ''
+        },
+        createdAt: Date.now()
+      });
+    }
+
     res.json({ success: true, message: payload });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -4301,6 +4313,16 @@ io.on('connection', (socket) => {
   // User connects & registers their socket ID
   socket.on('user:online', ({ userId }) => {
     if (userId) socket.join(`user:${userId}`);
+  });
+
+  // Jam: Direct Invite to another user
+  socket.on('jam:invite_user', ({ recipientId, roomCode, host }) => {
+    if (!recipientId || !roomCode) return;
+    io.to(`user:${recipientId}`).emit('jam:invite_received', {
+      roomCode,
+      host: host || { id: socket.id, name: 'Friend', avatar: '' },
+      createdAt: Date.now()
+    });
   });
 
   // Jam: Host creates or joins room

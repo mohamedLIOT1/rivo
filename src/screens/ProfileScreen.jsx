@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Camera, Edit2, Check, X, Music, Heart, Globe, Lock,
   Eye, EyeOff, Search, User, Calendar, LogOut, LogIn, ChevronRight, Loader2,
-  MessageSquare, UserPlus, UserCheck, Radio, Disc, Plus
+  MessageSquare, UserPlus, UserCheck, Radio, Disc, Plus, Activity, ShieldCheck
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { isQuranContent } from '../utils/quranUtils';
+import { isUserAdmin } from '../utils/adminUtils';
 
 const getToken = () => {
   try {
@@ -32,6 +33,7 @@ export default function ProfileScreen({
   globalTheme = 'dark',
   viewingUserId = null,
   onClearViewingUser,
+  onNavigateScreen,
 }) {
   const isDark = globalTheme === 'dark';
   const [isEditingName, setIsEditingName] = useState(false);
@@ -552,6 +554,31 @@ export default function ProfileScreen({
                       <Radio size={13} className="animate-pulse" />
                       <span>Jam</span>
                     </button>
+                  </div>
+                )}
+
+                {/* Current User Quick Navigation Actions */}
+                {isMe && (
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 my-2">
+                    <button
+                      onClick={() => onNavigateScreen ? onNavigateScreen('stats') : (window.location.href = '/stats')}
+                      className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 ${
+                        isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700' : 'bg-white text-[#0b1110] hover:bg-[#ede5d3]'
+                      }`}
+                    >
+                      <Activity size={13} className="text-[#17a398]" />
+                      <span>Listening Stats</span>
+                    </button>
+
+                    {currentUser && isUserAdmin(currentUser) && (
+                      <button
+                        onClick={() => onNavigateScreen ? onNavigateScreen('admin') : (window.location.href = '/admin')}
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#f59e0b] hover:bg-[#fbb739] text-[#0b1110] font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5"
+                      >
+                        <ShieldCheck size={13} />
+                        <span>Admin Portal</span>
+                      </button>
+                    )}
                   </div>
                 )}
 

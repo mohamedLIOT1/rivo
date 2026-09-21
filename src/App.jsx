@@ -220,15 +220,6 @@ function AppContent() {
     fetchUnreadCount();
   }, [currentUser]);
 
-  // Open profile screen instead of AuthModal when user is logged in
-  const handleUserAvatarClick = () => {
-    if (currentUser) {
-      setCurrentScreen('profile');
-    } else {
-      setIsAuthOpen(true);
-    }
-  };
-
   const [audioQuality, setAudioQuality] = useState('320');
   const [crossfade,    setCrossfade]    = useState(4);
 
@@ -767,6 +758,15 @@ function AppContent() {
     }
   }, [goToScreen]);
 
+  // Open profile screen and URL instead of AuthModal when user is logged in
+  const handleUserAvatarClick = useCallback(() => {
+    if (currentUser) {
+      navigateTo('profile');
+    } else {
+      setIsAuthOpen(true);
+    }
+  }, [currentUser, navigateTo]);
+
   const handleOpenFullPlayer = useCallback(() => {
     setIsFullPlayerOpen(true);
     if (typeof window !== 'undefined') {
@@ -946,6 +946,40 @@ function AppContent() {
       syncRemotePlayState(data);
     });
 
+    s.on('jam:invite_received', (data) => {
+      const hostName = data?.host?.name || 'Someone';
+      const roomCode = data?.roomCode;
+      if (!roomCode) return;
+
+      showToast({
+        type: 'jam',
+        title: `📻 Jam Invite from ${hostName}`,
+        body: `Invited you to listen together in sync! Tap to join (${roomCode})`,
+        roomCode,
+        sender: {
+          id: data?.host?.id,
+          name: hostName,
+          avatar: data?.host?.avatar || ''
+        }
+      });
+
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          const notif = new Notification(`Rivo • Jam Invite from ${hostName}`, {
+            body: `Tap to join and listen together in real-time (${roomCode})`,
+            icon: data?.host?.avatar || '/favicon.ico',
+            tag: `rivo-jam-${roomCode}`
+          });
+          notif.onclick = () => {
+            window.focus();
+            handleJoinJam(roomCode);
+          };
+        } catch (e) {
+          console.warn('Desktop notification error:', e);
+        }
+      }
+    });
+
     s.on('chat:message', (msg) => {
       const myId = String(currentUser?.id || currentUser?._id || '');
       if (myId && String(msg.recipient) === myId) {
@@ -956,23 +990,39 @@ function AppContent() {
           const senderName = msg.senderName || 'Someone';
           const preview = msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment'));
 
-          showToast({
-            title: `💬 ${senderName}`,
-            body: preview,
-            sender: { id: msg.sender, name: senderName, avatar: msg.senderAvatar }
-          });
+          if (msg.jamInvite?.roomCode) {
+            showToast({
+              type: 'jam',
+              title: `📻 Jam Session • ${senderName}`,
+              body: `Invited you to a live Jam Session! Tap to join (${msg.jamInvite.roomCode})`,
+              roomCode: msg.jamInvite.roomCode,
+              sender: { id: msg.sender, name: senderName, avatar: msg.senderAvatar }
+            });
+          } else {
+            showToast({
+              type: 'chat',
+              title: `💬 ${senderName}`,
+              body: preview,
+              sender: { id: msg.sender, name: senderName, avatar: msg.senderAvatar }
+            });
+          }
 
           // Browser Desktop Push Notification
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              const notif = new Notification(`Rivo • Telegram from ${senderName}`, {
+              const isJam = Boolean(msg.jamInvite?.roomCode);
+              const notif = new Notification(isJam ? `Rivo • Jam Session from ${senderName}` : `Rivo • Telegram from ${senderName}`, {
                 body: preview,
                 icon: msg.senderAvatar || '/favicon.ico',
-                tag: `rivo-chat-${msg.sender}`
+                tag: isJam ? `rivo-jam-${msg.jamInvite.roomCode}` : `rivo-chat-${msg.sender}`
               });
               notif.onclick = () => {
                 window.focus();
-                handleOpenChat({ id: msg.sender, name: senderName, avatar: msg.senderAvatar });
+                if (isJam) {
+                  handleJoinJam(msg.jamInvite.roomCode);
+                } else {
+                  handleOpenChat({ id: msg.sender, name: senderName, avatar: msg.senderAvatar });
+                }
               };
             } catch (e) {
               console.warn('Desktop notification error:', e);
@@ -1017,6 +1067,24 @@ function AppContent() {
     }
     if (openModal) {
       setIsJamOpen(true);
+    }
+    return code;
+  };
+
+  const handleStartJamWithTargetUser = (target) => {
+    const code = handleStartJam(true);
+    const targetId = target?.id || target?._id;
+    if (socket && targetId && code) {
+      socket.emit('jam:invite_user', {
+        recipientId: targetId,
+        roomCode: code,
+        host: {
+          id: currentUser?.id || currentUser?._id,
+          name: currentUser?.name || 'Friend',
+          avatar: currentUser?.avatar || ''
+        }
+      });
+      showToast(`Invited ${target?.name || 'friend'} to Jam (${code})`);
     }
     return code;
   };
@@ -1197,6 +1265,19 @@ function AppContent() {
               {globalTheme === 'dark' ? <Sun size={15} strokeWidth={2.5} /> : <Moon size={15} strokeWidth={2.5} />}
             </button>
 
+            {/* Friend Activity Quick Toggle */}
+            <button
+              onClick={toggleActivityPanel}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition shrink-0 ${
+                isActivityPanelOpen
+                  ? 'bg-[#17a398] text-[#0b1110] border-2 border-black font-black'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
+              }`}
+              title="Friend Activity"
+            >
+              <Users size={15} strokeWidth={2.5} />
+            </button>
+
             {/* Quick Actions Drawer Toggle (☰ 3 bars) */}
             <button
               onClick={() => setIsMobileMenuOpen(true)}
@@ -1296,7 +1377,7 @@ function AppContent() {
               currentUser={currentUser}
               logout={logout}
               openAuthModal={() => setIsAuthOpen(true)}
-              openProfileScreen={() => setCurrentScreen('profile')}
+              openProfileScreen={() => navigateTo('profile')}
               openJamModal={() => setIsJamOpen(true)}
               jamSession={jamSession}
               openChatModal={() => handleOpenChat(null)}
@@ -1461,7 +1542,14 @@ function AppContent() {
             />
           )}
 
-          {currentScreen === 'stats' && <StatsScreen tracks={tracks} currentUser={currentUser} globalTheme={globalTheme} />}
+          {currentScreen === 'stats' && (
+            <StatsScreen
+              tracks={tracks}
+              currentUser={currentUser}
+              onBack={() => handleNavigateBack('home')}
+              globalTheme={globalTheme}
+            />
+          )}
 
           {currentScreen === 'profile' && (
             <ProfileScreen
@@ -1474,16 +1562,14 @@ function AppContent() {
               onOpenChat={(target) => {
                 handleOpenChat(target);
               }}
-              onStartJamWithUser={(target) => {
-                handleStartJam();
-                handleOpenChat(target);
-              }}
+              onStartJamWithUser={handleStartJamWithTargetUser}
               onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
               onSavePlaylist={savePublicPlaylist}
               onUnsavePlaylist={unsavePublicPlaylist}
               userPlaylists={playlists}
               viewingUserId={viewingProfileUserId}
               onClearViewingUser={() => setViewingProfileUserId(null)}
+              onNavigateScreen={goToScreen}
               globalTheme={globalTheme}
             />
           )}
@@ -1506,8 +1592,16 @@ function AppContent() {
             setSelectedPlaylist(null);
             playTrack(friendTrack, [friendTrack], false, 0);
           }}
-          openProfileScreen={() => setCurrentScreen('profile')}
-          openChatModal={() => handleOpenChat(null)}
+          openProfileScreen={(target) => {
+            const uid = typeof target === 'object' ? (target?.id || target?._id) : target;
+            if (uid && String(uid) !== String(currentUser?.id || currentUser?._id)) {
+              navigateTo('profile', { userId: uid });
+            } else {
+              navigateTo('profile');
+            }
+          }}
+          onStartJamWithUser={handleStartJamWithTargetUser}
+          openChatModal={(target) => handleOpenChat(target || null)}
           currentUser={currentUser}
           globalTheme={globalTheme}
         />
@@ -1732,9 +1826,7 @@ function AppContent() {
         targetUser={chatTargetUser}
         currentUser={currentUser}
         socket={socket}
-        onStartJamWithUser={async (target) => {
-          return handleStartJam(false);
-        }}
+        onStartJamWithUser={handleStartJamWithTargetUser}
         onJoinJam={(code) => {
           handleJoinJam(code);
         }}
@@ -1851,28 +1943,62 @@ function AppContent() {
                 </div>
 
 
-                <button
-                  onClick={() => { setCurrentScreen('stats'); setIsMobileMenuOpen(false); }}
+                <a
+                  href="/profile"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleUserAvatarClick();
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
+                    currentScreen === 'profile' 
+                      ? 'bg-[#17a398] text-[#0b1110] font-black brutal-border' 
+                      : globalTheme === 'dark' ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
+                  }`}
+                >
+                  <Users size={16} />
+                  <span>{currentUser ? 'My Profile' : 'Sign In'}</span>
+                </a>
+
+                <a
+                  href="/stats"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    goToScreen('stats');
+                    setIsMobileMenuOpen(false);
+                  }}
                   className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
                     currentScreen === 'stats' 
                       ? 'bg-[#17a398] text-[#0b1110] font-black brutal-border' 
                       : globalTheme === 'dark' ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
                   }`}
                 >
-                  <Disc size={16} />
+                  <Activity size={16} className="text-[#17a398]" strokeWidth={2.5} />
                   <span>Stats & History</span>
-                </button>
+                </a>
 
                 {isUserAdmin(currentUser) && (
-                  <button
-                    onClick={() => { setCurrentScreen('admin'); setIsMobileMenuOpen(false); }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#f59e0b] brutal-border border-[#f59e0b] cursor-pointer"
+                  <a
+                    href="/admin"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      goToScreen('admin');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
+                      currentScreen === 'admin'
+                        ? 'bg-[#f59e0b] text-[#0b1110] font-black brutal-border'
+                        : 'bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#f59e0b] brutal-border border-[#f59e0b]'
+                    }`}
                   >
-                    <span>Admin Dashboard</span>
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck size={16} strokeWidth={2.5} />
+                      <span>Admin Portal</span>
+                    </div>
                     <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#f59e0b] text-black">
                       ADMIN
                     </span>
-                  </button>
+                  </a>
                 )}
               </div>
 
@@ -1906,19 +2032,53 @@ function AppContent() {
       {toastMessage && (
         <div 
           onClick={() => {
-            if (typeof toastMessage === 'object' && toastMessage?.sender) {
+            if (typeof toastMessage === 'object' && toastMessage?.roomCode) {
+              handleJoinJam(toastMessage.roomCode);
+              setIsJamOpen(true);
+              setToastMessage(null);
+            } else if (typeof toastMessage === 'object' && toastMessage?.sender) {
               handleOpenChat(toastMessage.sender);
               setToastMessage(null);
             }
           }}
-          className={`fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl text-xs font-display font-black brutal-border-thick brutal-shadow-lg flex items-center gap-2.5 transition-all bg-[#fdfbf7] text-[#0b1110] ${
-            typeof toastMessage === 'object' && toastMessage?.sender ? 'cursor-pointer pointer-events-auto hover:scale-105 active:scale-95' : 'pointer-events-none'
+          className={`fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl text-xs font-display font-black brutal-border-thick brutal-shadow-lg flex items-center gap-2.5 transition-all ${
+            typeof toastMessage === 'object' && (toastMessage?.sender || toastMessage?.roomCode)
+              ? 'cursor-pointer pointer-events-auto hover:scale-105 active:scale-95' 
+              : 'pointer-events-none'
+          } ${
+            toastMessage?.type === 'jam'
+              ? 'bg-[#082621] text-[#fdfbf7] border-[#f59e0b]'
+              : 'bg-[#fdfbf7] text-[#0b1110]'
           }`}
           style={{
             bottom: currentTrack ? 'calc(var(--player-height) + 16px)' : '24px',
           }}
         >
-          {typeof toastMessage === 'object' && toastMessage?.sender ? (
+          {typeof toastMessage === 'object' && toastMessage?.type === 'jam' ? (
+            <>
+              {toastMessage.sender?.avatar ? (
+                <div className="relative shrink-0">
+                  <img src={toastMessage.sender.avatar} alt="" className="w-8 h-8 rounded-lg object-cover brutal-border" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#f59e0b] border border-black animate-ping" />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-[#f59e0b] text-black brutal-border flex items-center justify-center shrink-0">
+                  <Radio size={16} className="animate-pulse" />
+                </div>
+              )}
+              <div className="flex flex-col text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-display font-black text-[#f59e0b] text-[11px] uppercase tracking-wider">{toastMessage.title}</span>
+                  <span className="text-[8px] font-mono font-black px-1 py-0.2 rounded bg-[#f59e0b] text-black">LIVE</span>
+                </div>
+                <span className="text-zinc-300 font-mono font-medium text-[11px] max-w-[220px] truncate">{toastMessage.body}</span>
+              </div>
+              <span className="text-[10px] text-[#0b1110] font-mono font-black ml-1.5 bg-[#f59e0b] hover:bg-amber-300 brutal-border px-2.5 py-1 rounded shadow-sm flex items-center gap-1 shrink-0">
+                <Radio size={11} className="animate-pulse" />
+                Join Jam
+              </span>
+            </>
+          ) : typeof toastMessage === 'object' && toastMessage?.sender ? (
             <>
               {toastMessage.sender.avatar ? (
                 <img src={toastMessage.sender.avatar} alt="" className="w-6 h-6 rounded-lg object-cover brutal-border shrink-0" />
