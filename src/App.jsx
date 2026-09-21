@@ -1275,8 +1275,8 @@ function AppContent() {
           }));
         }
 
-        // Also trigger browser file download on web platform
-        if (typeof window !== 'undefined' && !window.Capacitor) {
+        // Also trigger browser file download on web platform only (never in native apps)
+        if (typeof window !== 'undefined' && !window.Capacitor && !window.RIVO_NATIVE) {
           try {
             const dlLink = document.createElement('a');
             dlLink.href = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(cleanId)}`;

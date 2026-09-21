@@ -3806,7 +3806,7 @@ app.get('/api/tracks/download', async (req, res) => {
     });
 
     res.set({
-      'Content-Type': headRes.headers['content-type'] || 'audio/mpeg',
+      'Content-Type': 'audio/mpeg',
       'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
       'Access-Control-Allow-Origin': '*'
     });
