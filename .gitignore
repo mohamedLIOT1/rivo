@@ -8,5 +8,6 @@ dist/
 .idea/
 .artifacts/
 *.apk
+!Rivo-Hybrid-*.apk
 android/app/src/main/assets/
 
