@@ -413,10 +413,22 @@ export default function OnlineWebView() {
         mediaPlaybackRequiresUserGesture={false}
         allowsProtectedMedia={true}
         allowsInlineMediaPlayback={true}
+        allowsPictureInPictureMediaPlayback={true}
+        useWebKit={true}
+        onShouldStartLoadWithRequest={(request) => {
+          if (request.url && request.url.includes('/api/tracks/download')) {
+            return false;
+          }
+          return true;
+        }}
         allowFileAccess={true}
         allowUniversalAccessFromFileURLs={true}
         mixedContentMode="always"
-        userAgent="Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+        userAgent={
+          Platform.OS === 'android'
+            ? "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
+            : undefined
+        }
         androidHardwareAccelerationDisabled={false}
         androidLayerType="hardware"
         thirdPartyCookiesEnabled={true}

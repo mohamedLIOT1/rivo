@@ -54,9 +54,9 @@ jobs:
       - name: Package Payload into IPA
         run: |
           mkdir -p build/Payload
-          cp -r build/Rivo.xcarchive/Products/Applications/*.app build/Payload/
+          cp -R build/Rivo.xcarchive/Products/Applications/*.app build/Payload/
           cd build
-          zip -r Rivo.ipa Payload
+          zip -qyr Rivo.ipa Payload
           cd ..
 
       - name: Upload IPA Artifact
