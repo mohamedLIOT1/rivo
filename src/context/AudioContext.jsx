@@ -61,18 +61,14 @@ async function resolveTrackAudioUrl(track) {
   const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
     !targetUrl ||
     !extractYtId(targetUrl) ||
-    track.id?.toString().startsWith('sc-') ||
-    track.source === 'SoundCloud' ||
     track.source === 'Import' ||
     track.source === 'Spotify' ||
-    targetUrl.includes('pixabay.com') ||
-    targetUrl.includes('sndcdn.com') ||
-    targetUrl.includes('soundcloud.com')
+    targetUrl.includes('pixabay.com')
   );
 
   if (needsResolution) {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${track.id || track._id || ''}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
+      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(targetUrl || '')}&id=${track.id || track._id || ''}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
       const data = await res.json();
       if (data.success && data.url) {
         return {
@@ -208,7 +204,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return () => clearTimeout(timeout);
   }, [currentTrack?.id || currentTrack?._id, isPlaying]);
 
-  // ── Regular HTML Audio element (for uploaded/SoundCloud tracks) ──
+  // ── Regular HTML Audio element (for uploaded tracks) ──
   const audioRef = useRef(null);
   const secondaryAudioRef = useRef(null);
   const transitionActiveTrackIdRef = useRef(null);
@@ -333,7 +329,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const cur = currentTrackRef.current;
       if (cur && (cur.title || cur.artist) && !cur._retryDone) {
         cur._retryDone = true;
-        fetch(`${API_BASE_URL}/api/soundcloud/stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
+        fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
           .then(r => r.json())
           .then(d => {
             if (!isPlayingRef.current && !shouldPlayRef.current) return;
@@ -375,7 +371,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     try {
       const qTitle = encodeURIComponent(track.title || '');
       const qArtist = encodeURIComponent(track.artist || '');
-      const res = await fetch(`${API_BASE_URL}/api/soundcloud/fallback?title=${qTitle}&artist=${qArtist}`);
+      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${qTitle}&artist=${qArtist}`);
       const d = await res.json();
       if (!isPlayingRef.current && !shouldPlayRef.current) return;
       if (d.success && d.url && audioRef.current) {
@@ -670,7 +666,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       };
 
     } else {
-      // ── Regular audio (Upload / Downloaded Blob / SoundCloud) ─
+      // ── Regular audio (Upload / Downloaded Blob) ─
       isYtTrackRef.current = false;
       setIsYtTrack(false);
 
@@ -691,17 +687,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
         !targetUrl ||
         !extractYtId(targetUrl) ||
-        currentTrack.source === 'SoundCloud' ||
         currentTrack.source === 'Import' ||
         currentTrack.source === 'Spotify' ||
-        targetUrl.includes('pixabay.com') ||
-        targetUrl.includes('sndcdn.com') ||
-        targetUrl.includes('soundcloud.com')
+        targetUrl.includes('pixabay.com')
       );
 
       if (needsResolution) {
         if (audioRef.current) audioRef.current.pause();
-        fetch(`${API_BASE_URL}/api/soundcloud/stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || currentTrack._id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
+        fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || currentTrack._id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
           .then(r => r.json())
           .then(data => {
             if (data.success && data.url) {

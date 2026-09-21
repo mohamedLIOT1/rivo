@@ -68,7 +68,7 @@ const TABS = [
 ];
 
 function MainAppShell() {
-  const { appMode, toggleMode } = useConnectivity();
+  const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
 
   useEffect(() => {
@@ -116,7 +116,6 @@ function OfflineNativeShell() {
   const { currentTrack } = useAudioPlayer();
   const { currentUser } = useUser();
   const { isDark, toggleTheme } = useTheme();
-  const { toggleMode } = useConnectivity();
 
   const handleTabPress = (tabId) => {
     if (tabId === 'chat') {
@@ -173,16 +172,6 @@ function OfflineNativeShell() {
             </View>
           </View>
           <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
-        </TouchableOpacity>
-
-        {/* Offline Mode Switch in Header */}
-        <TouchableOpacity
-          style={styles.headerModePill}
-          onPress={toggleMode}
-          activeOpacity={0.8}
-        >
-          <WifiOff size={11} color="#17a398" strokeWidth={2.5} />
-          <Text style={styles.headerModePillText}>OFFLINE</Text>
         </TouchableOpacity>
 
         {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
@@ -604,23 +593,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#fdfbf7',
-  },
-  headerModePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#141d1b',
-    borderWidth: 1.5,
-    borderColor: '#17a398',
-    borderRadius: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-  },
-  headerModePillText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: '#17a398',
-    letterSpacing: 0.5,
   },
 });

@@ -51,7 +51,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     setResults([]);
     setSearchError('');
 
-    // Check if user pasted a link (Spotify, YouTube, SoundCloud, etc.)
+    // Check if user pasted a link (Spotify, YouTube, etc.)
     if (/^(https?:\/\/|spotify:|youtu)/i.test(q)) {
       try {
         const token = getToken();
@@ -83,59 +83,11 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
       const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
-        setResults(data.tracks);
+        setResults(data.tracks.filter(t => t.source !== 'SoundCloud' && !t.audioUrl?.includes('soundcloud.com')));
         setIsSearching(false);
         return;
       }
     } catch (err) {}
-
-    // 2. Direct SoundCloud HD Full Track Search Fallback
-    const SOUNDCLOUD_CLIENT_IDS = [
-      'Mxv2e5wxnWei6krLywjIXpztX7S0VCeK',
-      'iZ8g4v72mUqvA8jGFBsFoxWYuERgZaWi'
-    ];
-
-    for (const clientId of SOUNDCLOUD_CLIENT_IDS) {
-      try {
-        const scRes = await fetch(`https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(q)}&client_id=${clientId}&limit=15`);
-        if (!scRes.ok) continue;
-        const scData = await scRes.json();
-        if (scData && Array.isArray(scData.collection) && scData.collection.length > 0) {
-          const items = [];
-          for (const item of scData.collection) {
-            if ((item.duration || 0) < 30000) continue;
-            const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-            if (!prog) continue;
-
-            try {
-              const streamRes = await fetch(`${prog.url}?client_id=${clientId}`);
-              if (!streamRes.ok) continue;
-              const streamData = await streamRes.json();
-              if (!streamData.url) continue;
-
-              items.push({
-                id: `sc-${item.id}`,
-                title: item.title || q,
-                artist: item.user?.username || 'Artist',
-                album: 'Single',
-                cover: item.artwork_url
-                  ? item.artwork_url.replace('-large', '-t500x500')
-                  : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-                audioUrl: streamData.url,
-                duration: Math.round((item.duration || 180000) / 1000),
-                source: 'SoundCloud',
-              });
-            } catch (err) {}
-          }
-
-          if (items.length > 0) {
-            setResults(items);
-            setIsSearching(false);
-            return;
-          }
-        }
-      } catch (err) {}
-    }
 
     setIsSearching(false);
   };
@@ -452,7 +404,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                     required
                     value={linkUrl}
                     onChange={(e) => setLinkUrl(e.target.value)}
-                    placeholder="https://open.spotify.com/track/... or YouTube / SoundCloud link"
+                    placeholder="https://open.spotify.com/track/... or YouTube link"
                     className="w-full bg-[#ede5d3] brutal-border pl-9 pr-3 py-2.5 text-xs font-mono text-[#0b1110] placeholder-[#082621]/40 focus:outline-none focus:bg-white"
                     autoFocus
                   />
@@ -470,11 +422,6 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
                   linkUrl.includes('youtube.com') || linkUrl.includes('youtu.be') ? 'bg-red-100 text-[#dc2626]' : 'bg-[#ede5d3] text-[#082621]/70'
                 }`}>
                   YouTube
-                </span>
-                <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
-                  linkUrl.includes('soundcloud.com') ? 'bg-orange-100 text-orange-600' : 'bg-[#ede5d3] text-[#082621]/70'
-                }`}>
-                  SoundCloud
                 </span>
                 <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border ${
                   linkUrl.includes('apple.com') ? 'bg-pink-100 text-pink-700' : 'bg-[#ede5d3] text-[#082621]/70'

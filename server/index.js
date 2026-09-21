@@ -46,10 +46,31 @@ process.on('unhandledRejection', (reason) => console.warn('[Unhandled]:', reason
 
 // MongoDB Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority';
+async function purgeSoundCloudData() {
+  try {
+    const scQuery = {
+      $or: [
+        { source: { $regex: /soundcloud/i } },
+        { audioUrl: { $regex: /soundcloud\.com|sndcdn\.com/i } },
+        { album: { $regex: /soundcloud/i } },
+        { originalUrl: { $regex: /soundcloud\.com/i } },
+        { id: { $regex: /^sc-/i } },
+      ]
+    };
+    const res = await Track.deleteMany(scQuery);
+    if (res.deletedCount > 0) {
+      console.log(`[SoundCloud Purge] Deleted ${res.deletedCount} SoundCloud tracks from MongoDB.`);
+    }
+  } catch (err) {
+    console.warn('[SoundCloud Purge] DB error:', err.message);
+  }
+}
+
 async function connectDB() {
   try { 
     await mongoose.connect(MONGO_URI); 
     console.log('✅ DB Connected'); 
+    purgeSoundCloudData();
   } catch (err) { 
     console.error('DB connect error:', err.message);
     setTimeout(connectDB, 5000); 
@@ -140,11 +161,10 @@ function getTrackKey(title, artist) {
   return `${t}___${a}`;
 }
 
-// Clean up any dead/expired audio URLs so they resolve dynamically on play
-Track.updateMany(
-  { $or: [{ audioUrl: { $regex: 'pixabay' } }, { audioUrl: { $regex: 'sndcdn.com' } }] },
-  { $set: { audioUrl: '', source: 'SoundCloud' } }
-).then(r => { if (r.modifiedCount > 0) console.log(`[DB] Cleaned ${r.modifiedCount} placeholder/expired tracks`); }).catch(() => {});
+// Permanently purge any SoundCloud tracks from database
+Track.deleteMany(
+  { $or: [{ source: { $regex: /soundcloud/i } }, { audioUrl: { $regex: /soundcloud\.com|sndcdn\.com/i } }, { album: { $regex: /soundcloud/i } }] }
+).then(r => { if (r.deletedCount > 0) console.log(`[DB] Purged ${r.deletedCount} SoundCloud tracks`); }).catch(() => {});
 
 // Background task: backfill real track covers for all imported tracks that currently share a playlist cover
 setTimeout(async () => {
@@ -553,60 +573,10 @@ function optionalAuth(req, res, next) {
 }
 
 // ──────────────────────────────────────────
-// Dynamic SoundCloud Engine & Stream Cache
+// Search Cache Engine
 // ──────────────────────────────────────────
 const searchCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
-
-let cachedSoundCloudClientId = 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
-let lastSoundCloudIdFetch = Date.now();
-
-async function getSoundCloudClientId(forceRefresh = false) {
-  if (!forceRefresh && cachedSoundCloudClientId && (Date.now() - lastSoundCloudIdFetch < 2 * 60 * 60 * 1000)) {
-    return cachedSoundCloudClientId;
-  }
-  try {
-    const res = await axios.get('https://soundcloud.com', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      timeout: 8000
-    });
-    const scriptUrls = [...res.data.matchAll(/<script[^>]+src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
-    for (const scriptUrl of scriptUrls.reverse()) {
-      try {
-        const jsRes = await axios.get(scriptUrl, { timeout: 6000 });
-        const match = jsRes.data.match(/client_id[:=]"([a-zA-Z0-9]{32})"/);
-        if (match) {
-          cachedSoundCloudClientId = match[1];
-          lastSoundCloudIdFetch = Date.now();
-          console.log('[SoundCloud] Fresh client ID obtained:', cachedSoundCloudClientId);
-          return cachedSoundCloudClientId;
-        }
-      } catch {}
-    }
-  } catch (err) {
-    console.warn('[SoundCloud] Client ID refresh failed:', err.message);
-  }
-  return cachedSoundCloudClientId || 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
-}
-
-async function resolveSoundCloudStream(url, clientId) {
-  let cid = clientId || await getSoundCloudClientId();
-  try {
-    const res = await axios.get(`${url}${url.includes('?') ? '&' : '?'}client_id=${cid}`, { timeout: 4000 });
-    return res.data?.url || null;
-  } catch (err) {
-    if (err.response?.status === 401) {
-      cid = await getSoundCloudClientId(true);
-      try {
-        const retryRes = await axios.get(`${url}${url.includes('?') ? '&' : '?'}client_id=${cid}`, { timeout: 4000 });
-        return retryRes.data?.url || null;
-      } catch {}
-    }
-    return null;
-  }
-}
 
 async function searchYouTubeId(query) {
   if (!query || !query.trim()) return null;
@@ -840,117 +810,11 @@ async function syncTrackToAlbum(track) {
   return null;
 }
 
-function rankSoundCloudTrack(item, title = '', artist = '') {
-  let score = 100;
-  const itemTitle = (item.title || '').toLowerCase();
-  const userName = (item.user?.username || '').toLowerCase();
-  const durSec = (item.duration || 0) / 1000;
-  const cleanTitle = (title || '').toLowerCase().trim();
-  const cleanArtist = (artist || '').toLowerCase().trim();
-
-  // 1. Duration scoring (normal tracks are between 1:15 and 6:30)
-  if (durSec < 60 || durSec > 660) score -= 100;
-  else if (durSec >= 110 && durSec <= 360) score += 25;
-
-  // 2. Artist match boost
-  if (cleanArtist && (itemTitle.includes(cleanArtist) || userName.includes(cleanArtist))) {
-    score += 45;
-  }
-
-  // 3. Title keywords match
-  const words = cleanTitle.split(/\s+/).filter(w => w.length > 2);
-  for (const w of words) {
-    if (itemTitle.includes(w)) score += 25;
-  }
-
-  // 4. Heavily penalize unwanted covers, remixes, karaoke, instrumental, full albums
-  const unwanted = [
-    { key: 'remix', ar: 'ريمكس' },
-    { key: 'cover', ar: 'كاور' },
-    { key: 'piano', ar: 'بيانو' },
-    { key: 'instrumental', ar: 'عزف' },
-    { key: 'slowed', ar: 'مبطأ' },
-    { key: 'sped', ar: 'مسرع' },
-    { key: 'album', ar: 'البوم' },
-    { key: 'live', ar: 'حفلة' },
-    { key: 'karaoke', ar: 'كاريوكي' }
-  ];
-
-  for (const u of unwanted) {
-    const requested = cleanTitle.includes(u.key) || cleanTitle.includes(u.ar);
-    if (!requested) {
-      if (itemTitle.includes(u.key) || itemTitle.includes(u.ar)) {
-        score -= 75;
-      }
-    }
-  }
-
-  // 5. Official audio indicators
-  if (item.user?.verified || itemTitle.includes('official') || itemTitle.includes('الأصلية') || itemTitle.includes('النسخة الأصلية')) {
-    score += 35;
-  }
-
-  return score;
-}
-
-async function resolveSoundCloudTrack(query, rawTitle = '', rawArtist = '') {
-  if (!query || !query.trim()) return null;
-  let clientId = await getSoundCloudClientId();
-  try {
-    let res;
-    try {
-      res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-        params: { q: query.trim(), client_id: clientId, limit: 15 },
-        timeout: 5000
-      });
-    } catch (err) {
-      if (err.response?.status === 401) {
-        clientId = await getSoundCloudClientId(true);
-        res = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q: query.trim(), client_id: clientId, limit: 15 },
-          timeout: 5000
-        });
-      } else {
-        throw err;
-      }
-    }
-
-    const rawCollection = res.data?.collection || [];
-    const validItems = rawCollection.filter(item => item.policy !== 'SNIP' && (item.duration || 0) > 45000);
-    if (validItems.length === 0) return null;
-
-    // Rank items to pick original version over random remixes/covers
-    const ranked = validItems.map(item => ({
-      item,
-      score: rankSoundCloudTrack(item, rawTitle || query, rawArtist)
-    })).sort((a, b) => b.score - a.score);
-
-    for (const { item } of ranked) {
-      const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive' && !t.snipped);
-      if (prog) {
-        const streamUrl = await resolveSoundCloudStream(prog.url, clientId);
-        if (streamUrl && !streamUrl.includes('preview')) {
-          return {
-            streamUrl,
-            duration: item.duration ? Math.round(item.duration / 1000) : 180,
-            cover: item.artwork_url ? item.artwork_url.replace('-large', '-t500x500') : (item.user?.avatar_url || null),
-            title: item.title,
-            artist: item.user?.username
-          };
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[SoundCloud] resolveSoundCloudTrack error:', e.message);
-  }
-  return null;
-}
-
 async function resolveTrackAudio(title, artist) {
   const query = `${artist || ''} ${title || ''}`.trim();
   if (!query) return null;
 
-  // 1. YouTube FIRST via Official YouTube Data API v3 (Instant, authentic original music)
+  // YouTube Audio Resolution via Official YouTube Data API v3 & scrapers
   try {
     const ytId = await searchYouTubeId(query);
     if (ytId) {
@@ -967,12 +831,6 @@ async function resolveTrackAudio(title, artist) {
   } catch (err) {
     console.warn('[resolveTrackAudio] YouTube error:', err.message);
   }
-
-  // 2. Fallback to SoundCloud only if YouTube returns nothing
-  try {
-    const sc = await resolveSoundCloudTrack(query, title, artist);
-    if (sc && sc.streamUrl) return sc;
-  } catch {}
 
   return null;
 }
@@ -1870,36 +1728,7 @@ async function searchTracksInternal(query) {
       } catch {}
     }
 
-    // 3. Secondary fallback: SoundCloud (only if needed)
-    let scTracks = [];
-    if (ytTracks.length < 5) {
-      try {
-        let clientId = await getSoundCloudClientId();
-        let scRes = await axios.get('https://api-v2.soundcloud.com/search/tracks', {
-          params: { q: targetQuery, client_id: clientId, limit: 6 },
-          timeout: 2500
-        });
-        if (scRes?.data?.collection?.length > 0) {
-          const valid = scRes.data.collection.filter(item => 
-            (item.duration || 0) > 30000 && isMusicTrackServer(item.title, item.user?.username)
-          );
-          scTracks = valid.slice(0, 5).map(item => ({
-            id: `sc-${item.id}`,
-            title: item.title || q,
-            artist: item.user?.username || 'Artist',
-            album: 'SoundCloud',
-            cover: item.artwork_url
-              ? item.artwork_url.replace('-large', '-t500x500')
-              : (item.user?.avatar_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'),
-            audioUrl: '', // Will resolve on play to YouTube
-            duration: Math.round((item.duration || 180000) / 1000),
-            source: 'SoundCloud'
-          }));
-        }
-      } catch {}
-    }
-
-    const allTracks = [...formattedDbTracks, ...ytTracks, ...scTracks];
+    const allTracks = [...formattedDbTracks, ...ytTracks];
     searchCache.set(cacheKey, { timestamp: Date.now(), tracks: allTracks });
     return allTracks;
   } catch (e) {
@@ -2497,43 +2326,9 @@ app.post(['/api/tracks/import', '/api/tracks/import-link'], optionalAuth, async 
         artist = 'YouTube';
       }
     }
-    // 3. Detect SoundCloud Track
+    // 3. Reject SoundCloud
     else if (rawUrl.includes('soundcloud.com')) {
-      source = 'SoundCloud';
-      try {
-        const scOembed = await axios.get(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(rawUrl)}`, { timeout: 5000 });
-        title = scOembed.data?.title || '';
-        artist = scOembed.data?.author_name || 'SoundCloud Artist';
-        if (scOembed.data?.thumbnail_url) {
-          cover = scOembed.data.thumbnail_url.replace('-large', '-t500x500');
-        }
-      } catch (err) {}
-
-      // Resolve actual progressive stream URL via SoundCloud API
-      try {
-        const cid = await getSoundCloudClientId();
-        const resolveRes = await axios.get(`https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(rawUrl)}&client_id=${cid}`, { timeout: 6000 });
-        if (resolveRes.data) {
-          const item = resolveRes.data;
-          title = title || item.title || 'SoundCloud Track';
-          artist = artist || item.user?.username || 'SoundCloud Artist';
-          if (item.duration) duration = Math.round(item.duration / 1000);
-          if (item.artwork_url) cover = item.artwork_url.replace('-large', '-t500x500');
-          const prog = item.media?.transcodings?.find(t => t.format?.protocol === 'progressive');
-          if (prog?.url) {
-            const streamRes = await axios.get(`${prog.url}?client_id=${cid}`, { timeout: 4000 });
-            if (streamRes.data?.url) audioUrl = streamRes.data.url;
-          }
-        }
-      } catch (err) {
-        console.warn('[Import Track] SoundCloud resolve stream failed:', err.message);
-      }
-
-      if (!audioUrl) {
-        // Fallback: search YouTube for audio
-        const ytId = await searchYouTubeId(`${artist} - ${title}`);
-        if (ytId) audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
-      }
+      return res.status(400).json({ error: 'SoundCloud is not supported. Please use a YouTube or Spotify link.' });
     }
     // 4. Detect Apple Music Track
     else if (rawUrl.includes('music.apple.com')) {
@@ -2594,7 +2389,7 @@ app.post(['/api/tracks/import', '/api/tracks/import-link'], optionalAuth, async 
         title = rawUrl;
         artist = 'Online Track';
       } else {
-        return res.status(400).json({ error: 'Unsupported link or could not resolve audio stream. Please provide a Spotify, YouTube, SoundCloud, Apple Music, or direct audio link.' });
+        return res.status(400).json({ error: 'Unsupported link or could not resolve audio stream. Please provide a Spotify, YouTube, Apple Music, or direct audio link.' });
       }
     }
 
@@ -2666,7 +2461,11 @@ app.get('/api/sync', auth, async (req, res) => {
     const user = await User.findById(req.user.id).select('-password').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const allTracks = await Track.find().sort({ createdAt: -1 }).limit(3000).lean();
+    const allTracks = await Track.find({
+      source: { $ne: 'SoundCloud' },
+      album: { $ne: 'SoundCloud' },
+      audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
+    }).sort({ createdAt: -1 }).limit(3000).lean();
     const formatted = allTracks.map(t => ({
       id: String(t._id),
       _id: String(t._id),
@@ -2712,7 +2511,12 @@ app.post('/api/tracks/by-ids', async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.json({ success: true, tracks: [] });
-    const tracks = await Track.find({ _id: { $in: ids } }).lean();
+    const tracks = await Track.find({
+      _id: { $in: ids },
+      source: { $ne: 'SoundCloud' },
+      album: { $ne: 'SoundCloud' },
+      audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
+    }).lean();
 
     // Asynchronously backfill missing covers in background without blocking response
     setImmediate(async () => {
@@ -2736,7 +2540,7 @@ app.post('/api/tracks/by-ids', async (req, res) => {
       audioUrl: t.audioUrl && !t.audioUrl.includes('pixabay.com') && !t.audioUrl.includes('preview') ? t.audioUrl : '',
       duration: t.duration || 180,
       genre: t.genre,
-      source: t.source || 'SoundCloud',
+      source: t.source || 'YouTube',
       isQuran: Boolean(t.isQuran),
       lyrics: t.lyrics || []
     }));
@@ -3540,7 +3344,11 @@ app.get('/api/artists/:name', async (req, res) => {
 // ──────────────────────────────────────────
 app.get('/api/tracks', async (req, res) => {
   try {
-    const raw = await Track.find({}, { lyrics: 0 }).sort({ createdAt: -1 }).limit(1000).lean();
+    const raw = await Track.find({
+      source: { $ne: 'SoundCloud' },
+      album: { $ne: 'SoundCloud' },
+      audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
+    }, { lyrics: 0 }).sort({ createdAt: -1 }).limit(1000).lean();
     const tracks = raw.map(t => ({
       ...t,
       id: String(t._id),
@@ -3939,43 +3747,6 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
       });
       if (direct) streamUrl = direct;
     } catch {}
-  }
-
-  // 2. Fallback to SoundCloud multi-query with smart title cleaning and strict ranking
-  if (!streamUrl && (title || artist)) {
-    const rawCleanTitle = (title || '')
-      .replace(/\s*[-–—]\s*(من فيلم|فيلم|أغنية|كليب|فيديو كليب|official|video|audio|lyrics|lyric|remix|clip|ost).*$/i, '')
-      .replace(/\(.*?\)|\[.*?\]/g, '')
-      .replace(/(?:ft\.?|feat\.?|featuring)\s+.*$/i, '')
-      .trim();
-
-    const primaryTitle = rawCleanTitle.includes(' - ')
-      ? rawCleanTitle.split(' - ')[0].trim()
-      : rawCleanTitle;
-
-    const cleanArtist = (artist || '')
-      .split(/[-–—|/•,]/)[0]
-      .replace(/\(.*?\)|\[.*?\]/g, '')
-      .trim();
-
-    const queries = [
-      `${cleanArtist} ${primaryTitle}`.trim(),
-      primaryTitle,
-      `${cleanArtist} ${rawCleanTitle}`.trim(),
-      `${primaryTitle} ${cleanArtist}`.trim(),
-      rawCleanTitle,
-    ].filter(Boolean);
-
-    const uniqueQueries = [...new Set(queries)];
-    for (const q of uniqueQueries) {
-      try {
-        const sc = await resolveSoundCloudTrack(q, primaryTitle, cleanArtist);
-        if (sc && sc.streamUrl) {
-          streamUrl = sc.streamUrl;
-          break;
-        }
-      } catch {}
-    }
   }
 
   return streamUrl;
@@ -4429,21 +4200,8 @@ app.post('/api/ai/recommendations', async (req, res) => {
   }
 });
 
-// Direct SoundCloud MP3 audio stream fallback for unblocked playback
-app.get('/api/soundcloud/fallback', async (req, res) => {
-  try {
-    const { title, artist } = req.query;
-    const q = `${artist || ''} ${title || ''}`.trim();
-    if (!q) return res.status(400).json({ error: 'Query required' });
-
-    const sc = await resolveSoundCloudTrack(q, title, artist);
-    if (sc && sc.streamUrl) {
-      return res.json({ success: true, url: sc.streamUrl, duration: sc.duration, cover: sc.cover });
-    }
-    res.status(404).json({ success: false, error: 'Stream not found' });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
+app.get(['/api/soundcloud/fallback', '/api/tracks/fallback-stream'], async (req, res) => {
+  res.status(404).json({ success: false, error: 'SoundCloud fallback disabled' });
 });
 
 app.get('/api/proxy-audio', async (req, res) => {
@@ -4481,11 +4239,11 @@ app.get('/api/proxy-audio', async (req, res) => {
 });
 
 // ──────────────────────────────────────────
-// SOUNDCLOUD STREAM RESOLVER ENDPOINT
+// TRACK AUDIO STREAM RESOLVER ENDPOINT (YouTube First)
 // ──────────────────────────────────────────
-app.get('/api/soundcloud/stream', async (req, res) => {
+const resolveStreamHandler = async (req, res) => {
   try {
-    const { url, title, artist, id } = req.query;
+    const { url, title, artist } = req.query;
 
     // 1. YouTube FIRST via title + artist (Authentic original music)
     if (title || artist) {
@@ -4501,22 +4259,36 @@ app.get('/api/soundcloud/stream', async (req, res) => {
       }
     }
 
-    // 2. Direct SoundCloud media/transcoding URL fallback
-    if (url && (url.includes('api-v2.soundcloud.com/media') || url.includes('/transcodings/')) && !url.includes('/preview/')) {
-      const streamUrl = await resolveSoundCloudStream(url);
-      if (streamUrl && !streamUrl.includes('preview')) {
-        return res.json({ success: true, url: streamUrl });
-      }
-    }
-
-    // 3. Fallback to existing audioUrl if valid and not a 30s preview snippet
-    if (url && url.startsWith('http') && !url.includes('pixabay.com') && !url.includes('preview')) {
+    // 2. Direct MP3/M4A if valid and not soundcloud
+    if (url && url.startsWith('http') && !url.includes('pixabay.com') && !url.includes('preview') && !url.includes('soundcloud.com') && !url.includes('sndcdn.com')) {
       return res.json({ success: true, url });
     }
 
     res.status(404).json({ success: false, error: 'Could not resolve audio stream' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+};
+
+app.get('/api/tracks/resolve-stream', resolveStreamHandler);
+app.get('/api/soundcloud/stream', resolveStreamHandler);
+
+// Purge SoundCloud tracks endpoint
+app.post('/api/tracks/purge-soundcloud', async (req, res) => {
+  try {
+    const scQuery = {
+      $or: [
+        { source: { $regex: /soundcloud/i } },
+        { audioUrl: { $regex: /soundcloud\.com|sndcdn\.com/i } },
+        { album: { $regex: /soundcloud/i } },
+        { originalUrl: { $regex: /soundcloud\.com/i } },
+        { id: { $regex: /^sc-/i } },
+      ]
+    };
+    const r = await Track.deleteMany(scQuery);
+    res.json({ success: true, deletedCount: r.deletedCount });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
