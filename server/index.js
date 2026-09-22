@@ -3900,31 +3900,33 @@ app.get('/api/tracks/download', async (req, res) => {
 
     if (videoId) {
       const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      const { spawn, exec } = require('child_process');
+      const { exec } = require('child_process');
+      const os = require('os');
+      const path = require('path');
+      const fs = require('fs');
+
       const hasYtDlp = await new Promise(resolve => {
         exec('yt-dlp --version', (err, stdout) => resolve(!err && stdout && stdout.trim().length > 0));
       });
 
       if (hasYtDlp) {
-        res.set({
-          'Content-Type': 'audio/mpeg',
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
-          'Access-Control-Allow-Origin': '*'
+        const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
+        const dlSuccess = await new Promise(resolve => {
+          exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`, { timeout: 35000 }, (err) => {
+            if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
+              resolve(true);
+            } else {
+              try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) {}
+              resolve(false);
+            }
+          });
         });
-        const ytdlProcess = spawn('yt-dlp', [
-          '--extractor-args', 'youtube:player_client=android,web',
-          '--no-check-certificates',
-          '-f', 'ba[ext=m4a]/ba/b',
-          '-o', '-',
-          ytUrl
-        ]);
-        ytdlProcess.stdout.pipe(res);
-        ytdlProcess.stderr.on('data', () => {});
-        ytdlProcess.on('error', (err) => {
-          console.warn('[yt-dlp spawn error]:', err.message);
-          if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
-        });
-        return;
+
+        if (dlSuccess) {
+          return res.download(tempFile, `${cleanFilename}.m4a`, () => {
+            try { fs.unlinkSync(tempFile); } catch (e) {}
+          });
+        }
       }
     }
 

@@ -902,36 +902,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }));
       } catch (e) {}
     }
-  }, [currentTrack, isPlaying, getActiveYtPlayer, isCurrentYtReady, repeatMode, isShuffle, likedTrackIds, duration, currentTime]);
-
-  // Sync playback state with Native Android MediaNotificationService
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      try {
-        const isLiked = currentTrack ? likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id)) : false;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'PLAYBACK_STATE',
-          isPlaying: isPlaying,
-          isRepeat: repeatMode !== 'off',
-          isShuffle: Boolean(isShuffle),
-          isLiked: isLiked,
-          duration: duration || currentTrack?.duration || 240,
-          currentTime: currentTime || 0,
-          track: currentTrack ? {
-            id: currentTrack._id || currentTrack.id,
-            _id: currentTrack._id || currentTrack.id,
-            title: currentTrack.title || 'Unknown Track',
-            artist: currentTrack.artist || 'Unknown Artist',
-            coverUrl: currentTrack.cover || currentTrack.coverUrl || '',
-            audioUrl: currentTrack.audioUrl || '',
-            duration: duration || currentTrack.duration || 240,
-            currentTime: currentTime || 0,
-            liked: isLiked,
-          } : null
-        }));
-      } catch (e) {}
-    }
-  }, [isPlaying, currentTrack, repeatMode, isShuffle, likedTrackIds, duration]);
+  }, [currentTrack, isPlaying, getActiveYtPlayer, isCurrentYtReady, repeatMode, isShuffle, likedTrackIds, duration]);
 
   // Periodic time sync to keep Android Notification Seekbar accurate
   useEffect(() => {

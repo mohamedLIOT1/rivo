@@ -175,8 +175,27 @@ export async function saveTrackOffline(track, options = {}) {
         album: track.album || '',
         duration: track.duration || 0,
       });
-      // Return a synthetic record so the UI can update immediately
-      return { ...track, id: trackId, downloaded: true, savedAt: Date.now() };
+
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('rivo-track-download-completed', handler);
+          resolve(null);
+        }, 90000);
+
+        function handler(e) {
+          if (e && e.detail && String(e.detail.id) === trackId) {
+            clearTimeout(timeout);
+            window.removeEventListener('rivo-track-download-completed', handler);
+            if (e.detail.success) {
+              resolve({ ...track, id: trackId, downloaded: true, savedAt: Date.now() });
+            } else {
+              resolve(null);
+            }
+          }
+        }
+
+        window.addEventListener('rivo-track-download-completed', handler);
+      });
     } catch (e) {
       console.error('Native bridge download error:', e);
       // Fall through to web download as fallback
