@@ -19,7 +19,13 @@ const normalizeCoverUrl = (url) => {
   return trimmed;
 };
 
-export const showMediaNotification = (track, isPlaying = true, isRepeat = false, isShuffle = false) => {
+export const showMediaNotification = (
+  track,
+  isPlaying = true,
+  isRepeat = false,
+  isShuffle = false,
+  isLiked = false
+) => {
   if (!RivoMediaControls) return;
   try {
     const rawCover = track?.coverUrl || track?.cover || '';
@@ -30,28 +36,43 @@ export const showMediaNotification = (track, isPlaying = true, isRepeat = false,
       isPlaying: Boolean(isPlaying),
       isRepeat: Boolean(isRepeat),
       isShuffle: Boolean(isShuffle),
+      isLiked: Boolean(isLiked !== undefined ? isLiked : (track?.liked || track?.isLiked)),
       duration: Number(track?.duration || 240),
-      currentTime: Number(track?.currentTime || 0),
+      currentTime: Number(track?.currentTime !== undefined ? track.currentTime : 0),
     });
   } catch (e) {
     // Graceful fallback
   }
 };
 
-export const updateMediaNotification = (isPlaying, isRepeat = false, isShuffle = false, track = null) => {
+export const updateMediaNotification = (
+  isPlaying,
+  isRepeat = false,
+  isShuffle = false,
+  isLiked = false,
+  track = null
+) => {
   if (!RivoMediaControls) return;
   try {
     const payload = {
       isPlaying: Boolean(isPlaying),
       isRepeat: Boolean(isRepeat),
       isShuffle: Boolean(isShuffle),
+      isLiked: Boolean(isLiked),
     };
     if (track) {
       payload.title = track.title || 'Unknown Track';
       payload.artist = track.artist || 'Unknown Artist';
       payload.coverUrl = normalizeCoverUrl(track.coverUrl || track.cover || '');
-      if (track.duration) payload.duration = Number(track.duration);
-      if (track.currentTime) payload.currentTime = Number(track.currentTime);
+      if (track.duration !== undefined && track.duration !== null) {
+        payload.duration = Number(track.duration);
+      }
+      if (track.currentTime !== undefined && track.currentTime !== null) {
+        payload.currentTime = Number(track.currentTime);
+      }
+      if (track.liked !== undefined || track.isLiked !== undefined) {
+        payload.isLiked = Boolean(track.liked || track.isLiked);
+      }
     }
     RivoMediaControls.updatePlayback(payload);
   } catch (e) {}

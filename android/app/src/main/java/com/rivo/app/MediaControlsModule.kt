@@ -36,6 +36,9 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             if (options.hasKey("isPlaying")) putExtra("isPlaying", options.getBoolean("isPlaying"))
             if (options.hasKey("isRepeat")) putExtra("isRepeat", options.getBoolean("isRepeat"))
             if (options.hasKey("isShuffle")) putExtra("isShuffle", options.getBoolean("isShuffle"))
+            if (options.hasKey("isLiked")) putExtra("isLiked", options.getBoolean("isLiked"))
+            if (options.hasKey("duration")) putExtra("duration", options.getDouble("duration"))
+            if (options.hasKey("currentTime")) putExtra("currentTime", options.getDouble("currentTime"))
         }
 
         try {
@@ -56,9 +59,13 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             action = MediaNotificationService.ACTION_UPDATE
             if (options.hasKey("title")) putExtra("title", options.getString("title"))
             if (options.hasKey("artist")) putExtra("artist", options.getString("artist"))
+            if (options.hasKey("coverUrl")) putExtra("coverUrl", options.getString("coverUrl"))
             if (options.hasKey("isPlaying")) putExtra("isPlaying", options.getBoolean("isPlaying"))
             if (options.hasKey("isRepeat")) putExtra("isRepeat", options.getBoolean("isRepeat"))
             if (options.hasKey("isShuffle")) putExtra("isShuffle", options.getBoolean("isShuffle"))
+            if (options.hasKey("isLiked")) putExtra("isLiked", options.getBoolean("isLiked"))
+            if (options.hasKey("duration")) putExtra("duration", options.getDouble("duration"))
+            if (options.hasKey("currentTime")) putExtra("currentTime", options.getDouble("currentTime"))
         }
 
         try {
