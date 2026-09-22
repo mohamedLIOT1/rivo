@@ -3760,192 +3760,101 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
 });
 
 // ──────────────────────────────────────────
-// Resilient SoundCloud Audio Stream Resolver (Bypasses YouTube datacenter bot blocks)
+// Official YouTube Audio Stream Resolver & Stream Proxy (Multi-Tier, NO SoundCloud)
 // ──────────────────────────────────────────
-let scClientIdCache = {
-  clientId: null,
-  fetchedAt: 0
-};
 
-async function getSoundCloudClientId() {
-  const now = Date.now();
-  if (scClientIdCache.clientId && (now - scClientIdCache.fetchedAt < 2 * 60 * 60 * 1000)) {
-    return scClientIdCache.clientId;
-  }
-  try {
-    const scHtmlRes = await axios.get('https://soundcloud.com', {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      timeout: 5000
-    });
-    const scriptUrls = [...scHtmlRes.data.matchAll(/<script[^>]+src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
-    for (const sUrl of scriptUrls.slice(-6)) {
-      try {
-        const sRes = await axios.get(sUrl, { timeout: 4000 });
-        const m = sRes.data.match(/client_id[:=]"([a-zA-Z0-9]{32})"/);
-        if (m && m[1]) {
-          scClientIdCache = { clientId: m[1], fetchedAt: now };
-          return m[1];
-        }
-      } catch {}
-    }
-  } catch (err) {
-    console.warn('[SoundCloud] Failed to scrape client ID:', err.message);
-  }
-  return scClientIdCache.clientId || 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
-}
-
-async function resolveSoundCloudAudioStream(title = '', artist = '') {
-  try {
-    const cleanT = String(title || '').replace(/[\[\(].*?[\]\)]/g, '').replace(/https?:\/\/\S+/g, '').trim();
-    const cleanA = String(artist || '').replace(/[\[\(].*?[\]\)]/g, '').replace(/https?:\/\/\S+/g, '').trim();
-    const query = `${cleanA} ${cleanT}`.trim();
-    if (!query) return null;
-
-    const clientId = await getSoundCloudClientId();
-    if (!clientId) return null;
-
-    const searchUrl = `https://api-v2.soundcloud.com/search?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=10`;
-    const searchRes = await axios.get(searchUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      timeout: 5000
-    });
-
-    const items = searchRes.data?.collection || [];
-    if (!Array.isArray(items) || items.length === 0) return null;
-
-    const validItems = items.filter(it => {
-      if (!it || !it.title || !it.media?.transcodings) return false;
-      const durSec = (it.duration || 0) / 1000;
-      return durSec >= 30 && durSec <= 900;
-    });
-
-    const scored = validItems.map(it => {
-      let score = 0;
-      const itTitle = (it.title || '').toLowerCase();
-      const isCover = /cover|كفر|ريمكس|remix|slowed|reverb/i.test(itTitle);
-      const queryWantsCover = /cover|remix/i.test(query.toLowerCase());
-      if (isCover && !queryWantsCover) score -= 50;
-      if (it.playback_count) score += Math.min(50, Math.log10(it.playback_count + 1) * 10);
-      return { item: it, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score);
-    const chosenItems = scored.length > 0 ? scored.map(s => s.item) : validItems;
-
-    for (const item of chosenItems) {
-      const trans = item.media?.transcodings || [];
-      const prog = trans.find(t => t.format?.protocol === 'progressive');
-      if (prog && prog.url) {
-        try {
-          const streamInfoRes = await axios.get(`${prog.url}?client_id=${clientId}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-            timeout: 4000
-          });
-          const streamUrl = streamInfoRes.data?.url;
-          if (streamUrl && streamUrl.startsWith('http')) {
-            return {
-              streamUrl,
-              duration: Math.round((item.duration || 0) / 1000),
-              title: item.title,
-              artist: item.user?.username || cleanA
-            };
-          }
-        } catch {}
-      }
-    }
-  } catch (err) {
-    console.warn('[SoundCloud Audio Stream] Resolution error:', err.message);
-  }
-  return null;
-}
-
-// Direct Audio Stream Downloader with resilient multi-tier fallback
-async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
-  let streamUrl = null;
-  if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be')) {
-    streamUrl = rawUrl;
-  }
-
-  let ytUrl = rawUrl;
+async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '') {
   let videoId = null;
-  if (rawUrl) {
-    const m = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-    if (m && m[1]) videoId = m[1];
+  const candidates = [rawUrl];
+  for (const cand of candidates) {
+    if (!cand || typeof cand !== 'string') continue;
+    const m1 = cand.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (m1 && m1[1]) { videoId = m1[1]; break; }
+    const m2 = cand.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+    if (m2 && m2[1]) { videoId = m2[1]; break; }
+    if (/^[a-zA-Z0-9_-]{11}$/.test(cand.trim()) && !mongoose.isValidObjectId(cand.trim())) {
+      videoId = cand.trim();
+      break;
+    }
   }
   if (!videoId && (title || artist)) {
     try {
       videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
     } catch {}
   }
-  if (videoId && (!ytUrl || !ytUrl.includes('youtube.com'))) {
-    ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  }
+  if (!videoId) return null;
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // 1. Try yt-dlp with iOS/TV player client to bypass YouTube datacenter bot detection
-  if (!streamUrl && ytUrl && (ytUrl.includes('youtube.com') || ytUrl.includes('youtu.be'))) {
-    try {
-      const { exec } = require('child_process');
-      const direct = await new Promise((resolve) => {
-        const cmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -g "${ytUrl}"`;
-        exec(cmd, { timeout: 15000 }, (err, stdout) => {
-          if (!err && stdout && stdout.trim()) {
-            resolve(stdout.trim().split('\n')[0]);
-          } else {
-            // Second attempt with tv client
-            exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -g "${ytUrl}"`, { timeout: 12000 }, (err2, stdout2) => {
-              if (!err2 && stdout2 && stdout2.trim()) {
-                resolve(stdout2.trim().split('\n')[0]);
-              } else {
-                resolve(null);
-              }
-            });
-          }
-        });
-      });
-      if (direct) streamUrl = direct;
-    } catch {}
-  }
-
-  // 2. Multi-instance stream resolvers fallback
-  if (!streamUrl && videoId) {
-    const streamResolvers = [
-      `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-      `https://invidious.jing.rocks/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-      `https://yt.artemislena.eu/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-      `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-      `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-      `https://pipedapi.kavin.rocks/streams/${videoId}`,
-    ];
-    for (const ep of streamResolvers) {
-      try {
-        const invRes = await axios.get(ep, { timeout: 4000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-        const formats = invRes.data?.adaptiveFormats || invRes.data?.audioStreams || [];
-        const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
-                      formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
-        if (audio?.url) {
-          streamUrl = audio.url;
-          break;
+  // Tier 1: yt-dlp direct stream resolution with modern iOS/TV client headers
+  try {
+    const { exec } = require('child_process');
+    const direct = await new Promise((resolve) => {
+      const cmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -g "${ytUrl}"`;
+      exec(cmd, { timeout: 12000 }, (err, stdout) => {
+        if (!err && stdout && stdout.trim().startsWith('http')) {
+          resolve(stdout.trim().split('\n')[0]);
+        } else {
+          // Second attempt with tv client
+          exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -g "${ytUrl}"`, { timeout: 10000 }, (err2, stdout2) => {
+            if (!err2 && stdout2 && stdout2.trim().startsWith('http')) {
+              resolve(stdout2.trim().split('\n')[0]);
+            } else {
+              resolve(null);
+            }
+          });
         }
-      } catch {}
-    }
-  }
+      });
+    });
+    if (direct) return direct;
+  } catch {}
 
-  // 3. Resilient SoundCloud Progressive MP3 stream fallback (reliable on cloud servers)
-  if (!streamUrl && (title || artist)) {
+  // Tier 2: Cobalt API official YouTube audio extraction
+  const cobaltEndpoints = [
+    'https://api.cobalt.tools/api/json',
+    'https://cobalt.stream/api/json',
+    'https://co.wuk.sh/api/json',
+    'https://cobalt-api.kwiatekm.pl/api/json'
+  ];
+  for (const ep of cobaltEndpoints) {
     try {
-      const sc = await resolveSoundCloudAudioStream(title, artist);
-      if (sc && sc.streamUrl) {
-        streamUrl = sc.streamUrl;
+      const cobRes = await axios.post(ep, {
+        url: ytUrl,
+        downloadMode: 'audio',
+      }, {
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        timeout: 6000
+      });
+      if (cobRes.data?.url && cobRes.data.url.startsWith('http')) {
+        return cobRes.data.url;
       }
     } catch {}
   }
 
-  return streamUrl;
+  // Tier 3: Invidious / Piped official adaptive format streams
+  const streamResolvers = [
+    `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://invidious.jing.rocks/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://yt.artemislena.eu/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://pipedapi.kavin.rocks/streams/${videoId}`,
+  ];
+  for (const ep of streamResolvers) {
+    try {
+      const invRes = await axios.get(ep, { timeout: 4000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const formats = invRes.data?.adaptiveFormats || invRes.data?.audioStreams || [];
+      const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
+                    formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
+      if (audio?.url && audio.url.startsWith('http')) {
+        return audio.url;
+      }
+    } catch {}
+  }
+
+  return null;
 }
 
-// Dedicated audio stream resolution endpoint for mobile
+// Dedicated audio stream resolution endpoint with proxy support
 app.get('/api/tracks/:id/stream', async (req, res) => {
   try {
     const { id } = req.params;
@@ -3957,13 +3866,59 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
     const title = req.query.title || track?.title || '';
     const artist = req.query.artist || track?.artist || '';
 
-    const streamUrl = await resolveAudioStreamUrl(rawUrl, title, artist);
+    // Direct MP3/M4A non-YouTube stream
+    if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be') && (rawUrl.endsWith('.mp3') || rawUrl.endsWith('.m4a'))) {
+      return res.json({ success: true, url: rawUrl });
+    }
+
+    const streamUrl = await resolveOfficialYouTubeAudioStream(rawUrl, title, artist);
     if (streamUrl) {
-      return res.json({ success: true, url: streamUrl });
+      const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
+      return res.json({ success: true, url: proxyUrl, directUrl: streamUrl });
     }
     res.status(404).json({ success: false, error: 'Could not resolve audio stream' });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Resilient Stream Proxy with full Range header support for zero-lag seeking & buffering
+app.get('/api/tracks/stream-proxy', async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl || !targetUrl.startsWith('http')) {
+    return res.status(400).send('Missing url param');
+  }
+
+  try {
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+    };
+    if (req.headers.range) {
+      headers['Range'] = req.headers.range;
+    }
+
+    const response = await axios({
+      method: 'get',
+      url: targetUrl,
+      responseType: 'stream',
+      headers,
+      timeout: 30000,
+      validateStatus: (status) => status < 400,
+    });
+
+    res.status(response.status);
+    const forwardHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
+    forwardHeaders.forEach((h) => {
+      if (response.headers[h]) {
+        res.setHeader(h, response.headers[h]);
+      }
+    });
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    response.data.pipe(res);
+  } catch (err) {
+    res.redirect(targetUrl);
   }
 });
 
@@ -4164,59 +4119,72 @@ app.get('/api/tracks/download', async (req, res) => {
       }
     }
 
-    // Fallback tier 1: Try SoundCloud progressive MP3 directly (bulletproof on cloud datacenter IPs)
-    if (cleanTitle || cleanArtist) {
-      try {
-        const sc = await resolveSoundCloudAudioStream(cleanTitle, cleanArtist);
-        if (sc && sc.streamUrl) {
-          const streamRes = await axios({
-            method: 'get',
-            url: sc.streamUrl,
-            responseType: 'stream',
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-            timeout: 45000
+    // Official YouTube Stream Fallback Tier 1: Cobalt API (extracts official audio from YouTube URL)
+    if (videoId) {
+      const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const cobaltEndpoints = [
+        'https://api.cobalt.tools/api/json',
+        'https://cobalt.stream/api/json',
+        'https://co.wuk.sh/api/json',
+        'https://cobalt-api.kwiatekm.pl/api/json'
+      ];
+      for (const ep of cobaltEndpoints) {
+        try {
+          const cobRes = await axios.post(ep, {
+            url: ytUrl,
+            downloadMode: 'audio',
+          }, {
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+            timeout: 8000
           });
-
-          const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
-          res.set({
-            'Content-Type': 'audio/mpeg',
-            'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.mp3`,
-            'Access-Control-Allow-Origin': '*'
-          });
-          return streamRes.data.pipe(res);
-        }
-      } catch (scErr) {
-        console.warn('[download] SoundCloud fallback stream error:', scErr.message);
+          const cobUrl = cobRes.data?.url;
+          if (cobUrl && cobUrl.startsWith('http')) {
+            const streamRes = await axios({
+              method: 'get',
+              url: cobUrl,
+              responseType: 'stream',
+              headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X)' },
+              timeout: 45000
+            });
+            const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+            res.set({
+              'Content-Type': 'audio/mpeg',
+              'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.mp3`,
+              'Access-Control-Allow-Origin': '*'
+            });
+            return streamRes.data.pipe(res);
+          }
+        } catch {}
       }
     }
 
-    // Fallback tier 2: resolve via public mirror / resolver
+    // Official YouTube Stream Fallback Tier 2: Invidious / Piped adaptive audio formats
     const streamTarget = url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '');
-    const streamUrl = await resolveAudioStreamUrl(streamTarget, cleanTitle, cleanArtist);
-    if (!streamUrl) {
-      return res.status(404).json({ success: false, error: 'Could not resolve audio stream for download' });
+    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, cleanTitle, cleanArtist);
+    if (streamUrl) {
+      try {
+        const streamRes = await axios({
+          method: 'get',
+          url: streamUrl,
+          responseType: 'stream',
+          headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X)' },
+          timeout: 45000
+        });
+
+        const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+        res.set({
+          'Content-Type': 'audio/mp4',
+          'Content-Disposition': `attachment; filename="${safeAscii}.m4a"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.m4a`,
+          'Access-Control-Allow-Origin': '*'
+        });
+        return streamRes.data.pipe(res);
+      } catch (streamErr) {
+        res.set({ 'Access-Control-Allow-Origin': '*' });
+        return res.redirect(streamUrl);
+      }
     }
 
-    try {
-      const streamRes = await axios({
-        method: 'get',
-        url: streamUrl,
-        responseType: 'stream',
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-        timeout: 45000
-      });
-
-      const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
-      res.set({
-        'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.mp3`,
-        'Access-Control-Allow-Origin': '*'
-      });
-      return streamRes.data.pipe(res);
-    } catch (streamErr) {
-      res.set({ 'Access-Control-Allow-Origin': '*' });
-      return res.redirect(streamUrl);
-    }
+    return res.status(404).json({ success: false, error: 'Could not resolve official audio stream for download' });
   } catch (e) {
     console.error('Download audio error:', e.message);
     if (!res.headersSent) res.status(500).json({ success: false, error: e.message });

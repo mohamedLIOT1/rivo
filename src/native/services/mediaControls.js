@@ -31,19 +31,23 @@ const normalizeCoverUrl = (url) => {
 export const showMediaNotification = (
   track,
   isPlaying = true,
-  isRepeat = false,
+  repeatMode = 'off',
   isShuffle = false,
   isLiked = false
 ) => {
   if (!RivoMediaControls) return;
   try {
     const rawCover = track?.coverUrl || track?.cover || '';
+    const safeRepeatMode = typeof repeatMode === 'string'
+      ? repeatMode
+      : (repeatMode ? 'all' : 'off');
     RivoMediaControls.showNotification({
       title: track?.title || 'Unknown Track',
       artist: track?.artist || 'Unknown Artist',
       coverUrl: normalizeCoverUrl(rawCover),
       isPlaying: Boolean(isPlaying),
-      isRepeat: Boolean(isRepeat),
+      repeatMode: safeRepeatMode,
+      isRepeat: safeRepeatMode !== 'off',
       isShuffle: Boolean(isShuffle),
       isLiked: Boolean(isLiked !== undefined ? isLiked : (track?.liked || track?.isLiked)),
       duration: Number(track?.duration || 240),
@@ -56,16 +60,20 @@ export const showMediaNotification = (
 
 export const updateMediaNotification = (
   isPlaying,
-  isRepeat = false,
+  repeatMode = 'off',
   isShuffle = false,
   isLiked = false,
   track = null
 ) => {
   if (!RivoMediaControls) return;
   try {
+    const safeRepeatMode = typeof repeatMode === 'string'
+      ? repeatMode
+      : (repeatMode ? 'all' : 'off');
     const payload = {
       isPlaying: Boolean(isPlaying),
-      isRepeat: Boolean(isRepeat),
+      repeatMode: safeRepeatMode,
+      isRepeat: safeRepeatMode !== 'off',
       isShuffle: Boolean(isShuffle),
       isLiked: Boolean(isLiked),
     };

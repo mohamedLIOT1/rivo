@@ -3,11 +3,15 @@ name: Build iOS IPA (Unsigned)
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-ios:
-    name: Build Unsigned IPA for Sideloadly
+    name: Build Unsigned IPA for iOS
     runs-on: macos-14
 
     steps:
@@ -69,3 +73,13 @@ jobs:
           name: Rivo-iOS-IPA
           path: build/Rivo.ipa
           retention-days: 14
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: Rivo ${{ github.ref_name }}
+          files: |
+            build/Rivo.ipa
+            Rivo-Hybrid-v1.2.6.apk
+          generate_release_notes: true

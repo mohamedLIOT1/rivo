@@ -53,7 +53,7 @@ class MediaNotificationService : Service() {
         var currentArtist: String = "Playing in Background"
         var currentCoverUrl: String? = null
         var isPlaying: Boolean = false
-        var isRepeat: Boolean = false
+        var repeatMode: String = "off" // "off", "all", "one"
         var isShuffle: Boolean = false
         var isLiked: Boolean = false
         var currentDurationMs: Long = 0L
@@ -229,7 +229,12 @@ class MediaNotificationService : Service() {
 
                 isPlaying = intent.getBooleanExtra("isPlaying", true)
                 if (now - lastUserRepeatTimeMs > 4000L) {
-                    isRepeat = intent.getBooleanExtra("isRepeat", false)
+                    val incomingRepeatMode = intent.getStringExtra("repeatMode")
+                    if (!incomingRepeatMode.isNullOrBlank()) {
+                        repeatMode = incomingRepeatMode
+                    } else if (intent.hasExtra("isRepeat")) {
+                        repeatMode = if (intent.getBooleanExtra("isRepeat", false)) "all" else "off"
+                    }
                 }
                 isShuffle = intent.getBooleanExtra("isShuffle", false)
                 if (now - lastUserLikeTimeMs > 4000L) {
@@ -262,8 +267,13 @@ class MediaNotificationService : Service() {
             ACTION_UPDATE -> {
                 val now = SystemClock.elapsedRealtime()
                 isPlaying = intent.getBooleanExtra("isPlaying", isPlaying)
-                if (intent.hasExtra("isRepeat") && (now - lastUserRepeatTimeMs > 4000L)) {
-                    isRepeat = intent.getBooleanExtra("isRepeat", isRepeat)
+                if (now - lastUserRepeatTimeMs > 4000L) {
+                    val incomingRepeatMode = intent.getStringExtra("repeatMode")
+                    if (!incomingRepeatMode.isNullOrBlank()) {
+                        repeatMode = incomingRepeatMode
+                    } else if (intent.hasExtra("isRepeat")) {
+                        repeatMode = if (intent.getBooleanExtra("isRepeat", false)) "all" else "off"
+                    }
                 }
                 if (intent.hasExtra("isShuffle")) isShuffle = intent.getBooleanExtra("isShuffle", isShuffle)
                 if (intent.hasExtra("isLiked") && (now - lastUserLikeTimeMs > 4000L)) {
@@ -348,7 +358,11 @@ class MediaNotificationService : Service() {
             releaseWakeLock()
             abandonAudioFocus()
         } else if (action == "repeat") {
-            isRepeat = !isRepeat
+            repeatMode = when (repeatMode) {
+                "off" -> "all"
+                "all" -> "one"
+                else -> "off"
+            }
             lastUserRepeatTimeMs = now
         } else if (action == "like") {
             isLiked = !isLiked
@@ -433,8 +447,23 @@ class MediaNotificationService : Service() {
             PlaybackStateCompat.CustomAction.Builder(ACTION_LIKE, likeLabel, likeIconRes).build()
         )
 
-        val repeatIconRes = if (isRepeat) R.drawable.ic_notification_repeat_on else R.drawable.ic_notification_repeat
-        val repeatLabel = if (isRepeat) "Repeat (On)" else "Repeat (Off)"
+        // Set MediaSession repeat mode
+        when (repeatMode) {
+            "one" -> mediaSession?.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_ONE)
+            "all" -> mediaSession?.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_ALL)
+            else -> mediaSession?.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_NONE)
+        }
+
+        val repeatIconRes = when (repeatMode) {
+            "one" -> R.drawable.ic_notification_repeat_on
+            "all" -> R.drawable.ic_notification_repeat_all
+            else -> R.drawable.ic_notification_repeat
+        }
+        val repeatLabel = when (repeatMode) {
+            "one" -> "Repeat (Current)"
+            "all" -> "Repeat (Queue)"
+            else -> "Repeat (Off)"
+        }
         playbackStateBuilder.addCustomAction(
             PlaybackStateCompat.CustomAction.Builder(ACTION_REPEAT, repeatLabel, repeatIconRes).build()
         )

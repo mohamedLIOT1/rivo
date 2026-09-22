@@ -122,7 +122,7 @@ function MainAppShell() {
  */
 function OfflineNativeShell({ isIOSPrimary = false }) {
   const { appMode } = useConnectivity();
-  const [activeTab, setActiveTab] = useState(isIOSPrimary || appMode === 'online' ? 'home' : 'offline');
+  const [activeTab, setActiveTab] = useState(isIOSPrimary ? 'offline' : (appMode === 'online' ? 'home' : 'offline'));
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);

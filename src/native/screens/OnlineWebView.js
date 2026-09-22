@@ -16,8 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useUser } from '../context/UserContext';
-import * as FileSystem from 'expo-file-system';
-import { downloadTrack as nativeDownloadTrack, getDownloadedTracks } from '../services/downloadManager';
+import { downloadTrack as nativeDownloadTrack, getDownloadedTracks, removeDownloadedTrack } from '../services/downloadManager';
 import {
   showMediaNotification,
   updateMediaNotification,
@@ -463,7 +462,9 @@ export default function OnlineWebView() {
           }
           const trackDur = Number(data.duration !== undefined ? data.duration : (activeTrack?.duration || 240));
           const trackTime = Number(data.currentTime !== undefined ? data.currentTime : (activeTrack?.currentTime || 0));
-          const isRepeatState = Boolean(data.isRepeat);
+          const repeatModeState = typeof data.repeatMode === 'string'
+            ? data.repeatMode
+            : (data.isRepeat ? 'all' : 'off');
           const isShuffleState = Boolean(data.isShuffle);
           const trackIdStr = activeTrack ? String(activeTrack.id || activeTrack._id || '') : '';
           const isLikedState = (likedTrackIds && likedTrackIds.length > 0 && trackIdStr)
@@ -477,11 +478,11 @@ export default function OnlineWebView() {
               duration: trackDur,
               currentTime: trackTime,
               liked: isLikedState,
-            }, Boolean(isPlaying), isRepeatState, isShuffleState, isLikedState);
+            }, Boolean(isPlaying), repeatModeState, isShuffleState, isLikedState);
           } else {
             updateMediaNotification(
               Boolean(isPlaying),
-              isRepeatState,
+              repeatModeState,
               isShuffleState,
               isLikedState,
               {
@@ -516,16 +517,29 @@ export default function OnlineWebView() {
             if (refreshDownloadedTracks) {
               await refreshDownloadedTracks();
             }
-            webViewRef.current?.injectJavaScript(`
-              (function() {
-                try {
-                  window.dispatchEvent(new CustomEvent('rivo-track-download-completed', {
-                    detail: { id: ${JSON.stringify(trackId)}, success: true }
-                  }));
-                } catch(e) {}
-              })();
-              true;
-            `);
+            try {
+              const freshList = await getDownloadedTracks();
+              const freshIds = (freshList || []).map(t => String(t._id || t.id));
+              const freshTracks = (freshList || []).map(t => ({
+                id: String(t._id || t.id),
+                _id: String(t._id || t.id),
+                title: t.title,
+                artist: t.artist,
+                localAudioUri: t.localAudioUri || t.nativeAudioUri || t.audioUrl,
+              }));
+              webViewRef.current?.injectJavaScript(`
+                (function() {
+                  try {
+                    window.__RIVO_NATIVE_DOWNLOADED_IDS = ${JSON.stringify(freshIds)};
+                    window.__RIVO_DOWNLOADED_TRACKS = ${JSON.stringify(freshTracks)};
+                    window.dispatchEvent(new CustomEvent('rivo-track-download-completed', {
+                      detail: { id: ${JSON.stringify(trackId)}, success: true }
+                    }));
+                  } catch(e) {}
+                })();
+                true;
+              `);
+            } catch (e) {}
           } catch (err) {
             setDownloadProgress(null);
             showToast(`Download failed: ${err.message}`, 'error');
@@ -539,6 +553,38 @@ export default function OnlineWebView() {
               })();
               true;
             `);
+          }
+          break;
+        }
+
+        case 'DELETE_TRACK': {
+          const trackId = data.trackId || data.id;
+          if (trackId) {
+            try {
+              await removeDownloadedTrack(trackId);
+              if (refreshDownloadedTracks) {
+                await refreshDownloadedTracks();
+              }
+              const freshList = await getDownloadedTracks();
+              const freshIds = (freshList || []).map(t => String(t._id || t.id));
+              const freshTracks = (freshList || []).map(t => ({
+                id: String(t._id || t.id),
+                _id: String(t._id || t.id),
+                title: t.title,
+                artist: t.artist,
+                localAudioUri: t.localAudioUri || t.nativeAudioUri || t.audioUrl,
+              }));
+              webViewRef.current?.injectJavaScript(`
+                (function() {
+                  try {
+                    window.__RIVO_NATIVE_DOWNLOADED_IDS = ${JSON.stringify(freshIds)};
+                    window.__RIVO_DOWNLOADED_TRACKS = ${JSON.stringify(freshTracks)};
+                  } catch(e) {}
+                })();
+                true;
+              `);
+              showToast('Track removed from offline vault', 'info');
+            } catch (e) {}
           }
           break;
         }
@@ -558,12 +604,16 @@ export default function OnlineWebView() {
                 const base64 = await FileSystem.readAsStringAsync(fileUri, {
                   encoding: FileSystem.EncodingType.Base64,
                 });
+                const dataUri = `data:audio/mpeg;base64,${base64}`;
                 webViewRef.current?.injectJavaScript(`
                   (function() {
                     try {
                       if (typeof window.__RIVO_RECEIVE_OFFLINE_AUDIO === 'function') {
-                        window.__RIVO_RECEIVE_OFFLINE_AUDIO(${JSON.stringify(reqId)}, "data:audio/mpeg;base64,${base64}");
+                        window.__RIVO_RECEIVE_OFFLINE_AUDIO(${JSON.stringify(reqId)}, "${dataUri}");
                       }
+                      window.dispatchEvent(new CustomEvent('rivo-receive-offline-audio', {
+                        detail: { id: ${JSON.stringify(reqId)}, dataUri: "${dataUri}" }
+                      }));
                     } catch(e) {}
                   })();
                   true;
@@ -642,10 +692,18 @@ export default function OnlineWebView() {
           try {
             const list = await getDownloadedTracks();
             const ids = (list || []).map(t => String(t._id || t.id));
+            const tracksData = (list || []).map(t => ({
+              id: String(t._id || t.id),
+              _id: String(t._id || t.id),
+              title: t.title,
+              artist: t.artist,
+              localAudioUri: t.localAudioUri || t.nativeAudioUri || t.audioUrl,
+            }));
             webViewRef.current?.injectJavaScript(`
               (function() {
                 try {
                   window.__RIVO_NATIVE_DOWNLOADED_IDS = ${JSON.stringify(ids)};
+                  window.__RIVO_DOWNLOADED_TRACKS = ${JSON.stringify(tracksData)};
                 } catch(e) {}
               })();
               true;

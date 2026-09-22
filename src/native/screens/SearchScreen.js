@@ -38,7 +38,7 @@ const DISPENSARY_GENRES = [
 ];
 
 export default function SearchScreen({ onTrackAction }) {
-  const { playTrack, tracks: audioTracks } = useAudioPlayer();
+  const { playTrack, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { tracks: userTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
@@ -49,7 +49,9 @@ export default function SearchScreen({ onTrackAction }) {
   const searchTimeoutRef = useRef(null);
 
   const isOffline = appMode === 'offline';
-  const allTracks = (Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (Array.isArray(audioTracks) ? audioTracks : []);
+  const allTracks = isOffline
+    ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
+    : ((Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (Array.isArray(audioTracks) ? audioTracks : []));
 
   // Live query to server /api/search when connected
   useEffect(() => {

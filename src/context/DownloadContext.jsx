@@ -98,8 +98,14 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
           setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...patchFields } : t));
         }
 
-        // Web browser file trigger
-        if (typeof window !== 'undefined' && !window.Capacitor && !window.RIVO_NATIVE) {
+        // Web browser file trigger - desktop only (never in native app)
+        const isNativeApp = typeof window !== 'undefined' && (
+          Boolean(window.RIVO_NATIVE) ||
+          Boolean(window.ReactNativeWebView) ||
+          Boolean(window.Capacitor) ||
+          Boolean(window.__RIVO_NATIVE_INJECTED)
+        );
+        if (typeof window !== 'undefined' && !isNativeApp) {
           try {
             const cleanTitle = (nextTrack.title || 'Song').replace(/https?:\/\/\S+/gi, '').replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Song';
             const cleanArtist = (nextTrack.artist || 'Artist').replace(/https?:\/\/\S+/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Artist';
@@ -145,6 +151,12 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
 
     // If already downloaded: remove it
     if (track.downloaded) {
+      if (typeof window !== 'undefined' && window.ReactNativeWebView?.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'DELETE_TRACK',
+          trackId: cleanId,
+        }));
+      }
       await removeTrackOffline(cleanId);
       if (setTracks) {
         setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, downloaded: false } : t));
@@ -161,6 +173,22 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
 
     isCancelledRef.current = false;
     showToast?.(`Downloading "${track.title || 'Song'}"...`);
+
+    // In native app, dispatch to native storage vault
+    if (typeof window !== 'undefined' && window.ReactNativeWebView?.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'DOWNLOAD_TRACK',
+        track: {
+          id: cleanId,
+          _id: cleanId,
+          title: track.title,
+          artist: track.artist,
+          audioUrl: track.audioUrl,
+          cover: track.cover,
+          duration: track.duration,
+        }
+      }));
+    }
 
     // If nothing currently downloading, process right away
     if (!downloadingTrackId && queueRef.current.length === 0) {
@@ -209,6 +237,12 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
 
   const removeOfflineTrack = useCallback(async (trackId) => {
     const cleanId = String(trackId);
+    if (typeof window !== 'undefined' && window.ReactNativeWebView?.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'DELETE_TRACK',
+        trackId: cleanId,
+      }));
+    }
     await removeTrackOffline(cleanId);
     if (setTracks) {
       setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, downloaded: false } : t));

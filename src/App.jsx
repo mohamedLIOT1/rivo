@@ -1243,7 +1243,20 @@ function AppContent() {
                   (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId ? currentTrack : null);
     if (!track) return;
 
+    const isNativeApp = typeof window !== 'undefined' && (
+      Boolean(window.RIVO_NATIVE) ||
+      Boolean(window.ReactNativeWebView) ||
+      Boolean(window.Capacitor) ||
+      Boolean(window.__RIVO_NATIVE_INJECTED)
+    );
+
     if (track.downloaded) {
+      if (typeof window !== 'undefined' && window.ReactNativeWebView?.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'DELETE_TRACK',
+          trackId: cleanId,
+        }));
+      }
       await removeTrackOffline(cleanId);
       setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, downloaded: false } : t));
       if (currentTrack && String(currentTrack.id || currentTrack._id) === cleanId) {
@@ -1252,6 +1265,20 @@ function AppContent() {
       showToast('Song removed from offline downloads');
     } else {
       showToast('Downloading song for offline playback...');
+      if (typeof window !== 'undefined' && window.ReactNativeWebView?.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'DOWNLOAD_TRACK',
+          track: {
+            id: cleanId,
+            _id: cleanId,
+            title: track.title,
+            artist: track.artist,
+            audioUrl: track.audioUrl,
+            cover: track.cover,
+            duration: track.duration,
+          }
+        }));
+      }
       const result = await saveTrackOffline(track);
       if (result) {
         // Get a fresh playable audio URL (native file URI converted to http:// via Capacitor)
@@ -1284,8 +1311,8 @@ function AppContent() {
           }));
         }
 
-        // Also trigger browser file download on web platform only (never in native apps)
-        if (typeof window !== 'undefined' && !window.Capacitor && !window.RIVO_NATIVE) {
+        // Trigger browser file download ONLY on desktop web browser (never inside native Android or iOS app)
+        if (typeof window !== 'undefined' && !isNativeApp) {
           try {
             const cleanTitle = (track.title || 'Song').replace(/https?:\/\/\S+/gi, '').replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Song';
             const cleanArtist = (track.artist || 'Artist').replace(/https?:\/\/\S+/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Artist';

@@ -941,6 +941,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'PLAYBACK_STATE',
         isPlaying: Boolean(isPlaying),
+        repeatMode: repeatMode,
         isRepeat: repeatMode !== 'off',
         isShuffle: Boolean(isShuffle),
         isLiked: isLiked,
@@ -975,6 +976,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'PLAYBACK_STATE',
               isPlaying: true,
+              repeatMode: repeatMode,
               isRepeat: repeatMode !== 'off',
               isShuffle: Boolean(isShuffle),
               isLiked: isLiked,
@@ -1319,6 +1321,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'PLAYBACK_STATE',
           isPlaying: true,
+          repeatMode: repeatMode,
           isRepeat: repeatMode !== 'off',
           isShuffle: Boolean(isShuffle),
           isLiked: isLiked,

@@ -163,7 +163,8 @@ export const AudioProvider = ({ children }) => {
     if (!status.isLoaded) return;
     if (isPlaying !== status.isPlaying) {
       setIsPlaying(status.isPlaying);
-      updateMediaNotification(status.isPlaying, repeatMode !== 'off', isShuffle, currentTrackRef.current);
+      const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
+      updateMediaNotification(status.isPlaying, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
     }
 
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
@@ -199,12 +200,15 @@ export const AudioProvider = ({ children }) => {
           if (!isNaN(secs) && seekToRef.current) seekToRef.current(secs);
           return;
         }
+        const cur = currentTrackRef.current;
+        const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+
         switch (action) {
           case 'play':
             if (soundRef.current) {
               await soundRef.current.playAsync().catch(() => {});
               setIsPlaying(true);
-              updateMediaNotification(true, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+              updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
             }
@@ -213,7 +217,7 @@ export const AudioProvider = ({ children }) => {
             if (soundRef.current) {
               await soundRef.current.pauseAsync().catch(() => {});
               setIsPlaying(false);
-              updateMediaNotification(false, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+              updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
             }
@@ -223,11 +227,11 @@ export const AudioProvider = ({ children }) => {
               if (isPlayingRef.current) {
                 await soundRef.current.pauseAsync().catch(() => {});
                 setIsPlaying(false);
-                updateMediaNotification(false, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+                updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
               } else {
                 await soundRef.current.playAsync().catch(() => {});
                 setIsPlaying(true);
-                updateMediaNotification(true, repeatModeRef.current !== 'off', isShuffleRef.current, currentTrackRef.current);
+                updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
               }
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
@@ -276,7 +280,7 @@ export const AudioProvider = ({ children }) => {
       const isLikedTrack = likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id));
       updateMediaNotification(
         isPlaying,
-        repeatMode !== 'off',
+        repeatMode,
         isShuffle,
         isLikedTrack,
         {
@@ -388,9 +392,19 @@ export const AudioProvider = ({ children }) => {
         await s.unloadAsync().catch(() => {});
       }
 
-      // Check if track is available locally
-      const local = (downloadedTracks || []).find(t => String(t._id || t.id) === trackId);
-      let uri = local?.nativeAudioUri || local?.localAudioUri || track.nativeAudioUri || track.localAudioUri;
+      // Prioritize local downloaded version in Online Mode to save mobile data:
+      // Match by trackId OR clean title + artist in offline vault
+      const cleanTitle = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+      const cleanArtist = (track.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+
+      const local = (downloadedTracks || []).find(t => {
+        if (trackId && String(t._id || t.id) === trackId) return true;
+        const tTitle = (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+        const tArtist = (t.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+        return cleanTitle && tTitle && cleanTitle === tTitle && (!cleanArtist || !tArtist || cleanArtist === tArtist);
+      });
+
+      let uri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || track.nativeAudioUri || track.localAudioUri;
 
       if (uri && uri.startsWith('file://')) {
         try {
@@ -441,7 +455,7 @@ export const AudioProvider = ({ children }) => {
           coverUrl: track.coverUrl || track.cover || '',
           currentTime: 0,
           liked: isLikedTrack,
-        }, true, repeatMode !== 'off', isShuffle, isLikedTrack);
+        }, true, repeatMode, isShuffle, isLikedTrack);
       } catch {}
     } catch (err) {
       setIsLoading(false);
@@ -472,11 +486,11 @@ export const AudioProvider = ({ children }) => {
     if (isPlaying) {
       await soundRef.current.pauseAsync().catch(() => {});
       setIsPlaying(false);
-      updateMediaNotification(false, repeatMode !== 'off', isShuffle, isLikedTrack, currentTrackRef.current);
+      updateMediaNotification(false, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
     } else {
       await soundRef.current.playAsync().catch(() => {});
       setIsPlaying(true);
-      updateMediaNotification(true, repeatMode !== 'off', isShuffle, isLikedTrack, currentTrackRef.current);
+      updateMediaNotification(true, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
     }
   };
 

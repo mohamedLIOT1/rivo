@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
@@ -34,12 +35,16 @@ export default function LibraryScreen({
   onNavigateOffline,
   onTrackAction,
 }) {
-  const { playTrack, playPlaylist, tracks: audioTracks } = useAudioPlayer();
+  const { playTrack, playPlaylist, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, playlists, likedTrackIds, tracks: userTracks } = useUser();
+  const { appMode } = useConnectivity();
   const { isDark } = useTheme();
+  const isOffline = appMode === 'offline';
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
 
-  const allTracks = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
+  const allTracks = isOffline
+    ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
+    : ((userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []));
   const safeLikedIds = Array.isArray(likedTrackIds) ? likedTrackIds : [];
 
   // Liked tracks

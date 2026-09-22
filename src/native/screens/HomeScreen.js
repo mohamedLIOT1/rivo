@@ -83,9 +83,9 @@ export default function HomeScreen({
 
         {/* Top Pill Badge */}
         <View style={styles.labPill}>
-          <View style={styles.pulseDot} />
+          <View style={[styles.pulseDot, isOffline && { backgroundColor: '#f59e0b' }]} />
           <Text style={styles.labPillText}>
-            🎵 UNLIMITED HI-FI STREAMING • CAIRO MUSIC LAB
+            {isOffline ? '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION' : '🎵 UNLIMITED HI-FI STREAMING • CAIRO MUSIC LAB'}
           </Text>
         </View>
 
@@ -98,7 +98,9 @@ export default function HomeScreen({
         </Text>
 
         <Text style={styles.heroSubtitle}>
-          Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.
+          {isOffline
+            ? 'Playing your downloaded songs directly from local storage. 100% offline, zero data usage.'
+            : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.'}
         </Text>
 
         {/* 2 Primary CTA Buttons */}
@@ -199,7 +201,11 @@ export default function HomeScreen({
 
         {displayTracks.length === 0 && (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Loading dispensary tracks...</Text>
+            <Text style={styles.emptyText}>
+              {isOffline
+                ? 'No offline songs saved yet.\nDownload songs while connected to listen offline here!'
+                : 'Loading dispensary tracks...'}
+            </Text>
           </View>
         )}
       </View>

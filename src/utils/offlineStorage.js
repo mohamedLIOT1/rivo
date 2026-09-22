@@ -499,50 +499,72 @@ export async function getOfflineTrackAudioUrl(trackId, title = null, artist = nu
             return;
           }
 
-          if (typeof window !== 'undefined' && window.ReactNativeWebView && Array.isArray(window.__RIVO_NATIVE_DOWNLOADED_IDS) && (idStr && window.__RIVO_NATIVE_DOWNLOADED_IDS.includes(idStr))) {
-            const timeout = setTimeout(() => {
-              window.removeEventListener('rivo-receive-offline-audio', onReceive);
-              resolve(null);
-            }, 400);
+          let matchedNativeId = idStr;
+          if (typeof window !== 'undefined' && window.ReactNativeWebView) {
+            const downloadedIds = Array.isArray(window.__RIVO_NATIVE_DOWNLOADED_IDS) ? window.__RIVO_NATIVE_DOWNLOADED_IDS : [];
+            const downloadedTracks = Array.isArray(window.__RIVO_DOWNLOADED_TRACKS) ? window.__RIVO_DOWNLOADED_TRACKS : [];
 
-            function onReceive(e) {
-              if (e && e.detail && String(e.detail.id) === idStr && e.detail.dataUri) {
-                clearTimeout(timeout);
-                window.removeEventListener('rivo-receive-offline-audio', onReceive);
-                try {
-                  const blob = dataURItoBlob(e.detail.dataUri);
-                  if (blob && blob.size > 10000) {
-                    openDB().then(dbInst => {
-                      const putTx = dbInst.transaction(STORE_NAME, 'readwrite');
-                      putTx.objectStore(STORE_NAME).put({
-                        id: idStr,
-                        _id: idStr,
-                        title: title || 'Track',
-                        artist: artist || 'Artist',
-                        source: 'Rivo',
-                        publisher: 'Rivo',
-                        signature: 'Rivo',
-                        audioBlob: blob,
-                        downloaded: true,
-                        savedAt: Date.now()
-                      });
-                    }).catch(() => {});
-                    const blobUrl = URL.createObjectURL(blob);
-                    activeBlobUrls.set(idStr, blobUrl);
-                    resolve(blobUrl);
-                    return;
-                  }
-                } catch (err) {}
-                resolve(null);
+            if (!matchedNativeId || !downloadedIds.includes(matchedNativeId)) {
+              const matchByTitle = downloadedTracks.find(nt => {
+                const ntTitle = (nt.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+                const ntArtist = (nt.artist || '').toLowerCase().trim();
+                return normTitle && ntTitle && normTitle === ntTitle && (!normArtist || !ntArtist || normArtist === ntArtist);
+              });
+              if (matchByTitle) {
+                matchedNativeId = String(matchByTitle.id || matchByTitle._id);
               }
             }
 
-            window.addEventListener('rivo-receive-offline-audio', onReceive);
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'REQUEST_OFFLINE_AUDIO',
-              id: idStr
-            }));
-            return;
+            if (matchedNativeId && (downloadedIds.includes(matchedNativeId) || downloadedTracks.some(t => String(t.id || t._id) === matchedNativeId))) {
+              const timeout = setTimeout(() => {
+                window.removeEventListener('rivo-receive-offline-audio', onReceive);
+                delete window.__RIVO_RECEIVE_OFFLINE_AUDIO;
+                resolve(null);
+              }, 400);
+
+              function onReceive(e) {
+                if (e && e.detail && String(e.detail.id) === matchedNativeId && e.detail.dataUri) {
+                  clearTimeout(timeout);
+                  window.removeEventListener('rivo-receive-offline-audio', onReceive);
+                  delete window.__RIVO_RECEIVE_OFFLINE_AUDIO;
+                  try {
+                    const blob = dataURItoBlob(e.detail.dataUri);
+                    if (blob && blob.size > 10000) {
+                      openDB().then(dbInst => {
+                        const putTx = dbInst.transaction(STORE_NAME, 'readwrite');
+                        putTx.objectStore(STORE_NAME).put({
+                          id: matchedNativeId,
+                          _id: matchedNativeId,
+                          title: title || 'Track',
+                          artist: artist || 'Artist',
+                          source: 'Rivo',
+                          publisher: 'Rivo',
+                          signature: 'Rivo',
+                          audioBlob: blob,
+                          downloaded: true,
+                          savedAt: Date.now()
+                        });
+                      }).catch(() => {});
+                      const blobUrl = URL.createObjectURL(blob);
+                      activeBlobUrls.set(matchedNativeId, blobUrl);
+                      resolve(blobUrl);
+                      return;
+                    }
+                  } catch (err) {}
+                  resolve(null);
+                }
+              }
+
+              window.__RIVO_RECEIVE_OFFLINE_AUDIO = (recvId, dataUri) => {
+                onReceive({ detail: { id: recvId, dataUri } });
+              };
+              window.addEventListener('rivo-receive-offline-audio', onReceive);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'REQUEST_OFFLINE_AUDIO',
+                id: matchedNativeId
+              }));
+              return;
+            }
           }
 
           resolve(null);

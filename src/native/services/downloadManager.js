@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { resolveAudioStream } from './youtubeResolver';
 import { API_BASE_URL } from '../config';
 
@@ -7,6 +8,10 @@ const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 const COVERS_DIR = `${FileSystem.documentDirectory}rivo_covers/`;
 const MANIFEST_FILE = `${TRACKS_DIR}manifest.json`;
 const STORAGE_KEY = '@rivo_offline_tracks_v2';
+
+// Dedicated persistent external music vault (persists across full app uninstalls & reinstalls)
+const PERSISTENT_DIR = Platform.OS === 'android' ? 'file:///storage/emulated/0/Music/Rivo/' : null;
+const PERSISTENT_MANIFEST = PERSISTENT_DIR ? `${PERSISTENT_DIR}manifest.json` : null;
 
 const LEGACY_STORAGE_KEYS = [
   '@rivo_offline_tracks_v2',
@@ -26,6 +31,33 @@ const ensureDirs = async () => {
 
     const cInfo = await FileSystem.getInfoAsync(COVERS_DIR);
     if (!cInfo.exists) await FileSystem.makeDirectoryAsync(COVERS_DIR, { intermediates: true });
+
+    if (PERSISTENT_DIR) {
+      try {
+        const pInfo = await FileSystem.getInfoAsync(PERSISTENT_DIR);
+        if (!pInfo.exists) {
+          await FileSystem.makeDirectoryAsync(PERSISTENT_DIR, { intermediates: true });
+        } else {
+          // Restore any tracks from external vault that may have been wiped during reinstall
+          const pFiles = await FileSystem.readDirectoryAsync(PERSISTENT_DIR);
+          for (const pf of pFiles) {
+            if (pf.endsWith('.mp3') || pf.endsWith('.m4a')) {
+              const target = `${TRACKS_DIR}${pf}`;
+              const check = await FileSystem.getInfoAsync(target).catch(() => ({ exists: false }));
+              if (!check.exists) {
+                await FileSystem.copyAsync({ from: `${PERSISTENT_DIR}${pf}`, to: target }).catch(() => {});
+              }
+            } else if (pf.endsWith('.jpg')) {
+              const targetCover = `${COVERS_DIR}${pf}`;
+              const checkC = await FileSystem.getInfoAsync(targetCover).catch(() => ({ exists: false }));
+              if (!checkC.exists) {
+                await FileSystem.copyAsync({ from: `${PERSISTENT_DIR}${pf}`, to: targetCover }).catch(() => {});
+              }
+            }
+          }
+        }
+      } catch {}
+    }
 
     // Migrate from legacy liofy_tracks directory if present
     try {
@@ -68,6 +100,11 @@ const saveToStorageAndManifest = async (list) => {
     const jsonStr = JSON.stringify(list || []);
     await AsyncStorage.setItem(STORAGE_KEY, jsonStr).catch(() => {});
     await FileSystem.writeAsStringAsync(MANIFEST_FILE, jsonStr).catch(() => {});
+    if (PERSISTENT_DIR && PERSISTENT_MANIFEST) {
+      try {
+        await FileSystem.writeAsStringAsync(PERSISTENT_MANIFEST, jsonStr);
+      } catch {}
+    }
   } catch (e) {
     console.warn('[downloadManager] saveToStorageAndManifest error:', e.message);
   }
@@ -93,6 +130,25 @@ export const getDownloadedTracks = async () => {
           if (mRaw) {
             const mList = JSON.parse(mRaw);
             if (Array.isArray(mList) && mList.length > 0) tracks = mList;
+          }
+        }
+      } catch {}
+    }
+
+    // 2b. Check persistent external vault manifest (recovers all songs across full app uninstalls & reinstalls)
+    if ((!Array.isArray(tracks) || tracks.length === 0) && PERSISTENT_MANIFEST) {
+      try {
+        const pInfo = await FileSystem.getInfoAsync(PERSISTENT_MANIFEST);
+        if (pInfo.exists) {
+          const pRaw = await FileSystem.readAsStringAsync(PERSISTENT_MANIFEST);
+          if (pRaw) {
+            const pList = JSON.parse(pRaw);
+            if (Array.isArray(pList) && pList.length > 0) {
+              tracks = pList;
+              // Sync back to internal manifest and AsyncStorage
+              await AsyncStorage.setItem(STORAGE_KEY, pRaw).catch(() => {});
+              await FileSystem.writeAsStringAsync(MANIFEST_FILE, pRaw).catch(() => {});
+            }
           }
         }
       } catch {}
@@ -348,7 +404,33 @@ export const downloadTrack = async (track, onProgress) => {
   const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`;
   candidates.push(backendDownloadUrl);
 
-  // Candidate 3: Backend Stream Resolver
+  // Candidate 3: Client-side Cobalt official YouTube audio extraction
+  if (ytId) {
+    const cobaltEndpoints = [
+      'https://api.cobalt.tools/api/json',
+      'https://cobalt.stream/api/json',
+      'https://co.wuk.sh/api/json',
+      'https://cobalt-api.kwiatekm.pl/api/json',
+    ];
+    for (const ep of cobaltEndpoints) {
+      try {
+        const cobRes = await fetch(ep, {
+          method: 'POST',
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${ytId}`, downloadMode: 'audio' }),
+        });
+        if (cobRes.ok) {
+          const cobData = await cobRes.json();
+          if (cobData?.url && typeof cobData.url === 'string' && cobData.url.startsWith('http')) {
+            candidates.push(cobData.url);
+            break;
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // Candidate 4: Backend Stream Resolver
   const isValidAudioStreamUrl = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com/watch') && !u.includes('youtu.be/') && !u.includes('sndcdn.com/preview');
 
   try {
@@ -360,19 +442,6 @@ export const downloadTrack = async (track, onProgress) => {
       }
     }
   } catch (e) {}
-
-  try {
-    const resolveRes = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`);
-    if (resolveRes.ok) {
-      const resolveData = await resolveRes.json();
-      if (isValidAudioStreamUrl(resolveData?.url)) {
-        candidates.push(resolveData.url);
-      }
-    }
-  } catch (e) {}
-
-  // Candidate 4: Client-side YouTube mirror resolution
-  const ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || (track.source === 'YouTube' ? extractYouTubeId(track._id) : null);
 
   if (onProgress) onProgress(15);
 
@@ -499,6 +568,18 @@ export const downloadTrack = async (track, onProgress) => {
     } catch {}
   }
 
+  // Sync to persistent external vault so it survives uninstall / reinstall
+  if (PERSISTENT_DIR) {
+    try {
+      const extAudioDst = `${PERSISTENT_DIR}${trackId}.${audioFileUri.endsWith('.m4a') ? 'm4a' : 'mp3'}`;
+      await FileSystem.copyAsync({ from: audioFileUri, to: extAudioDst }).catch(() => {});
+      if (localCover && localCover.startsWith('file://')) {
+        const extCoverDst = `${PERSISTENT_DIR}${trackId}.jpg`;
+        await FileSystem.copyAsync({ from: localCover, to: extCoverDst }).catch(() => {});
+      }
+    } catch {}
+  }
+
   const record = {
     ...track,
     id: trackId,
@@ -537,6 +618,12 @@ export const removeDownloadedTrack = async (trackId) => {
   await FileSystem.deleteAsync(audioFileUriMp3, { idempotent: true }).catch(() => {});
   await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
   await FileSystem.deleteAsync(coverFileUri, { idempotent: true }).catch(() => {});
+
+  if (PERSISTENT_DIR) {
+    await FileSystem.deleteAsync(`${PERSISTENT_DIR}${idStr}.mp3`, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(`${PERSISTENT_DIR}${idStr}.m4a`, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(`${PERSISTENT_DIR}${idStr}.jpg`, { idempotent: true }).catch(() => {});
+  }
 
   const existing = await getDownloadedTracks();
   const updated = existing.filter(t => String(t._id || t.id) !== idStr);
