@@ -15,6 +15,7 @@ import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
+import { useUser } from '../context/UserContext';
 import { downloadTrack as nativeDownloadTrack } from '../services/downloadManager';
 import {
   showMediaNotification,
@@ -173,12 +174,15 @@ const INJECTED_JS = `
         var b = document.querySelector('button[title="Previous Track"], button[title="Previous"]');
         if (b) b.click();
       } else if (action === 'repeat') {
+        if (typeof handlers['repeat'] === 'function') {
+          try { handlers['repeat'](); return; } catch(e) {}
+        }
         var b = document.querySelector('button[title*="Repeat"], button[aria-label*="Repeat"]');
         if (b) b.click();
-      } else if (action === 'shuffle') {
-        var b = document.querySelector('button[title*="Shuffle"], button[aria-label*="Shuffle"]');
-        if (b) b.click();
       } else if (action === 'like') {
+        if (typeof handlers['like'] === 'function') {
+          try { handlers['like'](); return; } catch(e) {}
+        }
         var b = document.querySelector('button[title*="Like"], button[aria-label*="Like"]');
         if (b) b.click();
       } else if (typeof action === 'string' && action.indexOf('seek:') === 0) {
@@ -186,6 +190,8 @@ const INJECTED_JS = `
         if (!isNaN(secs)) {
           if (typeof window.__RIVO_MEDIA_SEEK === 'function') {
             window.__RIVO_MEDIA_SEEK(secs);
+          } else if (typeof handlers['seekto'] === 'function') {
+            try { handlers['seekto']({ seekTime: secs }); } catch(e) {}
           }
         }
       }
@@ -236,6 +242,7 @@ export default function OnlineWebView() {
   const webViewRef = useRef(null);
   const { showToast } = useToast();
   const { refreshDownloadedTracks } = useAudioPlayer();
+  const { toggleLikeTrack, likedTrackIds } = useUser();
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
   const prevOnlineRef = useRef(isOnline);
@@ -307,6 +314,15 @@ export default function OnlineWebView() {
   // ─── Subscribe to Native Android Media Controls (Notification & Lockscreen) ───
   useEffect(() => {
     const unsubscribe = subscribeToMediaActions((action) => {
+      // Immediate execution for Like in background
+      if (action === 'like') {
+        const cur = currentTrackRef.current;
+        const trackId = cur?.id || cur?._id;
+        if (trackId && typeof toggleLikeTrack === 'function') {
+          toggleLikeTrack(trackId);
+        }
+      }
+
       webViewRef.current?.injectJavaScript(`
         (function() {
           try {
@@ -321,6 +337,21 @@ export default function OnlineWebView() {
                 window.__RIVO_MEDIA_HANDLERS['nexttrack']();
               } else if ('${action}' === 'prev' && typeof window.__RIVO_MEDIA_HANDLERS['previoustrack'] === 'function') {
                 window.__RIVO_MEDIA_HANDLERS['previoustrack']();
+              } else if ('${action}' === 'repeat') {
+                var b = document.querySelector('button[title*="Repeat"], button[aria-label*="Repeat"]');
+                if (b) b.click();
+              } else if ('${action}' === 'like') {
+                var b = document.querySelector('button[title*="Like"], button[aria-label*="Like"]');
+                if (b) b.click();
+              } else if ('${action}'.indexOf('seek:') === 0) {
+                var secs = parseFloat('${action}'.split(':')[1]);
+                if (!isNaN(secs)) {
+                  if (typeof window.__RIVO_MEDIA_SEEK === 'function') {
+                    window.__RIVO_MEDIA_SEEK(secs);
+                  } else if (typeof window.__RIVO_MEDIA_HANDLERS['seekto'] === 'function') {
+                    window.__RIVO_MEDIA_HANDLERS['seekto']({ seekTime: secs });
+                  }
+                }
               }
             }
           } catch(e) {}
@@ -331,7 +362,7 @@ export default function OnlineWebView() {
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [toggleLikeTrack]);
 
   // ─── Handle messages from WebView (postMessage bridge) ────────────
   const handleMessage = useCallback(async (event) => {
@@ -358,7 +389,10 @@ export default function OnlineWebView() {
           const trackTime = Number(data.currentTime !== undefined ? data.currentTime : (activeTrack?.currentTime || 0));
           const isRepeatState = Boolean(data.isRepeat);
           const isShuffleState = Boolean(data.isShuffle);
-          const isLikedState = Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
+          const trackIdStr = activeTrack ? String(activeTrack.id || activeTrack._id || '') : '';
+          const isLikedState = (likedTrackIds && likedTrackIds.length > 0 && trackIdStr)
+            ? likedTrackIds.some(id => String(id) === trackIdStr)
+            : Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
 
           if (activeTrack) {
             showMediaNotification({

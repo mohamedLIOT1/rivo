@@ -43,7 +43,6 @@ class MediaNotificationService : Service() {
         const val ACTION_PREV = "com.rivo.app.ACTION_PREV"
         const val ACTION_NEXT = "com.rivo.app.ACTION_NEXT"
         const val ACTION_REPEAT = "com.rivo.app.ACTION_REPEAT"
-        const val ACTION_SHUFFLE = "com.rivo.app.ACTION_SHUFFLE"
         const val ACTION_LIKE = "com.rivo.app.ACTION_LIKE"
         const val ACTION_FORWARD = "com.rivo.app.ACTION_FORWARD"
 
@@ -58,6 +57,9 @@ class MediaNotificationService : Service() {
         var currentPositionMs: Long = 0L
         var currentBitmap: Bitmap? = null
         private var lastLoadedCoverUrl: String? = null
+        private var lastUserSeekTimeMs: Long = 0L
+        private var lastUserLikeTimeMs: Long = 0L
+        private var lastUserRepeatTimeMs: Long = 0L
     }
 
     private var mediaSession: MediaSessionCompat? = null
@@ -124,12 +126,9 @@ class MediaNotificationService : Service() {
                     dispatchMediaAction("repeat")
                 }
 
-                override fun onSetShuffleMode(shuffleMode: Int) {
-                    dispatchMediaAction("shuffle")
-                }
-
                 override fun onSeekTo(pos: Long) {
                     currentPositionMs = pos
+                    lastUserSeekTimeMs = SystemClock.elapsedRealtime()
                     updateNotification()
                     MediaControlsModule.sendEvent("seek:${pos / 1000.0}")
                 }
@@ -138,7 +137,6 @@ class MediaNotificationService : Service() {
                     when (action) {
                         ACTION_LIKE, "like" -> dispatchMediaAction("like")
                         ACTION_REPEAT, "repeat" -> dispatchMediaAction("repeat")
-                        ACTION_SHUFFLE, "shuffle" -> dispatchMediaAction("shuffle")
                         else -> if (!action.isNullOrBlank()) dispatchMediaAction(action)
                     }
                 }
@@ -152,13 +150,18 @@ class MediaNotificationService : Service() {
 
         when (action) {
             ACTION_SHOW -> {
+                val now = SystemClock.elapsedRealtime()
                 currentTitle = intent.getStringExtra("title") ?: currentTitle
                 currentArtist = intent.getStringExtra("artist") ?: currentArtist
                 currentCoverUrl = intent.getStringExtra("coverUrl")
                 isPlaying = intent.getBooleanExtra("isPlaying", true)
-                isRepeat = intent.getBooleanExtra("isRepeat", false)
+                if (now - lastUserRepeatTimeMs > 4000L) {
+                    isRepeat = intent.getBooleanExtra("isRepeat", false)
+                }
                 isShuffle = intent.getBooleanExtra("isShuffle", false)
-                isLiked = intent.getBooleanExtra("isLiked", false)
+                if (now - lastUserLikeTimeMs > 4000L) {
+                    isLiked = intent.getBooleanExtra("isLiked", false)
+                }
 
                 if (intent.hasExtra("duration")) {
                     val dSec = intent.getDoubleExtra("duration", 0.0)
@@ -166,7 +169,9 @@ class MediaNotificationService : Service() {
                 }
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
-                    if (cSec >= 0) currentPositionMs = (cSec * 1000).toLong()
+                    if (cSec >= 0 && (now - lastUserSeekTimeMs > 4000L)) {
+                        currentPositionMs = (cSec * 1000).toLong()
+                    }
                 }
 
                 if (isPlaying) acquireWakeLock() else releaseWakeLock()
@@ -174,10 +179,15 @@ class MediaNotificationService : Service() {
                 loadCoverBitmapAsync(currentCoverUrl)
             }
             ACTION_UPDATE -> {
+                val now = SystemClock.elapsedRealtime()
                 isPlaying = intent.getBooleanExtra("isPlaying", isPlaying)
-                isRepeat = intent.getBooleanExtra("isRepeat", isRepeat)
-                isShuffle = intent.getBooleanExtra("isShuffle", isShuffle)
-                if (intent.hasExtra("isLiked")) isLiked = intent.getBooleanExtra("isLiked", isLiked)
+                if (intent.hasExtra("isRepeat") && (now - lastUserRepeatTimeMs > 4000L)) {
+                    isRepeat = intent.getBooleanExtra("isRepeat", isRepeat)
+                }
+                if (intent.hasExtra("isShuffle")) isShuffle = intent.getBooleanExtra("isShuffle", isShuffle)
+                if (intent.hasExtra("isLiked") && (now - lastUserLikeTimeMs > 4000L)) {
+                    isLiked = intent.getBooleanExtra("isLiked", isLiked)
+                }
                 if (intent.hasExtra("title")) currentTitle = intent.getStringExtra("title") ?: currentTitle
                 if (intent.hasExtra("artist")) currentArtist = intent.getStringExtra("artist") ?: currentArtist
 
@@ -187,7 +197,9 @@ class MediaNotificationService : Service() {
                 }
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
-                    if (cSec >= 0) currentPositionMs = (cSec * 1000).toLong()
+                    if (cSec >= 0 && (now - lastUserSeekTimeMs > 4000L)) {
+                        currentPositionMs = (cSec * 1000).toLong()
+                    }
                 }
 
                 if (intent.hasExtra("coverUrl")) {
@@ -217,7 +229,6 @@ class MediaNotificationService : Service() {
             ACTION_PREV -> dispatchMediaAction("prev")
             ACTION_NEXT -> dispatchMediaAction("next")
             ACTION_REPEAT -> dispatchMediaAction("repeat")
-            ACTION_SHUFFLE -> dispatchMediaAction("shuffle")
             ACTION_LIKE -> dispatchMediaAction("like")
             ACTION_FORWARD -> dispatchMediaAction("forward")
         }
@@ -226,6 +237,7 @@ class MediaNotificationService : Service() {
     }
 
     private fun dispatchMediaAction(action: String) {
+        val now = SystemClock.elapsedRealtime()
         // Toggle state locally immediately for visual response
         if (action == "play") {
             isPlaying = true
@@ -236,10 +248,10 @@ class MediaNotificationService : Service() {
             releaseWakeLock()
         } else if (action == "repeat") {
             isRepeat = !isRepeat
-        } else if (action == "shuffle") {
-            isShuffle = !isShuffle
+            lastUserRepeatTimeMs = now
         } else if (action == "like") {
             isLiked = !isLiked
+            lastUserLikeTimeMs = now
         }
 
         updateNotification()
@@ -297,7 +309,6 @@ class MediaNotificationService : Service() {
         val playPauseIntent = makeActionIntent(ACTION_PLAY_PAUSE, 102)
         val nextIntent = makeActionIntent(ACTION_NEXT, 103)
         val repeatIntent = makeActionIntent(ACTION_REPEAT, 104)
-        val shuffleIntent = makeActionIntent(ACTION_SHUFFLE, 105)
 
         // 1. Configure PlaybackStateCompat with seek capability, speed, and real-time position
         val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
@@ -308,8 +319,7 @@ class MediaNotificationService : Service() {
             PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
             PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
             PlaybackStateCompat.ACTION_SEEK_TO or
-            PlaybackStateCompat.ACTION_SET_REPEAT_MODE or
-            PlaybackStateCompat.ACTION_SET_SHUFFLE_MODE
+            PlaybackStateCompat.ACTION_SET_REPEAT_MODE
 
         val playbackStateBuilder = PlaybackStateCompat.Builder()
             .setActions(playbackActions)
@@ -322,14 +332,10 @@ class MediaNotificationService : Service() {
             PlaybackStateCompat.CustomAction.Builder(ACTION_LIKE, likeLabel, likeIconRes).build()
         )
 
-        val shuffleLabel = if (isShuffle) "Shuffle (On)" else "Shuffle (Off)"
-        playbackStateBuilder.addCustomAction(
-            PlaybackStateCompat.CustomAction.Builder(ACTION_SHUFFLE, shuffleLabel, R.drawable.ic_notification_shuffle).build()
-        )
-
+        val repeatIconRes = if (isRepeat) R.drawable.ic_notification_repeat_on else R.drawable.ic_notification_repeat
         val repeatLabel = if (isRepeat) "Repeat (On)" else "Repeat (Off)"
         playbackStateBuilder.addCustomAction(
-            PlaybackStateCompat.CustomAction.Builder(ACTION_REPEAT, repeatLabel, R.drawable.ic_notification_repeat).build()
+            PlaybackStateCompat.CustomAction.Builder(ACTION_REPEAT, repeatLabel, repeatIconRes).build()
         )
 
         mediaSession?.setPlaybackState(playbackStateBuilder.build())
@@ -368,14 +374,12 @@ class MediaNotificationService : Service() {
             // 1: Previous
             // 2: Play/Pause
             // 3: Next
-            // 4: Repeat
-            // 5: Shuffle
+            // 4: Repeat / Loop
             .addAction(likeIconRes, likeLabel, likeIntent)                           // 0
             .addAction(R.drawable.ic_notification_prev, "Previous", prevIntent)       // 1
             .addAction(playPauseIcon, playPauseLabel, playPauseIntent)                 // 2
             .addAction(R.drawable.ic_notification_next, "Next", nextIntent)           // 3
-            .addAction(R.drawable.ic_notification_repeat, repeatLabel, repeatIntent) // 4
-            .addAction(R.drawable.ic_notification_shuffle, shuffleLabel, shuffleIntent) // 5
+            .addAction(repeatIconRes, repeatLabel, repeatIntent)                     // 4
 
         currentBitmap?.let {
             builder.setLargeIcon(it)
