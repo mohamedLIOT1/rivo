@@ -488,26 +488,50 @@ export const AudioProvider = ({ children }) => {
   };
 
   const playNextTrack = () => {
-    const q = queueRef.current;
+    let q = queueRef.current;
+    if (!q || q.length === 0) {
+      q = downloadedTracks.length > 0 ? downloadedTracks : [];
+      if (q.length > 0) setQueue(q);
+    }
     if (!q || q.length === 0) return;
-    const currentId = String(currentTrackRef.current?._id || currentTrackRef.current?.id);
-    const i = q.findIndex(t => String(t._id || t.id) === currentId);
+
+    const currentId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+    const currentTitle = String(currentTrackRef.current?.title || '').trim().toLowerCase();
+    let i = q.findIndex(t => String(t._id || t.id) === currentId);
+    if (i === -1 && currentTitle) {
+      i = q.findIndex(t => String(t.title || '').trim().toLowerCase() === currentTitle);
+    }
 
     if (isShuffle) {
       const nextIdx = Math.floor(Math.random() * q.length);
       playTrack(q[nextIdx], q);
     } else if (i >= 0 && i < q.length - 1) {
       playTrack(q[i + 1], q);
-    } else if (repeatMode === 'all' && q.length > 0) {
+    } else if (q.length > 0) {
       playTrack(q[0], q);
     }
   };
 
   const playPrevTrack = () => {
-    const q = queueRef.current;
+    if ((playbackStatusRef.current.currentTime || 0) > 3) {
+      seekTo(0);
+      return;
+    }
+
+    let q = queueRef.current;
+    if (!q || q.length === 0) {
+      q = downloadedTracks.length > 0 ? downloadedTracks : [];
+      if (q.length > 0) setQueue(q);
+    }
     if (!q || q.length === 0) return;
-    const currentId = String(currentTrackRef.current?._id || currentTrackRef.current?.id);
-    const i = q.findIndex(t => String(t._id || t.id) === currentId);
+
+    const currentId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+    const currentTitle = String(currentTrackRef.current?.title || '').trim().toLowerCase();
+    let i = q.findIndex(t => String(t._id || t.id) === currentId);
+    if (i === -1 && currentTitle) {
+      i = q.findIndex(t => String(t.title || '').trim().toLowerCase() === currentTitle);
+    }
+
     if (i > 0) playTrack(q[i - 1], q);
     else playTrack(q[q.length - 1], q);
   };

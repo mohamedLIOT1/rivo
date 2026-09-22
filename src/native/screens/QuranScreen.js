@@ -188,6 +188,7 @@ export default function QuranScreen({ onTrackAction }) {
                 key={track._id || track.id || idx}
                 track={track}
                 index={idx + 1}
+                onPlay={(t) => playTrack(t, displayedTracks)}
                 onMorePress={() => onTrackAction && onTrackAction(track)}
               />
             ))}

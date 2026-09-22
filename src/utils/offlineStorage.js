@@ -230,9 +230,7 @@ export async function saveTrackOffline(track, options = {}) {
     ? (cleanTitle || 'Single')
     : track.album;
 
-  // ── Native APK Bridge: route download to device storage via postMessage ──
-  // When running inside the Rivo APK WebView, window.RIVO_NATIVE is set by
-  // the injected JS. Also dispatch to native storage for offline mode.
+  // ── Native Bridge (iOS & Android): route download to device storage via postMessage ──
   if (typeof window !== 'undefined' && window.RIVO_NATIVE && window.RIVO_DOWNLOAD) {
     try {
       window.RIVO_DOWNLOAD({
@@ -246,6 +244,36 @@ export async function saveTrackOffline(track, options = {}) {
         source: 'Rivo',
         album: cleanAlbum,
         duration: track.duration || 0,
+      });
+
+      return await new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          window.removeEventListener('rivo-track-download-completed', handler);
+          resolve({ ...track, id: trackId, downloaded: true, savedAt: Date.now() });
+        }, 60000);
+
+        function handler(e) {
+          if (e && e.detail && String(e.detail.id) === trackId) {
+            clearTimeout(timeout);
+            window.removeEventListener('rivo-track-download-completed', handler);
+            if (e.detail.success) {
+              resolve({
+                ...track,
+                id: trackId,
+                _id: trackId,
+                title: cleanTitle,
+                artist: cleanArtist,
+                album: cleanAlbum,
+                downloaded: true,
+                savedAt: Date.now(),
+              });
+            } else {
+              resolve(null);
+            }
+          }
+        }
+
+        window.addEventListener('rivo-track-download-completed', handler);
       });
     } catch (e) {
       console.error('Native bridge download error:', e);

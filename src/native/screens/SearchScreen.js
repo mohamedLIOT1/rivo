@@ -221,6 +221,7 @@ export default function SearchScreen({ onTrackAction }) {
                     key={track._id || track.id || index}
                     track={track}
                     index={index + 1}
+                    onPlay={(t) => playTrack(t, filteredTracks)}
                     onMorePress={() => onTrackAction && onTrackAction(track)}
                   />
                 ))}

@@ -157,7 +157,7 @@ export default function QuranScreen({
             <div className="flex flex-wrap items-center gap-2.5">
               {filteredTracks.length > 0 && (
                 <button
-                  onClick={() => onSelectTrack(filteredTracks[0])}
+                  onClick={() => onSelectTrack(filteredTracks[0], filteredTracks)}
                   className="bg-[#26c4b7] hover:bg-[#17a398] text-[#041d1a] font-display font-black text-xs sm:text-sm px-4 py-2 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center gap-2 cursor-pointer transition-all"
                 >
                   <Play size={15} fill="currentColor" />
@@ -289,7 +289,7 @@ export default function QuranScreen({
                 return (
                   <div
                     key={track.id || track._id || idx}
-                    onClick={() => onSelectTrack(track)}
+                    onClick={() => onSelectTrack(track, filteredTracks)}
                     className={`group flex items-center justify-between p-2.5 rounded-xl brutal-border cursor-pointer transition-all ${
                       active
                         ? 'bg-[#17a398] text-[#041d1a] brutal-shadow-sm font-black'
