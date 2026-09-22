@@ -3884,6 +3884,30 @@ app.get('/api/tracks/download', async (req, res) => {
     const cleanTitle = sanitizeTag(title, 'Track');
     const cleanFilename = `${cleanArtist} - ${cleanTitle}`;
 
+    let cleanAlbum = sanitizeTag(req.query.album || '', '');
+    if (!cleanAlbum && trackId) {
+      try {
+        const dbTrack = await Track.findById(trackId).lean();
+        if (dbTrack && dbTrack.album && !/https?:\/\/|www\.|youtube|liofy/i.test(dbTrack.album)) {
+          cleanAlbum = sanitizeTag(dbTrack.album, '');
+        }
+      } catch (e) {}
+    }
+    if (!cleanAlbum && (title || artist)) {
+      try {
+        const dbTrack = await Track.findOne({
+          title: new RegExp(`^${cleanTitle}$`, 'i'),
+          artist: new RegExp(`^${cleanArtist}$`, 'i')
+        }).lean();
+        if (dbTrack && dbTrack.album && !/https?:\/\/|www\.|youtube|liofy/i.test(dbTrack.album)) {
+          cleanAlbum = sanitizeTag(dbTrack.album, '');
+        }
+      } catch (e) {}
+    }
+    if (!cleanAlbum) {
+      cleanAlbum = cleanTitle || 'Single';
+    }
+
     let NodeID3 = null;
     try {
       NodeID3 = require('node-id3');
@@ -3895,14 +3919,17 @@ app.get('/api/tracks/download', async (req, res) => {
         const tags = {
           title: cleanTitle,
           artist: cleanArtist,
-          album: 'Rivo',
-          composer: 'Rivo',
+          album: cleanAlbum,
           publisher: 'Rivo',
-          copyright: 'Rivo',
+          encodedBy: 'Rivo',
           comment: {
             language: 'eng',
             text: 'Rivo'
-          }
+          },
+          userDefinedText: [
+            { description: 'RIVO_SIGNATURE', value: 'Rivo' },
+            { description: 'SOURCE', value: 'Rivo' }
+          ]
         };
         const tagged = NodeID3.write(tags, buffer);
         return (tagged && Buffer.isBuffer(tagged)) ? tagged : buffer;
@@ -3956,7 +3983,7 @@ app.get('/api/tracks/download', async (req, res) => {
 
       if (hasYtDlp) {
         const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
-        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" --parse-metadata "Rivo:%(album)s" --parse-metadata "Rivo:%(comment)s" --parse-metadata "Rivo:%(description)s" --parse-metadata "Rivo:%(synopsis)s" --parse-metadata "Rivo:%(purl)s" --parse-metadata "Rivo:%(webpage_url)s" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`;
+        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" --parse-metadata "Rivo:%(comment)s" --parse-metadata "Rivo:%(description)s" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`;
         const dlSuccess = await new Promise(resolve => {
           exec(ytdlpCmd, { timeout: 35000 }, (err) => {
             if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {

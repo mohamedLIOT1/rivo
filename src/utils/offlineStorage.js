@@ -2,8 +2,9 @@ import { API_BASE_URL } from '../config';
 
 // IndexedDB Offline Audio & Cover Storage Manager for Rivo (Pure Web & PWA)
 const DB_NAME = 'RivoOfflineDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'downloaded_tracks';
+const LEGACY_DB_NAMES = ['LiofyOfflineDB', 'liofy_offline_db', 'rivo_offline_db'];
 
 // Track active Blob URLs in memory and revoke when no longer needed to prevent RAM memory leaks
 const activeBlobUrls = new Map();
@@ -33,6 +34,52 @@ function openDB() {
     request.onerror = (e) => reject(e.target.error);
   });
 }
+
+// Migrate data from a legacy IndexedDB to the current RivoOfflineDB
+async function migrateLegacyDB(legacyDbName) {
+  try {
+    const legacyReq = indexedDB.open(legacyDbName, 1);
+    const legacyDb = await new Promise((resolve, reject) => {
+      legacyReq.onsuccess = (e) => resolve(e.target.result);
+      legacyReq.onerror = () => resolve(null);
+      legacyReq.onblocked = () => resolve(null);
+    });
+    if (!legacyDb) return;
+    if (!legacyDb.objectStoreNames.contains(STORE_NAME)) {
+      legacyDb.close();
+      return;
+    }
+    const items = await new Promise((resolve) => {
+      const tx = legacyDb.transaction(STORE_NAME, 'readonly');
+      const req = tx.objectStore(STORE_NAME).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+    legacyDb.close();
+    if (!items.length) return;
+    const db = await openDB();
+    const putTx = db.transaction(STORE_NAME, 'readwrite');
+    const store = putTx.objectStore(STORE_NAME);
+    for (const item of items) {
+      try { store.put(item); } catch {}
+    }
+    await new Promise((resolve, reject) => {
+      putTx.oncomplete = resolve;
+      putTx.onerror = resolve; // non-fatal
+    });
+    // Delete the legacy DB after migration
+    try { indexedDB.deleteDatabase(legacyDbName); } catch {}
+  } catch {}
+}
+
+// Run legacy migrations once on startup
+(async () => {
+  try {
+    for (const name of LEGACY_DB_NAMES) {
+      await migrateLegacyDB(name).catch(() => {});
+    }
+  } catch {}
+})();
 
 // Convert Base64 Data URI directly to Blob in pure JS
 function dataURItoBlob(dataURI) {
@@ -179,7 +226,9 @@ export async function saveTrackOffline(track, options = {}) {
     .replace(/\s+/g, ' ')
     .trim() || 'Artist';
 
-  const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album)) ? 'Rivo' : track.album;
+  const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album))
+    ? (cleanTitle || 'Single')
+    : track.album;
 
   // ── Native APK Bridge: route download to device storage via postMessage ──
   // When running inside the Rivo APK WebView, window.RIVO_NATIVE is set by
@@ -195,7 +244,7 @@ export async function saveTrackOffline(track, options = {}) {
         coverUrl: track.cover || track.coverUrl || '',
         cover: track.cover || track.coverUrl || '',
         source: 'Rivo',
-        album: cleanAlbum || 'Rivo',
+        album: cleanAlbum,
         duration: track.duration || 0,
       });
     } catch (e) {
@@ -316,7 +365,7 @@ export async function saveTrackOffline(track, options = {}) {
       _id: trackId,
       title: cleanTitle,
       artist: cleanArtist,
-      album: cleanAlbum || 'Rivo',
+      album: cleanAlbum,
       source: 'Rivo',
       publisher: 'Rivo',
       signature: 'Rivo',
@@ -427,7 +476,6 @@ export async function getOfflineTrackAudioUrl(trackId, title = null, artist = nu
                         _id: idStr,
                         title: title || 'Track',
                         artist: artist || 'Artist',
-                        album: 'Rivo',
                         source: 'Rivo',
                         publisher: 'Rivo',
                         signature: 'Rivo',
