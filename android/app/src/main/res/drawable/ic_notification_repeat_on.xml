@@ -3,7 +3,16 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+  <!-- Repeat loop arrows -->
   <path
-      android:fillColor="#FF17A398"
+      android:fillColor="#FFFFFFFF"
       android:pathData="M7,7h10v3l4,-4 -4,-4v3H5v6h2V7zm10,10H7v-3l-4,4 4,4v-3h12v-6h-2v4z"/>
+  <!-- Center '1' repeat badge (Material repeat_one) -->
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M13,15V9h-1l-2,1v1h1.8v4H13z"/>
+  <!-- Active state indicator dot at bottom -->
+  <path
+      android:fillColor="#FFFFFFFF"
+      android:pathData="M12,21.5a1.5,1.5 0 1,0 0.001,0z"/>
 </vector>

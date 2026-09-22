@@ -5,7 +5,19 @@ import { API_BASE_URL } from '../config';
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 const COVERS_DIR = `${FileSystem.documentDirectory}rivo_covers/`;
+const MANIFEST_FILE = `${TRACKS_DIR}manifest.json`;
 const STORAGE_KEY = '@rivo_offline_tracks_v2';
+
+const LEGACY_STORAGE_KEYS = [
+  '@rivo_offline_tracks_v2',
+  '@rivo_offline_tracks',
+  '@liofy_offline_tracks_v2',
+  '@liofy_offline_tracks',
+  '@offline_tracks',
+];
+
+const LEGACY_TRACKS_DIR = `${FileSystem.documentDirectory}liofy_tracks/`;
+const LEGACY_COVERS_DIR = `${FileSystem.documentDirectory}liofy_covers/`;
 
 const ensureDirs = async () => {
   try {
@@ -14,9 +26,181 @@ const ensureDirs = async () => {
 
     const cInfo = await FileSystem.getInfoAsync(COVERS_DIR);
     if (!cInfo.exists) await FileSystem.makeDirectoryAsync(COVERS_DIR, { intermediates: true });
+
+    // Migrate from legacy liofy_tracks directory if present
+    try {
+      const legTrackInfo = await FileSystem.getInfoAsync(LEGACY_TRACKS_DIR);
+      if (legTrackInfo.exists) {
+        const legFiles = await FileSystem.readDirectoryAsync(LEGACY_TRACKS_DIR);
+        for (const lf of legFiles) {
+          try {
+            await FileSystem.moveAsync({
+              from: `${LEGACY_TRACKS_DIR}${lf}`,
+              to: `${TRACKS_DIR}${lf}`
+            });
+          } catch {}
+        }
+      }
+    } catch {}
+
+    // Migrate from legacy liofy_covers directory if present
+    try {
+      const legCoverInfo = await FileSystem.getInfoAsync(LEGACY_COVERS_DIR);
+      if (legCoverInfo.exists) {
+        const legCovers = await FileSystem.readDirectoryAsync(LEGACY_COVERS_DIR);
+        for (const lc of legCovers) {
+          try {
+            await FileSystem.moveAsync({
+              from: `${LEGACY_COVERS_DIR}${lc}`,
+              to: `${COVERS_DIR}${lc}`
+            });
+          } catch {}
+        }
+      }
+    } catch {}
   } catch (e) {
     console.warn('[downloadManager] ensureDirs error:', e.message);
   }
+};
+
+const saveToStorageAndManifest = async (list) => {
+  try {
+    const jsonStr = JSON.stringify(list || []);
+    await AsyncStorage.setItem(STORAGE_KEY, jsonStr).catch(() => {});
+    await FileSystem.writeAsStringAsync(MANIFEST_FILE, jsonStr).catch(() => {});
+  } catch (e) {
+    console.warn('[downloadManager] saveToStorageAndManifest error:', e.message);
+  }
+};
+
+export const getDownloadedTracks = async () => {
+  try {
+    await ensureDirs();
+
+    // 1. Read primary AsyncStorage key
+    let tracks = [];
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      if (raw) tracks = JSON.parse(raw) || [];
+    } catch {}
+
+    // 2. Check disk manifest (resilient to APK updates / SQLite clearing)
+    if (!Array.isArray(tracks) || tracks.length === 0) {
+      try {
+        const mInfo = await FileSystem.getInfoAsync(MANIFEST_FILE);
+        if (mInfo.exists) {
+          const mRaw = await FileSystem.readAsStringAsync(MANIFEST_FILE);
+          if (mRaw) {
+            const mList = JSON.parse(mRaw);
+            if (Array.isArray(mList) && mList.length > 0) tracks = mList;
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Fallback to legacy AsyncStorage keys
+    for (const key of LEGACY_STORAGE_KEYS) {
+      if (key === STORAGE_KEY) continue;
+      try {
+        const raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list) && list.length > 0) {
+            const existingIds = new Set(tracks.map(t => String(t._id || t.id)));
+            list.forEach(t => {
+              const tid = String(t._id || t.id);
+              if (tid && !existingIds.has(tid)) {
+                tracks.push(t);
+                existingIds.add(tid);
+              }
+            });
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Physical Disk Reconciliation: Scan TRACKS_DIR on device
+    try {
+      const dirInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
+      if (dirInfo.exists) {
+        const diskFiles = await FileSystem.readDirectoryAsync(TRACKS_DIR);
+        const trackMap = new Map(tracks.map(t => [String(t._id || t.id), t]));
+        let modified = false;
+
+        for (const file of diskFiles) {
+          if (!file.endsWith('.mp3')) continue;
+          const trackId = file.replace(/\.mp3$/i, '');
+          if (!trackId || trackId === 'temp') continue;
+
+          const fileUri = `${TRACKS_DIR}${file}`;
+          const fInfo = await FileSystem.getInfoAsync(fileUri);
+          if (!fInfo.exists || fInfo.size < 10000) continue;
+
+          const existing = trackMap.get(trackId);
+          if (existing) {
+            if (existing.localAudioUri !== fileUri || existing.nativeAudioUri !== fileUri) {
+              existing.localAudioUri = fileUri;
+              existing.nativeAudioUri = fileUri;
+              existing.audioUrl = fileUri;
+              existing.downloaded = true;
+              existing.isDownloaded = true;
+              modified = true;
+            }
+          } else {
+            // File is on device disk but missing from index (e.g. after APK update) -> auto recover!
+            const coverUri = `${COVERS_DIR}${trackId}.jpg`;
+            const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+            const recovered = {
+              id: trackId,
+              _id: trackId,
+              title: cleanMetadataString(trackId, 'Offline Track'),
+              artist: 'Offline Artist',
+              album: 'Downloaded',
+              source: 'Rivo',
+              signature: 'Rivo',
+              publisher: 'Rivo',
+              localAudioUri: fileUri,
+              nativeAudioUri: fileUri,
+              audioUrl: fileUri,
+              coverUrl: coverInfo.exists ? coverUri : null,
+              cover: coverInfo.exists ? coverUri : null,
+              isDownloaded: true,
+              downloaded: true,
+              downloadedAt: new Date().toISOString(),
+            };
+            tracks.push(recovered);
+            trackMap.set(trackId, recovered);
+            modified = true;
+          }
+        }
+
+        // Verify and filter invalid records
+        const verified = tracks.filter(t =>
+          t &&
+          t.source !== 'SoundCloud' &&
+          t.album !== 'SoundCloud' &&
+          !String(t.audioUrl || '').includes('soundcloud.com') &&
+          !String(t.id || t._id || '').startsWith('sc-')
+        );
+
+        if (modified || verified.length !== tracks.length) {
+          tracks = verified;
+          await saveToStorageAndManifest(tracks);
+        }
+      }
+    } catch (diskErr) {
+      console.warn('[downloadManager] disk reconciliation error:', diskErr.message);
+    }
+
+    return tracks;
+  } catch {
+    return [];
+  }
+};
+
+export const isTrackDownloaded = async (trackId) => {
+  const list = await getDownloadedTracks();
+  return list.some(t => String(t._id || t.id) === String(trackId));
 };
 
 function extractYouTubeId(input) {
@@ -30,11 +214,8 @@ function extractYouTubeId(input) {
   return null;
 }
 
-// Client-side YouTube audio stream resolution via public mirrors
 async function resolveClientSideYouTubeStream(videoId) {
   if (!videoId) return null;
-
-  // 1. Cobalt mirrors
   const cobaltEndpoints = [
     'https://api.cobalt.tools/api/json',
     'https://cobalt.stream/api/json',
@@ -59,8 +240,6 @@ async function resolveClientSideYouTubeStream(videoId) {
       }
     } catch {}
   }
-
-  // 2. Invidious instances
   const invidious = [
     'https://inv.nadeko.net',
     'https://yewtu.be',
@@ -79,36 +258,8 @@ async function resolveClientSideYouTubeStream(videoId) {
       }
     } catch {}
   }
-
   return null;
 }
-
-export const getDownloadedTracks = async () => {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    const cleaned = list.filter(t =>
-      t &&
-      t.source !== 'SoundCloud' &&
-      t.album !== 'SoundCloud' &&
-      !String(t.audioUrl || '').includes('soundcloud.com') &&
-      !String(t.audioUrl || '').includes('sndcdn.com') &&
-      !String(t.id || t._id || '').startsWith('sc-')
-    );
-    if (cleaned.length !== list.length) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned)).catch(() => {});
-    }
-    return cleaned;
-  } catch {
-    return [];
-  }
-};
-
-export const isTrackDownloaded = async (trackId) => {
-  const list = await getDownloadedTracks();
-  return list.some(t => String(t._id || t.id) === String(trackId));
-};
 
 function cleanMetadataString(str, fallback = '') {
   if (!str) return fallback;
@@ -133,7 +284,9 @@ export const downloadTrack = async (track, onProgress) => {
   const coverFileUri = `${COVERS_DIR}${trackId}.jpg`;
   const cleanTitle = cleanMetadataString(track.title, 'Track');
   const cleanArtist = cleanMetadataString(track.artist, 'Artist');
-  const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album)) ? 'Rivo' : cleanMetadataString(track.album, 'Rivo');
+  const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album))
+    ? (cleanTitle || 'Single')
+    : cleanMetadataString(track.album, cleanTitle || 'Single');
 
   if (onProgress) onProgress(5);
 
@@ -169,7 +322,7 @@ export const downloadTrack = async (track, onProgress) => {
         _id: trackId,
         title: cleanTitle,
         artist: cleanArtist,
-        album: cleanAlbum || 'Rivo',
+        album: cleanAlbum,
         source: 'Rivo',
         publisher: 'Rivo',
         signature: 'Rivo',
@@ -182,7 +335,7 @@ export const downloadTrack = async (track, onProgress) => {
         downloadedAt: new Date().toISOString(),
       };
       const updated = [record, ...existing.filter(t => String(t._id || t.id) !== trackId)];
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      await saveToStorageAndManifest(updated);
       return record;
     }
   } catch {}
@@ -320,7 +473,7 @@ export const downloadTrack = async (track, onProgress) => {
     _id: trackId,
     title: cleanTitle,
     artist: cleanArtist,
-    album: cleanAlbum || 'Rivo',
+    album: cleanAlbum,
     source: 'Rivo',
     publisher: 'Rivo',
     signature: 'Rivo',
@@ -337,7 +490,7 @@ export const downloadTrack = async (track, onProgress) => {
 
   const existing = await getDownloadedTracks();
   const updated = [record, ...existing.filter(t => String(t._id || t.id) !== trackId)];
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  await saveToStorageAndManifest(updated);
 
   if (onProgress) onProgress(100);
   return record;
@@ -353,6 +506,6 @@ export const removeDownloadedTrack = async (trackId) => {
 
   const existing = await getDownloadedTracks();
   const updated = existing.filter(t => String(t._id || t.id) !== idStr);
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  await saveToStorageAndManifest(updated);
   return updated;
 };
