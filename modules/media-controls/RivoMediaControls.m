@@ -44,6 +44,7 @@ static NSData *createSilentWAVData(void) {
 {
     BOOL _hasListeners;
     BOOL _remoteCommandsConfigured;
+    BOOL _audioSessionConfigured;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
     AVAudioPlayer *_silentPlayer;
@@ -86,6 +87,8 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 }
 
 - (void)configureAudioSession {
+    if (_audioSessionConfigured) return;
+    _audioSessionConfigured = YES;
     @try {
         AVAudioSession *session = [AVAudioSession sharedInstance];
         [session setCategory:AVAudioSessionCategoryPlayback

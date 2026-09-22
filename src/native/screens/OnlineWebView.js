@@ -206,15 +206,6 @@ const INJECTED_JS = `
     }
   };
 
-  // 5. Involuntary pause interceptor: prevent background micro-stutter
-  document.addEventListener('pause', function(e) {
-    if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-      if (e.target && typeof e.target.play === 'function') {
-        e.target.play().catch(function() {});
-      }
-    }
-  }, true);
-
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -255,26 +246,28 @@ export default function OnlineWebView() {
   const [canGoBack, setCanGoBack] = useState(false);
   const currentTrackRef = useRef(null);
 
-  // ─── AppState Background Audio Keeper (Resumes playback immediately on background) ───
+  // ─── AppState Background Audio Keeper (Resumes playback smoothly on background) ───
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
-        webViewRef.current?.injectJavaScript(`
-          (function() {
-            try {
-              if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-                var iframes = document.querySelectorAll('iframe[src*="youtube"]');
-                iframes.forEach(function(f) {
-                  try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
-                });
-                document.querySelectorAll('audio, video').forEach(function(el) {
-                  if (el.paused) el.play().catch(function() {});
-                });
-              }
-            } catch(e) {}
-          })();
-          true;
-        `);
+        setTimeout(() => {
+          webViewRef.current?.injectJavaScript(`
+            (function() {
+              try {
+                if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+                  var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+                  iframes.forEach(function(f) {
+                    try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
+                  });
+                  document.querySelectorAll('audio, video').forEach(function(el) {
+                    if (el.paused) el.play().catch(function() {});
+                  });
+                }
+              } catch(e) {}
+            })();
+            true;
+          `);
+        }, 150);
       }
     });
     return () => sub.remove();
@@ -442,6 +435,7 @@ export default function OnlineWebView() {
             return;
           }
 
+          const trackId = String(track.id || track._id);
           const trackName = track.title || 'Unknown';
           showToast(`Downloading "${trackName}" to device...`, 'info');
           setDownloadProgress({ title: trackName, percent: 0 });
@@ -455,9 +449,29 @@ export default function OnlineWebView() {
             if (refreshDownloadedTracks) {
               await refreshDownloadedTracks();
             }
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  window.dispatchEvent(new CustomEvent('rivo-track-download-completed', {
+                    detail: { id: ${JSON.stringify(trackId)}, success: true }
+                  }));
+                } catch(e) {}
+              })();
+              true;
+            `);
           } catch (err) {
             setDownloadProgress(null);
             showToast(`Download failed: ${err.message}`, 'error');
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  window.dispatchEvent(new CustomEvent('rivo-track-download-completed', {
+                    detail: { id: ${JSON.stringify(trackId)}, success: false }
+                  }));
+                } catch(e) {}
+              })();
+              true;
+            `);
           }
           break;
         }

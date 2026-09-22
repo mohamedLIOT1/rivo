@@ -177,8 +177,15 @@ export const downloadTrack = async (track, onProgress) => {
   candidates.push(backendDownloadUrl);
 
   // Candidate 3: Backend Stream Resolver
-  const backendStreamUrl = `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`;
-  candidates.push(backendStreamUrl);
+  try {
+    const streamRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
+    if (streamRes.ok) {
+      const streamData = await streamRes.json();
+      if (streamData?.url && typeof streamData.url === 'string') {
+        candidates.push(streamData.url);
+      }
+    }
+  } catch (e) {}
 
   // Candidate 4: Client-side YouTube mirror resolution
   const ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || (track.source === 'YouTube' ? extractYouTubeId(track._id) : null);
