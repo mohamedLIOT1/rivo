@@ -4085,6 +4085,22 @@ app.get('/api/tracks/download', async (req, res) => {
   }
 });
 
+app.get('/api/diagnose/ytdlp', async (req, res) => {
+  const { exec } = require('child_process');
+  const videoId = req.query.v || '4Q4Gy2Z7xZ0';
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const cmd = req.query.cmd || `yt-dlp --version`;
+  exec(cmd, { timeout: 25000 }, (err, stdout, stderr) => {
+    res.json({
+      cmd,
+      error: err ? err.message : null,
+      code: err ? err.code : 0,
+      stdout: stdout ? stdout.trim() : '',
+      stderr: stderr ? stderr.trim() : ''
+    });
+  });
+});
+
 app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
   try {
     const { trackId, title, artist, audioUrl, lyrics, isVerified } = req.body;
