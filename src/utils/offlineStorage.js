@@ -257,7 +257,7 @@ export async function saveTrackOffline(track, options = {}) {
             clearTimeout(timeout);
             window.removeEventListener('rivo-track-download-completed', handler);
             if (e.detail.success) {
-              resolve({
+              const dlRecord = {
                 ...track,
                 id: trackId,
                 _id: trackId,
@@ -266,7 +266,12 @@ export async function saveTrackOffline(track, options = {}) {
                 album: cleanAlbum,
                 downloaded: true,
                 savedAt: Date.now(),
-              });
+              };
+              openDB().then(dbInst => {
+                const putTx = dbInst.transaction(STORE_NAME, 'readwrite');
+                putTx.objectStore(STORE_NAME).put(dlRecord);
+              }).catch(() => {});
+              resolve(dlRecord);
             } else {
               resolve(null);
             }
@@ -484,11 +489,18 @@ export async function getOfflineTrackAudioUrl(trackId, title = null, artist = nu
           }
 
           // Fallback: If track is on the native filesystem, request it across the bridge
+          const isIOS = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+          if (isIOS) {
+            // On iOS WKWebView, resolve null immediately to avoid freezing track transitions
+            resolve(null);
+            return;
+          }
+
           if (typeof window !== 'undefined' && window.ReactNativeWebView && Array.isArray(window.__RIVO_NATIVE_DOWNLOADED_IDS) && (idStr && window.__RIVO_NATIVE_DOWNLOADED_IDS.includes(idStr))) {
             const timeout = setTimeout(() => {
               window.removeEventListener('rivo-receive-offline-audio', onReceive);
               resolve(null);
-            }, 6000);
+            }, 400);
 
             function onReceive(e) {
               if (e && e.detail && String(e.detail.id) === idStr && e.detail.dataUri) {

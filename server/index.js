@@ -3968,9 +3968,15 @@ app.get('/api/tracks/download', async (req, res) => {
 
     // YouTube track resolution
     let videoId = null;
-    if (url) {
-      const m = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-      if (m && m[1]) videoId = m[1];
+    const candidates = [url, id, trackId, req.query.id, req.query.trackId];
+    for (const cand of candidates) {
+      if (!cand || typeof cand !== 'string') continue;
+      const str = cand.trim();
+      const m1 = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      if (m1 && m1[1] && m1[1].length === 11) { videoId = m1[1]; break; }
+      const m2 = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+      if (m2 && m2[1] && m2[1].length === 11) { videoId = m2[1]; break; }
+      if (/^[a-zA-Z0-9_-]{11}$/.test(str) && !mongoose.isValidObjectId(str)) { videoId = str; break; }
     }
     if (!videoId && (title || artist)) {
       try {
@@ -4015,7 +4021,8 @@ app.get('/api/tracks/download', async (req, res) => {
     }
 
     // Fallback: resolve via public mirror / resolver
-    const streamUrl = await resolveAudioStreamUrl(url, cleanTitle, cleanArtist);
+    const streamTarget = url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '');
+    const streamUrl = await resolveAudioStreamUrl(streamTarget, cleanTitle, cleanArtist);
     if (!streamUrl) {
       return res.status(404).json({ success: false, error: 'Could not resolve audio stream for download' });
     }
