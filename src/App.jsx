@@ -82,6 +82,15 @@ function AppContent() {
   }, []);
 
   const [currentScreen, setCurrentScreen]     = useState(initialNav.screen || 'home');
+  const [isNativeApp, setIsNativeApp]         = useState(() => {
+    return typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE || window.ReactNativeWebView);
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window.RIVO_NATIVE || window.ReactNativeWebView)) {
+      setIsNativeApp(true);
+    }
+  }, []);
   const [topSearchQuery, setTopSearchQuery]   = useState(initialNav.params?.query || '');
   const [selectedArtist, setSelectedArtist]   = useState(() => {
     if (initialNav.screen === 'artist' && initialNav.params?.name) {
@@ -1301,15 +1310,17 @@ function AppContent() {
       {/* ── TOP APOTHECARY NAV BAR (Rivo Design) ── */}
       <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
 
-        {/* Brand identity: RIVO */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div 
-            onClick={() => goToScreen('home')} 
-            className="cursor-pointer flex items-center shrink-0"
-          >
-            <RivoLogo size={34} showText={true} textClassName="text-white text-lg sm:text-xl" isDark={true} />
+        {/* Brand identity: RIVO (Hidden in native mobile app to avoid duplicate logo above Good morning) */}
+        {!isNativeApp && (
+          <div className="flex items-center gap-2 shrink-0 rivo-nav-logo">
+            <div 
+              onClick={() => goToScreen('home')} 
+              className="cursor-pointer flex items-center shrink-0"
+            >
+              <RivoLogo size={34} showText={true} textClassName="text-white text-lg sm:text-xl" isDark={true} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Retro Search Box */}
         <div className="hidden md:flex flex-1 max-w-md mx-4">

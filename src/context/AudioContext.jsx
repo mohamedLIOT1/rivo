@@ -395,14 +395,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!div1) {
       div1 = document.createElement('div');
       div1.id = 'rivo-yt-player-1';
-      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden;';
+      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:1;pointer-events:none;z-index:99999;transform:scale(0.01);overflow:hidden;';
       document.body.appendChild(div1);
     }
     let div2 = document.getElementById('rivo-yt-player-2');
     if (!div2) {
       div2 = document.createElement('div');
       div2.id = 'rivo-yt-player-2';
-      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden;';
+      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:1;pointer-events:none;z-index:99999;transform:scale(0.01);overflow:hidden;';
       document.body.appendChild(div2);
     }
 
@@ -800,11 +800,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // MediaSession API
     if ('mediaSession' in navigator) {
       try {
+        const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
         navigator.mediaSession.metadata = new MediaMetadata({
           title:  currentTrack.title  || 'Rivo',
           artist: currentTrack.artist || 'Artist',
           album:  currentTrack.album  || 'Single',
-          artwork: [{ src: currentTrack.cover || '', sizes: '512x512', type: 'image/jpeg' }],
+          artwork: coverSrc ? [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] : [],
         });
         navigator.mediaSession.setActionHandler('play', () => {
           resumeAudioContext();
@@ -836,6 +837,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
         navigator.mediaSession.setActionHandler('nexttrack', () => {
           if (playNextTrackRef.current) playNextTrackRef.current();
         });
+        // Explicitly clear seek/skip handlers so system lockscreen shows Next/Prev buttons instead of 10s skip
+        try {
+          navigator.mediaSession.setActionHandler('seekforward', null);
+          navigator.mediaSession.setActionHandler('seekbackward', null);
+          navigator.mediaSession.setActionHandler('skipforward', null);
+          navigator.mediaSession.setActionHandler('skipbackward', null);
+        } catch {}
       } catch {}
     }
 

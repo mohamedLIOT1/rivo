@@ -71,7 +71,7 @@ const TABS = [
 ];
 
 function MainAppShell() {
-  const { appMode, toggleMode } = useConnectivity();
+  const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
 
   useEffect(() => {
@@ -97,25 +97,6 @@ function MainAppShell() {
               </View>
               <Text style={styles.brandTitle}>RIVO</Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.onlineFixedModeBtn}
-              onPress={toggleMode}
-              activeOpacity={0.8}
-            >
-              <View style={styles.onlineStatusDot} />
-              <Wifi size={11} color="#10b981" strokeWidth={2.5} />
-              <Text style={styles.onlineFixedModeBtnText}>ONLINE</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.vaultPillBtn}
-              onPress={toggleMode}
-              activeOpacity={0.8}
-            >
-              <Download size={13} color="#17a398" strokeWidth={2.2} />
-              <Text style={styles.vaultPillText}>VAULT</Text>
-            </TouchableOpacity>
           </View>
         )}
         <OnlineWebView />
@@ -137,7 +118,7 @@ function MainAppShell() {
  * The native React Native app shell for Offline Vault, Quran, and local playback.
  */
 function OfflineNativeShell() {
-  const { appMode, toggleMode } = useConnectivity();
+  const { appMode } = useConnectivity();
   const [activeTab, setActiveTab] = useState('offline');
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
@@ -208,16 +189,6 @@ function OfflineNativeShell() {
             </View>
           </View>
           <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
-        </TouchableOpacity>
-
-        {/* Offline Mode Switch in Header */}
-        <TouchableOpacity
-          style={styles.headerModePill}
-          onPress={toggleMode}
-          activeOpacity={0.8}
-        >
-          <WifiOff size={11} color="#17a398" strokeWidth={2.5} />
-          <Text style={styles.headerModePillText}>OFFLINE</Text>
         </TouchableOpacity>
 
         {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}

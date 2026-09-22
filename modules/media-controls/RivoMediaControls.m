@@ -89,9 +89,9 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     @try {
         AVAudioSession *session = [AVAudioSession sharedInstance];
         [session setCategory:AVAudioSessionCategoryPlayback
-                 withOptions:(AVAudioSessionCategoryOptionMixWithOthers |
-                              AVAudioSessionCategoryOptionAllowBluetooth |
-                              AVAudioSessionCategoryOptionAllowBluetoothA2DP)
+                 withOptions:(AVAudioSessionCategoryOptionAllowBluetooth |
+                              AVAudioSessionCategoryOptionAllowBluetoothA2DP |
+                              AVAudioSessionCategoryOptionDefaultToSpeaker)
                        error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
@@ -109,9 +109,14 @@ RCT_EXPORT_MODULE(RivoMediaControls);
             _silentPlayer.numberOfLoops = -1; // Infinite loop keeps iOS background session alive
             _silentPlayer.volume = 0.0001f;   // Completely silent to human ear but holds audio hardware pipeline
             [_silentPlayer prepareToPlay];
+            [_silentPlayer play];
         } @catch (NSException *e) {
             NSLog(@"[RivoMediaControls] ensureSilentPlayer error: %@", e);
         }
+    } else if (!_silentPlayer.isPlaying) {
+        @try {
+            [_silentPlayer play];
+        } @catch (NSException *e) {}
     }
 }
 
@@ -138,12 +143,19 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     [center.previousTrackCommand removeTarget:nil];
     [center.changePlaybackPositionCommand removeTarget:nil];
 
+    // Explicitly disable 10s skip and seek commands so iOS always displays Next/Prev track buttons
+    center.skipForwardCommand.enabled = NO;
+    [center.skipForwardCommand removeTarget:nil];
+    center.skipBackwardCommand.enabled = NO;
+    [center.skipBackwardCommand removeTarget:nil];
+    center.seekForwardCommand.enabled = NO;
+    [center.seekForwardCommand removeTarget:nil];
+    center.seekBackwardCommand.enabled = NO;
+    [center.seekBackwardCommand removeTarget:nil];
+
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
         [self ensureSilentPlayer];
-        if (self->_silentPlayer && !self->_silentPlayer.isPlaying) {
-            [self->_silentPlayer play];
-        }
         NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
         now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
         [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
@@ -154,9 +166,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        if (self->_silentPlayer && self->_silentPlayer.isPlaying) {
-            [self->_silentPlayer pause];
-        }
+        [self ensureSilentPlayer];
         NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
         now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
         [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
@@ -167,14 +177,10 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.togglePlayPauseCommand setEnabled:YES];
     [center.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        BOOL willPlay = !(self->_silentPlayer && self->_silentPlayer.isPlaying);
-        if (willPlay) {
-            [self ensureSilentPlayer];
-            [self->_silentPlayer play];
-        } else {
-            if (self->_silentPlayer) [self->_silentPlayer pause];
-        }
+        [self ensureSilentPlayer];
         NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+        double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
+        BOOL willPlay = (currentRate <= 0.0);
         now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
         [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
 
@@ -184,12 +190,14 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.nextTrackCommand setEnabled:YES];
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self ensureSilentPlayer];
         [self sendActionSafely:@"next"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     [center.previousTrackCommand setEnabled:YES];
     [center.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self ensureSilentPlayer];
         [self sendActionSafely:@"prev"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
@@ -257,12 +265,16 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             double currentTime = [options[@"currentTime"] doubleValue];
             nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime >= 0 ? currentTime : 0.0);
 
-            // Normalize cover URL (handle relative /api or /covers URLs)
+            // Normalize cover URL (handle relative /api or /covers URLs, protocol-relative //, and http)
             NSString *rawCover = options[@"coverUrl"];
             NSString *coverUrl = nil;
             if (rawCover && [rawCover length] > 0) {
-                if ([rawCover hasPrefix:@"/"] && ![rawCover hasPrefix:@"//"]) {
+                if ([rawCover hasPrefix:@"//"]) {
+                    coverUrl = [@"https:" stringByAppendingString:rawCover];
+                } else if ([rawCover hasPrefix:@"/"]) {
                     coverUrl = [@"https://liofy-production-0f56.up.railway.app" stringByAppendingString:rawCover];
+                } else if ([rawCover hasPrefix:@"http://"]) {
+                    coverUrl = [@"https://" stringByAppendingString:[rawCover substringFromIndex:7]];
                 } else {
                     coverUrl = rawCover;
                 }
@@ -279,13 +291,12 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                     self->_currentCoverUrl = [coverUrl copy];
                     nowPlaying[MPMediaItemPropertyArtwork] = artwork;
                 } else if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
-                    // If cover changed but not cached yet, keep previous artwork in nowPlaying to avoid flashing empty
-                    if (self->_currentArtwork) {
-                        nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
-                    }
+                    // Reset artwork so previous track's cover is never displayed for this track
                     self->_currentCoverUrl = [coverUrl copy];
+                    self->_currentArtwork = nil;
+                    [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
 
-                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
                         @try {
                             NSData *imageData = nil;
                             if ([coverUrl hasPrefix:@"file://"]) {
@@ -301,7 +312,7 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                                 NSString *encoded = [coverUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
                                 NSURL *url = [NSURL URLWithString:encoded ?: coverUrl];
                                 if (url) {
-                                    NSURLRequest *req = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReturnCacheDataElseLoad timeoutInterval:6.0];
+                                    NSURLRequest *req = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReturnCacheDataElseLoad timeoutInterval:8.0];
                                     NSURLResponse *resp = nil;
                                     NSError *err = nil;
                                     imageData = [NSURLConnection sendSynchronousRequest:req returningResponse:&resp error:&err];
@@ -317,9 +328,11 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                                     }];
                                     self->_currentArtwork = artwork;
                                     dispatch_async(dispatch_get_main_queue(), ^{
-                                        NSMutableDictionary *updated = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                                        updated[MPMediaItemPropertyArtwork] = artwork;
-                                        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = updated;
+                                        if ([coverUrl isEqualToString:self->_currentCoverUrl]) {
+                                            NSMutableDictionary *updated = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                                            updated[MPMediaItemPropertyArtwork] = artwork;
+                                            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = updated;
+                                        }
                                     });
                                 }
                             }
@@ -330,8 +343,10 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                 } else if (self->_currentArtwork) {
                     nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
                 }
-            } else if (self->_currentArtwork) {
-                nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
+            } else {
+                self->_currentCoverUrl = nil;
+                self->_currentArtwork = nil;
+                [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
             }
 
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlaying;
