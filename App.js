@@ -84,21 +84,8 @@ function MainAppShell() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: Fixed Top Header + WebView ─── */}
+      {/* ─── ONLINE MODE: WebView ─── */}
       <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
-        {isOnline && (
-          <View style={styles.onlineFixedHeader}>
-            <View style={styles.brandingRow}>
-              <View style={styles.logoBadge}>
-                <View style={styles.logoTealOffset} />
-                <View style={styles.logoCreamDisc}>
-                  <Text style={styles.logoLetter}>R</Text>
-                </View>
-              </View>
-              <Text style={styles.brandTitle}>RIVO</Text>
-            </View>
-          </View>
-        )}
         <OnlineWebView />
       </View>
 

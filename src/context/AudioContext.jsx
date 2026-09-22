@@ -168,6 +168,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const watchdogRef       = useRef(null);
   const playNextTrackRef  = useRef(null);
   const playPrevTrackRef  = useRef(null);
+  const isUserPauseActionRef = useRef(false);
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
@@ -395,14 +396,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!div1) {
       div1 = document.createElement('div');
       div1.id = 'rivo-yt-player-1';
-      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:1;pointer-events:none;z-index:99999;transform:scale(0.01);overflow:hidden;';
+      div1.style.cssText = 'position:fixed;bottom:-9999px;right:-9999px;width:320px;height:240px;opacity:0.02;pointer-events:none;z-index:-1;';
       document.body.appendChild(div1);
     }
     let div2 = document.getElementById('rivo-yt-player-2');
     if (!div2) {
       div2 = document.createElement('div');
       div2.id = 'rivo-yt-player-2';
-      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:1;pointer-events:none;z-index:99999;transform:scale(0.01);overflow:hidden;';
+      div2.style.cssText = 'position:fixed;bottom:-9999px;right:-9999px;width:320px;height:240px;opacity:0.02;pointer-events:none;z-index:-1;';
       document.body.appendChild(div2);
     }
 
@@ -440,6 +441,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       } else if (event.data === YT.PlayerState.PAUSED) {
         if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
+          // If pause was involuntary (e.g. iOS backgrounding / WebKit interruption) and not requested by user:
+          if (!isUserPauseActionRef.current && isPlayingRef.current) {
+            try {
+              player.unMute();
+              player.playVideo();
+            } catch (e) {}
+            return;
+          }
           setIsPlaying(false);
           if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
         }
@@ -808,6 +817,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           artwork: coverSrc ? [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] : [],
         });
         navigator.mediaSession.setActionHandler('play', () => {
+          isUserPauseActionRef.current = false;
           resumeAudioContext();
           const actPlayer = getActiveYtPlayer();
           if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
@@ -821,6 +831,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setIsPlaying(true);
         });
         navigator.mediaSession.setActionHandler('pause', () => {
+          isUserPauseActionRef.current = true;
           const actPlayer = getActiveYtPlayer();
           if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
             try {
@@ -832,9 +843,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setIsPlaying(false);
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => {
+          isUserPauseActionRef.current = false;
           if (playPrevTrackRef.current) playPrevTrackRef.current();
         });
         navigator.mediaSession.setActionHandler('nexttrack', () => {
+          isUserPauseActionRef.current = false;
           if (playNextTrackRef.current) playNextTrackRef.current();
         });
         // Explicitly clear seek/skip handlers so system lockscreen shows Next/Prev buttons instead of 10s skip
@@ -924,6 +937,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!currentTrackRef.current) return;
     resumeAudioContext();
     const nextPlaying = !isPlayingRef.current;
+    isUserPauseActionRef.current = !nextPlaying;
     setIsPlaying(nextPlaying);
 
     if (!nextPlaying && watchdogRef.current) {
@@ -1041,6 +1055,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       secondaryAudioRef.current.removeAttribute('src');
     }
     resumeAudioContext();
+    isUserPauseActionRef.current = false;
 
     if (!isSeamless) {
       // Immediately stop previous audio synchronously to prevent overlap
