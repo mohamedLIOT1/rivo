@@ -8,6 +8,7 @@ import { resolveAudioStream } from '../services/youtubeResolver';
 import { showMediaNotification, updateMediaNotification, hideMediaNotification, subscribeToMediaActions } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
 import { useToast } from './ToastContext';
+import { useUser } from './UserContext';
 
 const AudioContext = createContext();
 const AudioProgressContext = createContext();
@@ -32,6 +33,12 @@ export const AudioProvider = ({ children }) => {
   const { showToast } = useToast();
   const conn = useConnectivity();
   const isOffline = conn?.appMode === 'offline';
+
+  let userCtx = {};
+  try {
+    userCtx = useUser() || {};
+  } catch {}
+  const { likedTrackIds = [], toggleLikeTrack } = userCtx;
 
   const [currentTrack, setCurrentTrackState] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -231,6 +238,19 @@ export const AudioProvider = ({ children }) => {
           case 'prev':
             if (playPrevTrackRef.current) playPrevTrackRef.current();
             break;
+          case 'repeat':
+            setRepeatMode(prev => prev === 'off' ? 'all' : (prev === 'all' ? 'one' : 'off'));
+            break;
+          case 'shuffle':
+            setIsShuffle(prev => !prev);
+            break;
+          case 'like': {
+            const cur = currentTrackRef.current;
+            if (cur && toggleLikeTrack) {
+              toggleLikeTrack(String(cur._id || cur.id));
+            }
+            break;
+          }
           case 'forward': {
             const newPos = (playbackStatusRef.current.currentTime || 0) + 10;
             if (seekToRef.current) seekToRef.current(newPos);
@@ -248,13 +268,25 @@ export const AudioProvider = ({ children }) => {
     });
 
     return () => unsub();
-  }, []);
+  }, [toggleLikeTrack]);
 
   useEffect(() => {
     if (currentTrack) {
-      updateMediaNotification(isPlaying, repeatMode !== 'off', isShuffle, currentTrack);
+      const isLikedTrack = likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id));
+      updateMediaNotification(
+        isPlaying,
+        repeatMode !== 'off',
+        isShuffle,
+        isLikedTrack,
+        {
+          ...currentTrack,
+          duration: Number(currentTrack.duration || (playbackStatusRef.current?.duration || 240)),
+          currentTime: Number(playbackStatusRef.current?.currentTime || 0),
+          liked: isLikedTrack,
+        }
+      );
     }
-  }, [isPlaying, isShuffle, repeatMode, currentTrack?.id, currentTrack?._id]);
+  }, [isPlaying, isShuffle, repeatMode, currentTrack?.id, currentTrack?._id, likedTrackIds]);
 
   useEffect(() => {
     if (!currentTrack) {
@@ -401,12 +433,14 @@ export const AudioProvider = ({ children }) => {
       setIsPlaying(true);
       setIsLoading(false);
       try {
+        const isLikedTrack = track ? likedTrackIds.some(id => String(id) === String(track._id || track.id)) : false;
         showMediaNotification({
           ...track,
           duration: Number(track.duration || (playbackStatusRef.current?.duration || 240)),
           coverUrl: track.coverUrl || track.cover || '',
           currentTime: 0,
-        }, true, repeatMode !== 'off', isShuffle);
+          liked: isLikedTrack,
+        }, true, repeatMode !== 'off', isShuffle, isLikedTrack);
       } catch {}
     } catch (err) {
       setIsLoading(false);
@@ -433,14 +467,15 @@ export const AudioProvider = ({ children }) => {
       if (queueRef.current.length > 0) return playTrack(queueRef.current[0], queueRef.current);
       return;
     }
+    const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
     if (isPlaying) {
       await soundRef.current.pauseAsync().catch(() => {});
       setIsPlaying(false);
-      updateMediaNotification(false, repeatMode !== 'off', isShuffle, currentTrackRef.current);
+      updateMediaNotification(false, repeatMode !== 'off', isShuffle, isLikedTrack, currentTrackRef.current);
     } else {
       await soundRef.current.playAsync().catch(() => {});
       setIsPlaying(true);
-      updateMediaNotification(true, repeatMode !== 'off', isShuffle, currentTrackRef.current);
+      updateMediaNotification(true, repeatMode !== 'off', isShuffle, isLikedTrack, currentTrackRef.current);
     }
   };
 

@@ -5,6 +5,7 @@ import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { isQuranContent } from '../utils/quranUtils';
 import { API_BASE_URL } from '../config';
 import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/listeningTracker';
+import { useUser } from './UserContext';
 
 const AudioPlayerContext = createContext(null);
 
@@ -97,6 +98,12 @@ async function resolveTrackAudioUrl(track) {
 // ──────────────────────────────────────────────────────────────────
 
 export function AudioProvider({ children, tracks, setTracks }) {
+  let userCtx = {};
+  try {
+    userCtx = useUser() || {};
+  } catch {}
+  const { likedTrackIds = [], toggleLike } = userCtx;
+
   const [currentTrack, setCurrentTrack] = useState(null);
   const [currentQueue, setCurrentQueue] = useState([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
@@ -168,6 +175,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const watchdogRef       = useRef(null);
   const playNextTrackRef  = useRef(null);
   const playPrevTrackRef  = useRef(null);
+  const toggleRepeatRef   = useRef(null);
+  const toggleShuffleRef  = useRef(null);
+  const toggleLikeRef     = useRef(null);
+  const seekToRef         = useRef(null);
   const isUserPauseActionRef = useRef(false);
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
@@ -863,9 +874,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // ── Native Media Controls Bridge (Android Lockscreen & Background Notification) ──
     if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       try {
+        const isLiked = currentTrack ? likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id)) : false;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'PLAYBACK_STATE',
           isPlaying: isPlaying,
+          isRepeat: repeatMode !== 'off',
+          isShuffle: Boolean(isShuffle),
+          isLiked: isLiked,
+          duration: duration || currentTrack?.duration || 240,
+          currentTime: currentTime || 0,
           track: currentTrack ? {
             id: currentTrack._id || currentTrack.id,
             _id: currentTrack._id || currentTrack.id,
@@ -875,19 +892,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
             audioUrl: currentTrack.audioUrl || '',
             duration: duration || currentTrack.duration || 240,
             currentTime: currentTime || 0,
+            liked: isLiked,
           } : null
         }));
       } catch (e) {}
     }
-  }, [currentTrack, isPlaying, getActiveYtPlayer, isCurrentYtReady]);
+  }, [currentTrack, isPlaying, getActiveYtPlayer, isCurrentYtReady, repeatMode, isShuffle, likedTrackIds, duration, currentTime]);
 
   // Sync playback state with Native Android MediaNotificationService
   useEffect(() => {
     if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       try {
+        const isLiked = currentTrack ? likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id)) : false;
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'PLAYBACK_STATE',
           isPlaying: isPlaying,
+          isRepeat: repeatMode !== 'off',
+          isShuffle: Boolean(isShuffle),
+          isLiked: isLiked,
+          duration: duration || currentTrack?.duration || 240,
+          currentTime: currentTime || 0,
           track: currentTrack ? {
             id: currentTrack._id || currentTrack.id,
             _id: currentTrack._id || currentTrack.id,
@@ -897,11 +921,37 @@ export function AudioProvider({ children, tracks, setTracks }) {
             audioUrl: currentTrack.audioUrl || '',
             duration: duration || currentTrack.duration || 240,
             currentTime: currentTime || 0,
+            liked: isLiked,
           } : null
         }));
       } catch (e) {}
     }
-  }, [isPlaying, currentTrack]);
+  }, [isPlaying, currentTrack, repeatMode, isShuffle, likedTrackIds, duration]);
+
+  // Periodic time sync to keep Android Notification Seekbar accurate
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        try {
+          const curT = currentTrackRef.current;
+          if (curT) {
+            const isLiked = likedTrackIds.some(id => String(id) === String(curT._id || curT.id));
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'PLAYBACK_STATE',
+              isPlaying: true,
+              isRepeat: repeatMode !== 'off',
+              isShuffle: Boolean(isShuffle),
+              isLiked: isLiked,
+              duration: duration || curT.duration || 240,
+              currentTime: currentTimeRef.current || 0,
+            }));
+          }
+        } catch {}
+      }
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isPlaying, repeatMode, isShuffle, likedTrackIds, duration]);
 
   // Sync play/pause state changes for YouTube (as safety backup)
   useEffect(() => {
@@ -999,10 +1049,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (playNextTrackRef.current) playNextTrackRef.current();
       } else if (action === 'prev') {
         if (playPrevTrackRef.current) playPrevTrackRef.current();
+      } else if (action === 'repeat') {
+        if (toggleRepeatRef.current) toggleRepeatRef.current();
+      } else if (action === 'shuffle') {
+        if (toggleShuffleRef.current) toggleShuffleRef.current();
+      } else if (action === 'like') {
+        const cur = currentTrackRef.current;
+        if (cur && toggleLikeRef.current) {
+          toggleLikeRef.current(cur._id || cur.id);
+        }
+      } else if (typeof action === 'string' && action.startsWith('seek:')) {
+        const secs = parseFloat(action.split(':')[1]);
+        if (!isNaN(secs) && seekToRef.current) seekToRef.current(secs);
       }
+    };
+    window.__RIVO_MEDIA_SEEK = (sec) => {
+      if (!isNaN(sec) && seekToRef.current) seekToRef.current(sec);
     };
     return () => {
       delete window.__RIVO_MEDIA_ACTION;
+      delete window.__RIVO_MEDIA_SEEK;
     };
   }, [togglePlay]);
 
@@ -1578,6 +1644,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }, 150);
     }
   }, [getActiveYtPlayer, isCurrentYtReady]);
+
+  useEffect(() => {
+    toggleRepeatRef.current = toggleRepeat;
+  }, [toggleRepeat]);
+
+  useEffect(() => {
+    toggleShuffleRef.current = toggleShuffle;
+  }, [toggleShuffle]);
+
+  useEffect(() => {
+    toggleLikeRef.current = toggleLike;
+  }, [toggleLike]);
+
+  useEffect(() => {
+    seekToRef.current = seekTo;
+  }, [seekTo]);
 
   const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt }) => {
     let targetTime = Number(syncTime) || 0;

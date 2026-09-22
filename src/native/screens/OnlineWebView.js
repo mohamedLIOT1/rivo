@@ -172,6 +172,22 @@ const INJECTED_JS = `
         }
         var b = document.querySelector('button[title="Previous Track"], button[title="Previous"]');
         if (b) b.click();
+      } else if (action === 'repeat') {
+        var b = document.querySelector('button[title*="Repeat"], button[aria-label*="Repeat"]');
+        if (b) b.click();
+      } else if (action === 'shuffle') {
+        var b = document.querySelector('button[title*="Shuffle"], button[aria-label*="Shuffle"]');
+        if (b) b.click();
+      } else if (action === 'like') {
+        var b = document.querySelector('button[title*="Like"], button[aria-label*="Like"]');
+        if (b) b.click();
+      } else if (typeof action === 'string' && action.indexOf('seek:') === 0) {
+        var secs = parseFloat(action.split(':')[1]);
+        if (!isNaN(secs)) {
+          if (typeof window.__RIVO_MEDIA_SEEK === 'function') {
+            window.__RIVO_MEDIA_SEEK(secs);
+          }
+        }
       }
     } catch(err) {
       console.warn('[Rivo Bridge] Error in media action:', err);
@@ -338,14 +354,32 @@ export default function OnlineWebView() {
             };
           }
           const activeTrack = currentTrackRef.current;
+          const trackDur = Number(data.duration !== undefined ? data.duration : (activeTrack?.duration || 240));
+          const trackTime = Number(data.currentTime !== undefined ? data.currentTime : (activeTrack?.currentTime || 0));
+          const isRepeatState = Boolean(data.isRepeat);
+          const isShuffleState = Boolean(data.isShuffle);
+          const isLikedState = Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
+
           if (activeTrack) {
             showMediaNotification({
               ...activeTrack,
-              duration: Number(activeTrack.duration || 240),
-              currentTime: Number(activeTrack.currentTime || 0),
-            }, Boolean(isPlaying));
+              duration: trackDur,
+              currentTime: trackTime,
+              liked: isLikedState,
+            }, Boolean(isPlaying), isRepeatState, isShuffleState, isLikedState);
           } else {
-            updateMediaNotification(Boolean(isPlaying), false, false, activeTrack);
+            updateMediaNotification(
+              Boolean(isPlaying),
+              isRepeatState,
+              isShuffleState,
+              isLikedState,
+              activeTrack ? {
+                ...activeTrack,
+                duration: trackDur,
+                currentTime: trackTime,
+                liked: isLikedState,
+              } : null
+            );
           }
           break;
         }
