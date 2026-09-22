@@ -1,6 +1,9 @@
 [providers]
 providers = ['node']
 
+[phases.setup]
+nixPkgs = ['nodejs_20', 'yt-dlp', 'ffmpeg']
+
 [build]
 cmds = ['npm install', 'npm run build']
 
