@@ -861,8 +861,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
           isUserPauseActionRef.current = false;
           if (playNextTrackRef.current) playNextTrackRef.current();
         });
-        // Explicitly clear seek/skip handlers so system lockscreen shows Next/Prev buttons instead of 10s skip
+        // Explicitly register seekto so system notification slider seeks accurately, while clearing 10s skip handlers
         try {
+          navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details && typeof details.seekTime === 'number') {
+              if (seekToRef.current) seekToRef.current(details.seekTime);
+            }
+          });
           navigator.mediaSession.setActionHandler('seekforward', null);
           navigator.mediaSession.setActionHandler('seekbackward', null);
           navigator.mediaSession.setActionHandler('skipforward', null);
