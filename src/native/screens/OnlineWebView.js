@@ -208,6 +208,49 @@ const INJECTED_JS = `
 
 
 
+  // 5. Global media state tracker
+  document.addEventListener('play', function() {
+    window.__RIVO_IS_PLAYING = true;
+    window.__RIVO_USER_PAUSED = false;
+  }, true);
+
+  document.addEventListener('click', function(e) {
+    try {
+      var target = e.target;
+      if (target && (target.closest('button[title="Pause"]') || target.closest('button[aria-label*="Pause"]'))) {
+        window.__RIVO_USER_PAUSED = true;
+        window.__RIVO_IS_PLAYING = false;
+      }
+    } catch(err) {}
+  }, true);
+
+  ${Platform.OS === 'android' ? `
+  // 6. Android Involuntary Pause Guard & Background Watchdog
+  document.addEventListener('pause', function(e) {
+    if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+      if (e.target && typeof e.target.play === 'function') {
+        e.target.play().catch(function() {});
+      }
+    }
+  }, true);
+
+  setInterval(function() {
+    try {
+      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+        var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+        iframes.forEach(function(f) {
+          try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
+        });
+        document.querySelectorAll('audio, video').forEach(function(el) {
+          if (el.paused) {
+            el.play().catch(function() {});
+          }
+        });
+      }
+    } catch(e) {}
+  }, 1000);
+  ` : ''}
+
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -384,10 +427,12 @@ export default function OnlineWebView() {
       switch (data.type) {
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
+          const isSameTrack = Boolean(
+            currentTrackRef.current && track &&
+            ((track.id && track.id === currentTrackRef.current.id) ||
+             (track.title && track.title === currentTrackRef.current.title))
+          );
           if (track) {
-            const isSameTrack = currentTrackRef.current &&
-              ((track.id && track.id === currentTrackRef.current.id) ||
-               (track.title && track.title === currentTrackRef.current.title));
             const existingCover = isSameTrack ? (currentTrackRef.current?.coverUrl || currentTrackRef.current?.cover || '') : '';
             const incomingCover = track.coverUrl || track.cover || '';
             currentTrackRef.current = {
@@ -409,7 +454,7 @@ export default function OnlineWebView() {
             ? likedTrackIds.some(id => String(id) === trackIdStr)
             : Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
 
-          const isNewTrack = !isSameTrack && track;
+          const isNewTrack = !isSameTrack && Boolean(track);
           if (isNewTrack) {
             showMediaNotification({
               ...activeTrack,

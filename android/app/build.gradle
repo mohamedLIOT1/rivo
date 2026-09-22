@@ -115,8 +115,8 @@ android {
         applicationId 'com.rivo.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "1.2.3"
+        versionCode 6
+        versionName "1.2.4"
     }
     signingConfigs {
         debug {
@@ -201,3 +201,16 @@ if (rnVersion < versionToNumber(0, 75, 0)) {
     apply from: new File(["node", "--print", "require.resolve('@react-native-community/cli-platform-android/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim(), "../native_modules.gradle");
     applyNativeModulesAppBuildGradle(project)
 }
+
+task applyPatches(type: Exec) {
+    workingDir projectRoot
+    if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+        commandLine 'cmd', '/c', 'npx', 'patch-package'
+    } else {
+        commandLine 'npx', 'patch-package'
+    }
+}
+tasks.matching { it.name == "preBuild" }.all {
+    it.dependsOn applyPatches
+}
+
