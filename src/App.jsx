@@ -1287,9 +1287,11 @@ function AppContent() {
         // Also trigger browser file download on web platform only (never in native apps)
         if (typeof window !== 'undefined' && !window.Capacitor && !window.RIVO_NATIVE) {
           try {
+            const cleanTitle = (track.title || 'Song').replace(/https?:\/\/\S+/gi, '').replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Song';
+            const cleanArtist = (track.artist || 'Artist').replace(/https?:\/\/\S+/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Artist';
             const dlLink = document.createElement('a');
-            dlLink.href = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(cleanId)}`;
-            dlLink.setAttribute('download', `${track.artist || 'Track'} - ${track.title || 'Song'}.mp3`);
+            dlLink.href = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(cleanId)}`;
+            dlLink.setAttribute('download', `${cleanArtist} - ${cleanTitle}.mp3`);
             document.body.appendChild(dlLink);
             dlLink.click();
             document.body.removeChild(dlLink);

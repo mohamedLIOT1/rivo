@@ -101,9 +101,11 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
         // Web browser file trigger
         if (typeof window !== 'undefined' && !window.Capacitor && !window.RIVO_NATIVE) {
           try {
+            const cleanTitle = (nextTrack.title || 'Song').replace(/https?:\/\/\S+/gi, '').replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Song';
+            const cleanArtist = (nextTrack.artist || 'Artist').replace(/https?:\/\/\S+/gi, '').replace(/[/\\?%*:|"<>]/g, '').trim() || 'Artist';
             const dlLink = document.createElement('a');
-            dlLink.href = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(nextTrack.audioUrl || '')}&title=${encodeURIComponent(nextTrack.title || '')}&artist=${encodeURIComponent(nextTrack.artist || '')}&id=${encodeURIComponent(cleanId)}`;
-            dlLink.setAttribute('download', `${nextTrack.artist || 'Track'} - ${nextTrack.title || 'Song'}.mp3`);
+            dlLink.href = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(nextTrack.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(cleanId)}`;
+            dlLink.setAttribute('download', `${cleanArtist} - ${cleanTitle}.mp3`);
             document.body.appendChild(dlLink);
             dlLink.click();
             document.body.removeChild(dlLink);

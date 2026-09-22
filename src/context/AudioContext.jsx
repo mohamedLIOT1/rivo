@@ -592,31 +592,52 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     if (!currentTrack) return;
 
-    const newId  = String(currentTrack.id || currentTrack._id || '');
-    const newUrl = currentTrack.audioUrl || '';
+    let isEffectCancelled = false;
 
-    // Guard: if track ID and audioUrl haven't changed, this is a metadata-only update
-    if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current && lastLoadedUrlRef.current) {
-      return;
-    }
+    (async () => {
+      const newId  = String(currentTrack.id || currentTrack._id || '');
+      let newUrl = currentTrack.audioUrl || '';
 
-    lastLoadedIdRef.current  = newId;
-    lastLoadedUrlRef.current = newUrl;
+      let isBlobUrl = newUrl.startsWith('blob:') || newUrl.startsWith('data:');
+      let isLocalFile = newUrl.includes('/_capacitor_file_/') || newUrl.includes('capacitor://') || newUrl.startsWith('file://') || newUrl.startsWith('content://') || newUrl.endsWith('.mp3');
+      let isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
 
-    const isBlobUrl = newUrl.startsWith('blob:') || newUrl.startsWith('data:');
-    const isLocalFile = newUrl.includes('/_capacitor_file_/') || newUrl.includes('capacitor://') || newUrl.startsWith('file://') || newUrl.startsWith('content://') || newUrl.endsWith('.mp3');
-    const isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
+      // Prioritize local storage in Online Mode: check if this track is saved offline in IndexedDB
+      if (!isBlobUrl && !isLocalFile && !isDownloaded) {
+        try {
+          const offlineBlob = await getOfflineTrackAudioUrl(newId, currentTrack.title, currentTrack.artist);
+          if (isEffectCancelled) return;
+          if (offlineBlob) {
+            newUrl = offlineBlob;
+            isBlobUrl = true;
+            isDownloaded = true;
+            currentTrack.audioUrl = offlineBlob;
+            currentTrack.downloaded = true;
+            currentTrack.nativeAudioUri = offlineBlob;
+            currentTrack.album = (!currentTrack.album || /https?:\/\/|www\.|youtube|liofy/i.test(currentTrack.album)) ? 'Rivo' : currentTrack.album;
+            currentTrack.source = 'Rivo';
+          }
+        } catch (e) {}
+      }
 
-    // Track is ONLY a YouTube online track if it's NOT a blob, NOT a local device file, and NOT marked as downloaded
-    const ytId = (!isBlobUrl && !isLocalFile && !isDownloaded) ? extractYtId(newUrl) : null;
+      // Guard: if track ID and audioUrl haven't changed, this is a metadata-only update
+      if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current && lastLoadedUrlRef.current) {
+        return;
+      }
 
-    if (ytId) {
-      // ── YouTube track ──────────────────────────────────────────
-      isYtTrackRef.current = true;
-      setIsYtTrack(true);
+      lastLoadedIdRef.current  = newId;
+      lastLoadedUrlRef.current = newUrl;
 
-      // Stop and unload HTML audio completely
-      stopHtmlAudio();
+      // Track is ONLY a YouTube online track if it's NOT a blob, NOT a local device file, and NOT marked as downloaded
+      const ytId = (!isBlobUrl && !isLocalFile && !isDownloaded) ? extractYtId(newUrl) : null;
+
+      if (ytId) {
+        // ── YouTube track ──────────────────────────────────────────
+        isYtTrackRef.current = true;
+        setIsYtTrack(true);
+
+        // Stop and unload HTML audio completely
+        stopHtmlAudio();
 
       setCurrentTime(0);
       setDuration(currentTrack.duration || 210);
@@ -677,14 +698,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
         }, 6000);
       }
-
-      return () => {
-        if (watchdogRef.current) {
-          clearTimeout(watchdogRef.current);
-          watchdogRef.current = null;
-        }
-      };
-
     } else {
       // ── Regular audio (Upload / Downloaded Blob) ─
       isYtTrackRef.current = false;
@@ -816,6 +829,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }
     }
+  })();
+
+    return () => {
+      isEffectCancelled = true;
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+    };
   }, [currentTrack]);
 
   // ── MediaSession API (Lockscreen & Bluetooth Controls) ──
@@ -823,10 +845,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!currentTrack || typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
     try {
       const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
+      const cleanAlbum = (!currentTrack.album || /https?:\/\/|www\.|youtube|liofy/i.test(currentTrack.album)) ? 'Rivo' : currentTrack.album;
       navigator.mediaSession.metadata = new MediaMetadata({
         title: currentTrack.title || 'Rivo',
         artist: currentTrack.artist || 'Artist',
-        album: currentTrack.album || 'Single',
+        album: cleanAlbum || 'Rivo',
         artwork: coverSrc ? [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] : [],
       });
       navigator.mediaSession.setActionHandler('play', () => {
@@ -1154,11 +1177,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     let trackToPlay = { ...track };
 
-    const offlineAudioUrl = await getOfflineTrackAudioUrl(track.id);
+    const offlineAudioUrl = await getOfflineTrackAudioUrl(track.id || track._id, track.title, track.artist);
     if (offlineAudioUrl) {
       trackToPlay.audioUrl = offlineAudioUrl;
       trackToPlay.downloaded = true;
       trackToPlay.nativeAudioUri = offlineAudioUrl;
+      trackToPlay.album = (!trackToPlay.album || /https?:\/\/|www\.|youtube|liofy/i.test(trackToPlay.album)) ? 'Rivo' : trackToPlay.album;
+      trackToPlay.source = 'Rivo';
     }
 
     // ── STRICT QUEUE ISOLATION (Quran vs Music) ──
@@ -1275,6 +1300,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             coverUrl: coverSrc,
             cover: coverSrc,
             audioUrl: trackToPlay.audioUrl || '',
+            album: (!trackToPlay.album || /https?:\/\/|www\.|youtube|liofy/i.test(trackToPlay.album)) ? 'Rivo' : trackToPlay.album,
             duration: trackToPlay.duration || 240,
             currentTime: 0,
             liked: isLiked,

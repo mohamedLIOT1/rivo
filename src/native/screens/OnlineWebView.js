@@ -16,7 +16,8 @@ import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useUser } from '../context/UserContext';
-import { downloadTrack as nativeDownloadTrack } from '../services/downloadManager';
+import * as FileSystem from 'expo-file-system';
+import { downloadTrack as nativeDownloadTrack, getDownloadedTracks } from '../services/downloadManager';
 import {
   showMediaNotification,
   updateMediaNotification,
@@ -270,6 +271,15 @@ const INJECTED_JS = `
         toastType: type || 'info',
       }));
     }
+  };
+
+  // Bridge: receive offline audio base64 from native
+  window.__RIVO_RECEIVE_OFFLINE_AUDIO = function(id, dataUri) {
+    try {
+      window.dispatchEvent(new CustomEvent('rivo-receive-offline-audio', {
+        detail: { id: id, dataUri: dataUri }
+      }));
+    } catch(e) {}
   };
 
   true;
@@ -527,6 +537,35 @@ export default function OnlineWebView() {
           break;
         }
 
+        case 'REQUEST_OFFLINE_AUDIO': {
+          const reqId = String(data.id || '');
+          if (!reqId) break;
+          try {
+            const list = await getDownloadedTracks();
+            const found = list.find(t => String(t._id || t.id) === reqId);
+            const fileUri = found?.localAudioUri || found?.nativeAudioUri;
+            if (fileUri) {
+              const fileInfo = await FileSystem.getInfoAsync(fileUri);
+              if (fileInfo.exists && fileInfo.size > 10000) {
+                const base64 = await FileSystem.readAsStringAsync(fileUri, {
+                  encoding: FileSystem.EncodingType.Base64,
+                });
+                webViewRef.current?.injectJavaScript(`
+                  (function() {
+                    try {
+                      if (typeof window.__RIVO_RECEIVE_OFFLINE_AUDIO === 'function') {
+                        window.__RIVO_RECEIVE_OFFLINE_AUDIO(${JSON.stringify(reqId)}, "data:audio/mpeg;base64,${base64}");
+                      }
+                    } catch(e) {}
+                  })();
+                  true;
+                `);
+              }
+            }
+          } catch (e) {}
+          break;
+        }
+
         case 'TOAST': {
           showToast(data.message || '', data.toastType || 'info');
           break;
@@ -589,9 +628,21 @@ export default function OnlineWebView() {
             setInitialLoading(true);
           }
         }}
-        onLoadEnd={() => {
+        onLoadEnd={async () => {
           hasLoadedOnceRef.current = true;
           setInitialLoading(false);
+          try {
+            const list = await getDownloadedTracks();
+            const ids = (list || []).map(t => String(t._id || t.id));
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  window.__RIVO_NATIVE_DOWNLOADED_IDS = ${JSON.stringify(ids)};
+                } catch(e) {}
+              })();
+              true;
+            `);
+          } catch(e) {}
         }}
         onError={() => {
           setInitialLoading(false);

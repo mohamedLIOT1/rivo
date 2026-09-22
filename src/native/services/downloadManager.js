@@ -110,6 +110,20 @@ export const isTrackDownloaded = async (trackId) => {
   return list.some(t => String(t._id || t.id) === String(trackId));
 };
 
+function cleanMetadataString(str, fallback = '') {
+  if (!str) return fallback;
+  const cleaned = String(str)
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/www\.\S+/gi, '')
+    .replace(/youtube\.com\S*/gi, '')
+    .replace(/youtu\.be\S*/gi, '')
+    .replace(/liofy\S*/gi, '')
+    .replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || fallback;
+}
+
 export const downloadTrack = async (track, onProgress) => {
   if (!track) throw new Error('No track provided');
   await ensureDirs();
@@ -117,6 +131,9 @@ export const downloadTrack = async (track, onProgress) => {
   const trackId = String(track._id || track.id);
   const audioFileUri = `${TRACKS_DIR}${trackId}.mp3`;
   const coverFileUri = `${COVERS_DIR}${trackId}.jpg`;
+  const cleanTitle = cleanMetadataString(track.title, 'Track');
+  const cleanArtist = cleanMetadataString(track.artist, 'Artist');
+  const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album)) ? 'Rivo' : cleanMetadataString(track.album, 'Rivo');
 
   if (onProgress) onProgress(5);
 
@@ -133,8 +150,8 @@ export const downloadTrack = async (track, onProgress) => {
       let trackLyrics = track.lyrics || existingRecord?.lyrics || null;
       if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
         try {
-          const qTitle = encodeURIComponent(track.title || '');
-          const qArtist = encodeURIComponent(track.artist || '');
+          const qTitle = encodeURIComponent(cleanTitle);
+          const qArtist = encodeURIComponent(cleanArtist);
           const qId = encodeURIComponent(trackId);
           const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${qId}&title=${qTitle}&artist=${qArtist}`);
           if (lyricsRes.ok) {
@@ -150,6 +167,12 @@ export const downloadTrack = async (track, onProgress) => {
         ...track,
         id: trackId,
         _id: trackId,
+        title: cleanTitle,
+        artist: cleanArtist,
+        album: cleanAlbum || 'Rivo',
+        source: 'Rivo',
+        publisher: 'Rivo',
+        signature: 'Rivo',
         localAudioUri: existingLocalUri,
         nativeAudioUri: existingLocalUri,
         audioUrl: existingLocalUri,
@@ -173,7 +196,7 @@ export const downloadTrack = async (track, onProgress) => {
   if (isDirectRemote(track.nativeAudioUri)) candidates.push(track.nativeAudioUri);
 
   // Candidate 2: Backend Direct Downloader endpoint
-  const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}`;
+  const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`;
   candidates.push(backendDownloadUrl);
 
   // Candidate 3: Backend Stream Resolver
@@ -278,8 +301,8 @@ export const downloadTrack = async (track, onProgress) => {
   let trackLyrics = track.lyrics || null;
   if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
     try {
-      const qTitle = encodeURIComponent(track.title || '');
-      const qArtist = encodeURIComponent(track.artist || '');
+      const qTitle = encodeURIComponent(cleanTitle);
+      const qArtist = encodeURIComponent(cleanArtist);
       const qId = encodeURIComponent(trackId);
       const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${qId}&title=${qTitle}&artist=${qArtist}`);
       if (lyricsRes.ok) {
@@ -295,6 +318,12 @@ export const downloadTrack = async (track, onProgress) => {
     ...track,
     id: trackId,
     _id: trackId,
+    title: cleanTitle,
+    artist: cleanArtist,
+    album: cleanAlbum || 'Rivo',
+    source: 'Rivo',
+    publisher: 'Rivo',
+    signature: 'Rivo',
     localAudioUri: audioFileUri,
     nativeAudioUri: audioFileUri,
     audioUrl: audioFileUri,

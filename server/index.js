@@ -3865,7 +3865,51 @@ app.get('/api/tracks/download', async (req, res) => {
       } catch {}
     }
 
-    const cleanFilename = `${(artist || 'Artist').split(/[|/]/)[0].trim()} - ${(title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim()}`;
+    const sanitizeTag = (str, fallback = 'Rivo') => {
+      if (!str) return fallback;
+      const cleaned = String(str)
+        .replace(/https?:\/\/\S+/gi, '')
+        .replace(/www\.\S+/gi, '')
+        .replace(/youtube\.com\S*/gi, '')
+        .replace(/youtu\.be\S*/gi, '')
+        .replace(/liofy\S*/gi, '')
+        .replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '')
+        .replace(/[/\\?%*:|"<>]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return cleaned || fallback;
+    };
+
+    const cleanArtist = sanitizeTag(artist, 'Artist').split(/[|/]/)[0].trim();
+    const cleanTitle = sanitizeTag(title, 'Track');
+    const cleanFilename = `${cleanArtist} - ${cleanTitle}`;
+
+    let NodeID3 = null;
+    try {
+      NodeID3 = require('node-id3');
+    } catch (e) {}
+
+    const applyRivoTags = (buffer) => {
+      if (!NodeID3 || !buffer || !Buffer.isBuffer(buffer)) return buffer;
+      try {
+        const tags = {
+          title: cleanTitle,
+          artist: cleanArtist,
+          album: 'Rivo',
+          composer: 'Rivo',
+          publisher: 'Rivo',
+          copyright: 'Rivo',
+          comment: {
+            language: 'eng',
+            text: 'Rivo'
+          }
+        };
+        const tagged = NodeID3.write(tags, buffer);
+        return (tagged && Buffer.isBuffer(tagged)) ? tagged : buffer;
+      } catch (err) {
+        return buffer;
+      }
+    };
 
     // Direct MP3 or Audio URLs (non-YouTube)
     if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('youtube.com') && !url.includes('youtu.be')) {
@@ -3873,16 +3917,17 @@ app.get('/api/tracks/download', async (req, res) => {
         const directRes = await axios({
           method: 'get',
           url: url,
-          responseType: 'stream',
+          responseType: 'arraybuffer',
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
           timeout: 30000
         });
+        const taggedBuffer = applyRivoTags(Buffer.from(directRes.data));
         res.set({
           'Content-Type': 'audio/mpeg',
           'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
           'Access-Control-Allow-Origin': '*'
         });
-        return directRes.data.pipe(res);
+        return res.send(taggedBuffer);
       } catch (e) {}
     }
 
@@ -3894,7 +3939,7 @@ app.get('/api/tracks/download', async (req, res) => {
     }
     if (!videoId && (title || artist)) {
       try {
-        videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
+        videoId = await searchYouTubeId(`${cleanArtist} ${cleanTitle}`.trim());
       } catch {}
     }
 
@@ -3911,8 +3956,9 @@ app.get('/api/tracks/download', async (req, res) => {
 
       if (hasYtDlp) {
         const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
+        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" --parse-metadata "Rivo:%(album)s" --parse-metadata "Rivo:%(comment)s" --parse-metadata "Rivo:%(description)s" --parse-metadata "Rivo:%(synopsis)s" --parse-metadata "Rivo:%(purl)s" --parse-metadata "Rivo:%(webpage_url)s" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`;
         const dlSuccess = await new Promise(resolve => {
-          exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`, { timeout: 35000 }, (err) => {
+          exec(ytdlpCmd, { timeout: 35000 }, (err) => {
             if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
               resolve(true);
             } else {
@@ -3931,7 +3977,7 @@ app.get('/api/tracks/download', async (req, res) => {
     }
 
     // Fallback: resolve via public mirror / resolver
-    const streamUrl = await resolveAudioStreamUrl(url, title, artist);
+    const streamUrl = await resolveAudioStreamUrl(url, cleanTitle, cleanArtist);
     if (!streamUrl) {
       return res.status(404).json({ success: false, error: 'Could not resolve audio stream for download' });
     }
@@ -3940,17 +3986,18 @@ app.get('/api/tracks/download', async (req, res) => {
       const headRes = await axios({
         method: 'get',
         url: streamUrl,
-        responseType: 'stream',
+        responseType: 'arraybuffer',
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
         timeout: 30000
       });
 
+      const taggedBuffer = applyRivoTags(Buffer.from(headRes.data));
       res.set({
         'Content-Type': 'audio/mpeg',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
         'Access-Control-Allow-Origin': '*'
       });
-      headRes.data.pipe(res);
+      return res.send(taggedBuffer);
     } catch (streamErr) {
       return res.redirect(streamUrl);
     }
