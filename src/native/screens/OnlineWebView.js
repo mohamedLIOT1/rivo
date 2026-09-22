@@ -161,12 +161,18 @@ const INJECTED_JS = `
           window.__RIVO_MEDIA_ACTION('play');
         }
       } else if (action === 'next') {
+        if (typeof window.__RIVO_NEXT_TRACK === 'function') {
+          try { window.__RIVO_NEXT_TRACK(); return; } catch(e) {}
+        }
         if (typeof handlers['nexttrack'] === 'function') {
           try { handlers['nexttrack'](); return; } catch(e) {}
         }
         var b = document.querySelector('button[title="Next Track"], button[title="Next"]');
         if (b) b.click();
       } else if (action === 'prev') {
+        if (typeof window.__RIVO_PREV_TRACK === 'function') {
+          try { window.__RIVO_PREV_TRACK(); return; } catch(e) {}
+        }
         if (typeof handlers['previoustrack'] === 'function') {
           try { handlers['previoustrack'](); return; } catch(e) {}
         }
@@ -194,18 +200,14 @@ const INJECTED_JS = `
     }
   };
 
-  // 5. Background watchdog: if playing and not paused by user, auto-resume any paused media
-  setInterval(function() {
-    try {
-      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-        document.querySelectorAll('audio, video').forEach(function(el) {
-          if (el.paused) {
-            el.play().catch(function() {});
-          }
-        });
+  // 5. Involuntary pause interceptor: prevent background micro-stutter
+  document.addEventListener('pause', function(e) {
+    if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+      if (e.target && typeof e.target.play === 'function') {
+        e.target.play().catch(function() {});
       }
-    } catch(e) {}
-  }, 800);
+    }
+  }, true);
 
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
@@ -246,28 +248,26 @@ export default function OnlineWebView() {
   const [canGoBack, setCanGoBack] = useState(false);
   const currentTrackRef = useRef(null);
 
-  // ─── AppState Background Audio Keeper (Resumes playback when moving to background) ───
+  // ─── AppState Background Audio Keeper (Resumes playback immediately on background) ───
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
-        setTimeout(() => {
-          webViewRef.current?.injectJavaScript(`
-            (function() {
-              try {
-                if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-                  var iframes = document.querySelectorAll('iframe[src*="youtube"]');
-                  iframes.forEach(function(f) {
-                    try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
-                  });
-                  document.querySelectorAll('audio, video').forEach(function(el) {
-                    if (el.paused) el.play().catch(function() {});
-                  });
-                }
-              } catch(e) {}
-            })();
-            true;
-          `);
-        }, 250);
+        webViewRef.current?.injectJavaScript(`
+          (function() {
+            try {
+              if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+                var iframes = document.querySelectorAll('iframe[src*="youtube"]');
+                iframes.forEach(function(f) {
+                  try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
+                });
+                document.querySelectorAll('audio, video').forEach(function(el) {
+                  if (el.paused) el.play().catch(function() {});
+                });
+              }
+            } catch(e) {}
+          })();
+          true;
+        `);
       }
     });
     return () => sub.remove();
@@ -310,6 +310,23 @@ export default function OnlineWebView() {
       webViewRef.current?.injectJavaScript(`
         (function() {
           try {
+            if ('${action}' === 'next') {
+              if (typeof window.__RIVO_NEXT_TRACK === 'function') {
+                window.__RIVO_NEXT_TRACK();
+                return;
+              }
+            } else if ('${action}' === 'prev') {
+              if (typeof window.__RIVO_PREV_TRACK === 'function') {
+                window.__RIVO_PREV_TRACK();
+                return;
+              }
+            } else if ('${action}' === 'play_pause' || '${action}' === 'toggle') {
+              if (typeof window.__RIVO_TOGGLE_PLAY === 'function') {
+                window.__RIVO_TOGGLE_PLAY();
+                return;
+              }
+            }
+
             if (typeof window.__RIVO_MEDIA_ACTION === 'function') {
               window.__RIVO_MEDIA_ACTION('${action}');
             } else if (window.__RIVO_MEDIA_HANDLERS) {
@@ -497,6 +514,9 @@ export default function OnlineWebView() {
         allowsInlineMediaPlayback={true}
         allowsPictureInPictureMediaPlayback={true}
         useWebKit={true}
+        bounces={false}
+        allowsBackForwardNavigationGestures={false}
+        scrollEnabled={true}
         onShouldStartLoadWithRequest={(request) => {
           if (request.url && request.url.includes('/api/tracks/download')) {
             try {
