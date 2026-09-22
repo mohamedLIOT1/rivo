@@ -144,30 +144,39 @@ export const resolveAudioStream = async (track) => {
   const ytId = rawUrl?.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1] ||
                (rawUrl?.length === 11 ? rawUrl : null);
   if (ytId) {
-    const mirrors = [
-      `https://inv.nadeko.net/api/v1/videos/${ytId}?fields=adaptiveFormats`,
-      `https://invidious.jing.rocks/api/v1/videos/${ytId}?fields=adaptiveFormats`,
-      `https://yt.artemislena.eu/api/v1/videos/${ytId}?fields=adaptiveFormats`,
-      `https://pipedapi.kavin.rocks/streams/${ytId}`,
-    ];
-    for (const ep of mirrors) {
-      try {
-        const res = await fetch(ep, { headers: { 'Accept': 'application/json' } });
-        if (res.ok) {
-          const d = await res.json();
-          const formats = d.adaptiveFormats || d.audioStreams || [];
-          const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
-                        formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
-          if (audio?.url) {
-            if (trackId) streamCache.set(trackId, audio.url);
-            return audio.url;
-          }
-        }
-      } catch {}
+    const mirrorStream = await resolveClientSideYouTubeStream(ytId);
+    if (mirrorStream) {
+      if (trackId) streamCache.set(trackId, mirrorStream);
+      return mirrorStream;
     }
   }
 
   return rawUrl || null;
+};
+
+export const resolveClientSideYouTubeStream = async (ytId) => {
+  if (!ytId) return null;
+  const mirrors = [
+    `https://inv.nadeko.net/api/v1/videos/${ytId}?fields=adaptiveFormats`,
+    `https://invidious.jing.rocks/api/v1/videos/${ytId}?fields=adaptiveFormats`,
+    `https://yt.artemislena.eu/api/v1/videos/${ytId}?fields=adaptiveFormats`,
+    `https://pipedapi.kavin.rocks/streams/${ytId}`,
+  ];
+  for (const ep of mirrors) {
+    try {
+      const res = await fetch(ep, { headers: { 'Accept': 'application/json' } });
+      if (res.ok) {
+        const d = await res.json();
+        const formats = d.adaptiveFormats || d.audioStreams || [];
+        const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
+                      formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
+        if (audio?.url) {
+          return audio.url;
+        }
+      }
+    } catch {}
+  }
+  return null;
 };
 
 export const resolveYouTubeStream = async (trackId) => {

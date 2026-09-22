@@ -392,6 +392,12 @@ export const downloadTrack = async (track, onProgress) => {
     }
   } catch {}
 
+  // Extract YouTube ID if present
+  const rawUrl = track.audioUrl || track.url || '';
+  const ytId = rawUrl?.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1] ||
+               (rawUrl?.length === 11 ? rawUrl : null) ||
+               (track.source === 'YouTube' ? (rawUrl?.match(/^([a-zA-Z0-9_-]{11})$/)?.[1] || trackId.match(/^([a-zA-Z0-9_-]{11})$/)?.[1]) : null);
+
   // Gather candidate download URLs in order of priority
   const candidates = [];
 
