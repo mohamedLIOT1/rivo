@@ -3781,16 +3781,24 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
     ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   }
 
-  // 1. Try yt-dlp first if ytUrl is available
+  // 1. Try yt-dlp with iOS/TV player client to bypass YouTube datacenter bot detection
   if (!streamUrl && ytUrl && (ytUrl.includes('youtube.com') || ytUrl.includes('youtu.be'))) {
     try {
       const { exec } = require('child_process');
       const direct = await new Promise((resolve) => {
-        exec(`yt-dlp --extractor-args "youtube:player_client=android,web" --no-check-certificates -f "ba[ext=m4a]/ba/b" -g "${ytUrl}"`, { timeout: 12000 }, (err, stdout) => {
+        const cmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -g "${ytUrl}"`;
+        exec(cmd, { timeout: 15000 }, (err, stdout) => {
           if (!err && stdout && stdout.trim()) {
             resolve(stdout.trim().split('\n')[0]);
           } else {
-            resolve(null);
+            // Second attempt with tv client
+            exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -g "${ytUrl}"`, { timeout: 12000 }, (err2, stdout2) => {
+              if (!err2 && stdout2 && stdout2.trim()) {
+                resolve(stdout2.trim().split('\n')[0]);
+              } else {
+                resolve(null);
+              }
+            });
           }
         });
       });
@@ -3798,45 +3806,22 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
     } catch {}
   }
 
-  // 2. Cobalt API fallback
+  // 2. Multi-instance stream resolvers fallback
   if (!streamUrl && videoId) {
-    const cobaltEndpoints = [
-      'https://api.cobalt.tools/api/json',
-      'https://cobalt.stream/api/json',
-      'https://co.wuk.sh/api/json'
+    const streamResolvers = [
+      `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+      `https://invidious.jing.rocks/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+      `https://yt.artemislena.eu/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+      `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+      `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+      `https://pipedapi.kavin.rocks/streams/${videoId}`,
     ];
-    for (const ep of cobaltEndpoints) {
+    for (const ep of streamResolvers) {
       try {
-        const cRes = await axios.post(ep, {
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          downloadMode: 'audio',
-          audioFormat: 'mp3',
-          isAudioOnly: true
-        }, { headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }, timeout: 6000 });
-        const cData = cRes.data;
-        const u = cData?.url || cData?.audio || (cData?.picker && cData?.picker[0]?.url);
-        if (u) {
-          streamUrl = u;
-          break;
-        }
-      } catch {}
-    }
-  }
-
-  // 3. Invidious instances fallback
-  if (!streamUrl && videoId) {
-    const invidious = [
-      'https://inv.nadeko.net',
-      'https://yewtu.be',
-      'https://yt.artemislena.eu',
-      'https://invidious.jing.rocks',
-      'https://invidious.nerdvpn.de'
-    ];
-    for (const base of invidious) {
-      try {
-        const invRes = await axios.get(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, { timeout: 4500 });
-        const formats = invRes.data?.adaptiveFormats || [];
-        const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+        const invRes = await axios.get(ep, { timeout: 4000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const formats = invRes.data?.adaptiveFormats || invRes.data?.audioStreams || [];
+        const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
+                      formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
         if (audio?.url) {
           streamUrl = audio.url;
           break;
@@ -4020,8 +4005,8 @@ app.get('/api/tracks/download', async (req, res) => {
 
       if (hasYtDlp) {
         const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
-        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`;
-        const dlSuccess = await new Promise(resolve => {
+        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
+        let dlSuccess = await new Promise(resolve => {
           exec(ytdlpCmd, { timeout: 35000 }, (err) => {
             if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
               resolve(true);
@@ -4031,6 +4016,21 @@ app.get('/api/tracks/download', async (req, res) => {
             }
           });
         });
+
+        // Retry with tv player client if ios client fails
+        if (!dlSuccess) {
+          const ytdlpCmdTv = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
+          dlSuccess = await new Promise(resolve => {
+            exec(ytdlpCmdTv, { timeout: 25000 }, (err) => {
+              if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
+                resolve(true);
+              } else {
+                try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch (e) {}
+                resolve(false);
+              }
+            });
+          });
+        }
 
         if (dlSuccess) {
           const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';

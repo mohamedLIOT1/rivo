@@ -216,44 +216,24 @@ function extractYouTubeId(input) {
 
 async function resolveClientSideYouTubeStream(videoId) {
   if (!videoId) return null;
-  const cobaltEndpoints = [
-    'https://api.cobalt.tools/api/json',
-    'https://cobalt.stream/api/json',
-    'https://co.wuk.sh/api/json'
+  const mirrors = [
+    `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://invidious.jing.rocks/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://yt.artemislena.eu/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://pipedapi.kavin.rocks/streams/${videoId}`,
   ];
-  for (const ep of cobaltEndpoints) {
+  for (const ep of mirrors) {
     try {
       const res = await fetch(ep, {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: `https://www.youtube.com/watch?v=${videoId}`,
-          downloadMode: 'audio',
-          audioFormat: 'mp3',
-          isAudioOnly: true
-        })
+        headers: { 'Accept': 'application/json' },
       });
       if (res.ok) {
         const data = await res.json();
-        const u = data.url || data.audio || (data.picker && data.picker[0]?.url);
-        if (u) return u;
-      }
-    } catch {}
-  }
-  const invidious = [
-    'https://inv.nadeko.net',
-    'https://yewtu.be',
-    'https://yt.artemislena.eu',
-    'https://invidious.jing.rocks',
-    'https://invidious.nerdvpn.de'
-  ];
-  for (const base of invidious) {
-    try {
-      const res = await fetch(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`);
-      if (res.ok) {
-        const data = await res.json();
-        const formats = data.adaptiveFormats || [];
-        const audio = formats.find(f => f.type?.includes('audio/mp4')) || formats.find(f => f.type?.includes('audio'));
+        const formats = data.adaptiveFormats || data.audioStreams || [];
+        const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
+                      formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
         if (audio?.url) return audio.url;
       }
     } catch {}
@@ -370,11 +350,21 @@ export const downloadTrack = async (track, onProgress) => {
 
   // Candidate 3: Backend Stream Resolver
   try {
-    const streamRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
+    const streamRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`);
     if (streamRes.ok) {
       const streamData = await streamRes.json();
       if (streamData?.url && typeof streamData.url === 'string') {
         candidates.push(streamData.url);
+      }
+    }
+  } catch (e) {}
+
+  try {
+    const resolveRes = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`);
+    if (resolveRes.ok) {
+      const resolveData = await resolveRes.json();
+      if (resolveData?.url && typeof resolveData.url === 'string') {
+        candidates.push(resolveData.url);
       }
     }
   } catch (e) {}

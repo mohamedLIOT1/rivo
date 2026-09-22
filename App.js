@@ -73,12 +73,28 @@ const TABS = [
 function MainAppShell() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
+  const isIOS = Platform.OS === 'ios';
 
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
     }
   }, []);
+
+  // On iOS, always run the Native Shell as the primary interface.
+  // This gives native AVAudioSession + expo-av playback with 100% background audio support,
+  // lock screen media controls, and direct local offline vault downloads.
+  // The Web Portal is accessible at any time via the drawer menu (☰ -> Rivo Web Portal).
+  if (isIOS) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
+        <ErrorBoundary>
+          <OfflineNativeShell isIOSPrimary={true} />
+        </ErrorBoundary>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -104,9 +120,9 @@ function MainAppShell() {
  *
  * The native React Native app shell for Offline Vault, Quran, and local playback.
  */
-function OfflineNativeShell() {
+function OfflineNativeShell({ isIOSPrimary = false }) {
   const { appMode } = useConnectivity();
-  const [activeTab, setActiveTab] = useState('offline');
+  const [activeTab, setActiveTab] = useState(isIOSPrimary || appMode === 'online' ? 'home' : 'offline');
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
