@@ -228,6 +228,8 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                 [self->_silentPlayer play];
             }
 
+            BOOL isPlaying = [options[@"isPlaying"] boolValue];
+
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
 
             NSString *title = options[@"title"];
