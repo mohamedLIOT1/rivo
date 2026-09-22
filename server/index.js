@@ -3913,8 +3913,16 @@ app.get('/api/tracks/download', async (req, res) => {
       NodeID3 = require('node-id3');
     } catch (e) {}
 
+    const isMp3Buffer = (buf) => {
+      if (!buf || buf.length < 4) return false;
+      if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return true; // ID3
+      if (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) return true; // MP3 sync
+      return false;
+    };
+
     const applyRivoTags = (buffer) => {
       if (!NodeID3 || !buffer || !Buffer.isBuffer(buffer)) return buffer;
+      if (!isMp3Buffer(buffer)) return buffer; // Never corrupt non-MP3 containers (m4a/webm/aac)
       try {
         const tags = {
           title: cleanTitle,
@@ -3944,17 +3952,16 @@ app.get('/api/tracks/download', async (req, res) => {
         const directRes = await axios({
           method: 'get',
           url: url,
-          responseType: 'arraybuffer',
+          responseType: 'stream',
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-          timeout: 30000
+          timeout: 45000
         });
-        const taggedBuffer = applyRivoTags(Buffer.from(directRes.data));
         res.set({
           'Content-Type': 'audio/mpeg',
           'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
           'Access-Control-Allow-Origin': '*'
         });
-        return res.send(taggedBuffer);
+        return directRes.data.pipe(res);
       } catch (e) {}
     }
 
@@ -3983,7 +3990,7 @@ app.get('/api/tracks/download', async (req, res) => {
 
       if (hasYtDlp) {
         const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
-        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" --parse-metadata "Rivo:%(comment)s" --parse-metadata "Rivo:%(description)s" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`;
+        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,web" -f "ba[ext=m4a]/ba/b/18" -o "${tempFile}" "${ytUrl}"`;
         const dlSuccess = await new Promise(resolve => {
           exec(ytdlpCmd, { timeout: 35000 }, (err) => {
             if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
@@ -3996,6 +4003,9 @@ app.get('/api/tracks/download', async (req, res) => {
         });
 
         if (dlSuccess) {
+          res.set({
+            'Access-Control-Allow-Origin': '*'
+          });
           return res.download(tempFile, `${cleanFilename}.m4a`, () => {
             try { fs.unlinkSync(tempFile); } catch (e) {}
           });
@@ -4010,22 +4020,22 @@ app.get('/api/tracks/download', async (req, res) => {
     }
 
     try {
-      const headRes = await axios({
+      const streamRes = await axios({
         method: 'get',
         url: streamUrl,
-        responseType: 'arraybuffer',
+        responseType: 'stream',
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-        timeout: 30000
+        timeout: 45000
       });
 
-      const taggedBuffer = applyRivoTags(Buffer.from(headRes.data));
       res.set({
         'Content-Type': 'audio/mpeg',
         'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
         'Access-Control-Allow-Origin': '*'
       });
-      return res.send(taggedBuffer);
+      return streamRes.data.pipe(res);
     } catch (streamErr) {
+      res.set({ 'Access-Control-Allow-Origin': '*' });
       return res.redirect(streamUrl);
     }
   } catch (e) {

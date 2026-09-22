@@ -112,7 +112,7 @@ export default function HomeScreen({
               <button 
                 onClick={() => {
                   if (displayTracks.length > 0) {
-                    onSelectTrack(displayTracks[0]);
+                    onSelectTrack(displayTracks[0], displayTracks);
                   }
                 }}
                 className="flex-1 sm:flex-initial bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-black text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-2 cursor-pointer"
@@ -212,7 +212,7 @@ export default function HomeScreen({
             return (
               <div 
                 key={track.id || track._id || index}
-                onClick={() => onSelectTrack(track)}
+                onClick={() => onSelectTrack(track, quickItems)}
                 className={`rounded-xl brutal-border p-2 flex items-center justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
                   isDark 
                     ? 'bg-[#141d1b] hover:bg-[#1a2623] border-zinc-700' 
@@ -282,7 +282,7 @@ export default function HomeScreen({
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectTrack(track);
+                      onSelectTrack(track, quickItems);
                     }}
                     className="w-8 h-8 rounded-lg bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn shrink-0 cursor-pointer" 
                     title="Play"
@@ -403,7 +403,7 @@ export default function HomeScreen({
             return (
               <div 
                 key={track.id || track._id || index}
-                onClick={() => onSelectTrack(track)}
+                onClick={() => onSelectTrack(track, displayTracks)}
                 className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
                   isDark 
                     ? 'bg-[#141d1b] hover:bg-[#1a2623] border-zinc-700' 
@@ -479,7 +479,7 @@ export default function HomeScreen({
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectTrack(track);
+                      onSelectTrack(track, displayTracks);
                     }}
                     className="flex-1 bg-[#ded2bb] hover:bg-[#17a398] text-[#0b1110] font-display font-black text-[11px] py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
                   >

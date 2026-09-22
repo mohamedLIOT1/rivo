@@ -538,6 +538,8 @@ export default function OnlineWebView() {
         }
 
         case 'REQUEST_OFFLINE_AUDIO': {
+          // iOS WKWebView crashes on multi-megabyte injectJavaScript calls
+          if (Platform.OS === 'ios') break;
           const reqId = String(data.id || '');
           if (!reqId) break;
           try {
@@ -546,7 +548,7 @@ export default function OnlineWebView() {
             const fileUri = found?.localAudioUri || found?.nativeAudioUri;
             if (fileUri) {
               const fileInfo = await FileSystem.getInfoAsync(fileUri);
-              if (fileInfo.exists && fileInfo.size > 10000) {
+              if (fileInfo.exists && fileInfo.size > 10000 && fileInfo.size < 10000000) {
                 const base64 = await FileSystem.readAsStringAsync(fileUri, {
                   encoding: FileSystem.EncodingType.Base64,
                 });

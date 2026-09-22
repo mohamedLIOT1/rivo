@@ -1277,6 +1277,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // Signal that the next currentTrack change should autoplay
     shouldPlayRef.current = true;
+    currentTrackRef.current = trackToPlay;
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
 
@@ -1621,10 +1622,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueueIndex(nextIdx);
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
       } else {
-        const nextIdx = (idx + 1) % activeList.length;
+        let targetList = activeList;
+        let nextIdx = (idx + 1) % targetList.length;
+        if (targetList.length <= 1 && tracksRef.current && tracksRef.current.length > 1) {
+          const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+          if (pool.length > 1) {
+            targetList = pool;
+            const curIdxInPool = pool.findIndex(t => String(t.id || t._id) === curId);
+            nextIdx = (curIdxInPool + 1) % pool.length;
+          }
+        }
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
-        playTrack(activeList[nextIdx], activeList, false, nextIdx);
+        playTrack(targetList[nextIdx], targetList, false, nextIdx);
       }
     }
     // Force playing state so song starts automatically
@@ -1636,6 +1646,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, [playNextTrack]);
 
   const playPrevTrack = useCallback(() => {
+    if ((currentTimeRef.current || 0) > 3) {
+      if (seekToRef.current) seekToRef.current(0);
+      return;
+    }
     isTransitionTriggeredRef.current = false;
     isSeamlessYtHandoffRef.current = false;
     const isCurQuran = isQuranContent(currentTrackRef.current);
