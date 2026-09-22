@@ -289,7 +289,7 @@ export const downloadTrack = async (track, onProgress) => {
     }
   }
 
-  let audioFileUri = audioFileUriM4a; // Default to m4a for YouTube streams
+  let audioFileUri = audioFileUriMp3; // Default to mp3 for audio streams
   try {
     const existingInfo = await FileSystem.getInfoAsync(existingLocalUri);
     if (existingInfo.exists && existingInfo.size > 10000) {
@@ -349,11 +349,13 @@ export const downloadTrack = async (track, onProgress) => {
   candidates.push(backendDownloadUrl);
 
   // Candidate 3: Backend Stream Resolver
+  const isValidAudioStreamUrl = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com/watch') && !u.includes('youtu.be/') && !u.includes('sndcdn.com/preview');
+
   try {
     const streamRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`);
     if (streamRes.ok) {
       const streamData = await streamRes.json();
-      if (streamData?.url && typeof streamData.url === 'string') {
+      if (isValidAudioStreamUrl(streamData?.url)) {
         candidates.push(streamData.url);
       }
     }
@@ -363,7 +365,7 @@ export const downloadTrack = async (track, onProgress) => {
     const resolveRes = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`);
     if (resolveRes.ok) {
       const resolveData = await resolveRes.json();
-      if (resolveData?.url && typeof resolveData.url === 'string') {
+      if (isValidAudioStreamUrl(resolveData?.url)) {
         candidates.push(resolveData.url);
       }
     }
@@ -406,8 +408,32 @@ export const downloadTrack = async (track, onProgress) => {
       if (res && (res.status === 200 || res.status === 206)) {
         const check = await FileSystem.getInfoAsync(audioFileUri);
         if (check.exists && check.size > 10000) {
-          success = true;
-          break;
+          // Verify downloaded payload is valid audio and not an HTML or JSON error response
+          let isPayloadCorrupt = false;
+          try {
+            const headSample = await FileSystem.readAsStringAsync(audioFileUri, {
+              encoding: FileSystem.EncodingType.UTF8,
+              length: 64,
+              position: 0,
+            });
+            if (headSample && (
+              headSample.startsWith('<!DOCTYPE') ||
+              headSample.startsWith('<html') ||
+              headSample.startsWith('{"') ||
+              headSample.includes('<head>') ||
+              headSample.includes('"error"')
+            )) {
+              isPayloadCorrupt = true;
+            }
+          } catch {}
+
+          if (!isPayloadCorrupt) {
+            success = true;
+            break;
+          } else {
+            console.warn(`[downloadManager] Candidate ${i + 1} returned text/html/json error payload instead of audio`);
+            await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+          }
         }
       }
     } catch (candidateErr) {
@@ -504,10 +530,12 @@ export const downloadTrack = async (track, onProgress) => {
 
 export const removeDownloadedTrack = async (trackId) => {
   const idStr = String(trackId);
-  const audioFileUri = `${TRACKS_DIR}${idStr}.mp3`;
+  const audioFileUriMp3 = `${TRACKS_DIR}${idStr}.mp3`;
+  const audioFileUriM4a = `${TRACKS_DIR}${idStr}.m4a`;
   const coverFileUri = `${COVERS_DIR}${idStr}.jpg`;
 
-  await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+  await FileSystem.deleteAsync(audioFileUriMp3, { idempotent: true }).catch(() => {});
+  await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
   await FileSystem.deleteAsync(coverFileUri, { idempotent: true }).catch(() => {});
 
   const existing = await getDownloadedTracks();

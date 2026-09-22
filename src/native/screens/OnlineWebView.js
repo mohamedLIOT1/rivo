@@ -114,8 +114,9 @@ const INJECTED_JS = `
         window.__RIVO_IS_PLAYING = true;
         window.__RIVO_USER_PAUSED = false;
 
+        var played = false;
         if (typeof handlers['play'] === 'function') {
-          try { handlers['play'](); } catch(e) {}
+          try { handlers['play'](); played = true; } catch(e) {}
         }
         var iframes = document.querySelectorAll('iframe[src*="youtube"]');
         iframes.forEach(function(f) {
@@ -124,8 +125,10 @@ const INJECTED_JS = `
         document.querySelectorAll('audio, video').forEach(function(a) {
           try { a.play(); } catch(e) {}
         });
-        var b = document.querySelector('button[title="Play"], button[title="Pause"]');
-        if (b) b.click();
+        if (!played) {
+          var b = document.querySelector('button[title="Play"], button[aria-label="Play"]');
+          if (b) b.click();
+        }
 
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -137,8 +140,9 @@ const INJECTED_JS = `
         window.__RIVO_IS_PLAYING = false;
         window.__RIVO_USER_PAUSED = true;
 
+        var paused = false;
         if (typeof handlers['pause'] === 'function') {
-          try { handlers['pause'](); } catch(e) {}
+          try { handlers['pause'](); paused = true; } catch(e) {}
         }
         var iframes = document.querySelectorAll('iframe[src*="youtube"]');
         iframes.forEach(function(f) {
@@ -147,8 +151,10 @@ const INJECTED_JS = `
         document.querySelectorAll('audio, video').forEach(function(a) {
           try { a.pause(); } catch(e) {}
         });
-        var b = document.querySelector('button[title="Pause"], button[title="Play"]');
-        if (b) b.click();
+        if (!paused) {
+          var b = document.querySelector('button[title="Pause"], button[aria-label="Pause"]');
+          if (b) b.click();
+        }
 
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -163,22 +169,26 @@ const INJECTED_JS = `
           window.__RIVO_MEDIA_ACTION('play');
         }
       } else if (action === 'next') {
+        window.__RIVO_USER_PAUSED = false;
+        window.__RIVO_IS_PLAYING = true;
         if (typeof window.__RIVO_NEXT_TRACK === 'function') {
           try { window.__RIVO_NEXT_TRACK(); return; } catch(e) {}
         }
         if (typeof handlers['nexttrack'] === 'function') {
           try { handlers['nexttrack'](); return; } catch(e) {}
         }
-        var b = document.querySelector('button[title="Next Track"], button[title="Next"]');
+        var b = document.querySelector('button[title="Next Track"], button[title="Next"], button[aria-label*="Next"]');
         if (b) b.click();
       } else if (action === 'prev') {
+        window.__RIVO_USER_PAUSED = false;
+        window.__RIVO_IS_PLAYING = true;
         if (typeof window.__RIVO_PREV_TRACK === 'function') {
           try { window.__RIVO_PREV_TRACK(); return; } catch(e) {}
         }
         if (typeof handlers['previoustrack'] === 'function') {
           try { handlers['previoustrack'](); return; } catch(e) {}
         }
-        var b = document.querySelector('button[title="Previous Track"], button[title="Previous"]');
+        var b = document.querySelector('button[title="Previous Track"], button[title="Previous"], button[aria-label*="Previous"]');
         if (b) b.click();
       } else if (action === 'repeat') {
         if (typeof handlers['repeat'] === 'function') {

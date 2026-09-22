@@ -3759,6 +3759,108 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
   }
 });
 
+// ──────────────────────────────────────────
+// Resilient SoundCloud Audio Stream Resolver (Bypasses YouTube datacenter bot blocks)
+// ──────────────────────────────────────────
+let scClientIdCache = {
+  clientId: null,
+  fetchedAt: 0
+};
+
+async function getSoundCloudClientId() {
+  const now = Date.now();
+  if (scClientIdCache.clientId && (now - scClientIdCache.fetchedAt < 2 * 60 * 60 * 1000)) {
+    return scClientIdCache.clientId;
+  }
+  try {
+    const scHtmlRes = await axios.get('https://soundcloud.com', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 5000
+    });
+    const scriptUrls = [...scHtmlRes.data.matchAll(/<script[^>]+src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map(m => m[1]);
+    for (const sUrl of scriptUrls.slice(-6)) {
+      try {
+        const sRes = await axios.get(sUrl, { timeout: 4000 });
+        const m = sRes.data.match(/client_id[:=]"([a-zA-Z0-9]{32})"/);
+        if (m && m[1]) {
+          scClientIdCache = { clientId: m[1], fetchedAt: now };
+          return m[1];
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.warn('[SoundCloud] Failed to scrape client ID:', err.message);
+  }
+  return scClientIdCache.clientId || 'Pb72ranhoyt6gw7hM7TkzUItXlMWSNSo';
+}
+
+async function resolveSoundCloudAudioStream(title = '', artist = '') {
+  try {
+    const cleanT = String(title || '').replace(/[\[\(].*?[\]\)]/g, '').replace(/https?:\/\/\S+/g, '').trim();
+    const cleanA = String(artist || '').replace(/[\[\(].*?[\]\)]/g, '').replace(/https?:\/\/\S+/g, '').trim();
+    const query = `${cleanA} ${cleanT}`.trim();
+    if (!query) return null;
+
+    const clientId = await getSoundCloudClientId();
+    if (!clientId) return null;
+
+    const searchUrl = `https://api-v2.soundcloud.com/search?q=${encodeURIComponent(query)}&client_id=${clientId}&limit=10`;
+    const searchRes = await axios.get(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      timeout: 5000
+    });
+
+    const items = searchRes.data?.collection || [];
+    if (!Array.isArray(items) || items.length === 0) return null;
+
+    const validItems = items.filter(it => {
+      if (!it || !it.title || !it.media?.transcodings) return false;
+      const durSec = (it.duration || 0) / 1000;
+      return durSec >= 30 && durSec <= 900;
+    });
+
+    const scored = validItems.map(it => {
+      let score = 0;
+      const itTitle = (it.title || '').toLowerCase();
+      const isCover = /cover|كفر|ريمكس|remix|slowed|reverb/i.test(itTitle);
+      const queryWantsCover = /cover|remix/i.test(query.toLowerCase());
+      if (isCover && !queryWantsCover) score -= 50;
+      if (it.playback_count) score += Math.min(50, Math.log10(it.playback_count + 1) * 10);
+      return { item: it, score };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+    const chosenItems = scored.length > 0 ? scored.map(s => s.item) : validItems;
+
+    for (const item of chosenItems) {
+      const trans = item.media?.transcodings || [];
+      const prog = trans.find(t => t.format?.protocol === 'progressive');
+      if (prog && prog.url) {
+        try {
+          const streamInfoRes = await axios.get(`${prog.url}?client_id=${clientId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            timeout: 4000
+          });
+          const streamUrl = streamInfoRes.data?.url;
+          if (streamUrl && streamUrl.startsWith('http')) {
+            return {
+              streamUrl,
+              duration: Math.round((item.duration || 0) / 1000),
+              title: item.title,
+              artist: item.user?.username || cleanA
+            };
+          }
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('[SoundCloud Audio Stream] Resolution error:', err.message);
+  }
+  return null;
+}
+
 // Direct Audio Stream Downloader with resilient multi-tier fallback
 async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
   let streamUrl = null;
@@ -3828,6 +3930,16 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
         }
       } catch {}
     }
+  }
+
+  // 3. Resilient SoundCloud Progressive MP3 stream fallback (reliable on cloud servers)
+  if (!streamUrl && (title || artist)) {
+    try {
+      const sc = await resolveSoundCloudAudioStream(title, artist);
+      if (sc && sc.streamUrl) {
+        streamUrl = sc.streamUrl;
+      }
+    } catch {}
   }
 
   return streamUrl;
@@ -4052,7 +4164,33 @@ app.get('/api/tracks/download', async (req, res) => {
       }
     }
 
-    // Fallback: resolve via public mirror / resolver
+    // Fallback tier 1: Try SoundCloud progressive MP3 directly (bulletproof on cloud datacenter IPs)
+    if (cleanTitle || cleanArtist) {
+      try {
+        const sc = await resolveSoundCloudAudioStream(cleanTitle, cleanArtist);
+        if (sc && sc.streamUrl) {
+          const streamRes = await axios({
+            method: 'get',
+            url: sc.streamUrl,
+            responseType: 'stream',
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+            timeout: 45000
+          });
+
+          const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+          res.set({
+            'Content-Type': 'audio/mpeg',
+            'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.mp3`,
+            'Access-Control-Allow-Origin': '*'
+          });
+          return streamRes.data.pipe(res);
+        }
+      } catch (scErr) {
+        console.warn('[download] SoundCloud fallback stream error:', scErr.message);
+      }
+    }
+
+    // Fallback tier 2: resolve via public mirror / resolver
     const streamTarget = url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : '');
     const streamUrl = await resolveAudioStreamUrl(streamTarget, cleanTitle, cleanArtist);
     if (!streamUrl) {

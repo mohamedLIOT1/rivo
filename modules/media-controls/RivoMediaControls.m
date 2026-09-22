@@ -1,6 +1,7 @@
 #import "RivoMediaControls.h"
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
+#import <WebKit/WebKit.h>
 
 static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
 
@@ -113,6 +114,36 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     }
 }
 
+- (WKWebView *)findActiveWebView {
+    for (UIWindow *window in [UIApplication sharedApplication].windows) {
+        WKWebView *found = [self searchWebViewInView:window];
+        if (found) return found;
+    }
+    if (@available(iOS 13.0, *)) {
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                for (UIWindow *window in windowScene.windows) {
+                    WKWebView *found = [self searchWebViewInView:window];
+                    if (found) return found;
+                }
+            }
+        }
+    }
+    return nil;
+}
+
+- (WKWebView *)searchWebViewInView:(UIView *)view {
+    if ([view isKindOfClass:[WKWebView class]]) {
+        return (WKWebView *)view;
+    }
+    for (UIView *subview in view.subviews) {
+        WKWebView *found = [self searchWebViewInView:subview];
+        if (found) return found;
+    }
+    return nil;
+}
+
 - (void)setupRemoteCommands {
     if (_remoteCommandsConfigured) return;
     _remoteCommandsConfigured = YES;
@@ -138,9 +169,47 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-        now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
-        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPlay" expirationHandler:^{
+            if (bgTask != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                bgTask = UIBackgroundTaskInvalid;
+            }
+        }];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+
+                if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer play];
+                }
+
+                WKWebView *wv = [self findActiveWebView];
+                if (wv) {
+                    if (@available(iOS 15.0, *)) {
+                        [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
+                    }
+                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = false; window.__RIVO_IS_PLAYING = true; if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('play'); } else if (typeof window.__RIVO_TOGGLE_PLAY === 'function') { window.__RIVO_TOGGLE_PLAY(); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
+                        if (bgTask != UIBackgroundTaskInvalid) {
+                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                            bgTask = UIBackgroundTaskInvalid;
+                        }
+                    }];
+                } else {
+                    if (bgTask != UIBackgroundTaskInvalid) {
+                        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                        bgTask = UIBackgroundTaskInvalid;
+                    }
+                }
+            } @catch (NSException *e) {
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
+            }
+        });
 
         [self sendActionSafely:@"play"];
         return MPRemoteCommandHandlerStatusSuccess;
@@ -148,9 +217,47 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-        now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
-        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPause" expirationHandler:^{
+            if (bgTask != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                bgTask = UIBackgroundTaskInvalid;
+            }
+        }];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+
+                if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer pause];
+                }
+
+                WKWebView *wv = [self findActiveWebView];
+                if (wv) {
+                    if (@available(iOS 15.0, *)) {
+                        [wv pauseAllMediaPlaybackWithCompletionHandler:nil];
+                    }
+                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = true; window.__RIVO_IS_PLAYING = false; if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('pause'); } else if (typeof window.__RIVO_TOGGLE_PLAY === 'function') { window.__RIVO_TOGGLE_PLAY(); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
+                        if (bgTask != UIBackgroundTaskInvalid) {
+                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                            bgTask = UIBackgroundTaskInvalid;
+                        }
+                    }];
+                } else {
+                    if (bgTask != UIBackgroundTaskInvalid) {
+                        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                        bgTask = UIBackgroundTaskInvalid;
+                    }
+                }
+            } @catch (NSException *e) {
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
+            }
+        });
 
         [self sendActionSafely:@"pause"];
         return MPRemoteCommandHandlerStatusSuccess;
@@ -158,11 +265,54 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.togglePlayPauseCommand setEnabled:YES];
     [center.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-        double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
-        BOOL willPlay = (currentRate <= 0.0);
-        now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
-        [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaToggle" expirationHandler:^{
+            if (bgTask != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                bgTask = UIBackgroundTaskInvalid;
+            }
+        }];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
+                BOOL willPlay = (currentRate <= 0.0);
+                now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+
+                if (willPlay) {
+                    if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) [self->_silentPlayer play];
+                } else {
+                    if (self->_silentPlayer && [self->_silentPlayer isPlaying]) [self->_silentPlayer pause];
+                }
+
+                WKWebView *wv = [self findActiveWebView];
+                if (wv) {
+                    if (@available(iOS 15.0, *)) {
+                        if (!willPlay) [wv pauseAllMediaPlaybackWithCompletionHandler:nil];
+                        else [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
+                    }
+                    NSString *actionStr = willPlay ? @"play" : @"pause";
+                    NSString *script = [NSString stringWithFormat:@"(function(){ try { window.__RIVO_USER_PAUSED = %@; window.__RIVO_IS_PLAYING = %@; if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('%@'); } else if (typeof window.__RIVO_TOGGLE_PLAY === 'function') { window.__RIVO_TOGGLE_PLAY(); } } catch(e){} })(); true;", willPlay ? @"false" : @"true", willPlay ? @"true" : @"false", actionStr];
+                    [wv evaluateJavaScript:script completionHandler:^(id res, NSError *err) {
+                        if (bgTask != UIBackgroundTaskInvalid) {
+                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                            bgTask = UIBackgroundTaskInvalid;
+                        }
+                    }];
+                } else {
+                    if (bgTask != UIBackgroundTaskInvalid) {
+                        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                        bgTask = UIBackgroundTaskInvalid;
+                    }
+                }
+            } @catch (NSException *e) {
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
+            }
+        });
 
         [self sendActionSafely:@"play_pause"];
         return MPRemoteCommandHandlerStatusSuccess;
@@ -170,12 +320,96 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.nextTrackCommand setEnabled:YES];
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaNext" expirationHandler:^{
+            if (bgTask != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                bgTask = UIBackgroundTaskInvalid;
+            }
+        }];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer play];
+                }
+
+                WKWebView *wv = [self findActiveWebView];
+                if (wv) {
+                    if (@available(iOS 15.0, *)) {
+                        [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
+                    }
+                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = false; window.__RIVO_IS_PLAYING = true; if (typeof window.__RIVO_NEXT_TRACK === 'function') { window.__RIVO_NEXT_TRACK(); } else if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('next'); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                            if (bgTask != UIBackgroundTaskInvalid) {
+                                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                                bgTask = UIBackgroundTaskInvalid;
+                            }
+                        });
+                    }];
+                } else {
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        if (bgTask != UIBackgroundTaskInvalid) {
+                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                            bgTask = UIBackgroundTaskInvalid;
+                        }
+                    });
+                }
+            } @catch (NSException *e) {
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
+            }
+        });
+
         [self sendActionSafely:@"next"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     [center.previousTrackCommand setEnabled:YES];
     [center.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPrev" expirationHandler:^{
+            if (bgTask != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                bgTask = UIBackgroundTaskInvalid;
+            }
+        }];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer play];
+                }
+
+                WKWebView *wv = [self findActiveWebView];
+                if (wv) {
+                    if (@available(iOS 15.0, *)) {
+                        [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
+                    }
+                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = false; window.__RIVO_IS_PLAYING = true; if (typeof window.__RIVO_PREV_TRACK === 'function') { window.__RIVO_PREV_TRACK(); } else if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('prev'); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                            if (bgTask != UIBackgroundTaskInvalid) {
+                                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                                bgTask = UIBackgroundTaskInvalid;
+                            }
+                        });
+                    }];
+                } else {
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        if (bgTask != UIBackgroundTaskInvalid) {
+                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                            bgTask = UIBackgroundTaskInvalid;
+                        }
+                    });
+                }
+            } @catch (NSException *e) {
+                if (bgTask != UIBackgroundTaskInvalid) {
+                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
+                    bgTask = UIBackgroundTaskInvalid;
+                }
+            }
+        });
+
         [self sendActionSafely:@"prev"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
@@ -184,6 +418,14 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     [center.changePlaybackPositionCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
         MPChangePlaybackPositionCommandEvent *posEvent = (MPChangePlaybackPositionCommandEvent *)event;
         if (posEvent) {
+            double targetSecs = posEvent.positionTime;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                WKWebView *wv = [self findActiveWebView];
+                if (wv) {
+                    NSString *seekScript = [NSString stringWithFormat:@"(function(){ try { if (typeof window.__RIVO_MEDIA_SEEK === 'function') { window.__RIVO_MEDIA_SEEK(%f); } else if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('seek:%f'); } } catch(e){} })(); true;", targetSecs, targetSecs];
+                    [wv evaluateJavaScript:seekScript completionHandler:nil];
+                }
+            });
             [self sendActionSafely:[NSString stringWithFormat:@"seek:%f", posEvent.positionTime]];
         }
         return MPRemoteCommandHandlerStatusSuccess;
