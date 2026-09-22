@@ -192,6 +192,7 @@ export const AudioProvider = ({ children }) => {
   // Sync media notification controls with background notification drawer & iOS Lock Screen
   useEffect(() => {
     const unsub = subscribeToMediaActions(async (action) => {
+      if (!isOffline && !soundRef.current) return;
       try {
         if (typeof action === 'string' && action.startsWith('seek:')) {
           const secs = parseFloat(action.split(':')[1]);

@@ -4,42 +4,6 @@
 
 static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
 
-static NSData *createSilentWAVData(void) {
-    uint32_t sampleRate = 44100;
-    uint16_t numChannels = 1;
-    uint16_t bitsPerSample = 16;
-    uint32_t dataSize = sampleRate * numChannels * (bitsPerSample / 8); // 88200 bytes = 1 sec
-    uint32_t chunkSize = 36 + dataSize;
-    uint32_t byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-    uint16_t blockAlign = numChannels * (bitsPerSample / 8);
-
-    NSMutableData *data = [NSMutableData dataWithCapacity:(44 + dataSize)];
-    [data appendBytes:"RIFF" length:4];
-    [data appendBytes:&chunkSize length:4];
-    [data appendBytes:"WAVE" length:4];
-
-    [data appendBytes:"fmt " length:4];
-    uint32_t subchunk1Size = 16;
-    uint16_t audioFormat = 1; // PCM
-    [data appendBytes:&subchunk1Size length:4];
-    [data appendBytes:&audioFormat length:2];
-    [data appendBytes:&numChannels length:2];
-    [data appendBytes:&sampleRate length:4];
-    [data appendBytes:&byteRate length:4];
-    [data appendBytes:&blockAlign length:2];
-    [data appendBytes:&bitsPerSample length:2];
-
-    [data appendBytes:"data" length:4];
-    [data appendBytes:&dataSize length:4];
-
-    void *zeroes = calloc(1, dataSize);
-    if (zeroes) {
-        [data appendBytes:zeroes length:dataSize];
-        free(zeroes);
-    }
-    return data;
-}
-
 @implementation RivoMediaControls
 {
     BOOL _hasListeners;
@@ -47,7 +11,6 @@ static NSData *createSilentWAVData(void) {
     BOOL _audioSessionConfigured;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
-    AVAudioPlayer *_silentPlayer;
 }
 
 RCT_EXPORT_MODULE(RivoMediaControls);
@@ -80,7 +43,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
         dispatch_async(dispatch_get_main_queue(), ^{
             [self configureAudioSession];
             [self setupRemoteCommands];
-            [self ensureSilentPlayer];
         });
     }
     return self;
@@ -103,31 +65,9 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     }
 }
 
-- (void)ensureSilentPlayer {
-    if (!_silentPlayer) {
-        @try {
-            NSData *silentData = createSilentWAVData();
-            NSError *err = nil;
-            _silentPlayer = [[AVAudioPlayer alloc] initWithData:silentData error:&err];
-            _silentPlayer.numberOfLoops = -1; // Infinite loop keeps iOS background session alive
-            _silentPlayer.volume = 0.0001f;   // Completely silent to human ear but holds audio hardware pipeline
-            [_silentPlayer prepareToPlay];
-            [_silentPlayer play];
-        } @catch (NSException *e) {
-            NSLog(@"[RivoMediaControls] ensureSilentPlayer error: %@", e);
-        }
-    } else if (!_silentPlayer.isPlaying) {
-        @try {
-            [_silentPlayer play];
-        } @catch (NSException *e) {}
-    }
-}
-
 - (void)sendActionSafely:(NSString *)action {
     @try {
-        if (_hasListeners) {
-            [self sendEventWithName:@"onMediaAction" body:action];
-        }
+        [self sendEventWithName:@"onMediaAction" body:action];
     } @catch (NSException *e) {
         NSLog(@"[RivoMediaControls] sendActionSafely error: %@", e);
     }
@@ -146,7 +86,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     [center.previousTrackCommand removeTarget:nil];
     [center.changePlaybackPositionCommand removeTarget:nil];
 
-    // Explicitly disable 10s skip and seek commands so iOS always displays Next/Prev track buttons
+    // Disable 10s skip commands so iOS displays Next / Prev track buttons
     center.skipForwardCommand.enabled = NO;
     [center.skipForwardCommand removeTarget:nil];
     center.skipBackwardCommand.enabled = NO;
@@ -158,7 +98,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self ensureSilentPlayer];
         NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
         now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
         [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
@@ -169,7 +108,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self ensureSilentPlayer];
         NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
         now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
         [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
@@ -180,7 +118,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.togglePlayPauseCommand setEnabled:YES];
     [center.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self ensureSilentPlayer];
         NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
         double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
         BOOL willPlay = (currentRate <= 0.0);
@@ -193,14 +130,12 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.nextTrackCommand setEnabled:YES];
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self ensureSilentPlayer];
         [self sendActionSafely:@"next"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     [center.previousTrackCommand setEnabled:YES];
     [center.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self ensureSilentPlayer];
         [self sendActionSafely:@"prev"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
@@ -215,6 +150,84 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     }];
 }
 
+- (UIImage *)loadImageFromSource:(NSString *)source {
+    if (!source || [source length] == 0) return nil;
+
+    // 1. Check in-memory cache
+    UIImage *cached = [sArtworkCache objectForKey:source];
+    if (cached) return cached;
+
+    // 2. Base64 Data URI
+    if ([source hasPrefix:@"data:"]) {
+        NSRange commaRange = [source rangeOfString:@","];
+        if (commaRange.location != NSNotFound) {
+            NSString *base64Str = [source substringFromIndex:commaRange.location + 1];
+            NSData *data = [[NSData alloc] initWithBase64EncodedString:base64Str
+                                                               options:NSDataBase64DecodingIgnoreUnknownCharacters];
+            if (data && [data length] > 0) {
+                UIImage *img = [UIImage imageWithData:data];
+                if (img) {
+                    [sArtworkCache setObject:img forKey:source];
+                    return img;
+                }
+            }
+        }
+        return nil;
+    }
+
+    // 3. Local file path (file:// or /var/... or /private/var/...)
+    NSString *filePath = nil;
+    if ([source hasPrefix:@"file://"]) {
+        NSURL *url = [NSURL URLWithString:source];
+        filePath = [url path];
+        if (!filePath) {
+            filePath = [source substringFromIndex:7];
+        }
+    } else if ([source hasPrefix:@"/var/"] || [source hasPrefix:@"/private/var/"] || [source hasPrefix:@"/Users/"]) {
+        filePath = source;
+    }
+
+    if (filePath && [filePath length] > 0) {
+        if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
+            NSData *data = [NSData dataWithContentsOfFile:filePath];
+            if (data && [data length] > 0) {
+                UIImage *img = [UIImage imageWithData:data];
+                if (img) {
+                    [sArtworkCache setObject:img forKey:source];
+                    return img;
+                }
+            }
+        }
+    }
+
+    // 4. Remote HTTP/HTTPS URL
+    NSString *remoteUrl = source;
+    if ([remoteUrl hasPrefix:@"//"]) {
+        remoteUrl = [@"https:" stringByAppendingString:remoteUrl];
+    } else if ([remoteUrl hasPrefix:@"/"]) {
+        remoteUrl = [@"https://liofy-production-0f56.up.railway.app" stringByAppendingString:remoteUrl];
+    } else if ([remoteUrl hasPrefix:@"http://"]) {
+        remoteUrl = [@"https://" stringByAppendingString:[remoteUrl substringFromIndex:7]];
+    }
+
+    if ([remoteUrl hasPrefix:@"https://"]) {
+        NSString *encoded = [remoteUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSURL *url = [NSURL URLWithString:encoded ?: remoteUrl];
+        if (url) {
+            NSData *data = [NSData dataWithContentsOfURL:url options:NSDataReadingUncached error:nil];
+            if (data && [data length] > 0) {
+                UIImage *img = [UIImage imageWithData:data];
+                if (img) {
+                    [sArtworkCache setObject:img forKey:source];
+                    return img;
+                }
+            }
+        }
+    }
+
+    return nil;
+}
+
 RCT_EXPORT_METHOD(showNotification:(NSDictionary *)options) {
     [self updatePlayback:options];
 }
@@ -224,12 +237,6 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
         @try {
             [self configureAudioSession];
             [self setupRemoteCommands];
-            [self ensureSilentPlayer];
-
-            // Maintain silent background audio keeper continuously so iOS never suspends WebView or background audio
-            if (self->_silentPlayer && !self->_silentPlayer.isPlaying) {
-                [self->_silentPlayer play];
-            }
 
             BOOL isPlaying = [options[@"isPlaying"] boolValue];
 
@@ -262,79 +269,33 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             double currentTime = [options[@"currentTime"] doubleValue];
             nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime >= 0 ? currentTime : 0.0);
 
-            // Normalize cover URL (handle relative /api or /covers URLs, protocol-relative //, and http)
-            NSString *rawCover = options[@"coverUrl"];
-            NSString *coverUrl = nil;
-            if (rawCover && [rawCover length] > 0) {
-                if ([rawCover hasPrefix:@"//"]) {
-                    coverUrl = [@"https:" stringByAppendingString:rawCover];
-                } else if ([rawCover hasPrefix:@"/"]) {
-                    coverUrl = [@"https://liofy-production-0f56.up.railway.app" stringByAppendingString:rawCover];
-                } else if ([rawCover hasPrefix:@"http://"]) {
-                    coverUrl = [@"https://" stringByAppendingString:[rawCover substringFromIndex:7]];
-                } else {
-                    coverUrl = rawCover;
-                }
-            }
-
+            NSString *coverUrl = options[@"coverUrl"];
             if (coverUrl && [coverUrl length] > 0) {
-                // Check in-memory cache first for instant synchronous lock screen artwork
-                UIImage *cachedImg = [sArtworkCache objectForKey:coverUrl];
-                if (cachedImg) {
-                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:cachedImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
-                        return cachedImg;
+                UIImage *existingImg = [sArtworkCache objectForKey:coverUrl];
+                if (existingImg) {
+                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:existingImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
+                        return existingImg;
                     }];
                     self->_currentArtwork = artwork;
                     self->_currentCoverUrl = [coverUrl copy];
                     nowPlaying[MPMediaItemPropertyArtwork] = artwork;
                 } else if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
-                    // Reset artwork so previous track's cover is never displayed for this track
                     self->_currentCoverUrl = [coverUrl copy];
-                    self->_currentArtwork = nil;
-                    [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
 
                     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-                        @try {
-                            NSData *imageData = nil;
-                            if ([coverUrl hasPrefix:@"file://"]) {
-                                NSURL *url = [NSURL URLWithString:coverUrl];
-                                if (url) {
-                                    imageData = [NSData dataWithContentsOfURL:url];
-                                }
-                            }
-                            if (!imageData && [coverUrl hasPrefix:@"/"]) {
-                                imageData = [NSData dataWithContentsOfFile:coverUrl];
-                            }
-                            if (!imageData && [coverUrl hasPrefix:@"http"]) {
-                                NSString *encoded = [coverUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-                                NSURL *url = [NSURL URLWithString:encoded ?: coverUrl];
-                                if (url) {
-                                    NSURLRequest *req = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReturnCacheDataElseLoad timeoutInterval:8.0];
-                                    NSURLResponse *resp = nil;
-                                    NSError *err = nil;
-                                    imageData = [NSURLConnection sendSynchronousRequest:req returningResponse:&resp error:&err];
-                                }
-                            }
-
-                            if (imageData && [imageData length] > 0) {
-                                UIImage *image = [UIImage imageWithData:imageData];
-                                if (image) {
-                                    [sArtworkCache setObject:image forKey:coverUrl];
-                                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:image.size requestHandler:^UIImage * _Nonnull(CGSize size) {
-                                        return image;
-                                    }];
+                        UIImage *loadedImg = [self loadImageFromSource:coverUrl];
+                        if (loadedImg) {
+                            MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:loadedImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
+                                return loadedImg;
+                            }];
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                if ([coverUrl isEqualToString:self->_currentCoverUrl]) {
                                     self->_currentArtwork = artwork;
-                                    dispatch_async(dispatch_get_main_queue(), ^{
-                                        if ([coverUrl isEqualToString:self->_currentCoverUrl]) {
-                                            NSMutableDictionary *updated = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                                            updated[MPMediaItemPropertyArtwork] = artwork;
-                                            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = updated;
-                                        }
-                                    });
+                                    NSMutableDictionary *updated = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                                    updated[MPMediaItemPropertyArtwork] = artwork;
+                                    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = updated;
                                 }
-                            }
-                        } @catch (NSException *e) {
-                            NSLog(@"[RivoMediaControls] Artwork download error: %@", e);
+                            });
                         }
                     });
                 } else if (self->_currentArtwork) {
@@ -356,9 +317,6 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 RCT_EXPORT_METHOD(hideNotification) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            if (self->_silentPlayer && self->_silentPlayer.isPlaying) {
-                [self->_silentPlayer stop];
-            }
             self->_currentCoverUrl = nil;
             self->_currentArtwork = nil;
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;

@@ -7,6 +7,15 @@ import { API_BASE_URL } from '../config';
 const normalizeCoverUrl = (url) => {
   if (!url || typeof url !== 'string') return '';
   const trimmed = url.trim();
+  if (trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('file://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/var/') || trimmed.startsWith('/private/var/') || trimmed.startsWith('/Users/')) {
+    return trimmed;
+  }
   if (trimmed.startsWith('//')) {
     return `https:${trimmed}`;
   }
