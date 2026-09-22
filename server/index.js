@@ -3851,14 +3851,89 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
 // Direct Audio Stream Downloader
 app.get('/api/tracks/download', async (req, res) => {
   try {
-    const { url, title, artist, id } = req.query;
-    const streamUrl = await resolveAudioStreamUrl(url, title, artist);
+    let { url, title, artist, id } = req.query;
+    if (id && (!url || !title)) {
+      try {
+        if (mongoose.isValidObjectId(id)) {
+          const dbTrack = await Track.findById(id).lean();
+          if (dbTrack) {
+            url = url || dbTrack.audioUrl;
+            title = title || dbTrack.title;
+            artist = artist || dbTrack.artist;
+          }
+        }
+      } catch {}
+    }
 
+    const cleanFilename = `${(artist || 'Artist').split(/[|/]/)[0].trim()} - ${(title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim()}`;
+
+    // Direct MP3 or Audio URLs (non-YouTube)
+    if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('youtube.com') && !url.includes('youtu.be')) {
+      try {
+        const directRes = await axios({
+          method: 'get',
+          url: url,
+          responseType: 'stream',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          timeout: 30000
+        });
+        res.set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
+          'Access-Control-Allow-Origin': '*'
+        });
+        return directRes.data.pipe(res);
+      } catch (e) {}
+    }
+
+    // YouTube track resolution
+    let videoId = null;
+    if (url) {
+      const m = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      if (m && m[1]) videoId = m[1];
+    }
+    if (!videoId && (title || artist)) {
+      try {
+        videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
+      } catch {}
+    }
+
+    if (videoId) {
+      const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const { spawn, exec } = require('child_process');
+      const hasYtDlp = await new Promise(resolve => {
+        exec('yt-dlp --version', (err, stdout) => resolve(!err && stdout && stdout.trim().length > 0));
+      });
+
+      if (hasYtDlp) {
+        res.set({
+          'Content-Type': 'audio/mpeg',
+          'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
+          'Access-Control-Allow-Origin': '*'
+        });
+        const ytdlProcess = spawn('yt-dlp', [
+          '--extractor-args', 'youtube:player_client=android,web',
+          '--no-check-certificates',
+          '-f', 'ba[ext=m4a]/ba/b',
+          '-o', '-',
+          ytUrl
+        ]);
+        ytdlProcess.stdout.pipe(res);
+        ytdlProcess.stderr.on('data', () => {});
+        ytdlProcess.on('error', (err) => {
+          console.warn('[yt-dlp spawn error]:', err.message);
+          if (!res.headersSent) res.status(500).json({ success: false, error: err.message });
+        });
+        return;
+      }
+    }
+
+    // Fallback: resolve via public mirror / resolver
+    const streamUrl = await resolveAudioStreamUrl(url, title, artist);
     if (!streamUrl) {
       return res.status(404).json({ success: false, error: 'Could not resolve audio stream for download' });
     }
 
-    const cleanFilename = `${(artist || 'Artist').split(/[|/]/)[0].trim()} - ${(title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim()}`;
     try {
       const headRes = await axios({
         method: 'get',
@@ -3875,12 +3950,11 @@ app.get('/api/tracks/download', async (req, res) => {
       });
       headRes.data.pipe(res);
     } catch (streamErr) {
-      // If server pipe fails, redirect client directly to streamUrl
       return res.redirect(streamUrl);
     }
   } catch (e) {
     console.error('Download audio error:', e.message);
-    res.status(500).json({ success: false, error: e.message });
+    if (!res.headersSent) res.status(500).json({ success: false, error: e.message });
   }
 });
 
