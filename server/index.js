@@ -3786,13 +3786,13 @@ async function resolveAudioStreamUrl(rawUrl, title = '', artist = '') {
     try {
       const { exec } = require('child_process');
       const direct = await new Promise((resolve) => {
-        const cmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,ios,tv" -f "ba[ext=m4a]/ba/b/bestaudio/best" -g "${ytUrl}"`;
+        const cmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -g "${ytUrl}"`;
         exec(cmd, { timeout: 15000 }, (err, stdout) => {
           if (!err && stdout && stdout.trim()) {
             resolve(stdout.trim().split('\n')[0]);
           } else {
             // Second attempt with tv client
-            exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android" -f "ba/b/bestaudio/best" -g "${ytUrl}"`, { timeout: 12000 }, (err2, stdout2) => {
+            exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -g "${ytUrl}"`, { timeout: 12000 }, (err2, stdout2) => {
               if (!err2 && stdout2 && stdout2.trim()) {
                 resolve(stdout2.trim().split('\n')[0]);
               } else {
@@ -4005,7 +4005,7 @@ app.get('/api/tracks/download', async (req, res) => {
 
       if (hasYtDlp) {
         const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
-        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android,ios,tv" -f "ba[ext=m4a]/ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
+        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
         let dlSuccess = await new Promise(resolve => {
           exec(ytdlpCmd, { timeout: 35000 }, (err) => {
             if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
@@ -4019,7 +4019,7 @@ app.get('/api/tracks/download', async (req, res) => {
 
         // Retry with tv player client if ios client fails
         if (!dlSuccess) {
-          const ytdlpCmdTv = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=android" -f "ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
+          const ytdlpCmdTv = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
           dlSuccess = await new Promise(resolve => {
             exec(ytdlpCmdTv, { timeout: 25000 }, (err) => {
               if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
