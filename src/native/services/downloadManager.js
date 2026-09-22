@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { resolveAudioStream } from './youtubeResolver';
+import { resolveAudioStream, resolveClientSideYouTubeStream, extractYouTubeId } from './youtubeResolver';
 import { API_BASE_URL } from '../config';
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
@@ -259,44 +259,6 @@ export const isTrackDownloaded = async (trackId) => {
   return list.some(t => String(t._id || t.id) === String(trackId));
 };
 
-function extractYouTubeId(input) {
-  if (!input || typeof input !== 'string') return null;
-  const str = input.trim();
-  const m1 = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-  if (m1 && m1[1] && m1[1].length === 11) return m1[1];
-  const m2 = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
-  if (m2 && m2[1] && m2[1].length === 11) return m2[1];
-  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
-  return null;
-}
-
-async function resolveClientSideYouTubeStream(videoId) {
-  if (!videoId) return null;
-  const mirrors = [
-    `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://invidious.jing.rocks/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://yt.artemislena.eu/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://pipedapi.kavin.rocks/streams/${videoId}`,
-  ];
-  for (const ep of mirrors) {
-    try {
-      const res = await fetch(ep, {
-        headers: { 'Accept': 'application/json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const formats = data.adaptiveFormats || data.audioStreams || [];
-        const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
-                      formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
-        if (audio?.url) return audio.url;
-      }
-    } catch {}
-  }
-  return null;
-}
-
 function cleanMetadataString(str, fallback = '') {
   if (!str) return fallback;
   const cleaned = String(str)
@@ -394,57 +356,45 @@ export const downloadTrack = async (track, onProgress) => {
 
   // Extract YouTube ID if present
   const rawUrl = track.audioUrl || track.url || '';
-  const ytId = rawUrl?.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1] ||
-               (rawUrl?.length === 11 ? rawUrl : null) ||
-               (track.source === 'YouTube' ? (rawUrl?.match(/^([a-zA-Z0-9_-]{11})$/)?.[1] || trackId.match(/^([a-zA-Z0-9_-]{11})$/)?.[1]) : null);
+  const ytId = extractYouTubeId(rawUrl) ||
+               (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
 
   // Gather candidate download URLs in order of priority
   const candidates = [];
 
   // Candidate 1: Direct remote audio URL (if already an audio file)
   const isDirectRemote = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com') && !u.includes('youtu.be') && !u.includes('soundcloud.com');
-  if (isDirectRemote(track.audioUrl)) candidates.push(track.audioUrl);
-  if (isDirectRemote(track.nativeAudioUri)) candidates.push(track.nativeAudioUri);
+  if (isDirectRemote(track.audioUrl)) candidates.push({ url: track.audioUrl, ext: track.audioUrl.includes('.m4a') ? 'm4a' : 'mp3' });
+  if (isDirectRemote(track.nativeAudioUri)) candidates.push({ url: track.nativeAudioUri, ext: track.nativeAudioUri.includes('.m4a') ? 'm4a' : 'mp3' });
 
-  // Candidate 2: Backend Direct Downloader endpoint
-  const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`;
-  candidates.push(backendDownloadUrl);
-
-  // Candidate 3: Client-side Cobalt official YouTube audio extraction
+  // Candidate 2: Ultra-fast Direct Client-side YouTube Audio Stream Resolution (resolves official Googlevideo stream directly on device in <1s)
   if (ytId) {
-    const cobaltEndpoints = [
-      'https://api.cobalt.tools/api/json',
-      'https://cobalt.stream/api/json',
-      'https://co.wuk.sh/api/json',
-      'https://cobalt-api.kwiatekm.pl/api/json',
-    ];
-    for (const ep of cobaltEndpoints) {
-      try {
-        const cobRes = await fetch(ep, {
-          method: 'POST',
-          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: `https://www.youtube.com/watch?v=${ytId}`, downloadMode: 'audio' }),
-        });
-        if (cobRes.ok) {
-          const cobData = await cobRes.json();
-          if (cobData?.url && typeof cobData.url === 'string' && cobData.url.startsWith('http')) {
-            candidates.push(cobData.url);
-            break;
-          }
-        }
-      } catch {}
+    try {
+      if (onProgress) onProgress(10);
+      const directGoogleStream = await resolveClientSideYouTubeStream(ytId);
+      if (directGoogleStream && typeof directGoogleStream === 'string' && directGoogleStream.startsWith('http')) {
+        candidates.push({ url: directGoogleStream, ext: 'm4a' });
+      }
+    } catch (e) {
+      console.warn('[downloadManager] Direct client-side YouTube stream resolution error:', e.message);
     }
   }
 
+  // Candidate 3: Backend Direct Downloader endpoint
+  const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`;
+  candidates.push({ url: backendDownloadUrl, ext: 'm4a' });
+
   // Candidate 4: Backend Stream Resolver
-  const isValidAudioStreamUrl = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com/watch') && !u.includes('youtu.be/') && !u.includes('sndcdn.com/preview');
+  const isValidAudioStreamUrl = (u) => typeof u === 'string' && (u.startsWith('http') || u.startsWith('/')) && !u.includes('youtube.com/watch') && !u.includes('youtu.be/') && !u.includes('sndcdn.com/preview');
 
   try {
     const streamRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`);
     if (streamRes.ok) {
       const streamData = await streamRes.json();
-      if (isValidAudioStreamUrl(streamData?.url)) {
-        candidates.push(streamData.url);
+      let sUrl = streamData?.url || streamData?.directUrl;
+      if (isValidAudioStreamUrl(sUrl)) {
+        if (sUrl.startsWith('/')) sUrl = `${API_BASE_URL}${sUrl}`;
+        candidates.push({ url: sUrl, ext: sUrl.includes('.m4a') ? 'm4a' : 'mp3' });
       }
     }
   } catch (e) {}
@@ -455,16 +405,19 @@ export const downloadTrack = async (track, onProgress) => {
 
   // Try candidate URLs one by one until one produces a valid audio file
   for (let i = 0; i < candidates.length; i++) {
-    const targetUrl = candidates[i];
+    const candidate = candidates[i];
+    const targetUrl = candidate.url;
+    const chosenAudioUri = candidate.ext === 'm4a' ? audioFileUriM4a : audioFileUriMp3;
+
     try {
       // First clean up any corrupted partial file
-      await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+      await FileSystem.deleteAsync(chosenAudioUri, { idempotent: true }).catch(() => {});
 
       let res = null;
       try {
         const downloadResumable = FileSystem.createDownloadResumable(
           targetUrl,
-          audioFileUri,
+          chosenAudioUri,
           {},
           (progressEvent) => {
             if (progressEvent.totalBytesExpectedToWrite > 0) {
@@ -477,16 +430,16 @@ export const downloadTrack = async (track, onProgress) => {
         );
         res = await downloadResumable.downloadAsync();
       } catch (resumeErr) {
-        res = await FileSystem.downloadAsync(targetUrl, audioFileUri);
+        res = await FileSystem.downloadAsync(targetUrl, chosenAudioUri);
       }
 
       if (res && (res.status === 200 || res.status === 206)) {
-        const check = await FileSystem.getInfoAsync(audioFileUri);
+        const check = await FileSystem.getInfoAsync(chosenAudioUri);
         if (check.exists && check.size > 10000) {
           // Verify downloaded payload is valid audio and not an HTML or JSON error response
           let isPayloadCorrupt = false;
           try {
-            const headSample = await FileSystem.readAsStringAsync(audioFileUri, {
+            const headSample = await FileSystem.readAsStringAsync(chosenAudioUri, {
               encoding: FileSystem.EncodingType.UTF8,
               length: 64,
               position: 0,
@@ -504,10 +457,11 @@ export const downloadTrack = async (track, onProgress) => {
 
           if (!isPayloadCorrupt) {
             success = true;
+            audioFileUri = chosenAudioUri;
             break;
           } else {
             console.warn(`[downloadManager] Candidate ${i + 1} returned text/html/json error payload instead of audio`);
-            await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+            await FileSystem.deleteAsync(chosenAudioUri, { idempotent: true }).catch(() => {});
           }
         }
       }
@@ -516,28 +470,30 @@ export const downloadTrack = async (track, onProgress) => {
     }
   }
 
-  // If backend candidates failed, try client-side direct YouTube mirror as final fallback
+  // If backend candidates failed, try direct client-side YouTube resolution as final fallback
   if (!success && ytId) {
     try {
       if (onProgress) onProgress(30);
       const mirrorUrl = await resolveClientSideYouTubeStream(ytId);
       if (mirrorUrl) {
-        await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
-        const mirrorRes = await FileSystem.downloadAsync(mirrorUrl, audioFileUri);
+        await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
+        const mirrorRes = await FileSystem.downloadAsync(mirrorUrl, audioFileUriM4a);
         if (mirrorRes && (mirrorRes.status === 200 || mirrorRes.status === 206)) {
-          const check = await FileSystem.getInfoAsync(audioFileUri);
+          const check = await FileSystem.getInfoAsync(audioFileUriM4a);
           if (check.exists && check.size > 10000) {
             success = true;
+            audioFileUri = audioFileUriM4a;
           }
         }
       }
     } catch (mirrorErr) {
-      console.warn('[downloadManager] Mirror fallback failed:', mirrorErr.message);
+      console.warn('[downloadManager] Direct fallback failed:', mirrorErr.message);
     }
   }
 
   if (!success) {
-    await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(audioFileUriMp3, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
     throw new Error('Could not download audio stream from available servers');
   }
 

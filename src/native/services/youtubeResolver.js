@@ -116,10 +116,23 @@ export const resolveAudioStream = async (track) => {
     return rawUrl;
   }
 
-  // 3. Fast Server-side Stream Resolution via Proxy (starts playing in < 1 second, zero lag)
+  // 3. Ultra-fast Client-side YouTube Audio Stream Resolution (resolves official Googlevideo stream directly on device in <1s)
+  const ytId = extractYouTubeId(rawUrl) ||
+               (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
+  if (ytId) {
+    try {
+      const directStream = await resolveClientSideYouTubeStream(ytId);
+      if (directStream) {
+        if (trackId) streamCache.set(trackId, directStream);
+        return directStream;
+      }
+    } catch (e) {}
+  }
+
+  // 4. Server-side Stream Resolution via Proxy Fallback
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     const serverStreamRes = await fetch(
       `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
       { signal: controller.signal }
@@ -127,8 +140,8 @@ export const resolveAudioStream = async (track) => {
     clearTimeout(timeoutId);
     if (serverStreamRes.ok) {
       const data = await serverStreamRes.json();
-      if (data?.success && data?.url) {
-        let streamUrl = data.url;
+      let streamUrl = data?.url || data?.directUrl;
+      if (streamUrl) {
         if (streamUrl.startsWith('/')) {
           streamUrl = `${API_BASE_URL}${streamUrl}`;
         }
@@ -137,45 +150,92 @@ export const resolveAudioStream = async (track) => {
       }
     }
   } catch (e) {
-    // Backend request timed out or failed, proceed to mirror fallback
-  }
-
-  // 5. Client-side mirror fallback
-  const ytId = rawUrl?.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1] ||
-               (rawUrl?.length === 11 ? rawUrl : null);
-  if (ytId) {
-    const mirrorStream = await resolveClientSideYouTubeStream(ytId);
-    if (mirrorStream) {
-      if (trackId) streamCache.set(trackId, mirrorStream);
-      return mirrorStream;
-    }
+    // Backend request timed out or failed
   }
 
   return rawUrl || null;
 };
 
+export function extractYouTubeId(input) {
+  if (!input || typeof input !== 'string') return null;
+  const str = input.trim();
+  const m1 = str.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  if (m1 && m1[1] && m1[1].length === 11) return m1[1];
+  const m2 = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+  if (m2 && m2[1] && m2[1].length === 11) return m2[1];
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  return null;
+}
+
 export const resolveClientSideYouTubeStream = async (ytId) => {
   if (!ytId) return null;
-  const mirrors = [
-    `https://inv.nadeko.net/api/v1/videos/${ytId}?fields=adaptiveFormats`,
-    `https://invidious.jing.rocks/api/v1/videos/${ytId}?fields=adaptiveFormats`,
-    `https://yt.artemislena.eu/api/v1/videos/${ytId}?fields=adaptiveFormats`,
-    `https://pipedapi.kavin.rocks/streams/${ytId}`,
-  ];
-  for (const ep of mirrors) {
-    try {
-      const res = await fetch(ep, { headers: { 'Accept': 'application/json' } });
-      if (res.ok) {
-        const d = await res.json();
-        const formats = d.adaptiveFormats || d.audioStreams || [];
-        const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
-                      formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
-        if (audio?.url) {
-          return audio.url;
-        }
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: controller.signal,
+    });
+    const html = await webRes.text();
+    clearTimeout(timeoutId);
+
+    const keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
+    const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
+    const key = keyMatch ? keyMatch[1] : 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    const visitorData = visitorMatch ? visitorMatch[1] : '';
+    const cookies = webRes.headers?.get ? (webRes.headers.get('set-cookie') || '') : '';
+
+    const playerBody = {
+      context: {
+        client: {
+          clientName: 'VISIONOS',
+          clientVersion: '1.02',
+          deviceMake: 'Apple',
+          deviceModel: 'RealityDevice17,1',
+          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+          osName: 'visionOS',
+          osVersion: '26.5.23O471',
+          hl: 'en',
+          gl: 'US',
+          visitorData: visitorData || undefined,
+        },
+      },
+      videoId: ytId,
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+    };
+    if (cookies) headers['Cookie'] = cookies;
+
+    const playerController = new AbortController();
+    const playerTimeout = setTimeout(() => playerController.abort(), 6000);
+
+    const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(playerBody),
+      signal: playerController.signal,
+    });
+    clearTimeout(playerTimeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.playabilityStatus?.status === 'OK') {
+        const formats = (data.streamingData?.adaptiveFormats || []).concat(data.streamingData?.formats || []);
+        // itag 140 is official AAC/m4a audio 128kbps, itag 139 is 48kbps, itag 251 is opus
+        const audio140 = formats.find(f => f.itag === 140 && f.url);
+        const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
+        const chosen = audio140 || anyAudio;
+        if (chosen?.url) return chosen.url;
       }
-    } catch {}
-  }
+    }
+  } catch (err) {}
   return null;
 };
 

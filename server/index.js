@@ -3782,10 +3782,62 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
     } catch {}
   }
-  if (!videoId) return null;
-  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  // Tier 1: Direct VisionOS Innertube API Audio Stream Extraction
+  try {
+    const webRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 5000,
+    });
+    const html = typeof webRes.data === 'string' ? webRes.data : '';
+    const keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
+    const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
+    const key = keyMatch ? keyMatch[1] : 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    const visitorData = visitorMatch ? visitorMatch[1] : '';
+    const setCookie = webRes.headers['set-cookie'];
+    const cookies = Array.isArray(setCookie) ? setCookie.join('; ') : (setCookie || '');
 
-  // Tier 1: yt-dlp direct stream resolution with modern iOS/TV client headers
+    const playerBody = {
+      context: {
+        client: {
+          clientName: 'VISIONOS',
+          clientVersion: '1.02',
+          deviceMake: 'Apple',
+          deviceModel: 'RealityDevice17,1',
+          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+          osName: 'visionOS',
+          osVersion: '26.5.23O471',
+          hl: 'en',
+          gl: 'US',
+          visitorData: visitorData || undefined,
+        },
+      },
+      videoId: videoId,
+    };
+
+    const playerHeaders = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+    };
+    if (cookies) playerHeaders['Cookie'] = cookies;
+
+    const playerRes = await axios.post(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, playerBody, {
+      headers: playerHeaders,
+      timeout: 6000,
+    });
+
+    if (playerRes.data?.playabilityStatus?.status === 'OK') {
+      const formats = (playerRes.data.streamingData?.adaptiveFormats || []).concat(playerRes.data.streamingData?.formats || []);
+      const audio140 = formats.find(f => f.itag === 140 && f.url);
+      const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
+      const chosen = audio140 || anyAudio;
+      if (chosen?.url) return chosen.url;
+    }
+  } catch (e) {}
+
+  // Tier 2: yt-dlp direct stream resolution with modern iOS/TV client headers
   try {
     const { exec } = require('child_process');
     const direct = await new Promise((resolve) => {
@@ -4060,6 +4112,31 @@ app.get('/api/tracks/download', async (req, res) => {
     }
 
     if (videoId) {
+      // Prioritize fast direct stream resolution first
+      const streamTarget = url || `https://www.youtube.com/watch?v=${videoId}`;
+      const directStreamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, cleanTitle, cleanArtist);
+      if (directStreamUrl) {
+        try {
+          const streamRes = await axios({
+            method: 'get',
+            url: directStreamUrl,
+            responseType: 'stream',
+            headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X)' },
+            timeout: 45000,
+          });
+          const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+          res.set({
+            'Content-Type': 'audio/mp4',
+            'Content-Disposition': `attachment; filename="${safeAscii}.m4a"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.m4a`,
+            'Access-Control-Allow-Origin': '*'
+          });
+          return streamRes.data.pipe(res);
+        } catch (streamErr) {
+          res.set({ 'Access-Control-Allow-Origin': '*' });
+          return res.redirect(directStreamUrl);
+        }
+      }
+
       const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
       const { exec } = require('child_process');
       const os = require('os');
