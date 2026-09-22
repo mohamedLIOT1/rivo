@@ -17,7 +17,6 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useUser } from '../context/UserContext';
 import * as FileSystem from 'expo-file-system';
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { downloadTrack as nativeDownloadTrack, getDownloadedTracks } from '../services/downloadManager';
 import {
   showMediaNotification,
@@ -300,55 +299,10 @@ export default function OnlineWebView() {
   const [canGoBack, setCanGoBack] = useState(false);
   const currentTrackRef = useRef(null);
 
-  const iosKeeperSoundRef = useRef(null);
-
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-      interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-      interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
-    }).catch(() => {});
-
-    return () => {
-      if (iosKeeperSoundRef.current) {
-        iosKeeperSoundRef.current.unloadAsync().catch(() => {});
-        iosKeeperSoundRef.current = null;
-      }
-    };
-  }, []);
-
-  const ensureIosKeeper = useCallback(async (playing) => {
-    if (Platform.OS !== 'ios') return;
-    if (playing) {
-      if (!iosKeeperSoundRef.current) {
-        try {
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA' },
-            { isLooping: true, volume: 0.0001, shouldPlay: true }
-          );
-          iosKeeperSoundRef.current = sound;
-        } catch {}
-      } else {
-        try { await iosKeeperSoundRef.current.playAsync(); } catch {}
-      }
-    } else {
-      if (iosKeeperSoundRef.current) {
-        try { await iosKeeperSoundRef.current.pauseAsync(); } catch {}
-      }
-    }
-  }, []);
-
   // ─── AppState Background Audio Keeper (Resumes playback smoothly on background) ───
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background' || nextState === 'inactive') {
-        if (currentTrackRef.current) {
-          ensureIosKeeper(true);
-        }
         webViewRef.current?.injectJavaScript(`
           (function() {
             try {
@@ -368,7 +322,7 @@ export default function OnlineWebView() {
       }
     });
     return () => sub.remove();
-  }, [ensureIosKeeper]);
+  }, []);
 
   // ─── Hardware Back Button Handler (navigate back inside WebView instead of exiting) ───
   useEffect(() => {
@@ -479,7 +433,6 @@ export default function OnlineWebView() {
       switch (data.type) {
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
-          ensureIosKeeper(Boolean(isPlaying));
           const isSameTrack = Boolean(
             currentTrackRef.current && track &&
             ((track.id && track.id === currentTrackRef.current.id) ||
@@ -622,7 +575,7 @@ export default function OnlineWebView() {
     } catch (e) {
       // Non-JSON messages are ignored
     }
-  }, [showToast, refreshDownloadedTracks, ensureIosKeeper]);
+  }, [showToast, refreshDownloadedTracks]);
 
   // â”€â”€â”€ Error / offline fallback UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (hasError) {
