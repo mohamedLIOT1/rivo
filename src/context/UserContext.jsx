@@ -236,7 +236,11 @@ export function UserProvider({ children }) {
     try {
       offlineTracks = await getOfflineTracks();
     } catch {}
-    const offlineMap = new Map(offlineTracks.map(t => [String(t.id), t]));
+    const offlineMap = new Map(offlineTracks.map(t => [String(t.id || t._id), t]));
+    const offlineTitleMap = new Map(offlineTracks.map(t => [
+      `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`,
+      t
+    ]));
 
     const token = getToken();
     if (!token) {
@@ -247,11 +251,21 @@ export function UserProvider({ children }) {
           const likedSet = new Set((likedTrackIds || []).map(String));
           const merged = data.tracks.map(t => {
             const cleanId = String(t.id || t._id);
-            const off = offlineMap.get(cleanId);
+            const titleKey = `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`;
+            const off = offlineMap.get(cleanId) || offlineTitleMap.get(titleKey);
             const isLiked = likedSet.has(cleanId);
             if (off) {
               const { audioBlob, coverBlob, ...cleanOff } = off;
-              return { ...t, ...cleanOff, liked: isLiked, downloaded: true };
+              return {
+                ...t,
+                ...cleanOff,
+                album: (!t.album || /https?:\/\/|www\.|youtube|liofy/i.test(t.album)) ? 'Rivo' : t.album,
+                source: 'Rivo',
+                publisher: 'Rivo',
+                signature: 'Rivo',
+                liked: isLiked,
+                downloaded: true
+              };
             }
             return { ...t, liked: isLiked };
           });
@@ -277,12 +291,17 @@ export function UserProvider({ children }) {
           const liked = new Set((data.likedTrackIds || []).map(String));
           const merged = data.tracks.map(t => {
             const cleanId = String(t.id || t._id);
-            const off = offlineMap.get(cleanId);
+            const titleKey = `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`;
+            const off = offlineMap.get(cleanId) || offlineTitleMap.get(titleKey);
             if (off) {
               const { audioBlob, coverBlob, ...cleanOff } = off;
               return {
                 ...t,
                 ...cleanOff,
+                album: (!t.album || /https?:\/\/|www\.|youtube|liofy/i.test(t.album)) ? 'Rivo' : t.album,
+                source: 'Rivo',
+                publisher: 'Rivo',
+                signature: 'Rivo',
                 liked: liked.has(cleanId),
                 downloaded: true
               };

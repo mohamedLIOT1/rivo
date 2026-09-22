@@ -158,47 +158,48 @@ export async function saveTrackOffline(track, options = {}) {
 
   if (signal?.aborted) return null;
 
+  const cleanTitle = (track.title || 'Track')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/www\.\S+/gi, '')
+    .replace(/youtube\.com\S*/gi, '')
+    .replace(/youtu\.be\S*/gi, '')
+    .replace(/liofy\S*/gi, '')
+    .replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '')
+    .replace(/[/\\?%*:|"<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Track';
+
+  const cleanArtist = (track.artist || 'Artist')
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/www\.\S+/gi, '')
+    .replace(/youtube\.com\S*/gi, '')
+    .replace(/youtu\.be\S*/gi, '')
+    .replace(/liofy\S*/gi, '')
+    .replace(/[/\\?%*:|"<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Artist';
+
+  const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album)) ? 'Rivo' : track.album;
+
   // ── Native APK Bridge: route download to device storage via postMessage ──
   // When running inside the Rivo APK WebView, window.RIVO_NATIVE is set by
-  // the injected JS. Downloads go to expo-file-system instead of IndexedDB.
+  // the injected JS. Also dispatch to native storage for offline mode.
   if (typeof window !== 'undefined' && window.RIVO_NATIVE && window.RIVO_DOWNLOAD) {
     try {
       window.RIVO_DOWNLOAD({
         id: trackId,
         _id: trackId,
-        title: track.title || 'Unknown',
-        artist: track.artist || 'Unknown Artist',
+        title: cleanTitle,
+        artist: cleanArtist,
         audioUrl: track.audioUrl || '',
         coverUrl: track.cover || track.coverUrl || '',
         cover: track.cover || track.coverUrl || '',
-        source: track.source || '',
-        album: track.album || '',
+        source: 'Rivo',
+        album: cleanAlbum || 'Rivo',
         duration: track.duration || 0,
-      });
-
-      return new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-          window.removeEventListener('rivo-track-download-completed', handler);
-          resolve(null);
-        }, 90000);
-
-        function handler(e) {
-          if (e && e.detail && String(e.detail.id) === trackId) {
-            clearTimeout(timeout);
-            window.removeEventListener('rivo-track-download-completed', handler);
-            if (e.detail.success) {
-              resolve({ ...track, id: trackId, downloaded: true, savedAt: Date.now() });
-            } else {
-              resolve(null);
-            }
-          }
-        }
-
-        window.addEventListener('rivo-track-download-completed', handler);
       });
     } catch (e) {
       console.error('Native bridge download error:', e);
-      // Fall through to web download as fallback
     }
   }
 
@@ -312,6 +313,13 @@ export async function saveTrackOffline(track, options = {}) {
     const offlineTrack = {
       ...track,
       id: trackId,
+      _id: trackId,
+      title: cleanTitle,
+      artist: cleanArtist,
+      album: cleanAlbum || 'Rivo',
+      source: 'Rivo',
+      publisher: 'Rivo',
+      signature: 'Rivo',
       downloaded: true,
       audioBlob: audioBlob || null,
       coverBlob: coverBlob || null,
@@ -334,34 +342,182 @@ export async function saveTrackOffline(track, options = {}) {
   }
 }
 
-// Get offline saved track audio blob URL dynamically
-export async function getOfflineTrackAudioUrl(trackId) {
-  if (!trackId) return null;
-  const idStr = String(trackId);
+// Get offline saved track audio blob URL dynamically with title/artist fallback
+export async function getOfflineTrackAudioUrl(trackId, title = null, artist = null) {
+  if (!trackId && !title) return null;
+  const idStr = trackId ? String(trackId) : null;
 
   try {
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.get(idStr);
-      req.onsuccess = () => {
-        const item = req.result;
-        if (item && item.audioBlob) {
-          if (activeBlobUrls.has(idStr)) {
-            try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}
+
+      const handleFound = (item) => {
+        if (item && item.audioBlob && item.audioBlob.size > 10000) {
+          const key = String(item.id || item._id || idStr || 'found');
+          if (activeBlobUrls.has(key)) {
+            try { URL.revokeObjectURL(activeBlobUrls.get(key)); } catch (e) {}
           }
           const blobUrl = URL.createObjectURL(item.audioBlob);
-          activeBlobUrls.set(idStr, blobUrl);
+          activeBlobUrls.set(key, blobUrl);
           resolve(blobUrl);
-          return;
+          return true;
         }
-        resolve(null);
+        return false;
       };
-      req.onerror = () => resolve(null);
+
+      if (idStr) {
+        const req = store.get(idStr);
+        req.onsuccess = () => {
+          if (handleFound(req.result)) return;
+          searchByTitleArtist();
+        };
+        req.onerror = () => searchByTitleArtist();
+      } else {
+        searchByTitleArtist();
+      }
+
+      function searchByTitleArtist() {
+        const allReq = store.getAll();
+        allReq.onsuccess = () => {
+          const all = allReq.result || [];
+          const normTitle = (title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+          const normArtist = (artist || '').toLowerCase().trim();
+
+          const found = all.find(item => {
+            if (!item.audioBlob || item.audioBlob.size < 10000) return false;
+            const itemId = String(item.id || item._id || '');
+            if (idStr && (itemId === idStr || itemId.includes(idStr) || idStr.includes(itemId))) {
+              return true;
+            }
+            if (normTitle && item.title) {
+              const itemTitle = item.title.toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+              if (itemTitle === normTitle) {
+                if (!normArtist || !item.artist) return true;
+                const itemArtist = item.artist.toLowerCase().trim();
+                return itemArtist === normArtist || itemArtist.includes(normArtist) || normArtist.includes(itemArtist);
+              }
+            }
+            return false;
+          });
+
+          if (found && handleFound(found)) {
+            return;
+          }
+
+          // Fallback: If track is on the native filesystem, request it across the bridge
+          if (typeof window !== 'undefined' && window.ReactNativeWebView && Array.isArray(window.__RIVO_NATIVE_DOWNLOADED_IDS) && (idStr && window.__RIVO_NATIVE_DOWNLOADED_IDS.includes(idStr))) {
+            const timeout = setTimeout(() => {
+              window.removeEventListener('rivo-receive-offline-audio', onReceive);
+              resolve(null);
+            }, 6000);
+
+            function onReceive(e) {
+              if (e && e.detail && String(e.detail.id) === idStr && e.detail.dataUri) {
+                clearTimeout(timeout);
+                window.removeEventListener('rivo-receive-offline-audio', onReceive);
+                try {
+                  const blob = dataURItoBlob(e.detail.dataUri);
+                  if (blob && blob.size > 10000) {
+                    openDB().then(dbInst => {
+                      const putTx = dbInst.transaction(STORE_NAME, 'readwrite');
+                      putTx.objectStore(STORE_NAME).put({
+                        id: idStr,
+                        _id: idStr,
+                        title: title || 'Track',
+                        artist: artist || 'Artist',
+                        album: 'Rivo',
+                        source: 'Rivo',
+                        publisher: 'Rivo',
+                        signature: 'Rivo',
+                        audioBlob: blob,
+                        downloaded: true,
+                        savedAt: Date.now()
+                      });
+                    }).catch(() => {});
+                    const blobUrl = URL.createObjectURL(blob);
+                    activeBlobUrls.set(idStr, blobUrl);
+                    resolve(blobUrl);
+                    return;
+                  }
+                } catch (err) {}
+                resolve(null);
+              }
+            }
+
+            window.addEventListener('rivo-receive-offline-audio', onReceive);
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'REQUEST_OFFLINE_AUDIO',
+              id: idStr
+            }));
+            return;
+          }
+
+          resolve(null);
+        };
+        allReq.onerror = () => resolve(null);
+      }
     });
   } catch (err) {
     return null;
+  }
+}
+
+// Helper to check if track is saved offline in IndexedDB or Native Storage
+export async function isTrackSavedOffline(trackId, title = null, artist = null) {
+  if (!trackId && !title) return false;
+  const idStr = trackId ? String(trackId) : '';
+
+  if (typeof window !== 'undefined' && Array.isArray(window.__RIVO_NATIVE_DOWNLOADED_IDS)) {
+    if (idStr && window.__RIVO_NATIVE_DOWNLOADED_IDS.includes(idStr)) {
+      return true;
+    }
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+
+      if (idStr) {
+        const req = store.get(idStr);
+        req.onsuccess = () => {
+          if (req.result) {
+            resolve(true);
+            return;
+          }
+          searchFallback();
+        };
+        req.onerror = () => searchFallback();
+      } else {
+        searchFallback();
+      }
+
+      function searchFallback() {
+        if (!title) { resolve(false); return; }
+        const allReq = store.getAll();
+        allReq.onsuccess = () => {
+          const all = allReq.result || [];
+          const normTitle = (title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+          const normArtist = (artist || '').toLowerCase().trim();
+          const exists = all.some(item => {
+            if (!item.title) return false;
+            const itemTitle = item.title.toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+            if (itemTitle === normTitle) {
+              if (!normArtist || !item.artist) return true;
+              return item.artist.toLowerCase().trim() === normArtist;
+            }
+            return false;
+          });
+          resolve(exists);
+        };
+        allReq.onerror = () => resolve(false);
+      }
+    });
+  } catch {
+    return false;
   }
 }
 
