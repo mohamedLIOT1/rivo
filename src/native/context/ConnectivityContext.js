@@ -24,22 +24,17 @@ export function ConnectivityProvider({ children }) {
   const [ready, setReady] = useState(false);
   const prefRef = useRef(null);
 
-  // Load saved preference
+  // Clear any legacy manual preference so it never interferes with automatic mode
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(PREF_KEY);
-        if (saved === 'online' || saved === 'offline') {
-          setUserPreference(saved);
-          prefRef.current = saved;
-          setAppMode(saved);
-        }
+        await AsyncStorage.removeItem(PREF_KEY);
       } catch {}
       setReady(true);
     })();
   }, []);
 
-  // NetInfo real-time listener
+  // NetInfo real-time listener - strictly automatic mode switching
   useEffect(() => {
     const handleConnectivityChange = (state) => {
       const isConnected = !!state.isConnected && state.isInternetReachable !== false;
@@ -49,14 +44,8 @@ export function ConnectivityProvider({ children }) {
         type: state.type || 'unknown',
       };
       setNetworkState(newNetState);
-
-      if (prefRef.current === 'offline') {
-        setAppMode('offline');
-      } else if (prefRef.current === 'online') {
-        setAppMode(isConnected ? 'online' : 'offline');
-      } else {
-        setAppMode(isConnected ? 'online' : 'offline');
-      }
+      // Strictly automatic: online when connected, offline when disconnected
+      setAppMode(isConnected ? 'online' : 'offline');
       setReady(true);
     };
 
@@ -66,31 +55,20 @@ export function ConnectivityProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
-  const toggleMode = useCallback(async () => {
-    const next = appMode === 'online' ? 'offline' : 'online';
-    setUserPreference(next);
-    prefRef.current = next;
-    setAppMode(next);
-    try {
-      await AsyncStorage.setItem(PREF_KEY, next);
-    } catch {}
-  }, [appMode]);
+  const toggleMode = useCallback(() => {
+    // Mode is automatic; keep stub to prevent crashes if called
+  }, []);
 
-  const resetToAuto = useCallback(async () => {
-    setUserPreference(null);
-    prefRef.current = null;
+  const resetToAuto = useCallback(() => {
     const isConnected = networkState.isConnected;
     setAppMode(isConnected ? 'online' : 'offline');
-    try {
-      await AsyncStorage.removeItem(PREF_KEY);
-    } catch {}
   }, [networkState.isConnected]);
 
   const value = {
     networkState,
     appMode,
-    isAutoMode: !userPreference,
-    userPreference: userPreference || 'auto',
+    isAutoMode: true,
+    userPreference: 'auto',
     toggleMode,
     resetToAuto,
     ready,

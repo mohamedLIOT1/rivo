@@ -35,6 +35,11 @@ const RIVO_WEB_URL = API_BASE_URL;
 const INJECTED_JS = `
 (function() {
   window.RIVO_NATIVE = true;
+  try {
+    if (document.documentElement) {
+      document.documentElement.classList.add('rivo-native-app');
+    }
+  } catch(e) {}
 
   // 1. Spoof Page Visibility API so WebView never detects when app is backgrounded or screen is locked
   try {
@@ -75,16 +80,27 @@ const INJECTED_JS = `
   if (window.__RIVO_NATIVE_INJECTED) return true;
   window.__RIVO_NATIVE_INJECTED = true;
 
-  // 3. Intercept navigator.mediaSession handlers
+  // 3. Intercept navigator.mediaSession handlers and disable 10s skip commands
   window.__RIVO_MEDIA_HANDLERS = window.__RIVO_MEDIA_HANDLERS || {};
   if (navigator && navigator.mediaSession) {
     var origSetActionHandler = navigator.mediaSession.setActionHandler ? navigator.mediaSession.setActionHandler.bind(navigator.mediaSession) : null;
     navigator.mediaSession.setActionHandler = function(action, handler) {
+      if (action === 'seekforward' || action === 'seekbackward' || action === 'skipforward' || action === 'skipbackward') {
+        return; // Suppress 10s skip commands so iOS lock screen always displays Next / Prev track buttons
+      }
       window.__RIVO_MEDIA_HANDLERS[action] = handler;
       if (origSetActionHandler) {
         try { origSetActionHandler(action, handler); } catch(e) {}
       }
     };
+    try {
+      if (origSetActionHandler) {
+        origSetActionHandler('seekforward', null);
+        origSetActionHandler('seekbackward', null);
+        origSetActionHandler('skipforward', null);
+        origSetActionHandler('skipbackward', null);
+      }
+    } catch(e) {}
   }
 
   // 4. Global Action Handler for Android & iOS Notification & Lockscreen Controls
@@ -106,7 +122,7 @@ const INJECTED_JS = `
         document.querySelectorAll('audio, video').forEach(function(a) {
           try { a.play(); } catch(e) {}
         });
-        var b = document.querySelector('button[title="Play"]');
+        var b = document.querySelector('button[title="Play"], button[title="Pause"]');
         if (b) b.click();
 
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -129,7 +145,7 @@ const INJECTED_JS = `
         document.querySelectorAll('audio, video').forEach(function(a) {
           try { a.pause(); } catch(e) {}
         });
-        var b = document.querySelector('button[title="Pause"]');
+        var b = document.querySelector('button[title="Pause"], button[title="Play"]');
         if (b) b.click();
 
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -148,13 +164,13 @@ const INJECTED_JS = `
         if (typeof handlers['nexttrack'] === 'function') {
           try { handlers['nexttrack'](); return; } catch(e) {}
         }
-        var b = document.querySelector('button[title="Next Track"]');
+        var b = document.querySelector('button[title="Next Track"], button[title="Next"]');
         if (b) b.click();
       } else if (action === 'prev') {
         if (typeof handlers['previoustrack'] === 'function') {
           try { handlers['previoustrack'](); return; } catch(e) {}
         }
-        var b = document.querySelector('button[title="Previous Track"]');
+        var b = document.querySelector('button[title="Previous Track"], button[title="Previous"]');
         if (b) b.click();
       }
     } catch(err) {
@@ -323,10 +339,13 @@ export default function OnlineWebView() {
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
           if (track) {
-            const existingCover = currentTrackRef.current?.coverUrl || currentTrackRef.current?.cover || '';
+            const isSameTrack = currentTrackRef.current &&
+              ((track.id && track.id === currentTrackRef.current.id) ||
+               (track.title && track.title === currentTrackRef.current.title));
+            const existingCover = isSameTrack ? (currentTrackRef.current?.coverUrl || currentTrackRef.current?.cover || '') : '';
             const incomingCover = track.coverUrl || track.cover || '';
             currentTrackRef.current = {
-              ...currentTrackRef.current,
+              ...(isSameTrack ? currentTrackRef.current : {}),
               ...track,
               coverUrl: incomingCover || existingCover || '',
             };

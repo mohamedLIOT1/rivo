@@ -116,25 +116,9 @@ export default function OfflineScreen() {
           </View>
 
           <Text style={styles.heroTitle}>OFFLINE TAPES</Text>
-          <Text style={styles.heroSub}>
+          <Text style={[styles.heroSub, { marginBottom: 0 }]}>
             Audio tracks saved on your device for zero-latency, offline listening.
           </Text>
-
-          <View style={styles.meterBox}>
-            <View style={styles.meterHeader}>
-              <Text style={styles.meterLabel}>CACHED RECORDINGS:</Text>
-              <Text style={styles.meterValue}>{offlineTracks.length} TAPES</Text>
-            </View>
-
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${Math.min(offlineTracks.length * 5, 100)}%` },
-                ]}
-              />
-            </View>
-          </View>
         </View>
       </View>
 
