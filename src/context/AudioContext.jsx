@@ -381,20 +381,53 @@ export function AudioProvider({ children, tracks, setTracks }) {
     stopYouTube();
 
     try {
+      const trackId = String(track.id || track._id || '');
       const qTitle = encodeURIComponent(track.title || '');
       const qArtist = encodeURIComponent(track.artist || '');
-      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${qTitle}&artist=${qArtist}`);
-      const d = await res.json();
+      const rawUrl = track.audioUrl || '';
+
+      let streamUrl = null;
+      let durationVal = track.duration || 210;
+
+      // 1. Direct stream from /api/tracks/:id/stream
+      try {
+        const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${qTitle}&artist=${qArtist}`);
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          let cand = sData?.url || sData?.directUrl;
+          if (cand && !cand.includes('youtube.com/watch') && !cand.includes('youtu.be/')) {
+            if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+            streamUrl = cand;
+          }
+        }
+      } catch (e) {}
+
+      // 2. Fallback to /api/tracks/resolve-stream with stream=true
+      if (!streamUrl) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}`);
+          if (res.ok) {
+            const d = await res.json();
+            if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
+              let cand = d.url;
+              if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+              streamUrl = cand;
+              if (d.duration) durationVal = d.duration;
+            }
+          }
+        } catch (e) {}
+      }
+
       if (!isPlayingRef.current && !shouldPlayRef.current) return;
-      if (d.success && d.url && audioRef.current) {
+      if (streamUrl && audioRef.current) {
         stopYouTube(); // Double check YouTube is completely silenced
-        audioRef.current.src = d.url;
+        audioRef.current.src = streamUrl;
         audioRef.current.volume = volumeRef.current;
         resumeAudioContext();
         await audioRef.current.play();
         setIsPlaying(true);
-        if (d.duration) setDuration(d.duration);
-        if (d.cover) setCurrentTrack(prev => prev ? { ...prev, cover: d.cover } : prev);
+        if (durationVal) setDuration(durationVal);
+        if (track.cover) setCurrentTrack(prev => prev ? { ...prev, cover: track.cover } : prev);
       }
     } catch (err) {
       console.warn('Fallback play error:', err);
@@ -691,14 +724,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (isYtTrackRef.current && actPlayer) {
             try {
               const state = actPlayer.getPlayerState();
-              // YT.PlayerState: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (cued)
-              // If playing (1), buffering (3), or paused (2), DO NOT fallback!
-              if (state === 1 || state === 2 || state === 3) return;
-              console.warn('[YT] Watchdog: YouTube not playing after 6s, falling back to audio stream');
+              const currTime = typeof actPlayer.getCurrentTime === 'function' ? (actPlayer.getCurrentTime() || 0) : 0;
+              // If playing normally and audio has progressed beyond 0.5s: healthy!
+              if (state === 1 && currTime > 0.5) return;
+              console.warn('[YT] Watchdog: YouTube not playing/stuck after 4s (state=' + state + ', time=' + currTime + '), falling back to audio stream');
               fallbackToHtmlAudio(currentTrack);
-            } catch {}
+            } catch (e) {
+              fallbackToHtmlAudio(currentTrack);
+            }
           }
-        }, 6000);
+        }, 4000);
       }
     } else {
       // ── Regular audio (Upload / Downloaded Blob) ─

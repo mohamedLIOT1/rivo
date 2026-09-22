@@ -433,9 +433,19 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
+      const soundSource = uri.startsWith('file://')
+        ? { uri }
+        : {
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+              'Accept': '*/*',
+            },
+          };
+
       const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true, progressUpdateIntervalMillis: 500 },
+        soundSource,
+        { shouldPlay: true, progressUpdateIntervalMillis: 250 },
         onPlaybackStatusUpdate
       );
 

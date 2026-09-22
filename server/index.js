@@ -4799,6 +4799,19 @@ const resolveStreamHandler = async (req, res) => {
 
     // 1. YouTube FIRST via title + artist (Authentic original music)
     if (title || artist) {
+      if (req.query.stream === 'true' || req.query.audio === 'true') {
+        const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '');
+        if (directAudio) {
+          const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
+          return res.json({
+            success: true,
+            url: proxyUrl,
+            directUrl: directAudio,
+            duration: 240,
+            isYouTube: true,
+          });
+        }
+      }
       const result = await resolveTrackAudio(title || '', artist || '');
       if (result && result.streamUrl) {
         return res.json({

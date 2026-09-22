@@ -237,7 +237,7 @@ const INJECTED_JS = `
   // 6. Involuntary Pause Guard & Background Watchdog (iOS & Android)
   document.addEventListener('pause', function(e) {
     if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-      if (e.target && typeof e.target.play === 'function') {
+      if (e.target && typeof e.target.play === 'function' && (e.target.currentSrc || e.target.src)) {
         e.target.play().catch(function() {});
       }
     }
@@ -251,13 +251,13 @@ const INJECTED_JS = `
           try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
         });
         document.querySelectorAll('audio, video').forEach(function(el) {
-          if (el.paused) {
+          if (el.paused && (el.currentSrc || el.src)) {
             el.play().catch(function() {});
           }
         });
       }
     } catch(e) {}
-  }, 1000);
+  }, 2000);
 
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {

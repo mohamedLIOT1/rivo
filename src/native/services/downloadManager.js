@@ -373,6 +373,9 @@ export const downloadTrack = async (track, onProgress) => {
       if (onProgress) onProgress(10);
       const directGoogleStream = await resolveClientSideYouTubeStream(ytId);
       if (directGoogleStream && typeof directGoogleStream === 'string' && directGoogleStream.startsWith('http')) {
+        // High-speed proxied URL with Range header support first
+        const proxyStreamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(directGoogleStream)}`;
+        candidates.push({ url: proxyStreamUrl, ext: 'm4a' });
         candidates.push({ url: directGoogleStream, ext: 'm4a' });
       }
     } catch (e) {
@@ -402,6 +405,10 @@ export const downloadTrack = async (track, onProgress) => {
   if (onProgress) onProgress(15);
 
   let success = false;
+  const downloadHeaders = {
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+    'Accept': '*/*',
+  };
 
   // Try candidate URLs one by one until one produces a valid audio file
   for (let i = 0; i < candidates.length; i++) {
@@ -418,7 +425,7 @@ export const downloadTrack = async (track, onProgress) => {
         const downloadResumable = FileSystem.createDownloadResumable(
           targetUrl,
           chosenAudioUri,
-          {},
+          { headers: downloadHeaders },
           (progressEvent) => {
             if (progressEvent.totalBytesExpectedToWrite > 0) {
               const progress = progressEvent.totalBytesWritten / progressEvent.totalBytesExpectedToWrite;
@@ -430,12 +437,12 @@ export const downloadTrack = async (track, onProgress) => {
         );
         res = await downloadResumable.downloadAsync();
       } catch (resumeErr) {
-        res = await FileSystem.downloadAsync(targetUrl, chosenAudioUri);
+        res = await FileSystem.downloadAsync(targetUrl, chosenAudioUri, { headers: downloadHeaders });
       }
 
       if (res && (res.status === 200 || res.status === 206)) {
         const check = await FileSystem.getInfoAsync(chosenAudioUri);
-        if (check.exists && check.size > 10000) {
+        if (check.exists && check.size > 50000) {
           // Verify downloaded payload is valid audio and not an HTML or JSON error response
           let isPayloadCorrupt = false;
           try {

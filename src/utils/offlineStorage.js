@@ -515,18 +515,27 @@ export async function getOfflineTrackAudioUrl(trackId, title = null, artist = nu
               }
             }
 
-            if (matchedNativeId && (downloadedIds.includes(matchedNativeId) || downloadedTracks.some(t => String(t.id || t._id) === matchedNativeId))) {
+            const foundNative = downloadedTracks.find(nt => {
+              if (matchedNativeId && String(nt.id || nt._id) === matchedNativeId) return true;
+              const ntTitle = (nt.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+              const ntArtist = (nt.artist || '').toLowerCase().trim();
+              return normTitle && ntTitle && normTitle === ntTitle && (!normArtist || !ntArtist || normArtist === ntArtist);
+            });
+            if (foundNative?.localAudioUri && foundNative.localAudioUri.startsWith('file://')) {
+              resolve(foundNative.localAudioUri);
+              return;
+            }
+
+            if (matchedNativeId && (downloadedIds.includes(matchedNativeId) || foundNative)) {
               const timeout = setTimeout(() => {
                 window.removeEventListener('rivo-receive-offline-audio', onReceive);
-                delete window.__RIVO_RECEIVE_OFFLINE_AUDIO;
                 resolve(null);
-              }, 400);
+              }, 1500);
 
               function onReceive(e) {
                 if (e && e.detail && String(e.detail.id) === matchedNativeId && e.detail.dataUri) {
                   clearTimeout(timeout);
                   window.removeEventListener('rivo-receive-offline-audio', onReceive);
-                  delete window.__RIVO_RECEIVE_OFFLINE_AUDIO;
                   try {
                     const blob = dataURItoBlob(e.detail.dataUri);
                     if (blob && blob.size > 10000) {

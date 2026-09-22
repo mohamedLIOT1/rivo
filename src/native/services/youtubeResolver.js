@@ -123,8 +123,10 @@ export const resolveAudioStream = async (track) => {
     try {
       const directStream = await resolveClientSideYouTubeStream(ytId);
       if (directStream) {
-        if (trackId) streamCache.set(trackId, directStream);
-        return directStream;
+        // Stream through high-speed Range-enabled proxy to prevent YouTube throttling and playback freezing
+        const streamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(directStream)}`;
+        if (trackId) streamCache.set(trackId, streamUrl);
+        return streamUrl;
       }
     } catch (e) {}
   }
