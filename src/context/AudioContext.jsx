@@ -17,7 +17,7 @@ function extractYtId(input) {
   if (urlMatch && urlMatch[1] && urlMatch[1].length === 11) return urlMatch[1];
   const prefixMatch = str.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
   if (prefixMatch && prefixMatch[1] && prefixMatch[1].length === 11) return prefixMatch[1];
-  if ((str.includes('youtube.com') || str.includes('youtu.be')) && /^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) return str;
   return null;
 }
 
@@ -628,18 +628,32 @@ export function AudioProvider({ children, tracks, setTracks }) {
       lastLoadedIdRef.current  = newId;
       lastLoadedUrlRef.current = newUrl;
 
-      // Track is ONLY a YouTube online track if it's NOT a blob, NOT a local device file, and NOT marked as downloaded
-      const ytId = (!isBlobUrl && !isLocalFile && !isDownloaded) ? extractYtId(newUrl) : null;
+      // Track is a YouTube online track if it's NOT a blob, NOT a local device file, and NOT marked as downloaded
+      const ytId = (!isBlobUrl && !isLocalFile && !isDownloaded)
+        ? (extractYtId(newUrl) || extractYtId(currentTrack.id) || extractYtId(currentTrack._id) || extractYtId(currentTrack.youtubeId))
+        : null;
 
       if (ytId) {
         // ── YouTube track ──────────────────────────────────────────
         isYtTrackRef.current = true;
         setIsYtTrack(true);
 
-        // Stop and unload HTML audio completely
-        stopHtmlAudio();
+        // On iOS & WKWebView: Play silent keeper in HTML audio so WebKit never kills background playback or lockscreen
+        const isIOS = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent || ''));
+        if (isIOS && audioRef.current) {
+          try {
+            audioRef.current.loop = true;
+            audioRef.current.volume = 0.0001;
+            if (!audioRef.current.src || !audioRef.current.src.startsWith('data:audio/wav')) {
+              audioRef.current.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+            }
+            audioRef.current.play().catch(() => {});
+          } catch {}
+        } else {
+          stopHtmlAudio();
+        }
 
-      setCurrentTime(0);
+        setCurrentTime(0);
       setDuration(currentTrack.duration || 210);
 
       if (watchdogRef.current) {
@@ -893,10 +907,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
             if (seekToRef.current) seekToRef.current(details.seekTime);
           }
         });
-        navigator.mediaSession.setActionHandler('seekforward', null);
-        navigator.mediaSession.setActionHandler('seekbackward', null);
-        navigator.mediaSession.setActionHandler('skipforward', null);
-        navigator.mediaSession.setActionHandler('skipbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const step = details?.seekOffset || 10;
+          if (seekToRef.current && currentTimeRef.current != null) {
+            seekToRef.current(Math.min(durationRef.current || 999999, (currentTimeRef.current || 0) + step));
+          }
+        });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const step = details?.seekOffset || 10;
+          if (seekToRef.current && currentTimeRef.current != null) {
+            seekToRef.current(Math.max(0, (currentTimeRef.current || 0) - step));
+          }
+        });
+        navigator.mediaSession.setActionHandler('skipforward', () => {
+          if (playNextTrackRef.current) playNextTrackRef.current();
+        });
+        navigator.mediaSession.setActionHandler('skipbackward', () => {
+          if (playPrevTrackRef.current) playPrevTrackRef.current();
+        });
       } catch {}
     } catch {}
   }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
@@ -905,9 +933,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+        if ('setPositionState' in navigator.mediaSession && duration && duration > 0 && !isNaN(duration)) {
+          navigator.mediaSession.setPositionState({
+            duration: Math.max(1, duration),
+            playbackRate: isPlaying ? 1 : 0,
+            position: Math.min(duration, Math.max(0, currentTime || 0))
+          });
+        }
       } catch {}
     }
-  }, [isPlaying]);
+  }, [isPlaying, currentTime, duration]);
 
   // ── Native Media Controls Bridge (Android Lockscreen & Background Notification) ──
   useEffect(() => {

@@ -136,7 +136,7 @@ function extractYtId(input) {
     return prefixMatch[1];
   }
 
-  if ((str.includes('youtube.com') || str.includes('youtu.be')) && /^[a-zA-Z0-9_-]{11}$/.test(str)) {
+  if (/^[a-zA-Z0-9_-]{11}$/.test(str)) {
     return str;
   }
   
@@ -488,8 +488,11 @@ export async function getOfflineTrackAudioUrl(trackId, title = null, artist = nu
             return;
           }
 
-          // Fallback: If track is on the native filesystem, request it across the bridge
-          const isIOS = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+          const isIOS = typeof navigator !== 'undefined' && (
+            /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+            (/Macintosh/i.test(navigator.userAgent) && typeof window !== 'undefined' && window.ReactNativeWebView)
+          );
           if (isIOS) {
             // On iOS WKWebView, resolve null immediately to avoid freezing track transitions
             resolve(null);

@@ -134,7 +134,7 @@ export const AudioProvider = ({ children }) => {
           shouldDuckAndroid: true,
           playThroughEarpieceAndroid: false,
           interruptionModeAndroid: InterruptionModeAndroid.DuckOthers,
-          interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+          interruptionModeIOS: InterruptionModeIOS.MixWithOthers,
         });
       } catch {}
     };

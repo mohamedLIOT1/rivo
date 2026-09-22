@@ -578,12 +578,18 @@ function optionalAuth(req, res, next) {
 const searchCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
+const ytSearchCache = new Map();
+
 async function searchYouTubeId(query) {
   if (!query || !query.trim()) return null;
   const q = query.trim();
+  const cacheKey = q.toLowerCase();
+  if (ytSearchCache.has(cacheKey)) {
+    return ytSearchCache.get(cacheKey);
+  }
 
   // 1. YouTube Data API v3 (Official, unblocked on Railway)
-  const apiKey = process.env.YOUTUBE_API_KEY;
+  const apiKey = process.env.YOUTUBE_API_KEY || 'AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs';
   if (apiKey) {
     try {
       const res = await axios.get('https://www.googleapis.com/youtube/v3/search', {
@@ -597,19 +603,32 @@ async function searchYouTubeId(query) {
         timeout: 4500
       });
       const videoId = res.data?.items?.[0]?.id?.videoId;
-      if (videoId && videoId.length === 11) return videoId;
+      if (videoId && videoId.length === 11) {
+        if (ytSearchCache.size > 2000) ytSearchCache.clear();
+        ytSearchCache.set(cacheKey, videoId);
+        return videoId;
+      }
     } catch (err) {
       console.warn('[searchYouTubeId] YouTube API error:', err?.response?.data?.error?.message || err.message);
     }
   }
 
-  // 2. Invidious fallback
-  try {
-    const invRes = await axios.get(`https://invidious.jing.rocks/api/v1/search?q=${encodeURIComponent(q)}&type=video`, { timeout: 3000 });
-    if (invRes.data && Array.isArray(invRes.data) && invRes.data[0]?.videoId) {
-      return invRes.data[0].videoId;
-    }
-  } catch {}
+  // 2. Invidious & Piped fallback
+  const invidiousEndpoints = [
+    'https://inv.nadeko.net/api/v1/search',
+    'https://invidious.jing.rocks/api/v1/search',
+    'https://yewtu.be/api/v1/search'
+  ];
+  for (const ep of invidiousEndpoints) {
+    try {
+      const invRes = await axios.get(`${ep}?q=${encodeURIComponent(q)}&type=video`, { timeout: 2500 });
+      if (invRes.data && Array.isArray(invRes.data) && invRes.data[0]?.videoId) {
+        const vid = invRes.data[0].videoId;
+        ytSearchCache.set(cacheKey, vid);
+        return vid;
+      }
+    } catch {}
+  }
 
   // 3. Fallback scraping
   try {
@@ -617,14 +636,17 @@ async function searchYouTubeId(query) {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       },
-      timeout: 5000
+      timeout: 3500
     });
     const matches = [...res.data.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map(m => m[1]);
     const valid = matches.filter(id => id && id.length === 11);
-    return valid[0] || null;
-  } catch {
-    return null;
-  }
+    if (valid[0]) {
+      ytSearchCache.set(cacheKey, valid[0]);
+      return valid[0];
+    }
+  } catch {}
+
+  return null;
 }
 
 async function fetchTrackCover(title, artist) {
@@ -3957,9 +3979,10 @@ app.get('/api/tracks/download', async (req, res) => {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
           timeout: 45000
         });
+        const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
         res.set({
           'Content-Type': 'audio/mpeg',
-          'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
+          'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.mp3`,
           'Access-Control-Allow-Origin': '*'
         });
         return directRes.data.pipe(res);
@@ -4010,12 +4033,21 @@ app.get('/api/tracks/download', async (req, res) => {
         });
 
         if (dlSuccess) {
+          const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+          const encoded = encodeURIComponent(cleanFilename);
           res.set({
+            'Content-Type': 'audio/mp4',
+            'Content-Disposition': `attachment; filename="${safeAscii}.m4a"; filename*=UTF-8''${encoded}.m4a`,
             'Access-Control-Allow-Origin': '*'
           });
-          return res.download(tempFile, `${cleanFilename}.m4a`, () => {
+          const fStream = fs.createReadStream(tempFile);
+          fStream.on('close', () => {
             try { fs.unlinkSync(tempFile); } catch (e) {}
           });
+          fStream.on('error', () => {
+            try { fs.unlinkSync(tempFile); } catch (e) {}
+          });
+          return fStream.pipe(res);
         }
       }
     }
@@ -4036,9 +4068,10 @@ app.get('/api/tracks/download', async (req, res) => {
         timeout: 45000
       });
 
+      const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
       res.set({
         'Content-Type': 'audio/mpeg',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}.mp3"`,
+        'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.mp3`,
         'Access-Control-Allow-Origin': '*'
       });
       return streamRes.data.pipe(res);
@@ -4490,7 +4523,80 @@ app.get('/api/proxy-audio', async (req, res) => {
 // ──────────────────────────────────────────
 const resolveStreamHandler = async (req, res) => {
   try {
-    const { url, title, artist } = req.query;
+    const { url, title, artist, id, trackId } = req.query;
+
+    // 0. Instant YouTube ID extraction from candidate fields (0ms response)
+    const cand = [url, id, trackId, req.params?.id];
+    for (const c of cand) {
+      if (c && typeof c === 'string') {
+        const m1 = c.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+        if (m1 && m1[1] && m1[1].length === 11) {
+          const vid = m1[1];
+          return res.json({
+            success: true,
+            url: `https://www.youtube.com/watch?v=${vid}`,
+            ytId: vid,
+            duration: 240,
+            cover: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+            isYouTube: true
+          });
+        }
+        const m2 = c.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+        if (m2 && m2[1] && m2[1].length === 11) {
+          const vid = m2[1];
+          return res.json({
+            success: true,
+            url: `https://www.youtube.com/watch?v=${vid}`,
+            ytId: vid,
+            duration: 240,
+            cover: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+            isYouTube: true
+          });
+        }
+        if (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim())) {
+          const vid = c.trim();
+          return res.json({
+            success: true,
+            url: `https://www.youtube.com/watch?v=${vid}`,
+            ytId: vid,
+            duration: 240,
+            cover: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
+            isYouTube: true
+          });
+        }
+      }
+    }
+
+    // Check DB for existing track by ObjectId
+    const targetDbId = id || trackId || req.params?.id;
+    if (targetDbId && mongoose.isValidObjectId(targetDbId)) {
+      try {
+        const dbTrack = await Track.findById(targetDbId).lean();
+        if (dbTrack) {
+          const dbYtId = (dbTrack.audioUrl && (dbTrack.audioUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1])) ||
+                         (/^[a-zA-Z0-9_-]{11}$/.test(dbTrack.audioUrl) ? dbTrack.audioUrl : null);
+          if (dbYtId) {
+            return res.json({
+              success: true,
+              url: `https://www.youtube.com/watch?v=${dbYtId}`,
+              ytId: dbYtId,
+              duration: dbTrack.duration || 240,
+              cover: dbTrack.cover || `https://i.ytimg.com/vi/${dbYtId}/hqdefault.jpg`,
+              isYouTube: true
+            });
+          }
+          if (dbTrack.audioUrl && dbTrack.audioUrl.startsWith('http') && !dbTrack.audioUrl.includes('soundcloud')) {
+            return res.json({
+              success: true,
+              url: dbTrack.audioUrl,
+              duration: dbTrack.duration || 240,
+              cover: dbTrack.cover,
+              isYouTube: false
+            });
+          }
+        }
+      } catch {}
+    }
 
     // 1. YouTube FIRST via title + artist (Authentic original music)
     if (title || artist) {

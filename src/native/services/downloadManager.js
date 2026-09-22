@@ -128,8 +128,8 @@ export const getDownloadedTracks = async () => {
         let modified = false;
 
         for (const file of diskFiles) {
-          if (!file.endsWith('.mp3')) continue;
-          const trackId = file.replace(/\.mp3$/i, '');
+          if (!file.endsWith('.mp3') && !file.endsWith('.m4a') && !file.endsWith('.mp4')) continue;
+          const trackId = file.replace(/\.(mp3|m4a|mp4)$/i, '');
           if (!trackId || trackId === 'temp') continue;
 
           const fileUri = `${TRACKS_DIR}${file}`;
@@ -280,7 +280,8 @@ export const downloadTrack = async (track, onProgress) => {
   await ensureDirs();
 
   const trackId = String(track._id || track.id);
-  const audioFileUri = `${TRACKS_DIR}${trackId}.mp3`;
+  const audioFileUriMp3 = `${TRACKS_DIR}${trackId}.mp3`;
+  const audioFileUriM4a = `${TRACKS_DIR}${trackId}.m4a`;
   const coverFileUri = `${COVERS_DIR}${trackId}.jpg`;
   const cleanTitle = cleanMetadataString(track.title, 'Track');
   const cleanArtist = cleanMetadataString(track.artist, 'Artist');
@@ -290,10 +291,25 @@ export const downloadTrack = async (track, onProgress) => {
 
   if (onProgress) onProgress(5);
 
-  // Check if audio file already exists locally on disk
-  const existingLocalUri = (track.localAudioUri && track.localAudioUri.startsWith('file://')) ? track.localAudioUri :
-                          (track.nativeAudioUri && track.nativeAudioUri.startsWith('file://')) ? track.nativeAudioUri :
-                          audioFileUri;
+  // Check if audio file already exists locally on disk (either .m4a or .mp3)
+  let existingLocalUri = (track.localAudioUri && track.localAudioUri.startsWith('file://')) ? track.localAudioUri :
+                         (track.nativeAudioUri && track.nativeAudioUri.startsWith('file://')) ? track.nativeAudioUri :
+                         null;
+
+  if (!existingLocalUri) {
+    try {
+      const infoM4a = await FileSystem.getInfoAsync(audioFileUriM4a);
+      if (infoM4a.exists && infoM4a.size > 10000) existingLocalUri = audioFileUriM4a;
+    } catch {}
+    if (!existingLocalUri) {
+      try {
+        const infoMp3 = await FileSystem.getInfoAsync(audioFileUriMp3);
+        if (infoMp3.exists && infoMp3.size > 10000) existingLocalUri = audioFileUriMp3;
+      } catch {}
+    }
+  }
+
+  let audioFileUri = audioFileUriM4a; // Default to m4a for YouTube streams
   try {
     const existingInfo = await FileSystem.getInfoAsync(existingLocalUri);
     if (existingInfo.exists && existingInfo.size > 10000) {
