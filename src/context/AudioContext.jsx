@@ -446,7 +446,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 durationRef.current = d;
               }
             }
-          }, 150);
+          }, 250);
         } else if (!isYtTrackRef.current) {
           try { player.pauseVideo(); player.mute(); } catch {}
         }
@@ -1043,6 +1043,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // Handle media actions dispatched from Native Android notification / lockscreen
   useEffect(() => {
+    window.__RIVO_NEXT_TRACK = () => {
+      if (playNextTrackRef.current) playNextTrackRef.current();
+    };
+    window.__RIVO_PREV_TRACK = () => {
+      if (playPrevTrackRef.current) playPrevTrackRef.current();
+    };
+    window.__RIVO_TOGGLE_PLAY = () => {
+      togglePlay();
+    };
     window.__RIVO_MEDIA_ACTION = (action) => {
       if (action === 'play') {
         if (!isPlayingRef.current) togglePlay();
@@ -1074,6 +1083,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return () => {
       delete window.__RIVO_MEDIA_ACTION;
       delete window.__RIVO_MEDIA_SEEK;
+      delete window.__RIVO_NEXT_TRACK;
+      delete window.__RIVO_PREV_TRACK;
+      delete window.__RIVO_TOGGLE_PLAY;
     };
   }, [togglePlay]);
 
@@ -1170,9 +1182,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const targetId = String(trackToPlay.id || trackToPlay._id || '');
       const isTrackInCurQ = curQ.some(t => String(t.id || t._id) === targetId);
 
-      // If playing remotely or if track is completely absent from current queue, start queue fresh with this track
+      // If playing remotely or if track is completely absent from current queue, build contextual queue from library
       if (!isTrackInCurQ) {
-        resolvedQueue = [trackToPlay];
+        const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        const hasInPool = pool.some(t => String(t.id || t._id) === targetId);
+        resolvedQueue = hasInPool ? pool : [trackToPlay, ...pool];
         setCurrentQueue(resolvedQueue);
       } else {
         // Check if current queue is strictly composed of the same type
@@ -1451,7 +1465,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
     const typeIsolated = rawQueue.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-    const pool = typeIsolated.length > 0 ? typeIsolated : tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const pool = (typeIsolated.length > 1) ? typeIsolated : (tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)).length > 0 ? tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)) : typeIsolated);
     const activeList = isOfflineMode ? pool.filter(t => t.downloaded) : pool;
     if (!activeList.length) return;
 
@@ -1556,12 +1570,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueueIndex(nextIdx);
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
       } else {
-        // If repeatMode is 'off' and we are at the end of the queue, stop playing cleanly
-        if (repeatModeRef.current === 'off' && idx >= activeList.length - 1) {
-          setIsPlaying(false);
-          return;
-        }
-        const nextIdx = idx >= 0 ? (idx + 1) % activeList.length : 0;
+        const nextIdx = (idx + 1) % activeList.length;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
@@ -1582,7 +1591,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
     const typeIsolated = rawQueue.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-    const pool = typeIsolated.length > 0 ? typeIsolated : tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const pool = (typeIsolated.length > 1) ? typeIsolated : (tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)).length > 0 ? tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)) : typeIsolated);
     const activeList = isOfflineMode ? pool.filter(t => t.downloaded) : pool;
     if (!activeList.length) return;
 
