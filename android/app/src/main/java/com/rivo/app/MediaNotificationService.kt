@@ -21,6 +21,9 @@ import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -64,6 +67,8 @@ class MediaNotificationService : Service() {
 
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -75,6 +80,55 @@ class MediaNotificationService : Service() {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Rivo::PlaybackWakeLock").apply {
                 setReferenceCounted(false)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    override fun onDestroy() {
+        releaseWakeLock()
+        abandonAudioFocus()
+        try {
+            mediaSession?.isActive = false
+            mediaSession?.release()
+        } catch (_: Throwable) {}
+        super.onDestroy()
+    }
+
+    private fun requestAudioFocus() {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+            audioManager = am
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(audioAttributes)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener { /* maintain focus */ }
+                    .build()
+                audioFocusRequest = focusRequest
+                am.requestAudioFocus(focusRequest)
+            } else {
+                @Suppress("DEPRECATION")
+                am.requestAudioFocus(
+                    { _ -> },
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun abandonAudioFocus() {
+        try {
+            val am = audioManager ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                am.abandonAudioFocus(null)
             }
         } catch (_: Throwable) {}
     }
@@ -189,11 +243,20 @@ class MediaNotificationService : Service() {
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
                     if (cSec >= 0 && (now - lastUserSeekTimeMs > 4000L)) {
-                        currentPositionMs = (cSec * 1000).toLong()
+                        val newPosMs = (cSec * 1000).toLong()
+                        if (newPosMs > 0 || !isPlaying || currentPositionMs < 2000L) {
+                            currentPositionMs = newPosMs
+                        }
                     }
                 }
 
-                if (isPlaying) acquireWakeLock() else releaseWakeLock()
+                if (isPlaying) {
+                    acquireWakeLock()
+                    requestAudioFocus()
+                } else {
+                    releaseWakeLock()
+                    abandonAudioFocus()
+                }
                 startForegroundWithNotification()
             }
             ACTION_UPDATE -> {
@@ -228,7 +291,10 @@ class MediaNotificationService : Service() {
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
                     if (cSec >= 0 && (now - lastUserSeekTimeMs > 4000L)) {
-                        currentPositionMs = (cSec * 1000).toLong()
+                        val newPosMs = (cSec * 1000).toLong()
+                        if (newPosMs > 0 || !isPlaying || currentPositionMs < 2000L) {
+                            currentPositionMs = newPosMs
+                        }
                     }
                 }
 
@@ -242,14 +308,17 @@ class MediaNotificationService : Service() {
 
                 if (isPlaying) {
                     acquireWakeLock()
+                    requestAudioFocus()
                     startForegroundWithNotification()
                 } else {
                     releaseWakeLock()
+                    abandonAudioFocus()
                 }
                 updateNotification()
             }
             ACTION_HIDE -> {
                 releaseWakeLock()
+                abandonAudioFocus()
                 stopForeground(true)
                 stopSelf()
             }
@@ -272,10 +341,12 @@ class MediaNotificationService : Service() {
         if (action == "play") {
             isPlaying = true
             acquireWakeLock()
+            requestAudioFocus()
             startForegroundWithNotification()
         } else if (action == "pause") {
             isPlaying = false
             releaseWakeLock()
+            abandonAudioFocus()
         } else if (action == "repeat") {
             isRepeat = !isRepeat
             lastUserRepeatTimeMs = now
@@ -575,11 +646,5 @@ class MediaNotificationService : Service() {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
-    }
-
-    override fun onDestroy() {
-        releaseWakeLock()
-        mediaSession?.release()
-        super.onDestroy()
     }
 }
