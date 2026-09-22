@@ -61,34 +61,61 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // 1.1 Hardware Media Keys & F-Keys (F4: Prev, F5: Play/Pause, F6: Next)
+      // 1.1 Hardware Media Keys & Function Keys:
+      // F4: Play / Pause (توقيف / تشغيل)
+      // F5: Play Next (الأغنية التالية / بلاي نيكست)
+      // F6: Fast Forward 10s (تقديم للأمام / بلاي فورورد)
       if (
+        e.code === 'F4' || e.key === 'F4' ||
         e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' ||
-        e.code === 'F5' || e.key === 'F5' ||
         e.code === 'F8' || e.key === 'F8'
       ) {
         e.preventDefault();
+        e.stopPropagation();
         togglePlay();
         return;
       }
 
       if (
+        e.code === 'F5' || e.key === 'F5' ||
         e.code === 'MediaTrackNext' || e.key === 'MediaTrackNext' ||
-        e.code === 'F6' || e.key === 'F6' ||
         e.code === 'F9' || e.key === 'F9'
       ) {
         e.preventDefault();
+        e.stopPropagation();
         playNextTrack();
         return;
       }
 
       if (
-        e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious' ||
-        e.code === 'F4' || e.key === 'F4' ||
-        e.code === 'F7' || e.key === 'F7'
+        e.code === 'F6' || e.key === 'F6' ||
+        e.code === 'MediaFastForward' || e.key === 'MediaFastForward'
       ) {
         e.preventDefault();
+        e.stopPropagation();
+        const cur = currentTimeRef.current || 0;
+        const dur = durationRef.current || 999999;
+        seekTo(Math.min(dur, cur + 10));
+        return;
+      }
+
+      if (
+        e.code === 'F3' || e.key === 'F3' ||
+        e.code === 'F7' || e.key === 'F7' ||
+        (e.shiftKey && (e.code === 'F4' || e.key === 'F4')) ||
+        e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious'
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
         playPrevTrack();
+        return;
+      }
+
+      if (e.code === 'MediaRewind' || e.key === 'MediaRewind') {
+        e.preventDefault();
+        e.stopPropagation();
+        const cur = currentTimeRef.current || 0;
+        seekTo(Math.max(0, cur - 10));
         return;
       }
 
@@ -208,8 +235,8 @@ export function useKeyboardShortcuts({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [
     togglePlay,
     playNextTrack,
