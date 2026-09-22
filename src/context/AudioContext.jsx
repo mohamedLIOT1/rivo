@@ -816,93 +816,97 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }
     }
+  }, [currentTrack]);
 
-    // MediaSession API
-    if ('mediaSession' in navigator) {
+  // ── MediaSession API (Lockscreen & Bluetooth Controls) ──
+  useEffect(() => {
+    if (!currentTrack || typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    try {
+      const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentTrack.title || 'Rivo',
+        artist: currentTrack.artist || 'Artist',
+        album: currentTrack.album || 'Single',
+        artwork: coverSrc ? [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] : [],
+      });
+      navigator.mediaSession.setActionHandler('play', () => {
+        isUserPauseActionRef.current = false;
+        resumeAudioContext();
+        const actPlayer = getActiveYtPlayer();
+        if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
+          try {
+            actPlayer.unMute();
+            actPlayer.playVideo();
+          } catch {}
+        } else if (audioRef.current) {
+          audioRef.current.play().catch(() => {});
+        }
+        setIsPlaying(true);
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        isUserPauseActionRef.current = true;
+        const actPlayer = getActiveYtPlayer();
+        if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
+          try {
+            actPlayer.pauseVideo();
+          } catch {}
+        } else if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsPlaying(false);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        isUserPauseActionRef.current = false;
+        if (playPrevTrackRef.current) playPrevTrackRef.current();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        isUserPauseActionRef.current = false;
+        if (playNextTrackRef.current) playNextTrackRef.current();
+      });
+      // Explicitly register seekto so system notification slider seeks accurately, while clearing 10s skip handlers
       try {
-        const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title:  currentTrack.title  || 'Rivo',
-          artist: currentTrack.artist || 'Artist',
-          album:  currentTrack.album  || 'Single',
-          artwork: coverSrc ? [{ src: coverSrc, sizes: '512x512', type: 'image/jpeg' }] : [],
-        });
-        navigator.mediaSession.setActionHandler('play', () => {
-          isUserPauseActionRef.current = false;
-          resumeAudioContext();
-          const actPlayer = getActiveYtPlayer();
-          if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
-            try {
-              actPlayer.unMute();
-              actPlayer.playVideo();
-            } catch {}
-          } else if (audioRef.current) {
-            audioRef.current.play().catch(() => {});
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details && typeof details.seekTime === 'number') {
+            if (seekToRef.current) seekToRef.current(details.seekTime);
           }
-          setIsPlaying(true);
         });
-        navigator.mediaSession.setActionHandler('pause', () => {
-          isUserPauseActionRef.current = true;
-          const actPlayer = getActiveYtPlayer();
-          if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
-            try {
-              actPlayer.pauseVideo();
-            } catch {}
-          } else if (audioRef.current) {
-            audioRef.current.pause();
-          }
-          setIsPlaying(false);
-        });
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-          isUserPauseActionRef.current = false;
-          if (playPrevTrackRef.current) playPrevTrackRef.current();
-        });
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-          isUserPauseActionRef.current = false;
-          if (playNextTrackRef.current) playNextTrackRef.current();
-        });
-        // Explicitly register seekto so system notification slider seeks accurately, while clearing 10s skip handlers
-        try {
-          navigator.mediaSession.setActionHandler('seekto', (details) => {
-            if (details && typeof details.seekTime === 'number') {
-              if (seekToRef.current) seekToRef.current(details.seekTime);
-            }
-          });
-          navigator.mediaSession.setActionHandler('seekforward', null);
-          navigator.mediaSession.setActionHandler('seekbackward', null);
-          navigator.mediaSession.setActionHandler('skipforward', null);
-          navigator.mediaSession.setActionHandler('skipbackward', null);
-        } catch {}
+        navigator.mediaSession.setActionHandler('seekforward', null);
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('skipforward', null);
+        navigator.mediaSession.setActionHandler('skipbackward', null);
       } catch {}
-    }
+    } catch {}
+  }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
 
-    // ── Native Media Controls Bridge (Android Lockscreen & Background Notification) ──
-    if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-      try {
-        const isLiked = currentTrack ? likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id)) : false;
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'PLAYBACK_STATE',
-          isPlaying: isPlaying,
-          isRepeat: repeatMode !== 'off',
-          isShuffle: Boolean(isShuffle),
-          isLiked: isLiked,
-          duration: duration || currentTrack?.duration || 240,
+  // ── Native Media Controls Bridge (Android Lockscreen & Background Notification) ──
+  useEffect(() => {
+    if (!currentTrack || typeof window === 'undefined' || !window.ReactNativeWebView || !window.ReactNativeWebView.postMessage) return;
+    try {
+      const isLiked = likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id));
+      const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'PLAYBACK_STATE',
+        isPlaying: Boolean(isPlaying),
+        isRepeat: repeatMode !== 'off',
+        isShuffle: Boolean(isShuffle),
+        isLiked: isLiked,
+        duration: duration || currentTrack.duration || 240,
+        currentTime: currentTime || 0,
+        track: {
+          id: currentTrack._id || currentTrack.id,
+          _id: currentTrack._id || currentTrack.id,
+          title: currentTrack.title || 'Unknown Track',
+          artist: currentTrack.artist || 'Unknown Artist',
+          coverUrl: coverSrc,
+          cover: coverSrc,
+          audioUrl: currentTrack.audioUrl || '',
+          duration: duration || currentTrack.duration || 240,
           currentTime: currentTime || 0,
-          track: currentTrack ? {
-            id: currentTrack._id || currentTrack.id,
-            _id: currentTrack._id || currentTrack.id,
-            title: currentTrack.title || 'Unknown Track',
-            artist: currentTrack.artist || 'Unknown Artist',
-            coverUrl: currentTrack.cover || currentTrack.coverUrl || '',
-            audioUrl: currentTrack.audioUrl || '',
-            duration: duration || currentTrack.duration || 240,
-            currentTime: currentTime || 0,
-            liked: isLiked,
-          } : null
-        }));
-      } catch (e) {}
-    }
-  }, [currentTrack, isPlaying, getActiveYtPlayer, isCurrentYtReady, repeatMode, isShuffle, likedTrackIds, duration]);
+          liked: isLiked,
+        }
+      }));
+    } catch (e) {}
+  }, [currentTrack, isPlaying, repeatMode, isShuffle, likedTrackIds, duration]);
 
   // Periodic time sync to keep Android Notification Seekbar accurate
   useEffect(() => {
@@ -913,6 +917,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const curT = currentTrackRef.current;
           if (curT) {
             const isLiked = likedTrackIds.some(id => String(id) === String(curT._id || curT.id));
+            const coverSrc = curT.cover || curT.coverUrl || '';
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'PLAYBACK_STATE',
               isPlaying: true,
@@ -921,6 +926,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
               isLiked: isLiked,
               duration: duration || curT.duration || 240,
               currentTime: currentTimeRef.current || 0,
+              track: {
+                id: curT._id || curT.id,
+                _id: curT._id || curT.id,
+                title: curT.title || 'Unknown Track',
+                artist: curT.artist || 'Unknown Artist',
+                coverUrl: coverSrc,
+                cover: coverSrc,
+                audioUrl: curT.audioUrl || '',
+                duration: duration || curT.duration || 240,
+                currentTime: currentTimeRef.current || 0,
+                liked: isLiked,
+              }
             }));
           }
         } catch {}
@@ -1228,6 +1245,34 @@ export function AudioProvider({ children, tracks, setTracks }) {
     shouldPlayRef.current = true;
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
+
+    if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      try {
+        const isLiked = likedTrackIds.some(id => String(id) === String(trackToPlay._id || trackToPlay.id));
+        const coverSrc = trackToPlay.cover || trackToPlay.coverUrl || '';
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'PLAYBACK_STATE',
+          isPlaying: true,
+          isRepeat: repeatMode !== 'off',
+          isShuffle: Boolean(isShuffle),
+          isLiked: isLiked,
+          duration: trackToPlay.duration || 240,
+          currentTime: 0,
+          track: {
+            id: trackToPlay._id || trackToPlay.id,
+            _id: trackToPlay._id || trackToPlay.id,
+            title: trackToPlay.title || 'Unknown Track',
+            artist: trackToPlay.artist || 'Unknown Artist',
+            coverUrl: coverSrc,
+            cover: coverSrc,
+            audioUrl: trackToPlay.audioUrl || '',
+            duration: trackToPlay.duration || 240,
+            currentTime: 0,
+            liked: isLiked,
+          }
+        }));
+      } catch {}
+    }
   }, [setTracks, getActiveYtPlayer]);
 
   const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {

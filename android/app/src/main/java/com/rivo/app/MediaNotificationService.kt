@@ -151,9 +151,28 @@ class MediaNotificationService : Service() {
         when (action) {
             ACTION_SHOW -> {
                 val now = SystemClock.elapsedRealtime()
-                currentTitle = intent.getStringExtra("title") ?: currentTitle
-                currentArtist = intent.getStringExtra("artist") ?: currentArtist
-                currentCoverUrl = intent.getStringExtra("coverUrl")
+                val incomingTitle = intent.getStringExtra("title")
+                if (!incomingTitle.isNullOrBlank() && incomingTitle != "Unknown Track") {
+                    currentTitle = incomingTitle
+                } else if (currentTitle == "Rivo Music" && !incomingTitle.isNullOrBlank()) {
+                    currentTitle = incomingTitle
+                }
+
+                val incomingArtist = intent.getStringExtra("artist")
+                if (!incomingArtist.isNullOrBlank() && incomingArtist != "Unknown Artist") {
+                    currentArtist = incomingArtist
+                } else if (currentArtist == "Playing in Background" && !incomingArtist.isNullOrBlank()) {
+                    currentArtist = incomingArtist
+                }
+
+                val incomingCover = intent.getStringExtra("coverUrl")
+                if (!incomingCover.isNullOrBlank()) {
+                    if (incomingCover != currentCoverUrl || currentBitmap == null) {
+                        currentCoverUrl = incomingCover
+                        loadCoverBitmapAsync(incomingCover)
+                    }
+                }
+
                 isPlaying = intent.getBooleanExtra("isPlaying", true)
                 if (now - lastUserRepeatTimeMs > 4000L) {
                     isRepeat = intent.getBooleanExtra("isRepeat", false)
@@ -176,7 +195,6 @@ class MediaNotificationService : Service() {
 
                 if (isPlaying) acquireWakeLock() else releaseWakeLock()
                 startForegroundWithNotification()
-                loadCoverBitmapAsync(currentCoverUrl)
             }
             ACTION_UPDATE -> {
                 val now = SystemClock.elapsedRealtime()
@@ -188,8 +206,20 @@ class MediaNotificationService : Service() {
                 if (intent.hasExtra("isLiked") && (now - lastUserLikeTimeMs > 4000L)) {
                     isLiked = intent.getBooleanExtra("isLiked", isLiked)
                 }
-                if (intent.hasExtra("title")) currentTitle = intent.getStringExtra("title") ?: currentTitle
-                if (intent.hasExtra("artist")) currentArtist = intent.getStringExtra("artist") ?: currentArtist
+
+                val incomingTitle = intent.getStringExtra("title")
+                if (!incomingTitle.isNullOrBlank() && incomingTitle != "Unknown Track") {
+                    currentTitle = incomingTitle
+                } else if (currentTitle == "Rivo Music" && !incomingTitle.isNullOrBlank()) {
+                    currentTitle = incomingTitle
+                }
+
+                val incomingArtist = intent.getStringExtra("artist")
+                if (!incomingArtist.isNullOrBlank() && incomingArtist != "Unknown Artist") {
+                    currentArtist = incomingArtist
+                } else if (currentArtist == "Playing in Background" && !incomingArtist.isNullOrBlank()) {
+                    currentArtist = incomingArtist
+                }
 
                 if (intent.hasExtra("duration")) {
                     val dSec = intent.getDoubleExtra("duration", 0.0)
@@ -202,11 +232,11 @@ class MediaNotificationService : Service() {
                     }
                 }
 
-                if (intent.hasExtra("coverUrl")) {
-                    val newCover = intent.getStringExtra("coverUrl")
-                    if (!newCover.isNullOrBlank() && newCover != currentCoverUrl) {
-                        currentCoverUrl = newCover
-                        loadCoverBitmapAsync(newCover)
+                val incomingCover = intent.getStringExtra("coverUrl")
+                if (!incomingCover.isNullOrBlank()) {
+                    if (incomingCover != currentCoverUrl || currentBitmap == null) {
+                        currentCoverUrl = incomingCover
+                        loadCoverBitmapAsync(incomingCover)
                     }
                 }
 
@@ -345,6 +375,9 @@ class MediaNotificationService : Service() {
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Rivo Music")
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, currentTitle)
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, currentArtist)
+            .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_DESCRIPTION, "Rivo Music")
 
         if (currentDurationMs > 0L) {
             metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDurationMs)
@@ -353,6 +386,7 @@ class MediaNotificationService : Service() {
         currentBitmap?.let {
             metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
             metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it)
         }
         mediaSession?.setMetadata(metadataBuilder.build())
 
@@ -473,7 +507,8 @@ class MediaNotificationService : Service() {
     }
 
     private fun loadCoverBitmapAsync(urlStr: String?) {
-        if (urlStr.isNullOrBlank() || urlStr == lastLoadedCoverUrl) return
+        if (urlStr.isNullOrBlank()) return
+        if (urlStr == lastLoadedCoverUrl && currentBitmap != null) return
         lastLoadedCoverUrl = urlStr
 
         thread {
