@@ -225,8 +225,7 @@ const INJECTED_JS = `
     } catch(err) {}
   }, true);
 
-  ${Platform.OS === 'android' ? `
-  // 6. Android Involuntary Pause Guard & Background Watchdog
+  // 6. Involuntary Pause Guard & Background Watchdog (iOS & Android)
   document.addEventListener('pause', function(e) {
     if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
       if (e.target && typeof e.target.play === 'function') {
@@ -250,7 +249,6 @@ const INJECTED_JS = `
       }
     } catch(e) {}
   }, 1000);
-  ` : ''}
 
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {

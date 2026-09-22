@@ -901,6 +901,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } catch {}
   }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
 
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+      } catch {}
+    }
+  }, [isPlaying]);
+
   // ── Native Media Controls Bridge (Android Lockscreen & Background Notification) ──
   useEffect(() => {
     if (!currentTrack || typeof window === 'undefined' || !window.ReactNativeWebView || !window.ReactNativeWebView.postMessage) return;

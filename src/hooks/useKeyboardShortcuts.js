@@ -61,6 +61,37 @@ export function useKeyboardShortcuts({
         return;
       }
 
+      // 1.1 Hardware Media Keys & F-Keys (F4: Prev, F5: Play/Pause, F6: Next)
+      if (
+        e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' ||
+        e.code === 'F5' || e.key === 'F5' ||
+        e.code === 'F8' || e.key === 'F8'
+      ) {
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+
+      if (
+        e.code === 'MediaTrackNext' || e.key === 'MediaTrackNext' ||
+        e.code === 'F6' || e.key === 'F6' ||
+        e.code === 'F9' || e.key === 'F9'
+      ) {
+        e.preventDefault();
+        playNextTrack();
+        return;
+      }
+
+      if (
+        e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious' ||
+        e.code === 'F4' || e.key === 'F4' ||
+        e.code === 'F7' || e.key === 'F7'
+      ) {
+        e.preventDefault();
+        playPrevTrack();
+        return;
+      }
+
       // 2. Play / Pause with Space
       if (e.code === 'Space') {
         e.preventDefault();
