@@ -206,31 +206,7 @@ const INJECTED_JS = `
     }
   };
 
-  // 5. Involuntary pause interceptor: prevent background pause
-  document.addEventListener('pause', function(e) {
-    if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-      if (e.target && typeof e.target.play === 'function') {
-        e.target.play().catch(function() {});
-      }
-    }
-  }, true);
 
-  // 6. Background watchdog: auto-resume any paused media if playing and not paused by user
-  setInterval(function() {
-    try {
-      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-        var iframes = document.querySelectorAll('iframe[src*="youtube"]');
-        iframes.forEach(function(f) {
-          try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
-        });
-        document.querySelectorAll('audio, video').forEach(function(el) {
-          if (el.paused) {
-            el.play().catch(function() {});
-          }
-        });
-      }
-    } catch(e) {}
-  }, 1000);
 
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
@@ -433,12 +409,28 @@ export default function OnlineWebView() {
             ? likedTrackIds.some(id => String(id) === trackIdStr)
             : Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
 
-          showMediaNotification({
-            ...activeTrack,
-            duration: trackDur,
-            currentTime: trackTime,
-            liked: isLikedState,
-          }, Boolean(isPlaying), isRepeatState, isShuffleState, isLikedState);
+          const isNewTrack = !isSameTrack && track;
+          if (isNewTrack) {
+            showMediaNotification({
+              ...activeTrack,
+              duration: trackDur,
+              currentTime: trackTime,
+              liked: isLikedState,
+            }, Boolean(isPlaying), isRepeatState, isShuffleState, isLikedState);
+          } else {
+            updateMediaNotification(
+              Boolean(isPlaying),
+              isRepeatState,
+              isShuffleState,
+              isLikedState,
+              {
+                ...activeTrack,
+                duration: trackDur,
+                currentTime: trackTime,
+                liked: isLikedState,
+              }
+            );
+          }
           break;
         }
 
