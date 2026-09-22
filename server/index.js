@@ -3851,8 +3851,9 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
 // Direct Audio Stream Downloader
 app.get('/api/tracks/download', async (req, res) => {
   try {
-    let { url, title, artist, id } = req.query;
-    if (id && (!url || !title)) {
+    let { url, title, artist, id, trackId } = req.query;
+    trackId = trackId || id;
+    if (trackId && (!url || !title)) {
       try {
         if (mongoose.isValidObjectId(id)) {
           const dbTrack = await Track.findById(id).lean();
