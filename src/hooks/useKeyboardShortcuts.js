@@ -62,52 +62,52 @@ export function useKeyboardShortcuts({
       }
 
       // 1.1 Hardware Media Keys & Function Keys:
-      // F4: Play / Pause (توقيف / تشغيل)
-      // F5: Play Next (الأغنية التالية / بلاي نيكست)
-      // F6: Fast Forward 10s (تقديم للأمام / بلاي فورورد)
+      // F5 / MediaPlayPause: Play / Pause (توقيف / تشغيل) - يعمل مع زرار Fn أو بدونه
       if (
-        e.code === 'F4' || e.key === 'F4' ||
-        e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' ||
-        e.code === 'F8' || e.key === 'F8'
+        e.code === 'F5' || e.key === 'F5' || e.key === 'f5' || e.keyCode === 116 || e.which === 116 ||
+        e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' || e.keyCode === 179 || e.which === 179 ||
+        e.code === 'F8' || e.key === 'F8' || e.keyCode === 119 || e.which === 119
       ) {
         e.preventDefault();
         e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         togglePlay();
         return;
       }
 
+      // F6 / MediaTrackNext: Next Track (الأغنية التالية / نيكست) - يعمل مع زرار Fn أو بدونه
       if (
-        e.code === 'F5' || e.key === 'F5' ||
-        e.code === 'MediaTrackNext' || e.key === 'MediaTrackNext' ||
-        e.code === 'F9' || e.key === 'F9'
+        e.code === 'F6' || e.key === 'F6' || e.key === 'f6' || e.keyCode === 117 || e.which === 117 ||
+        e.code === 'MediaTrackNext' || e.key === 'MediaTrackNext' || e.keyCode === 176 || e.which === 176 ||
+        e.code === 'F9' || e.key === 'F9' || e.keyCode === 120 || e.which === 120
       ) {
         e.preventDefault();
         e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         playNextTrack();
         return;
       }
 
+      // F4 / MediaTrackPrevious: Previous Track (الأغنية السابقة / بريفيس) - يعمل مع زرار Fn أو بدونه
       if (
-        e.code === 'F6' || e.key === 'F6' ||
-        e.code === 'MediaFastForward' || e.key === 'MediaFastForward'
+        e.code === 'F4' || e.key === 'F4' || e.key === 'f4' || e.keyCode === 115 || e.which === 115 ||
+        e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious' || e.keyCode === 177 || e.which === 177 ||
+        e.code === 'F7' || e.key === 'F7' || e.keyCode === 118 || e.which === 118 ||
+        e.code === 'F3' || e.key === 'F3'
       ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        playPrevTrack();
+        return;
+      }
+
+      if (e.code === 'MediaFastForward' || e.key === 'MediaFastForward') {
         e.preventDefault();
         e.stopPropagation();
         const cur = currentTimeRef.current || 0;
         const dur = durationRef.current || 999999;
         seekTo(Math.min(dur, cur + 10));
-        return;
-      }
-
-      if (
-        e.code === 'F3' || e.key === 'F3' ||
-        e.code === 'F7' || e.key === 'F7' ||
-        (e.shiftKey && (e.code === 'F4' || e.key === 'F4')) ||
-        e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious'
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-        playPrevTrack();
         return;
       }
 
@@ -235,8 +235,20 @@ export function useKeyboardShortcuts({
       }
     };
 
+    const handleKeyUp = (e) => {
+      if (e.code === 'F5' || e.key === 'F5' || e.keyCode === 116 || e.which === 116) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown, { capture: true });
-    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+    window.addEventListener('keyup', handleKeyUp, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+      window.removeEventListener('keyup', handleKeyUp, { capture: true });
+    };
   }, [
     togglePlay,
     playNextTrack,

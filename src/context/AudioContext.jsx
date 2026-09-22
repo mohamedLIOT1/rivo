@@ -638,20 +638,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isYtTrackRef.current = true;
         setIsYtTrack(true);
 
-        // On iOS & WKWebView: Play silent keeper in HTML audio so WebKit never kills background playback or lockscreen
-        const isIOS = typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Macintosh/i.test(navigator.userAgent || ''));
-        if (isIOS && audioRef.current) {
-          try {
-            audioRef.current.loop = true;
-            audioRef.current.volume = 0.0001;
-            if (!audioRef.current.src || !audioRef.current.src.startsWith('data:audio/wav')) {
-              audioRef.current.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-            }
-            audioRef.current.play().catch(() => {});
-          } catch {}
-        } else {
-          stopHtmlAudio();
-        }
+        // Stop and unload HTML audio completely so only YouTube plays
+        stopHtmlAudio();
 
         setCurrentTime(0);
       setDuration(currentTrack.duration || 210);
