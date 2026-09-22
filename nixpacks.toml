@@ -2,7 +2,7 @@
 providers = ['node']
 
 [phases.setup]
-nixPkgs = ['nodejs_22', 'yt-dlp', 'ffmpeg']
+nixPkgs = ['nodejs_22', 'yt-dlp', 'ffmpeg', 'deno']
 
 [phases.install]
 cmds = ['npm install']

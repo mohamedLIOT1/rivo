@@ -287,7 +287,7 @@ const INJECTED_JS = `
 export default function OnlineWebView() {
   const webViewRef = useRef(null);
   const { showToast } = useToast();
-  const { refreshDownloadedTracks } = useAudioPlayer();
+  const { refreshDownloadedTracks, playTrack: nativePlayTrack } = useAudioPlayer();
   const { toggleLikeTrack, likedTrackIds } = useUser();
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
@@ -298,6 +298,7 @@ export default function OnlineWebView() {
   const [downloadProgress, setDownloadProgress] = useState(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const currentTrackRef = useRef(null);
+  const nativeAudioActiveRef = useRef(false); // iOS: true when expo-av is playing instead of WebView
 
   // ─── AppState Background Audio Keeper (Resumes playback smoothly on background) ───
   useEffect(() => {
@@ -355,9 +356,19 @@ export default function OnlineWebView() {
     prevOnlineRef.current = isOnline;
   }, [isOnline]);
 
-  // ─── Subscribe to Native Android Media Controls (Notification & Lockscreen) ───
+  // ─── Subscribe to Native Media Controls (Notification & Lockscreen) ───
   useEffect(() => {
     const unsubscribe = subscribeToMediaActions((action) => {
+      // On iOS with native audio active, skip WebView injection.
+      // AudioContext's own subscribeToMediaActions listener handles play/pause/next/prev.
+      if (Platform.OS === 'ios' && nativeAudioActiveRef.current) {
+        if (action === 'play' || action === 'pause' || action === 'play_pause' || action === 'toggle'
+            || action === 'next' || action === 'prev') {
+          return; // Let AudioContext handle it
+        }
+        // Like still handled below
+      }
+
       // Immediate execution for Like in background
       if (action === 'like') {
         const cur = currentTrackRef.current;
@@ -461,6 +472,41 @@ export default function OnlineWebView() {
             : Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
 
           const isNewTrack = !isSameTrack && Boolean(track);
+
+          // ─── iOS Native Audio Takeover ───
+          // On iOS, WKWebView cannot play audio in background.
+          // When a new track starts, mute WebView and play via expo-av natively.
+          if (Platform.OS === 'ios' && isNewTrack && isPlaying && activeTrack) {
+            // Mute WebView audio so it doesn't double-play
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  // Mute all video/audio elements
+                  document.querySelectorAll('video, audio').forEach(function(el) { el.muted = true; el.volume = 0; });
+                  // Mute YouTube iframes
+                  document.querySelectorAll('iframe').forEach(function(f) {
+                    try { f.contentWindow.postMessage('{"event":"command","func":"mute","args":""}', '*'); } catch(e) {}
+                  });
+                } catch(e) {}
+              })();
+              true;
+            `);
+            nativeAudioActiveRef.current = true;
+            // Play through native expo-av (supports iOS background audio)
+            nativePlayTrack({
+              ...activeTrack,
+              duration: trackDur,
+            }, []).catch(() => {});
+            // Media notification is handled by AudioContext.playTrack
+            break;
+          }
+
+          // On iOS with native audio active, sync play/pause to native player
+          if (Platform.OS === 'ios' && nativeAudioActiveRef.current && isSameTrack) {
+            // Don't update media notification from WebView - AudioContext handles it
+            break;
+          }
+
           if (isNewTrack) {
             showMediaNotification({
               ...activeTrack,
