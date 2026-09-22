@@ -178,31 +178,18 @@ const INJECTED_JS = `
     }
   };
 
-  // 6. Monitor navigator.mediaSession.metadata to sync native notification
-  var lastMetaTitle = '';
+  // 5. Background watchdog: if playing and not paused by user, auto-resume any paused media
   setInterval(function() {
     try {
-      if (navigator.mediaSession && navigator.mediaSession.metadata) {
-        var m = navigator.mediaSession.metadata;
-        if (m.title && m.title !== lastMetaTitle) {
-          lastMetaTitle = m.title;
-          window.__RIVO_IS_PLAYING = true;
-          window.__RIVO_USER_PAUSED = false;
-          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'PLAYBACK_STATE',
-              isPlaying: true,
-              track: {
-                title: m.title || 'Unknown Track',
-                artist: m.artist || 'Unknown Artist',
-                coverUrl: m.artwork && m.artwork[0] ? m.artwork[0].src : ''
-              }
-            }));
+      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
+        document.querySelectorAll('audio, video').forEach(function(el) {
+          if (el.paused) {
+            el.play().catch(function() {});
           }
-        }
+        });
       }
     } catch(e) {}
-  }, 1000);
+  }, 800);
 
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {
@@ -507,10 +494,12 @@ export default function OnlineWebView() {
         allowUniversalAccessFromFileURLs={true}
         mixedContentMode="always"
         userAgent={
-          Platform.OS === 'android'
-            ? "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
-            : undefined
+          Platform.OS === 'ios'
+            ? "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15"
+            : "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
         }
+        injectedJavaScriptForMainFrameOnly={false}
+        injectedJavaScriptBeforeContentLoadedForMainFrameOnly={false}
         androidHardwareAccelerationDisabled={false}
         androidLayerType="hardware"
         thirdPartyCookiesEnabled={true}

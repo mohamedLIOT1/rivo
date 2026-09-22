@@ -223,17 +223,9 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             [self setupRemoteCommands];
             [self ensureSilentPlayer];
 
-            BOOL isPlaying = [options[@"isPlaying"] boolValue];
-
-            // Maintain silent background audio keeper so iOS never suspends WebView or app
-            if (isPlaying) {
-                if (self->_silentPlayer && !self->_silentPlayer.isPlaying) {
-                    [self->_silentPlayer play];
-                }
-            } else {
-                if (self->_silentPlayer && self->_silentPlayer.isPlaying) {
-                    [self->_silentPlayer pause];
-                }
+            // Maintain silent background audio keeper continuously so iOS never suspends WebView or background audio
+            if (self->_silentPlayer && !self->_silentPlayer.isPlaying) {
+                [self->_silentPlayer play];
             }
 
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
