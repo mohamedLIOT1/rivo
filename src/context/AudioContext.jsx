@@ -200,8 +200,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     if (!currentTrack) return;
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+
+    // If socket is available, emit immediate zero-latency listening update
+    if (socketRef.current) {
+      socketRef.current.emit('activity:listening', { track: currentTrack, isPlaying });
+    }
+
     if (!token) return;
 
+    // Fast sync: 50ms if paused so friends see pause immediately, 800ms when playing to throttle track changes
+    const delay = isPlaying ? 800 : 50;
     const timeout = setTimeout(() => {
       fetch(`${API_BASE_URL}/api/users/listening-activity`, {
         method: 'POST',
@@ -211,7 +219,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         },
         body: JSON.stringify({ track: currentTrack, isPlaying })
       }).catch(() => {});
-    }, 1200);
+    }, delay);
 
     return () => clearTimeout(timeout);
   }, [currentTrack?.id || currentTrack?._id, isPlaying]);

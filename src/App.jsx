@@ -1721,6 +1721,7 @@ function AppContent() {
         <ListeningActivityPanel
           isOpen={isActivityPanelOpen}
           onClose={handleCloseActivityPanel}
+          socket={socket}
           onSelectTrack={(friendTrack) => {
             setSelectedPlaylist(null);
             playTrack(friendTrack, [friendTrack], false, 0);

@@ -63,6 +63,9 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
+// Real-time Presence: Track active socket connections per user ID (Map<userId, Set<socketId>>)
+const userSocketMap = new Map();
+
 const ACTIVE_JWT_SECRET = process.env.JWT_SECRET;
 if (!ACTIVE_JWT_SECRET) {
   console.error('❌ [Security Warning] JWT_SECRET is not set in environment variables! Please set JWT_SECRET in .env.');
@@ -1119,7 +1122,7 @@ app.get('/api/users/search', async (req, res) => {
 
     if (q) {
       if (q.length < 2) return res.json({ success: true, users: [] });
-      queryFilter = { name: { $regex: q, $options: 'i' } };
+      queryFilter = { name: { $regex: escapeRegex(q), $options: 'i' } };
     }
 
     // Search ONLY by name, NEVER search or expose email
@@ -1288,16 +1291,26 @@ app.get('/api/users/listening-activity', optionalAuth, async (req, res) => {
         const followedUsers = await User.find({ _id: { $in: me.following } })
           .select('_id name avatar bio currentListening lastActiveAt updatedAt')
           .lean();
-        friends = followedUsers.map(u => ({
-          id: String(u._id),
-          name: u.name,
-          avatar: u.avatar || '',
-          bio: u.bio || '',
-          isVerified: isVerifiedUser(u.name),
-          currentListening: u.currentListening || null,
-          lastActiveAt: u.lastActiveAt || u.updatedAt || null,
-          isLive: Boolean(u.currentListening?.isPlaying && (Date.now() - new Date(u.currentListening?.updatedAt || u.lastActiveAt).getTime() < 300000))
-        }));
+        friends = followedUsers.map(u => {
+          const uId = String(u._id);
+          const isOnline = Boolean(userSocketMap.has(uId) && userSocketMap.get(uId).size > 0);
+          const lastActivityTime = new Date(u.currentListening?.updatedAt || u.lastActiveAt || u.updatedAt || 0).getTime();
+          const isRecent = (Date.now() - lastActivityTime) < 180000; // within 3 minutes
+          // User is only live if they are currently online AND actively playing AND activity is recent
+          const isLive = Boolean(isOnline && u.currentListening?.isPlaying && isRecent);
+
+          return {
+            id: uId,
+            name: u.name,
+            avatar: u.avatar || '',
+            bio: u.bio || '',
+            isVerified: isVerifiedUser(u.name),
+            currentListening: u.currentListening || null,
+            lastActiveAt: u.lastActiveAt || u.updatedAt || null,
+            isOnline,
+            isLive
+          };
+        });
       }
     }
 
@@ -1310,8 +1323,9 @@ app.get('/api/users/listening-activity', optionalAuth, async (req, res) => {
 app.post('/api/users/listening-activity', auth, async (req, res) => {
   try {
     const { track, isPlaying } = req.body;
+    const now = new Date();
     const updateData = {
-      lastActiveAt: new Date(),
+      lastActiveAt: now,
       currentListening: track ? {
         id: track.id || track._id,
         title: track.title,
@@ -1319,20 +1333,23 @@ app.post('/api/users/listening-activity', auth, async (req, res) => {
         cover: track.cover,
         audioUrl: track.audioUrl,
         isPlaying: Boolean(isPlaying),
-        updatedAt: new Date()
+        updatedAt: now
       } : null
     };
 
     const user = await User.findByIdAndUpdate(req.user.id, { $set: updateData }, { new: true });
+    const uidStr = String(user._id);
+    const isOnline = Boolean(userSocketMap.has(uidStr) && userSocketMap.get(uidStr).size > 0);
     
     // Broadcast via socket.io
     io.emit('activity:updated', {
-      userId: String(user._id),
+      userId: uidStr,
       name: user.name,
       avatar: user.avatar,
       currentListening: user.currentListening,
       lastActiveAt: user.lastActiveAt,
-      isLive: Boolean(isPlaying)
+      isOnline,
+      isLive: Boolean(isPlaying && isOnline)
     });
 
     res.json({ success: true, currentListening: user.currentListening });
@@ -3431,16 +3448,44 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
+const ALLOWED_AUDIO_EXTS = ['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac'];
+const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
+
+const fileFilter = (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (file.fieldname === 'audio') {
+    if (ALLOWED_AUDIO_EXTS.includes(ext)) {
+      return cb(null, true);
+    }
+    return cb(new Error('Invalid audio file type. Allowed: MP3, M4A, WAV, OGG, FLAC, AAC'), false);
+  }
+  if (file.fieldname === 'cover') {
+    // Strictly block HTML, SVG, scripts or executables to eliminate Stored XSS
+    if (ALLOWED_IMAGE_EXTS.includes(ext)) {
+      return cb(null, true);
+    }
+    return cb(new Error('Invalid image file type. Allowed: JPG, PNG, WEBP (SVG and HTML are disallowed)'), false);
+  }
+  return cb(new Error('Unexpected file upload field'), false);
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const baseName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + '-' + file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_'));
+    cb(null, `${uniqueSuffix}-${baseName}${ext}`);
   }
 });
-const upload = multer({ storage, limits: { fileSize: 50 * 1024 * 1024 } });
 
-app.post('/api/tracks/upload', optionalAuth, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter
+});
+
+app.post('/api/tracks/upload', auth, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   try {
     const { title, artist, album, genre, lyrics } = req.body;
     if (!title || !artist) return res.status(400).json({ error: 'Title and artist are required' });
@@ -4299,21 +4344,6 @@ app.get('/api/tracks/download', async (req, res) => {
   }
 });
 
-app.get('/api/diagnose/ytdlp', async (req, res) => {
-  const { exec } = require('child_process');
-  const videoId = req.query.v || '4Q4Gy2Z7xZ0';
-  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const cmd = req.query.cmd || `yt-dlp --version`;
-  exec(cmd, { timeout: 25000 }, (err, stdout, stderr) => {
-    res.json({
-      cmd,
-      error: err ? err.message : null,
-      code: err ? err.code : 0,
-      stdout: stdout ? stdout.trim() : '',
-      stderr: stderr ? stderr.trim() : ''
-    });
-  });
-});
 
 app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
   try {
@@ -4716,8 +4746,36 @@ app.get(['/api/soundcloud/fallback', '/api/tracks/fallback-stream'], async (req,
 
 app.get('/api/proxy-audio', async (req, res) => {
   try {
-    const url = req.query.url;
-    if (!url) return res.status(400).end();
+    const rawUrl = req.query.url;
+    if (!rawUrl || typeof rawUrl !== 'string') return res.status(400).end();
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ error: 'Invalid URL' });
+    }
+
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return res.status(400).json({ error: 'Only HTTP and HTTPS are permitted' });
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    // Block internal network scanning / SSRF (localhost, private ranges, cloud metadata 169.254.x)
+    const isPrivate = host === 'localhost' ||
+      host === '0.0.0.0' ||
+      /^127\./.test(host) ||
+      /^10\./.test(host) ||
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^169\.254\./.test(host) ||
+      /^::1$/.test(host) ||
+      /^fc00:/.test(host) ||
+      /^fe80:/.test(host);
+
+    if (isPrivate) {
+      return res.status(403).json({ error: 'Access to internal resources is forbidden' });
+    }
 
     const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
     if (req.headers.range) {
@@ -4726,7 +4784,7 @@ app.get('/api/proxy-audio', async (req, res) => {
 
     const r = await axios({
       method: 'get',
-      url,
+      url: rawUrl,
       responseType: 'stream',
       headers,
       timeout: 25000,
@@ -4869,8 +4927,8 @@ const resolveStreamHandler = async (req, res) => {
 app.get('/api/tracks/resolve-stream', resolveStreamHandler);
 app.get('/api/soundcloud/stream', resolveStreamHandler);
 
-// Purge SoundCloud tracks endpoint
-app.post('/api/tracks/purge-soundcloud', async (req, res) => {
+// Purge SoundCloud tracks endpoint (Admin Only)
+app.post('/api/tracks/purge-soundcloud', adminAuth, async (req, res) => {
   try {
     const scQuery = {
       $or: [
@@ -4896,7 +4954,54 @@ const jamRooms = {};
 io.on('connection', (socket) => {
   // User connects & registers their socket ID
   socket.on('user:online', ({ userId }) => {
-    if (userId) socket.join(`user:${userId}`);
+    if (!userId) return;
+    const uidStr = String(userId);
+    socket.userId = uidStr;
+    socket.join(`user:${uidStr}`);
+    if (!userSocketMap.has(uidStr)) {
+      userSocketMap.set(uidStr, new Set());
+    }
+    userSocketMap.get(uidStr).add(socket.id);
+
+    // Notify all clients that this user is now online
+    io.emit('user:status', {
+      userId: uidStr,
+      isOnline: true
+    });
+  });
+
+  // Client emits live listening state changes over socket for instant zero-lag sync
+  socket.on('activity:listening', async ({ track, isPlaying }) => {
+    const uidStr = socket.userId;
+    if (!uidStr) return;
+    const now = new Date();
+    const updateData = {
+      lastActiveAt: now,
+      currentListening: track ? {
+        id: track.id || track._id,
+        title: track.title,
+        artist: track.artist,
+        cover: track.cover,
+        audioUrl: track.audioUrl,
+        isPlaying: Boolean(isPlaying),
+        updatedAt: now
+      } : null
+    };
+
+    try {
+      const user = await User.findByIdAndUpdate(uidStr, { $set: updateData }, { new: true });
+      if (user) {
+        io.emit('activity:updated', {
+          userId: uidStr,
+          name: user.name,
+          avatar: user.avatar,
+          currentListening: user.currentListening,
+          lastActiveAt: user.lastActiveAt,
+          isOnline: true,
+          isLive: Boolean(isPlaying)
+        });
+      }
+    } catch (e) {}
   });
 
   // Jam: Direct Invite to another user
@@ -5113,7 +5218,40 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
+    // Clean up presence tracking for this user
+    const uidStr = socket.userId;
+    if (uidStr && userSocketMap.has(uidStr)) {
+      const sockets = userSocketMap.get(uidStr);
+      sockets.delete(socket.id);
+      if (sockets.size === 0) {
+        userSocketMap.delete(uidStr);
+
+        // When user has closed all tabs/connections: mark offline and stop live playing
+        try {
+          await User.findByIdAndUpdate(uidStr, {
+            $set: {
+              'currentListening.isPlaying': false,
+              lastActiveAt: new Date()
+            }
+          });
+        } catch (e) {}
+
+        // Broadcast immediately to all connected clients
+        io.emit('user:status', {
+          userId: uidStr,
+          isOnline: false,
+          isLive: false
+        });
+        io.emit('activity:updated', {
+          userId: uidStr,
+          isOnline: false,
+          isLive: false,
+          currentListening: { isPlaying: false }
+        });
+      }
+    }
+
     // Clean up user from all jam rooms
     for (const code in jamRooms) {
       const room = jamRooms[code];

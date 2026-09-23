@@ -12,7 +12,8 @@ export default function ListeningActivityPanel({
   openChatModal,
   onStartJamWithUser,
   currentUser,
-  globalTheme = 'dark'
+  globalTheme = 'dark',
+  socket
 }) {
   const isDark = globalTheme === 'dark';
   const [activities, setActivities] = useState([]);
@@ -47,6 +48,55 @@ export default function ListeningActivityPanel({
     return () => clearInterval(interval);
   }, [isOpen]);
 
+  // Real-time socket event listeners for instant activity & presence updates
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleActivityUpdated = (data) => {
+      if (!data || !data.userId) return;
+      setActivities((prev) =>
+        prev.map((friend) => {
+          if (String(friend.id) === String(data.userId)) {
+            return {
+              ...friend,
+              currentListening: data.currentListening !== undefined ? data.currentListening : friend.currentListening,
+              lastActiveAt: data.lastActiveAt || friend.lastActiveAt,
+              isLive: data.isLive !== undefined ? Boolean(data.isLive) : (data.isOnline !== undefined ? (data.isOnline && friend.isLive) : friend.isLive),
+              isOnline: data.isOnline !== undefined ? Boolean(data.isOnline) : friend.isOnline
+            };
+          }
+          return friend;
+        })
+      );
+    };
+
+    const handleUserStatus = (data) => {
+      if (!data || !data.userId) return;
+      setActivities((prev) =>
+        prev.map((friend) => {
+          if (String(friend.id) === String(data.userId)) {
+            const isOnline = Boolean(data.isOnline);
+            return {
+              ...friend,
+              isOnline,
+              // If user went offline, they cannot be live listening
+              isLive: !isOnline ? false : (data.isLive !== undefined ? Boolean(data.isLive) : friend.isLive)
+            };
+          }
+          return friend;
+        })
+      );
+    };
+
+    socket.on('activity:updated', handleActivityUpdated);
+    socket.on('user:status', handleUserStatus);
+
+    return () => {
+      socket.off('activity:updated', handleActivityUpdated);
+      socket.off('user:status', handleUserStatus);
+    };
+  }, [socket]);
+
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return '';
     const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -70,7 +120,7 @@ export default function ListeningActivityPanel({
 
   if (!isOpen) return null;
 
-  const liveCount = activities.filter((a) => Boolean(a.isLive || a.currentListening?.isPlaying)).length;
+  const liveCount = activities.filter((a) => Boolean(a.isLive)).length;
 
   const filteredActivities = activities.filter((friend) => {
     if (!searchQuery.trim()) return true;
@@ -176,7 +226,8 @@ export default function ListeningActivityPanel({
           {filteredActivities.length > 0 ? (
             filteredActivities.map((friend) => {
               const listening = friend.currentListening;
-              const isLive = Boolean(friend.isLive || listening?.isPlaying);
+              const isLive = Boolean(friend.isLive);
+              const isOnline = Boolean(friend.isOnline);
               const timeAgo = formatTimeAgo(friend.lastActiveAt || listening?.updatedAt);
 
               return (
@@ -206,11 +257,13 @@ export default function ListeningActivityPanel({
                     </div>
 
                     {isLive ? (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#dc2626] border border-[#0b1110] rounded-full animate-pulse flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#dc2626] border border-[#0b1110] rounded-full animate-pulse flex items-center justify-center" title="Listening Live">
                         <span className="w-1.5 h-1.5 bg-white rounded-full" />
                       </span>
+                    ) : isOnline ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border border-[#0b1110] rounded-full" title="Online" />
                     ) : (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border border-[#0b1110] rounded-full" />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-zinc-500 border border-[#0b1110] rounded-full" title="Offline" />
                     )}
                   </div>
 
@@ -228,35 +281,49 @@ export default function ListeningActivityPanel({
                       </span>
                       {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
 
-                      {!isLive && timeAgo && (
+                      {!isLive && (
                         <span className={`text-[9px] font-mono shrink-0 ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-                          • {timeAgo}
+                          • {isOnline ? 'online' : (timeAgo ? timeAgo : 'offline')}
                         </span>
                       )}
                     </div>
 
-                    {listening ? (
+                    {isLive && listening ? (
                       <div
                         onClick={() => handlePlayFriendTrack(friend)}
                         className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-                        title={`Listen to ${listening.title}`}
+                        title={`Listening to ${listening.title}`}
                       >
-                        <Disc size={11} className={`shrink-0 ${isLive ? 'text-[#17a398] animate-spin' : 'text-zinc-400'}`} style={{ animationDuration: '4s' }} />
-                        <p
-                          className={`text-[11px] truncate leading-tight ${
-                            isLive
-                              ? 'text-[#17a398] font-bold'
-                              : isDark
-                              ? 'text-zinc-300'
-                              : 'text-[#082621]/70'
-                          }`}
-                        >
+                        <Disc size={11} className="shrink-0 text-[#17a398] animate-spin" style={{ animationDuration: '4s' }} />
+                        <p className="text-[11px] truncate leading-tight text-[#17a398] font-bold">
+                          {listening.title} <span className="opacity-50">•</span> {listening.artist}
+                        </p>
+                      </div>
+                    ) : listening && isOnline ? (
+                      <div
+                        onClick={() => handlePlayFriendTrack(friend)}
+                        className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
+                        title={`Last played: ${listening.title}`}
+                      >
+                        <Disc size={11} className="shrink-0 text-zinc-400" />
+                        <p className={`text-[11px] truncate leading-tight ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                          {listening.title} <span className="opacity-50">•</span> {listening.artist} <span className="text-[9px] opacity-60">(paused)</span>
+                        </p>
+                      </div>
+                    ) : listening && !isOnline ? (
+                      <div
+                        onClick={() => handlePlayFriendTrack(friend)}
+                        className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
+                        title={`Last played: ${listening.title}`}
+                      >
+                        <Disc size={11} className="shrink-0 text-zinc-500" />
+                        <p className={`text-[11px] truncate leading-tight ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
                           {listening.title} <span className="opacity-50">•</span> {listening.artist}
                         </p>
                       </div>
                     ) : (
                       <p className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
-                        IDLE • NO DOSE ACTIVE
+                        {isOnline ? 'ONLINE • IDLE' : 'OFFLINE'}
                       </p>
                     )}
                   </div>
