@@ -1608,6 +1608,10 @@ app.get('/api/chat/:recipientId', auth, async (req, res) => {
     const currentUserId = req.user.id;
     const recipientId = req.params.recipientId;
 
+    if (!recipientId || recipientId === 'undefined' || recipientId === 'null' || !mongoose.isValidObjectId(recipientId)) {
+      return res.json({ success: true, messages: [] });
+    }
+
     // Mark messages from this sender to current user as read
     await Message.updateMany(
       { sender: recipientId, recipient: currentUserId, read: false },

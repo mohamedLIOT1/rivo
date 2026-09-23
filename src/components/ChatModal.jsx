@@ -86,31 +86,36 @@ export default function ChatModal({
 
   // Load message history when an active direct chat user is chosen
   useEffect(() => {
-    if (!isOpen || !activeUser?.id) return;
+    const activeUserId = activeUser?.id || activeUser?._id;
+    if (!isOpen || !activeUserId) return;
 
     const fetchHistory = async () => {
       setLoading(true);
       try {
         const token = getToken();
-        const res = await fetch(`${API_BASE_URL}/api/chat/${activeUser.id}`, {
+        const res = await fetch(`${API_BASE_URL}/api/chat/${activeUserId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = await res.json();
         if (data.success) {
           setMessages(data.messages || []);
+        } else {
+          setMessages([]);
         }
       } catch (err) {
         console.error('Failed to load chat history:', err);
+        setMessages([]);
+      } finally {
+        setLoading(false);
+        setTimeout(scrollToBottom, 100);
       }
-      setLoading(false);
-      setTimeout(scrollToBottom, 100);
     };
 
     fetchHistory();
-    if (socket && activeUser?.id) {
-      socket.emit('chat:mark_read', { senderId: activeUser.id });
+    if (socket) {
+      socket.emit('chat:mark_read', { senderId: activeUserId });
     }
-  }, [isOpen, activeUser?.id, socket]);
+  }, [isOpen, activeUser?.id, activeUser?._id]);
 
   // Search users to start new chat
   useEffect(() => {

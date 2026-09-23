@@ -1105,6 +1105,12 @@ function AppContent() {
     }
   };
 
+  const handleJoinJamRef = useRef(handleJoinJam);
+  useEffect(() => { handleJoinJamRef.current = handleJoinJam; }, [handleJoinJam]);
+
+  const handleOpenChatRef = useRef(handleOpenChat);
+  useEffect(() => { handleOpenChatRef.current = handleOpenChat; }, [handleOpenChat]);
+
   useEffect(() => {
     const s = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
     setSocket(s);
@@ -1162,7 +1168,7 @@ function AppContent() {
           });
           notif.onclick = () => {
             window.focus();
-            handleJoinJam(roomCode);
+            handleJoinJamRef.current?.(roomCode);
           };
         } catch (e) {
           console.warn('Desktop notification error:', e);
@@ -1217,9 +1223,9 @@ function AppContent() {
               notif.onclick = () => {
                 window.focus();
                 if (isJam) {
-                  handleJoinJam(msg.jamInvite.roomCode);
+                  handleJoinJamRef.current?.(msg.jamInvite.roomCode);
                 } else {
-                  handleOpenChat({ id: msg.sender, name: senderName, avatar: msg.senderAvatar });
+                  handleOpenChatRef.current?.({ id: msg.sender, name: senderName, avatar: msg.senderAvatar });
                 }
               };
             } catch (e) {
@@ -1250,7 +1256,7 @@ function AppContent() {
     });
 
     return () => s.disconnect();
-  }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState, handleJoinJam, handleOpenChat]);
+  }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState]);
 
   useEffect(() => {
     if (socket) {
