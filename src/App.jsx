@@ -1040,6 +1040,71 @@ function AppContent() {
     }, 5000);
   };
 
+  const handleStartJam = (openModal = true) => {
+    resumeAudioContext();
+    const code = jamSession?.code || `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
+    const userPayload = currentUser 
+      ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+
+    if (socket && !jamSession?.code) {
+      socket.emit('jam:join_room', {
+        roomCode: code,
+        user: userPayload
+      });
+      showToast(`Jam Session active: ${code}`);
+    }
+    if (openModal) {
+      handleOpenJam();
+    }
+    return code;
+  };
+
+  const handleStartJamWithTargetUser = (target) => {
+    const code = handleStartJam(true);
+    const targetId = target?.id || target?._id;
+    if (socket && targetId && code) {
+      socket.emit('jam:invite_user', {
+        recipientId: targetId,
+        roomCode: code,
+        host: {
+          id: currentUser?.id || currentUser?._id,
+          name: currentUser?.name || 'Friend',
+          avatar: currentUser?.avatar || ''
+        }
+      });
+      showToast(`Invited ${target?.name || 'friend'} to Jam (${code})`);
+    }
+    return code;
+  };
+
+  const handleJoinJam = (code) => {
+    if (!code) return;
+    resumeAudioContext();
+    const cleanCode = code.trim().toUpperCase();
+    const userPayload = currentUser 
+      ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
+      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+
+    if (socket) {
+      socket.emit('jam:join_room', {
+        roomCode: cleanCode,
+        user: userPayload
+      });
+      handleOpenJam();
+      showToast(`Joined Jam: ${cleanCode}`);
+    }
+  };
+
+  const handleLeaveJam = () => {
+    if (jamSession && socket) {
+      socket.emit('jam:leave_room', { roomCode: jamSession.code });
+      setJamSession(null);
+      setJamSync({ jamSession: null });
+      showToast('Left Jam Session');
+    }
+  };
+
   useEffect(() => {
     const s = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
     setSocket(s);
@@ -1202,71 +1267,6 @@ function AppContent() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [jamSession?.code, socket]);
-
-  const handleStartJam = (openModal = true) => {
-    resumeAudioContext();
-    const code = jamSession?.code || `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
-    const userPayload = currentUser 
-      ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
-      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
-
-    if (socket && !jamSession?.code) {
-      socket.emit('jam:join_room', {
-        roomCode: code,
-        user: userPayload
-      });
-      showToast(`Jam Session active: ${code}`);
-    }
-    if (openModal) {
-      handleOpenJam();
-    }
-    return code;
-  };
-
-  const handleStartJamWithTargetUser = (target) => {
-    const code = handleStartJam(true);
-    const targetId = target?.id || target?._id;
-    if (socket && targetId && code) {
-      socket.emit('jam:invite_user', {
-        recipientId: targetId,
-        roomCode: code,
-        host: {
-          id: currentUser?.id || currentUser?._id,
-          name: currentUser?.name || 'Friend',
-          avatar: currentUser?.avatar || ''
-        }
-      });
-      showToast(`Invited ${target?.name || 'friend'} to Jam (${code})`);
-    }
-    return code;
-  };
-
-  const handleJoinJam = (code) => {
-    if (!code) return;
-    resumeAudioContext();
-    const cleanCode = code.trim().toUpperCase();
-    const userPayload = currentUser 
-      ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
-      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
-
-    if (socket) {
-      socket.emit('jam:join_room', {
-        roomCode: cleanCode,
-        user: userPayload
-      });
-      handleOpenJam();
-      showToast(`Joined Jam: ${cleanCode}`);
-    }
-  };
-
-  const handleLeaveJam = () => {
-    if (jamSession && socket) {
-      socket.emit('jam:leave_room', { roomCode: jamSession.code });
-      setJamSession(null);
-      setJamSync({ jamSession: null });
-      showToast('Left Jam Session');
-    }
-  };
 
   const handleKickMember = (member) => {
     if (jamSession && socket && member) {
