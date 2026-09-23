@@ -169,6 +169,8 @@ function AppContent() {
   const isChatOpenRef = useRef(isChatOpen);
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
 
+  const activeNotificationsRef = useRef({});
+
   const isJamOpenRef = useRef(isJamOpen);
   useEffect(() => { isJamOpenRef.current = isJamOpen; }, [isJamOpen]);
 
@@ -209,6 +211,19 @@ function AppContent() {
     setChatTargetUser(target);
     setIsChatOpen(true);
     setUnreadChatCount(0);
+
+    const targetId = target?.id || target?._id;
+    if (targetId) {
+      const tag = `rivo-chat-${targetId}`;
+      if (activeNotificationsRef.current[tag]) {
+        try { activeNotificationsRef.current[tag].close(); } catch {}
+        delete activeNotificationsRef.current[tag];
+      }
+      if (socket) {
+        socket.emit('chat:mark_read', { senderId: targetId });
+      }
+    }
+
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setIsActivityPanelOpen(false);
     }
@@ -216,7 +231,7 @@ function AppContent() {
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
-  }, [pushModalHistory]);
+  }, [pushModalHistory, socket]);
 
   const handleCloseChat = useCallback(() => {
     setIsChatOpen(false);
@@ -1094,7 +1109,10 @@ function AppContent() {
       const myId = String(currentUser?.id || currentUser?._id || '');
       if (myId && String(msg.recipient) === myId) {
         const isOpenWithSender = isChatOpenRef.current && String(chatTargetUserRef.current?.id || chatTargetUserRef.current?._id) === String(msg.sender);
-        if (!isOpenWithSender) {
+        if (isOpenWithSender) {
+          // If chat is actively open with sender on this device, mark as read immediately
+          s.emit('chat:mark_read', { senderId: msg.sender });
+        } else {
           setUnreadChatCount(prev => prev + 1);
 
           const senderName = msg.senderName || 'Someone';
@@ -1121,11 +1139,16 @@ function AppContent() {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               const isJam = Boolean(msg.jamInvite?.roomCode);
-              const notif = new Notification(isJam ? `Rivo • Jam Session from ${senderName}` : `Rivo • Telegram from ${senderName}`, {
+              const tag = isJam ? `rivo-jam-${msg.jamInvite.roomCode}` : `rivo-chat-${msg.sender}`;
+              const notif = new Notification(isJam ? `Rivo • Jam Session from ${senderName}` : `Rivo • Message from ${senderName}`, {
                 body: preview,
                 icon: msg.senderAvatar || '/favicon.ico',
-                tag: isJam ? `rivo-jam-${msg.jamInvite.roomCode}` : `rivo-chat-${msg.sender}`
+                tag
               });
+              activeNotificationsRef.current[tag] = notif;
+              notif.onclose = () => {
+                delete activeNotificationsRef.current[tag];
+              };
               notif.onclick = () => {
                 window.focus();
                 if (isJam) {
@@ -1142,8 +1165,27 @@ function AppContent() {
       }
     });
 
+    // Cross-Device Notification Dismissal Sync
+    // If the message is read/seen on phone or another screen, immediately close this device's notification!
+    s.on('chat:dismiss_notification', ({ senderId, roomCode }) => {
+      const tag = roomCode ? `rivo-jam-${roomCode}` : `rivo-chat-${senderId}`;
+      if (activeNotificationsRef.current[tag]) {
+        try {
+          activeNotificationsRef.current[tag].close();
+        } catch {}
+        delete activeNotificationsRef.current[tag];
+      }
+      setToastMessage(prev => {
+        if (String(prev?.sender?.id) === String(senderId) || (roomCode && prev?.roomCode === roomCode)) {
+          return null;
+        }
+        return prev;
+      });
+      setUnreadChatCount(prev => Math.max(0, prev - 1));
+    });
+
     return () => s.disconnect();
-  }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState]);
+  }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState, handleJoinJam, handleOpenChat]);
 
   useEffect(() => {
     if (socket) {

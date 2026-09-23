@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft, Users, Disc } from 'lucide-react';
+import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft, Users, Disc, Check, CheckCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from './VerifiedBadge';
 
@@ -107,7 +107,10 @@ export default function ChatModal({
     };
 
     fetchHistory();
-  }, [isOpen, activeUser?.id]);
+    if (socket && activeUser?.id) {
+      socket.emit('chat:mark_read', { senderId: activeUser.id });
+    }
+  }, [isOpen, activeUser?.id, socket]);
 
   // Search users to start new chat
   useEffect(() => {
@@ -134,7 +137,7 @@ export default function ChatModal({
     return () => clearTimeout(timer);
   }, [searchQuery, currentUser?.id, currentUser?._id]);
 
-  // Listen to real-time incoming socket messages
+  // Listen to real-time incoming socket messages and seen receipts
   useEffect(() => {
     if (!socket) return;
 
@@ -151,6 +154,11 @@ export default function ChatModal({
           return [...prev, msg];
         });
         setTimeout(scrollToBottom, 100);
+
+        // If message is from the user we are actively chatting with, immediately mark as read
+        if (String(msg.sender) === activeId) {
+          socket.emit('chat:mark_read', { senderId: activeId });
+        }
       }
 
       // Update conversations list in real-time
@@ -167,9 +175,23 @@ export default function ChatModal({
       });
     };
 
+    const handleSeen = (data) => {
+      const myId = String(currentUser?.id || currentUser?._id || '');
+      const activeId = String(activeUser?.id || activeUser?._id || '');
+      if (String(data.seenBy) === activeId) {
+        setMessages((prev) =>
+          prev.map((m) => (String(m.sender) === myId ? { ...m, read: true } : m))
+        );
+      }
+    };
+
     socket.on('chat:message', handleMessage);
-    return () => socket.off('chat:message', handleMessage);
-  }, [socket, activeUser?.id, currentUser?.id, currentUser?._id]);
+    socket.on('chat:seen', handleSeen);
+    return () => {
+      socket.off('chat:message', handleMessage);
+      socket.off('chat:seen', handleSeen);
+    };
+  }, [socket, activeUser?.id, activeUser?._id, currentUser?.id, currentUser?._id]);
 
   if (!isOpen) return null;
 
@@ -490,9 +512,21 @@ export default function ChatModal({
                         )}
                       </div>
 
-                      <span className="text-[9px] font-mono text-zinc-500 mt-1 px-1 font-medium">
-                        {timeFormatted}
-                      </span>
+                      <div className={`flex items-center gap-1.5 mt-1 px-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                        <span className="text-[9px] font-mono text-zinc-500 font-medium">{timeFormatted}</span>
+                        {isMe && (
+                          msg.read ? (
+                            <span className="flex items-center gap-0.5 text-[#17a398] text-[9.5px] font-mono font-bold" title="Seen">
+                              <CheckCheck size={12} strokeWidth={2.5} className="text-[#17a398]" />
+                              <span className="text-[8.5px]">Seen</span>
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-0.5 text-zinc-400 text-[9.5px] font-mono" title="Sent">
+                              <Check size={11} strokeWidth={2} />
+                            </span>
+                          )
+                        )}
+                      </div>
                     </div>
                   );
                 })

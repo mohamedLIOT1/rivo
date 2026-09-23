@@ -1614,6 +1614,18 @@ app.get('/api/chat/:recipientId', auth, async (req, res) => {
       { $set: { read: true } }
     ).catch(() => {});
 
+    // Notify original sender that their messages were seen
+    io.to(`user:${recipientId}`).emit('chat:seen', {
+      seenBy: currentUserId,
+      senderId: recipientId,
+      readAt: Date.now()
+    });
+
+    // Dismiss notification on reader's other connected devices (e.g. mobile/desktop sync)
+    io.to(`user:${currentUserId}`).emit('chat:dismiss_notification', {
+      senderId: recipientId
+    });
+
     const messages = await Message.find({
       $or: [
         { sender: currentUserId, recipient: recipientId },
@@ -5001,6 +5013,31 @@ io.on('connection', (socket) => {
           isLive: Boolean(isPlaying)
         });
       }
+    } catch (e) {}
+  });
+
+  // Real-time Chat: Mark messages as read / seen and sync across all devices
+  socket.on('chat:mark_read', async ({ senderId }) => {
+    const currentUserId = socket.userId;
+    if (!currentUserId || !senderId) return;
+
+    try {
+      await Message.updateMany(
+        { sender: senderId, recipient: currentUserId, read: false },
+        { $set: { read: true } }
+      );
+
+      // 1. Notify the original sender that their messages were seen
+      io.to(`user:${senderId}`).emit('chat:seen', {
+        seenBy: currentUserId,
+        senderId: senderId,
+        readAt: Date.now()
+      });
+
+      // 2. Notify the reader's other connected devices (mobile/desktop) to dismiss notification
+      io.to(`user:${currentUserId}`).emit('chat:dismiss_notification', {
+        senderId: senderId
+      });
     } catch (e) {}
   });
 
