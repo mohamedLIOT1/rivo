@@ -10,6 +10,8 @@ const http = require('http');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -20,9 +22,40 @@ const { Server } = require('socket.io');
 try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch (e) {}
 
 const app = express();
+
+// Security Headers (Helmet)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: false,
+  contentSecurityPolicy: false // Allows dynamic audio/video streams, external CDNs & native WebView
+}));
+
+// CORS Configuration
 app.use(cors({ origin: '*', credentials: true }));
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
+// Global Rate Limiting (DoS prevention)
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again later.' }
+});
+app.use('/api/', generalLimiter);
+
+// Strict Rate Limiting for Authentication (Brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again after 15 minutes.' }
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ limit: '15mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../dist')));
 
 const server = http.createServer(app);
@@ -30,22 +63,24 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
-const JWT_SECRET = process.env.JWT_SECRET || 'rivo_secure_key_2025';
-const LEGACY_JWT_SECRET = 'liofy_secure_key_2025';
+const ACTIVE_JWT_SECRET = process.env.JWT_SECRET;
+if (!ACTIVE_JWT_SECRET) {
+  console.error('❌ [Security Warning] JWT_SECRET is not set in environment variables! Please set JWT_SECRET in .env.');
+}
+const JWT_SECRET = ACTIVE_JWT_SECRET || 'rivo_jwt_fallback_secret_must_change_in_env_998341';
 const verifyJwt = (t) => {
-  try {
-    return jwt.verify(t, JWT_SECRET);
-  } catch (err) {
-    return jwt.verify(t, LEGACY_JWT_SECRET);
-  }
+  return jwt.verify(t, JWT_SECRET);
 };
 
 // Global Error Handlers
 process.on('uncaughtException', (err) => console.warn('[Uncaught]:', err.message));
 process.on('unhandledRejection', (reason) => console.warn('[Unhandled]:', reason?.message));
 
-// MongoDB Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://mohamedmustafat79_db_user:LiofyPass12345@cluster0.sr4ypsh.mongodb.net/liofy_db?retryWrites=true&w=majority';
+// MongoDB Connection (Strictly environment variable - No hardcoded fallback credentials)
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('❌ [Fatal Config] MONGO_URI is missing from environment variables (.env)!');
+}
 async function purgeSoundCloudData() {
   try {
     const scQuery = {
@@ -237,50 +272,46 @@ const MessageSchema = new mongoose.Schema({
 const Message = mongoose.model('Message', MessageSchema);
 
 // ──────────────────────────────────────────
-// Auth Helpers, Admins & Verified Badges
+// Auth Helpers & Administrator Security
 // ──────────────────────────────────────────
-const ADMIN_USER_NAMES = ['ali', 'lio', 'tester'];
-const VERIFIED_USER_NAMES = ['ali', 'lio', 'tester'];
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'mohamedmustafat79@gmail.com')
+  .toLowerCase()
+  .split(',')
+  .map(e => e.trim())
+  .filter(Boolean);
 
-function isAdminUser(userOrName) {
-  if (!userOrName) return false;
-  if (typeof userOrName === 'string') {
-    return ADMIN_USER_NAMES.includes(userOrName.trim().toLowerCase());
+function isAdminUser(userOrObj) {
+  if (!userOrObj) return false;
+  if (typeof userOrObj === 'string') {
+    return ADMIN_EMAILS.includes(userOrObj.trim().toLowerCase());
   }
-  if (userOrName.role === 'admin' || userOrName.isAdmin === true) {
+  if (userOrObj.role === 'admin' || userOrObj.isAdmin === true) {
     return true;
   }
-  const name = (userOrName.name || userOrName.username || '').trim().toLowerCase();
-  if (name && ADMIN_USER_NAMES.includes(name)) return true;
-  const emailPrefix = (userOrName.email || '').split('@')[0].trim().toLowerCase();
-  if (ADMIN_USER_NAMES.includes(emailPrefix)) return true;
+  const email = (userOrObj.email || '').trim().toLowerCase();
+  if (email && ADMIN_EMAILS.includes(email)) return true;
   return false;
 }
 
-function isVerifiedUser(userOrName) {
-  if (!userOrName) return false;
-  if (isAdminUser(userOrName)) return true;
-  const name = typeof userOrName === 'string' ? userOrName : (userOrName.name || userOrName.username || '');
-  return VERIFIED_USER_NAMES.includes((name || '').trim().toLowerCase());
+function isVerifiedUser(userOrObj) {
+  if (!userOrObj) return false;
+  if (isAdminUser(userOrObj)) return true;
+  if (typeof userOrObj === 'object' && userOrObj.isVerified === true) return true;
+  return false;
 }
 
-// Auto-upgrade Ali, Lio, Tester in database on startup
+// Auto-verify designated admin email in MongoDB if present
 setTimeout(async () => {
   try {
-    if (mongoose.connection.readyState === 1) {
+    if (mongoose.connection.readyState === 1 && ADMIN_EMAILS.length > 0) {
       await User.updateMany(
-        {
-          $or: [
-            { name: { $in: [/^ali$/i, /^lio$/i, /^tester$/i] } },
-            { email: { $in: [/^ali@/i, /^lio@/i, /^tester@/i] } }
-          ]
-        },
+        { email: { $in: ADMIN_EMAILS } },
         { $set: { role: 'admin', isAdmin: true, isVerified: true } }
       );
-      console.log('✅ [Admin] Designated admins (Lio, Ali, Tester) verified & promoted in MongoDB');
+      console.log('✅ [Admin Security] Designated super-admin email verified in MongoDB');
     }
   } catch (err) {
-    console.warn('[Admin] Startup auto-promotion error:', err.message);
+    console.warn('[Admin Security] Startup admin check error:', err.message);
   }
 }, 4000);
 
@@ -872,7 +903,7 @@ app.post('/api/auth/register', async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
     const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=1DB954&color=000&size=512&bold=true&format=png`;
 
-    const isInitAdmin = isAdminUser(name) || isAdminUser(email);
+    const isInitAdmin = isAdminUser({ email });
     const user = await new User({
       name,
       email: email.toLowerCase(),
@@ -881,7 +912,7 @@ app.post('/api/auth/register', async (req, res) => {
       bio: '',
       role: isInitAdmin ? 'admin' : 'user',
       isAdmin: isInitAdmin,
-      isVerified: isInitAdmin || isVerifiedUser(name),
+      isVerified: isInitAdmin,
       likedTrackIds: [],
       followers: [],
       following: [],
