@@ -9,13 +9,19 @@ import {
   Alert,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi } from 'lucide-react-native';
+import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
-import { getDownloadedTracks, removeDownloadedTrack } from '../services/downloadManager';
+import {
+  getDownloadedTracks,
+  removeDownloadedTrack,
+  importLocalAudioFiles,
+  scanOfflineVault,
+  getStorageLocationInfo,
+} from '../services/downloadManager';
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 
@@ -26,6 +32,8 @@ export default function OfflineScreen() {
   const [offlineTracks, setOfflineTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storageUsed, setStorageUsed] = useState(0);
+  const [storageInfo, setStorageInfo] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     loadOffline();
@@ -37,23 +45,45 @@ export default function OfflineScreen() {
       const list = await getDownloadedTracks();
       setOfflineTracks(list);
 
-      // Calculate total storage used by downloaded tracks
-      try {
-        const dirInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
-        if (dirInfo.exists) {
-          const files = await FileSystem.readDirectoryAsync(TRACKS_DIR);
-          let totalSize = 0;
-          for (const file of files) {
-            try {
-              const fInfo = await FileSystem.getInfoAsync(TRACKS_DIR + file);
-              if (fInfo.exists && fInfo.size) totalSize += fInfo.size;
-            } catch {}
-          }
-          setStorageUsed(totalSize);
-        }
-      } catch {}
+      const info = await getStorageLocationInfo().catch(() => null);
+      if (info) {
+        setStorageInfo(info);
+        setStorageUsed(info.totalBytes || 0);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleImportAudio = async () => {
+    try {
+      setActionLoading(true);
+      const res = await importLocalAudioFiles();
+      if (res && res.success) {
+        showToast(`Imported ${res.count} track(s) successfully!`, 'success');
+        await loadOffline();
+      }
+    } catch {
+      showToast('Failed to import audio files', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleScanVault = async () => {
+    try {
+      setActionLoading(true);
+      const res = await scanOfflineVault();
+      if (res && res.newlyFound > 0) {
+        showToast(`Found ${res.newlyFound} new local tracks!`, 'success');
+      } else {
+        showToast('Vault scanned — all files up to date', 'info');
+      }
+      await loadOffline();
+    } catch {
+      showToast('Failed scanning vault', 'error');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -116,9 +146,45 @@ export default function OfflineScreen() {
           </View>
 
           <Text style={styles.heroTitle}>OFFLINE TAPES</Text>
-          <Text style={[styles.heroSub, { marginBottom: 0 }]}>
+          <Text style={[styles.heroSub, { marginBottom: 12 }]}>
             Audio tracks saved on your device for zero-latency, offline listening.
           </Text>
+
+          {/* Storage & Location Info Box */}
+          <View style={styles.vaultInfoBox}>
+            <View style={styles.vaultInfoRow}>
+              <HardDrive size={13} color={colors.mint} />
+              <Text style={styles.vaultPathText} numberOfLines={1}>
+                {storageInfo?.folderLabel || 'Internal Storage'}
+              </Text>
+            </View>
+            <Text style={styles.vaultSizeText}>
+              {formatBytes(storageUsed)} • {(offlineTracks || []).length} TAPES
+            </Text>
+          </View>
+
+          {/* Action Buttons: Import MP3 and Scan Vault */}
+          <View style={styles.heroActionsRow}>
+            <TouchableOpacity
+              style={styles.heroActionBtn}
+              onPress={handleImportAudio}
+              disabled={actionLoading}
+              activeOpacity={0.8}
+            >
+              <FolderPlus size={15} color={colors.ink} />
+              <Text style={styles.heroActionText}>IMPORT MP3</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.heroActionBtn, styles.heroActionBtnSec]}
+              onPress={handleScanVault}
+              disabled={actionLoading}
+              activeOpacity={0.8}
+            >
+              <RefreshCw size={13} color={colors.mint} />
+              <Text style={styles.heroActionTextSec}>SCAN VAULT</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -170,8 +236,19 @@ export default function OfflineScreen() {
                       {track?.artist || 'Unknown Artist'}
                     </Text>
                     <View style={styles.badgeRow}>
-                      <View style={styles.localPill}>
-                        <Text style={styles.localPillText}>MP3 LOCAL</Text>
+                      <View style={[
+                        styles.localPill,
+                        track?.isLocalImport && {
+                          borderColor: colors.mint,
+                          backgroundColor: 'rgba(52,211,153,0.12)',
+                        }
+                      ]}>
+                        <Text style={[
+                          styles.localPillText,
+                          track?.isLocalImport && { color: colors.mint }
+                        ]}>
+                          {track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE TAPE'}
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -422,5 +499,66 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: colors.teal,
     flex: 1,
+  },
+  vaultInfoBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(52, 211, 153, 0.25)',
+    padding: 10,
+    marginBottom: 12,
+  },
+  vaultInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  vaultPathText: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.mint,
+    flex: 1,
+  },
+  vaultSizeText: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.paperMuted,
+  },
+  heroActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  heroActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.mint,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+  },
+  heroActionText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.ink,
+    letterSpacing: 0.5,
+  },
+  heroActionBtnSec: {
+    backgroundColor: colors.ink,
+    borderColor: colors.mint,
+  },
+  heroActionTextSec: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '900',
+    color: colors.mint,
+    letterSpacing: 0.5,
   },
 });

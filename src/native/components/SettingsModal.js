@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
-import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut } from 'lucide-react-native';
+import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut, HardDrive, FolderPlus, RefreshCw } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
@@ -8,6 +8,11 @@ import { API_BASE_URL } from '../config';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import BrutalButton from '../ui/BrutalButton';
+import {
+  importLocalAudioFiles,
+  scanOfflineVault,
+  getStorageLocationInfo,
+} from '../services/downloadManager';
 
 export default function SettingsModal({ visible, onClose }) {
   const { currentUser, logout } = useUser();
@@ -15,6 +20,53 @@ export default function SettingsModal({ visible, onClose }) {
   const [highQuality, setHighQuality] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
   const [cacheSize, setCacheSize] = useState('14.2 MB');
+  const [storageInfo, setStorageInfo] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      loadStorageInfo();
+    }
+  }, [visible]);
+
+  const loadStorageInfo = async () => {
+    try {
+      const info = await getStorageLocationInfo();
+      setStorageInfo(info);
+    } catch {}
+  };
+
+  const handleImportAudio = async () => {
+    try {
+      setActionLoading(true);
+      const res = await importLocalAudioFiles();
+      if (res && res.success) {
+        showToast(`Imported ${res.count} tracks to Vault!`, 'success');
+        await loadStorageInfo();
+      }
+    } catch {
+      showToast('Failed to import audio files', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleScanVault = async () => {
+    try {
+      setActionLoading(true);
+      const res = await scanOfflineVault();
+      if (res && res.newlyFound > 0) {
+        showToast(`Found ${res.newlyFound} new local tracks!`, 'success');
+      } else {
+        showToast('Storage scan complete — all tracks synced', 'info');
+      }
+      await loadStorageInfo();
+    } catch {
+      showToast('Failed scanning vault', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (!visible) return null;
 
@@ -124,7 +176,49 @@ export default function SettingsModal({ visible, onClose }) {
                 </View>
               </View>
 
+              {/* Offline Storage & Vault Section */}
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
+                  <HardDrive size={18} color={colors.mint} />
+                  <Text style={styles.sectionTitle}>OFFLINE VAULT & STORAGE</Text>
+                </View>
 
+                <View style={styles.infoRow}>
+                  <Text style={styles.label}>Location:</Text>
+                  <Text style={styles.valueMono} numberOfLines={1}>
+                    {storageInfo?.folderLabel || 'Internal App Storage'}
+                  </Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.label}>Vault Files:</Text>
+                  <Text style={styles.valueMono}>
+                    {storageInfo ? `${storageInfo.totalCount} files (${(storageInfo.totalBytes / 1048576).toFixed(1)} MB)` : 'Scanning...'}
+                  </Text>
+                </View>
+
+                <View style={styles.storageActionsRow}>
+                  <TouchableOpacity
+                    style={styles.storageActionBtn}
+                    onPress={handleImportAudio}
+                    disabled={actionLoading}
+                    activeOpacity={0.8}
+                  >
+                    <FolderPlus size={14} color={colors.ink} />
+                    <Text style={styles.storageActionText}>IMPORT MP3s</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.storageActionBtn, styles.storageActionBtnSec]}
+                    onPress={handleScanVault}
+                    disabled={actionLoading}
+                    activeOpacity={0.8}
+                  >
+                    <RefreshCw size={13} color={colors.mint} />
+                    <Text style={styles.storageActionTextSec}>RE-SYNC VAULT</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {/* About Rivo Engine */}
               <View style={styles.sectionCard}>
@@ -354,5 +448,40 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 11,
     color: colors.rust,
+  },
+  storageActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  storageActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.mint,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 6,
+    paddingVertical: 9,
+  },
+  storageActionText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: colors.ink,
+    letterSpacing: 0.5,
+  },
+  storageActionBtnSec: {
+    backgroundColor: colors.ink,
+    borderColor: colors.mint,
+  },
+  storageActionTextSec: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: colors.mint,
+    letterSpacing: 0.5,
   },
 });

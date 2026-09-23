@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { resolveAudioStream, resolveClientSideYouTubeStream, extractYouTubeId } from './youtubeResolver';
@@ -598,4 +599,304 @@ export const removeDownloadedTrack = async (trackId) => {
   const updated = existing.filter(t => String(t._id || t.id) !== idStr);
   await saveToStorageAndManifest(updated);
   return updated;
+};
+
+export function parseAudioMetadataFromFilename(filename) {
+  if (!filename) return { title: 'Local Track', artist: 'Local Import' };
+  let name = filename.replace(/\.(mp3|m4a|wav|aac|flac|ogg|opus)$/i, '').trim();
+  name = cleanMetadataString(name, 'Local Track');
+
+  if (name.includes(' - ')) {
+    const parts = name.split(' - ');
+    const artist = cleanMetadataString(parts[0], 'Local Artist');
+    const title = cleanMetadataString(parts.slice(1).join(' - '), 'Local Track');
+    return { title, artist };
+  }
+
+  if (name.includes(' _ ')) {
+    const parts = name.split(' _ ');
+    const artist = cleanMetadataString(parts[0], 'Local Artist');
+    const title = cleanMetadataString(parts.slice(1).join(' _ '), 'Local Track');
+    return { title, artist };
+  }
+
+  return {
+    title: name || 'Local Track',
+    artist: 'Local Import',
+  };
+}
+
+export const importLocalAudioFiles = async () => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['audio/*'],
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return { success: false, count: 0, tracks: [] };
+    }
+
+    await ensureDirs();
+    const existing = await getDownloadedTracks();
+    const newTracks = [];
+
+    for (const asset of result.assets) {
+      try {
+        const originalName = asset.name || 'local_audio.mp3';
+        const extMatch = originalName.match(/\.(mp3|m4a|wav|aac|flac|ogg|opus)$/i);
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'mp3';
+        const fileId = `local_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+        const destAudioPath = `${TRACKS_DIR}${fileId}.${ext}`;
+
+        await FileSystem.copyAsync({
+          from: asset.uri,
+          to: destAudioPath,
+        });
+
+        if (PERSISTENT_DIR) {
+          try {
+            await FileSystem.copyAsync({
+              from: destAudioPath,
+              to: `${PERSISTENT_DIR}${fileId}.${ext}`,
+            }).catch(() => {});
+          } catch {}
+        }
+
+        const { title, artist } = parseAudioMetadataFromFilename(originalName);
+
+        const newTrack = {
+          id: fileId,
+          _id: fileId,
+          title: title || originalName.replace(/\.[^/.]+$/, ''),
+          artist: artist || 'Local Import',
+          album: 'Device Storage',
+          source: 'Local',
+          publisher: 'Local',
+          signature: 'Local',
+          localAudioUri: destAudioPath,
+          nativeAudioUri: destAudioPath,
+          audioUrl: destAudioPath,
+          coverUrl: null,
+          cover: null,
+          isDownloaded: true,
+          downloaded: true,
+          isLocalImport: true,
+          downloadedAt: new Date().toISOString(),
+          fileSize: asset.size || 0,
+        };
+
+        newTracks.push(newTrack);
+      } catch (fileErr) {
+        console.warn('[downloadManager] Error importing single file:', asset.name, fileErr);
+      }
+    }
+
+    if (newTracks.length > 0) {
+      const updated = [...newTracks, ...existing];
+      await saveToStorageAndManifest(updated);
+      return { success: true, count: newTracks.length, tracks: updated };
+    }
+
+    return { success: false, count: 0, tracks: existing };
+  } catch (err) {
+    console.warn('[downloadManager] importLocalAudioFiles failed:', err);
+    throw err;
+  }
+};
+
+export const scanOfflineVault = async () => {
+  await ensureDirs();
+  const existing = await getDownloadedTracks();
+  const existingUris = new Set(existing.map(t => t.localAudioUri || t.nativeAudioUri || t.audioUrl));
+  const existingIds = new Set(existing.map(t => String(t._id || t.id)));
+
+  let newlyFound = 0;
+  const newTracks = [];
+
+  // 1. Scan primary TRACKS_DIR
+  try {
+    const tFiles = await FileSystem.readDirectoryAsync(TRACKS_DIR);
+    for (const f of tFiles) {
+      if (!/\.(mp3|m4a|wav|aac|flac|ogg)$/i.test(f)) continue;
+      const fileUri = `${TRACKS_DIR}${f}`;
+      const baseId = f.replace(/\.(mp3|m4a|wav|aac|flac|ogg)$/i, '');
+      if (existingIds.has(baseId) || existingUris.has(fileUri)) continue;
+
+      const info = await FileSystem.getInfoAsync(fileUri);
+      if (!info.exists || info.size < 5000) continue;
+
+      const { title, artist } = parseAudioMetadataFromFilename(f);
+      const newTrack = {
+        id: baseId,
+        _id: baseId,
+        title,
+        artist,
+        album: 'Offline Vault',
+        source: 'Vault',
+        publisher: 'Rivo',
+        signature: 'Rivo',
+        localAudioUri: fileUri,
+        nativeAudioUri: fileUri,
+        audioUrl: fileUri,
+        isDownloaded: true,
+        downloaded: true,
+        isLocalImport: true,
+        downloadedAt: new Date().toISOString(),
+        fileSize: info.size,
+      };
+      newTracks.push(newTrack);
+      existingIds.add(baseId);
+      existingUris.add(fileUri);
+      newlyFound++;
+    }
+  } catch (err) {
+    console.warn('[downloadManager] scan TRACKS_DIR error:', err.message);
+  }
+
+  // 2. Scan iOS Document Directory (files dropped directly into Files app: On My iPhone > Rivo)
+  if (Platform.OS === 'ios') {
+    try {
+      const docFiles = await FileSystem.readDirectoryAsync(FileSystem.documentDirectory);
+      for (const df of docFiles) {
+        if (!/\.(mp3|m4a|wav|aac|flac|ogg)$/i.test(df)) continue;
+        const srcUri = `${FileSystem.documentDirectory}${df}`;
+        const targetUri = `${TRACKS_DIR}${df}`;
+
+        const check = await FileSystem.getInfoAsync(targetUri).catch(() => ({ exists: false }));
+        if (!check.exists) {
+          await FileSystem.copyAsync({ from: srcUri, to: targetUri }).catch(() => {});
+        }
+
+        const baseId = df.replace(/\.(mp3|m4a|wav|aac|flac|ogg)$/i, '');
+        if (!existingIds.has(baseId) && !existingUris.has(targetUri)) {
+          const info = await FileSystem.getInfoAsync(targetUri);
+          const { title, artist } = parseAudioMetadataFromFilename(df);
+          const newTrack = {
+            id: `ios_${baseId}`,
+            _id: `ios_${baseId}`,
+            title,
+            artist,
+            album: 'Files App',
+            source: 'Local',
+            publisher: 'Rivo',
+            signature: 'Rivo',
+            localAudioUri: targetUri,
+            nativeAudioUri: targetUri,
+            audioUrl: targetUri,
+            isDownloaded: true,
+            downloaded: true,
+            isLocalImport: true,
+            downloadedAt: new Date().toISOString(),
+            fileSize: info.size || 0,
+          };
+          newTracks.push(newTrack);
+          existingIds.add(newTrack.id);
+          existingUris.add(targetUri);
+          newlyFound++;
+        }
+      }
+    } catch (err) {
+      console.warn('[downloadManager] scan iOS docFiles error:', err.message);
+    }
+  }
+
+  // 3. Scan Android PERSISTENT_DIR (/Music/Rivo/)
+  if (Platform.OS === 'android' && PERSISTENT_DIR) {
+    try {
+      const pInfo = await FileSystem.getInfoAsync(PERSISTENT_DIR);
+      if (pInfo.exists) {
+        const pFiles = await FileSystem.readDirectoryAsync(PERSISTENT_DIR);
+        for (const pf of pFiles) {
+          if (!/\.(mp3|m4a|wav|aac|flac|ogg)$/i.test(pf)) continue;
+          const pSrcUri = `${PERSISTENT_DIR}${pf}`;
+          const targetUri = `${TRACKS_DIR}${pf}`;
+
+          const check = await FileSystem.getInfoAsync(targetUri).catch(() => ({ exists: false }));
+          if (!check.exists) {
+            await FileSystem.copyAsync({ from: pSrcUri, to: targetUri }).catch(() => {});
+          }
+
+          const baseId = pf.replace(/\.(mp3|m4a|wav|aac|flac|ogg)$/i, '');
+          if (!existingIds.has(baseId) && !existingUris.has(targetUri)) {
+            const info = await FileSystem.getInfoAsync(targetUri);
+            const { title, artist } = parseAudioMetadataFromFilename(pf);
+            const newTrack = {
+              id: baseId,
+              _id: baseId,
+              title,
+              artist,
+              album: 'Music Vault',
+              source: 'Local',
+              publisher: 'Rivo',
+              signature: 'Rivo',
+              localAudioUri: targetUri,
+              nativeAudioUri: targetUri,
+              audioUrl: targetUri,
+              isDownloaded: true,
+              downloaded: true,
+              isLocalImport: true,
+              downloadedAt: new Date().toISOString(),
+              fileSize: info.size || 0,
+            };
+            newTracks.push(newTrack);
+            existingIds.add(baseId);
+            existingUris.add(targetUri);
+            newlyFound++;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[downloadManager] scan Android persistentDir error:', err.message);
+    }
+  }
+
+  if (newTracks.length > 0) {
+    const updated = [...newTracks, ...existing];
+    await saveToStorageAndManifest(updated);
+    return { newlyFound, tracks: updated };
+  }
+
+  return { newlyFound: 0, tracks: existing };
+};
+
+export const getStorageLocationInfo = async () => {
+  const isAndroid = Platform.OS === 'android';
+  const isIOS = Platform.OS === 'ios';
+
+  let folderLabel = isAndroid
+    ? 'Phone Storage: /Music/Rivo/'
+    : isIOS
+    ? 'Files App: On My iPhone > Rivo'
+    : 'Local App Storage';
+
+  let totalSize = 0;
+  let count = 0;
+
+  try {
+    const dirInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
+    if (dirInfo.exists) {
+      const files = await FileSystem.readDirectoryAsync(TRACKS_DIR);
+      for (const file of files) {
+        if (/\.(mp3|m4a|wav|aac|flac|ogg)$/i.test(file)) {
+          count++;
+          try {
+            const fInfo = await FileSystem.getInfoAsync(`${TRACKS_DIR}${file}`);
+            if (fInfo.exists && fInfo.size) totalSize += fInfo.size;
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  return {
+    isAndroid,
+    isIOS,
+    folderLabel,
+    tracksDir: TRACKS_DIR,
+    persistentDir: PERSISTENT_DIR,
+    totalCount: count,
+    totalBytes: totalSize,
+  };
 };
