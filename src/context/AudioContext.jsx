@@ -395,18 +395,44 @@ export function AudioProvider({ children, tracks, setTracks }) {
       let streamUrl = null;
       let durationVal = track.duration || 210;
 
-      // 1. Direct stream from /api/tracks/:id/stream
-      try {
-        const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${qTitle}&artist=${qArtist}`);
-        if (sRes.ok) {
-          const sData = await sRes.json();
-          let cand = sData?.url || sData?.directUrl;
-          if (cand && !cand.includes('youtube.com/watch') && !cand.includes('youtu.be/')) {
-            if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
-            streamUrl = cand;
+      // 0. Native device client-side stream resolution (Instant, zero-proxy, bypasses YouTube embed restrictions)
+      if (typeof window !== 'undefined' && typeof window.RIVO_RESOLVE_STREAM === 'function') {
+        try {
+          const nativeStreamPromise = new Promise((resolve) => {
+            const onResolved = (ev) => {
+              if (ev.detail && (ev.detail.trackId === trackId || ev.detail.ytId === curYtId)) {
+                window.removeEventListener('rivo-receive-resolved-stream', onResolved);
+                resolve(ev.detail.url || null);
+              }
+            };
+            window.addEventListener('rivo-receive-resolved-stream', onResolved);
+            setTimeout(() => {
+              window.removeEventListener('rivo-receive-resolved-stream', onResolved);
+              resolve(null);
+            }, 3500);
+          });
+          window.RIVO_RESOLVE_STREAM(track);
+          const resolvedUrl = await nativeStreamPromise;
+          if (resolvedUrl) {
+            streamUrl = resolvedUrl;
           }
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
+
+      // 1. Direct stream from /api/tracks/:id/stream
+      if (!streamUrl) {
+        try {
+          const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${qTitle}&artist=${qArtist}`);
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            let cand = sData?.url || sData?.directUrl;
+            if (cand && !cand.includes('youtube.com/watch') && !cand.includes('youtu.be/')) {
+              if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+              streamUrl = cand;
+            }
+          }
+        } catch (e) {}
+      }
 
       // 2. Fallback to /api/tracks/resolve-stream with stream=true
       if (!streamUrl) {
@@ -521,14 +547,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       } else if (event.data === YT.PlayerState.PAUSED) {
         if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
-          // If pause was involuntary (e.g. iOS backgrounding / WebKit interruption) and not requested by user:
-          if (!isUserPauseActionRef.current && isPlayingRef.current) {
-            try {
-              player.unMute();
-              player.playVideo();
-            } catch (e) {}
-            return;
-          }
           setIsPlaying(false);
           if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
         }

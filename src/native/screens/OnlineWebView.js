@@ -17,6 +17,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useUser } from '../context/UserContext';
 import { downloadTrack as nativeDownloadTrack, getDownloadedTracks, removeDownloadedTrack } from '../services/downloadManager';
+import { resolveAudioStream, resolveClientSideYouTubeStream, extractYouTubeId } from '../services/youtubeResolver';
 import {
   showMediaNotification,
   updateMediaNotification,
@@ -248,6 +249,17 @@ const INJECTED_JS = `
     }
   };
 
+  // 8. Bridge: request native client-side YouTube stream resolution
+  window.__RIVO_NATIVE_RESOLVER = true;
+  window.RIVO_RESOLVE_STREAM = function(track) {
+    if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'RESOLVE_STREAM',
+        track: track,
+      }));
+    }
+  };
+
   // Bridge: send toast/status messages to native
   window.RIVO_TOAST = function(message, type) {
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
@@ -257,6 +269,15 @@ const INJECTED_JS = `
         toastType: type || 'info',
       }));
     }
+  };
+
+  // Bridge: receive resolved stream from native
+  window.__RIVO_RECEIVE_RESOLVED_STREAM = function(data) {
+    try {
+      window.dispatchEvent(new CustomEvent('rivo-receive-resolved-stream', {
+        detail: data
+      }));
+    } catch(e) {}
   };
 
   // Bridge: receive offline audio base64 from native
@@ -451,6 +472,14 @@ export default function OnlineWebView() {
             : Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
 
           const isNewTrack = !isSameTrack && Boolean(track);
+          const isPlayStateChanged = currentTrackRef.current?._lastIsPlaying !== Boolean(isPlaying);
+          currentTrackRef.current._lastIsPlaying = Boolean(isPlaying);
+
+          // On iOS, avoid calling updateMediaNotification on periodic time ticks to prevent audio session stutter
+          if (Platform.OS === 'ios' && !isNewTrack && !isPlayStateChanged) {
+            break;
+          }
+
           if (isNewTrack) {
             showMediaNotification({
               ...activeTrack,
@@ -471,6 +500,44 @@ export default function OnlineWebView() {
                 liked: isLikedState,
               }
             );
+          }
+          break;
+        }
+
+        case 'RESOLVE_STREAM': {
+          const track = data.track;
+          if (!track) break;
+          const trackId = String(track.id || track._id || '');
+          const ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || extractYouTubeId(track.youtubeId);
+          try {
+            let streamUrl = null;
+            if (ytId) {
+              streamUrl = await resolveClientSideYouTubeStream(ytId);
+            }
+            if (!streamUrl) {
+              streamUrl = await resolveAudioStream(track);
+            }
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  if (typeof window.__RIVO_RECEIVE_RESOLVED_STREAM === 'function') {
+                    window.__RIVO_RECEIVE_RESOLVED_STREAM(${JSON.stringify({ trackId, ytId, url: streamUrl, success: Boolean(streamUrl) })});
+                  }
+                } catch(e) {}
+              })();
+              true;
+            `);
+          } catch (e) {
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  if (typeof window.__RIVO_RECEIVE_RESOLVED_STREAM === 'function') {
+                    window.__RIVO_RECEIVE_RESOLVED_STREAM(${JSON.stringify({ trackId, ytId, url: null, success: false })});
+                  }
+                } catch(e) {}
+              })();
+              true;
+            `);
           }
           break;
         }

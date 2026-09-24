@@ -123,10 +123,8 @@ export const resolveAudioStream = async (track) => {
     try {
       const directStream = await resolveClientSideYouTubeStream(ytId);
       if (directStream) {
-        // Stream through high-speed Range-enabled proxy to prevent YouTube throttling and playback freezing
-        const streamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(directStream)}`;
-        if (trackId) streamCache.set(trackId, streamUrl);
-        return streamUrl;
+        if (trackId) streamCache.set(trackId, directStream);
+        return directStream;
       }
     } catch (e) {}
   }
@@ -172,24 +170,61 @@ export function extractYouTubeId(input) {
 export const resolveClientSideYouTubeStream = async (ytId) => {
   if (!ytId) return null;
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    let visitorData = '';
+    let cookies = '';
 
-    const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      signal: controller.signal,
-    });
-    const html = await webRes.text();
-    clearTimeout(timeoutId);
+    // Fast official visitor_id token acquisition
+    try {
+      const vController = new AbortController();
+      const vTimeout = setTimeout(() => vController.abort(), 3000);
+      const vRes = await fetch(`https://www.youtube.com/youtubei/v1/visitor_id?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'VISIONOS',
+              clientVersion: '1.02',
+              deviceMake: 'Apple',
+              deviceModel: 'RealityDevice17,1',
+              osName: 'visionOS',
+              osVersion: '26.5.23O471',
+              hl: 'en',
+              gl: 'US',
+            }
+          }
+        }),
+        signal: vController.signal,
+      });
+      clearTimeout(vTimeout);
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        visitorData = vData?.responseContext?.visitorData || '';
+      }
+    } catch (e) {}
 
-    const keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
-    const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
-    const key = keyMatch ? keyMatch[1] : 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-    const visitorData = visitorMatch ? visitorMatch[1] : '';
-    const cookies = webRes.headers?.get ? (webRes.headers.get('set-cookie') || '') : '';
+    // Fallback: scrape watch page if visitor_id endpoint did not return
+    if (!visitorData) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: controller.signal,
+        });
+        const html = await webRes.text();
+        clearTimeout(timeoutId);
+
+        const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
+        if (visitorMatch && visitorMatch[1]) visitorData = visitorMatch[1];
+        cookies = webRes.headers?.get ? (webRes.headers.get('set-cookie') || '') : '';
+      } catch (e) {}
+    }
 
     const playerBody = {
       context: {

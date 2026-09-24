@@ -3884,18 +3884,46 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
   // Tier 1: Direct VisionOS / Apple Innertube API Audio Stream Extraction
   try {
-    const webRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 5000,
-    });
-    const html = typeof webRes.data === 'string' ? webRes.data : '';
-    const keyMatch = html.match(/"INNERTUBE_API_KEY":"([^"]+)"/);
-    const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
-    const key = keyMatch ? keyMatch[1] : 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-    const visitorData = visitorMatch ? visitorMatch[1] : '';
+    const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    let visitorData = '';
+
+    // Fast official visitor_id token acquisition (immune to datacenter scraping blocks)
+    try {
+      const vRes = await axios.post(`https://www.youtube.com/youtubei/v1/visitor_id?key=${key}`, {
+        context: {
+          client: {
+            clientName: 'VISIONOS',
+            clientVersion: '1.02',
+            deviceMake: 'Apple',
+            deviceModel: 'RealityDevice17,1',
+            osName: 'visionOS',
+            osVersion: '26.5.23O471',
+            hl: 'en',
+            gl: 'US',
+          }
+        }
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 3000
+      });
+      visitorData = vRes.data?.responseContext?.visitorData || '';
+    } catch (e) {}
+
+    // Fallback: scrape watch page if visitor_id endpoint did not return a token
+    if (!visitorData) {
+      try {
+        const webRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          timeout: 4000,
+        });
+        const html = typeof webRes.data === 'string' ? webRes.data : '';
+        const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
+        if (visitorMatch && visitorMatch[1]) visitorData = visitorMatch[1];
+      } catch (e) {}
+    }
 
     const playerBody = {
       context: {

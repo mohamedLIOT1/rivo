@@ -5,45 +5,6 @@
 
 static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
 
-static NSData *CreateSilentWavData(void) {
-    int sampleRate = 8000;
-    int numChannels = 1;
-    int bitsPerSample = 8;
-    int dataSize = sampleRate * 1; // 1 second
-    int fileSize = 36 + dataSize;
-    
-    NSMutableData *data = [NSMutableData dataWithCapacity:fileSize + 8];
-    [data appendBytes:"RIFF" length:4];
-    int32_t fSize = fileSize;
-    [data appendBytes:&fSize length:4];
-    [data appendBytes:"WAVEfmt " length:8];
-    int32_t subchunk1Size = 16;
-    [data appendBytes:&subchunk1Size length:4];
-    int16_t audioFormat = 1; // PCM
-    [data appendBytes:&audioFormat length:2];
-    int16_t channels = numChannels;
-    [data appendBytes:&channels length:2];
-    int32_t sRate = sampleRate;
-    [data appendBytes:&sRate length:4];
-    int32_t byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-    [data appendBytes:&byteRate length:4];
-    int16_t blockAlign = numChannels * (bitsPerSample / 8);
-    [data appendBytes:&blockAlign length:2];
-    int16_t bps = bitsPerSample;
-    [data appendBytes:&bps length:2];
-    [data appendBytes:"data" length:4];
-    int32_t dSize = dataSize;
-    [data appendBytes:&dSize length:4];
-    
-    void *silenceBuffer = malloc(dataSize);
-    if (silenceBuffer) {
-        memset(silenceBuffer, 128, dataSize); // 8-bit PCM silence
-        [data appendBytes:silenceBuffer length:dataSize];
-        free(silenceBuffer);
-    }
-    return data;
-}
-
 @implementation RivoMediaControls
 {
     BOOL _hasListeners;
@@ -51,7 +12,6 @@ static NSData *CreateSilentWavData(void) {
     BOOL _audioSessionConfigured;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
-    AVAudioPlayer *_silentPlayer;
 }
 
 RCT_EXPORT_MODULE(RivoMediaControls);
@@ -182,10 +142,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
                 NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
                 now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
                 [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
-
-                if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer play];
-                }
 
                 WKWebView *wv = [self findActiveWebView];
                 if (wv) {
@@ -523,25 +479,6 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 
             BOOL isPlaying = [options[@"isPlaying"] boolValue];
 
-            // Maintain silent background audio session so iOS does not suspend the app
-            if (isPlaying) {
-                if (!self->_silentPlayer) {
-                    NSData *wavData = CreateSilentWavData();
-                    NSError *err = nil;
-                    self->_silentPlayer = [[AVAudioPlayer alloc] initWithData:wavData error:&err];
-                    self->_silentPlayer.numberOfLoops = -1; // Infinite loop
-                    self->_silentPlayer.volume = 0.0; // Completely silent
-                }
-                if (![self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer prepareToPlay];
-                    [self->_silentPlayer play];
-                }
-            } else {
-                if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer pause];
-                }
-            }
-
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
 
             NSString *title = options[@"title"];
@@ -619,10 +556,6 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 RCT_EXPORT_METHOD(hideNotification) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            if (self->_silentPlayer) {
-                [self->_silentPlayer stop];
-                self->_silentPlayer = nil;
-            }
             self->_currentCoverUrl = nil;
             self->_currentArtwork = nil;
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
