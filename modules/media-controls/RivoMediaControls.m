@@ -97,7 +97,8 @@ RCT_EXPORT_MODULE(RivoMediaControls);
         [session setCategory:AVAudioSessionCategoryPlayback
                  withOptions:(AVAudioSessionCategoryOptionAllowBluetooth |
                               AVAudioSessionCategoryOptionAllowBluetoothA2DP |
-                              AVAudioSessionCategoryOptionDefaultToSpeaker)
+                              AVAudioSessionCategoryOptionDefaultToSpeaker |
+                              AVAudioSessionCategoryOptionMixWithOthers)
                        error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
@@ -529,10 +530,12 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                     NSError *err = nil;
                     self->_silentPlayer = [[AVAudioPlayer alloc] initWithData:wavData error:&err];
                     self->_silentPlayer.numberOfLoops = -1; // Infinite loop
-                    self->_silentPlayer.volume = 0.01; // Minimal non-zero volume to keep audio session alive
+                    self->_silentPlayer.volume = 0.0; // Completely silent
                 }
-                [self->_silentPlayer prepareToPlay];
-                [self->_silentPlayer play];
+                if (![self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer prepareToPlay];
+                    [self->_silentPlayer play];
+                }
             } else {
                 if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
                     [self->_silentPlayer pause];
