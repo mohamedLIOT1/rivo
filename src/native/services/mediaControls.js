@@ -119,3 +119,31 @@ export const subscribeToMediaActions = (callback) => {
     return () => {};
   }
 };
+
+export const showChatNotification = (options) => {
+  if (!RivoMediaControls || !RivoMediaControls.showChatNotification) return;
+  try {
+    RivoMediaControls.showChatNotification({
+      senderId: String(options.senderId || options.sender || ''),
+      senderName: String(options.senderName || options.title || 'Friend'),
+      message: String(options.message || options.body || options.preview || ''),
+      isJam: Boolean(options.isJam),
+      roomCode: options.roomCode ? String(options.roomCode) : undefined,
+    });
+  } catch (e) {}
+};
+
+export const dismissChatNotification = (senderId) => {
+  if (!RivoMediaControls || !RivoMediaControls.dismissChatNotification) return;
+  try {
+    RivoMediaControls.dismissChatNotification(String(senderId));
+  } catch (e) {}
+};
+
+export const dismissAllChatNotifications = () => {
+  if (!RivoMediaControls || !RivoMediaControls.dismissAllChatNotifications) return;
+  try {
+    RivoMediaControls.dismissAllChatNotifications();
+  } catch (e) {}
+};
+

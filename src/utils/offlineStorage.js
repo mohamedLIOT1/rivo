@@ -424,10 +424,29 @@ export async function saveTrackOffline(track, options = {}) {
   }
 }
 
-// Get offline saved track audio blob URL dynamically with title/artist fallback
 export async function getOfflineTrackAudioUrl(trackId, title = null, artist = null) {
   if (!trackId && !title) return null;
   const idStr = trackId ? String(trackId) : null;
+  const normTitle = (title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+  const normArtist = (artist || '').toLowerCase().trim();
+
+  // 1. FAST NATIVE FIRST CHECK (Prioritize local storage over website stream in Online Mode)
+  if (typeof window !== 'undefined') {
+    const downloadedTracks = Array.isArray(window.__RIVO_DOWNLOADED_TRACKS) ? window.__RIVO_DOWNLOADED_TRACKS : [];
+    if (downloadedTracks.length > 0) {
+      const foundNative = downloadedTracks.find(nt => {
+        const ntId = String(nt.id || nt._id || '');
+        if (idStr && (ntId === idStr || ntId.includes(idStr) || idStr.includes(ntId))) return true;
+        const ntTitle = (nt.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
+        const ntArtist = (nt.artist || '').toLowerCase().trim();
+        return normTitle && ntTitle && normTitle === ntTitle && (!normArtist || !ntArtist || normArtist === ntArtist);
+      });
+      const localUri = foundNative?.localAudioUri || foundNative?.nativeAudioUri || foundNative?.audioUrl;
+      if (localUri && (localUri.startsWith('file://') || localUri.startsWith('content://') || localUri.startsWith('blob:') || localUri.startsWith('data:'))) {
+        return localUri;
+      }
+    }
+  }
 
   try {
     const db = await openDB();

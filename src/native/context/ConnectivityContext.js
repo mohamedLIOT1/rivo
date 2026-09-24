@@ -74,9 +74,15 @@ export function ConnectivityProvider({ children }) {
     setAppMode(isConnected ? 'online' : 'offline');
   }, [networkState.isConnected]);
 
+  const setMode = useCallback((mode) => {
+    setAppMode(mode);
+  }, []);
+
   const value = {
     networkState,
     appMode,
+    setAppMode,
+    setMode,
     isAutoMode: true,
     userPreference: 'auto',
     toggleMode,

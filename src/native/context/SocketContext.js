@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
 import { useUser } from './UserContext';
+import { showChatNotification, dismissChatNotification } from '../services/mediaControls';
 
 const SocketContext = createContext();
 
@@ -44,6 +45,25 @@ export const SocketProvider = ({ children }) => {
 
     s.on('new_chat_message', (msg) => {
       setChatMessages((prev) => [...prev, msg]);
+    });
+
+    s.on('chat:message', (msg) => {
+      const myId = String(currentUser?._id || currentUser?.id || '');
+      if (myId && String(msg.recipient) === myId) {
+        showChatNotification({
+          senderId: msg.sender,
+          senderName: msg.senderName || 'Friend',
+          message: msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment')),
+          isJam: Boolean(msg.jamInvite?.roomCode),
+          roomCode: msg.jamInvite?.roomCode,
+        });
+      }
+    });
+
+    s.on('chat:dismiss_notification', ({ senderId }) => {
+      if (senderId) {
+        dismissChatNotification(senderId);
+      }
     });
 
     setSocket(s);

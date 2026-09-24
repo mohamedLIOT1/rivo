@@ -22,6 +22,8 @@ import {
   updateMediaNotification,
   hideMediaNotification,
   subscribeToMediaActions,
+  showChatNotification,
+  dismissChatNotification,
 } from '../services/mediaControls';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
@@ -298,7 +300,7 @@ export default function OnlineWebView() {
   const { showToast } = useToast();
   const { refreshDownloadedTracks } = useAudioPlayer();
   const { toggleLikeTrack, likedTrackIds } = useUser();
-  const { appMode } = useConnectivity();
+  const { appMode, setAppMode, toggleMode } = useConnectivity();
   const isOnline = appMode === 'online';
   const prevOnlineRef = useRef(isOnline);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -624,6 +626,62 @@ export default function OnlineWebView() {
           break;
         }
 
+        case 'SHOW_CHAT_NOTIFICATION': {
+          const payload = data.options || data.payload || data;
+          showChatNotification(payload);
+          break;
+        }
+
+        case 'DISMISS_CHAT_NOTIFICATION': {
+          const senderId = data.senderId || data.id;
+          if (senderId) {
+            dismissChatNotification(senderId);
+          }
+          break;
+        }
+
+        case 'SET_APP_MODE': {
+          const targetMode = data.mode || 'offline';
+          if (typeof setAppMode === 'function') {
+            setAppMode(targetMode);
+          }
+          break;
+        }
+
+        case 'TOGGLE_APP_MODE': {
+          if (typeof toggleMode === 'function') {
+            toggleMode();
+          }
+          break;
+        }
+
+        case 'REQUEST_SYNC_DOWNLOADS': {
+          try {
+            const list = await getDownloadedTracks();
+            const ids = (list || []).map(t => String(t._id || t.id));
+            const tracksData = (list || []).map(t => ({
+              id: String(t._id || t.id),
+              _id: String(t._id || t.id),
+              title: t.title,
+              artist: t.artist,
+              localAudioUri: t.localAudioUri || t.nativeAudioUri || t.audioUrl,
+            }));
+            webViewRef.current?.injectJavaScript(`
+              (function() {
+                try {
+                  window.__RIVO_NATIVE_DOWNLOADED_IDS = ${JSON.stringify(ids)};
+                  window.__RIVO_DOWNLOADED_TRACKS = ${JSON.stringify(tracksData)};
+                  window.dispatchEvent(new CustomEvent('rivo-downloads-synced', {
+                    detail: { tracks: ${JSON.stringify(tracksData)} }
+                  }));
+                } catch(e) {}
+              })();
+              true;
+            `);
+          } catch (e) {}
+          break;
+        }
+
         case 'TOAST': {
           showToast(data.message || '', data.toastType || 'info');
           break;
@@ -635,7 +693,7 @@ export default function OnlineWebView() {
     } catch (e) {
       // Non-JSON messages are ignored
     }
-  }, [showToast, refreshDownloadedTracks]);
+  }, [showToast, refreshDownloadedTracks, setAppMode, toggleMode]);
 
   // â”€â”€â”€ Error / offline fallback UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (hasError) {

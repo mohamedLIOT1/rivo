@@ -204,23 +204,32 @@ export const getDownloadedTracks = async () => {
               modified = true;
             }
           } else {
-            // File is on device disk but missing from index (e.g. after APK update) -> auto recover!
+            // File is on device disk but missing from index (e.g. after APK update) -> auto recover with ID3 tags & lyrics!
             const coverUri = `${COVERS_DIR}${trackId}.jpg`;
             const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+            const id3Meta = await extractId3Metadata(fileUri, trackId);
+            const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(file);
+            const resolvedTitle = cleanMetadataString(id3Meta.title || fTitle || trackId, 'Offline Track');
+            const resolvedArtist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
+            const resolvedAlbum = cleanMetadataString(id3Meta.album || 'Downloaded', 'Downloaded');
+            const finalCover = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
+
             const recovered = {
               id: trackId,
               _id: trackId,
-              title: cleanMetadataString(trackId, 'Offline Track'),
-              artist: 'Offline Artist',
-              album: 'Downloaded',
+              title: resolvedTitle,
+              artist: resolvedArtist,
+              album: resolvedAlbum,
               source: 'Rivo',
               signature: 'Rivo',
               publisher: 'Rivo',
               localAudioUri: fileUri,
               nativeAudioUri: fileUri,
               audioUrl: fileUri,
-              coverUrl: coverInfo.exists ? coverUri : null,
-              cover: coverInfo.exists ? coverUri : null,
+              coverUrl: finalCover,
+              cover: finalCover,
+              lyrics: id3Meta.lyrics || null,
+              embeddedLyrics: id3Meta.lyrics || null,
               isDownloaded: true,
               downloaded: true,
               downloadedAt: new Date().toISOString(),
@@ -601,6 +610,289 @@ export const removeDownloadedTrack = async (trackId) => {
   return updated;
 };
 
+function base64ToUint8Array(b64) {
+  if (!b64 || typeof b64 !== 'string') return new Uint8Array(0);
+  const clean = b64.replace(/[\r\n\t =]/g, '');
+  const len = clean.length;
+  if (len === 0) return new Uint8Array(0);
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < chars.length; i++) lookup[chars.charCodeAt(i)] = i;
+
+  const byteLen = Math.floor((len * 3) / 4);
+  const bytes = new Uint8Array(byteLen);
+  let p = 0;
+  for (let i = 0; i < len; i += 4) {
+    const b0 = lookup[clean.charCodeAt(i)];
+    const b1 = lookup[clean.charCodeAt(i + 1)];
+    const b2 = lookup[clean.charCodeAt(i + 2)];
+    const b3 = lookup[clean.charCodeAt(i + 3)];
+    bytes[p++] = (b0 << 2) | (b1 >> 4);
+    if (p < byteLen) bytes[p++] = ((b1 & 15) << 4) | (b2 >> 2);
+    if (p < byteLen) bytes[p++] = ((b2 & 3) << 6) | b3;
+  }
+  return bytes;
+}
+
+function uint8ArrayToBase64(bytes) {
+  if (!bytes || bytes.length === 0) return '';
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let b64 = '';
+  const len = bytes.length;
+  for (let i = 0; i < len; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < len ? bytes[i + 1] : 0;
+    const b2 = i + 2 < len ? bytes[i + 2] : 0;
+    b64 += chars[b0 >> 2];
+    b64 += chars[((b0 & 3) << 4) | (b1 >> 4)];
+    b64 += i + 1 < len ? chars[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    b64 += i + 2 < len ? chars[b2 & 63] : '=';
+  }
+  return b64;
+}
+
+function decodeId3String(bytes, encoding = 0) {
+  if (!bytes || bytes.length === 0) return '';
+  try {
+    if (encoding === 3) {
+      if (typeof TextDecoder !== 'undefined') {
+        return new TextDecoder('utf-8').decode(bytes).replace(/\0/g, '').trim();
+      }
+    } else if (encoding === 1) {
+      if (bytes.length >= 2) {
+        if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+          if (typeof TextDecoder !== 'undefined') {
+            return new TextDecoder('utf-16le').decode(bytes.slice(2)).replace(/\0/g, '').trim();
+          }
+        } else if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
+          if (typeof TextDecoder !== 'undefined') {
+            return new TextDecoder('utf-16be').decode(bytes.slice(2)).replace(/\0/g, '').trim();
+          }
+        }
+      }
+      if (typeof TextDecoder !== 'undefined') {
+        return new TextDecoder('utf-16').decode(bytes).replace(/\0/g, '').trim();
+      }
+    } else if (encoding === 2) {
+      if (typeof TextDecoder !== 'undefined') {
+        return new TextDecoder('utf-16be').decode(bytes).replace(/\0/g, '').trim();
+      }
+    }
+  } catch (e) {}
+
+  if (encoding === 1 || encoding === 2) {
+    let offset = 0;
+    let isLE = true;
+    if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+      isLE = false;
+      offset = 2;
+    } else if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+      isLE = true;
+      offset = 2;
+    } else if (encoding === 2) {
+      isLE = false;
+    }
+    let str = '';
+    for (let i = offset; i + 1 < bytes.length; i += 2) {
+      const code = isLE ? (bytes[i] | (bytes[i + 1] << 8)) : ((bytes[i] << 8) | bytes[i + 1]);
+      if (code !== 0) str += String.fromCharCode(code);
+    }
+    return str.trim();
+  }
+
+  let str = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (c !== 0) str += String.fromCharCode(c);
+  }
+  try {
+    return decodeURIComponent(escape(str)).trim();
+  } catch {
+    return str.trim();
+  }
+}
+
+function readSynchSafeInt(b0, b1, b2, b3) {
+  return ((b0 & 0x7F) << 21) | ((b1 & 0x7F) << 14) | ((b2 & 0x7F) << 7) | (b3 & 0x7F);
+}
+
+function readInt32(b0, b1, b2, b3) {
+  return ((b0 << 24) >>> 0) | (b1 << 16) | (b2 << 8) | b3;
+}
+
+export async function extractId3Metadata(fileUri, trackId = null) {
+  const result = {
+    title: null,
+    artist: null,
+    album: null,
+    lyrics: null,
+    coverUrl: null,
+  };
+
+  if (!fileUri) return result;
+
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+    if (!fileInfo.exists || fileInfo.size < 128) return result;
+
+    const sampleLength = Math.min(fileInfo.size, 393216);
+    const headB64 = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+      length: sampleLength,
+      position: 0,
+    }).catch(() => null);
+
+    if (headB64) {
+      const bytes = base64ToUint8Array(headB64);
+      if (bytes.length >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+        const version = bytes[3];
+        const flags = bytes[5];
+        const tagSize = readSynchSafeInt(bytes[6], bytes[7], bytes[8], bytes[9]);
+        let offset = 10;
+
+        if (version === 4 && (flags & 0x40)) {
+          if (offset + 4 <= bytes.length) {
+            const extSize = readSynchSafeInt(bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]);
+            offset += extSize;
+          }
+        } else if (version === 3 && (flags & 0x40)) {
+          if (offset + 4 <= bytes.length) {
+            const extSize = readInt32(bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]);
+            offset += 4 + extSize;
+          }
+        }
+
+        const maxOffset = Math.min(bytes.length, tagSize + 10);
+        while (offset + (version === 2 ? 6 : 10) <= maxOffset) {
+          if (bytes[offset] === 0) break;
+
+          let frameId = '';
+          let frameSize = 0;
+
+          if (version === 2) {
+            frameId = String.fromCharCode(bytes[offset], bytes[offset+1], bytes[offset+2]);
+            frameSize = (bytes[offset+3] << 16) | (bytes[offset+4] << 8) | bytes[offset+5];
+            offset += 6;
+          } else {
+            frameId = String.fromCharCode(bytes[offset], bytes[offset+1], bytes[offset+2], bytes[offset+3]);
+            if (version === 4) {
+              frameSize = readSynchSafeInt(bytes[offset+4], bytes[offset+5], bytes[offset+6], bytes[offset+7]);
+            } else {
+              frameSize = readInt32(bytes[offset+4], bytes[offset+5], bytes[offset+6], bytes[offset+7]);
+            }
+            offset += 10;
+          }
+
+          if (frameSize <= 0 || offset + frameSize > bytes.length) {
+            break;
+          }
+
+          const frameData = bytes.slice(offset, offset + frameSize);
+          offset += frameSize;
+
+          if (frameData.length === 0) continue;
+          const encoding = frameData[0];
+
+          if ((frameId === 'TIT2' || frameId === 'TT2') && !result.title) {
+            const text = decodeId3String(frameData.slice(1), encoding);
+            if (text) result.title = text;
+          } else if ((frameId === 'TPE1' || frameId === 'TP1') && !result.artist) {
+            const text = decodeId3String(frameData.slice(1), encoding);
+            if (text) result.artist = text;
+          } else if ((frameId === 'TALB' || frameId === 'TAL') && !result.album) {
+            const text = decodeId3String(frameData.slice(1), encoding);
+            if (text) result.album = text;
+          } else if ((frameId === 'USLT' || frameId === 'ULT') && !result.lyrics) {
+            if (frameData.length > 4) {
+              let descEnd = 4;
+              if (encoding === 1 || encoding === 2) {
+                while (descEnd + 1 < frameData.length && (frameData[descEnd] !== 0 || frameData[descEnd + 1] !== 0)) {
+                  descEnd += 2;
+                }
+                descEnd += 2;
+              } else {
+                while (descEnd < frameData.length && frameData[descEnd] !== 0) {
+                  descEnd++;
+                }
+                descEnd++;
+              }
+              const lyricsText = decodeId3String(frameData.slice(descEnd), encoding);
+              if (lyricsText && lyricsText.length > 5) {
+                result.lyrics = lyricsText;
+              }
+            }
+          } else if (frameId === 'SYLT' && !result.lyrics) {
+            const text = decodeId3String(frameData.slice(6), encoding);
+            if (text && text.length > 5) {
+              result.lyrics = text;
+            }
+          } else if ((frameId === 'APIC' || frameId === 'PIC') && !result.coverUrl && trackId) {
+            try {
+              let imgStart = -1;
+              for (let j = 1; j < frameData.length - 3; j++) {
+                if (frameData[j] === 0xFF && frameData[j+1] === 0xD8 && frameData[j+2] === 0xFF) {
+                  imgStart = j;
+                  break;
+                }
+                if (frameData[j] === 0x89 && frameData[j+1] === 0x50 && frameData[j+2] === 0x4E && frameData[j+3] === 0x47) {
+                  imgStart = j;
+                  break;
+                }
+              }
+              if (imgStart !== -1 && imgStart < frameData.length - 100) {
+                const imgBytes = frameData.slice(imgStart);
+                const imgB64 = uint8ArrayToBase64(imgBytes);
+                const coverTarget = `${COVERS_DIR}${trackId}.jpg`;
+                await FileSystem.writeAsStringAsync(coverTarget, imgB64, {
+                  encoding: FileSystem.EncodingType.Base64,
+                });
+                if (PERSISTENT_DIR) {
+                  await FileSystem.writeAsStringAsync(`${PERSISTENT_DIR}${trackId}.jpg`, imgB64, {
+                    encoding: FileSystem.EncodingType.Base64,
+                  }).catch(() => {});
+                }
+                result.coverUrl = coverTarget;
+              }
+            } catch (covErr) {
+              console.warn('[ID3] cover extraction error:', covErr.message);
+            }
+          }
+        }
+      }
+    }
+
+    if ((!result.title || !result.artist) && fileInfo.size >= 128) {
+      const tailB64 = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+        length: 128,
+        position: fileInfo.size - 128,
+      }).catch(() => null);
+
+      if (tailB64) {
+        const tailBytes = base64ToUint8Array(tailB64);
+        if (tailBytes.length >= 128 && tailBytes[0] === 0x54 && tailBytes[1] === 0x41 && tailBytes[2] === 0x47) {
+          if (!result.title) {
+            const t = decodeId3String(tailBytes.slice(3, 33), 0);
+            if (t) result.title = t;
+          }
+          if (!result.artist) {
+            const a = decodeId3String(tailBytes.slice(33, 63), 0);
+            if (a) result.artist = a;
+          }
+          if (!result.album) {
+            const al = decodeId3String(tailBytes.slice(63, 93), 0);
+            if (al) result.album = al;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[ID3] extractId3Metadata failed:', err.message);
+  }
+
+  return result;
+}
+
 export function parseAudioMetadataFromFilename(filename) {
   if (!filename) return { title: 'Local Track', artist: 'Local Import' };
   let name = filename.replace(/\.(mp3|m4a|wav|aac|flac|ogg|opus)$/i, '').trim();
@@ -664,22 +956,31 @@ export const importLocalAudioFiles = async () => {
           } catch {}
         }
 
-        const { title, artist } = parseAudioMetadataFromFilename(originalName);
+        const { title: filenameTitle, artist: filenameArtist } = parseAudioMetadataFromFilename(originalName);
+        const id3Meta = await extractId3Metadata(destAudioPath, fileId);
+
+        const title = cleanMetadataString(id3Meta.title || filenameTitle || originalName.replace(/\.[^/.]+$/, ''), 'Local Track');
+        const artist = cleanMetadataString(id3Meta.artist || filenameArtist || 'Local Import', 'Local Artist');
+        const album = cleanMetadataString(id3Meta.album || 'Device Storage', 'Device Storage');
+        const coverUrl = id3Meta.coverUrl || null;
+        const lyrics = id3Meta.lyrics || null;
 
         const newTrack = {
           id: fileId,
           _id: fileId,
-          title: title || originalName.replace(/\.[^/.]+$/, ''),
-          artist: artist || 'Local Import',
-          album: 'Device Storage',
+          title,
+          artist,
+          album,
           source: 'Local',
           publisher: 'Local',
           signature: 'Local',
           localAudioUri: destAudioPath,
           nativeAudioUri: destAudioPath,
           audioUrl: destAudioPath,
-          coverUrl: null,
-          cover: null,
+          coverUrl,
+          cover: coverUrl,
+          lyrics,
+          embeddedLyrics: lyrics,
           isDownloaded: true,
           downloaded: true,
           isLocalImport: true,
@@ -727,19 +1028,31 @@ export const scanOfflineVault = async () => {
       const info = await FileSystem.getInfoAsync(fileUri);
       if (!info.exists || info.size < 5000) continue;
 
-      const { title, artist } = parseAudioMetadataFromFilename(f);
+      const id3Meta = await extractId3Metadata(fileUri, baseId);
+      const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(f);
+      const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
+      const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
+      const album = cleanMetadataString(id3Meta.album || 'Offline Vault', 'Offline Vault');
+      const coverUri = `${COVERS_DIR}${baseId}.jpg`;
+      const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+      const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
+
       const newTrack = {
         id: baseId,
         _id: baseId,
         title,
         artist,
-        album: 'Offline Vault',
+        album,
         source: 'Vault',
         publisher: 'Rivo',
         signature: 'Rivo',
         localAudioUri: fileUri,
         nativeAudioUri: fileUri,
         audioUrl: fileUri,
+        coverUrl,
+        cover: coverUrl,
+        lyrics: id3Meta.lyrics || null,
+        embeddedLyrics: id3Meta.lyrics || null,
         isDownloaded: true,
         downloaded: true,
         isLocalImport: true,
@@ -772,19 +1085,31 @@ export const scanOfflineVault = async () => {
         const baseId = df.replace(/\.(mp3|m4a|wav|aac|flac|ogg)$/i, '');
         if (!existingIds.has(baseId) && !existingUris.has(targetUri)) {
           const info = await FileSystem.getInfoAsync(targetUri);
-          const { title, artist } = parseAudioMetadataFromFilename(df);
+          const id3Meta = await extractId3Metadata(targetUri, baseId);
+          const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(df);
+          const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
+          const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
+          const album = cleanMetadataString(id3Meta.album || 'Files App', 'Files App');
+          const coverUri = `${COVERS_DIR}${baseId}.jpg`;
+          const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+          const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
+
           const newTrack = {
             id: `ios_${baseId}`,
             _id: `ios_${baseId}`,
             title,
             artist,
-            album: 'Files App',
+            album,
             source: 'Local',
             publisher: 'Rivo',
             signature: 'Rivo',
             localAudioUri: targetUri,
             nativeAudioUri: targetUri,
             audioUrl: targetUri,
+            coverUrl,
+            cover: coverUrl,
+            lyrics: id3Meta.lyrics || null,
+            embeddedLyrics: id3Meta.lyrics || null,
             isDownloaded: true,
             downloaded: true,
             isLocalImport: true,
@@ -821,19 +1146,31 @@ export const scanOfflineVault = async () => {
           const baseId = pf.replace(/\.(mp3|m4a|wav|aac|flac|ogg)$/i, '');
           if (!existingIds.has(baseId) && !existingUris.has(targetUri)) {
             const info = await FileSystem.getInfoAsync(targetUri);
-            const { title, artist } = parseAudioMetadataFromFilename(pf);
+            const id3Meta = await extractId3Metadata(targetUri, baseId);
+            const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(pf);
+            const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
+            const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
+            const album = cleanMetadataString(id3Meta.album || 'Music Vault', 'Music Vault');
+            const coverUri = `${COVERS_DIR}${baseId}.jpg`;
+            const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+            const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
+
             const newTrack = {
               id: baseId,
               _id: baseId,
               title,
               artist,
-              album: 'Music Vault',
+              album,
               source: 'Local',
               publisher: 'Rivo',
               signature: 'Rivo',
               localAudioUri: targetUri,
               nativeAudioUri: targetUri,
               audioUrl: targetUri,
+              coverUrl,
+              cover: coverUrl,
+              lyrics: id3Meta.lyrics || null,
+              embeddedLyrics: id3Meta.lyrics || null,
               isDownloaded: true,
               downloaded: true,
               isLocalImport: true,
@@ -848,7 +1185,7 @@ export const scanOfflineVault = async () => {
         }
       }
     } catch (err) {
-      console.warn('[downloadManager] scan Android persistentDir error:', err.message);
+      console.warn('[downloadManager] scan PERSISTENT_DIR error:', err.message);
     }
   }
 

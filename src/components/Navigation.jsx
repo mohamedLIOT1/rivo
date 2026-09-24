@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -323,6 +323,32 @@ export default function Navigation({
               </div>
             </div>
 
+          </div>
+
+          {/* ── Switch to Offline Mode Button (visible on mobile / tablet screens <= 1024px) ── */}
+          <div className="block lg:hidden mt-auto mb-1.5 shrink-0">
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'SET_APP_MODE',
+                    mode: 'offline'
+                  }));
+                }
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl brutal-border font-bold text-xs cursor-pointer transition ${
+                isDark ? 'bg-[#0b1110] border-[#17a398] text-[#26c4b7] hover:bg-[#17a398]/20' : 'bg-white border-[#17a398] text-[#082621] hover:bg-[#17a398]/10'
+              }`}
+              title="Switch to Offline Mode (Local Vault)"
+            >
+              <div className="flex items-center gap-2">
+                <WifiOff size={15} className="text-[#17a398]" strokeWidth={2.5} />
+                <span>Offline Vault</span>
+              </div>
+              <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
+                SWITCH
+              </span>
+            </button>
           </div>
 
           {/* ── User & Shortcuts Bar (Bottom) ── */}

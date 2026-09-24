@@ -222,6 +222,12 @@ function AppContent() {
       if (socket) {
         socket.emit('chat:mark_read', { senderId: targetId });
       }
+      if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'DISMISS_CHAT_NOTIFICATION',
+          senderId: targetId
+        }));
+      }
     }
 
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -1206,6 +1212,22 @@ function AppContent() {
             });
           }
 
+          // Native Android & Mobile Phone Push Notification Bridge
+          if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+            try {
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'SHOW_CHAT_NOTIFICATION',
+                options: {
+                  senderId: msg.sender,
+                  senderName,
+                  message: preview,
+                  isJam: Boolean(msg.jamInvite?.roomCode),
+                  roomCode: msg.jamInvite?.roomCode,
+                }
+              }));
+            } catch (e) {}
+          }
+
           // Browser Desktop Push Notification
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
@@ -1253,6 +1275,17 @@ function AppContent() {
         return prev;
       });
       setUnreadChatCount(prev => Math.max(0, prev - 1));
+
+      // Dismiss native notification on mobile device
+      if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'DISMISS_CHAT_NOTIFICATION',
+            senderId,
+            roomCode
+          }));
+        } catch (e) {}
+      }
     });
 
     return () => s.disconnect();
@@ -2112,6 +2145,32 @@ function AppContent() {
                   {isActivityPanelOpen && (
                     <span className="w-2 h-2 rounded-full bg-[#17a398]" />
                   )}
+                </button>
+
+                {/* Switch to Offline Mode (Mobile / Tablet Quick Action) */}
+                <button
+                  onClick={() => {
+                    handleCloseMobileMenu();
+                    if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'SET_APP_MODE',
+                        mode: 'offline'
+                      }));
+                    } else {
+                      setIsOfflineMode(prev => !prev);
+                      showToast(!isOfflineMode ? 'Switched to Offline Vault' : 'Switched to Online Mode', 'info');
+                    }
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#0b1110] border-2 border-[#17a398] text-[#26c4b7] hover:bg-[#17a398]/20 brutal-shadow-sm brutal-btn cursor-pointer transition font-bold"
+                  title="Switch to Offline Vault (Local Storage)"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <WifiOff size={16} className="text-[#17a398]" strokeWidth={2.5} />
+                    <span>Switch to Offline Mode</span>
+                  </div>
+                  <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] uppercase">
+                    VAULT
+                  </span>
                 </button>
               </div>
 

@@ -643,14 +643,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
       let isLocalFile = newUrl.includes('/_capacitor_file_/') || newUrl.includes('capacitor://') || newUrl.startsWith('file://') || newUrl.startsWith('content://') || newUrl.endsWith('.mp3');
       let isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
 
-      // Prioritize local storage in Online Mode: check if this track is saved offline in IndexedDB
+      // Prioritize local storage in Online Mode: check if this track is saved offline in local storage or IndexedDB
       if (!isBlobUrl && !isLocalFile && !isDownloaded) {
         try {
           const offlineBlob = await getOfflineTrackAudioUrl(newId, currentTrack.title, currentTrack.artist);
           if (isEffectCancelled) return;
           if (offlineBlob) {
             newUrl = offlineBlob;
-            isBlobUrl = true;
+            isBlobUrl = offlineBlob.startsWith('blob:') || offlineBlob.startsWith('data:');
+            isLocalFile = offlineBlob.startsWith('file://') || offlineBlob.startsWith('content://') || offlineBlob.includes('/_capacitor_file_/');
             isDownloaded = true;
             currentTrack.audioUrl = offlineBlob;
             currentTrack.downloaded = true;
