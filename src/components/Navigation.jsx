@@ -47,7 +47,6 @@ export default function Navigation({
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
-    { id: 'offline', label: 'Offline', icon: WifiOff, isOfflineSwitch: true },
     { id: 'quran', label: 'Quran', icon: BookOpen },
   ];
 
@@ -427,41 +426,6 @@ export default function Navigation({
         {mobileNavItems.map((item) => {
           const Icon = item.icon;
           const active = currentScreen === item.id;
-
-          if (item.isOfflineSwitch) {
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'SET_APP_MODE',
-                      mode: 'offline'
-                    }));
-                  } else {
-                    setCurrentScreen('library');
-                  }
-                }}
-                className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition cursor-pointer ${
-                  isDark ? 'text-teal-400 hover:text-teal-300' : 'text-[#082621] hover:text-[#17a398]'
-                }`}
-                title="Switch to Offline Vault"
-              >
-                <div className="relative">
-                  <Icon 
-                    size={18} 
-                    className="text-[#17a398]" 
-                    strokeWidth={2.5} 
-                  />
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[#17a398] animate-pulse" />
-                </div>
-                <span className="text-[9px] font-display font-black text-[#17a398]">
-                  {item.label}
-                </span>
-              </button>
-            );
-          }
 
           return (
             <a
