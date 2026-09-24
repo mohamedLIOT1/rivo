@@ -450,7 +450,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         audioRef.current.src = streamUrl;
         audioRef.current.volume = volumeRef.current;
         resumeAudioContext();
-        await audioRef.current.play();
+        try {
+          await audioRef.current.play();
+        } catch (playErr) {
+          console.warn('[Audio] play error in fallback:', playErr);
+        }
         setIsPlaying(true);
         if (durationVal) setDuration(durationVal);
         if (track.cover) setCurrentTrack(prev => prev ? { ...prev, cover: track.cover } : prev);
@@ -468,14 +472,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!div1) {
       div1 = document.createElement('div');
       div1.id = 'rivo-yt-player-1';
-      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:1;pointer-events:none;z-index:-999;';
+      div1.style.cssText = 'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:9999;';
       document.body.appendChild(div1);
     }
     let div2 = document.getElementById('rivo-yt-player-2');
     if (!div2) {
       div2 = document.createElement('div');
       div2.id = 'rivo-yt-player-2';
-      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:1;pointer-events:none;z-index:-999;';
+      div2.style.cssText = 'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:9999;';
       document.body.appendChild(div2);
     }
 
@@ -765,13 +769,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
               const currTime = typeof actPlayer.getCurrentTime === 'function' ? (actPlayer.getCurrentTime() || 0) : 0;
               // If playing normally and audio has progressed beyond 0.5s: healthy!
               if (state === 1 && currTime > 0.5) return;
-              console.warn('[YT] Watchdog: YouTube not playing/stuck after 4s (state=' + state + ', time=' + currTime + '), falling back to audio stream');
+              console.warn('[YT] Watchdog: YouTube not playing/stuck after 1.8s (state=' + state + ', time=' + currTime + '), falling back to audio stream');
               fallbackToHtmlAudio(currentTrack);
             } catch (e) {
               fallbackToHtmlAudio(currentTrack);
             }
           }
-        }, 4000);
+        }, 1800);
       }
     } else {
       // ── Regular audio (Upload / Downloaded Blob) ─

@@ -3882,7 +3882,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // Tier 1: Direct VisionOS / Android Innertube API Audio Stream Extraction
+  // Tier 1: Direct VisionOS / Apple Innertube API Audio Stream Extraction
   try {
     const webRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
@@ -3896,15 +3896,17 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
     const key = keyMatch ? keyMatch[1] : 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
     const visitorData = visitorMatch ? visitorMatch[1] : '';
-    const setCookie = webRes.headers['set-cookie'];
-    const cookies = Array.isArray(setCookie) ? setCookie.join('; ') : (setCookie || '');
 
     const playerBody = {
       context: {
         client: {
-          clientName: 'ANDROID',
-          clientVersion: '19.29.37',
-          androidSdkVersion: 34,
+          clientName: 'VISIONOS',
+          clientVersion: '1.02',
+          deviceMake: 'Apple',
+          deviceModel: 'RealityDevice17,1',
+          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+          osName: 'visionOS',
+          osVersion: '26.5.23O471',
           hl: 'en',
           gl: 'US',
           visitorData: visitorData || undefined,
@@ -3915,9 +3917,8 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     const playerHeaders = {
       'Content-Type': 'application/json',
-      'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; en_US)',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
     };
-    if (cookies) playerHeaders['Cookie'] = cookies;
 
     const playerRes = await axios.post(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, playerBody, {
       headers: playerHeaders,
