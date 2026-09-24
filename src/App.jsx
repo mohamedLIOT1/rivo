@@ -1498,6 +1498,25 @@ function AppContent() {
               <Users size={15} strokeWidth={2.5} />
             </button>
 
+            {/* Direct Switch to Offline Vault Button (Mobile / Tablet) */}
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'SET_APP_MODE',
+                    mode: 'offline'
+                  }));
+                } else {
+                  goToScreen('library');
+                }
+              }}
+              className="flex lg:hidden items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#17a398]/15 hover:bg-[#17a398]/25 text-[#17a398] border border-[#17a398]/40 cursor-pointer transition shrink-0 font-display font-black text-xs"
+              title="Switch to Offline Mode (Local Vault)"
+            >
+              <WifiOff size={14} strokeWidth={2.5} />
+              <span>Offline</span>
+            </button>
+
             {/* Quick Actions Drawer Toggle (☰ 3 bars) */}
             <button
               onClick={handleOpenMobileMenu}

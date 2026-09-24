@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw } from 'lucide-react-native';
+import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw, CheckSquare, Square, Check, ListPlus, X } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -26,7 +26,7 @@ import {
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 
 export default function OfflineScreen() {
-  const { playTrack, currentTrack, isPlaying, togglePlay } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue } = useAudioPlayer();
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const [offlineTracks, setOfflineTracks] = useState([]);
@@ -34,6 +34,8 @@ export default function OfflineScreen() {
   const [storageUsed, setStorageUsed] = useState(0);
   const [storageInfo, setStorageInfo] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   useEffect(() => {
     loadOffline();
@@ -115,6 +117,74 @@ export default function OfflineScreen() {
     );
   };
 
+  const toggleSelectTrack = (trackId) => {
+    const sId = String(trackId);
+    setSelectedIds((prev) =>
+      prev.includes(sId) ? prev.filter((id) => id !== sId) : [...prev, sId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const allIds = (offlineTracks || []).map((t) => String(t._id || t.id));
+    if (selectedIds.length === allIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(allIds);
+    }
+  };
+
+  const getSelectedTracks = () => {
+    return (offlineTracks || []).filter((t) => selectedIds.includes(String(t._id || t.id)));
+  };
+
+  const handleBatchQueue = () => {
+    const sel = getSelectedTracks();
+    if (sel.length === 0) return;
+    if (typeof addMultipleToQueue === 'function') {
+      addMultipleToQueue(sel);
+    } else {
+      sel.forEach((t) => playTrack(t));
+    }
+    showToast(`Added ${sel.length} tape(s) to queue`, 'info');
+    setIsSelectMode(false);
+    setSelectedIds([]);
+  };
+
+  const handleBatchDelete = () => {
+    const sel = getSelectedTracks();
+    if (sel.length === 0) return;
+    Alert.alert(
+      'REMOVE SELECTED TAPES',
+      `Delete ${sel.length} tape(s) from local device storage?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete All',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              for (const t of sel) {
+                const id = t._id || t.id;
+                await removeDownloadedTrack(id);
+              }
+              const selSet = new Set(sel.map((t) => String(t._id || t.id)));
+              setOfflineTracks((prev) => prev.filter((t) => !selSet.has(String(t._id || t.id))));
+              setSelectedIds([]);
+              setIsSelectMode(false);
+              showToast(`Removed ${sel.length} tape(s) from storage`, 'info');
+              loadOffline();
+            } catch {
+              showToast('Error removing some tapes', 'error');
+            } finally {
+              setActionLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handlePlayOffline = (track) => {
     if (!track) return;
     const trackId = String(track._id || track.id || '');
@@ -136,149 +206,230 @@ export default function OfflineScreen() {
   };
 
   return (
-    <ScrollView style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]} contentContainerStyle={styles.content}>
-      {/* Offline Storage Status Card */}
-      <View style={styles.heroOuter}>
-        <View style={styles.heroShadow} />
-        <View style={styles.heroCard}>
-          <View style={styles.topRow}>
-            <CassetteTag label="NO WI-FI REQUIRED" bg={colors.ink} textColor={colors.mint} />
-          </View>
+    <View style={{ flex: 1, backgroundColor: !isDark ? '#fdfbf7' : colors.ink }}>
+      <ScrollView style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]} contentContainerStyle={[styles.content, isSelectMode && { paddingBottom: 110 }]}>
+        {/* Offline Storage Status Card */}
+        <View style={styles.heroOuter}>
+          <View style={styles.heroShadow} />
+          <View style={styles.heroCard}>
+            <View style={styles.topRow}>
+              <CassetteTag label="NO WI-FI REQUIRED" bg={colors.ink} textColor={colors.mint} />
+            </View>
 
-          <Text style={styles.heroTitle}>OFFLINE TAPES</Text>
-          <Text style={[styles.heroSub, { marginBottom: 12 }]}>
-            Audio tracks saved on your device for zero-latency, offline listening.
-          </Text>
+            <Text style={styles.heroTitle}>OFFLINE TAPES</Text>
+            <Text style={[styles.heroSub, { marginBottom: 12 }]}>
+              Audio tracks saved on your device for zero-latency, offline listening.
+            </Text>
 
-          {/* Storage & Location Info Box */}
-          <View style={styles.vaultInfoBox}>
-            <View style={styles.vaultInfoRow}>
-              <HardDrive size={13} color={colors.mint} />
-              <Text style={styles.vaultPathText} numberOfLines={1}>
-                {storageInfo?.folderLabel || 'Internal Storage'}
+            {/* Storage & Location Info Box */}
+            <View style={styles.vaultInfoBox}>
+              <View style={styles.vaultInfoRow}>
+                <HardDrive size={13} color={colors.mint} />
+                <Text style={styles.vaultPathText} numberOfLines={1}>
+                  {storageInfo?.folderLabel || 'Internal Storage'}
+                </Text>
+              </View>
+              <Text style={styles.vaultSizeText}>
+                {formatBytes(storageUsed)} • {(offlineTracks || []).length} TAPES
               </Text>
             </View>
-            <Text style={styles.vaultSizeText}>
-              {formatBytes(storageUsed)} • {(offlineTracks || []).length} TAPES
-            </Text>
-          </View>
 
-          {/* Action Buttons: Import MP3 and Scan Vault */}
-          <View style={styles.heroActionsRow}>
-            <TouchableOpacity
-              style={styles.heroActionBtn}
-              onPress={handleImportAudio}
-              disabled={actionLoading}
-              activeOpacity={0.8}
-            >
-              <FolderPlus size={15} color={colors.ink} />
-              <Text style={styles.heroActionText}>IMPORT MP3</Text>
-            </TouchableOpacity>
+            {/* Action Buttons: Import MP3, Scan Vault, Select */}
+            <View style={styles.heroActionsRow}>
+              <TouchableOpacity
+                style={styles.heroActionBtn}
+                onPress={handleImportAudio}
+                disabled={actionLoading}
+                activeOpacity={0.8}
+              >
+                <FolderPlus size={14} color={colors.ink} />
+                <Text style={styles.heroActionText}>IMPORT</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.heroActionBtn, styles.heroActionBtnSec]}
-              onPress={handleScanVault}
-              disabled={actionLoading}
-              activeOpacity={0.8}
-            >
-              <RefreshCw size={13} color={colors.mint} />
-              <Text style={styles.heroActionTextSec}>SCAN VAULT</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+              <TouchableOpacity
+                style={[styles.heroActionBtn, styles.heroActionBtnSec]}
+                onPress={handleScanVault}
+                disabled={actionLoading}
+                activeOpacity={0.8}
+              >
+                <RefreshCw size={13} color={colors.mint} />
+                <Text style={styles.heroActionTextSec}>SCAN</Text>
+              </TouchableOpacity>
 
-      {/* Offline Tracks List */}
-      <View style={styles.listSection}>
-        <View style={styles.listHeader}>
-          <Text style={styles.listTitle}>DOWNLOADED AUDIO CASSETTES</Text>
-          <Text style={styles.listCount}>{(offlineTracks || []).length} SAVED</Text>
-        </View>
-
-        {(!offlineTracks || offlineTracks.length === 0) ? (
-          <View style={styles.emptyCard}>
-            <WifiOff size={40} color={colors.teal} />
-            <Text style={styles.emptyTitle}>No offline tapes saved</Text>
-            <Text style={styles.emptySub}>
-              Switch to online mode and tap the download icon on any song to save it for offline playback — no Wi-Fi needed.
-            </Text>
-            <View style={styles.goOnlineBanner}>
-              <Wifi size={13} color={colors.teal} />
-              <Text style={styles.goOnlineText}>
-                Use the toggle button to go online and download tapes
-              </Text>
+              {(offlineTracks || []).length > 0 && (
+                <TouchableOpacity
+                  style={[
+                    styles.heroActionBtn,
+                    isSelectMode ? { backgroundColor: colors.rust, borderColor: colors.rust } : styles.heroActionBtnSec,
+                  ]}
+                  onPress={() => {
+                    setIsSelectMode((p) => !p);
+                    setSelectedIds([]);
+                  }}
+                  disabled={actionLoading}
+                  activeOpacity={0.8}
+                >
+                  <CheckSquare size={13} color={isSelectMode ? '#ffffff' : colors.mint} />
+                  <Text style={[styles.heroActionTextSec, isSelectMode && { color: '#ffffff' }]}>
+                    {isSelectMode ? 'CANCEL' : 'SELECT'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
-        ) : (
-          <View style={styles.tracksList}>
-            {(offlineTracks || []).filter(Boolean).map((track, idx) => {
-              const trackId = String(track?._id || track?.id || idx);
-              const currentId = String(currentTrack?._id || currentTrack?.id || '');
-              const active = Boolean(currentTrack && trackId === currentId);
+        </View>
 
-              return (
-                <View key={trackId} style={styles.trackCard}>
-                  <Image
-                    source={{
-                      uri:
-                        track?.coverUrl ||
-                        track?.cover ||
-                        'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400',
+        {/* Offline Tracks List */}
+        <View style={styles.listSection}>
+          <View style={styles.listHeader}>
+            <Text style={styles.listTitle}>DOWNLOADED AUDIO CASSETTES</Text>
+            <Text style={styles.listCount}>{(offlineTracks || []).length} SAVED</Text>
+          </View>
+
+          {(!offlineTracks || offlineTracks.length === 0) ? (
+            <View style={styles.emptyCard}>
+              <WifiOff size={40} color={colors.teal} />
+              <Text style={styles.emptyTitle}>No offline tapes saved</Text>
+              <Text style={styles.emptySub}>
+                Switch to online mode and tap the download icon on any song to save it for offline playback — no Wi-Fi needed.
+              </Text>
+              <View style={styles.goOnlineBanner}>
+                <Wifi size={13} color={colors.teal} />
+                <Text style={styles.goOnlineText}>
+                  Use the toggle button to go online and download tapes
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.tracksList}>
+              {(offlineTracks || []).filter(Boolean).map((track, idx) => {
+                const trackId = String(track?._id || track?.id || idx);
+                const currentId = String(currentTrack?._id || currentTrack?.id || '');
+                const active = Boolean(currentTrack && trackId === currentId);
+                const isSelected = selectedIds.includes(trackId);
+
+                return (
+                  <TouchableOpacity
+                    key={trackId}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      if (isSelectMode) {
+                        toggleSelectTrack(trackId);
+                      } else {
+                        handlePlayOffline(track);
+                      }
                     }}
-                    style={styles.cover}
-                  />
+                    style={[
+                      styles.trackCard,
+                      isSelected && {
+                        borderColor: colors.mint,
+                        backgroundColor: 'rgba(52,211,153,0.12)',
+                      },
+                    ]}
+                  >
+                    {isSelectMode && (
+                      <View style={styles.selectCheckWrapper}>
+                        <View style={[styles.selectCheckBox, isSelected && styles.selectCheckBoxActive]}>
+                          {isSelected && <Check size={13} color={colors.ink} strokeWidth={3} />}
+                        </View>
+                      </View>
+                    )}
 
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.trackTitle} numberOfLines={1}>
-                      {track?.title || 'Untitled'}
-                    </Text>
-                    <Text style={styles.trackArtist} numberOfLines={1}>
-                      {track?.artist || 'Unknown Artist'}
-                    </Text>
-                    <View style={styles.badgeRow}>
-                      <View style={[
-                        styles.localPill,
-                        track?.isLocalImport && {
-                          borderColor: colors.mint,
-                          backgroundColor: 'rgba(52,211,153,0.12)',
-                        }
-                      ]}>
-                        <Text style={[
-                          styles.localPillText,
-                          track?.isLocalImport && { color: colors.mint }
+                    <Image
+                      source={{
+                        uri:
+                          track?.coverUrl ||
+                          track?.cover ||
+                          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400',
+                      }}
+                      style={styles.cover}
+                    />
+
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.trackTitle} numberOfLines={1}>
+                        {track?.title || 'Untitled'}
+                      </Text>
+                      <Text style={styles.trackArtist} numberOfLines={1}>
+                        {track?.artist || 'Unknown Artist'}
+                      </Text>
+                      <View style={styles.badgeRow}>
+                        <View style={[
+                          styles.localPill,
+                          track?.isLocalImport && {
+                            borderColor: colors.mint,
+                            backgroundColor: 'rgba(52,211,153,0.12)',
+                          }
                         ]}>
-                          {track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE TAPE'}
-                        </Text>
+                          <Text style={[
+                            styles.localPillText,
+                            track?.isLocalImport && { color: colors.mint }
+                          ]}>
+                            {track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE TAPE'}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
 
-                  <View style={styles.actions}>
-                    <TouchableOpacity
-                      style={styles.playBtn}
-                      onPress={() => handlePlayOffline(track)}
-                    >
-                      {active && isPlaying ? (
-                        <Pause size={15} color={colors.ink} fill={colors.ink} />
-                      ) : (
-                        <Play size={15} color={colors.ink} fill={colors.ink} />
-                      )}
-                    </TouchableOpacity>
+                    {!isSelectMode && (
+                      <View style={styles.actions}>
+                        <TouchableOpacity
+                          style={styles.playBtn}
+                          onPress={() => handlePlayOffline(track)}
+                        >
+                          {active && isPlaying ? (
+                            <Pause size={15} color={colors.ink} fill={colors.ink} />
+                          ) : (
+                            <Play size={15} color={colors.ink} fill={colors.ink} />
+                          )}
+                        </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.deleteBtn}
-                      onPress={() => handleDelete(track)}
-                    >
-                      <Trash2 size={15} color={colors.rust} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
+                        <TouchableOpacity
+                          style={styles.deleteBtn}
+                          onPress={() => handleDelete(track)}
+                        >
+                          <Trash2 size={15} color={colors.rust} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Floating Tactical Multi-Select Bottom Action Deck */}
+      {isSelectMode && (
+        <View style={styles.selectActionBar}>
+          <View style={styles.selectInfoRow}>
+            <Text style={styles.selectCountBadge}>{selectedIds.length}</Text>
+            <Text style={styles.selectCountText}>Selected</Text>
           </View>
-        )}
-      </View>
-    </ScrollView>
+          <TouchableOpacity onPress={handleSelectAll} style={styles.selectActionBtnSec}>
+            <Text style={styles.selectActionBtnTextSec}>
+              {selectedIds.length === (offlineTracks || []).length ? 'Deselect All' : 'Select All'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleBatchQueue}
+            disabled={selectedIds.length === 0}
+            style={[styles.selectActionBtn, selectedIds.length === 0 && { opacity: 0.4 }]}
+          >
+            <ListPlus size={14} color={colors.ink} />
+            <Text style={styles.selectActionBtnText}>Queue</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleBatchDelete}
+            disabled={selectedIds.length === 0}
+            style={[styles.selectActionBtnDanger, selectedIds.length === 0 && { opacity: 0.4 }]}
+          >
+            <Trash2 size={14} color="#ffffff" />
+            <Text style={styles.selectActionBtnTextDanger}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -560,5 +711,108 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: colors.mint,
     letterSpacing: 0.5,
+  },
+  selectCheckWrapper: {
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectCheckBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.mint,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  selectCheckBoxActive: {
+    backgroundColor: colors.mint,
+    borderColor: colors.ink,
+  },
+  selectActionBar: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    backgroundColor: colors.ink,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.mint,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    gap: 8,
+  },
+  selectInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  selectCountBadge: {
+    backgroundColor: colors.mint,
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  selectCountText: {
+    color: colors.paper,
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+  },
+  selectActionBtnSec: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  selectActionBtnTextSec: {
+    color: colors.paper,
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  selectActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.mint,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  selectActionBtnText: {
+    color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+  },
+  selectActionBtnDanger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.rust,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  selectActionBtnTextDanger: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: 'monospace',
   },
 });

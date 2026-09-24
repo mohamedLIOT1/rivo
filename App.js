@@ -121,7 +121,7 @@ function MainAppShell() {
  * The native React Native app shell for Offline Vault, Quran, and local playback.
  */
 function OfflineNativeShell({ isIOSPrimary = false }) {
-  const { appMode } = useConnectivity();
+  const { appMode, setAppMode } = useConnectivity();
   const [activeTab, setActiveTab] = useState(isIOSPrimary ? 'offline' : (appMode === 'online' ? 'home' : 'offline'));
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
@@ -196,6 +196,18 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
 
         {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
+          {/* Switch to Online Mode (Android) */}
+          {!isIOSPrimary && (
+            <TouchableOpacity
+              style={[styles.topIconBtn, { backgroundColor: '#17a398', borderColor: '#0b1110', width: 'auto', paddingHorizontal: 8 }]}
+              onPress={() => setAppMode('online')}
+              activeOpacity={0.8}
+            >
+              <Wifi size={13} color="#0b1110" strokeWidth={2.8} />
+              <Text style={{ color: '#0b1110', fontSize: 10, fontWeight: '900', marginLeft: 4 }}>ONLINE</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Sun / Moon (Theme toggle) */}
           <TouchableOpacity
             style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
@@ -300,6 +312,18 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
               </TouchableOpacity>
             </View>
 
+            {!isIOSPrimary && (
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: '#17a398', borderColor: '#0b1110', marginBottom: 8 }]}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setAppMode('online');
+                }}
+              >
+                <Wifi size={18} color="#0b1110" strokeWidth={2.8} />
+                <Text style={[styles.menuItemText, { color: '#0b1110', fontWeight: '900' }]}>Switch to Online Mode</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.menuItem}

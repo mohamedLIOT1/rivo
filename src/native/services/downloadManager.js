@@ -3,6 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { resolveAudioStream, resolveClientSideYouTubeStream, extractYouTubeId } from './youtubeResolver';
+import { parseLrcLyrics } from '../../utils/lrcParser';
 import { API_BASE_URL } from '../config';
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
@@ -324,7 +325,8 @@ export const downloadTrack = async (track, onProgress) => {
       if (onProgress) onProgress(100);
       const existing = await getDownloadedTracks();
       const existingRecord = existing.find(t => String(t._id || t.id) === trackId);
-      let trackLyrics = track.lyrics || existingRecord?.lyrics || null;
+      let rawLyrics = track.lyrics || existingRecord?.lyrics || null;
+      let trackLyrics = rawLyrics ? parseLrcLyrics(rawLyrics) : null;
       if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
         try {
           const qTitle = encodeURIComponent(cleanTitle);
@@ -334,7 +336,7 @@ export const downloadTrack = async (track, onProgress) => {
           if (lyricsRes.ok) {
             const lyricsData = await lyricsRes.json();
             if (lyricsData?.success && lyricsData?.lyrics) {
-              trackLyrics = lyricsData.lyrics;
+              trackLyrics = parseLrcLyrics(lyricsData.lyrics);
             }
           }
         } catch {}
@@ -531,7 +533,8 @@ export const downloadTrack = async (track, onProgress) => {
   }
 
   // Lyrics fetch & embed
-  let trackLyrics = track.lyrics || null;
+  let rawLyrics = track.lyrics || null;
+  let trackLyrics = rawLyrics ? parseLrcLyrics(rawLyrics) : null;
   if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
     try {
       const qTitle = encodeURIComponent(cleanTitle);
@@ -541,7 +544,7 @@ export const downloadTrack = async (track, onProgress) => {
       if (lyricsRes.ok) {
         const lyricsData = await lyricsRes.json();
         if (lyricsData?.success && lyricsData?.lyrics) {
-          trackLyrics = lyricsData.lyrics;
+          trackLyrics = parseLrcLyrics(lyricsData.lyrics);
         }
       }
     } catch {}
@@ -818,13 +821,17 @@ export async function extractId3Metadata(fileUri, trackId = null) {
               }
               const lyricsText = decodeId3String(frameData.slice(descEnd), encoding);
               if (lyricsText && lyricsText.length > 5) {
-                result.lyrics = lyricsText;
+                const parsed = parseLrcLyrics(lyricsText);
+                result.lyrics = (parsed && parsed.length > 0) ? parsed : lyricsText;
+                result.rawLyrics = lyricsText;
               }
             }
           } else if (frameId === 'SYLT' && !result.lyrics) {
             const text = decodeId3String(frameData.slice(6), encoding);
             if (text && text.length > 5) {
-              result.lyrics = text;
+              const parsed = parseLrcLyrics(text);
+              result.lyrics = (parsed && parsed.length > 0) ? parsed : text;
+              result.rawLyrics = text;
             }
           } else if ((frameId === 'APIC' || frameId === 'PIC') && !result.coverUrl && trackId) {
             try {
@@ -963,7 +970,7 @@ export const importLocalAudioFiles = async () => {
         const artist = cleanMetadataString(id3Meta.artist || filenameArtist || 'Local Import', 'Local Artist');
         const album = cleanMetadataString(id3Meta.album || 'Device Storage', 'Device Storage');
         const coverUrl = id3Meta.coverUrl || null;
-        const lyrics = id3Meta.lyrics || null;
+        const lyrics = id3Meta.lyrics ? parseLrcLyrics(id3Meta.lyrics) : null;
 
         const newTrack = {
           id: fileId,

@@ -9,6 +9,7 @@ import { showMediaNotification, updateMediaNotification, hideMediaNotification, 
 import { useConnectivity } from './ConnectivityContext';
 import { useToast } from './ToastContext';
 import { useUser } from './UserContext';
+import { parseLrcLyrics } from '../../utils/lrcParser';
 
 const AudioContext = createContext();
 const AudioProgressContext = createContext();
@@ -77,6 +78,13 @@ export const AudioProvider = ({ children }) => {
     const newQ = [...queueRef.current, track];
     setQueue(newQ);
     showToast(`Added to queue: ${track.title}`, 'info');
+  };
+
+  const addMultipleToQueue = (tracksToAdd) => {
+    if (!Array.isArray(tracksToAdd) || tracksToAdd.length === 0) return;
+    const newQ = [...queueRef.current, ...tracksToAdd];
+    setQueue(newQ);
+    showToast(`Added ${tracksToAdd.length} track(s) to queue`, 'info');
   };
 
   const removeFromQueue = (trackId) => {
@@ -300,12 +308,9 @@ export const AudioProvider = ({ children }) => {
     }
 
     if (currentTrack.lyrics) {
-      if (Array.isArray(currentTrack.lyrics) && currentTrack.lyrics.length > 0) {
-        setLyrics(currentTrack.lyrics);
-        return;
-      }
-      if (typeof currentTrack.lyrics === 'string' && currentTrack.lyrics.trim().length > 0) {
-        setLyrics(currentTrack.lyrics);
+      const parsed = parseLrcLyrics(currentTrack.lyrics);
+      if (parsed.length > 0) {
+        setLyrics(parsed);
         return;
       }
     }
@@ -313,11 +318,15 @@ export const AudioProvider = ({ children }) => {
     // Check offline vault for saved lyrics
     const dl = (downloadedTracks || []).find(t => String(t._id || t.id) === String(currentTrack._id || currentTrack.id));
     if (dl?.lyrics) {
-      setLyrics(dl.lyrics);
-      return;
+      const parsed = parseLrcLyrics(dl.lyrics);
+      if (parsed.length > 0) {
+        setLyrics(parsed);
+        return;
+      }
     }
 
-    if (isOffline) {
+    // Never generate AI lyrics for local files or downloaded tracks or offline mode
+    if (isOffline || currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded || dl) {
       setLyrics([]);
       return;
     }
@@ -613,7 +622,7 @@ export const AudioProvider = ({ children }) => {
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     sleepTimerRemaining, lyrics, isLoadingLyrics,
     playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
-    addToQueue, removeFromQueue, clearQueue,
+    addToQueue, addMultipleToQueue, setQueue, removeFromQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
   }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics]);

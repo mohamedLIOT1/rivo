@@ -12,6 +12,7 @@ import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import SleepTimerModal from './SleepTimerModal';
+import { parseLrcLyrics } from '../../utils/lrcParser';
 
 const { width, height } = Dimensions.get('window');
 
@@ -47,21 +48,7 @@ export default function FullPlayerModal({ visible, onClose }) {
   // Synced lyrics data structure normalized
   const lyricsList = useMemo(() => {
     if (!lyrics) return [];
-    if (Array.isArray(lyrics)) {
-      return lyrics
-        .filter(l => l && typeof l.text === 'string')
-        .map((l, idx) => ({
-          time: typeof l.time === 'number' ? l.time : idx * 5,
-          text: l.text,
-        }));
-    }
-    if (typeof lyrics === 'string') {
-      return lyrics
-        .split('\n')
-        .map((line, idx) => ({ time: idx * 5, text: line.trim() }))
-        .filter(l => l.text);
-    }
-    return [];
+    return parseLrcLyrics(lyrics);
   }, [lyrics]);
 
   const activeLyricIndex = useMemo(() => {

@@ -3,7 +3,7 @@ import {
   Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
   Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical,
-  Download, CheckCircle2
+  Download, CheckCircle2, CheckSquare, Square, ListPlus, FolderPlus
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
@@ -260,6 +260,80 @@ export default function PlaylistScreen({
       (t.artist && t.artist.toLowerCase().includes(q))
     );
   }, [playlistTracks, searchQuery]);
+
+  // Multi-Select state & batch actions
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedTrackIds, setSelectedTrackIds] = useState(new Set());
+
+  const toggleTrackSelect = (trackId) => {
+    setSelectedTrackIds(prev => {
+      const next = new Set(prev);
+      const sId = String(trackId);
+      if (next.has(sId)) next.delete(sId);
+      else next.add(sId);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTrackIds.size === filteredPlaylistTracks.length) {
+      setSelectedTrackIds(new Set());
+    } else {
+      setSelectedTrackIds(new Set(filteredPlaylistTracks.map(t => String(t.id || t._id))));
+    }
+  };
+
+  const getSelectedTracks = () => {
+    return filteredPlaylistTracks.filter(t => selectedTrackIds.has(String(t.id || t._id)));
+  };
+
+  const handleBatchQueue = () => {
+    const sel = getSelectedTracks();
+    if (sel.length === 0) return;
+    sel.forEach(t => addToQueue?.(t));
+    setIsSelectMode(false);
+    setSelectedTrackIds(new Set());
+  };
+
+  const handleBatchPlaylist = () => {
+    const sel = getSelectedTracks();
+    if (sel.length === 0) return;
+    openAddToPlaylist?.(sel);
+    setIsSelectMode(false);
+    setSelectedTrackIds(new Set());
+  };
+
+  const handleBatchDownload = () => {
+    const sel = getSelectedTracks();
+    if (sel.length === 0) return;
+    const toDownload = sel.filter(t => !t.downloaded);
+    if (toDownload.length > 0) {
+      downloadAllTracks?.(toDownload, playlist?.name || 'Selected Tracks');
+    }
+    setIsSelectMode(false);
+    setSelectedTrackIds(new Set());
+  };
+
+  const handleBatchDelete = async () => {
+    const sel = getSelectedTracks();
+    if (sel.length === 0) return;
+    const count = sel.length;
+    if (!window.confirm(`Are you sure you want to remove ${count} selected track(s)?`)) return;
+
+    if (playlist.isLikedSongs) {
+      sel.forEach(t => toggleLike?.(t.id || t._id));
+    } else if (onRemoveTrackFromPlaylist) {
+      for (const t of sel) {
+        await onRemoveTrackFromPlaylist(t.id || t._id, playlist.id || playlist._id);
+      }
+    } else if (onDeleteTrack) {
+      for (const t of sel) {
+        await onDeleteTrack(t.id || t._id);
+      }
+    }
+    setSelectedTrackIds(new Set());
+    setIsSelectMode(false);
+  };
 
   // Debounced auto-fetch AI recommendations on load so page renders with 0ms delay
   useEffect(() => {
@@ -850,6 +924,26 @@ export default function PlaylistScreen({
               )}
             </div>
           )}
+
+          {playlistTracks.length > 0 && (
+            <button
+              onClick={() => {
+                setIsSelectMode(prev => !prev);
+                setSelectedTrackIds(new Set());
+              }}
+              className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 transition-all ${
+                isSelectMode
+                  ? 'bg-[#17a398] text-[#0b1110] border-black font-black'
+                  : isDark
+                    ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border-zinc-700'
+                    : 'bg-white text-[#0b1110] hover:bg-[#ede5d3] border-black'
+              }`}
+              title="Toggle multi-select mode"
+            >
+              <CheckSquare size={14} strokeWidth={2.5} className={isSelectMode ? 'text-[#0b1110]' : 'text-[#17a398]'} />
+              <span>{isSelectMode ? 'Cancel Select' : 'Select'}</span>
+            </button>
+          )}
         </div>
 
         {playlistTracks.length > 0 && (
@@ -880,27 +974,70 @@ export default function PlaylistScreen({
             <div className={`grid grid-cols-12 text-[9px] sm:text-[10px] font-mono font-black uppercase tracking-wider brutal-border p-1.5 sm:p-2.5 ${
               isDark ? 'bg-[#101716] text-zinc-300 border-zinc-700' : 'bg-[#ded2bb] text-[#082621] border-black'
             }`}>
-              <span className="col-span-1 text-center">#</span>
+              <span className="col-span-1 text-center flex items-center justify-center">
+                {isSelectMode ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelectAll();
+                    }}
+                    className="p-1 hover:text-[#17a398] cursor-pointer"
+                    title={selectedTrackIds.size === filteredPlaylistTracks.length ? 'Deselect all' : 'Select all'}
+                  >
+                    {selectedTrackIds.size === filteredPlaylistTracks.length && filteredPlaylistTracks.length > 0 ? (
+                      <CheckSquare size={14} className="text-[#17a398]" />
+                    ) : (
+                      <Square size={14} />
+                    )}
+                  </button>
+                ) : (
+                  '#'
+                )}
+              </span>
               <span className="col-span-6 md:col-span-5">{isQuran ? 'SURAH & RECITER' : 'TITLE & ARTIST'}</span>
               <span className="hidden md:block col-span-3">{isQuran ? 'COLLECTION' : 'ALBUM'}</span>
               <span className="col-span-5 md:col-span-3 text-right pr-2">ACTIONS</span>
             </div>
 
             {filteredPlaylistTracks.map((track, i) => {
+              const isSelected = selectedTrackIds.has(String(track.id || track._id));
               return (
                 <React.Fragment key={track.id || track._id || i}>
                   <div
-                    onClick={() => handlePlayPlaylistTrack(track)}
+                    onClick={() => {
+                      if (isSelectMode) {
+                        toggleTrackSelect(track.id || track._id);
+                      } else {
+                        handlePlayPlaylistTrack(track);
+                      }
+                    }}
                     className={`grid grid-cols-12 items-center p-2 sm:p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-transform cursor-pointer group ${
-                      isDark 
-                        ? 'bg-[#141d1b] border-zinc-700 hover:bg-[#182320]' 
-                        : 'bg-[#fdfbf7] border-black hover:bg-[#ede5d3]'
+                      isSelected
+                        ? isDark ? 'bg-[#17a398]/20 border-[#17a398]' : 'bg-[#17a398]/15 border-[#17a398]'
+                        : isDark 
+                          ? 'bg-[#141d1b] border-zinc-700 hover:bg-[#182320]' 
+                          : 'bg-[#fdfbf7] border-black hover:bg-[#ede5d3]'
                     }`}
                   >
-                    <span className={`col-span-1 text-xs font-mono font-black text-center ${
+                    <span className={`col-span-1 text-xs font-mono font-black text-center flex items-center justify-center ${
                       isDark ? 'text-zinc-400' : 'text-[#082621]'
                     }`}>
-                      {String(i + 1).padStart(2, '0')}
+                      {isSelectMode ? (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTrackSelect(track.id || track._id);
+                          }}
+                          className={`w-5 h-5 rounded flex items-center justify-center brutal-border ${
+                            isSelected ? 'bg-[#17a398] text-[#0b1110] border-black' : 'bg-transparent text-transparent border-zinc-500'
+                          }`}
+                        >
+                          <Check size={13} strokeWidth={3} className={isSelected ? 'text-[#0b1110]' : 'opacity-0'} />
+                        </div>
+                      ) : (
+                        String(i + 1).padStart(2, '0')
+                      )}
                     </span>
                     
                     {/* Title & Artist */}
@@ -1282,6 +1419,90 @@ export default function PlaylistScreen({
           currentUser={currentUser}
           globalTheme={globalTheme}
         />
+      )}
+
+      {/* ── Tactical Multi-Select Bottom Action Deck ── */}
+      {isSelectMode && (
+        <div className={`fixed bottom-16 md:bottom-20 left-1/2 -translate-x-1/2 z-50 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl brutal-border-thick brutal-shadow-xl flex items-center gap-2 sm:gap-3 flex-wrap max-w-[95vw] sm:max-w-2xl transition-all ${
+          isDark ? 'bg-[#0e1715] border-[#17a398] text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
+        }`}>
+          <div className="flex items-center gap-2 pr-2 border-r border-[#17a398]/30">
+            <span className="font-mono text-xs font-black bg-[#17a398] text-[#0b1110] px-2 py-0.5 rounded-full">
+              {selectedTrackIds.size}
+            </span>
+            <span className="font-display font-black text-xs hidden sm:inline">Selected</span>
+          </div>
+
+          {/* Select All / Deselect All */}
+          <button
+            onClick={handleSelectAll}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold brutal-border cursor-pointer transition ${
+              isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110]'
+            }`}
+          >
+            {selectedTrackIds.size === filteredPlaylistTracks.length ? 'Deselect All' : 'Select All'}
+          </button>
+
+          {/* Add to Queue */}
+          <button
+            disabled={selectedTrackIds.size === 0}
+            onClick={handleBatchQueue}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#082621] text-[#26c4b7] hover:bg-[#0b1110] text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer"
+            title="Add selected tracks to queue"
+          >
+            <ListPlus size={14} />
+            <span className="hidden sm:inline">Queue</span>
+          </button>
+
+          {/* Add to Playlist */}
+          <button
+            disabled={selectedTrackIds.size === 0}
+            onClick={handleBatchPlaylist}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17a398] text-[#0b1110] hover:bg-[#26c4b7] text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer"
+            title="Add selected tracks to a playlist"
+          >
+            <FolderPlus size={14} strokeWidth={2.5} />
+            <span className="hidden sm:inline">Playlist</span>
+          </button>
+
+          {/* Download */}
+          <button
+            disabled={selectedTrackIds.size === 0}
+            onClick={handleBatchDownload}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer ${
+              isDark ? 'bg-zinc-800 text-teal-400 hover:bg-zinc-700' : 'bg-white text-teal-700 hover:bg-[#ede5d3]'
+            }`}
+            title="Download selected tracks offline"
+          >
+            <Download size={14} />
+            <span className="hidden sm:inline">Download</span>
+          </button>
+
+          {/* Delete / Remove (if allowed) */}
+          {(isOwner || playlist.isLikedSongs || isUserPlaylist) && (
+            <button
+              disabled={selectedTrackIds.size === 0}
+              onClick={handleBatchDelete}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer"
+              title="Remove selected tracks"
+            >
+              <Trash2 size={14} />
+              <span className="hidden sm:inline">Remove</span>
+            </button>
+          )}
+
+          {/* Close */}
+          <button
+            onClick={() => {
+              setIsSelectMode(false);
+              setSelectedTrackIds(new Set());
+            }}
+            className="p-1.5 rounded-lg hover:bg-zinc-500/20 cursor-pointer ml-auto"
+            title="Exit select mode"
+          >
+            <X size={16} />
+          </button>
+        </div>
       )}
     </div>
   );

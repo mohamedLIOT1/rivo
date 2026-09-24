@@ -20,18 +20,28 @@ export default function AddToPlaylistModal({
     }
   }, [isOpen]);
 
-  if (!isOpen || !track) return null;
+  if (!isOpen || !track || (Array.isArray(track) && track.length === 0)) return null;
 
-  const isQuran = isQuranContent(track);
+  const isMultiple = Array.isArray(track);
+  const sampleTrack = isMultiple ? track[0] : track;
+  const isQuran = isQuranContent(sampleTrack);
   const customPlaylists = playlists.filter(p => !p.isLikedSongs && (isQuran ? isQuranContent(p) : !isQuranContent(p)));
-  const trackIdClean = String(track.id || track._id);
+  const trackIdClean = String(sampleTrack?.id || sampleTrack?._id);
 
   const handlePlaylistClick = (pl) => {
+    if (isMultiple) {
+      for (const t of track) {
+        onAddTrackToPlaylist?.(t.id || t._id, pl.id, true);
+      }
+      onClose();
+      return;
+    }
+
     const isAlreadyAdded = (pl.trackIds || []).map(String).includes(trackIdClean);
     if (isAlreadyAdded) {
       setDuplicateConfirmPlaylist(pl);
     } else {
-      onAddTrackToPlaylist?.(track.id || track._id, pl.id, false);
+      onAddTrackToPlaylist?.(sampleTrack.id || sampleTrack._id, pl.id, false);
       onClose();
     }
   };
@@ -54,7 +64,7 @@ export default function AddToPlaylistModal({
               <div className="w-3 h-3 bg-[#17a398] brutal-border" />
             )}
             <h3 className="text-base font-mono font-black uppercase text-[#082621]">
-              {duplicateConfirmPlaylist ? 'Already in Playlist' : (isQuran ? 'Add to Quran Playlist' : 'Dispense to Cassette')}
+              {duplicateConfirmPlaylist ? 'Already in Playlist' : isMultiple ? `Dispense ${track.length} Tracks` : (isQuran ? 'Add to Quran Playlist' : 'Dispense to Cassette')}
             </h3>
           </div>
           <button 
@@ -70,10 +80,14 @@ export default function AddToPlaylistModal({
 
         {/* Track preview */}
         <div className="flex items-center gap-3 my-4 p-2.5 bg-[#ede5d3] brutal-border">
-          <img src={track.cover} alt={track.title} className="w-11 h-11 brutal-border object-cover bg-white shrink-0" />
+          <img src={sampleTrack.cover} alt={sampleTrack.title} className="w-11 h-11 brutal-border object-cover bg-white shrink-0" />
           <div className="truncate flex-1">
-            <h4 className="font-bold text-xs text-[#0b1110] truncate">{track.title}</h4>
-            <p className="text-[11px] text-[#082621]/70 truncate">{track.artist}</p>
+            <h4 className="font-bold text-xs text-[#0b1110] truncate">
+              {isMultiple ? `${track.length} Tracks Selected` : sampleTrack.title}
+            </h4>
+            <p className="text-[11px] text-[#082621]/70 truncate">
+              {isMultiple ? track.map(t => t.title).slice(0, 3).join(', ') + (track.length > 3 ? '...' : '') : sampleTrack.artist}
+            </p>
           </div>
         </div>
 

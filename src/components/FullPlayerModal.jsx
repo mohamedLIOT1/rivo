@@ -13,6 +13,7 @@ import ConfirmModal from './ConfirmModal';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
+import { parseLrcLyrics } from '../utils/lrcParser';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -286,6 +287,22 @@ export default function FullPlayerModal({
     setShowTranslation(false);
 
     if (currentTrack) {
+      // 1. If track already has embedded or loaded lyrics (LRC string or array), parse and preserve
+      if (currentTrack.lyrics) {
+        const parsed = parseLrcLyrics(currentTrack.lyrics);
+        if (parsed.length > 0) {
+          setLocalLyrics(parsed);
+          currentTrack.lyrics = parsed;
+          return;
+        }
+      }
+
+      // 2. If track is local import or downloaded, do not generate AI lyrics
+      if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
+        setLocalLyrics([]);
+        return;
+      }
+
       const qTitle = currentTrack.title;
       const qArtist = currentTrack.artist;
       const tId = currentTrack.id || currentTrack._id;
@@ -295,11 +312,15 @@ export default function FullPlayerModal({
           .then(r => r.json())
           .then(d => {
             if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
-              setLocalLyrics(d.lyrics);
+              const parsed = parseLrcLyrics(d.lyrics);
+              setLocalLyrics(parsed);
               setIsLyricsVerified(Boolean(d.isVerified));
               setLyricsVerifiedBy(d.verifiedBy || null);
-              currentTrack.lyrics = d.lyrics;
+              currentTrack.lyrics = parsed;
             } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
+              if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
+                return;
+              }
               setIsLyricsVerified(false);
               setLyricsVerifiedBy(null);
               fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
@@ -315,10 +336,11 @@ export default function FullPlayerModal({
               .then(r => r.json())
               .then(g => {
                 if (g.success && Array.isArray(g.lyrics) && g.lyrics.length > 0) {
-                  setLocalLyrics(g.lyrics);
+                  const parsedAi = parseLrcLyrics(g.lyrics);
+                  setLocalLyrics(parsedAi);
                   setIsLyricsVerified(false);
                   setLyricsVerifiedBy(null);
-                  currentTrack.lyrics = g.lyrics;
+                  currentTrack.lyrics = parsedAi;
                 }
               })
               .catch(() => {});
@@ -343,10 +365,11 @@ export default function FullPlayerModal({
         (data.title && data.title.toLowerCase().trim() === curTitle);
 
       if (matches && Array.isArray(data.lyrics)) {
-        setLocalLyrics(data.lyrics);
+        const parsedSocket = parseLrcLyrics(data.lyrics);
+        setLocalLyrics(parsedSocket);
         setIsLyricsVerified(Boolean(data.isVerified));
         setLyricsVerifiedBy(data.verifiedBy || null);
-        currentTrack.lyrics = data.lyrics;
+        currentTrack.lyrics = parsedSocket;
       }
     };
     s.on('lyrics:updated', onLyricsUpdated);
@@ -355,7 +378,7 @@ export default function FullPlayerModal({
     };
   }, [currentTrack?.id, currentTrack?._id, currentTrack?.title]);
 
-  const rawLyrics = localLyrics || (currentTrack && Array.isArray(currentTrack.lyrics) ? currentTrack.lyrics : []);
+  const rawLyrics = localLyrics || (currentTrack?.lyrics ? parseLrcLyrics(currentTrack.lyrics) : []);
   const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
 
   const lyrics = useMemo(() => {
