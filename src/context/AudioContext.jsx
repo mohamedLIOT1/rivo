@@ -384,15 +384,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const fallbackToHtmlAudio = useCallback(async (track) => {
     if (!track) return;
     if (!isPlayingRef.current && !shouldPlayRef.current) return;
-    isYtTrackRef.current = false;
-    setIsYtTrack(false);
-    stopYouTube();
 
     try {
       const trackId = String(track.id || track._id || '');
       const qTitle = encodeURIComponent(track.title || '');
       const qArtist = encodeURIComponent(track.artist || '');
       const rawUrl = track.audioUrl || '';
+      const curYtId = extractYtId(rawUrl) || extractYtId(trackId);
 
       let streamUrl = null;
       let durationVal = track.duration || 210;
@@ -416,6 +414,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}`);
           if (res.ok) {
             const d = await res.json();
+            const resolvedYtId = d.ytId || extractYtId(d.url);
+            // If server resolved a new alternative YouTube video ID, switch to it!
+            if (resolvedYtId && resolvedYtId !== curYtId) {
+              const actPlayer = getActiveYtPlayer();
+              if (actPlayer && isCurrentYtReady()) {
+                isYtTrackRef.current = true;
+                setIsYtTrack(true);
+                stopHtmlAudio();
+                actPlayer.unMute();
+                actPlayer.loadVideoById({ videoId: resolvedYtId, startSeconds: 0 });
+                try { actPlayer.playVideo(); } catch {}
+                setIsPlaying(true);
+                if (d.duration) setDuration(d.duration);
+                setCurrentTrack(prev => prev ? { ...prev, audioUrl: `https://www.youtube.com/watch?v=${resolvedYtId}` } : prev);
+                return;
+              }
+            }
+
             if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
               let cand = d.url;
               if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
@@ -428,7 +444,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       if (!isPlayingRef.current && !shouldPlayRef.current) return;
       if (streamUrl && audioRef.current) {
-        stopYouTube(); // Double check YouTube is completely silenced
+        isYtTrackRef.current = false;
+        setIsYtTrack(false);
+        stopYouTube();
         audioRef.current.src = streamUrl;
         audioRef.current.volume = volumeRef.current;
         resumeAudioContext();
@@ -440,22 +458,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } catch (err) {
       console.warn('Fallback play error:', err);
     }
-  }, [stopYouTube]);
+  }, [stopYouTube, stopHtmlAudio, getActiveYtPlayer, isCurrentYtReady]);
 
   // Create hidden YouTube IFrame player divs (Deck 1 & Deck 2)
+  // Note: Container must have real dimensions (>=200x200) and opacity 1 behind UI
+  // so WebKit / iOS WKWebView doesn't suspend media rendering or throttle playback!
   useEffect(() => {
     let div1 = document.getElementById('rivo-yt-player-1');
     if (!div1) {
       div1 = document.createElement('div');
       div1.id = 'rivo-yt-player-1';
-      div1.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;';
+      div1.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:1;pointer-events:none;z-index:-999;';
       document.body.appendChild(div1);
     }
     let div2 = document.getElementById('rivo-yt-player-2');
     if (!div2) {
       div2 = document.createElement('div');
       div2.id = 'rivo-yt-player-2';
-      div2.style.cssText = 'position:fixed;top:0;left:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1;';
+      div2.style.cssText = 'position:fixed;bottom:0;right:0;width:200px;height:200px;opacity:1;pointer-events:none;z-index:-999;';
       document.body.appendChild(div2);
     }
 
@@ -531,7 +551,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
             disablekb: 1,
             fs: 0,
             playsinline: 1,
+            enablejsapi: 1,
             origin: window.location.origin,
+            widget_referrer: window.location.href,
           },
           events: {
             onReady: () => {
@@ -564,7 +586,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
             disablekb: 1,
             fs: 0,
             playsinline: 1,
+            enablejsapi: 1,
             origin: window.location.origin,
+            widget_referrer: window.location.href,
           },
           events: {
             onReady: () => {
@@ -708,12 +732,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (shouldPlayRef.current || isPlayingRef.current) {
             shouldPlayRef.current = false;
             actPlayer.unMute();
-            actPlayer.loadVideoById(ytId);
-            actPlayer.playVideo();
+            resumeAudioContext();
+            if (typeof actPlayer.loadVideoById === 'function') {
+              actPlayer.loadVideoById({ videoId: ytId, startSeconds: 0 });
+            }
+            try { actPlayer.playVideo(); } catch (e) {}
             setIsPlaying(true);
           } else {
             // Do not autoplay on site load — prepare video paused
-            actPlayer.cueVideoById(ytId);
+            if (typeof actPlayer.cueVideoById === 'function') {
+              actPlayer.cueVideoById({ videoId: ytId });
+            }
             setIsPlaying(false);
           }
         } catch (e) {

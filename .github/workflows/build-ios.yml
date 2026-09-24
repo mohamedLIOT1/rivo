@@ -112,19 +112,21 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Package Payload into IPA
+      - name: Package Payload into Versioned IPA
         run: |
           mkdir -p build/Payload
           cp -R build/Rivo.xcarchive/Products/Applications/*.app build/Payload/
+          APP_VER=$(node -p "require('./package.json').version")
           cd build
-          zip -qyr Rivo.ipa Payload
+          zip -qyr "Rivo-v${APP_VER}.ipa" Payload
+          cp "Rivo-v${APP_VER}.ipa" Rivo.ipa
           cd ..
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Rivo-iOS-IPA
-          path: build/Rivo.ipa
+          path: build/Rivo*.ipa
           retention-days: 14
 
       - name: Create or Update GitHub Release
@@ -134,4 +136,4 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Rivo ${{ github.ref_name }}
           files: |
-            build/Rivo.ipa
+            build/Rivo*.ipa

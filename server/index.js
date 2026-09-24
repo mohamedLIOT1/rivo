@@ -3874,7 +3874,15 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
     } catch {}
   }
-  // Tier 1: Direct VisionOS Innertube API Audio Stream Extraction
+  if (!videoId && rawUrl) {
+    const rawMatch = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (rawMatch && rawMatch[1]) videoId = rawMatch[1];
+  }
+  if (!videoId) return null;
+
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // Tier 1: Direct VisionOS / Android Innertube API Audio Stream Extraction
   try {
     const webRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
@@ -3894,13 +3902,9 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const playerBody = {
       context: {
         client: {
-          clientName: 'VISIONOS',
-          clientVersion: '1.02',
-          deviceMake: 'Apple',
-          deviceModel: 'RealityDevice17,1',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-          osName: 'visionOS',
-          osVersion: '26.5.23O471',
+          clientName: 'ANDROID',
+          clientVersion: '19.29.37',
+          androidSdkVersion: 34,
           hl: 'en',
           gl: 'US',
           visitorData: visitorData || undefined,
@@ -3911,7 +3915,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     const playerHeaders = {
       'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; en_US)',
     };
     if (cookies) playerHeaders['Cookie'] = cookies;
 
@@ -3952,7 +3956,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     if (direct) return direct;
   } catch {}
 
-  // Tier 2: Cobalt API official YouTube audio extraction
+  // Tier 3: Cobalt API official YouTube audio extraction
   const cobaltEndpoints = [
     'https://api.cobalt.tools/api/json',
     'https://cobalt.stream/api/json',
@@ -3974,12 +3978,12 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     } catch {}
   }
 
-  // Tier 3: Invidious / Piped official adaptive format streams
+  // Tier 4: Invidious / Piped official adaptive format streams
   const streamResolvers = [
+    `https://invidious.tiekoetter.com/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://yt.chocolatemoo53.com/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+    `https://invidious.f5.si/api/v1/videos/${videoId}?fields=adaptiveFormats`,
     `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://invidious.jing.rocks/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://yt.artemislena.eu/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats`,
     `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
     `https://pipedapi.kavin.rocks/streams/${videoId}`,
   ];

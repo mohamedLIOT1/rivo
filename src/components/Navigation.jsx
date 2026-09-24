@@ -4,6 +4,7 @@ import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { buildUrl } from '../utils/router';
+import { FULL_VERSION, APP_VERSION } from '../version';
 import RivoLogo from './RivoLogo';
 
 export default function Navigation({ 
@@ -316,10 +317,10 @@ export default function Navigation({
               }`}>
                 High fidelity • Seamless streaming
               </p>
-              <div className={`text-[8px] font-mono font-bold pt-1 ${
-                isDark ? 'text-zinc-500' : 'text-zinc-600'
+              <div className={`text-[9px] font-mono font-black pt-1 tracking-wider ${
+                isDark ? 'text-[#17a398]' : 'text-[#0f756d]'
               }`}>
-                RIVO MUSIC
+                RIVO {FULL_VERSION}
               </div>
             </div>
 

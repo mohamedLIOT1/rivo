@@ -6,6 +6,7 @@ import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { API_BASE_URL } from '../config';
 import { colors } from '../theme/colors';
+import { FULL_VERSION } from '../version';
 import CassetteTag from '../ui/CassetteTag';
 import BrutalButton from '../ui/BrutalButton';
 import {
@@ -226,8 +227,16 @@ export default function SettingsModal({ visible, onClose }) {
                   <Cpu size={18} color={colors.mint} />
                   <Text style={styles.sectionTitle}>RIVO ARCHITECTURE</Text>
                 </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                  <Text style={{ fontFamily: 'monospace', fontWeight: '900', fontSize: 13, color: colors.mint }}>
+                    {FULL_VERSION}
+                  </Text>
+                  <View style={{ backgroundColor: 'rgba(23,163,152,0.2)', borderWidth: 1, borderColor: colors.teal, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: colors.teal }}>RELEASE</Text>
+                  </View>
+                </View>
                 <Text style={styles.aboutText}>
-                  Rivo Sonic Dispensary v1.0.0 is compiled with Pure Native React Native architecture. Zero WebViews.
+                  Rivo Sonic Dispensary {FULL_VERSION} is compiled with Hybrid Native & Web Engine architecture.
                   Engineered with tactile physical controls, real-time audio synchronization, and offline tape reel storage.
                 </Text>
               </View>

@@ -16,32 +16,28 @@ const PREF_KEY = '@rivo_connectivity_pref';
  * Defaults to offline mode on iOS as requested.
  */
 export function ConnectivityProvider({ children }) {
-  const isIOS = Platform.OS === 'ios';
-
   const [networkState, setNetworkState] = useState({
     isConnected: true,
     isWifi: true,
     type: 'wifi',
   });
 
-  const [userPreference, setUserPreference] = useState(isIOS ? 'offline' : null); // 'online' | 'offline' | null (auto)
-  const [appMode, setAppMode] = useState(isIOS ? 'offline' : 'online');
+  const [userPreference, setUserPreference] = useState(null); // 'online' | 'offline' | null (auto)
+  const [appMode, setAppMode] = useState('online');
   const [ready, setReady] = useState(false);
-  const prefRef = useRef(isIOS ? 'offline' : null);
+  const prefRef = useRef(null);
 
-  // Clear any legacy manual preference so it never interferes with automatic mode (except on iOS default offline)
+  // Clear any legacy manual preference so it never interferes with automatic mode
   useEffect(() => {
     (async () => {
       try {
-        if (!isIOS) {
-          await AsyncStorage.removeItem(PREF_KEY);
-        }
+        await AsyncStorage.removeItem(PREF_KEY);
       } catch {}
       setReady(true);
     })();
-  }, [isIOS]);
+  }, []);
 
-  // NetInfo real-time listener
+  // NetInfo real-time listener: automatically follows internet connectivity
   useEffect(() => {
     const handleConnectivityChange = (state) => {
       const isConnected = !!state.isConnected && state.isInternetReachable !== false;
@@ -52,10 +48,8 @@ export function ConnectivityProvider({ children }) {
       };
       setNetworkState(newNetState);
 
-      // On iOS, start and stay offline by default unless user toggles; on other platforms, follow network connectivity
-      if (!isIOS) {
-        setAppMode(isConnected ? 'online' : 'offline');
-      }
+      // Automatically switch to online when internet is connected, or offline if no internet
+      setAppMode(isConnected ? 'online' : 'offline');
       setReady(true);
     };
 
@@ -63,7 +57,7 @@ export function ConnectivityProvider({ children }) {
     NetInfo.fetch().then(handleConnectivityChange);
 
     return () => unsubscribe();
-  }, [isIOS]);
+  }, []);
 
   const toggleMode = useCallback(() => {
     setAppMode(prev => (prev === 'online' ? 'offline' : 'online'));

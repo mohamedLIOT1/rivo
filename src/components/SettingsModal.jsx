@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Settings, ShieldCheck, Check } from 'lucide-react';
+import { FULL_VERSION } from '../version';
 
 export default function SettingsModal({
   isOpen,
@@ -122,6 +123,16 @@ export default function SettingsModal({
         >
           SAVE SETTINGS
         </button>
+
+        {/* Version Information */}
+        <div className="mt-4 pt-3 border-t-2 border-[#0b1110] text-center">
+          <p className="font-mono text-[11px] font-black uppercase tracking-wider text-[#17a398]">
+            Rivo Sonic Dispensary {FULL_VERSION}
+          </p>
+          <p className="font-mono text-[9px] text-[#082621]/60 mt-0.5">
+            Non-stop Flow • Pure Sound Relief
+          </p>
+        </div>
       </div>
     </div>
   );

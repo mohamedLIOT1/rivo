@@ -13,6 +13,7 @@ import { User, LogIn, UserPlus, LogOut, Settings, Shield, Disc, Check } from 'lu
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
+import { FULL_VERSION } from '../version';
 import CassetteTag from '../ui/CassetteTag';
 
 export default function ProfileScreen({ onOpenSettings }) {
@@ -199,6 +200,16 @@ export default function ProfileScreen({ onOpenSettings }) {
           </View>
         </View>
       )}
+
+      {/* App Version Card */}
+      <View style={{ marginTop: 10, padding: 14, backgroundColor: '#141d1b', borderRadius: 10, borderWidth: 1, borderColor: '#1e332f', alignItems: 'center' }}>
+        <Text style={{ fontFamily: 'monospace', fontWeight: '900', fontSize: 12, color: colors.mint, letterSpacing: 0.5 }}>
+          RIVO {FULL_VERSION}
+        </Text>
+        <Text style={{ fontFamily: 'monospace', fontSize: 9.5, color: '#94a3b8', marginTop: 3 }}>
+          Audio Analgesics & Sonic Relief • Official Build
+        </Text>
+      </View>
     </ScrollView>
   );
 }

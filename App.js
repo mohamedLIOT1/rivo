@@ -40,6 +40,7 @@ import { SocketProvider } from './src/native/context/SocketContext';
 import { ConnectivityProvider, useConnectivity } from './src/native/context/ConnectivityContext';
 import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
+import { APP_VERSION, FULL_VERSION } from './src/native/version';
 
 import OnlineWebView from './src/native/screens/OnlineWebView';
 import ErrorBoundary from './src/native/components/ErrorBoundary';
@@ -73,7 +74,6 @@ const TABS = [
 function MainAppShell() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
-  const isIOS = Platform.OS === 'ios';
 
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
@@ -81,26 +81,11 @@ function MainAppShell() {
     }
   }, []);
 
-  // On iOS, always run the Native Shell as the primary interface.
-  // This gives native AVAudioSession + expo-av playback with 100% background audio support,
-  // lock screen media controls, and direct local offline vault downloads.
-  // The Web Portal is accessible at any time via the drawer menu (☰ -> Rivo Web Portal).
-  if (isIOS) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
-        <ErrorBoundary>
-          <OfflineNativeShell isIOSPrimary={true} />
-        </ErrorBoundary>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: WebView ─── */}
+      {/* ─── ONLINE MODE: WebView (both iOS and Android when connected to internet) ─── */}
       <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
         <OnlineWebView />
       </View>
@@ -120,9 +105,9 @@ function MainAppShell() {
  *
  * The native React Native app shell for Offline Vault, Quran, and local playback.
  */
-function OfflineNativeShell({ isIOSPrimary = false }) {
+function OfflineNativeShell() {
   const { appMode, setAppMode } = useConnectivity();
-  const [activeTab, setActiveTab] = useState(isIOSPrimary ? 'offline' : (appMode === 'online' ? 'home' : 'offline'));
+  const [activeTab, setActiveTab] = useState(appMode === 'online' ? 'home' : 'offline');
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
@@ -179,7 +164,7 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
   return (
     <View style={[styles.offlineShell, !isDark && styles.offlineShellLight]}>
       <View style={[styles.topHeader, !isDark && styles.topHeaderLight]}>
-        {/* Brand Logo: [R] RIVO */}
+        {/* Brand Logo: [R] RIVO v1.3.0 */}
         <TouchableOpacity
           style={styles.brandingRow}
           onPress={() => setActiveTab('home')}
@@ -191,13 +176,18 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
               <Text style={styles.logoLetter}>R</Text>
             </View>
           </View>
-          <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
+            <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+              <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: '#17a398' }}>v{APP_VERSION}</Text>
+            </View>
+          </View>
         </TouchableOpacity>
 
         {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
-          {/* Switch to Online Mode (Android) */}
-          {!isIOSPrimary && (
+          {/* Switch to Online Mode */}
+          {appMode !== 'online' && (
             <TouchableOpacity
               style={[styles.topIconBtn, { backgroundColor: '#17a398', borderColor: '#0b1110', width: 'auto', paddingHorizontal: 8 }]}
               onPress={() => setAppMode('online')}
@@ -312,7 +302,7 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
               </TouchableOpacity>
             </View>
 
-            {!isIOSPrimary && (
+            {appMode !== 'online' ? (
               <TouchableOpacity
                 style={[styles.menuItem, { backgroundColor: '#17a398', borderColor: '#0b1110', marginBottom: 8 }]}
                 onPress={() => {
@@ -322,6 +312,17 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
               >
                 <Wifi size={18} color="#0b1110" strokeWidth={2.8} />
                 <Text style={[styles.menuItemText, { color: '#0b1110', fontWeight: '900' }]}>Switch to Online Mode</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: 'rgba(56,189,248,0.18)', borderWidth: 1, borderColor: '#38bdf8', marginBottom: 8 }]}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setAppMode('offline');
+                }}
+              >
+                <WifiOff size={18} color="#38bdf8" strokeWidth={2.8} />
+                <Text style={[styles.menuItemText, { color: '#38bdf8', fontWeight: '900' }]}>Switch to Offline Mode</Text>
               </TouchableOpacity>
             )}
 
@@ -392,6 +393,12 @@ function OfflineNativeShell({ isIOSPrimary = false }) {
               <SettingsIcon size={18} color="#ede5d3" />
               <Text style={styles.menuItemText}>Settings</Text>
             </TouchableOpacity>
+
+            {/* Version Information Footer */}
+            <View style={styles.menuFooter}>
+              <Text style={styles.menuFooterVersion}>{FULL_VERSION}</Text>
+              <Text style={styles.menuFooterSub}>Sonic Dispensary • Pure Sound Relief</Text>
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -756,5 +763,25 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#17a398',
     letterSpacing: 0.5,
+  },
+  menuFooter: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#1e332f',
+    alignItems: 'center',
+  },
+  menuFooterVersion: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#17a398',
+    letterSpacing: 0.5,
+  },
+  menuFooterSub: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    color: '#64748b',
+    marginTop: 2,
   },
 });
