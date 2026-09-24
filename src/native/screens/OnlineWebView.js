@@ -236,30 +236,7 @@ const INJECTED_JS = `
     } catch(err) {}
   }, true);
 
-  // 6. Involuntary Pause Guard & Background Watchdog (iOS & Android)
-  document.addEventListener('pause', function(e) {
-    if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-      if (e.target && typeof e.target.play === 'function' && (e.target.currentSrc || e.target.src)) {
-        e.target.play().catch(function() {});
-      }
-    }
-  }, true);
 
-  setInterval(function() {
-    try {
-      if (window.__RIVO_IS_PLAYING && !window.__RIVO_USER_PAUSED) {
-        var iframes = document.querySelectorAll('iframe[src*="youtube"]');
-        iframes.forEach(function(f) {
-          try { f.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*'); } catch(e) {}
-        });
-        document.querySelectorAll('audio, video').forEach(function(el) {
-          if (el.paused && (el.currentSrc || el.src)) {
-            el.play().catch(function() {});
-          }
-        });
-      }
-    } catch(e) {}
-  }, 2000);
 
   // 7. Bridge: send download request to native layer
   window.RIVO_DOWNLOAD = function(track) {

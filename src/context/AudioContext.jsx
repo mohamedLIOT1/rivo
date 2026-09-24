@@ -489,6 +489,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (!player) return;
 
       if (event.data === YT.PlayerState.PLAYING) {
+        if (watchdogRef.current) {
+          clearTimeout(watchdogRef.current);
+          watchdogRef.current = null;
+        }
         if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
           stopHtmlAudio();
           setIsPlaying(true);
@@ -767,15 +771,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
             try {
               const state = actPlayer.getPlayerState();
               const currTime = typeof actPlayer.getCurrentTime === 'function' ? (actPlayer.getCurrentTime() || 0) : 0;
-              // If playing normally and audio has progressed beyond 0.5s: healthy!
-              if (state === 1 && currTime > 0.5) return;
-              console.warn('[YT] Watchdog: YouTube not playing/stuck after 1.8s (state=' + state + ', time=' + currTime + '), falling back to audio stream');
+              // If playing normally (1), buffering (3), or audio progressed (>0.5s): healthy, do NOT interrupt!
+              if (state === 1 || state === 3 || currTime > 0.5) return;
+              console.warn('[YT] Watchdog: YouTube not playing/stuck (state=' + state + ', time=' + currTime + '), falling back to audio stream');
               fallbackToHtmlAudio(currentTrack);
             } catch (e) {
               fallbackToHtmlAudio(currentTrack);
             }
           }
-        }, 1800);
+        }, 4000);
       }
     } else {
       // ── Regular audio (Upload / Downloaded Blob) ─
