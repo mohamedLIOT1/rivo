@@ -51,7 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Rivo-Android-APK
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: Rivo-Hybrid-*.apk
           retention-days: 14
 
       - name: Create or Update GitHub Release with APK
@@ -61,7 +61,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: Rivo ${{ github.ref_name }}
           files: |
-            android/app/build/outputs/apk/release/app-release.apk
+            Rivo-Hybrid-*.apk
 
   build-ios:
     name: Build Unsigned IPA for iOS
