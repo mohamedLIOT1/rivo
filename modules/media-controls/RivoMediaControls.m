@@ -187,10 +187,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
                 now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
                 [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
 
-                if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer pause];
-                }
-
                 WKWebView *wv = [self findActiveWebView];
                 if (wv) {
                     if (@available(iOS 15.0, *)) {
@@ -237,12 +233,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
                 now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
                 [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
 
-                if (willPlay) {
-                    if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) [self->_silentPlayer play];
-                } else {
-                    if (self->_silentPlayer && [self->_silentPlayer isPlaying]) [self->_silentPlayer pause];
-                }
-
                 WKWebView *wv = [self findActiveWebView];
                 if (wv) {
                     if (@available(iOS 15.0, *)) {
@@ -286,10 +276,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
         dispatch_async(dispatch_get_main_queue(), ^{
             @try {
-                if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer play];
-                }
-
                 WKWebView *wv = [self findActiveWebView];
                 if (wv) {
                     if (@available(iOS 15.0, *)) {
@@ -334,10 +320,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
         dispatch_async(dispatch_get_main_queue(), ^{
             @try {
-                if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer play];
-                }
-
                 WKWebView *wv = [self findActiveWebView];
                 if (wv) {
                     if (@available(iOS 15.0, *)) {
