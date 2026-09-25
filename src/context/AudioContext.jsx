@@ -238,6 +238,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const shouldPlayRef     = useRef(false); // Force autoplay on track change
   const lastLoadedUrlRef  = useRef(null);  // Last URL loaded into audio element (prevents interruption on metadata-only changes)
   const lastLoadedIdRef   = useRef(null);  // Last track ID loaded (detects actual track change vs metadata update)
+  const lastLoadedStreamUrlRef = useRef(null);
   const isTransitionTriggeredRef = useRef(false);
   const isSeamlessYtHandoffRef   = useRef(false);
   const watchdogRef       = useRef(null);
@@ -460,8 +461,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const newId = String(currentTrack.id || currentTrack._id || '');
       const newUrl = currentTrack.audioUrl || '';
 
-      // Guard: if track ID and audioUrl haven't changed, this is a metadata-only update
-      if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current && lastLoadedUrlRef.current) {
+      // Guard: if track ID is the same and already loaded, don't reload audio stream on metadata updates
+      if (newId && newId === lastLoadedIdRef.current) {
         return;
       }
 
@@ -481,6 +482,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         return;
       }
 
+      let playableUrl = streamResult.url;
+      if (playableUrl.startsWith('/')) {
+        playableUrl = `${API_BASE_URL}${playableUrl}`;
+      }
+
       if (streamResult.cover && streamResult.cover !== currentTrack.cover) {
         setCurrentTrack(prev => prev ? { ...prev, cover: streamResult.cover } : prev);
       }
@@ -493,8 +499,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const audio = audioRef.current;
       if (!audio) return;
 
-      if (audio.src !== streamResult.url) {
-        audio.src = streamResult.url;
+      if (lastLoadedStreamUrlRef.current !== playableUrl) {
+        lastLoadedStreamUrlRef.current = playableUrl;
+        audio.src = playableUrl;
       }
       audio.volume = volumeRef.current;
 

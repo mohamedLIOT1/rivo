@@ -4073,7 +4073,8 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
       return res.json({ success: true, url: rawUrl });
     }
 
-    const streamUrl = await resolveOfficialYouTubeAudioStream(rawUrl, title, artist);
+    const streamTarget = rawUrl || id || '';
+    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist);
     if (streamUrl) {
       const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
       return res.json({
@@ -4892,24 +4893,16 @@ const resolveStreamHandler = async (req, res) => {
   try {
     const { url, title, artist, id, trackId } = req.query;
 
-    // 0. Instant YouTube ID extraction from candidate fields (0ms response)
+    // 0. Instant YouTube audio resolution from candidate fields
     const cand = [url, id, trackId, req.params?.id];
     for (const c of cand) {
       if (c && typeof c === 'string') {
         const m1 = c.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-        if (m1 && m1[1] && m1[1].length === 11) {
-          const vid = m1[1];
-          return res.json({
-            success: true,
-            url: `https://www.youtube.com/watch?v=${vid}`,
-            ytId: vid,
-            duration: 240,
-            cover: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-            isYouTube: true
-          });
-        }
         const m2 = c.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
-        const vidCandidate = (m2 && m2[1]) ? m2[1] : (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim()) ? c.trim() : null);
+        const vidCandidate = (m1 && m1[1] && m1[1].length === 11)
+          ? m1[1]
+          : ((m2 && m2[1]) ? m2[1] : (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim()) ? c.trim() : null));
+
         if (vidCandidate) {
           const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '');
           if (directAudio) {
