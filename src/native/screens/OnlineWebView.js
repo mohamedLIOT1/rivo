@@ -17,6 +17,11 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useUser } from '../context/UserContext';
 import {
+  downloadTrack as nativeDownloadTrack,
+  getDownloadedTracks,
+  removeDownloadedTrack,
+} from '../services/downloadManager';
+import {
   resolveAudioStream,
   resolveClientSideYouTubeStream,
   searchYouTubeClientSide,
