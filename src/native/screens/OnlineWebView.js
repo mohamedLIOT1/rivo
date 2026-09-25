@@ -628,7 +628,11 @@ export default function OnlineWebView() {
 
           try {
             await nativeDownloadTrack(track, (percent) => {
-              setDownloadProgress((prev) => prev ? { ...prev, percent } : null);
+              setDownloadProgress((prev) => {
+                if (!prev) return null;
+                const newPercent = Math.max(prev.percent || 0, percent);
+                return { ...prev, percent: newPercent };
+              });
             });
             setDownloadProgress(null);
             showToast(`"${trackName}" saved to offline vault`, 'success');

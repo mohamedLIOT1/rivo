@@ -300,9 +300,120 @@ function cleanMetadataString(str, fallback = '') {
   return cleaned || fallback;
 }
 
+/**
+ * Resilient candidate downloader with activity-based stall detection.
+ * Continuously monitors byte throughput and resets watchdog as long as data flows.
+ * Aborts cleanly if no new bytes are received for stallTimeoutMs (20s).
+ */
+const downloadCandidateWithWatchdog = (
+  targetUrl,
+  chosenAudioUri,
+  headers,
+  onProgressChunk,
+  stallTimeoutMs = 20000,
+  maxTotalMs = 150000
+) => {
+  return new Promise((resolve, reject) => {
+    let downloadResumable = null;
+    let isSettled = false;
+    let lastBytesWritten = 0;
+    let lastActivityTime = Date.now();
+    let stallWatchdog = null;
+    let maxTimeoutTimer = null;
+
+    const cleanup = () => {
+      if (stallWatchdog) clearInterval(stallWatchdog);
+      if (maxTimeoutTimer) clearTimeout(maxTimeoutTimer);
+      stallWatchdog = null;
+      maxTimeoutTimer = null;
+    };
+
+    const finishResolve = (res) => {
+      if (isSettled) return;
+      isSettled = true;
+      cleanup();
+      resolve(res);
+    };
+
+    const finishReject = async (err) => {
+      if (isSettled) return;
+      isSettled = true;
+      cleanup();
+      try {
+        if (downloadResumable) {
+          await downloadResumable.pauseAsync().catch(() => {});
+        }
+      } catch (e) {}
+      reject(err);
+    };
+
+    // Overall max safety timeout (2.5 minutes)
+    maxTimeoutTimer = setTimeout(() => {
+      finishReject(new Error(`Download exceeded max duration of ${maxTotalMs / 1000}s`));
+    }, maxTotalMs);
+
+    // Stall watchdog: checks every 1000ms if no new bytes received for stallTimeoutMs (20s)
+    stallWatchdog = setInterval(() => {
+      if (isSettled) return;
+      if (Date.now() - lastActivityTime > stallTimeoutMs) {
+        finishReject(new Error(`Download stalled (no data for ${stallTimeoutMs / 1000}s)`));
+      }
+    }, 1000);
+
+    try {
+      downloadResumable = FileSystem.createDownloadResumable(
+        targetUrl,
+        chosenAudioUri,
+        { headers },
+        (progressEvent) => {
+          if (isSettled) return;
+          const written = progressEvent.totalBytesWritten || 0;
+          if (written > lastBytesWritten) {
+            lastBytesWritten = written;
+            lastActivityTime = Date.now(); // Bytes are actively arriving -> keep watchdog happy
+          }
+          if (onProgressChunk) {
+            try {
+              onProgressChunk(progressEvent);
+            } catch (pErr) {}
+          }
+        }
+      );
+
+      downloadResumable.downloadAsync()
+        .then((res) => finishResolve(res))
+        .catch(async (resumeErr) => {
+          if (!isSettled) {
+            try {
+              const directRes = await FileSystem.downloadAsync(targetUrl, chosenAudioUri, { headers });
+              finishResolve(directRes);
+            } catch (directErr) {
+              finishReject(resumeErr || directErr);
+            }
+          }
+        });
+    } catch (createErr) {
+      FileSystem.downloadAsync(targetUrl, chosenAudioUri, { headers })
+        .then((res) => finishResolve(res))
+        .catch((dlErr) => finishReject(createErr || dlErr));
+    }
+  });
+};
+
 export const downloadTrack = async (track, onProgress) => {
   if (!track) throw new Error('No track provided');
   await ensureDirs();
+
+  let highestPercent = 5;
+  const emitProgress = (pct) => {
+    const rounded = Math.min(95, Math.max(highestPercent, Math.round(pct)));
+    if (rounded > highestPercent) {
+      highestPercent = rounded;
+      if (onProgress) onProgress(highestPercent);
+    }
+  };
+
+  emitProgress(5);
 
   const trackId = String(track._id || track.id);
   const audioFileUriMp3 = `${TRACKS_DIR}${trackId}.mp3`;
@@ -313,8 +424,6 @@ export const downloadTrack = async (track, onProgress) => {
   const cleanAlbum = (!track.album || /https?:\/\/|www\.|youtube|liofy/i.test(track.album))
     ? (cleanTitle || 'Single')
     : cleanMetadataString(track.album, cleanTitle || 'Single');
-
-  if (onProgress) onProgress(5);
 
   // Check if audio file already exists locally on disk (either .m4a or .mp3)
   let existingLocalUri = (track.localAudioUri && track.localAudioUri.startsWith('file://')) ? track.localAudioUri :
@@ -401,35 +510,35 @@ export const downloadTrack = async (track, onProgress) => {
   }
 
   // Gather candidate download URLs in order of priority
-  const candidates = [];
+  const rawCandidates = [];
 
   // Candidate 0: In-memory stream cache (Instant download if track was recently played or resolved)
   const cachedStream = getStreamFromCache(trackId);
   const cachedDur = getStreamDurationFromCache(trackId);
   if (cachedDur) resolvedDuration = cachedDur;
   if (cachedStream && typeof cachedStream === 'string' && cachedStream.startsWith('http') && !cachedStream.includes('youtube.com/watch') && !cachedStream.includes('youtu.be/')) {
-    candidates.push({ url: cachedStream, ext: cachedStream.includes('.m4a') ? 'm4a' : 'mp3' });
+    rawCandidates.push({ url: cachedStream, ext: cachedStream.includes('.m4a') ? 'm4a' : 'mp3', source: 'cached-stream' });
   }
 
   // Candidate 1: Direct remote audio URL (if already a clean remote audio file)
   const isDirectRemote = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com') && !u.includes('youtu.be') && !u.includes('soundcloud.com');
-  if (isDirectRemote(track.audioUrl)) candidates.push({ url: track.audioUrl, ext: track.audioUrl.includes('.m4a') ? 'm4a' : 'mp3' });
-  if (isDirectRemote(track.nativeAudioUri)) candidates.push({ url: track.nativeAudioUri, ext: track.nativeAudioUri.includes('.m4a') ? 'm4a' : 'mp3' });
+  if (isDirectRemote(track.audioUrl)) rawCandidates.push({ url: track.audioUrl, ext: track.audioUrl.includes('.m4a') ? 'm4a' : 'mp3', source: 'track-audioUrl' });
+  if (isDirectRemote(track.nativeAudioUri)) rawCandidates.push({ url: track.nativeAudioUri, ext: track.nativeAudioUri.includes('.m4a') ? 'm4a' : 'mp3', source: 'track-nativeAudioUri' });
 
   // Candidate 2: Ultra-fast Direct Client-side YouTube Audio Stream Resolution (resolves official Googlevideo stream directly on device in <1s)
   if (ytId) {
     try {
-      if (onProgress) onProgress(10);
+      emitProgress(12);
       const ytRes = await resolveClientSideYouTubeStream(ytId);
       const directGoogleStream = typeof ytRes === 'string' ? ytRes : ytRes?.url;
       if (ytRes?.duration) resolvedDuration = ytRes.duration;
 
       if (directGoogleStream && typeof directGoogleStream === 'string' && directGoogleStream.startsWith('http')) {
-        // High-speed direct stream from Google CDN edge directly to device storage first (<1-2s)
-        candidates.push({ url: directGoogleStream, ext: 'm4a' });
+        // High-speed direct stream from Google CDN edge directly to device storage
+        rawCandidates.push({ url: directGoogleStream, ext: 'm4a', source: 'direct-google-cdn' });
         // Proxied URL fallback with Range header support in case of direct CDN blockage
         const proxyStreamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(directGoogleStream)}`;
-        candidates.push({ url: proxyStreamUrl, ext: 'm4a' });
+        rawCandidates.push({ url: proxyStreamUrl, ext: 'm4a', source: 'backend-stream-proxy' });
       }
     } catch (e) {
       console.warn('[downloadManager] Direct client-side YouTube stream resolution error:', e.message);
@@ -438,9 +547,26 @@ export const downloadTrack = async (track, onProgress) => {
 
   // Candidate 3: Backend Direct Downloader endpoint
   const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`;
-  candidates.push({ url: backendDownloadUrl, ext: 'm4a' });
+  rawCandidates.push({ url: backendDownloadUrl, ext: 'm4a', source: 'backend-downloader' });
 
-  if (onProgress) onProgress(15);
+  // Candidate 4: Backend Stream Resolution endpoint
+  const backendStreamUrl = `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`;
+  rawCandidates.push({ url: backendStreamUrl, ext: 'm4a', source: 'backend-stream-endpoint' });
+
+  // Deduplicate candidates preserving priority order
+  const seenUrls = new Set();
+  const candidates = [];
+  for (const c of rawCandidates) {
+    if (c && c.url && typeof c.url === 'string') {
+      const trimmed = c.url.trim();
+      if (trimmed.startsWith('http') && !seenUrls.has(trimmed)) {
+        seenUrls.add(trimmed);
+        candidates.push({ ...c, url: trimmed });
+      }
+    }
+  }
+
+  emitProgress(15);
 
   let success = false;
   // Standard mobile browser headers compatible with iOS NSURLSessionDownloadTask
@@ -460,37 +586,29 @@ export const downloadTrack = async (track, onProgress) => {
       // First clean up any corrupted partial file
       await FileSystem.deleteAsync(chosenAudioUri, { idempotent: true }).catch(() => {});
 
-      let res = null;
-      // Per-candidate timeout (15s) so a stalled stream connection never hangs the download
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Download candidate timeout')), 15000)
+      const res = await downloadCandidateWithWatchdog(
+        targetUrl,
+        chosenAudioUri,
+        downloadHeaders,
+        (progressEvent) => {
+          const written = progressEvent.totalBytesWritten || 0;
+          const expected = progressEvent.totalBytesExpectedToWrite;
+          if (expected > 0) {
+            const fraction = written / expected;
+            emitProgress(15 + fraction * 77); // Smooth progress from 15% to 92%
+          } else {
+            const estTotal = (resolvedDuration && resolvedDuration > 0)
+              ? Math.max(1500000, resolvedDuration * 16000)
+              : 4200000;
+            const fraction = Math.min(0.95, written / estTotal);
+            emitProgress(15 + fraction * 77);
+          }
+        },
+        20000, // 20s stall watchdog (resets whenever data arrives; only fails if silent for 20s)
+        150000 // 150s max safety timeout
       );
 
-      try {
-        const downloadResumable = FileSystem.createDownloadResumable(
-          targetUrl,
-          chosenAudioUri,
-          { headers: downloadHeaders },
-          (progressEvent) => {
-            if (progressEvent.totalBytesExpectedToWrite > 0) {
-              const progress = progressEvent.totalBytesWritten / progressEvent.totalBytesExpectedToWrite;
-              if (onProgress) onProgress(Math.min(90, Math.round(15 + progress * 75)));
-            } else {
-              if (onProgress) onProgress(50);
-            }
-          }
-        );
-        res = await Promise.race([downloadResumable.downloadAsync(), timeoutPromise]);
-      } catch (resumeErr) {
-        try {
-          res = await Promise.race([
-            FileSystem.downloadAsync(targetUrl, chosenAudioUri, { headers: downloadHeaders }),
-            timeoutPromise
-          ]);
-        } catch (dlErr) {}
-      }
-
-      if (res && (res.status === 200 || res.status === 206)) {
+      if (res && (res.status === 200 || res.status === 206 || !res.status)) {
         const check = await FileSystem.getInfoAsync(chosenAudioUri);
         if (check.exists && check.size > 50000) {
           // Verify downloaded payload is valid audio and not an HTML or JSON error response
@@ -517,30 +635,43 @@ export const downloadTrack = async (track, onProgress) => {
             audioFileUri = chosenAudioUri;
             break;
           } else {
-            console.warn(`[downloadManager] Candidate ${i + 1} returned text/html/json error payload instead of audio`);
+            console.warn(`[downloadManager] Candidate ${i + 1} (${candidate.source}) returned text/html/json error payload instead of audio`);
             await FileSystem.deleteAsync(chosenAudioUri, { idempotent: true }).catch(() => {});
           }
         }
       }
     } catch (candidateErr) {
-      console.warn(`[downloadManager] Candidate ${i + 1} failed:`, candidateErr.message);
+      console.warn(`[downloadManager] Candidate ${i + 1} (${candidate.source}) failed:`, candidateErr.message);
+      await FileSystem.deleteAsync(chosenAudioUri, { idempotent: true }).catch(() => {});
     }
   }
 
-  // If first-tier candidates failed, try direct client-side YouTube resolution as fallback
+  // If first-tier candidates failed, try direct client-side YouTube resolution as fallback with watchdog
   if (!success && ytId) {
     try {
-      if (onProgress) onProgress(30);
+      emitProgress(25);
       const mirrorRes = await resolveClientSideYouTubeStream(ytId);
       const mirrorUrl = typeof mirrorRes === 'string' ? mirrorRes : mirrorRes?.url;
       if (mirrorRes?.duration) resolvedDuration = mirrorRes.duration;
 
-      if (mirrorUrl) {
+      if (mirrorUrl && typeof mirrorUrl === 'string' && mirrorUrl.startsWith('http')) {
         await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
-        const mirrorDownloadRes = await FileSystem.downloadAsync(mirrorUrl, audioFileUriM4a, { headers: downloadHeaders });
-        if (mirrorDownloadRes && (mirrorDownloadRes.status === 200 || mirrorDownloadRes.status === 206)) {
+        const mirrorResDl = await downloadCandidateWithWatchdog(
+          mirrorUrl,
+          audioFileUriM4a,
+          downloadHeaders,
+          (progressEvent) => {
+            const written = progressEvent.totalBytesWritten || 0;
+            const expected = progressEvent.totalBytesExpectedToWrite;
+            const est = (expected > 0) ? expected : 4200000;
+            emitProgress(25 + Math.min(0.95, written / est) * 67);
+          },
+          25000,
+          150000
+        );
+        if (mirrorResDl && (mirrorResDl.status === 200 || mirrorResDl.status === 206 || !mirrorResDl.status)) {
           const check = await FileSystem.getInfoAsync(audioFileUriM4a);
-          if (check.exists && check.size > 10000) {
+          if (check.exists && check.size > 50000) {
             success = true;
             audioFileUri = audioFileUriM4a;
           }
@@ -557,7 +688,7 @@ export const downloadTrack = async (track, onProgress) => {
     throw new Error('Could not download audio stream from available servers');
   }
 
-  if (onProgress) onProgress(92);
+  emitProgress(92);
 
   // Cover art download & local caching (with 3-second timeout protection)
   let localCover = track.coverUrl || track.cover || '';

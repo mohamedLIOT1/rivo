@@ -250,7 +250,7 @@ export async function saveTrackOffline(track, options = {}) {
         const timeout = setTimeout(() => {
           window.removeEventListener('rivo-track-download-completed', handler);
           resolve({ ...track, id: trackId, downloaded: true, savedAt: Date.now() });
-        }, 60000);
+        }, 180000);
 
         function handler(e) {
           if (e && e.detail && String(e.detail.id) === trackId) {
