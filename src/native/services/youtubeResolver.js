@@ -132,8 +132,22 @@ export const resolveAudioStream = async (track) => {
   }
 
   // 3. Ultra-fast Client-side YouTube Audio Stream Resolution (resolves official Googlevideo stream directly on device in <1s)
-  const ytId = extractYouTubeId(rawUrl) ||
-               (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
+  let ytId = extractYouTubeId(rawUrl) ||
+             (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
+
+  // If no direct ytId, search YouTube client-side directly (<300ms)
+  if (!ytId && (cleanTitle || cleanArtist || rawTitle)) {
+    try {
+      const searchRes = await searchYouTubeClientSide(`${cleanArtist || rawArtist} ${cleanTitle || rawTitle}`.trim());
+      if (searchRes?.videoId) {
+        ytId = searchRes.videoId;
+        if (searchRes.duration && trackId) {
+          streamDurationCache.set(trackId, searchRes.duration);
+        }
+      }
+    } catch (e) {}
+  }
+
   if (ytId) {
     try {
       const directResult = await resolveClientSideYouTubeStream(ytId);
@@ -173,6 +187,58 @@ export const resolveAudioStream = async (track) => {
   }
 
   return rawUrl || null;
+};
+
+/**
+ * Ultra-fast client-side YouTube search via Innertube API (<300ms).
+ * Returns { videoId, duration, title, channel } with exact duration parsed from lengthText.
+ */
+export const searchYouTubeClientSide = async (query) => {
+  if (!query || typeof query !== 'string') return null;
+  try {
+    const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(`https://www.youtube.com/youtubei/v1/search?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20231201.00.00',
+            hl: 'en',
+            gl: 'US'
+          }
+        },
+        query: `${query} music`
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const d = await res.json();
+    const contents = d?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+    const item = contents.find(c => c.videoRenderer && c.videoRenderer.videoId);
+    if (item?.videoRenderer) {
+      const v = item.videoRenderer;
+      const videoId = v.videoId;
+      const durText = v.lengthText?.simpleText || v.lengthText?.runs?.[0]?.text || '';
+      let durSec = 0;
+      if (durText) {
+        const parts = durText.split(':').map(p => parseInt(p, 10));
+        if (parts.length === 2) durSec = parts[0] * 60 + parts[1];
+        else if (parts.length === 3) durSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+      return {
+        videoId,
+        duration: durSec || null,
+        title: v.title?.runs?.[0]?.text || '',
+        channel: v.ownerText?.runs?.[0]?.text || ''
+      };
+    }
+  } catch (e) {}
+  return null;
 };
 
 export function extractYouTubeId(input) {

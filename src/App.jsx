@@ -1346,20 +1346,6 @@ function AppContent() {
       showToast('Song removed from offline downloads');
     } else {
       showToast('Downloading song for offline playback...');
-      if (typeof window !== 'undefined' && window.ReactNativeWebView?.postMessage) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'DOWNLOAD_TRACK',
-          track: {
-            id: cleanId,
-            _id: cleanId,
-            title: track.title,
-            artist: track.artist,
-            audioUrl: track.audioUrl,
-            cover: track.cover,
-            duration: track.duration,
-          }
-        }));
-      }
       const result = await saveTrackOffline(track);
       if (result) {
         // Get a fresh playable audio URL (native file URI converted to http:// via Capacitor)

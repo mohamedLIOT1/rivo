@@ -1817,6 +1817,13 @@ async function searchTracksInternal(query) {
               const v = c.videoRenderer;
               const title = v.title?.runs?.[0]?.text || q;
               const artist = v.ownerText?.runs?.[0]?.text || 'YouTube';
+              const durText = v.lengthText?.simpleText || v.lengthText?.runs?.[0]?.text || '';
+              let durSec = 0;
+              if (durText) {
+                const parts = durText.split(':').map(p => parseInt(p, 10));
+                if (parts.length === 2) durSec = parts[0] * 60 + parts[1];
+                else if (parts.length === 3) durSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+              }
               return {
                 id: `yt-${v.videoId}`,
                 title,
@@ -1824,7 +1831,7 @@ async function searchTracksInternal(query) {
                 album: 'YouTube',
                 cover: v.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
                 audioUrl: `https://www.youtube.com/watch?v=${v.videoId}`,
-                duration: 240,
+                duration: (durSec && durSec > 0 && durSec < 86400) ? durSec : 210,
                 source: 'YouTube'
               };
             })
@@ -3966,7 +3973,17 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       const audio140 = formats.find(f => f.itag === 140 && f.url);
       const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
       const chosen = audio140 || anyAudio;
-      if (chosen?.url) return chosen.url;
+      if (chosen?.url) {
+        const rawSec = parseInt(playerRes.data.videoDetails?.lengthSeconds, 10);
+        const rawMs = parseInt(chosen.approxDurationMs, 10);
+        const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0)
+          ? rawSec
+          : (rawMs && !isNaN(rawMs) && rawMs > 0 ? Math.round(rawMs / 1000) : null);
+        const retObj = new String(chosen.url);
+        retObj.url = chosen.url;
+        retObj.duration = durationSec;
+        return retObj;
+      }
     }
   } catch (e) {}
 
@@ -4059,7 +4076,12 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
     const streamUrl = await resolveOfficialYouTubeAudioStream(rawUrl, title, artist);
     if (streamUrl) {
       const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
-      return res.json({ success: true, url: proxyUrl, directUrl: streamUrl });
+      return res.json({
+        success: true,
+        url: proxyUrl,
+        directUrl: streamUrl,
+        duration: streamUrl.duration || track?.duration || 210
+      });
     }
     res.status(404).json({ success: false, error: 'Could not resolve audio stream' });
   } catch (e) {
@@ -4953,7 +4975,7 @@ const resolveStreamHandler = async (req, res) => {
             success: true,
             url: proxyUrl,
             directUrl: directAudio,
-            duration: 240,
+            duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
             isYouTube: true,
           });
         }

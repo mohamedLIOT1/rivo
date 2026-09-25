@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import {
   resolveAudioStream,
   resolveClientSideYouTubeStream,
+  searchYouTubeClientSide,
   extractYouTubeId,
   getStreamFromCache,
   getStreamDurationFromCache,
@@ -385,8 +386,19 @@ export const downloadTrack = async (track, onProgress) => {
 
   // Extract YouTube ID if present
   const rawUrl = track.audioUrl || track.url || '';
-  const ytId = extractYouTubeId(rawUrl) ||
-               (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
+  let ytId = extractYouTubeId(rawUrl) ||
+             (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
+
+  // If no direct ytId, search YouTube directly on client (<300ms) to bypass slow backend yt-dlp
+  if (!ytId && (cleanTitle || cleanArtist)) {
+    try {
+      const searchRes = await searchYouTubeClientSide(`${cleanArtist} ${cleanTitle}`.trim());
+      if (searchRes?.videoId) {
+        ytId = searchRes.videoId;
+        if (searchRes.duration) resolvedDuration = searchRes.duration;
+      }
+    } catch {}
+  }
 
   // Gather candidate download URLs in order of priority
   const candidates = [];
@@ -431,12 +443,13 @@ export const downloadTrack = async (track, onProgress) => {
   if (onProgress) onProgress(15);
 
   let success = false;
-  // Use matching Safari/VisionOS headers to prevent Google Video CDN 403 Forbidden and speed throttling
+  // Use matching Safari/VisionOS headers + Range: bytes=0- to completely remove Google Video CDN 1x bitrate pacing throttle
   const downloadHeaders = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
     'Accept': '*/*',
     'Accept-Encoding': 'identity',
     'Connection': 'keep-alive',
+    'Range': 'bytes=0-',
   };
 
   // Try candidate URLs one by one until one produces a valid audio file

@@ -318,6 +318,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
             if (Math.abs(rounded - durationRef.current) > 0.5) {
               setDuration(rounded);
               durationRef.current = rounded;
+              setCurrentTrack(prev => (prev ? { ...prev, duration: rounded } : prev));
+              if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
             }
           }
         }
@@ -328,6 +330,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const rounded = Math.round(audio.duration);
         setDuration(rounded);
         durationRef.current = rounded;
+        setCurrentTrack(prev => (prev ? { ...prev, duration: rounded } : prev));
+        if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
       }
     };
     const handleEnded = () => {
@@ -511,6 +515,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const sDur = sanitizeDuration(durationVal, 210);
           setDuration(sDur);
           durationRef.current = sDur;
+          setCurrentTrack(prev => (prev ? { ...prev, duration: sDur } : prev));
+          if (currentTrackRef.current) currentTrackRef.current.duration = sDur;
         }
         if (track.cover) setCurrentTrack(prev => prev ? { ...prev, cover: track.cover } : prev);
       } else if (!streamUrl) {
@@ -532,6 +538,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
       console.warn('Fallback play error:', err);
     }
   }, [stopYouTube, stopHtmlAudio, getActiveYtPlayer, isCurrentYtReady]);
+
+  // ── Sync resolved YouTube duration from native bridge ──
+  useEffect(() => {
+    const handleStreamResolved = (e) => {
+      if (!e.detail) return;
+      const { trackId, ytId, duration: streamDur } = e.detail;
+      const cur = currentTrackRef.current;
+      const curId = cur ? String(cur.id || cur._id || '') : '';
+      if (cur && (curId === String(trackId) || (ytId && cur.audioUrl?.includes(ytId)))) {
+        if (streamDur && streamDur > 0) {
+          const sDur = sanitizeDuration(streamDur);
+          setDuration(sDur);
+          durationRef.current = sDur;
+          setCurrentTrack(prev => (prev ? { ...prev, duration: sDur } : prev));
+          if (currentTrackRef.current) currentTrackRef.current.duration = sDur;
+        }
+      }
+    };
+    window.addEventListener('rivo-receive-resolved-stream', handleStreamResolved);
+    return () => window.removeEventListener('rivo-receive-resolved-stream', handleStreamResolved);
+  }, []);
 
   // Create hidden YouTube IFrame player divs (Deck 1 & Deck 2)
   // Note: Container must have real dimensions (>=200x200) and opacity 1 behind UI
@@ -1490,6 +1517,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
       try {
         const isLiked = likedTrackIds.some(id => String(id) === String(trackToPlay._id || trackToPlay.id));
         const coverSrc = trackToPlay.cover || trackToPlay.coverUrl || '';
+        const safeTrackDuration = (trackToPlay.duration && trackToPlay.duration > 0 && trackToPlay.duration < 86400)
+          ? sanitizeDuration(trackToPlay.duration)
+          : (durationRef.current > 0 ? durationRef.current : 210);
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'PLAYBACK_STATE',
           isPlaying: true,
@@ -1497,7 +1527,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           isRepeat: repeatMode !== 'off',
           isShuffle: Boolean(isShuffle),
           isLiked: isLiked,
-          duration: trackToPlay.duration || 240,
+          duration: safeTrackDuration,
           currentTime: 0,
           track: {
             id: trackToPlay._id || trackToPlay.id,
@@ -1508,7 +1538,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             cover: coverSrc,
             audioUrl: trackToPlay.audioUrl || '',
             album: (!trackToPlay.album || /https?:\/\/|www\.|youtube|liofy/i.test(trackToPlay.album)) ? 'Rivo' : trackToPlay.album,
-            duration: trackToPlay.duration || 240,
+            duration: safeTrackDuration,
             currentTime: 0,
             liked: isLiked,
           }

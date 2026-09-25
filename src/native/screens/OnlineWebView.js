@@ -16,8 +16,14 @@ import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useUser } from '../context/UserContext';
-import { downloadTrack as nativeDownloadTrack, getDownloadedTracks, removeDownloadedTrack } from '../services/downloadManager';
-import { resolveAudioStream, resolveClientSideYouTubeStream, extractYouTubeId } from '../services/youtubeResolver';
+import {
+  resolveAudioStream,
+  resolveClientSideYouTubeStream,
+  searchYouTubeClientSide,
+  extractYouTubeId,
+  getStreamDurationFromCache,
+  getCleanQueries,
+} from '../services/youtubeResolver';
 import {
   showMediaNotification,
   updateMediaNotification,
@@ -543,19 +549,34 @@ export default function OnlineWebView() {
           const track = data.track;
           if (!track) break;
           const trackId = String(track.id || track._id || '');
-          const ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || extractYouTubeId(track.youtubeId);
+          let ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || extractYouTubeId(track.youtubeId);
           try {
             let streamUrl = null;
             let streamDuration = null;
+
+            // If no ytId on track, search YouTube directly client-side (<300ms)
+            if (!ytId && (track.title || track.artist)) {
+              try {
+                const { cleanTitle, cleanArtist } = getCleanQueries(track.title, track.artist);
+                const searchRes = await searchYouTubeClientSide(`${cleanArtist} ${cleanTitle}`.trim());
+                if (searchRes?.videoId) {
+                  ytId = searchRes.videoId;
+                  if (searchRes.duration) streamDuration = searchRes.duration;
+                }
+              } catch (e) {}
+            }
+
             if (ytId) {
               const ytRes = await resolveClientSideYouTubeStream(ytId);
               if (ytRes) {
                 streamUrl = typeof ytRes === 'string' ? ytRes : ytRes.url;
-                streamDuration = ytRes.duration || null;
+                if (ytRes.duration) streamDuration = ytRes.duration;
               }
             }
             if (!streamUrl) {
               streamUrl = await resolveAudioStream(track);
+              const cachedD = getStreamDurationFromCache(trackId);
+              if (cachedD) streamDuration = cachedD;
             }
             webViewRef.current?.injectJavaScript(`
               (function() {
@@ -617,6 +638,7 @@ export default function OnlineWebView() {
                 _id: String(t._id || t.id),
                 title: t.title,
                 artist: t.artist,
+                duration: t.duration,
                 localAudioUri: t.localAudioUri || t.nativeAudioUri || t.audioUrl,
               }));
               webViewRef.current?.injectJavaScript(`
