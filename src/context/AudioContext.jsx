@@ -192,6 +192,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const isRepeat = repeatMode !== 'off';
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [isYtTrack, setIsYtTrack] = useState(false); // exposed for RAF-based lyrics sync
+  const isYtTrackRef = useRef(false);
 
   // Spotify Mix DJ Mode
   const [isMixMode, setIsMixMode] = useState(false);
@@ -318,12 +319,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     let lastTimeUpdate = 0;
     const handleTimeUpdate = () => {
-      if (isYtTrackRef.current) return;
       if (audio && !isNaN(audio.currentTime)) {
         const now = Date.now();
         if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
+          currentTimeRef.current = audio.currentTime;
 
           // Proactive authentic end-of-track detection for iOS WebKit VBR streams
           // Prevents the player from entering silence when WebKit miscalculates stream duration
@@ -353,7 +354,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
     const handleEnded = () => {
       onTrackEnded(currentTrackRef.current);
-      if (isYtTrackRef.current) return;
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => {});
@@ -361,16 +361,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
         playNextTrackRef.current();
       }
     };
-    // ── Key fix: when audio actually starts playing, ensure AudioContext is running & YouTube is killed ──
     const handlePlaying = () => {
       resumeAudioContext();
-      if (!isYtTrackRef.current) {
-        stopYouTube();
-      }
     };
     // If audio gets stuck/stalled, try to resume (only if actively playing)
     const handleStalled = () => {
-      if (!isYtTrackRef.current && isPlayingRef.current) {
+      if (isPlayingRef.current) {
         setTimeout(() => {
           if (!isPlayingRef.current) return;
           resumeAudioContext();
