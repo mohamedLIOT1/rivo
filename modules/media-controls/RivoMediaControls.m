@@ -5,6 +5,45 @@
 
 static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
 
+static NSData *CreateSilentWavData(void) {
+    int sampleRate = 8000;
+    int numChannels = 1;
+    int bitsPerSample = 8;
+    int dataSize = sampleRate * 1; // 1 second
+    int fileSize = 36 + dataSize;
+    
+    NSMutableData *data = [NSMutableData dataWithCapacity:fileSize + 8];
+    [data appendBytes:"RIFF" length:4];
+    int32_t fSize = fileSize;
+    [data appendBytes:&fSize length:4];
+    [data appendBytes:"WAVEfmt " length:8];
+    int32_t subchunk1Size = 16;
+    [data appendBytes:&subchunk1Size length:4];
+    int16_t audioFormat = 1; // PCM
+    [data appendBytes:&audioFormat length:2];
+    int16_t channels = numChannels;
+    [data appendBytes:&channels length:2];
+    int32_t sRate = sampleRate;
+    [data appendBytes:&sRate length:4];
+    int32_t byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    [data appendBytes:&byteRate length:4];
+    int16_t blockAlign = numChannels * (bitsPerSample / 8);
+    [data appendBytes:&blockAlign length:2];
+    int16_t bps = bitsPerSample;
+    [data appendBytes:&bps length:2];
+    [data appendBytes:"data" length:4];
+    int32_t dSize = dataSize;
+    [data appendBytes:&dSize length:4];
+    
+    void *silenceBuffer = malloc(dataSize);
+    if (silenceBuffer) {
+        memset(silenceBuffer, 128, dataSize); // 8-bit PCM silence
+        [data appendBytes:silenceBuffer length:dataSize];
+        free(silenceBuffer);
+    }
+    return data;
+}
+
 @implementation RivoMediaControls
 {
     BOOL _hasListeners;
@@ -12,6 +51,7 @@ static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
     BOOL _audioSessionConfigured;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
+    AVAudioPlayer *_silentPlayer;
 }
 
 RCT_EXPORT_MODULE(RivoMediaControls);
@@ -57,8 +97,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
         [session setCategory:AVAudioSessionCategoryPlayback
                  withOptions:(AVAudioSessionCategoryOptionAllowBluetooth |
                               AVAudioSessionCategoryOptionAllowBluetoothA2DP |
-                              AVAudioSessionCategoryOptionDefaultToSpeaker |
-                              AVAudioSessionCategoryOptionMixWithOthers)
+                              AVAudioSessionCategoryOptionDefaultToSpeaker)
                        error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
@@ -130,6 +169,10 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
+            [self->_silentPlayer play];
+        }
+
         __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPlay" expirationHandler:^{
             if (bgTask != UIBackgroundTaskInvalid) {
                 [[UIApplication sharedApplication] endBackgroundTask:bgTask];
@@ -174,6 +217,10 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
+            [self->_silentPlayer pause];
+        }
+
         __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPause" expirationHandler:^{
             if (bgTask != UIBackgroundTaskInvalid) {
                 [[UIApplication sharedApplication] endBackgroundTask:bgTask];
@@ -233,6 +280,12 @@ RCT_EXPORT_MODULE(RivoMediaControls);
                 now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
                 [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
 
+                if (willPlay) {
+                    if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) [self->_silentPlayer play];
+                } else {
+                    if (self->_silentPlayer && [self->_silentPlayer isPlaying]) [self->_silentPlayer pause];
+                }
+
                 WKWebView *wv = [self findActiveWebView];
                 if (wv) {
                     if (@available(iOS 15.0, *)) {
@@ -267,6 +320,10 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.nextTrackCommand setEnabled:YES];
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
+            [self->_silentPlayer play];
+        }
+
         __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaNext" expirationHandler:^{
             if (bgTask != UIBackgroundTaskInvalid) {
                 [[UIApplication sharedApplication] endBackgroundTask:bgTask];
@@ -311,6 +368,10 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     [center.previousTrackCommand setEnabled:YES];
     [center.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
+            [self->_silentPlayer play];
+        }
+
         __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPrev" expirationHandler:^{
             if (bgTask != UIBackgroundTaskInvalid) {
                 [[UIApplication sharedApplication] endBackgroundTask:bgTask];
@@ -461,6 +522,25 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 
             BOOL isPlaying = [options[@"isPlaying"] boolValue];
 
+            // Maintain silent background audio session so iOS never suspends the app or WKWebView
+            if (isPlaying) {
+                if (!self->_silentPlayer) {
+                    NSData *wavData = CreateSilentWavData();
+                    NSError *err = nil;
+                    self->_silentPlayer = [[AVAudioPlayer alloc] initWithData:wavData error:&err];
+                    self->_silentPlayer.numberOfLoops = -1; // Infinite loop
+                    self->_silentPlayer.volume = 0.01;
+                }
+                if (![self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer prepareToPlay];
+                    [self->_silentPlayer play];
+                }
+            } else {
+                if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
+                    [self->_silentPlayer pause];
+                }
+            }
+
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
 
             NSString *title = options[@"title"];
@@ -538,6 +618,10 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 RCT_EXPORT_METHOD(hideNotification) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
+            if (self->_silentPlayer) {
+                [self->_silentPlayer stop];
+                self->_silentPlayer = nil;
+            }
             self->_currentCoverUrl = nil;
             self->_currentArtwork = nil;
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;

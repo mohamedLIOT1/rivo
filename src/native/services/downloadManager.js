@@ -385,10 +385,11 @@ export const downloadTrack = async (track, onProgress) => {
       if (onProgress) onProgress(10);
       const directGoogleStream = await resolveClientSideYouTubeStream(ytId);
       if (directGoogleStream && typeof directGoogleStream === 'string' && directGoogleStream.startsWith('http')) {
-        // High-speed proxied URL with Range header support first
+        // High-speed direct stream from Google CDN edge directly to device storage first (<1-2s)
+        candidates.push({ url: directGoogleStream, ext: 'm4a' });
+        // Proxied URL fallback with Range header support in case of direct CDN blockage
         const proxyStreamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(directGoogleStream)}`;
         candidates.push({ url: proxyStreamUrl, ext: 'm4a' });
-        candidates.push({ url: directGoogleStream, ext: 'm4a' });
       }
     } catch (e) {
       console.warn('[downloadManager] Direct client-side YouTube stream resolution error:', e.message);

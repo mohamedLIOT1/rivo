@@ -80,6 +80,21 @@ const INJECTED_JS = `
   window.addEventListener('blur', stopEvent, true);
   window.addEventListener('pagehide', stopEvent, true);
 
+  // 2b. Notify native layer immediately when page is interactive to dismiss loading screen
+  try {
+    var notifyReady = function() {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PAGE_READY' }));
+      }
+    };
+    if (document.readyState === 'interactive' || document.readyState === 'complete') {
+      notifyReady();
+    } else {
+      document.addEventListener('DOMContentLoaded', notifyReady);
+      window.addEventListener('load', notifyReady);
+    }
+  } catch(e) {}
+
   // Prevent double-initialization
   if (window.__RIVO_NATIVE_INJECTED) return true;
   window.__RIVO_NATIVE_INJECTED = true;
@@ -308,6 +323,14 @@ export default function OnlineWebView() {
   const [canGoBack, setCanGoBack] = useState(false);
   const currentTrackRef = useRef(null);
 
+  // ─── Loading Screen Watchdog (ensure overlay never hangs if network is slow) ───
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setInitialLoading(false);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, []);
+
   // ─── AppState Background Audio Keeper (Resumes playback smoothly on background) ───
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
@@ -440,6 +463,12 @@ export default function OnlineWebView() {
       const data = JSON.parse(event.nativeEvent.data);
 
       switch (data.type) {
+        case 'PAGE_READY': {
+          hasLoadedOnceRef.current = true;
+          setInitialLoading(false);
+          break;
+        }
+
         case 'PLAYBACK_STATE': {
           const { track, isPlaying } = data;
           const isSameTrack = Boolean(

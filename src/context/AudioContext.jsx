@@ -441,8 +441,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (res.ok) {
             const d = await res.json();
             const resolvedYtId = d.ytId || extractYtId(d.url);
-            // If server resolved a new alternative YouTube video ID, switch to it!
-            if (resolvedYtId && resolvedYtId !== curYtId) {
+            // If server resolved a new alternative YouTube video ID, switch to it on web desktop only
+            const isNative = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE);
+            if (!isNative && resolvedYtId && resolvedYtId !== curYtId) {
               const actPlayer = getActiveYtPlayer();
               if (actPlayer && isCurrentYtReady()) {
                 isYtTrackRef.current = true;
@@ -484,6 +485,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setIsPlaying(true);
         if (durationVal) setDuration(durationVal);
         if (track.cover) setCurrentTrack(prev => prev ? { ...prev, cover: track.cover } : prev);
+      } else if (!streamUrl) {
+        const targetYtId = curYtId;
+        if (targetYtId) {
+          const actPlayer = getActiveYtPlayer();
+          if (actPlayer && isCurrentYtReady()) {
+            isYtTrackRef.current = true;
+            setIsYtTrack(true);
+            stopHtmlAudio();
+            actPlayer.unMute();
+            actPlayer.loadVideoById({ videoId: targetYtId, startSeconds: 0 });
+            try { actPlayer.playVideo(); } catch {}
+            setIsPlaying(true);
+          }
+        }
       }
     } catch (err) {
       console.warn('Fallback play error:', err);
@@ -725,6 +740,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
         ? (extractYtId(newUrl) || extractYtId(currentTrack.id) || extractYtId(currentTrack._id) || extractYtId(currentTrack.youtubeId))
         : null;
 
+      // In native mobile app (RIVO_NATIVE), YouTube video iframes are suspended by iOS WKWebView
+      // when the user exits the app or locks the screen!
+      // Therefore, in native app mode, we always resolve the direct audio stream and play via HTML5 <audio>
+      const isNativeApp = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE);
+      if (ytId && isNativeApp) {
+        fallbackToHtmlAudio(currentTrack);
+        return;
+      }
+
       if (ytId) {
         // ── YouTube track ──────────────────────────────────────────
         isYtTrackRef.current = true;
@@ -840,6 +864,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
               }
 
               if (ytId) {
+                const isNativeApp = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE);
+                if (isNativeApp) {
+                  fallbackToHtmlAudio(currentTrack);
+                  return;
+                }
+
                 // Switch seamlessly to YouTube player
                 isYtTrackRef.current = true;
                 setIsYtTrack(true);
