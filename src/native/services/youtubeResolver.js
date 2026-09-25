@@ -387,6 +387,7 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
           return {
             url: chosen.url,
             duration: durationSec,
+            contentLength: chosen.contentLength ? parseInt(chosen.contentLength, 10) : null,
             title: data.videoDetails?.title || null,
             author: data.videoDetails?.author || null,
             toString() { return this.url; }
