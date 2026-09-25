@@ -313,24 +313,30 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
-          if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+
+          // Proactive authentic end-of-track detection for iOS WebKit VBR streams
+          // Prevents the player from entering silence when WebKit miscalculates stream duration
+          if (durationRef.current > 0 && audio.currentTime >= durationRef.current - 0.75) {
+            handleEnded();
+            return;
+          }
+
+          // Only use audio.duration as last-resort fallback if no authentic duration was ever established
+          if ((!durationRef.current || durationRef.current <= 0) && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
             const rounded = Math.round(audio.duration);
-            if (Math.abs(rounded - durationRef.current) > 0.5) {
-              setDuration(rounded);
-              durationRef.current = rounded;
-              setCurrentTrack(prev => (prev ? { ...prev, duration: rounded } : prev));
-              if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
-            }
+            setDuration(rounded);
+            durationRef.current = rounded;
+            if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
           }
         }
       }
     };
     const handleLoadedMetadata = () => {
-      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+      // Only use audio.duration if no authentic duration is already established
+      if ((!durationRef.current || durationRef.current <= 0) && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
         const rounded = Math.round(audio.duration);
         setDuration(rounded);
         durationRef.current = rounded;
-        setCurrentTrack(prev => (prev ? { ...prev, duration: rounded } : prev));
         if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
       }
     };
@@ -515,10 +521,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const sDur = sanitizeDuration(durationVal, 210);
           setDuration(sDur);
           durationRef.current = sDur;
-          setCurrentTrack(prev => (prev ? { ...prev, duration: sDur } : prev));
           if (currentTrackRef.current) currentTrackRef.current.duration = sDur;
         }
-        if (track.cover) setCurrentTrack(prev => prev ? { ...prev, cover: track.cover } : prev);
       } else if (!streamUrl) {
         const targetYtId = curYtId;
         if (targetYtId) {
@@ -551,7 +555,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const sDur = sanitizeDuration(streamDur);
           setDuration(sDur);
           durationRef.current = sDur;
-          setCurrentTrack(prev => (prev ? { ...prev, duration: sDur } : prev));
           if (currentTrackRef.current) currentTrackRef.current.duration = sDur;
         }
       }
@@ -1510,6 +1513,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Signal that the next currentTrack change should autoplay
     shouldPlayRef.current = true;
     currentTrackRef.current = trackToPlay;
+    const initDur = (trackToPlay.duration && trackToPlay.duration > 0 && trackToPlay.duration < 86400)
+      ? sanitizeDuration(trackToPlay.duration)
+      : 0;
+    if (initDur > 0) {
+      setDuration(initDur);
+      durationRef.current = initDur;
+    }
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
 
@@ -1517,8 +1527,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       try {
         const isLiked = likedTrackIds.some(id => String(id) === String(trackToPlay._id || trackToPlay.id));
         const coverSrc = trackToPlay.cover || trackToPlay.coverUrl || '';
-        const safeTrackDuration = (trackToPlay.duration && trackToPlay.duration > 0 && trackToPlay.duration < 86400)
-          ? sanitizeDuration(trackToPlay.duration)
+        const safeTrackDuration = initDur > 0
+          ? initDur
           : (durationRef.current > 0 ? durationRef.current : 210);
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'PLAYBACK_STATE',

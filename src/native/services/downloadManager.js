@@ -443,13 +443,11 @@ export const downloadTrack = async (track, onProgress) => {
   if (onProgress) onProgress(15);
 
   let success = false;
-  // Use matching Safari/VisionOS headers + Range: bytes=0- to completely remove Google Video CDN 1x bitrate pacing throttle
+  // Standard mobile browser headers compatible with iOS NSURLSessionDownloadTask
   const downloadHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
     'Accept': '*/*',
-    'Accept-Encoding': 'identity',
     'Connection': 'keep-alive',
-    'Range': 'bytes=0-',
   };
 
   // Try candidate URLs one by one until one produces a valid audio file

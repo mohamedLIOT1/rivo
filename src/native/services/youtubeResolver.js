@@ -219,9 +219,20 @@ export const searchYouTubeClientSide = async (query) => {
     if (!res.ok) return null;
     const d = await res.json();
     const contents = d?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-    const item = contents.find(c => c.videoRenderer && c.videoRenderer.videoId);
-    if (item?.videoRenderer) {
-      const v = item.videoRenderer;
+    const candidates = contents
+      .map(c => c.videoRenderer)
+      .filter(v => v && v.videoId);
+
+    // Prefer standard single tracks (< 12 minutes) over long DJ mixes or 1-hour loops
+    const v = candidates.find(item => {
+      const durText = item.lengthText?.simpleText || item.lengthText?.runs?.[0]?.text || '';
+      const parts = durText.split(':');
+      if (parts.length > 2) return false; // Contains hours
+      const mins = parseInt(parts[0], 10);
+      return !isNaN(mins) && mins < 12;
+    }) || candidates[0];
+
+    if (v) {
       const videoId = v.videoId;
       const durText = v.lengthText?.simpleText || v.lengthText?.runs?.[0]?.text || '';
       let durSec = 0;
