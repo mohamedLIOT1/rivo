@@ -24,8 +24,10 @@ export default function EditSongModal({
   const [isAutoSyncing, setIsAutoSyncing] = useState(false);
 
   const formatTime = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
+    if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
+    const sVal = secs > 10000 ? Math.round(secs / 1000) : Math.round(secs);
+    const m = Math.floor(sVal / 60);
+    const s = Math.floor(sVal % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 

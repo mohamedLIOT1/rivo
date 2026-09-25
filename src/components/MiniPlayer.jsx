@@ -32,8 +32,10 @@ export default function MiniPlayer({
   const isDark = globalTheme === 'dark';
   const audio = useAudioPlayer();
   const repeatMode = propRepeatMode || audio?.repeatMode || (isRepeat ? 'all' : 'off');
-  const currentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
-  const duration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
+  const rawCurrentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
+  const currentTime = rawCurrentTime > 10000 ? Math.round(rawCurrentTime / 1000) : rawCurrentTime;
+  const rawDuration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
+  const duration = rawDuration > 10000 ? Math.round(rawDuration / 1000) : rawDuration;
   const seekTo = propSeekTo || audio?.seekTo;
 
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
@@ -45,14 +47,16 @@ export default function MiniPlayer({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPercent, setScrubPercent] = useState(0);
 
-  const activeDuration = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
+  const rawActiveDur = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
+  const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
 
   const formatTime = (secs) => {
     if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
+    const sVal = secs > 10000 ? Math.round(secs / 1000) : Math.round(secs);
+    const m = Math.floor(sVal / 60);
+    const s = Math.floor(sVal % 60);
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 

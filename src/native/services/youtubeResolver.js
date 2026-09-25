@@ -2,6 +2,21 @@ import * as FileSystem from 'expo-file-system';
 import { API_BASE_URL } from '../config';
 
 const streamCache = new Map();
+const streamDurationCache = new Map();
+
+export const getStreamFromCache = (trackId) => {
+  if (!trackId) return null;
+  return streamCache.get(String(trackId)) || null;
+};
+
+export const getStreamDurationFromCache = (trackId) => {
+  if (!trackId) return null;
+  return streamDurationCache.get(String(trackId)) || null;
+};
+
+let cachedVisitorData = '';
+let cachedVisitorTimestamp = 0;
+const VISITOR_CACHE_TTL = 3600 * 1000 * 12; // 12 hours
 
 /**
  * Cleans track title and artist for high-accuracy audio stream resolution.
@@ -121,9 +136,13 @@ export const resolveAudioStream = async (track) => {
                (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
   if (ytId) {
     try {
-      const directStream = await resolveClientSideYouTubeStream(ytId);
+      const directResult = await resolveClientSideYouTubeStream(ytId);
+      const directStream = typeof directResult === 'string' ? directResult : directResult?.url;
       if (directStream) {
-        if (trackId) streamCache.set(trackId, directStream);
+        if (trackId) {
+          streamCache.set(trackId, directStream);
+          if (directResult?.duration) streamDurationCache.set(trackId, directResult.duration);
+        }
         return directStream;
       }
     } catch (e) {}
@@ -174,41 +193,49 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
     let visitorData = '';
     let cookies = '';
 
-    // Fast official visitor_id token acquisition
-    try {
-      const vController = new AbortController();
-      const vTimeout = setTimeout(() => vController.abort(), 3000);
-      const vRes = await fetch(`https://www.youtube.com/youtubei/v1/visitor_id?key=${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          context: {
-            client: {
-              clientName: 'VISIONOS',
-              clientVersion: '1.02',
-              deviceMake: 'Apple',
-              deviceModel: 'RealityDevice17,1',
-              osName: 'visionOS',
-              osVersion: '26.5.23O471',
-              hl: 'en',
-              gl: 'US',
+    // Fast official visitor_id token acquisition with in-memory caching
+    if (cachedVisitorData && (Date.now() - cachedVisitorTimestamp < VISITOR_CACHE_TTL)) {
+      visitorData = cachedVisitorData;
+    } else {
+      try {
+        const vController = new AbortController();
+        const vTimeout = setTimeout(() => vController.abort(), 2500);
+        const vRes = await fetch(`https://www.youtube.com/youtubei/v1/visitor_id?key=${key}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            context: {
+              client: {
+                clientName: 'VISIONOS',
+                clientVersion: '1.02',
+                deviceMake: 'Apple',
+                deviceModel: 'RealityDevice17,1',
+                osName: 'visionOS',
+                osVersion: '26.5.23O471',
+                hl: 'en',
+                gl: 'US',
+              }
             }
+          }),
+          signal: vController.signal,
+        });
+        clearTimeout(vTimeout);
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          visitorData = vData?.responseContext?.visitorData || '';
+          if (visitorData) {
+            cachedVisitorData = visitorData;
+            cachedVisitorTimestamp = Date.now();
           }
-        }),
-        signal: vController.signal,
-      });
-      clearTimeout(vTimeout);
-      if (vRes.ok) {
-        const vData = await vRes.json();
-        visitorData = vData?.responseContext?.visitorData || '';
-      }
-    } catch (e) {}
+        }
+      } catch (e) {}
+    }
 
-    // Fallback: scrape watch page if visitor_id endpoint did not return
+    // Fallback: scrape watch page only if visitor_id was completely missing
     if (!visitorData) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
         const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
           headers: {
@@ -221,7 +248,11 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
         clearTimeout(timeoutId);
 
         const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
-        if (visitorMatch && visitorMatch[1]) visitorData = visitorMatch[1];
+        if (visitorMatch && visitorMatch[1]) {
+          visitorData = visitorMatch[1];
+          cachedVisitorData = visitorData;
+          cachedVisitorTimestamp = Date.now();
+        }
         cookies = webRes.headers?.get ? (webRes.headers.get('set-cookie') || '') : '';
       } catch (e) {}
     }
@@ -269,7 +300,21 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
         const audio140 = formats.find(f => f.itag === 140 && f.url);
         const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
         const chosen = audio140 || anyAudio;
-        if (chosen?.url) return chosen.url;
+        if (chosen?.url) {
+          const rawSec = parseInt(data.videoDetails?.lengthSeconds, 10);
+          const rawMs = parseInt(chosen.approxDurationMs, 10);
+          const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0)
+            ? rawSec
+            : (rawMs && !isNaN(rawMs) && rawMs > 0 ? Math.round(rawMs / 1000) : null);
+
+          return {
+            url: chosen.url,
+            duration: durationSec,
+            title: data.videoDetails?.title || null,
+            author: data.videoDetails?.author || null,
+            toString() { return this.url; }
+          };
+        }
       }
     }
   } catch (err) {}

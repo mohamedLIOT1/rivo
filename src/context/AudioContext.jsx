@@ -9,6 +9,16 @@ import { useUser } from './UserContext';
 
 const AudioPlayerContext = createContext(null);
 
+// ── Duration Sanitizer (handles milliseconds, missing, NaN, or infinite durations) ──
+export function sanitizeDuration(val, fallback = 210) {
+  if (val === undefined || val === null) return fallback;
+  const num = Number(val);
+  if (!isFinite(num) || isNaN(num) || num <= 0) return fallback;
+  if (num > 10000) return Math.max(1, Math.round(num / 1000));
+  if (num > 86400) return fallback;
+  return Math.round(num);
+}
+
 // ── Extract YouTube video ID from URL ─────────────────────────────
 function extractYtId(input) {
   if (!input || typeof input !== 'string') return null;
@@ -75,7 +85,7 @@ async function resolveTrackAudioUrl(track) {
         return {
           url: data.url,
           ytId: extractYtId(data.url),
-          duration: data.duration || track.duration || 180,
+          duration: sanitizeDuration(data.duration || track.duration, 180),
           cover: data.cover || track.cover
         };
       }
@@ -86,13 +96,13 @@ async function resolveTrackAudioUrl(track) {
 
   const ytId = extractYtId(targetUrl);
   if (ytId) {
-    return { url: targetUrl, ytId, duration: track.duration || 240, cover: track.cover };
+    return { url: targetUrl, ytId, duration: sanitizeDuration(track.duration, 240), cover: track.cover };
   }
 
   if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
     targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
   }
-  return { url: targetUrl, ytId: null, duration: track.duration || 180, cover: track.cover };
+  return { url: targetUrl, ytId: null, duration: sanitizeDuration(track.duration, 180), cover: track.cover };
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -303,17 +313,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
-          if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && Math.abs(audio.duration - durationRef.current) > 0.5) {
-            setDuration(audio.duration);
-            durationRef.current = audio.duration;
+          if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+            const rounded = Math.round(audio.duration);
+            if (Math.abs(rounded - durationRef.current) > 0.5) {
+              setDuration(rounded);
+              durationRef.current = rounded;
+            }
           }
         }
       }
     };
     const handleLoadedMetadata = () => {
-      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0) {
-        setDuration(audio.duration);
-        durationRef.current = audio.duration;
+      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+        const rounded = Math.round(audio.duration);
+        setDuration(rounded);
+        durationRef.current = rounded;
       }
     };
     const handleEnded = () => {
@@ -393,7 +407,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const curYtId = extractYtId(rawUrl) || extractYtId(trackId);
 
       let streamUrl = null;
-      let durationVal = track.duration || 210;
+      let durationVal = sanitizeDuration(track.duration, 210);
 
       // 0. Native device client-side stream resolution (Instant, zero-proxy, bypasses YouTube embed restrictions)
       if (typeof window !== 'undefined' && typeof window.RIVO_RESOLVE_STREAM === 'function') {
@@ -402,7 +416,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
             const onResolved = (ev) => {
               if (ev.detail && (ev.detail.trackId === trackId || ev.detail.ytId === curYtId)) {
                 window.removeEventListener('rivo-receive-resolved-stream', onResolved);
-                resolve(ev.detail.url || null);
+                resolve({
+                  url: ev.detail.url || null,
+                  duration: ev.detail.duration ? sanitizeDuration(ev.detail.duration) : null
+                });
               }
             };
             window.addEventListener('rivo-receive-resolved-stream', onResolved);
@@ -412,9 +429,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
             }, 3500);
           });
           window.RIVO_RESOLVE_STREAM(track);
-          const resolvedUrl = await nativeStreamPromise;
-          if (resolvedUrl) {
-            streamUrl = resolvedUrl;
+          const resolvedData = await nativeStreamPromise;
+          if (resolvedData?.url) {
+            streamUrl = resolvedData.url;
+            if (resolvedData.duration) {
+              durationVal = resolvedData.duration;
+            }
           }
         } catch (e) {}
       }
@@ -453,7 +473,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 actPlayer.loadVideoById({ videoId: resolvedYtId, startSeconds: 0 });
                 try { actPlayer.playVideo(); } catch {}
                 setIsPlaying(true);
-                if (d.duration) setDuration(d.duration);
+                if (d.duration) {
+                  const sDur = sanitizeDuration(d.duration);
+                  setDuration(sDur);
+                  durationRef.current = sDur;
+                }
                 setCurrentTrack(prev => prev ? { ...prev, audioUrl: `https://www.youtube.com/watch?v=${resolvedYtId}` } : prev);
                 return;
               }
@@ -463,7 +487,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
               let cand = d.url;
               if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
               streamUrl = cand;
-              if (d.duration) durationVal = d.duration;
+              if (d.duration) durationVal = sanitizeDuration(d.duration);
             }
           }
         } catch (e) {}
@@ -483,7 +507,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
           console.warn('[Audio] play error in fallback:', playErr);
         }
         setIsPlaying(true);
-        if (durationVal) setDuration(durationVal);
+        if (durationVal) {
+          const sDur = sanitizeDuration(durationVal, 210);
+          setDuration(sDur);
+          durationRef.current = sDur;
+        }
         if (track.cover) setCurrentTrack(prev => prev ? { ...prev, cover: track.cover } : prev);
       } else if (!streamUrl) {
         const targetYtId = curYtId;
@@ -758,7 +786,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         stopHtmlAudio();
 
         setCurrentTime(0);
-      setDuration(currentTrack.duration || 210);
+        const sDur = sanitizeDuration(currentTrack.duration, 210);
+        setDuration(sDur);
+        durationRef.current = sDur;
 
       if (watchdogRef.current) {
         clearTimeout(watchdogRef.current);
@@ -875,7 +905,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 setIsYtTrack(true);
                 stopHtmlAudio();
                 if (data.duration && isFinite(data.duration) && data.duration > 0) {
-                  setDuration(data.duration);
+                  const sDur = sanitizeDuration(data.duration);
+                  setDuration(sDur);
+                  durationRef.current = sDur;
                 }
                 const loadYt = () => {
                   const actPlayer = getActiveYtPlayer();
@@ -914,7 +946,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 stopYouTube();
                 const audio = audioRef.current;
                 if (data.duration && isFinite(data.duration) && data.duration > 0) {
-                  setDuration(data.duration);
+                  const sDur = sanitizeDuration(data.duration);
+                  setDuration(sDur);
+                  durationRef.current = sDur;
                 }
                 if (audio) {
                   audio.src = freshUrl;
@@ -1067,6 +1101,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     try {
       const isLiked = likedTrackIds.some(id => String(id) === String(currentTrack._id || currentTrack.id));
       const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
+      const safeDuration = sanitizeDuration(duration || currentTrack.duration, 240);
+      const safeTime = (currentTime && isFinite(currentTime) && currentTime > 0)
+        ? (currentTime > 10000 ? Math.round(currentTime / 1000) : currentTime)
+        : 0;
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'PLAYBACK_STATE',
         isPlaying: Boolean(isPlaying),
@@ -1074,8 +1112,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isRepeat: repeatMode !== 'off',
         isShuffle: Boolean(isShuffle),
         isLiked: isLiked,
-        duration: duration || currentTrack.duration || 240,
-        currentTime: currentTime || 0,
+        duration: safeDuration,
+        currentTime: safeTime,
         track: {
           id: currentTrack._id || currentTrack.id,
           _id: currentTrack._id || currentTrack.id,
@@ -1084,8 +1122,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           coverUrl: coverSrc,
           cover: coverSrc,
           audioUrl: currentTrack.audioUrl || '',
-          duration: duration || currentTrack.duration || 240,
-          currentTime: currentTime || 0,
+          duration: safeDuration,
+          currentTime: safeTime,
           liked: isLiked,
         }
       }));
@@ -1102,6 +1140,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (curT) {
             const isLiked = likedTrackIds.some(id => String(id) === String(curT._id || curT.id));
             const coverSrc = curT.cover || curT.coverUrl || '';
+            const safeDuration = sanitizeDuration(duration || curT.duration, 240);
+            const rawT = currentTimeRef.current || 0;
+            const safeTime = (rawT && isFinite(rawT) && rawT > 0)
+              ? (rawT > 10000 ? Math.round(rawT / 1000) : rawT)
+              : 0;
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'PLAYBACK_STATE',
               isPlaying: true,
@@ -1109,8 +1152,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
               isRepeat: repeatMode !== 'off',
               isShuffle: Boolean(isShuffle),
               isLiked: isLiked,
-              duration: duration || curT.duration || 240,
-              currentTime: currentTimeRef.current || 0,
+              duration: safeDuration,
+              currentTime: safeTime,
               track: {
                 id: curT._id || curT.id,
                 _id: curT._id || curT.id,
@@ -1119,8 +1162,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 coverUrl: coverSrc,
                 cover: coverSrc,
                 audioUrl: curT.audioUrl || '',
-                duration: duration || curT.duration || 240,
-                currentTime: currentTimeRef.current || 0,
+                duration: safeDuration,
+                currentTime: safeTime,
                 liked: isLiked,
               }
             }));

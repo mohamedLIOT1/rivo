@@ -561,6 +561,9 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             nowPlaying[MPNowPlayingInfoPropertyDefaultPlaybackRate] = @(1.0);
 
             double duration = [options[@"duration"] doubleValue];
+            if (duration > 10000.0) {
+                duration = round(duration / 1000.0);
+            }
             if (duration > 0) {
                 nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(duration);
             } else if (!nowPlaying[MPMediaItemPropertyPlaybackDuration]) {
@@ -568,6 +571,9 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             }
 
             double currentTime = [options[@"currentTime"] doubleValue];
+            if (currentTime > 10000.0) {
+                currentTime = round(currentTime / 1000.0);
+            }
             nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime >= 0 ? currentTime : 0.0);
 
             NSString *coverUrl = options[@"coverUrl"];

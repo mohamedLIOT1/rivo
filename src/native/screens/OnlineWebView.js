@@ -489,8 +489,10 @@ export default function OnlineWebView() {
           if (!activeTrack) {
             break;
           }
-          const trackDur = Number(data.duration !== undefined ? data.duration : (activeTrack?.duration || 240));
-          const trackTime = Number(data.currentTime !== undefined ? data.currentTime : (activeTrack?.currentTime || 0));
+          const rawDur = Number(data.duration !== undefined ? data.duration : (activeTrack?.duration || 240));
+          const trackDur = (rawDur > 10000) ? Math.round(rawDur / 1000) : (rawDur > 0 ? rawDur : 240);
+          const rawTime = Number(data.currentTime !== undefined ? data.currentTime : (activeTrack?.currentTime || 0));
+          const trackTime = (rawTime > 10000) ? Math.round(rawTime / 1000) : rawTime;
           const repeatModeState = typeof data.repeatMode === 'string'
             ? data.repeatMode
             : (data.isRepeat ? 'all' : 'off');
@@ -504,8 +506,12 @@ export default function OnlineWebView() {
           const isPlayStateChanged = currentTrackRef.current?._lastIsPlaying !== Boolean(isPlaying);
           currentTrackRef.current._lastIsPlaying = Boolean(isPlaying);
 
-          // On iOS, avoid calling updateMediaNotification on periodic time ticks to prevent audio session stutter
-          if (Platform.OS === 'ios' && !isNewTrack && !isPlayStateChanged) {
+          const isDurationChanged = Math.abs((currentTrackRef.current?._lastDuration || 0) - trackDur) > 2;
+          currentTrackRef.current._lastDuration = trackDur;
+
+          // On iOS, avoid calling updateMediaNotification on periodic time ticks to prevent audio session stutter,
+          // but ALWAYS update when track changes, play/pause changes, or duration becomes known/updated
+          if (Platform.OS === 'ios' && !isNewTrack && !isPlayStateChanged && !isDurationChanged) {
             break;
           }
 
@@ -540,8 +546,13 @@ export default function OnlineWebView() {
           const ytId = extractYouTubeId(track.audioUrl) || extractYouTubeId(trackId) || extractYouTubeId(track.youtubeId);
           try {
             let streamUrl = null;
+            let streamDuration = null;
             if (ytId) {
-              streamUrl = await resolveClientSideYouTubeStream(ytId);
+              const ytRes = await resolveClientSideYouTubeStream(ytId);
+              if (ytRes) {
+                streamUrl = typeof ytRes === 'string' ? ytRes : ytRes.url;
+                streamDuration = ytRes.duration || null;
+              }
             }
             if (!streamUrl) {
               streamUrl = await resolveAudioStream(track);
@@ -550,7 +561,13 @@ export default function OnlineWebView() {
               (function() {
                 try {
                   if (typeof window.__RIVO_RECEIVE_RESOLVED_STREAM === 'function') {
-                    window.__RIVO_RECEIVE_RESOLVED_STREAM(${JSON.stringify({ trackId, ytId, url: streamUrl, success: Boolean(streamUrl) })});
+                    window.__RIVO_RECEIVE_RESOLVED_STREAM(${JSON.stringify({
+                      trackId,
+                      ytId,
+                      url: streamUrl,
+                      duration: streamDuration,
+                      success: Boolean(streamUrl)
+                    })});
                   }
                 } catch(e) {}
               })();
@@ -561,7 +578,7 @@ export default function OnlineWebView() {
               (function() {
                 try {
                   if (typeof window.__RIVO_RECEIVE_RESOLVED_STREAM === 'function') {
-                    window.__RIVO_RECEIVE_RESOLVED_STREAM(${JSON.stringify({ trackId, ytId, url: null, success: false })});
+                    window.__RIVO_RECEIVE_RESOLVED_STREAM(${JSON.stringify({ trackId, ytId, url: null, duration: null, success: false })});
                   }
                 } catch(e) {}
               })();

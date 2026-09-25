@@ -2,9 +2,24 @@ import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import { resolveAudioStream, resolveClientSideYouTubeStream, extractYouTubeId } from './youtubeResolver';
+import {
+  resolveAudioStream,
+  resolveClientSideYouTubeStream,
+  extractYouTubeId,
+  getStreamFromCache,
+  getStreamDurationFromCache,
+} from './youtubeResolver';
 import { parseLrcLyrics } from '../../utils/lrcParser';
 import { API_BASE_URL } from '../config';
+
+const sanitizeDuration = (val, fallback = 210) => {
+  if (val === undefined || val === null) return fallback;
+  const num = Number(val);
+  if (!isFinite(num) || isNaN(num) || num <= 0) return fallback;
+  if (num > 10000) return Math.max(1, Math.round(num / 1000));
+  if (num > 86400) return fallback;
+  return Math.round(num);
+};
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 const COVERS_DIR = `${FileSystem.documentDirectory}rivo_covers/`;
@@ -366,6 +381,8 @@ export const downloadTrack = async (track, onProgress) => {
     }
   } catch {}
 
+  let resolvedDuration = null;
+
   // Extract YouTube ID if present
   const rawUrl = track.audioUrl || track.url || '';
   const ytId = extractYouTubeId(rawUrl) ||
@@ -374,7 +391,15 @@ export const downloadTrack = async (track, onProgress) => {
   // Gather candidate download URLs in order of priority
   const candidates = [];
 
-  // Candidate 1: Direct remote audio URL (if already an audio file)
+  // Candidate 0: In-memory stream cache (Instant download if track was recently played or resolved)
+  const cachedStream = getStreamFromCache(trackId);
+  const cachedDur = getStreamDurationFromCache(trackId);
+  if (cachedDur) resolvedDuration = cachedDur;
+  if (cachedStream && typeof cachedStream === 'string' && cachedStream.startsWith('http') && !cachedStream.includes('youtube.com/watch') && !cachedStream.includes('youtu.be/')) {
+    candidates.push({ url: cachedStream, ext: cachedStream.includes('.m4a') ? 'm4a' : 'mp3' });
+  }
+
+  // Candidate 1: Direct remote audio URL (if already a clean remote audio file)
   const isDirectRemote = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com') && !u.includes('youtu.be') && !u.includes('soundcloud.com');
   if (isDirectRemote(track.audioUrl)) candidates.push({ url: track.audioUrl, ext: track.audioUrl.includes('.m4a') ? 'm4a' : 'mp3' });
   if (isDirectRemote(track.nativeAudioUri)) candidates.push({ url: track.nativeAudioUri, ext: track.nativeAudioUri.includes('.m4a') ? 'm4a' : 'mp3' });
@@ -383,7 +408,10 @@ export const downloadTrack = async (track, onProgress) => {
   if (ytId) {
     try {
       if (onProgress) onProgress(10);
-      const directGoogleStream = await resolveClientSideYouTubeStream(ytId);
+      const ytRes = await resolveClientSideYouTubeStream(ytId);
+      const directGoogleStream = typeof ytRes === 'string' ? ytRes : ytRes?.url;
+      if (ytRes?.duration) resolvedDuration = ytRes.duration;
+
       if (directGoogleStream && typeof directGoogleStream === 'string' && directGoogleStream.startsWith('http')) {
         // High-speed direct stream from Google CDN edge directly to device storage first (<1-2s)
         candidates.push({ url: directGoogleStream, ext: 'm4a' });
@@ -400,27 +428,15 @@ export const downloadTrack = async (track, onProgress) => {
   const backendDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&id=${encodeURIComponent(trackId)}`;
   candidates.push({ url: backendDownloadUrl, ext: 'm4a' });
 
-  // Candidate 4: Backend Stream Resolver
-  const isValidAudioStreamUrl = (u) => typeof u === 'string' && (u.startsWith('http') || u.startsWith('/')) && !u.includes('youtube.com/watch') && !u.includes('youtu.be/') && !u.includes('sndcdn.com/preview');
-
-  try {
-    const streamRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId)}/stream?url=${encodeURIComponent(track.audioUrl || '')}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`);
-    if (streamRes.ok) {
-      const streamData = await streamRes.json();
-      let sUrl = streamData?.url || streamData?.directUrl;
-      if (isValidAudioStreamUrl(sUrl)) {
-        if (sUrl.startsWith('/')) sUrl = `${API_BASE_URL}${sUrl}`;
-        candidates.push({ url: sUrl, ext: sUrl.includes('.m4a') ? 'm4a' : 'mp3' });
-      }
-    }
-  } catch (e) {}
-
   if (onProgress) onProgress(15);
 
   let success = false;
+  // Use matching Safari/VisionOS headers to prevent Google Video CDN 403 Forbidden and speed throttling
   const downloadHeaders = {
-    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
     'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
   };
 
   // Try candidate URLs one by one until one produces a valid audio file
@@ -434,6 +450,11 @@ export const downloadTrack = async (track, onProgress) => {
       await FileSystem.deleteAsync(chosenAudioUri, { idempotent: true }).catch(() => {});
 
       let res = null;
+      // Per-candidate timeout (15s) so a stalled stream connection never hangs the download
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Download candidate timeout')), 15000)
+      );
+
       try {
         const downloadResumable = FileSystem.createDownloadResumable(
           targetUrl,
@@ -448,9 +469,14 @@ export const downloadTrack = async (track, onProgress) => {
             }
           }
         );
-        res = await downloadResumable.downloadAsync();
+        res = await Promise.race([downloadResumable.downloadAsync(), timeoutPromise]);
       } catch (resumeErr) {
-        res = await FileSystem.downloadAsync(targetUrl, chosenAudioUri, { headers: downloadHeaders });
+        try {
+          res = await Promise.race([
+            FileSystem.downloadAsync(targetUrl, chosenAudioUri, { headers: downloadHeaders }),
+            timeoutPromise
+          ]);
+        } catch (dlErr) {}
       }
 
       if (res && (res.status === 200 || res.status === 206)) {
@@ -490,15 +516,18 @@ export const downloadTrack = async (track, onProgress) => {
     }
   }
 
-  // If backend candidates failed, try direct client-side YouTube resolution as final fallback
+  // If first-tier candidates failed, try direct client-side YouTube resolution as fallback
   if (!success && ytId) {
     try {
       if (onProgress) onProgress(30);
-      const mirrorUrl = await resolveClientSideYouTubeStream(ytId);
+      const mirrorRes = await resolveClientSideYouTubeStream(ytId);
+      const mirrorUrl = typeof mirrorRes === 'string' ? mirrorRes : mirrorRes?.url;
+      if (mirrorRes?.duration) resolvedDuration = mirrorRes.duration;
+
       if (mirrorUrl) {
         await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
-        const mirrorRes = await FileSystem.downloadAsync(mirrorUrl, audioFileUriM4a);
-        if (mirrorRes && (mirrorRes.status === 200 || mirrorRes.status === 206)) {
+        const mirrorDownloadRes = await FileSystem.downloadAsync(mirrorUrl, audioFileUriM4a, { headers: downloadHeaders });
+        if (mirrorDownloadRes && (mirrorDownloadRes.status === 200 || mirrorDownloadRes.status === 206)) {
           const check = await FileSystem.getInfoAsync(audioFileUriM4a);
           if (check.exists && check.size > 10000) {
             success = true;
@@ -519,7 +548,7 @@ export const downloadTrack = async (track, onProgress) => {
 
   if (onProgress) onProgress(92);
 
-  // Cover art download & local caching
+  // Cover art download & local caching (with 3-second timeout protection)
   let localCover = track.coverUrl || track.cover || '';
   if (localCover && typeof localCover === 'string') {
     if (localCover.startsWith('/') && !localCover.startsWith('//')) {
@@ -527,13 +556,14 @@ export const downloadTrack = async (track, onProgress) => {
     }
     if (localCover.startsWith('http')) {
       try {
-        await FileSystem.downloadAsync(localCover, coverFileUri);
+        const coverTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Cover dl timeout')), 3000));
+        await Promise.race([FileSystem.downloadAsync(localCover, coverFileUri), coverTimeout]);
         localCover = coverFileUri;
       } catch {}
     }
   }
 
-  // Lyrics fetch & embed
+  // Lyrics fetch & embed (with 2.5-second timeout protection so lyrics never delay download)
   let rawLyrics = track.lyrics || null;
   let trackLyrics = rawLyrics ? parseLrcLyrics(rawLyrics) : null;
   if (!trackLyrics || (Array.isArray(trackLyrics) && trackLyrics.length === 0)) {
@@ -541,7 +571,12 @@ export const downloadTrack = async (track, onProgress) => {
       const qTitle = encodeURIComponent(cleanTitle);
       const qArtist = encodeURIComponent(cleanArtist);
       const qId = encodeURIComponent(trackId);
-      const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${qId}&title=${qTitle}&artist=${qArtist}`);
+      const lyrController = new AbortController();
+      const lyrTimeout = setTimeout(() => lyrController.abort(), 2500);
+      const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${qId}&title=${qTitle}&artist=${qArtist}`, {
+        signal: lyrController.signal,
+      });
+      clearTimeout(lyrTimeout);
       if (lyricsRes.ok) {
         const lyricsData = await lyricsRes.json();
         if (lyricsData?.success && lyricsData?.lyrics) {
@@ -576,6 +611,7 @@ export const downloadTrack = async (track, onProgress) => {
     localAudioUri: audioFileUri,
     nativeAudioUri: audioFileUri,
     audioUrl: audioFileUri,
+    duration: sanitizeDuration(resolvedDuration || track.duration || 210),
     coverUrl: localCover,
     cover: localCover,
     lyrics: trackLyrics,
