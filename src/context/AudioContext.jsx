@@ -31,35 +31,27 @@ function extractYtId(input) {
   return null;
 }
 
-// ── Load YouTube IFrame API script once ───────────────────────────
-let ytApiLoaded = false;
-let ytApiReady = false;
-const ytReadyCallbacks = [];
-
-function loadYouTubeApi() {
-  if (ytApiLoaded) return;
-  ytApiLoaded = true;
-  window.onYouTubeIframeAPIReady = () => {
-    ytApiReady = true;
-    ytReadyCallbacks.forEach(cb => cb());
-    ytReadyCallbacks.length = 0;
-  };
-  const tag = document.createElement('script');
-  tag.src = 'https://www.youtube.com/iframe_api';
-  document.head.appendChild(tag);
-}
-
-function onYtReady(cb) {
-  if (ytApiReady) { cb(); return; }
-  ytReadyCallbacks.push(cb);
-  loadYouTubeApi();
-}
-
-async function resolveTrackAudioUrl(track) {
+// ── Direct Audio Stream Resolver (HTML5 <audio> & Web Audio API) ──
+async function resolvePlayableAudioStream(track) {
   if (!track) return null;
-  let targetUrl = track.audioUrl;
-  const isBlobUrl = targetUrl?.startsWith('blob:');
-  const isDownloaded = Boolean(track.downloaded && targetUrl);
+  const trackId = String(track.id || track._id || '');
+  let targetUrl = track.audioUrl || '';
+
+  // 1. Prioritize offline storage / IndexedDB
+  try {
+    const offlineBlob = await getOfflineTrackAudioUrl(trackId, track.title, track.artist);
+    if (offlineBlob) {
+      return {
+        url: offlineBlob,
+        duration: sanitizeDuration(track.duration, 210),
+        cover: track.cover || track.coverUrl,
+        isOffline: true
+      };
+    }
+  } catch (e) {}
+
+  // 2. Local device files (Capacitor / native files) or Blobs
+  const isBlobUrl = targetUrl.startsWith('blob:') || targetUrl.startsWith('data:');
   const isLocalNativeUrl =
     targetUrl && (
       targetUrl.includes('/_capacitor_file_/') ||
@@ -68,41 +60,106 @@ async function resolveTrackAudioUrl(track) {
       targetUrl.startsWith('content://') ||
       (targetUrl.startsWith('http://localhost') && !targetUrl.includes(':5000'))
     );
+  if (isBlobUrl || isLocalNativeUrl) {
+    return {
+      url: targetUrl,
+      duration: sanitizeDuration(track.duration, 210),
+      cover: track.cover || track.coverUrl
+    };
+  }
 
-  const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
-    !targetUrl ||
-    !extractYtId(targetUrl) ||
-    track.source === 'Import' ||
-    track.source === 'Spotify' ||
-    targetUrl.includes('pixabay.com')
-  );
-
-  if (needsResolution) {
+  // 3. Native mobile device client-side stream resolution (Instant, zero-proxy)
+  if (typeof window !== 'undefined' && typeof window.RIVO_RESOLVE_STREAM === 'function') {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(targetUrl || '')}&id=${track.id || track._id || ''}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`);
-      const data = await res.json();
-      if (data.success && data.url) {
+      const nativeStreamPromise = new Promise((resolve) => {
+        const onResolved = (ev) => {
+          if (ev.detail && (ev.detail.trackId === trackId || (trackId && ev.detail.trackId?.includes(trackId)))) {
+            window.removeEventListener('rivo-receive-resolved-stream', onResolved);
+            resolve({
+              url: ev.detail.url || null,
+              duration: ev.detail.duration ? sanitizeDuration(ev.detail.duration) : null
+            });
+          }
+        };
+        window.addEventListener('rivo-receive-resolved-stream', onResolved);
+        setTimeout(() => {
+          window.removeEventListener('rivo-receive-resolved-stream', onResolved);
+          resolve(null);
+        }, 3000);
+      });
+      window.RIVO_RESOLVE_STREAM(track);
+      const resolvedData = await nativeStreamPromise;
+      if (resolvedData?.url) {
         return {
-          url: data.url,
-          ytId: extractYtId(data.url),
-          duration: sanitizeDuration(data.duration || track.duration, 180),
-          cover: data.cover || track.cover
+          url: resolvedData.url,
+          duration: resolvedData.duration || sanitizeDuration(track.duration, 210),
+          cover: track.cover || track.coverUrl
         };
       }
-    } catch (err) {
-      console.warn('Track resolution error:', err);
+    } catch (e) {}
+  }
+
+  // 4. If URL is already a direct stream proxy
+  if (targetUrl && (targetUrl.includes('/api/tracks/stream-proxy') || targetUrl.includes('/api/proxy-audio'))) {
+    const fullUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : targetUrl;
+    return {
+      url: fullUrl,
+      duration: sanitizeDuration(track.duration, 210),
+      cover: track.cover || track.coverUrl
+    };
+  }
+
+  const qTitle = encodeURIComponent(track.title || '');
+  const qArtist = encodeURIComponent(track.artist || '');
+
+  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream
+  try {
+    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}`);
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      let cand = sData?.url || sData?.directUrl;
+      if (cand && !cand.includes('youtube.com/watch') && !cand.includes('youtu.be/')) {
+        if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+        return {
+          url: cand,
+          duration: sanitizeDuration(sData.duration || track.duration, 210),
+          cover: sData.cover || track.cover || track.coverUrl
+        };
+      }
     }
+  } catch (e) {}
+
+  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}`);
+    if (res.ok) {
+      const d = await res.json();
+      if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
+        let cand = d.url;
+        if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+        return {
+          url: cand,
+          duration: sanitizeDuration(d.duration || track.duration, 210),
+          cover: d.cover || track.cover || track.coverUrl
+        };
+      }
+    }
+  } catch (e) {}
+
+  // 7. Last-resort fallback for plain mp3/m4a URLs
+  if (targetUrl && (targetUrl.endsWith('.mp3') || targetUrl.endsWith('.m4a'))) {
+    let proxied = targetUrl;
+    if (targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
+      proxied = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
+    }
+    return {
+      url: proxied,
+      duration: sanitizeDuration(track.duration, 210),
+      cover: track.cover || track.coverUrl
+    };
   }
 
-  const ytId = extractYtId(targetUrl);
-  if (ytId) {
-    return { url: targetUrl, ytId, duration: sanitizeDuration(track.duration, 240), cover: track.cover };
-  }
-
-  if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
-    targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
-  }
-  return { url: targetUrl, ytId: null, duration: sanitizeDuration(track.duration, 180), cover: track.cover };
+  return null;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -240,54 +297,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const transitionActiveTrackIdRef = useRef(null);
   const activeWebAudioMixRef = useRef(null);
 
-  // ── Dual-Deck YouTube IFrame Players (Deck 1 & Deck 2 for seamless Spotify Mix) ──
-  const ytPlayerRef        = useRef(null);   // active player reference
-  const ytPlayer1Ref       = useRef(null);   // Deck 1
-  const ytPlayer2Ref       = useRef(null);   // Deck 2
-  const activeYtDeckRef    = useRef(1);      // 1 or 2
-  const isYtReady1Ref      = useRef(false);
-  const isYtReady2Ref      = useRef(false);
-  const ytIntervalRef      = useRef(null);   // polling interval for currentTime
-  const isYtTrackRef       = useRef(false);  // is current track a YouTube track?
-
-  const getActiveYtPlayer = useCallback(() => {
-    return activeYtDeckRef.current === 1 ? ytPlayer1Ref.current : ytPlayer2Ref.current;
-  }, []);
-
-  const getSecondaryYtPlayer = useCallback(() => {
-    return activeYtDeckRef.current === 1 ? ytPlayer2Ref.current : ytPlayer1Ref.current;
-  }, []);
-
-  const isCurrentYtReady = useCallback(() => {
-    return activeYtDeckRef.current === 1 ? isYtReady1Ref.current : isYtReady2Ref.current;
-  }, []);
-
-  // ── Spotify Mix: Real Audio DJ Transition Execution Engine ───────
-  const checkAndRunDjTransition = useCallback(() => {}, []);
-
-  // ── Bulletproof Silencers to PREVENT dual-playback ghost player ──
-  const stopYouTube = useCallback(() => {
-    [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
-      if (p) {
-        try {
-          p.mute();
-          p.pauseVideo();
-          p.stopVideo();
-          if (typeof p.cueVideoById === 'function') {
-            p.cueVideoById('');
-          }
-        } catch {}
-      }
-    });
-    if (ytIntervalRef.current) {
-      clearInterval(ytIntervalRef.current);
-      ytIntervalRef.current = null;
-    }
-    if (watchdogRef.current) {
-      clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
-    }
-  }, []);
+  // YouTube IFrame player completely eliminated — pure direct audio streaming
+  const stopYouTube = useCallback(() => {}, []);
 
   const stopHtmlAudio = useCallback(() => {
     const audio = audioRef.current;
@@ -405,320 +416,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
   }, [stopYouTube]);
 
+  // Fallback / stream retry helper for HTML audio
   const fallbackToHtmlAudio = useCallback(async (track) => {
-    if (!track) return;
-    if (!isPlayingRef.current && !shouldPlayRef.current) return;
-
+    if (!track || !audioRef.current) return;
     try {
-      const trackId = String(track.id || track._id || '');
-      const qTitle = encodeURIComponent(track.title || '');
-      const qArtist = encodeURIComponent(track.artist || '');
-      const rawUrl = track.audioUrl || '';
-      const curYtId = extractYtId(rawUrl) || extractYtId(trackId);
-
-      let streamUrl = null;
-      let durationVal = sanitizeDuration(track.duration, 210);
-
-      // 0. Native device client-side stream resolution (Instant, zero-proxy, bypasses YouTube embed restrictions)
-      if (typeof window !== 'undefined' && typeof window.RIVO_RESOLVE_STREAM === 'function') {
-        try {
-          const nativeStreamPromise = new Promise((resolve) => {
-            const onResolved = (ev) => {
-              if (ev.detail && (ev.detail.trackId === trackId || ev.detail.ytId === curYtId)) {
-                window.removeEventListener('rivo-receive-resolved-stream', onResolved);
-                resolve({
-                  url: ev.detail.url || null,
-                  duration: ev.detail.duration ? sanitizeDuration(ev.detail.duration) : null
-                });
-              }
-            };
-            window.addEventListener('rivo-receive-resolved-stream', onResolved);
-            setTimeout(() => {
-              window.removeEventListener('rivo-receive-resolved-stream', onResolved);
-              resolve(null);
-            }, 3500);
-          });
-          window.RIVO_RESOLVE_STREAM(track);
-          const resolvedData = await nativeStreamPromise;
-          if (resolvedData?.url) {
-            streamUrl = resolvedData.url;
-            if (resolvedData.duration) {
-              durationVal = resolvedData.duration;
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 1. Direct stream from /api/tracks/:id/stream
-      if (!streamUrl) {
-        try {
-          const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${qTitle}&artist=${qArtist}`);
-          if (sRes.ok) {
-            const sData = await sRes.json();
-            let cand = sData?.url || sData?.directUrl;
-            if (cand && !cand.includes('youtube.com/watch') && !cand.includes('youtu.be/')) {
-              if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
-              streamUrl = cand;
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 2. Fallback to /api/tracks/resolve-stream with stream=true
-      if (!streamUrl) {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}`);
-          if (res.ok) {
-            const d = await res.json();
-            const resolvedYtId = d.ytId || extractYtId(d.url);
-            // If server resolved a new alternative YouTube video ID, switch to it on web desktop only
-            const isNative = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE);
-            if (!isNative && resolvedYtId && resolvedYtId !== curYtId) {
-              const actPlayer = getActiveYtPlayer();
-              if (actPlayer && isCurrentYtReady()) {
-                isYtTrackRef.current = true;
-                setIsYtTrack(true);
-                stopHtmlAudio();
-                actPlayer.unMute();
-                actPlayer.loadVideoById({ videoId: resolvedYtId, startSeconds: 0 });
-                try { actPlayer.playVideo(); } catch {}
-                setIsPlaying(true);
-                if (d.duration) {
-                  const sDur = sanitizeDuration(d.duration);
-                  setDuration(sDur);
-                  durationRef.current = sDur;
-                }
-                setCurrentTrack(prev => prev ? { ...prev, audioUrl: `https://www.youtube.com/watch?v=${resolvedYtId}` } : prev);
-                return;
-              }
-            }
-
-            if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
-              let cand = d.url;
-              if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
-              streamUrl = cand;
-              if (d.duration) durationVal = sanitizeDuration(d.duration);
-            }
-          }
-        } catch (e) {}
-      }
-
-      if (!isPlayingRef.current && !shouldPlayRef.current) return;
-      if (streamUrl && audioRef.current) {
-        isYtTrackRef.current = false;
-        setIsYtTrack(false);
-        stopYouTube();
-        audioRef.current.src = streamUrl;
+      const streamData = await resolvePlayableAudioStream(track);
+      if (streamData?.url && audioRef.current) {
+        audioRef.current.src = streamData.url;
         audioRef.current.volume = volumeRef.current;
         resumeAudioContext();
-        try {
-          await audioRef.current.play();
-        } catch (playErr) {
-          console.warn('[Audio] play error in fallback:', playErr);
-        }
+        await audioRef.current.play().catch(() => {});
         setIsPlaying(true);
-        if (durationVal) {
-          const sDur = sanitizeDuration(durationVal, 210);
-          setDuration(sDur);
-          durationRef.current = sDur;
-          if (currentTrackRef.current) currentTrackRef.current.duration = sDur;
-        }
-      } else if (!streamUrl) {
-        const targetYtId = curYtId;
-        if (targetYtId) {
-          const actPlayer = getActiveYtPlayer();
-          if (actPlayer && isCurrentYtReady()) {
-            isYtTrackRef.current = true;
-            setIsYtTrack(true);
-            stopHtmlAudio();
-            actPlayer.unMute();
-            actPlayer.loadVideoById({ videoId: targetYtId, startSeconds: 0 });
-            try { actPlayer.playVideo(); } catch {}
-            setIsPlaying(true);
-          }
-        }
       }
-    } catch (err) {
-      console.warn('Fallback play error:', err);
-    }
-  }, [stopYouTube, stopHtmlAudio, getActiveYtPlayer, isCurrentYtReady]);
-
-  // ── Sync resolved YouTube duration from native bridge ──
-  useEffect(() => {
-    const handleStreamResolved = (e) => {
-      if (!e.detail) return;
-      const { trackId, ytId, duration: streamDur } = e.detail;
-      const cur = currentTrackRef.current;
-      const curId = cur ? String(cur.id || cur._id || '') : '';
-      if (cur && (curId === String(trackId) || (ytId && cur.audioUrl?.includes(ytId)))) {
-        if (streamDur && streamDur > 0) {
-          const sDur = sanitizeDuration(streamDur);
-          setDuration(sDur);
-          durationRef.current = sDur;
-          if (currentTrackRef.current) currentTrackRef.current.duration = sDur;
-        }
-      }
-    };
-    window.addEventListener('rivo-receive-resolved-stream', handleStreamResolved);
-    return () => window.removeEventListener('rivo-receive-resolved-stream', handleStreamResolved);
+    } catch (e) {}
   }, []);
-
-  // Create hidden YouTube IFrame player divs (Deck 1 & Deck 2)
-  // Note: Container must have real dimensions (>=200x200) and opacity 1 behind UI
-  // so WebKit / iOS WKWebView doesn't suspend media rendering or throttle playback!
-  useEffect(() => {
-    let div1 = document.getElementById('rivo-yt-player-1');
-    if (!div1) {
-      div1 = document.createElement('div');
-      div1.id = 'rivo-yt-player-1';
-      div1.style.cssText = 'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:9999;';
-      document.body.appendChild(div1);
-    }
-    let div2 = document.getElementById('rivo-yt-player-2');
-    if (!div2) {
-      div2 = document.createElement('div');
-      div2.id = 'rivo-yt-player-2';
-      div2.style.cssText = 'position:fixed;top:0;left:0;width:200px;height:200px;opacity:0.01;pointer-events:none;z-index:9999;';
-      document.body.appendChild(div2);
-    }
-
-    const handleYtStateChange = (deckNum, event) => {
-      const YT = window.YT;
-      const player = deckNum === 1 ? ytPlayer1Ref.current : ytPlayer2Ref.current;
-      if (!player) return;
-
-      if (event.data === YT.PlayerState.PLAYING) {
-        if (watchdogRef.current) {
-          clearTimeout(watchdogRef.current);
-          watchdogRef.current = null;
-        }
-        if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
-          stopHtmlAudio();
-          setIsPlaying(true);
-          try {
-            const d = player.getDuration();
-            if (d > 0) {
-              setDuration(d);
-              durationRef.current = d;
-            }
-          } catch {}
-          if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-          ytIntervalRef.current = setInterval(() => {
-            const activeP = getActiveYtPlayer();
-            if (activeP && isYtTrackRef.current) {
-              const t = activeP.getCurrentTime() || 0;
-              const d = activeP.getDuration() || 0;
-              setCurrentTime(t);
-              if (d > 0 && Math.abs(d - durationRef.current) > 0.5) {
-                setDuration(d);
-                durationRef.current = d;
-              }
-            }
-          }, 250);
-        } else if (!isYtTrackRef.current) {
-          try { player.pauseVideo(); player.mute(); } catch {}
-        }
-      } else if (event.data === YT.PlayerState.PAUSED) {
-        if (activeYtDeckRef.current === deckNum && isYtTrackRef.current) {
-          setIsPlaying(false);
-          if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-        }
-      } else if (event.data === YT.PlayerState.ENDED) {
-        if (activeYtDeckRef.current === deckNum) {
-          if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-          onTrackEnded(currentTrackRef.current);
-          if (repeatModeRef.current === 'one') {
-            try {
-              player.seekTo(0, true);
-              player.playVideo();
-            } catch {}
-          } else {
-            if (playNextTrackRef.current) playNextTrackRef.current();
-          }
-        }
-      }
-    };
-
-    onYtReady(() => {
-      if (!ytPlayer1Ref.current) {
-        ytPlayer1Ref.current = new window.YT.Player('rivo-yt-player-1', {
-          height: '200',
-          width: '200',
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
-            playsinline: 1,
-            enablejsapi: 1,
-            origin: window.location.origin,
-            widget_referrer: window.location.href,
-          },
-          events: {
-            onReady: () => {
-              isYtReady1Ref.current = true;
-              if (activeYtDeckRef.current === 1) {
-                ytPlayerRef.current = ytPlayer1Ref.current;
-                try { ytPlayer1Ref.current.setVolume(volumeRef.current * 100); } catch {}
-              }
-              console.log('[YT Deck 1] Ready');
-            },
-            onStateChange: (e) => handleYtStateChange(1, e),
-            onError: (e) => {
-              console.warn('[YT Deck 1] error:', e.data);
-              if (activeYtDeckRef.current === 1) {
-                const cur = currentTrackRef.current;
-                if (cur) fallbackToHtmlAudio(cur);
-              }
-            }
-          }
-        });
-      }
-
-      if (!ytPlayer2Ref.current) {
-        ytPlayer2Ref.current = new window.YT.Player('rivo-yt-player-2', {
-          height: '200',
-          width: '200',
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            disablekb: 1,
-            fs: 0,
-            playsinline: 1,
-            enablejsapi: 1,
-            origin: window.location.origin,
-            widget_referrer: window.location.href,
-          },
-          events: {
-            onReady: () => {
-              isYtReady2Ref.current = true;
-              try { ytPlayer2Ref.current.setVolume(0); } catch {}
-              console.log('[YT Deck 2] Ready');
-            },
-            onStateChange: (e) => handleYtStateChange(2, e),
-            onError: (e) => {
-              console.warn('[YT Deck 2] error:', e.data);
-              if (activeYtDeckRef.current === 2) {
-                const cur = currentTrackRef.current;
-                if (cur) fallbackToHtmlAudio(cur);
-              }
-            }
-          }
-        });
-      }
-    });
-
-    return () => {
-      if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
-      if (div1 && div1.parentNode) div1.parentNode.removeChild(div1);
-      if (div2 && div2.parentNode) div2.parentNode.removeChild(div2);
-      ytPlayer1Ref.current = null;
-      ytPlayer2Ref.current = null;
-      ytPlayerRef.current = null;
-      isYtReady1Ref.current = false;
-      isYtReady2Ref.current = false;
-    };
-  }, [stopHtmlAudio, stopYouTube, checkAndRunDjTransition, fallbackToHtmlAudio, getActiveYtPlayer]);
 
   // EQ sync
   useEffect(() => { setEqualizerBands(eqBands, eqEnabled); }, [eqBands, eqEnabled]);
@@ -728,10 +439,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setVolumeState(val);
     setMasterVolume(val);
     if (audioRef.current) audioRef.current.volume = val;
-    const actPlayer = getActiveYtPlayer();
-    if (actPlayer && isCurrentYtReady()) {
-      try { actPlayer.setVolume(val * 100); } catch {}
-    }
   };
 
   // ── Real Listening Activity Tracker (Ticks accurate seconds when music is playing) ──
@@ -739,12 +446,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!isPlaying || !currentTrack) return;
 
     const ticker = setInterval(() => {
-      if (isYtTrackRef.current) {
-        const activeP = getActiveYtPlayer();
-        if (activeP && typeof activeP.getPlayerState === 'function' && activeP.getPlayerState() === 1) {
-          recordListeningTick(currentTrack, 1);
-        }
-      } else if (audioRef.current && !audioRef.current.paused && !isNaN(audioRef.current.currentTime) && audioRef.current.currentTime > 0) {
+      if (audioRef.current && !audioRef.current.paused && !isNaN(audioRef.current.currentTime) && audioRef.current.currentTime > 0) {
         recordListeningTick(currentTrack, 1);
       }
     }, 1000);
@@ -752,286 +454,80 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return () => clearInterval(ticker);
   }, [isPlaying, currentTrack]);
 
-  // ── Main track playback logic ──────────────────────────────────
+  // ── Main track playback logic (100% Direct Audio API) ──
   useEffect(() => {
     if (!currentTrack) return;
 
     let isEffectCancelled = false;
 
     (async () => {
-      const newId  = String(currentTrack.id || currentTrack._id || '');
-      let newUrl = currentTrack.audioUrl || '';
-
-      let isBlobUrl = newUrl.startsWith('blob:') || newUrl.startsWith('data:');
-      let isLocalFile = newUrl.includes('/_capacitor_file_/') || newUrl.includes('capacitor://') || newUrl.startsWith('file://') || newUrl.startsWith('content://') || newUrl.endsWith('.mp3');
-      let isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
-
-      // Prioritize local storage in Online Mode: check if this track is saved offline in local storage or IndexedDB
-      if (!isBlobUrl && !isLocalFile && !isDownloaded) {
-        try {
-          const offlineBlob = await getOfflineTrackAudioUrl(newId, currentTrack.title, currentTrack.artist);
-          if (isEffectCancelled) return;
-          if (offlineBlob) {
-            newUrl = offlineBlob;
-            isBlobUrl = offlineBlob.startsWith('blob:') || offlineBlob.startsWith('data:');
-            isLocalFile = offlineBlob.startsWith('file://') || offlineBlob.startsWith('content://') || offlineBlob.includes('/_capacitor_file_/');
-            isDownloaded = true;
-            currentTrack.audioUrl = offlineBlob;
-            currentTrack.downloaded = true;
-            currentTrack.nativeAudioUri = offlineBlob;
-            currentTrack.album = (!currentTrack.album || /https?:\/\/|www\.|youtube|liofy/i.test(currentTrack.album)) ? 'Rivo' : currentTrack.album;
-            currentTrack.source = 'Rivo';
-          }
-        } catch (e) {}
-      }
+      const newId = String(currentTrack.id || currentTrack._id || '');
+      const newUrl = currentTrack.audioUrl || '';
 
       // Guard: if track ID and audioUrl haven't changed, this is a metadata-only update
       if (newId === lastLoadedIdRef.current && newUrl === lastLoadedUrlRef.current && lastLoadedUrlRef.current) {
         return;
       }
 
-      lastLoadedIdRef.current  = newId;
+      lastLoadedIdRef.current = newId;
       lastLoadedUrlRef.current = newUrl;
 
-      // Track is a YouTube online track if it's NOT a blob, NOT a local device file, and NOT marked as downloaded
-      const ytId = (!isBlobUrl && !isLocalFile && !isDownloaded)
-        ? (extractYtId(newUrl) || extractYtId(currentTrack.id) || extractYtId(currentTrack._id) || extractYtId(currentTrack.youtubeId))
-        : null;
+      // Ensure duration is set
+      const sDur = sanitizeDuration(currentTrack.duration, 210);
+      setDuration(sDur);
+      durationRef.current = sDur;
 
-      // In native mobile app (RIVO_NATIVE), YouTube video iframes are suspended by iOS WKWebView
-      // when the user exits the app or locks the screen!
-      // Therefore, in native app mode, we always resolve the direct audio stream and play via HTML5 <audio>
-      const isNativeApp = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE);
-      if (ytId && isNativeApp) {
-        fallbackToHtmlAudio(currentTrack);
+      const streamResult = await resolvePlayableAudioStream(currentTrack);
+      if (isEffectCancelled) return;
+
+      if (!streamResult?.url) {
+        console.warn('[AudioContext] Could not resolve audio stream for track:', currentTrack.title);
         return;
       }
 
-      if (ytId) {
-        // ── YouTube track ──────────────────────────────────────────
-        isYtTrackRef.current = true;
-        setIsYtTrack(true);
-
-        // Stop and unload HTML audio completely so only YouTube plays
-        stopHtmlAudio();
-
-        setCurrentTime(0);
-        const sDur = sanitizeDuration(currentTrack.duration, 210);
-        setDuration(sDur);
-        durationRef.current = sDur;
-
-      if (watchdogRef.current) {
-        clearTimeout(watchdogRef.current);
-        watchdogRef.current = null;
+      if (streamResult.cover && streamResult.cover !== currentTrack.cover) {
+        setCurrentTrack(prev => prev ? { ...prev, cover: streamResult.cover } : prev);
       }
-      const loadYt = () => {
-        const actPlayer = getActiveYtPlayer();
-        const secPlayer = getSecondaryYtPlayer();
-        if (secPlayer) {
-          try {
-            secPlayer.pauseVideo();
-            secPlayer.mute();
-          } catch {}
-        }
-        if (!actPlayer || !isCurrentYtReady()) {
-          setTimeout(loadYt, 200);
-          return;
-        }
-        try {
-          actPlayer.setVolume(volumeRef.current * 100);
-          if (shouldPlayRef.current || isPlayingRef.current) {
-            shouldPlayRef.current = false;
-            actPlayer.unMute();
-            resumeAudioContext();
-            if (typeof actPlayer.loadVideoById === 'function') {
-              actPlayer.loadVideoById({ videoId: ytId, startSeconds: 0 });
-            }
-            try { actPlayer.playVideo(); } catch (e) {}
-            setIsPlaying(true);
-          } else {
-            // Do not autoplay on site load — prepare video paused
-            if (typeof actPlayer.cueVideoById === 'function') {
-              actPlayer.cueVideoById({ videoId: ytId });
-            }
-            setIsPlaying(false);
-          }
-        } catch (e) {
-          console.warn('[YT] loadVideoById error:', e);
-          if (shouldPlayRef.current || isPlayingRef.current) {
-            fallbackToHtmlAudio(currentTrack);
-          }
-        }
-      };
-      loadYt();
-
-      // Only arm watchdog if playback was actively requested
-      if (shouldPlayRef.current || isPlayingRef.current) {
-        watchdogRef.current = setTimeout(() => {
-          if (!isPlayingRef.current) return;
-          const actPlayer = getActiveYtPlayer();
-          if (isYtTrackRef.current && actPlayer) {
-            try {
-              const state = actPlayer.getPlayerState();
-              const currTime = typeof actPlayer.getCurrentTime === 'function' ? (actPlayer.getCurrentTime() || 0) : 0;
-              // If playing normally (1), buffering (3), or audio progressed (>0.5s): healthy, do NOT interrupt!
-              if (state === 1 || state === 3 || currTime > 0.5) return;
-              console.warn('[YT] Watchdog: YouTube not playing/stuck (state=' + state + ', time=' + currTime + '), falling back to audio stream');
-              fallbackToHtmlAudio(currentTrack);
-            } catch (e) {
-              fallbackToHtmlAudio(currentTrack);
-            }
-          }
-        }, 4000);
+      if (streamResult.duration && streamResult.duration > 0) {
+        const resolvedDur = sanitizeDuration(streamResult.duration, sDur);
+        setDuration(resolvedDur);
+        durationRef.current = resolvedDur;
       }
-    } else {
-      // ── Regular audio (Upload / Downloaded Blob) ─
-      isYtTrackRef.current = false;
-      setIsYtTrack(false);
 
-      // Stop YouTube player completely so it cannot play in background
-      stopYouTube();
+      const audio = audioRef.current;
+      if (!audio) return;
 
-      let targetUrl = newUrl;
-      const isDownloaded = Boolean(currentTrack.downloaded || currentTrack.nativeAudioUri);
-      const isLocalNativeUrl =
-        targetUrl && (
-          targetUrl.includes('/_capacitor_file_/') ||
-          targetUrl.includes('capacitor://') ||
-          targetUrl.startsWith('file://') ||
-          targetUrl.startsWith('content://') ||
-          (targetUrl.startsWith('http://localhost') && !targetUrl.includes(':5000'))
-        );
+      if (audio.src !== streamResult.url) {
+        audio.src = streamResult.url;
+      }
+      audio.volume = volumeRef.current;
 
-      const needsResolution = !isBlobUrl && !isDownloaded && !isLocalNativeUrl && (
-        !targetUrl ||
-        !extractYtId(targetUrl) ||
-        currentTrack.source === 'Import' ||
-        currentTrack.source === 'Spotify' ||
-        targetUrl.includes('pixabay.com')
-      );
-
-      if (needsResolution) {
-        if (audioRef.current) audioRef.current.pause();
-        fetch(`${API_BASE_URL}/api/tracks/resolve-stream?url=${encodeURIComponent(targetUrl || '')}&id=${currentTrack.id || currentTrack._id || ''}&title=${encodeURIComponent(currentTrack.title || '')}&artist=${encodeURIComponent(currentTrack.artist || '')}`)
-          .then(r => r.json())
-          .then(data => {
-            if (data.success && data.url) {
-              const freshUrl = data.url;
-              const ytId = extractYtId(freshUrl);
-
-              if (data.cover) {
-                setCurrentTrack(prev => prev ? { ...prev, cover: data.cover } : prev);
-              }
-
-              if (ytId) {
-                const isNativeApp = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE);
-                if (isNativeApp) {
-                  fallbackToHtmlAudio(currentTrack);
-                  return;
-                }
-
-                // Switch seamlessly to YouTube player
-                isYtTrackRef.current = true;
-                setIsYtTrack(true);
-                stopHtmlAudio();
-                if (data.duration && isFinite(data.duration) && data.duration > 0) {
-                  const sDur = sanitizeDuration(data.duration);
-                  setDuration(sDur);
-                  durationRef.current = sDur;
-                }
-                const loadYt = () => {
-                  const actPlayer = getActiveYtPlayer();
-                  const secPlayer = getSecondaryYtPlayer();
-                  if (secPlayer) {
-                    try {
-                      secPlayer.pauseVideo();
-                      secPlayer.mute();
-                    } catch {}
-                  }
-                  if (!actPlayer || !isCurrentYtReady()) {
-                    setTimeout(loadYt, 300);
-                    return;
-                  }
-                  try {
-                    actPlayer.setVolume(volumeRef.current * 100);
-                    if (isPlayingRef.current || shouldPlayRef.current) {
-                      shouldPlayRef.current = false;
-                      actPlayer.unMute();
-                      actPlayer.loadVideoById(ytId);
-                      actPlayer.playVideo();
-                      setIsPlaying(true);
-                    } else {
-                      actPlayer.cueVideoById(ytId);
-                      setIsPlaying(false);
-                    }
-                  } catch (e) {
-                    console.warn('[YT] loadVideoById error:', e);
-                  }
-                };
-                loadYt();
-              } else {
-                // HTML5 Audio playback
-                isYtTrackRef.current = false;
-                setIsYtTrack(false);
-                stopYouTube();
-                const audio = audioRef.current;
-                if (data.duration && isFinite(data.duration) && data.duration > 0) {
-                  const sDur = sanitizeDuration(data.duration);
-                  setDuration(sDur);
-                  durationRef.current = sDur;
-                }
-                if (audio) {
-                  audio.src = freshUrl;
-                  audio.volume = volumeRef.current;
-                  if (shouldPlayRef.current || isPlayingRef.current) {
-                    audio.play().catch(e => console.warn('Stream play error:', e));
-                  }
-                }
-              }
-            }
-          })
-          .catch(err => console.warn('Stream resolution error:', err));
+      if (isPlayingRef.current || shouldPlayRef.current) {
+        shouldPlayRef.current = false;
+        resumeAudioContext();
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => {
+            console.warn('[Audio] play() blocked or waiting for gesture:', e.name);
+            const retryPlay = () => {
+              if (!isPlayingRef.current) return;
+              resumeAudioContext();
+              audio.play().catch(() => {});
+              document.removeEventListener('touchstart', retryPlay);
+              document.removeEventListener('click', retryPlay);
+            };
+            document.addEventListener('touchstart', retryPlay, { once: true, passive: true });
+            document.addEventListener('click', retryPlay, { once: true });
+          });
+        }
+        setIsPlaying(true);
       } else {
-        // Detect local native device file URLs (Capacitor) — must NOT go through remote proxy
-        if (!isBlobUrl && !isLocalNativeUrl && targetUrl && targetUrl.startsWith('http') && !targetUrl.includes('/api/proxy-audio')) {
-          targetUrl = `${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`;
-        }
-
-        const audio = audioRef.current;
-        if (!audio) return;
-        if (audio.src !== targetUrl) { audio.src = targetUrl; }
-        audio.volume = volumeRef.current;
-
-        if (isPlayingRef.current || shouldPlayRef.current) {
-          shouldPlayRef.current = false;
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(e => {
-              console.warn('[Audio] play() blocked on phone, will retry on next gesture:', e.name);
-              const retryPlay = () => {
-                if (!isPlayingRef.current) return;
-                resumeAudioContext();
-                audio.play().catch(() => {});
-                document.removeEventListener('touchstart', retryPlay);
-                document.removeEventListener('click', retryPlay);
-              };
-              document.addEventListener('touchstart', retryPlay, { once: true, passive: true });
-              document.addEventListener('click', retryPlay, { once: true });
-            });
-          }
-        } else {
-          audio.pause();
-        }
+        audio.pause();
       }
-    }
-  })();
+    })();
 
     return () => {
       isEffectCancelled = true;
-      if (watchdogRef.current) {
-        clearTimeout(watchdogRef.current);
-        watchdogRef.current = null;
-      }
     };
   }, [currentTrack]);
 
@@ -1050,25 +546,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
       navigator.mediaSession.setActionHandler('play', () => {
         isUserPauseActionRef.current = false;
         resumeAudioContext();
-        const actPlayer = getActiveYtPlayer();
-        if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
-          try {
-            actPlayer.unMute();
-            actPlayer.playVideo();
-          } catch {}
-        } else if (audioRef.current) {
+        if (audioRef.current) {
           audioRef.current.play().catch(() => {});
         }
         setIsPlaying(true);
       });
       navigator.mediaSession.setActionHandler('pause', () => {
         isUserPauseActionRef.current = true;
-        const actPlayer = getActiveYtPlayer();
-        if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
-          try {
-            actPlayer.pauseVideo();
-          } catch {}
-        } else if (audioRef.current) {
+        if (audioRef.current) {
           audioRef.current.pause();
         }
         setIsPlaying(false);
@@ -1108,7 +593,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         });
       } catch {}
     } catch {}
-  }, [currentTrack, getActiveYtPlayer, isCurrentYtReady]);
+  }, [currentTrack]);
 
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -1204,25 +689,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return () => clearInterval(interval);
   }, [isPlaying, repeatMode, isShuffle, likedTrackIds, duration]);
 
-  // Sync play/pause state changes for YouTube (as safety backup)
-  useEffect(() => {
-    if (!isYtTrackRef.current) return;
-    const actPlayer = getActiveYtPlayer();
-    if (!actPlayer || !isCurrentYtReady()) return;
-    try {
-      const state = actPlayer.getPlayerState();
-      if (isPlaying && state !== 1 && state !== 3) {
-        actPlayer.unMute();
-        actPlayer.playVideo();
-      } else if (!isPlaying && state === 1) {
-        actPlayer.pauseVideo();
-      }
-    } catch {}
-  }, [isPlaying, getActiveYtPlayer, isCurrentYtReady]);
+  
 
   // Sync play/pause for HTML audio (as safety backup)
   useEffect(() => {
-    if (isYtTrackRef.current) return;
     const audio = audioRef.current;
     if (!audio) return;
     if (isPlaying && audio.paused && audio.src) {
@@ -1250,11 +720,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isUserPauseActionRef.current = !nextPlaying;
     setIsPlaying(nextPlaying);
 
-    if (!nextPlaying && watchdogRef.current) {
-      clearTimeout(watchdogRef.current);
-      watchdogRef.current = null;
-    }
-
     if (!isRemote && jamSessionRef.current && socketRef.current) {
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code,
@@ -1264,37 +729,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
       });
     }
 
-    if (isYtTrackRef.current) {
-      const actPlayer = getActiveYtPlayer();
-      if (actPlayer && isCurrentYtReady()) {
-        try {
-          if (nextPlaying) {
-            actPlayer.unMute();
-            actPlayer.playVideo();
-          } else {
-            actPlayer.pauseVideo();
-          }
-        } catch (e) {
-          console.warn('[YT] togglePlay error:', e);
+    const audio = audioRef.current;
+    if (audio) {
+      if (nextPlaying) {
+        resumeAudioContext();
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => {
+            console.warn('[Audio] synchronous play rejected on phone:', e);
+          });
         }
-      }
-    } else {
-      const audio = audioRef.current;
-      if (audio) {
-        if (nextPlaying) {
-          resumeAudioContext();
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(e => {
-              console.warn('[Audio] synchronous play rejected on phone:', e);
-            });
-          }
-        } else {
-          audio.pause();
-        }
+      } else {
+        audio.pause();
       }
     }
-  }, [getActiveYtPlayer, isCurrentYtReady]);
+  }, []);
 
   // Handle media actions dispatched from Native Android notification / lockscreen
   useEffect(() => {
@@ -1400,14 +849,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (audioRef.current) {
         audioRef.current.pause();
       }
-      [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
-        if (p) {
-          try {
-            p.mute();
-            p.pauseVideo();
-          } catch {}
-        }
-      });
     }
 
     let trackToPlay = { ...track };
@@ -1493,23 +934,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
       });
     }
 
-    if (isSeamless) {
-      isSeamlessYtHandoffRef.current = false;
-      lastLoadedIdRef.current = String(trackToPlay.id || trackToPlay._id || '');
-      lastLoadedUrlRef.current = trackToPlay.audioUrl || '';
-      currentTrackRef.current = trackToPlay;
-      setCurrentTrack(trackToPlay);
-      setIsPlaying(true);
-      const actPlayer = getActiveYtPlayer();
-      if (actPlayer) {
-        try {
-          const d = actPlayer.getDuration();
-          if (d > 0) setDuration(d);
-        } catch {}
-      }
-      return;
-    }
-
     // Signal that the next currentTrack change should autoplay
     shouldPlayRef.current = true;
     currentTrackRef.current = trackToPlay;
@@ -1555,7 +979,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }));
       } catch {}
     }
-  }, [setTracks, getActiveYtPlayer]);
+  }, [setTracks]);
 
   const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
     if (!seedTrack) return;
@@ -1768,13 +1192,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!activeList.length) return;
 
     // Immediately stop current audio only if NOT a seamless handoff
-    if (!isSeamlessYtHandoffRef.current) {
-      if (audioRef.current) audioRef.current.pause();
-      const actPlayer = getActiveYtPlayer();
-      if (actPlayer && isCurrentYtReady()) {
-        try { actPlayer.pauseVideo(); } catch {}
-      }
-    }
+    if (audioRef.current) audioRef.current.pause();
 
     const isSmart = isShuffleRef.current === 'smart';
     if (isSmart) {
@@ -1885,7 +1303,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     // Force playing state so song starts automatically
     setIsPlaying(true);
-  }, [isOfflineMode, playTrack, fetchSmartShuffleTracks, getActiveYtPlayer, isCurrentYtReady]);
+  }, [isOfflineMode, playTrack, fetchSmartShuffleTracks]);
 
   useEffect(() => {
     playNextTrackRef.current = playNextTrack;
@@ -1908,11 +1326,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // Immediately stop current audio
     if (audioRef.current) audioRef.current.pause();
-    [ytPlayer1Ref.current, ytPlayer2Ref.current].forEach(p => {
-      if (p) {
-        try { p.pauseVideo(); } catch {}
-      }
-    });
 
     const cur = currentTrackRef.current;
     const curId = String(cur?.id || cur?._id || '');
@@ -1942,13 +1355,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setCurrentTime(s);
     currentTimeRef.current = s;
 
-    const actPlayer = getActiveYtPlayer();
-    if (isYtTrackRef.current && actPlayer && (typeof actPlayer.seekTo === 'function' || isCurrentYtReady())) {
-      try {
-        actPlayer.seekTo(s, true);
-        actPlayer.setVolume(Math.round(volumeRef.current * 100));
-      } catch {}
-    } else if (audioRef.current) {
+    if (audioRef.current) {
       try {
         audioRef.current.currentTime = s;
         audioRef.current.volume = volumeRef.current;
@@ -1968,7 +1375,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }, 150);
     }
-  }, [getActiveYtPlayer, isCurrentYtReady]);
+  }, []);
 
   useEffect(() => {
     toggleRepeatRef.current = toggleRepeat;
@@ -2017,17 +1424,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Sync play/pause
       if (syncPlaying !== undefined && syncPlaying !== isPlayingRef.current) {
         setIsPlaying(syncPlaying);
-        const actPlayer = getActiveYtPlayer();
-        if (isYtTrackRef.current && actPlayer && isCurrentYtReady()) {
-          try {
-            if (syncPlaying) {
-              actPlayer.unMute();
-              actPlayer.playVideo();
-            } else {
-              actPlayer.pauseVideo();
-            }
-          } catch {}
-        } else if (audioRef.current) {
+        if (audioRef.current) {
           if (syncPlaying) {
             resumeAudioContext();
             audioRef.current.play().catch(() => {});
@@ -2037,7 +1434,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       }
     }
-  }, [playTrack, seekTo, getActiveYtPlayer, isCurrentYtReady]);
+  }, [playTrack, seekTo]);
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
     if (socket !== undefined) {
@@ -2150,17 +1547,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     const doSeek = () => {
       // Seek to 3s before the transition starts so user hears it immediately
-      const trackDur = isYtTrackRef.current
-        ? (getActiveYtPlayer()?.getDuration?.() || duration || 180)
-        : (audioRef.current?.duration || duration || 180);
+      const trackDur = audioRef.current?.duration || duration || 180;
       const seekPoint = Math.max(0, trackDur - dur - 3);
 
-      if (isYtTrackRef.current) {
-        const actPlayer = getActiveYtPlayer();
-        if (actPlayer) {
-          try { actPlayer.seekTo(seekPoint, true); actPlayer.unMute(); actPlayer.playVideo(); } catch {}
-        }
-      } else if (audioRef.current) {
+      if (audioRef.current) {
         audioRef.current.currentTime = seekPoint;
         audioRef.current.volume = volumeRef.current;
         audioRef.current.play().catch(() => {});
@@ -2179,7 +1569,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } else {
       doSeek();
     }
-  }, [duration, getActiveYtPlayer]);
+  }, [duration]);
 
   const value = {
     currentTrack, setCurrentTrack,

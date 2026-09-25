@@ -4909,27 +4909,20 @@ const resolveStreamHandler = async (req, res) => {
           });
         }
         const m2 = c.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
-        if (m2 && m2[1] && m2[1].length === 11) {
-          const vid = m2[1];
-          return res.json({
-            success: true,
-            url: `https://www.youtube.com/watch?v=${vid}`,
-            ytId: vid,
-            duration: 240,
-            cover: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-            isYouTube: true
-          });
-        }
-        if (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim())) {
-          const vid = c.trim();
-          return res.json({
-            success: true,
-            url: `https://www.youtube.com/watch?v=${vid}`,
-            ytId: vid,
-            duration: 240,
-            cover: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`,
-            isYouTube: true
-          });
+        const vidCandidate = (m2 && m2[1]) ? m2[1] : (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim()) ? c.trim() : null);
+        if (vidCandidate) {
+          const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '');
+          if (directAudio) {
+            const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
+            return res.json({
+              success: true,
+              url: proxyUrl,
+              directUrl: directAudio,
+              duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
+              cover: `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg`,
+              isYouTube: false
+            });
+          }
         }
       }
     }
@@ -4940,19 +4933,7 @@ const resolveStreamHandler = async (req, res) => {
       try {
         const dbTrack = await Track.findById(targetDbId).lean();
         if (dbTrack) {
-          const dbYtId = (dbTrack.audioUrl && (dbTrack.audioUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1])) ||
-                         (/^[a-zA-Z0-9_-]{11}$/.test(dbTrack.audioUrl) ? dbTrack.audioUrl : null);
-          if (dbYtId) {
-            return res.json({
-              success: true,
-              url: `https://www.youtube.com/watch?v=${dbYtId}`,
-              ytId: dbYtId,
-              duration: dbTrack.duration || 240,
-              cover: dbTrack.cover || `https://i.ytimg.com/vi/${dbYtId}/hqdefault.jpg`,
-              isYouTube: true
-            });
-          }
-          if (dbTrack.audioUrl && dbTrack.audioUrl.startsWith('http') && !dbTrack.audioUrl.includes('soundcloud')) {
+          if (dbTrack.audioUrl && (dbTrack.audioUrl.endsWith('.mp3') || dbTrack.audioUrl.endsWith('.m4a')) && !dbTrack.audioUrl.includes('youtube') && !dbTrack.audioUrl.includes('soundcloud')) {
             return res.json({
               success: true,
               url: dbTrack.audioUrl,
@@ -4961,33 +4942,33 @@ const resolveStreamHandler = async (req, res) => {
               isYouTube: false
             });
           }
+          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist);
+          if (directAudio) {
+            const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
+            return res.json({
+              success: true,
+              url: proxyUrl,
+              directUrl: directAudio,
+              duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210),
+              cover: dbTrack.cover,
+              isYouTube: false
+            });
+          }
         }
       } catch {}
     }
 
-    // 1. YouTube FIRST via title + artist (Authentic original music)
-    if (title || artist) {
-      if (req.query.stream === 'true' || req.query.audio === 'true') {
-        const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '');
-        if (directAudio) {
-          const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
-          return res.json({
-            success: true,
-            url: proxyUrl,
-            directUrl: directAudio,
-            duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
-            isYouTube: true,
-          });
-        }
-      }
-      const result = await resolveTrackAudio(title || '', artist || '');
-      if (result && result.streamUrl) {
+    // 1. YouTube audio stream via title + artist or url
+    if (title || artist || url) {
+      const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '');
+      if (directAudio) {
+        const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
         return res.json({
           success: true,
-          url: result.streamUrl,
-          duration: result.duration,
-          cover: result.cover,
-          isYouTube: Boolean(result.isYouTube)
+          url: proxyUrl,
+          directUrl: directAudio,
+          duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
+          isYouTube: false,
         });
       }
     }
