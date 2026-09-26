@@ -37,6 +37,40 @@ export default function AddAlbumModal({
 
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupSuccess, setLookupSuccess] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const handleAutoLookup = async (overrideTerm = null) => {
+    const q = (overrideTerm !== null ? overrideTerm : (linkUrl || name || artist)).trim();
+    if (!q) {
+      setError('Please type an album name/artist or paste a link to auto-grab metadata');
+      return;
+    }
+    setIsLookingUp(true);
+    setError(null);
+    try {
+      const isUrl = q.startsWith('http://') || q.startsWith('https://');
+      const param = isUrl ? `url=${encodeURIComponent(q)}` : `query=${encodeURIComponent(q)}`;
+      const res = await fetch(`${API_BASE_URL}/api/albums/lookup?${param}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'No metadata found for this album');
+      }
+      if (data.name) setName(data.name);
+      if (data.artist) setArtist(data.artist);
+      if (data.cover) setCover(data.cover);
+      if (data.releaseDate) setReleaseDate(data.releaseDate);
+      if (data.genre) setGenre(data.genre);
+      setLookupSuccess(true);
+      setTimeout(() => setLookupSuccess(false), 3500);
+    } catch (err) {
+      console.warn('Metadata lookup notice:', err.message);
+      setError(err.message || 'Auto metadata lookup failed');
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -52,6 +86,9 @@ export default function AddAlbumModal({
       setSelectedTrackIds([]);
       setTrackSearchQuery('');
       setError(null);
+      setIsLookingUp(false);
+      setLookupSuccess(false);
+      setShowAdvanced(false);
     }
   }, [isOpen, initialArtistName, artistAvatar]);
 
@@ -283,7 +320,7 @@ export default function AddAlbumModal({
         {/* ────────────────────────────────────────── */}
         {activeTab === 'link' ? (
           <form onSubmit={handleLinkImportSubmit} className="space-y-4">
-            {/* Link Input */}
+            {/* Link Input & Auto-Grab Button */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-[11px] font-mono font-bold uppercase flex items-center gap-1.5">
@@ -296,93 +333,126 @@ export default function AddAlbumModal({
                   </span>
                 )}
               </div>
-              <input
-                type="url"
-                required
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder="https://open.spotify.com/album/... or https://www.youtube.com/playlist?list=..."
-                className={`w-full p-2.5 text-xs rounded-xl brutal-border font-mono focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                  isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                }`}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  required
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://open.spotify.com/album/... or https://www.youtube.com/playlist?list=..."
+                  className={`flex-1 p-2.5 text-xs rounded-xl brutal-border font-mono focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
+                    isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAutoLookup(linkUrl)}
+                  disabled={isLookingUp || !linkUrl.trim()}
+                  className="brutal-btn px-3 py-2 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 rounded-xl cursor-pointer disabled:opacity-50 shrink-0"
+                  title="Auto-fetch high-res album cover, release date, and genre"
+                >
+                  {isLookingUp ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  <span>Auto-Grab</span>
+                </button>
+              </div>
               <p className={`text-[10px] font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                 Supports Spotify official albums/playlists and YouTube playlists (including full Quran playlists).
               </p>
             </div>
 
-            {/* Artist Name */}
-            <div>
-              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <User size={13} className="text-[#17a398]" />
-                <span>Artist Name (Optional override)</span>
-              </label>
-              <input
-                type="text"
-                value={artist}
-                onChange={(e) => setArtist(e.target.value)}
-                placeholder={initialArtistName ? initialArtistName : "Leave empty to auto-detect from link"}
-                className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                  isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                }`}
-              />
-            </div>
-
-            {/* Album Title Override (Optional) */}
-            <div>
-              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <Disc size={13} className="text-[#17a398]" />
-                <span>Album Title (Optional override)</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Leave blank to use title from Spotify/YouTube"
-                className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                  isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                }`}
-              />
-            </div>
-
-            {/* Release Date & Genre */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                  <Calendar size={13} className="text-[#17a398]" />
-                  <span>Release Year / Date</span>
-                </label>
-                <input
-                  type="text"
-                  value={releaseDate}
-                  onChange={(e) => setReleaseDate(e.target.value)}
-                  placeholder="e.g. 2024"
-                  className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                    isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                  }`}
-                />
+            {/* Album Cover & Auto-Grabbed Info Card */}
+            {(name || artist || cover) && (
+              <div className="flex items-center gap-3.5 p-3 rounded-xl brutal-border bg-black/10 dark:bg-zinc-900/60">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl brutal-border overflow-hidden bg-black shrink-0 relative aspect-square shadow-md">
+                  <img
+                    src={cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'}
+                    alt="Album Cover"
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-mono font-black truncate">{name || 'Album Title Detected on Import'}</p>
+                  <p className="text-[11px] text-zinc-400 font-mono truncate">{artist || 'Artist Name Detected on Import'}</p>
+                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                    <span className="text-[10px] font-mono font-bold bg-[#17a398]/20 text-[#17a398] border border-[#17a398]/40 px-2 py-0.5 rounded">
+                      Year: {releaseDate || 'Auto'}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-[#f59e0b]/20 text-[#f59e0b] border border-[#f59e0b]/40 px-2 py-0.5 rounded">
+                      Genre: {genre || 'Auto'}
+                    </span>
+                    {lookupSuccess && (
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5">
+                        <Check size={12} strokeWidth={3} /> Metadata synced!
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                  <Tag size={13} className="text-[#17a398]" />
-                  <span>Genre</span>
-                </label>
-                <input
-                  type="text"
-                  value={genre}
-                  onChange={(e) => setGenre(e.target.value)}
-                  placeholder="e.g. Pop, Hip-Hop, Quran"
-                  list="import-genre-suggestions"
-                  className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                    isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                  }`}
-                />
-                <datalist id="import-genre-suggestions">
-                  {presetGenres.map(g => (
-                    <option key={g} value={g} />
-                  ))}
-                </datalist>
-              </div>
+            )}
+
+            {/* Collapsible Advanced Metadata (Optional - User doesn't have to fiddle with it) */}
+            <div className="border border-zinc-800 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full flex items-center justify-between p-2.5 text-[11px] font-mono font-bold text-zinc-400 hover:text-white bg-zinc-900/40 cursor-pointer"
+              >
+                <span>Optional Overrides (Title, Artist, Genre, Date)</span>
+                <span className="text-[10px] font-mono">{showAdvanced ? '▲ HIDE' : '▼ EDIT'}</span>
+              </button>
+              {showAdvanced && (
+                <div className="p-3 space-y-3 bg-zinc-900/20">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase mb-1">Artist Name Override</label>
+                    <input
+                      type="text"
+                      value={artist}
+                      onChange={(e) => setArtist(e.target.value)}
+                      placeholder="Leave blank for auto-detected artist"
+                      className={`w-full p-2 text-xs rounded-xl brutal-border font-sans focus:outline-none ${
+                        isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase mb-1">Album Title Override</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Leave blank for auto-detected title"
+                      className={`w-full p-2 text-xs rounded-xl brutal-border font-sans focus:outline-none ${
+                        isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                      }`}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-mono font-bold uppercase mb-1">Release Year</label>
+                      <input
+                        type="text"
+                        value={releaseDate}
+                        onChange={(e) => setReleaseDate(e.target.value)}
+                        className={`w-full p-2 text-xs rounded-xl brutal-border font-sans focus:outline-none ${
+                          isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                        }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono font-bold uppercase mb-1">Genre</label>
+                      <input
+                        type="text"
+                        value={genre}
+                        onChange={(e) => setGenre(e.target.value)}
+                        className={`w-full p-2 text-xs rounded-xl brutal-border font-sans focus:outline-none ${
+                          isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Category Toggle: Music vs Quran */}
@@ -454,22 +524,41 @@ export default function AddAlbumModal({
           /* TAB 2: MANUAL SETUP                       */
           /* ────────────────────────────────────────── */
           <form onSubmit={handleManualSubmit} className="space-y-4">
-            {/* Album Title */}
+            {/* Album Title + Auto Grab */}
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <Disc size={13} className="text-[#17a398]" />
-                <span>Album Title *</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. After Hours, Dawn FM, Abbey Road"
-                className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                  isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                }`}
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-mono font-bold uppercase flex items-center gap-1.5">
+                  <Disc size={13} className="text-[#17a398]" />
+                  <span>Album Title *</span>
+                </label>
+                {lookupSuccess && (
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-0.5">
+                    <Check size={12} strokeWidth={3} /> Metadata auto-grabbed!
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. After Hours, Dawn FM, Abbey Road"
+                  className={`flex-1 p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
+                    isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                  }`}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAutoLookup(`${artist} ${name}`.trim())}
+                  disabled={isLookingUp || (!name.trim() && !artist.trim())}
+                  className="brutal-btn px-3 py-2 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1 rounded-xl cursor-pointer disabled:opacity-50 shrink-0"
+                  title="Auto-grab HD album cover, release date, and genre"
+                >
+                  {isLookingUp ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  <span>Auto-Grab</span>
+                </button>
+              </div>
             </div>
 
             {/* Artist Name */}
@@ -490,14 +579,14 @@ export default function AddAlbumModal({
               />
             </div>
 
-            {/* Cover Art URL */}
+            {/* Cover Art Preview & URL */}
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
                 <Image size={13} className="text-[#17a398]" />
-                <span>Album Cover Image URL</span>
+                <span>Album Cover Image</span>
               </label>
-              <div className="flex gap-2.5 items-start">
-                <div className="w-16 h-16 rounded-xl brutal-border overflow-hidden bg-black/20 shrink-0">
+              <div className="flex gap-3 items-center p-3 rounded-xl brutal-border bg-black/10 dark:bg-zinc-900/60">
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl brutal-border overflow-hidden bg-black shrink-0 relative aspect-square shadow-md">
                   <img
                     src={cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'}
                     alt="Preview"
@@ -505,13 +594,13 @@ export default function AddAlbumModal({
                     onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
                   />
                 </div>
-                <div className="flex-1 space-y-1.5">
+                <div className="flex-1 space-y-2 min-w-0">
                   <input
                     type="url"
                     value={cover}
                     onChange={(e) => setCover(e.target.value)}
-                    placeholder="https://images.unsplash.com/... or image link"
-                    className={`w-full p-2.5 text-xs rounded-xl brutal-border font-mono focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
+                    placeholder="Auto-grabbed or paste image URL..."
+                    className={`w-full p-2 text-xs rounded-xl brutal-border font-mono focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
                       isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
                     }`}
                   />
@@ -539,44 +628,56 @@ export default function AddAlbumModal({
               </div>
             </div>
 
-            {/* Release Date & Genre */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                  <Calendar size={13} className="text-[#17a398]" />
-                  <span>Release Year / Date</span>
-                </label>
-                <input
-                  type="text"
-                  value={releaseDate}
-                  onChange={(e) => setReleaseDate(e.target.value)}
-                  placeholder="e.g. 2024"
-                  className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                    isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                  }`}
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                  <Tag size={13} className="text-[#17a398]" />
-                  <span>Genre</span>
-                </label>
-                <input
-                  type="text"
-                  value={genre}
-                  onChange={(e) => setGenre(e.target.value)}
-                  placeholder="e.g. Pop, Hip-Hop"
-                  list="manual-genre-suggestions"
-                  className={`w-full p-2.5 text-xs rounded-xl brutal-border font-sans focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
-                    isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
-                  }`}
-                />
-                <datalist id="manual-genre-suggestions">
-                  {presetGenres.map(g => (
-                    <option key={g} value={g} />
-                  ))}
-                </datalist>
-              </div>
+            {/* Optional Collapsible Release Date & Genre (Auto-filled by Auto-Grab) */}
+            <div className="border border-zinc-800 rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full flex items-center justify-between p-2.5 text-[11px] font-mono font-bold text-zinc-400 hover:text-white bg-zinc-900/40 cursor-pointer"
+              >
+                <span>Optional Details (Year: {releaseDate || 'Auto'}, Genre: {genre || 'Auto'})</span>
+                <span className="text-[10px] font-mono">{showAdvanced ? '▲ HIDE' : '▼ EDIT'}</span>
+              </button>
+              {showAdvanced && (
+                <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 bg-zinc-900/20">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase mb-1 flex items-center gap-1">
+                      <Calendar size={12} className="text-[#17a398]" />
+                      <span>Release Year</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={releaseDate}
+                      onChange={(e) => setReleaseDate(e.target.value)}
+                      placeholder="e.g. 2024"
+                      className={`w-full p-2 text-xs rounded-xl brutal-border font-sans focus:outline-none ${
+                        isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase mb-1 flex items-center gap-1">
+                      <Tag size={12} className="text-[#17a398]" />
+                      <span>Genre</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={genre}
+                      onChange={(e) => setGenre(e.target.value)}
+                      placeholder="e.g. Pop, Hip-Hop"
+                      list="manual-genre-suggestions"
+                      className={`w-full p-2 text-xs rounded-xl brutal-border font-sans focus:outline-none ${
+                        isDark ? 'bg-[#182320] border-zinc-700 text-white' : 'bg-white border-black text-black'
+                      }`}
+                    />
+                    <datalist id="manual-genre-suggestions">
+                      {presetGenres.map(g => (
+                        <option key={g} value={g} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Category Toggle: Music vs Quran */}

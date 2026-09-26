@@ -52,13 +52,26 @@ export default function HomeScreen({
     return (tracks || []).filter(t => !isQuranContent(t));
   }, [tracks]);
 
+  // Sort tracks by global popularity, stream views, plays, and likes
+  const popularTracks = useMemo(() => {
+    const list = [...displayTracks];
+    return list.sort((a, b) => {
+      const viewsA = Number(a.views) || 0;
+      const viewsB = Number(b.views) || 0;
+      const playsA = Number(a.plays) || 0;
+      const playsB = Number(b.plays) || 0;
+      const likesA = Number(a.likes) || 0;
+      const likesB = Number(b.likes) || 0;
+      const scoreA = viewsA + (playsA * 150) + (likesA * 80) + (a.popular ? 50000 : 0);
+      const scoreB = viewsB + (playsB * 150) + (likesB * 80) + (b.popular ? 50000 : 0);
+      return scoreB - scoreA;
+    });
+  }, [displayTracks]);
+
   // Strictly filter out any Quran recitations/albums from Featured Albums on Home
   const displayAlbums = useMemo(() => {
     return (albums || []).filter(alb => !isQuranContent(alb));
   }, [albums]);
-
-  const quickItems = displayTracks.slice(0, 6);
-  const recentItems = displayTracks.slice(0, 50);
 
   // Preset vibrant badge colors for blister packs
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];
@@ -111,14 +124,14 @@ export default function HomeScreen({
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button 
                 onClick={() => {
-                  if (displayTracks.length > 0) {
-                    onSelectTrack(displayTracks[0], displayTracks);
+                  if (popularTracks.length > 0) {
+                    onSelectTrack(popularTracks[0], popularTracks);
                   }
                 }}
                 className="flex-1 sm:flex-initial bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-black text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Play size={15} fill="currentColor" />
-                <span>PLAY DAILY MIX</span>
+                <span>PLAY TOP CHARTS</span>
               </button>
 
               <button 
@@ -165,152 +178,7 @@ export default function HomeScreen({
         </div>
       </section>
 
-      {/* ─────────────────────────────────────────
-          QUICK ROTATION 6-PACK GRID
-          ───────────────────────────────────────── */}
-      <section className="mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
-          <div className="flex items-center gap-2">
-            <h2 className="font-display font-black text-lg sm:text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-              Daily Rotation & Favorites
-            </h2>
-            <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-              TOP TRACKS
-            </span>
-          </div>
 
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            <button 
-              onClick={() => setActiveFilter('all')}
-              className={`px-3 py-1 rounded-lg text-xs font-display font-bold brutal-border brutal-btn transition cursor-pointer ${
-                activeFilter === 'all' 
-                  ? 'bg-[#0b1110] text-[#fdfbf7] brutal-shadow-sm' 
-                  : 'bg-[#fdfbf7] text-[#0b1110] hover:bg-white'
-              }`}
-            >
-              All
-            </button>
-            <button 
-              onClick={() => setActiveFilter('music')}
-              className={`px-3 py-1 rounded-lg text-xs font-display font-bold brutal-border brutal-btn transition cursor-pointer ${
-                activeFilter === 'music' 
-                  ? 'bg-[#0b1110] text-[#fdfbf7] brutal-shadow-sm' 
-                  : 'bg-[#fdfbf7] text-[#0b1110] hover:bg-white'
-              }`}
-            >
-              Music
-            </button>
-          </div>
-        </div>
-
-        {/* 2x3 Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {quickItems.map((track, index) => {
-            const active = isTrackActive(track);
-            const color = badgeColors[index % badgeColors.length];
-
-            return (
-              <div 
-                key={track.id || track._id || index}
-                onClick={() => onSelectTrack(track, quickItems)}
-                className={`rounded-xl brutal-border p-2 flex items-center justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
-                  isDark 
-                    ? 'bg-[#141d1b] hover:bg-[#1a2623] border-zinc-700' 
-                    : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
-                } ${
-                  active ? (isDark ? 'ring-2 ring-[#17a398] bg-[#1a2623]' : 'ring-2 ring-[#0b1110] bg-white') : ''
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {track.cover ? (
-                    <img 
-                      src={track.cover} 
-                      alt={track.title} 
-                      className="w-11 h-11 rounded-lg brutal-border object-cover shrink-0" 
-                      onError={(e) => { e.target.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <div 
-                      className="w-11 h-11 rounded-lg brutal-border flex items-center justify-center shrink-0 text-white font-mono font-bold text-xs" 
-                      style={{ backgroundColor: color }}
-                    >
-                      RX{index + 1}
-                    </div>
-                  )}
-
-                  <div className="min-w-0">
-                    <div className={`font-display font-black text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                      {track.title}
-                    </div>
-                    <ArtistLinks
-                      track={track}
-                      onSelectArtist={onSelectArtist}
-                      className={`text-[10px] font-bold truncate block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                      linkClassName="hover:underline cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0 mr-1">
-                  {toggleLike && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLike(track.id || track._id);
-                      }}
-                      className="p-1 text-zinc-400 hover:text-[#dc2626] transition cursor-pointer" 
-                      title="Like"
-                    >
-                      <Heart 
-                        size={15} 
-                        fill={track.liked ? '#dc2626' : 'none'} 
-                        className={track.liked ? 'text-[#dc2626]' : ''} 
-                      />
-                    </button>
-                  )}
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActionMenuTrack(track);
-                    }}
-                    className="p-1 text-zinc-400 hover:text-white transition cursor-pointer" 
-                    title="Track options"
-                    aria-label="Track options"
-                  >
-                    <MoreVertical size={16} />
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectTrack(track, quickItems);
-                    }}
-                    className="w-8 h-8 rounded-lg bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn shrink-0 cursor-pointer" 
-                    title="Play"
-                  >
-                    {active && isPlaying ? (
-                      <Pause size={13} fill="currentColor" />
-                    ) : (
-                      <Play size={13} fill="currentColor" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {quickItems.length === 0 && (
-            <div className="col-span-full bg-[#fdfbf7] brutal-border rounded-xl p-6 text-center">
-              <p className="font-display font-bold text-sm text-[#0b1110]">No tracks found in current filter.</p>
-              <button 
-                onClick={openAddSongModal}
-                className="mt-3 px-4 py-2 bg-[#17a398] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-shadow-sm brutal-btn"
-              >
-                + Add Songs
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* ─────────────────────────────────────────
           FEATURED ALBUMS & DISCOGRAPHY SPOTLIGHT
@@ -378,22 +246,25 @@ export default function HomeScreen({
       )}
 
       {/* ─────────────────────────────────────────
-          RECENTLY DISPENSED / POPULAR TRACKS
+          MOST POPULAR & TOP LISTENED TRACKS (SINGLE UNIFIED SECTION)
           ───────────────────────────────────────── */}
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
           <div className="flex items-center gap-2">
             <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-              Recently Played & Discoveries
+              Most Popular & Top Listened
             </h2>
             <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-              RECENT
+              TOP CHARTS • GLOBAL HITS
             </span>
           </div>
+          <span className="text-[11px] font-mono font-bold text-emerald-100/70">
+            {popularTracks.length} Tracks
+          </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-          {recentItems.map((track, index) => {
+          {popularTracks.map((track, index) => {
             const active = isTrackActive(track);
             const color = badgeColors[index % badgeColors.length];
             const durationFormatted = track.duration 
@@ -403,7 +274,7 @@ export default function HomeScreen({
             return (
               <div 
                 key={track.id || track._id || index}
-                onClick={() => onSelectTrack(track, displayTracks)}
+                onClick={() => onSelectTrack(track, popularTracks)}
                 className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
                   isDark 
                     ? 'bg-[#141d1b] hover:bg-[#1a2623] border-zinc-700' 

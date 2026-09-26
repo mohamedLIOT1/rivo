@@ -322,7 +322,14 @@ const INJECTED_JS = `
 export default function OnlineWebView() {
   const webViewRef = useRef(null);
   const { showToast } = useToast();
-  const { refreshDownloadedTracks } = useAudioPlayer();
+  const { 
+    refreshDownloadedTracks, 
+    syncFromOnlineTrack, 
+    pauseNativePlayback, 
+    currentTrack: nativeCurrentTrack, 
+    isPlaying: nativeIsPlaying, 
+    progress: nativeProgress 
+  } = useAudioPlayer();
   const { toggleLikeTrack, likedTrackIds } = useUser();
   const { appMode, setAppMode, toggleMode } = useConnectivity();
   const isOnline = appMode === 'online';
@@ -384,9 +391,26 @@ export default function OnlineWebView() {
   useEffect(() => {
     if (!prevOnlineRef.current && isOnline) {
       setHasError(false);
-      hasLoadedOnceRef.current = false;
-      setInitialLoading(true);
-      webViewRef.current?.reload();
+      // If a song was playing in offline mode, pause native sound and inject sync command into WebView
+      if (nativeCurrentTrack) {
+        pauseNativePlayback?.();
+        webViewRef.current?.injectJavaScript(`
+          try {
+            if (typeof window.__RIVO_SYNC_TRACK === 'function') {
+              window.__RIVO_SYNC_TRACK(${JSON.stringify({
+                track: nativeCurrentTrack,
+                isPlaying: Boolean(nativeIsPlaying),
+                currentTime: nativeProgress?.currentTime || 0
+              })});
+            }
+          } catch(e) {}
+          true;
+        `);
+      } else {
+        hasLoadedOnceRef.current = false;
+        setInitialLoading(true);
+        webViewRef.current?.reload();
+      }
     } else if (!isOnline) {
       webViewRef.current?.injectJavaScript(`
         if (typeof window.__RIVO_MEDIA_ACTION === 'function') {
@@ -396,7 +420,7 @@ export default function OnlineWebView() {
       `);
     }
     prevOnlineRef.current = isOnline;
-  }, [isOnline]);
+  }, [isOnline, nativeCurrentTrack, nativeIsPlaying, nativeProgress, pauseNativePlayback]);
 
   // ─── Subscribe to Native Android Media Controls (Notification & Lockscreen) ───
   useEffect(() => {
@@ -512,6 +536,14 @@ export default function OnlineWebView() {
           const isLikedState = (likedTrackIds && likedTrackIds.length > 0 && trackIdStr)
             ? likedTrackIds.some(id => String(id) === trackIdStr)
             : Boolean(data.isLiked !== undefined ? data.isLiked : (activeTrack?.liked || activeTrack?.isLiked));
+
+          // Keep native AudioContext in sync with active online playback
+          syncFromOnlineTrack?.({
+            track: activeTrack,
+            isPlaying: Boolean(isPlaying),
+            currentTime: trackTime,
+            duration: trackDur
+          });
 
           const isNewTrack = !isSameTrack && Boolean(track);
           const isPlayStateChanged = currentTrackRef.current?._lastIsPlaying !== Boolean(isPlaying);

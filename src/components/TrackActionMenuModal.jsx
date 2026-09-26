@@ -26,7 +26,7 @@ export default function TrackActionMenuModal({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const isDark = globalTheme === 'dark';
   const isAdmin = isUserAdmin(currentUser);
-  const { currentTrack } = useAudioPlayer();
+  const { currentTrack, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
     downloadTrack,
@@ -50,7 +50,7 @@ export default function TrackActionMenuModal({
   const handlePlayNext = () => {
     if (onAddToQueue) {
       onAddToQueue(track, true);
-      showToast(currentTrack ? 'Will play next after current song' : 'Now playing');
+      showToast(jamSession ? 'Added to Jam: will play next' : (currentTrack ? 'Will play next after current song' : 'Now playing'));
     }
     onClose();
   };
@@ -58,7 +58,7 @@ export default function TrackActionMenuModal({
   const handleAddToQueue = () => {
     if (onAddToQueue) {
       onAddToQueue(track, false);
-      showToast(currentTrack ? 'Added to end of queue' : 'Now playing');
+      showToast(jamSession ? 'Added to Jam queue' : (currentTrack ? 'Added to end of queue' : 'Now playing'));
     }
     onClose();
   };
@@ -174,7 +174,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <ListPlus size={16} className="text-[#26c4b7]" />
-                <span>Play Next in Queue</span>
+                <span>{jamSession ? 'Play Next in Jam' : 'Play Next in Queue'}</span>
               </button>
             )}
 
@@ -187,7 +187,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <Plus size={16} className="text-[#26c4b7]" />
-                <span>Add to Queue</span>
+                <span>{jamSession ? 'Add to Jam Queue' : 'Add to Queue'}</span>
               </button>
             )}
 

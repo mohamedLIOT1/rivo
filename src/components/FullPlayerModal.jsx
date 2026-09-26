@@ -2244,7 +2244,7 @@ export default function FullPlayerModal({
                 <button
                   onClick={() => {
                     onAddToQueue(trackMenuTarget.track, true);
-                    showToast(currentTrack ? 'Will play next after current song' : 'Now playing');
+                    showToast(jamSession ? 'Added to Jam: will play next' : (currentTrack ? 'Will play next after current song' : 'Now playing'));
                     setTrackMenuTarget(null);
                   }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
@@ -2252,7 +2252,7 @@ export default function FullPlayerModal({
                   }`}
                 >
                   <ListPlus size={16} className="text-[#26c4b7]" />
-                  <span>Play Next in Queue</span>
+                  <span>{jamSession ? 'Play Next in Jam' : 'Play Next in Queue'}</span>
                 </button>
               )}
 
@@ -2261,7 +2261,7 @@ export default function FullPlayerModal({
                 <button
                   onClick={() => {
                     onAddToQueue(trackMenuTarget.track, false);
-                    showToast(currentTrack ? 'Added to end of queue' : 'Now playing');
+                    showToast(jamSession ? 'Added to Jam queue' : (currentTrack ? 'Added to end of queue' : 'Now playing'));
                     setTrackMenuTarget(null);
                   }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
@@ -2269,7 +2269,7 @@ export default function FullPlayerModal({
                   }`}
                 >
                   <Plus size={16} className="text-[#26c4b7]" />
-                  <span>Add to Queue</span>
+                  <span>{jamSession ? 'Add to Jam Queue' : 'Add to Queue'}</span>
                 </button>
               )}
 

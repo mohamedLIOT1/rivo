@@ -178,7 +178,7 @@ export default function MiniPlayer({
     <>
       {/* ── PERSISTENT CASSETTE DECK PLAYER (Bottom Bar) ── */}
       <footer 
-        className={`fixed bottom-[52px] md:bottom-0 inset-x-0 brutal-border-thick border-x-0 border-b-0 px-3 py-1.5 md:p-3.5 z-40 brutal-shadow-lg select-none h-[62px] md:h-[var(--player-height)] transition-colors ${
+        className={`fixed bottom-[58px] md:bottom-0 inset-x-0 brutal-border-thick border-x-0 border-b-0 px-3 py-1.5 md:p-3.5 z-40 brutal-shadow-lg select-none h-[62px] md:h-[var(--player-height)] transition-colors ${
           isDark 
             ? 'bg-[#101716] border-zinc-800 text-white' 
             : 'bg-[#fdfbf7] border-black text-[#0b1110]'

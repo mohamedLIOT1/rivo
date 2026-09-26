@@ -617,15 +617,38 @@ export const AudioProvider = ({ children }) => {
     showToast('All tracks downloaded offline', 'info');
   };
 
+  const syncFromOnlineTrack = useCallback(({ track, isPlaying: onlinePlaying, currentTime: onlineTime, duration: onlineDur }) => {
+    if (track) {
+      currentTrackRef.current = track;
+      setCurrentTrackState(track);
+      isPlayingRef.current = Boolean(onlinePlaying);
+      setIsPlaying(Boolean(onlinePlaying));
+      if (onlineTime !== undefined && onlineDur !== undefined) {
+        setProgress({ currentTime: onlineTime, duration: onlineDur });
+      }
+    }
+  }, []);
+
+  const pauseNativePlayback = useCallback(async () => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.pauseAsync();
+        isPlayingRef.current = false;
+        setIsPlaying(false);
+      }
+    } catch (e) {}
+  }, []);
+
   const controls = useMemo(() => ({
-    currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue,
+    currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     sleepTimerRemaining, lyrics, isLoadingLyrics,
     playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics]);
+    syncFromOnlineTrack, pauseNativePlayback,
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, syncFromOnlineTrack, pauseNativePlayback]);
 
   return (
     <AudioContext.Provider value={controls}>

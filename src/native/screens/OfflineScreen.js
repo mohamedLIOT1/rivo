@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Platform,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw, CheckSquare, Square, Check, ListPlus, X } from 'lucide-react-native';
@@ -401,7 +402,7 @@ export default function OfflineScreen() {
 
       {/* Floating Tactical Multi-Select Bottom Action Deck */}
       {isSelectMode && (
-        <View style={styles.selectActionBar}>
+        <View style={[styles.selectActionBar, { bottom: currentTrack ? (Platform.OS === 'ios' ? 134 : 118) : 20 }]}>
           <View style={styles.selectInfoRow}>
             <Text style={styles.selectCountBadge}>{selectedIds.length}</Text>
             <Text style={styles.selectCountText}>Selected</Text>

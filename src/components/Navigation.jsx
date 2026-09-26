@@ -419,7 +419,7 @@ export default function Navigation({
       {/* =============================================
           MOBILE BOTTOM NAVIGATION — Rivo Apothecary Style
           ============================================= */}
-      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 brutal-border-thick border-x-0 border-b-0 py-2 px-3 flex items-center justify-around shadow-2xl transition-colors ${
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 brutal-border-thick border-x-0 border-b-0 h-[58px] px-3 flex items-center justify-around shadow-2xl transition-colors ${
         isDark 
           ? 'bg-[#101716] border-zinc-800 text-white' 
           : 'bg-[#fdfbf7] border-black text-[#0b1110]'

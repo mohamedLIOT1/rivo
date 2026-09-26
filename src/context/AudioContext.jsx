@@ -787,12 +787,43 @@ export function AudioProvider({ children, tracks, setTracks }) {
     window.__RIVO_MEDIA_SEEK = (sec) => {
       if (!isNaN(sec) && seekToRef.current) seekToRef.current(sec);
     };
+    window.__RIVO_SYNC_TRACK = (syncData) => {
+      if (!syncData || !syncData.track) return;
+      const { track, isPlaying: syncPlaying, currentTime: syncTime } = syncData;
+      const curId = currentTrackRef.current?.id || currentTrackRef.current?._id;
+      const targetId = track.id || track._id;
+      if (!curId || String(curId) !== String(targetId)) {
+        playTrack(track, tracksRef.current, false);
+        if (typeof syncTime === 'number' && syncTime > 0) {
+          setTimeout(() => {
+            if (seekToRef.current) seekToRef.current(syncTime);
+          }, 350);
+        }
+        if (!syncPlaying && audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+      } else {
+        if (typeof syncTime === 'number' && syncTime > 0 && Math.abs((currentTimeRef.current || 0) - syncTime) > 3) {
+          if (seekToRef.current) seekToRef.current(syncTime);
+        }
+        if (syncPlaying && !isPlayingRef.current) {
+          resumeAudioContext();
+          audioRef.current?.play().catch(() => {});
+          setIsPlaying(true);
+        } else if (!syncPlaying && isPlayingRef.current) {
+          audioRef.current?.pause();
+          setIsPlaying(false);
+        }
+      }
+    };
     return () => {
       delete window.__RIVO_MEDIA_ACTION;
       delete window.__RIVO_MEDIA_SEEK;
       delete window.__RIVO_NEXT_TRACK;
       delete window.__RIVO_PREV_TRACK;
       delete window.__RIVO_TOGGLE_PLAY;
+      delete window.__RIVO_SYNC_TRACK;
     };
   }, [togglePlay]);
 
@@ -1021,14 +1052,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, []);
 
-  const addToQueue = useCallback((track, playNext = false) => {
-    if (!track) return;
+  const addToQueue = useCallback((trackOrTracks, playNext = false) => {
+    if (!trackOrTracks) return;
+    const tracksToAdd = Array.isArray(trackOrTracks) ? trackOrTracks.filter(Boolean) : [trackOrTracks];
+    if (tracksToAdd.length === 0) return;
+
+    // If currently in a Jam session, sync added track(s) directly to the Jam Shared Queue!
+    if (jamSessionRef.current && socketRef.current) {
+      socketRef.current.emit('jam:add_to_queue', {
+        roomCode: jamSessionRef.current.code,
+        tracks: tracksToAdd,
+        playNext
+      });
+      return;
+    }
+
     if (!currentTrackRef.current) {
-      playTrack(track, [track], false, 0);
+      playTrack(tracksToAdd[0], tracksToAdd, false, 0);
       return;
     }
     const isCurQuran = isQuranContent(currentTrackRef.current);
-    if (isCurQuran !== isQuranContent(track)) return;
+    const filteredTracks = tracksToAdd.filter(t => isQuranContent(t) === isCurQuran);
+    if (filteredTracks.length === 0) return;
+
     setCurrentQueue(prev => {
       const currentList = Array.isArray(prev) ? prev : [];
       const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
@@ -1039,11 +1085,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
         if (curIdx >= 0) {
           const updated = [...currentList];
-          updated.splice(curIdx + 1, 0, track);
+          updated.splice(curIdx + 1, 0, ...filteredTracks);
           return updated;
         }
       }
-      return [...currentList, track];
+      return [...currentList, ...filteredTracks];
     });
   }, [playTrack]);
 
@@ -1077,7 +1123,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
     });
   }, []);
 
+  const reorderJamQueue = useCallback((fromIndex, toIndex) => {
+    if (jamSessionRef.current?.code && socketRef.current) {
+      socketRef.current.emit('jam:reorder_queue', {
+        roomCode: jamSessionRef.current.code,
+        fromIndex,
+        toIndex
+      });
+      setJamSessionState(prev => {
+        if (!prev || !Array.isArray(prev.queue)) return prev;
+        const q = [...prev.queue];
+        if (fromIndex < 0 || toIndex < 0 || fromIndex >= q.length || toIndex >= q.length) return prev;
+        const [moved] = q.splice(fromIndex, 1);
+        q.splice(toIndex, 0, moved);
+        return { ...prev, queue: q };
+      });
+    }
+  }, []);
+
   const reorderQueue = useCallback((fromIndex, toIndex) => {
+    if (jamSessionRef.current?.code && socketRef.current) {
+      reorderJamQueue(fromIndex, toIndex);
+    }
+
     setCurrentQueue(prev => {
       if (!Array.isArray(prev) || fromIndex < 0 || toIndex < 0 || fromIndex >= prev.length || toIndex >= prev.length) {
         return prev;
@@ -1105,7 +1173,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       return updated;
     });
-  }, []);
+  }, [reorderJamQueue]);
 
   const clearQueue = useCallback(() => {
     if (currentTrackRef.current) {
@@ -1460,12 +1528,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, []);
 
-  const addToJamQueue = useCallback((track) => {
-    if (!track) return;
+  const addToJamQueue = useCallback((trackOrTracks, playNext = false) => {
+    if (!trackOrTracks) return;
     if (jamSessionRef.current && socketRef.current) {
+      const isArr = Array.isArray(trackOrTracks);
       socketRef.current.emit('jam:add_to_queue', {
         roomCode: jamSessionRef.current.code,
-        track
+        track: isArr ? undefined : trackOrTracks,
+        tracks: isArr ? trackOrTracks : undefined,
+        playNext
       });
     }
   }, []);
@@ -1604,7 +1675,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Jam Real-Time Sync & Queue API
     jamSession, setJamSync,
     syncRemotePlayState,
-    addToJamQueue, removeFromJamQueue,
+    addToJamQueue, removeFromJamQueue, reorderJamQueue,
   };
 
   return (

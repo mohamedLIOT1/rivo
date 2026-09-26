@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { X, Radio, Users, Copy, Check, Play, Pause, Volume2, Plus, Trash2, Search, Music, Headphones, UserMinus } from 'lucide-react';
+import { 
+  X, Radio, Users, Copy, Check, Play, Pause, Volume2, Plus, Trash2, 
+  Search, Music, Headphones, UserMinus, Crown, GripVertical, ChevronUp, ChevronDown 
+} from 'lucide-react';
 import { resumeAudioContext } from '../utils/audioEngine';
 import VerifiedBadge from './VerifiedBadge';
 
@@ -15,6 +18,8 @@ export default function JamRoomModal({
   tracks = [],
   onAddToJamQueue,
   onRemoveFromJamQueue,
+  onReorderJamQueue = () => {},
+  onTransferHost = () => {},
   onPlayTrack,
   currentUser = null,
   socket = null,
@@ -26,6 +31,7 @@ export default function JamRoomModal({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [justAddedId, setJustAddedId] = useState(null);
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
 
   const isDark = globalTheme === 'dark' || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
@@ -226,32 +232,87 @@ export default function JamRoomModal({
 
               {/* Shared Queue List */}
               {jamSession.queue && jamSession.queue.length > 0 ? (
-                <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
-                  {jamSession.queue.map((track, idx) => (
-                    <div
-                      key={`${track.id || track._id}-${idx}`}
-                      className={`flex items-center justify-between p-2 brutal-border text-xs rounded-lg ${
-                        isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3] border-black'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-2">
-                        <span className={`text-[10px] font-mono font-bold w-4 text-center ${isDark ? 'text-zinc-400' : 'text-[#082621]'}`}>{idx + 1}</span>
-                        <img src={track.cover} alt={track.title} className="w-8 h-8 brutal-border object-cover shrink-0 bg-white rounded" />
-                        <div className="truncate">
-                          <p className={`font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{track.title}</p>
-                          <p className={`text-[10px] truncate ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{track.artist}</p>
+                <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
+                  {jamSession.queue.map((track, idx) => {
+                    const isDragging = draggedQueueIndex === idx;
+                    return (
+                      <div
+                        key={`${track.id || track._id}-${idx}`}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedQueueIndex(idx);
+                          e.dataTransfer.effectAllowed = 'move';
+                          try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          if (draggedQueueIndex !== null && draggedQueueIndex !== idx) {
+                            onReorderJamQueue?.(draggedQueueIndex, idx);
+                          }
+                          setDraggedQueueIndex(null);
+                        }}
+                        onDragEnd={() => setDraggedQueueIndex(null)}
+                        className={`flex items-center justify-between p-2 brutal-border text-xs rounded-lg transition-all ${
+                          isDragging ? 'opacity-40 border-dashed border-[#17a398] scale-98' : ''
+                        } ${
+                          isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3] border-black'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                          <div 
+                            className="cursor-grab active:cursor-grabbing p-1 text-zinc-500 hover:text-[#17a398] shrink-0"
+                            title="Drag to reorder song"
+                          >
+                            <GripVertical size={14} />
+                          </div>
+                          <span className={`text-[10px] font-mono font-bold w-4 text-center shrink-0 ${isDark ? 'text-zinc-400' : 'text-[#082621]'}`}>
+                            {idx + 1}
+                          </span>
+                          <img src={track.cover} alt={track.title} className="w-8 h-8 brutal-border object-cover shrink-0 bg-white rounded" />
+                          <div className="truncate min-w-0 flex-1">
+                            <p className={`font-bold truncate text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{track.title}</p>
+                            <p className={`text-[10px] truncate ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{track.artist}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {/* Move Up / Down Buttons (Great for Touch / Mobile) */}
+                          <div className="flex flex-col">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => onReorderJamQueue?.(idx, idx - 1)}
+                              className="p-0.5 hover:text-[#17a398] disabled:opacity-20 cursor-pointer"
+                              title="Move up"
+                            >
+                              <ChevronUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === jamSession.queue.length - 1}
+                              onClick={() => onReorderJamQueue?.(idx, idx + 1)}
+                              className="p-0.5 hover:text-[#17a398] disabled:opacity-20 cursor-pointer"
+                              title="Move down"
+                            >
+                              <ChevronDown size={12} />
+                            </button>
+                          </div>
+
+                          <button
+                            onClick={() => onRemoveFromJamQueue?.(idx, track.id || track._id)}
+                            className="p-1.5 text-[#dc2626] hover:bg-red-500/20 rounded cursor-pointer"
+                            title="Remove from queue"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
-
-                      <button
-                        onClick={() => onRemoveFromJamQueue?.(idx, track.id || track._id)}
-                        className="p-1 text-[#dc2626] hover:bg-red-500/20 rounded"
-                        title="Remove from queue"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className={`text-center py-5 text-xs font-mono ${isDark ? 'text-zinc-500' : 'text-[#082621]/70'}`}>
@@ -277,31 +338,47 @@ export default function JamRoomModal({
                     <div key={m.id || m.socketId} className={`flex items-center justify-between p-2 brutal-border text-xs rounded-lg ${
                       isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ede5d3] border-black'
                     }`}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
                         <img src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'} alt={m.name} className="w-6 h-6 brutal-border object-cover shrink-0 bg-white rounded" />
-                        <span className={`font-bold ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{m.name}</span>
+                        <span className={`font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{m.name}</span>
                         <VerifiedBadge userOrName={m} size={12} />
                       </div>
                       
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 shrink-0">
                         {m.isHost && (
-                          <span className="text-[9px] font-mono font-black uppercase text-black bg-[#17a398] px-1.5 py-0.5 rounded">
-                            HOST
+                          <span className="text-[9px] font-mono font-black uppercase text-black bg-[#17a398] px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <Crown size={10} strokeWidth={3} />
+                            <span>HOST</span>
                           </span>
                         )}
 
                         {isCurrentUserHost && !m.isHost && (
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Disconnect "${m.name}" from Jam?`)) {
-                                onKickMember?.(m);
-                              }
-                            }}
-                            className="p-1 text-[#dc2626] hover:bg-red-500/20 rounded"
-                            title={`Disconnect ${m.name}`}
-                          >
-                            <UserMinus size={13} />
-                          </button>
+                          <>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Transfer host of this Jam to "${m.name}" without leaving?`)) {
+                                  onTransferHost?.(m);
+                                }
+                              }}
+                              className="px-2 py-0.5 bg-[#f59e0b] hover:bg-amber-400 text-black font-mono font-black text-[9px] uppercase brutal-border rounded flex items-center gap-1 cursor-pointer"
+                              title={`Transfer Host to ${m.name}`}
+                            >
+                              <Crown size={10} strokeWidth={2.5} />
+                              <span>MAKE HOST</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Disconnect "${m.name}" from Jam?`)) {
+                                  onKickMember?.(m);
+                                }
+                              }}
+                              className="p-1 text-[#dc2626] hover:bg-red-500/20 rounded cursor-pointer"
+                              title={`Disconnect ${m.name}`}
+                            >
+                              <UserMinus size={13} />
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>

@@ -38,9 +38,10 @@ export default function PlaylistScreen({
   openEditAlbumModal,
   openAddToPlaylist,
   globalTheme = 'dark',
+  onToast = () => {},
 }) {
   const isDark = globalTheme === 'dark';
-  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue } = useAudioPlayer();
+  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
     downloadTrack,
@@ -290,7 +291,10 @@ export default function PlaylistScreen({
   const handleBatchQueue = () => {
     const sel = getSelectedTracks();
     if (sel.length === 0) return;
-    sel.forEach(t => addToQueue?.(t));
+    addToQueue?.(sel);
+    if (onToast) {
+      onToast(jamSession ? `Added ${sel.length} song${sel.length > 1 ? 's' : ''} to Jam queue` : `Added ${sel.length} song${sel.length > 1 ? 's' : ''} to queue`);
+    }
     setIsSelectMode(false);
     setSelectedTrackIds(new Set());
   };
@@ -847,6 +851,30 @@ export default function PlaylistScreen({
             title="Play playlist"
           >
             <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />
+          </button>
+
+          {/* Add entire playlist to queue or jam queue */}
+          <button
+            disabled={filteredPlaylistTracks.length === 0}
+            onClick={() => {
+              if (filteredPlaylistTracks.length > 0) {
+                addToQueue?.(filteredPlaylistTracks);
+                if (onToast) {
+                  onToast(jamSession ? `Added playlist (${filteredPlaylistTracks.length} tracks) to Jam queue` : `Added playlist to queue`);
+                }
+              }
+            }}
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 sm:gap-2 transition-all shrink-0 ${
+              filteredPlaylistTracks.length > 0
+                ? isDark 
+                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer' 
+                  : 'bg-white hover:bg-[#ede5d3] text-black border-black cursor-pointer'
+                : 'opacity-40 cursor-not-allowed'
+            }`}
+            title={jamSession ? "Add playlist to Jam Queue" : "Add playlist to Queue"}
+          >
+            <ListPlus size={16} strokeWidth={2.5} className="text-[#26c4b7]" />
+            <span>{jamSession ? "ADD TO JAM" : "QUEUE PLAYLIST"}</span>
           </button>
 
           {/* Save to Library button (for other users' public playlists or albums) */}
@@ -1423,7 +1451,7 @@ export default function PlaylistScreen({
 
       {/* ── Tactical Multi-Select Bottom Action Deck ── */}
       {isSelectMode && (
-        <div className={`fixed bottom-16 md:bottom-20 left-1/2 -translate-x-1/2 z-50 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl brutal-border-thick brutal-shadow-xl flex items-center gap-2 sm:gap-3 flex-wrap max-w-[95vw] sm:max-w-2xl transition-all ${
+        <div className={`fixed ${currentTrack ? 'bottom-[126px] md:bottom-24' : 'bottom-16 md:bottom-20'} left-1/2 -translate-x-1/2 z-50 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl brutal-border-thick brutal-shadow-xl flex items-center gap-2 sm:gap-3 flex-wrap max-w-[95vw] sm:max-w-2xl transition-all ${
           isDark ? 'bg-[#0e1715] border-[#17a398] text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
         }`}>
           <div className="flex items-center gap-2 pr-2 border-r border-[#17a398]/30">

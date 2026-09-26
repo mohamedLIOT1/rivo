@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Play, Heart, CheckCircle2, UserPlus, Check, Music2, ArrowLeft, Disc, Layers, Edit, Sparkles, Plus, MoreVertical } from 'lucide-react';
+import { Play, Heart, CheckCircle2, UserPlus, Check, Music2, ArrowLeft, Disc, Layers, Edit, Sparkles, Plus, MoreVertical, ListPlus } from 'lucide-react';
 import VerifiedBadge from '../components/VerifiedBadge';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { matchesArtist, ArtistLinks, getCanonicalArtistName, getArtistAliasNote } from '../utils/artistUtils';
@@ -25,10 +25,11 @@ export default function ArtistScreen({
   onDeleteTrack,
   openAddToPlaylist,
   onAlbumCreated = () => {},
-  globalTheme = 'dark' 
+  globalTheme = 'dark',
+  onToast = () => {}
 }) {
   const isDark = globalTheme === 'dark';
-  const { addToQueue } = useAudioPlayer();
+  const { addToQueue, jamSession } = useAudioPlayer();
   const { isFollowingArtist, toggleFollowArtist } = useUser();
   const [artist, setArtist] = useState(initialArtist);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -208,6 +209,30 @@ export default function ArtistScreen({
                 title={isQuran ? "Play all surahs" : "Play all tracks"}
               >
                 <Play size={18} fill="currentColor" className="ml-0.5 sm:w-5 sm:h-5 text-[#0b1110]" />
+              </button>
+
+              {/* Add artist tracks to queue or jam queue */}
+              <button
+                disabled={artistTracks.length === 0}
+                onClick={() => {
+                  if (artistTracks.length > 0) {
+                    addToQueue?.(artistTracks);
+                    if (onToast) {
+                      onToast(jamSession ? `Added ${artistTracks.length} tracks to Jam queue` : `Added ${artistTracks.length} tracks to queue`);
+                    }
+                  }
+                }}
+                className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 sm:gap-2 transition-all shrink-0 ${
+                  artistTracks.length > 0
+                    ? isDark 
+                      ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer' 
+                      : 'bg-white hover:bg-[#ede5d3] text-black border-black cursor-pointer'
+                    : 'opacity-40 cursor-not-allowed'
+                }`}
+                title={jamSession ? "Add all tracks to Jam Queue" : "Add all tracks to Queue"}
+              >
+                <ListPlus size={16} strokeWidth={2.5} className="text-[#26c4b7]" />
+                <span>{jamSession ? "ADD TO JAM" : "QUEUE ALL"}</span>
               </button>
 
               <button 

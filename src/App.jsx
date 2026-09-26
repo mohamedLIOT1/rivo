@@ -72,7 +72,7 @@ function AppContent() {
     togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
     addToQueue, removeFromQueue,
     reorderQueue, clearQueue,
-    setJamSync, syncRemotePlayState, addToJamQueue, removeFromJamQueue
+    setJamSync, syncRemotePlayState, addToJamQueue, removeFromJamQueue, reorderJamQueue
   } = audio;
 
   // Screen Navigation Initial State from URL
@@ -168,6 +168,10 @@ function AppContent() {
   // Sync refs for popstate and background handling
   const isChatOpenRef = useRef(isChatOpen);
   useEffect(() => { isChatOpenRef.current = isChatOpen; }, [isChatOpen]);
+  const jamSessionRef = useRef(jamSession);
+  useEffect(() => { jamSessionRef.current = jamSession; }, [jamSession]);
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   const activeNotificationsRef = useRef({});
 
@@ -1121,6 +1125,23 @@ function AppContent() {
     const s = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
     setSocket(s);
 
+    s.on('connect', () => {
+      const curUser = currentUserRef.current;
+      if (curUser?.id || curUser?._id) {
+        const uid = curUser.id || curUser._id;
+        s.emit('user:online', { userId: uid });
+      }
+      if (jamSessionRef.current?.code) {
+        const userPayload = curUser 
+          ? { id: curUser.id || curUser._id, name: curUser.name, avatar: curUser.avatar }
+          : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+        s.emit('jam:join_room', {
+          roomCode: jamSessionRef.current.code,
+          user: userPayload
+        });
+      }
+    });
+
     if (currentUser?.id || currentUser?._id) {
       const uid = currentUser.id || currentUser._id;
       s.emit('user:online', { userId: uid });
@@ -1129,6 +1150,10 @@ function AppContent() {
     s.on('jam:room_updated', (room) => {
       setJamSession(room);
       setJamSync({ socket: s, jamSession: room });
+    });
+
+    s.on('jam:promoted_to_host', () => {
+      showToast('👑 You are now the host of this Jam session!');
     });
 
     s.on('jam:kicked', (data) => {
@@ -1315,6 +1340,17 @@ function AppContent() {
         memberId: member.id || member._id
       });
       showToast(`Kicked ${member.name} from Jam`);
+    }
+  };
+
+  const handleTransferHost = (member) => {
+    if (jamSession && socket && member) {
+      socket.emit('jam:transfer_host', {
+        roomCode: jamSession.code,
+        targetSocketId: member.socketId,
+        targetUserId: member.id || member._id
+      });
+      showToast(`Transferred host to ${member.name}`);
     }
   };
 
@@ -1722,6 +1758,7 @@ function AppContent() {
               onUnsavePlaylist={unsavePublicPlaylist}
               userPlaylists={playlists}
               globalTheme={globalTheme}
+              onToast={showToast}
             />
           )}
 
@@ -1743,6 +1780,7 @@ function AppContent() {
               onAlbumCreated={handleCreateAlbum}
               onDeleteAlbum={handleDeleteAlbum}
               globalTheme={globalTheme}
+              onToast={showToast}
             />
           )}
 
@@ -1880,7 +1918,7 @@ function AppContent() {
         toggleRepeat={toggleRepeat}
         queue={(() => {
           const isCurQ = isQuranContent(currentTrack);
-          const rawQ = jamSession?.queue?.length ? jamSession.queue : (currentQueue?.length > 0 ? currentQueue : (isCurQ ? quranTracks : musicTracks));
+          const rawQ = jamSession ? (jamSession.queue || []) : (currentQueue?.length > 0 ? currentQueue : (isCurQ ? quranTracks : musicTracks));
           return rawQ.filter(t => isCurQ ? isQuranContent(t) : !isQuranContent(t));
         })()}
         onRemoveFromJamQueue={removeFromJamQueue}
@@ -1986,6 +2024,8 @@ function AppContent() {
         tracks={tracks}
         onAddToJamQueue={addToJamQueue}
         onRemoveFromJamQueue={removeFromJamQueue}
+        onReorderJamQueue={reorderJamQueue}
+        onTransferHost={handleTransferHost}
         onPlayTrack={playTrack}
         currentUser={currentUser}
         socket={socket}
