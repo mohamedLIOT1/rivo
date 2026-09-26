@@ -3090,6 +3090,16 @@ app.get('/api/albums/lookup', async (req, res) => {
   }
 });
 
+// Admin / System: Trigger auto-fix for all album covers to official HD square artwork
+app.all('/api/albums/auto-fix', async (req, res) => {
+  try {
+    await autoFixAlbumCovers();
+    res.json({ success: true, message: 'All album covers auto-fixed with official HD artwork' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.get('/api/albums/:id', async (req, res) => {
   try {
     const album = await Album.findOne({ $or: [{ id: req.params.id }, { _id: req.params.id }] }).lean();
@@ -3101,16 +3111,6 @@ app.get('/api/albums/:id', async (req, res) => {
       ...t
     }));
     res.json({ success: true, album, tracks: formattedTracks });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// Admin / System: Trigger auto-fix for all album covers to official HD square artwork
-app.all('/api/albums/auto-fix', async (req, res) => {
-  try {
-    await autoFixAlbumCovers();
-    res.json({ success: true, message: 'All album covers auto-fixed with official HD artwork' });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
