@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Disc, User, Image, Calendar, Tag, Check, Trash2, Loader2, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Disc, User, Image, Calendar, Tag, Check, Trash2, Loader2, ShieldCheck, Link2, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import DeleteAlbumModal from './DeleteAlbumModal';
 
@@ -13,25 +13,72 @@ export default function EditAlbumModal({
 }) {
   const isDark = globalTheme === 'dark';
 
+  const [linkUrl, setLinkUrl] = useState('');
   const [name, setName] = useState('');
   const [artist, setArtist] = useState('');
   const [cover, setCover] = useState('');
   const [releaseDate, setReleaseDate] = useState('');
   const [genre, setGenre] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupSuccess, setLookupSuccess] = useState(false);
   const [error, setError] = useState(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (album) {
+      setLinkUrl(album.linkUrl || album.url || '');
       setName(album.name || '');
       setArtist(album.artist || '');
       setCover(album.cover || '');
       setReleaseDate(album.releaseDate || '');
       setGenre(album.genre || '');
       setError(null);
+      setIsLookingUp(false);
+      setLookupSuccess(false);
     }
   }, [album, isOpen]);
+
+  // Detect link provider
+  const detectedProvider = useMemo(() => {
+    const u = (linkUrl || '').toLowerCase();
+    if (u.includes('spotify.com/album') || u.includes('spotify:album')) return 'Spotify Album';
+    if (u.includes('spotify.com/playlist') || u.includes('spotify:playlist')) return 'Spotify Playlist';
+    if (u.includes('youtube.com/playlist') || u.includes('list=')) return 'YouTube Playlist';
+    if (u.includes('music.apple.com')) return 'Apple Music';
+    return null;
+  }, [linkUrl]);
+
+  const handleAutoLookup = async () => {
+    const q = (linkUrl || name || artist).trim();
+    if (!q) {
+      setError('Please enter an album link or album name to auto-grab metadata');
+      return;
+    }
+    setIsLookingUp(true);
+    setError(null);
+    try {
+      const isUrl = q.startsWith('http://') || q.startsWith('https://');
+      const param = isUrl ? `url=${encodeURIComponent(q)}` : `query=${encodeURIComponent(`${artist} ${name}`.trim())}`;
+      const res = await fetch(`${API_BASE_URL}/api/albums/lookup?${param}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'No metadata found for this album');
+      }
+      if (data.name) setName(data.name);
+      if (data.artist) setArtist(data.artist);
+      if (data.cover) setCover(data.cover);
+      if (data.releaseDate) setReleaseDate(data.releaseDate);
+      if (data.genre) setGenre(data.genre);
+      setLookupSuccess(true);
+      setTimeout(() => setLookupSuccess(false), 3500);
+    } catch (err) {
+      console.warn('Metadata lookup notice:', err.message);
+      setError(err.message || 'Auto metadata lookup failed');
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   if (!isOpen || !album) return null;
 
@@ -59,6 +106,7 @@ export default function EditAlbumModal({
           name: name.trim(),
           artist: artist.trim(),
           cover: cover.trim(),
+          linkUrl: linkUrl.trim(),
           releaseDate: releaseDate.trim(),
           genre: genre.trim()
         })
@@ -74,6 +122,7 @@ export default function EditAlbumModal({
         name: name.trim(),
         artist: artist.trim(),
         cover: cover.trim(),
+        linkUrl: linkUrl.trim(),
         releaseDate: releaseDate.trim(),
         genre: genre.trim()
       });
@@ -148,7 +197,86 @@ export default function EditAlbumModal({
           </div>
         )}
 
+        {lookupSuccess && (
+          <div className="mb-4 p-3 rounded-lg bg-[#17a398]/20 border-2 border-[#17a398] text-[#17a398] text-xs font-bold font-mono flex items-center gap-2">
+            <Check size={15} />
+            <span>Official metadata & HD square artwork auto-grabbed!</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Album Link Input & Auto Grab */}
+          <div className={`p-3.5 rounded-xl brutal-border ${
+            isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#f4efe4] border-black'
+          }`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-mono font-bold uppercase flex items-center gap-1.5">
+                <Link2 size={13} className="text-[#17a398]" /> Album Link (Spotify / YouTube / Apple Music)
+              </label>
+              {detectedProvider && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
+                  {detectedProvider}
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://open.spotify.com/album/... or playlist link"
+                className={`flex-1 p-2 text-xs font-mono rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#121816] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={handleAutoLookup}
+                disabled={isLookingUp}
+                className="px-3 py-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-[10px] font-black uppercase brutal-border rounded-lg flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+                title="Auto-fetch high-res cover, title, artist, year and genre from link or name"
+              >
+                {isLookingUp ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                <span>{isLookingUp ? 'FETCHING...' : 'AUTO-GRAB'}</span>
+              </button>
+            </div>
+            <p className="text-[10px] font-mono text-zinc-400 mt-1.5">
+              Paste a Spotify or YouTube album link to auto-fill high-res artwork, release year & genre.
+            </p>
+          </div>
+
+          {/* Cover Preview & Cover URL */}
+          <div className="flex gap-3 items-start">
+            <div className="w-20 h-20 rounded-xl overflow-hidden brutal-border shrink-0 aspect-square bg-black/20 relative shadow-sm">
+              <img
+                src={cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400'}
+                alt="Album Cover Preview"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400';
+                }}
+              />
+              <span className="absolute bottom-1 right-1 text-[8px] font-mono px-1 py-0.5 rounded bg-black/70 text-white font-bold">1:1</span>
+            </div>
+            <div className="flex-1">
+              <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
+                <Image size={13} className="text-[#17a398]" /> Artwork Cover URL
+              </label>
+              <input
+                type="url"
+                value={cover}
+                onChange={(e) => setCover(e.target.value)}
+                placeholder="https://images.unsplash.com/... or iTunes HD cover"
+                className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none ${
+                  isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
+              />
+              <p className="text-[10px] font-mono text-zinc-400 mt-1">
+                Enter an image URL or click "AUTO-GRAB" above to fetch official HD square cover.
+              </p>
+            </div>
+          </div>
+
           {/* Album Title */}
           <div>
             <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
@@ -180,22 +308,6 @@ export default function EditAlbumModal({
                 isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
               }`}
               required
-            />
-          </div>
-
-          {/* Cover URL */}
-          <div>
-            <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-              <Image size={13} className="text-[#17a398]" /> Artwork Cover URL
-            </label>
-            <input
-              type="url"
-              value={cover}
-              onChange={(e) => setCover(e.target.value)}
-              placeholder="https://images.unsplash.com/..."
-              className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none ${
-                isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
-              }`}
             />
           </div>
 

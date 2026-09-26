@@ -31,8 +31,31 @@ function extractYtId(input) {
   return null;
 }
 
+// ── Client-side Stream Cache (Instant 0ms repeated playbacks) ──
+const clientStreamCache = new Map();
+const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
+
+export async function resolvePlayableAudioStream(track) {
+  if (!track) return null;
+  const trackId = String(track.id || track._id || '');
+  if (trackId && clientStreamCache.has(trackId)) {
+    const cached = clientStreamCache.get(trackId);
+    if (Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
+      return cached.data;
+    } else {
+      clientStreamCache.delete(trackId);
+    }
+  }
+
+  const result = await doResolvePlayableAudioStream(track);
+  if (trackId && result?.url) {
+    clientStreamCache.set(trackId, { data: result, timestamp: Date.now() });
+  }
+  return result;
+}
+
 // ── Direct Audio Stream Resolver (HTML5 <audio> & Web Audio API) ──
-async function resolvePlayableAudioStream(track) {
+async function doResolvePlayableAudioStream(track) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
   let targetUrl = track.audioUrl || '';
@@ -980,6 +1003,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
+
+    // Quietly pre-resolve next track stream in background for zero-delay transition
+    try {
+      if (resolvedQueue && resolvedQueue.length > 0) {
+        const activeIdx = (queueIndex !== null && queueIndex !== undefined && queueIndex >= 0) ? queueIndex : currentQueueIndexRef.current;
+        if (activeIdx >= 0 && activeIdx + 1 < resolvedQueue.length) {
+          const nextTrack = resolvedQueue[activeIdx + 1];
+          if (nextTrack) {
+            setTimeout(() => {
+              resolvePlayableAudioStream(nextTrack).catch(() => {});
+            }, 1200);
+          }
+        }
+      }
+    } catch {}
 
     if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       try {

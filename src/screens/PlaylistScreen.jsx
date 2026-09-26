@@ -15,6 +15,7 @@ import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
+import { getAlbumArtwork } from './ArtistScreen';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -593,7 +594,7 @@ export default function PlaylistScreen({
             ) : (
               <>
                 <img 
-                  src={playlist.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=082621&color=26c4b7&size=512&bold=true&format=svg`} 
+                  src={(playlist.isAlbum || isSiteAlbum) ? getAlbumArtwork(playlist, playlist.cover) : (playlist.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=082621&color=26c4b7&size=512&bold=true&format=svg`)} 
                   alt={playlist.name} 
                   className="w-full h-full object-cover" 
                 />

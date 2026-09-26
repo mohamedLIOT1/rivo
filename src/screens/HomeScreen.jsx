@@ -6,6 +6,7 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
+import { getAlbumArtwork } from './ArtistScreen';
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -208,7 +209,7 @@ export default function HomeScreen({
               >
                 <div className="relative aspect-square mb-2.5 overflow-hidden rounded-lg brutal-border bg-black/10">
                   <img
-                    src={alb.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'}
+                    src={getAlbumArtwork(alb, alb.cover)}
                     alt={alb.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}

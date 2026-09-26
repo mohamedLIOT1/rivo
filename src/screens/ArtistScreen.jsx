@@ -10,6 +10,44 @@ import AddAlbumModal from '../components/AddAlbumModal';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 
+export const OFFICIAL_ALBUM_COVERS = {
+  'roma': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/46/81/82/468182bd-6914-bf7d-2f4a-4cb4bd5175cd/196925215671.jpg/1200x1200bb.jpg',
+  'supernova': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7f/a0/00/7fa00086-e72c-191b-6547-e8992f774a9a/885288056853.jpg/1200x1200bb.jpg',
+  'nas w nas': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/64/78/b1/6478b176-8977-c2fb-bacd-761567625b00/196925011204.jpg/1200x1200bb.jpg',
+  'noaata beida': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/e9/de/11/e9de11f3-be73-e0df-b4ff-72dd702476e3/196626997326.jpg/1200x1200bb.jpg',
+  'the ugly ducklings': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/17/21/ff/1721ffa2-9895-8c92-43af-eaebd0a31cc6/3615938009819.png/1200x1200bb.jpg',
+  'ابناء البطة السوداء': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/17/21/ff/1721ffa2-9895-8c92-43af-eaebd0a31cc6/3615938009819.png/1200x1200bb.jpg',
+  'كايروكي من الاستوديو': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/2b/37/92/2b37929b-6df4-0a3e-24c4-5401eb70b5fe/196626954855.jpg/1200x1200bb.jpg',
+  'classics, vol. 1': 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/8a/22/95/8a2295a7-e3ba-5b30-1e07-cf3c372c07cc/cover.jpg/1200x1200bb.jpg',
+  'classics': 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/8a/22/95/8a2295a7-e3ba-5b30-1e07-cf3c372c07cc/cover.jpg/1200x1200bb.jpg',
+  'لما بنتولد': 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d8/46/06/d846063d-1cbd-f455-1287-5370cc305292/artwork.jpg/1200x1200bb.jpg',
+  'roxi': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ad/83/7f/ad837f70-04a2-b985-2e0b-dbeaf1f2c5c2/196872351095.jpg/1200x1200bb.jpg',
+  'rivo': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/6a/71/f3/6a71f3e3-b9c0-a08d-a782-4fead92c8ed6/cover.jpg/1200x1200bb.jpg',
+  'ريفو': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/6a/71/f3/6a71f3e3-b9c0-a08d-a782-4fead92c8ed6/cover.jpg/1200x1200bb.jpg',
+  'shoft kalam': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/01/c4/31/01c43187-da8b-fc50-b68e-2e71cd1d7c85/885288123609.jpg/1200x1200bb.jpg',
+  'placebo': 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/3d/be/1a/3dbe1ae5-a9c0-ff0c-d8ea-3b87692cadeb/6221216529510_cover.png/1200x1200bb.jpg',
+  'plan-b': 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/ef/28/e0/ef28e07b-c631-8981-55f4-a8979a433fc5/6221216496775_cover.jpg/1200x1200bb.jpg',
+  'agzakhana': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/65/7c/94/657c9473-c77e-601c-9bbc-4540ecc2c08b/6221216496768_Artwork.jpg/1200x1200bb.jpg'
+};
+
+export function getAlbumArtwork(albumOrName, fallbackCover = '') {
+  const name = typeof albumOrName === 'string' ? albumOrName : (albumOrName?.name || '');
+  const cleanKey = name.replace(/^Album\s*[-–—:]\s*/i, '').trim().toLowerCase();
+  if (OFFICIAL_ALBUM_COVERS[cleanKey]) {
+    return OFFICIAL_ALBUM_COVERS[cleanKey];
+  }
+  const cover = (typeof albumOrName === 'object' && albumOrName?.cover) ? albumOrName.cover : fallbackCover;
+  if (cover && !cover.includes('hqdefault.jpg') && !cover.includes('i.ytimg.com/vi/')) {
+    return cover;
+  }
+  for (const [key, val] of Object.entries(OFFICIAL_ALBUM_COVERS)) {
+    if (cleanKey.includes(key) || key.includes(cleanKey)) {
+      return val;
+    }
+  }
+  return cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Album')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
+}
+
 export default function ArtistScreen({ 
   artist: initialArtist, 
   tracks = [], 
@@ -78,6 +116,8 @@ export default function ArtistScreen({
           ...matchingTracks.map(t => String(t.id || t._id))
         ]));
 
+        const resolvedCover = getAlbumArtwork(a, matchingTracks[0]?.cover);
+
         albumMap.set(a.name.toLowerCase().trim(), {
           ...a,
           id: a.id || a._id,
@@ -85,7 +125,7 @@ export default function ArtistScreen({
           artist: a.artist || artistName,
           trackIds: allTrackIds,
           trackCount: allTrackIds.length,
-          cover: a.cover || matchingTracks[0]?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+          cover: resolvedCover,
           isAlbum: true,
           isPublic: true
         });
@@ -107,12 +147,13 @@ export default function ArtistScreen({
       ...albumTrackIds,
       ...(album.trackIds || []).map(String)
     ]));
+    const resolvedCover = getAlbumArtwork(album, albumTracks[0]?.cover);
     const albumPlaylist = {
       ...album,
       id: album.id || aIdSafe(album.name),
       name: album.name,
       artist: artistName,
-      cover: album.cover || albumTracks[0]?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      cover: resolvedCover,
       trackIds: allTrackIds,
       isAlbum: true,
       isPublic: true

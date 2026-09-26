@@ -167,6 +167,7 @@ const AlbumSchema = new mongoose.Schema({
   name: { type: String, required: true },
   artist: { type: String, required: true },
   cover: { type: String },
+  linkUrl: { type: String, default: '' },
   trackIds: [{ type: String }],
   releaseDate: { type: String },
   genre: { type: String },
@@ -563,11 +564,69 @@ setTimeout(async () => {
       }
 
       console.log('✅ [Quran & Albums] Auto-categorized Quran tracks, canonicalized reciters & deduplicated albums');
+      await autoFixAlbumCovers();
     }
   } catch (err) {
     console.warn('[Quran] Migration warning:', err.message);
   }
 }, 4500);
+
+const OFFICIAL_ALBUM_COVERS = {
+  'roma': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/46/81/82/468182bd-6914-bf7d-2f4a-4cb4bd5175cd/196925215671.jpg/1200x1200bb.jpg',
+  'supernova': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7f/a0/00/7fa00086-e72c-191b-6547-e8992f774a9a/885288056853.jpg/1200x1200bb.jpg',
+  'nas w nas': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/64/78/b1/6478b176-8977-c2fb-bacd-761567625b00/196925011204.jpg/1200x1200bb.jpg',
+  'noaata beida': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/e9/de/11/e9de11f3-be73-e0df-b4ff-72dd702476e3/196626997326.jpg/1200x1200bb.jpg',
+  'the ugly ducklings': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/17/21/ff/1721ffa2-9895-8c92-43af-eaebd0a31cc6/3615938009819.png/1200x1200bb.jpg',
+  'ابناء البطة السوداء': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/17/21/ff/1721ffa2-9895-8c92-43af-eaebd0a31cc6/3615938009819.png/1200x1200bb.jpg',
+  'كايروكي من الاستوديو': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/2b/37/92/2b37929b-6df4-0a3e-24c4-5401eb70b5fe/196626954855.jpg/1200x1200bb.jpg',
+  'classics, vol. 1': 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/8a/22/95/8a2295a7-e3ba-5b30-1e07-cf3c372c07cc/cover.jpg/1200x1200bb.jpg',
+  'classics': 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/8a/22/95/8a2295a7-e3ba-5b30-1e07-cf3c372c07cc/cover.jpg/1200x1200bb.jpg',
+  'لما بنتولد': 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d8/46/06/d846063d-1cbd-f455-1287-5370cc305292/artwork.jpg/1200x1200bb.jpg',
+  'roxi': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ad/83/7f/ad837f70-04a2-b985-2e0b-dbeaf1f2c5c2/196872351095.jpg/1200x1200bb.jpg',
+  'rivo': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/6a/71/f3/6a71f3e3-b9c0-a08d-a782-4fead92c8ed6/cover.jpg/1200x1200bb.jpg',
+  'ريفو': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/6a/71/f3/6a71f3e3-b9c0-a08d-a782-4fead92c8ed6/cover.jpg/1200x1200bb.jpg',
+  'shoft kalam': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/01/c4/31/01c43187-da8b-fc50-b68e-2e71cd1d7c85/885288123609.jpg/1200x1200bb.jpg',
+  'placebo': 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/3d/be/1a/3dbe1ae5-a9c0-ff0c-d8ea-3b87692cadeb/6221216529510_cover.png/1200x1200bb.jpg',
+  'plan-b': 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/ef/28/e0/ef28e07b-c631-8981-55f4-a8979a433fc5/6221216496775_cover.jpg/1200x1200bb.jpg',
+  'agzakhana': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/65/7c/94/657c9473-c77e-601c-9bbc-4540ecc2c08b/6221216496768_Artwork.jpg/1200x1200bb.jpg'
+};
+
+async function autoFixAlbumCovers() {
+  try {
+    if (mongoose.connection.readyState !== 1) return;
+    const albums = await Album.find();
+    let updatedCount = 0;
+    for (const album of albums) {
+      const rawName = (album.name || '').trim();
+      const cleanKey = rawName.replace(/^Album\s*[-–—:]\s*/i, '').trim().toLowerCase();
+      let targetCover = OFFICIAL_ALBUM_COVERS[cleanKey];
+
+      // Auto-lookup if not matched and has low quality/letterboxed cover
+      if (!targetCover && (!album.cover || album.cover.includes('hqdefault.jpg') || album.cover.includes('i.ytimg.com'))) {
+        try {
+          if (typeof lookupAlbumMetadata === 'function') {
+            const lookedUp = await lookupAlbumMetadata(cleanKey + ' ' + (album.artist || ''));
+            if (lookedUp?.cover && !lookedUp.cover.includes('hqdefault.jpg')) {
+              targetCover = lookedUp.cover;
+            }
+          }
+        } catch {}
+      }
+
+      if (targetCover && album.cover !== targetCover) {
+        album.cover = targetCover;
+        await album.save();
+        updatedCount++;
+      }
+    }
+    if (updatedCount > 0) {
+      console.log(`✅ [Album Artwork Auto-Fix] Updated ${updatedCount} albums with official 1200x1200 square covers.`);
+      if (typeof io !== 'undefined') io.emit('albums:updated_batch');
+    }
+  } catch (err) {
+    console.warn('[Album Artwork Auto-Fix] Error:', err.message);
+  }
+}
 
 function makeToken(u) {
   const isAdmin = isAdminUser(u);
@@ -3047,10 +3106,20 @@ app.get('/api/albums/:id', async (req, res) => {
   }
 });
 
+// Admin / System: Trigger auto-fix for all album covers to official HD square artwork
+app.all('/api/albums/auto-fix', async (req, res) => {
+  try {
+    await autoFixAlbumCovers();
+    res.json({ success: true, message: 'All album covers auto-fixed with official HD artwork' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Admin: Create / Upload Album
 const createAlbumHandler = async (req, res) => {
   try {
-    const { name, artist, cover, releaseDate, genre, trackIds = [], isQuran = false, description = '' } = req.body;
+    const { name, artist, cover, linkUrl, releaseDate, genre, trackIds = [], isQuran = false, description = '' } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Album name is required' });
     }
@@ -3067,6 +3136,7 @@ const createAlbumHandler = async (req, res) => {
       name: cleanName,
       artist: cleanArtist,
       cover: cover ? cover.trim() : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      linkUrl: linkUrl ? linkUrl.trim() : '',
       trackIds: cleanTrackIds,
       releaseDate: releaseDate ? releaseDate.trim() : '',
       genre: genre ? genre.trim() : 'Pop',
@@ -3257,7 +3327,7 @@ app.post('/api/albums/import', adminAuth, importAlbumHandler);
 const updateAlbumHandler = async (req, res) => {
   try {
     const albumId = req.params.id;
-    const { name, artist, cover, releaseDate, genre, trackIds } = req.body;
+    const { name, artist, cover, linkUrl, releaseDate, genre, trackIds } = req.body;
     const album = await Album.findOne({ $or: [{ id: albumId }, { _id: mongoose.isValidObjectId(albumId) ? albumId : null }] });
     if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
 
@@ -3265,6 +3335,7 @@ const updateAlbumHandler = async (req, res) => {
     if (name) album.name = name.trim();
     if (artist) album.artist = artist.trim();
     if (cover !== undefined) album.cover = cover.trim();
+    if (linkUrl !== undefined) album.linkUrl = linkUrl.trim();
     if (releaseDate !== undefined) album.releaseDate = releaseDate;
     if (genre !== undefined) album.genre = genre;
     if (Array.isArray(trackIds)) album.trackIds = trackIds;
@@ -3959,8 +4030,12 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
 });
 
 // ──────────────────────────────────────────
+// ──────────────────────────────────────────
 // Official YouTube Audio Stream Resolver & Stream Proxy (Multi-Tier, NO SoundCloud)
 // ──────────────────────────────────────────
+
+const backendStreamCache = new Map();
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 Hours cache
 
 async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '') {
   let videoId = null;
@@ -3987,160 +4062,125 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId) return null;
 
-  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  // 0. High-Speed In-Memory Stream Cache (Instant 0ms resolution)
+  if (backendStreamCache.has(videoId)) {
+    const cached = backendStreamCache.get(videoId);
+    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      const retObj = new String(cached.url);
+      retObj.url = cached.url;
+      retObj.duration = cached.duration;
+      return retObj;
+    } else {
+      backendStreamCache.delete(videoId);
+    }
+  }
 
-  // Tier 1: Direct VisionOS / Apple Innertube API Audio Stream Extraction
+  // 1. Ultra-Fast Parallel Race Across Verified High-Speed Invidious Nodes & VisionOS
   try {
-    const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-    let visitorData = '';
+    const endpoints = [
+      `https://invidious.f5.si/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
+      `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
+      `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
+      `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
+      `https://yt.drgnz.club/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
+      `https://iv.ggtyler.dev/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
+    ];
 
-    // Fast official visitor_id token acquisition (immune to datacenter scraping blocks)
-    try {
-      const vRes = await axios.post(`https://www.youtube.com/youtubei/v1/visitor_id?key=${key}`, {
+    const racePromises = endpoints.map(ep =>
+      axios.get(ep, { timeout: 3200, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } })
+        .then(res => {
+          const formats = (res.data?.adaptiveFormats || res.data?.audioStreams || []).concat(res.data?.formats || []);
+          const audio140 = formats.find(f => f.itag === 140 && f.url);
+          const anyAudio = formats.find(f => (f.type?.includes('audio') || f.mimeType?.includes('audio')) && f.url);
+          const chosen = audio140 || anyAudio;
+          if (chosen?.url && chosen.url.startsWith('http')) {
+            const rawSec = parseInt(res.data?.lengthSeconds, 10);
+            return {
+              url: chosen.url,
+              duration: (rawSec && !isNaN(rawSec) && rawSec > 0) ? rawSec : 210
+            };
+          }
+          throw new Error('No audio in format');
+        })
+    );
+
+    // Also race official VisionOS client concurrently (without blocking visitor scraping)
+    const visionPromise = (async () => {
+      const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+      const playerRes = await axios.post(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, {
         context: {
           client: {
             clientName: 'VISIONOS',
             clientVersion: '1.02',
             deviceMake: 'Apple',
             deviceModel: 'RealityDevice17,1',
+            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
             osName: 'visionOS',
             osVersion: '26.5.23O471',
             hl: 'en',
             gl: 'US',
           }
-        }
+        },
+        videoId: videoId,
       }, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 3000
+        timeout: 3200,
       });
-      visitorData = vRes.data?.responseContext?.visitorData || '';
-    } catch (e) {}
 
-    // Fallback: scrape watch page if visitor_id endpoint did not return a token
-    if (!visitorData) {
-      try {
-        const webRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-          timeout: 4000,
-        });
-        const html = typeof webRes.data === 'string' ? webRes.data : '';
-        const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
-        if (visitorMatch && visitorMatch[1]) visitorData = visitorMatch[1];
-      } catch (e) {}
-    }
-
-    const playerBody = {
-      context: {
-        client: {
-          clientName: 'VISIONOS',
-          clientVersion: '1.02',
-          deviceMake: 'Apple',
-          deviceModel: 'RealityDevice17,1',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-          osName: 'visionOS',
-          osVersion: '26.5.23O471',
-          hl: 'en',
-          gl: 'US',
-          visitorData: visitorData || undefined,
-        },
-      },
-      videoId: videoId,
-    };
-
-    const playerHeaders = {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-    };
-
-    const playerRes = await axios.post(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, playerBody, {
-      headers: playerHeaders,
-      timeout: 6000,
-    });
-
-    if (playerRes.data?.playabilityStatus?.status === 'OK') {
-      const formats = (playerRes.data.streamingData?.adaptiveFormats || []).concat(playerRes.data.streamingData?.formats || []);
-      const audio140 = formats.find(f => f.itag === 140 && f.url);
-      const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
-      const chosen = audio140 || anyAudio;
-      if (chosen?.url) {
-        const rawSec = parseInt(playerRes.data.videoDetails?.lengthSeconds, 10);
-        const rawMs = parseInt(chosen.approxDurationMs, 10);
-        const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0)
-          ? rawSec
-          : (rawMs && !isNaN(rawMs) && rawMs > 0 ? Math.round(rawMs / 1000) : null);
-        const retObj = new String(chosen.url);
-        retObj.url = chosen.url;
-        retObj.duration = durationSec;
-        return retObj;
+      if (playerRes.data?.playabilityStatus?.status === 'OK') {
+        const formats = (playerRes.data.streamingData?.adaptiveFormats || []).concat(playerRes.data.streamingData?.formats || []);
+        const audio140 = formats.find(f => f.itag === 140 && f.url);
+        const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
+        const chosen = audio140 || anyAudio;
+        if (chosen?.url) {
+          const rawSec = parseInt(playerRes.data.videoDetails?.lengthSeconds, 10);
+          return {
+            url: chosen.url,
+            duration: (rawSec && !isNaN(rawSec) && rawSec > 0) ? rawSec : 210
+          };
+        }
       }
+      throw new Error('VisionOS playability status not OK');
+    })();
+
+    const winner = await Promise.any([...racePromises, visionPromise]);
+    if (winner?.url) {
+      backendStreamCache.set(videoId, {
+        url: winner.url,
+        duration: winner.duration,
+        timestamp: Date.now()
+      });
+      const retObj = new String(winner.url);
+      retObj.url = winner.url;
+      retObj.duration = winner.duration;
+      return retObj;
     }
   } catch (e) {}
 
-  // Tier 2: yt-dlp direct stream resolution with modern iOS/TV client headers
-  try {
-    const { exec } = require('child_process');
-    const direct = await new Promise((resolve) => {
-      const cmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -g "${ytUrl}"`;
-      exec(cmd, { timeout: 12000 }, (err, stdout) => {
-        if (!err && stdout && stdout.trim().startsWith('http')) {
-          resolve(stdout.trim().split('\n')[0]);
-        } else {
-          // Second attempt with tv client
-          exec(`yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -g "${ytUrl}"`, { timeout: 10000 }, (err2, stdout2) => {
-            if (!err2 && stdout2 && stdout2.trim().startsWith('http')) {
-              resolve(stdout2.trim().split('\n')[0]);
-            } else {
-              resolve(null);
-            }
-          });
-        }
-      });
-    });
-    if (direct) return direct;
-  } catch {}
-
-  // Tier 3: Cobalt API official YouTube audio extraction
-  const cobaltEndpoints = [
-    'https://api.cobalt.tools/api/json',
-    'https://cobalt.stream/api/json',
-    'https://co.wuk.sh/api/json',
-    'https://cobalt-api.kwiatekm.pl/api/json'
-  ];
-  for (const ep of cobaltEndpoints) {
-    try {
-      const cobRes = await axios.post(ep, {
-        url: ytUrl,
-        downloadMode: 'audio',
-      }, {
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        timeout: 6000
-      });
-      if (cobRes.data?.url && cobRes.data.url.startsWith('http')) {
-        return cobRes.data.url;
-      }
-    } catch {}
-  }
-
-  // Tier 4: Invidious / Piped official adaptive format streams
-  const streamResolvers = [
-    `https://invidious.tiekoetter.com/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://yt.chocolatemoo53.com/api/v1/videos/${videoId}?fields=adaptiveFormats`,
+  // Fallback 2: Sequential second-chance sweep if parallel race was interrupted
+  const backupResolvers = [
     `https://invidious.f5.si/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
     `https://pipedapi.kavin.rocks/streams/${videoId}`,
+    `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
   ];
-  for (const ep of streamResolvers) {
+  for (const ep of backupResolvers) {
     try {
       const invRes = await axios.get(ep, { timeout: 4000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const formats = invRes.data?.adaptiveFormats || invRes.data?.audioStreams || [];
-      const audio = formats.find(f => f.type?.includes('audio/mp4') || f.mimeType?.includes('audio/mp4')) ||
-                    formats.find(f => f.type?.includes('audio') || f.mimeType?.includes('audio'));
+      const formats = (invRes.data?.adaptiveFormats || invRes.data?.audioStreams || []).concat(invRes.data?.formats || []);
+      const audio = formats.find(f => f.itag === 140 && f.url) ||
+                    formats.find(f => (f.type?.includes('audio') || f.mimeType?.includes('audio')) && f.url);
       if (audio?.url && audio.url.startsWith('http')) {
-        return audio.url;
+        const rawSec = parseInt(invRes.data?.lengthSeconds, 10);
+        const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0) ? rawSec : 210;
+        backendStreamCache.set(videoId, {
+          url: audio.url,
+          duration: durationSec,
+          timestamp: Date.now()
+        });
+        const retObj = new String(audio.url);
+        retObj.url = audio.url;
+        retObj.duration = durationSec;
+        return retObj;
       }
     } catch {}
   }
