@@ -7,6 +7,113 @@ import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getAlbumArtwork } from './ArtistScreen';
+const MEGA_HITS = [
+  'el bakht', 'البخت', 'el keif', 'الكيف', 'kan lak maaya', 'kan lak ma3aya', 'كان لك معايا',
+  'ya abyad ya eswed', 'يا ابيض يا اسود', 'dorak gai', 'دورك جاي', 'ghaba', 'غابة',
+  'el gemeza', 'الجميزة', 'sheraton', 'شيراتون', 'tamally maak', 'تملي معاك', 'nour el ein', 'نور العين',
+  'habibi leh', 'حبيبي ليه', 'law kan', 'لو كان', 'kol haga betaady', 'كل حاجة بتعدي',
+  'layla', 'ليلى', 'dinosaur', 'داينصور', 'betetmahey', 'بتتمحي', 'asef', 'اسف',
+  'mab2etsh bahes', 'مابقتش باحس', 'roma', 'روما', 'james dean', 'جيمس دين',
+  'ethbat makanak', 'اثبت مكانك', 'barbary', 'بربري', 'control', 'كنترول', 'sindbad', 'سندباد',
+  'el halal', 'الحلال', 'tesla', 'تسلا', 'alshan feena', 'علشان فينا', 'tayer', 'طاير',
+  'rivo', 'ريفو', '21', 'واحد وعشرين', 'keify keda', 'keif keda', 'كيفي كده', 'salka', 'سلكة',
+  'asyad el balad', 'اسياد البلد', 'bazet', 'باظت', 'matigy n3eesh', 'ما تيجى نعيش',
+  'leh benkhaby', 'ليه بنخبي', 'baet waheed', 'بقيت وحيد', 'seneen', 'سنين',
+  'back to black', 'starboy'
+];
+
+const MAJOR_HITS = [
+  'marboot be astek', 'marbout be astek', 'مربوط باستيك', 'مربوط بآستيك', 'noaata beida', 'نقطة بيضا',
+  'nas w nas', 'ناس وناس', 'ناس و ناس', 'akher oghnya', 'اخر اغنية', 'ana el sout', 'أنا الصوت',
+  'matkhafsh men el hokooma', 'متخافش من الحكومة', 'ghammed einak', 'غمض عينك',
+  'samurai', 'ساموراي', 'basrah w atooho', 'بسرح واتوه', 'nefsy ahebbek', 'نفسي احبك',
+  'helmy ana', 'حلمي انا', 'aandi fekra', 'عندي فكرة', 'zay shams w qamar', 'زي شمس وقمر',
+  'zina', 'زينة', 'salamat', 'سلامات', 'mesh bel hazout', 'مش بالحظوظ', 'khashab', 'خشب',
+  'bayaa', 'بياعة', 'kollaha ghaleyat', 'كلها غيرانة', 'ekhteyarat', 'اختياراتي',
+  'tegy ntrahan', 'تيجي نتراهن', 'el mohakma', 'المحكمة', '24 kiraat', '24 قيراط',
+  'batal 3alam', 'ابطال العالم', '7adota almany', 'haddouta almany', 'حدوتة الماني',
+  'drogba', 'دروجبا', 'yom gedid', 'يوم جديد', 'saa\'b el ekhteyar', 'صعب الاختيار',
+  'wayah', 'وياه', 'ragea', 'راجع', 'aks baad', 'عكس بعض', 'helwa el bedayat', 'حلوة البدايات',
+  'wana maak', 'وانا معاك', 'hayeish yeftekerni', 'هيعيش يفتكرني', 'kol hayaty', 'كل حياتي',
+  'ya ana ya la', 'يا انا يا لاء', 'amaken el sahar', 'اماكن السهر', 'enta el haz', 'انت الحظ',
+  'tutu', 'توتو', 'awghad', 'أوغاد', 'hokomdar', 'حكمدار', 'balad el ghorba', 'بلد الغربة',
+  'agzakhana', 'اجزاخانة', 'placebo', 'بلاسيبو', 'plan-b', 'بلان بي', 'tafeh', 'تفه',
+  'tany', 'ثاني', 'mafesh mane3', 'مفيش مانع', 'fel galeed', 'في الجليد', 'tharthara', 'ثرثرة',
+  'afareet', 'عفاريت', 'salmonella', 'سالمونيلا', 'el ghasala', 'الغسالة', 'khamsa', 'خمسة'
+];
+
+const ARTIST_GLOBAL_SCORES = {
+  'wegz': 1600000,
+  'cairokee': 1500000,
+  'cairokeeofficial': 1500000,
+  'amr diab': 1400000,
+  'marwan pablo': 1300000,
+  'amir eid': 1200000,
+  'tul8te': 1100000,
+  'lege-cy': 1050000,
+  'marwan moussa': 1000000,
+  'tamer ashour': 900000,
+  'sherine': 900000,
+  'mohamed mounir': 850000,
+  'hamaki': 850000,
+  'el joker': 800000
+};
+
+function normalizeArabicText(str = '') {
+  return String(str)
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[^a-z0-9\u0600-\u06FF]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function getGlobalTrackScore(t) {
+  if (!t) return 0;
+  const normTitle = normalizeArabicText(t.title);
+  const normArtist = normalizeArabicText(t.artist);
+  let score = 0;
+
+  // Real platform plays, views & likes
+  const plays = Number(t.plays) || 0;
+  const views = Number(t.views) || 0;
+  const likes = Number(t.likes) || 0;
+  score += plays * 100000;
+  score += views;
+  score += likes * 50000;
+  if (t.popular) score += 10000000;
+
+  // Global Mega Hits
+  for (const hit of MEGA_HITS) {
+    const nh = normalizeArabicText(hit);
+    if (normTitle === nh || normTitle.includes(nh)) {
+      score += 20000000;
+      break;
+    }
+  }
+
+  // Major Hits
+  for (const hit of MAJOR_HITS) {
+    const nh = normalizeArabicText(hit);
+    if (normTitle === nh || normTitle.includes(nh)) {
+      score += 10000000;
+      break;
+    }
+  }
+
+  // Artist Global Stature
+  for (const [art, weight] of Object.entries(ARTIST_GLOBAL_SCORES)) {
+    if (normArtist.includes(art)) {
+      score += weight;
+      break;
+    }
+  }
+
+  return score;
+}
 
 export default function HomeScreen({ 
   tracks = [], 
@@ -54,18 +161,16 @@ export default function HomeScreen({
   }, [tracks]);
 
   // Sort tracks by global popularity, stream views, plays, and likes
+  // Deterministic tie-breaker by title (never createdAt descending, so new songs don't hijack the top)
   const popularTracks = useMemo(() => {
     const list = [...displayTracks];
     return list.sort((a, b) => {
-      const viewsA = Number(a.views) || 0;
-      const viewsB = Number(b.views) || 0;
-      const playsA = Number(a.plays) || 0;
-      const playsB = Number(b.plays) || 0;
-      const likesA = Number(a.likes) || 0;
-      const likesB = Number(b.likes) || 0;
-      const scoreA = viewsA + (playsA * 150) + (likesA * 80) + (a.popular ? 50000 : 0);
-      const scoreB = viewsB + (playsB * 150) + (likesB * 80) + (b.popular ? 50000 : 0);
-      return scoreB - scoreA;
+      const scoreA = getGlobalTrackScore(a);
+      const scoreB = getGlobalTrackScore(b);
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      return (a.title || '').localeCompare(b.title || '');
     });
   }, [displayTracks]);
 
@@ -351,7 +456,7 @@ export default function HomeScreen({
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectTrack(track, displayTracks);
+                      onSelectTrack(track, popularTracks);
                     }}
                     className="flex-1 bg-[#ded2bb] hover:bg-[#17a398] text-[#0b1110] font-display font-black text-[11px] py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
                   >

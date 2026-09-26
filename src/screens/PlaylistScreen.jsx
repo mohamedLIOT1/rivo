@@ -42,7 +42,7 @@ export default function PlaylistScreen({
   onToast = () => {},
 }) {
   const isDark = globalTheme === 'dark';
-  const { isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
+  const { currentTrack, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
     downloadTrack,
