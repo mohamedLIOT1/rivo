@@ -18,6 +18,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const axios = require('axios');
 const { Server } = require('socket.io');
+const { execFile, exec } = require('child_process');
 
 try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch (e) {}
 
@@ -4034,8 +4035,55 @@ app.post('/api/ai/generate-song-lyrics', async (req, res) => {
 // Official YouTube Audio Stream Resolver & Stream Proxy (Multi-Tier, NO SoundCloud)
 // ──────────────────────────────────────────
 
-const backendStreamCache = new Map();
-const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 Hours cache
+const downloadingAudioMap = new Map();
+
+function getYtDlpBin() {
+  const isWin = process.platform === 'win32';
+  const binDir = path.join(__dirname, '../bin');
+  const localBin = path.join(binDir, isWin ? 'yt-dlp.exe' : 'yt-dlp');
+  if (fs.existsSync(localBin)) {
+    if (!isWin) {
+      try { fs.chmodSync(localBin, 0o755); } catch {}
+    }
+    return localBin;
+  }
+  return 'yt-dlp';
+}
+
+async function ensureYtDlpBinary() {
+  const isWin = process.platform === 'win32';
+  const binDir = path.join(__dirname, '../bin');
+  if (!fs.existsSync(binDir)) {
+    try { fs.mkdirSync(binDir, { recursive: true }); } catch {}
+  }
+  const localBin = path.join(binDir, isWin ? 'yt-dlp.exe' : 'yt-dlp');
+  if (fs.existsSync(localBin) && fs.statSync(localBin).size > 1000000) {
+    if (!isWin) {
+      try { fs.chmodSync(localBin, 0o755); } catch {}
+    }
+    return localBin;
+  }
+  console.log('[yt-dlp] Downloading standalone binary to', localBin, '...');
+  try {
+    const dlUrl = isWin
+      ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+      : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    const res = await axios({ method: 'get', url: dlUrl, responseType: 'stream', timeout: 60000 });
+    const writer = fs.createWriteStream(localBin);
+    await new Promise((resolve, reject) => {
+      res.data.pipe(writer);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+    if (!isWin) {
+      try { fs.chmodSync(localBin, 0o755); } catch {}
+    }
+    console.log('[yt-dlp] Standalone binary installed successfully!');
+  } catch (e) {
+    console.warn('[yt-dlp] Failed to download standalone binary:', e.message);
+  }
+  return localBin;
+}
 
 async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '') {
   let videoId = null;
@@ -4062,130 +4110,82 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId) return null;
 
-  // 0. High-Speed In-Memory Stream Cache (Instant 0ms resolution)
-  if (backendStreamCache.has(videoId)) {
-    const cached = backendStreamCache.get(videoId);
-    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      const retObj = new String(cached.url);
-      retObj.url = cached.url;
-      retObj.duration = cached.duration;
-      return retObj;
-    } else {
-      backendStreamCache.delete(videoId);
-    }
+  const audioCacheDir = path.join(__dirname, '../uploads/audio-cache');
+  if (!fs.existsSync(audioCacheDir)) {
+    try { fs.mkdirSync(audioCacheDir, { recursive: true }); } catch {}
   }
 
-  // 1. Ultra-Fast Parallel Race Across Verified High-Speed Invidious Nodes & VisionOS
-  try {
-    const endpoints = [
-      `https://invidious.f5.si/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
-      `https://inv.nadeko.net/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
-      `https://yewtu.be/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
-      `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
-      `https://yt.drgnz.club/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
-      `https://iv.ggtyler.dev/api/v1/videos/${videoId}?fields=adaptiveFormats,lengthSeconds`,
-    ];
+  const cachedM4a = path.join(audioCacheDir, `${videoId}.m4a`);
+  const cachedMp3 = path.join(audioCacheDir, `${videoId}.mp3`);
 
-    const racePromises = endpoints.map(ep =>
-      axios.get(ep, { timeout: 3200, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' } })
-        .then(res => {
-          const formats = (res.data?.adaptiveFormats || res.data?.audioStreams || []).concat(res.data?.formats || []);
-          const audio140 = formats.find(f => f.itag === 140 && f.url);
-          const anyAudio = formats.find(f => (f.type?.includes('audio') || f.mimeType?.includes('audio')) && f.url);
-          const chosen = audio140 || anyAudio;
-          if (chosen?.url && chosen.url.startsWith('http')) {
-            const rawSec = parseInt(res.data?.lengthSeconds, 10);
-            return {
-              url: chosen.url,
-              duration: (rawSec && !isNaN(rawSec) && rawSec > 0) ? rawSec : 210
-            };
-          }
-          throw new Error('No audio in format');
-        })
-    );
+  // 1. Instant check: Already cached on disk (> 20KB)?
+  if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
+    const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
+    retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
+    retObj.duration = 210;
+    return retObj;
+  }
+  if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
+    const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
+    retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
+    retObj.duration = 210;
+    return retObj;
+  }
 
-    // Also race official VisionOS client concurrently (without blocking visitor scraping)
-    const visionPromise = (async () => {
-      const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-      const playerRes = await axios.post(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, {
-        context: {
-          client: {
-            clientName: 'VISIONOS',
-            clientVersion: '1.02',
-            deviceMake: 'Apple',
-            deviceModel: 'RealityDevice17,1',
-            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-            osName: 'visionOS',
-            osVersion: '26.5.23O471',
-            hl: 'en',
-            gl: 'US',
-          }
-        },
-        videoId: videoId,
-      }, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 3200,
-      });
-
-      if (playerRes.data?.playabilityStatus?.status === 'OK') {
-        const formats = (playerRes.data.streamingData?.adaptiveFormats || []).concat(playerRes.data.streamingData?.formats || []);
-        const audio140 = formats.find(f => f.itag === 140 && f.url);
-        const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
-        const chosen = audio140 || anyAudio;
-        if (chosen?.url) {
-          const rawSec = parseInt(playerRes.data.videoDetails?.lengthSeconds, 10);
-          return {
-            url: chosen.url,
-            duration: (rawSec && !isNaN(rawSec) && rawSec > 0) ? rawSec : 210
-          };
-        }
-      }
-      throw new Error('VisionOS playability status not OK');
-    })();
-
-    const winner = await Promise.any([...racePromises, visionPromise]);
-    if (winner?.url) {
-      backendStreamCache.set(videoId, {
-        url: winner.url,
-        duration: winner.duration,
-        timestamp: Date.now()
-      });
-      const retObj = new String(winner.url);
-      retObj.url = winner.url;
-      retObj.duration = winner.duration;
-      return retObj;
-    }
-  } catch (e) {}
-
-  // Fallback 2: Sequential second-chance sweep if parallel race was interrupted
-  const backupResolvers = [
-    `https://invidious.f5.si/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-    `https://pipedapi.kavin.rocks/streams/${videoId}`,
-    `https://invidious.nerdvpn.de/api/v1/videos/${videoId}?fields=adaptiveFormats`,
-  ];
-  for (const ep of backupResolvers) {
+  // 2. In-flight download deduplication
+  if (downloadingAudioMap.has(videoId)) {
     try {
-      const invRes = await axios.get(ep, { timeout: 4000, headers: { 'User-Agent': 'Mozilla/5.0' } });
-      const formats = (invRes.data?.adaptiveFormats || invRes.data?.audioStreams || []).concat(invRes.data?.formats || []);
-      const audio = formats.find(f => f.itag === 140 && f.url) ||
-                    formats.find(f => (f.type?.includes('audio') || f.mimeType?.includes('audio')) && f.url);
-      if (audio?.url && audio.url.startsWith('http')) {
-        const rawSec = parseInt(invRes.data?.lengthSeconds, 10);
-        const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0) ? rawSec : 210;
-        backendStreamCache.set(videoId, {
-          url: audio.url,
-          duration: durationSec,
-          timestamp: Date.now()
-        });
-        const retObj = new String(audio.url);
-        retObj.url = audio.url;
-        retObj.duration = durationSec;
-        return retObj;
-      }
-    } catch {}
+      const url = await downloadingAudioMap.get(videoId);
+      const retObj = new String(url);
+      retObj.url = url;
+      retObj.duration = 210;
+      return retObj;
+    } catch (e) {}
   }
 
-  return null;
+  // 3. Download via yt-dlp to server cache
+  const dlPromise = (async () => {
+    const bin = getYtDlpBin();
+    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const targetFile = cachedM4a;
+
+    console.log(`[Audio-Server] Caching audio for YouTube track ${videoId} via yt-dlp...`);
+    await new Promise((resolve, reject) => {
+      execFile(bin, [
+        '--no-check-certificates',
+        '-f', 'ba[ext=m4a]/ba/b',
+        '-o', targetFile,
+        ytUrl
+      ], { timeout: 45000 }, (err) => {
+        if (err) {
+          console.warn(`[Audio-Server] yt-dlp download failed for ${videoId}:`, err.message);
+          return reject(err);
+        }
+        resolve();
+      });
+    });
+
+    if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) {
+      console.log(`[Audio-Server] Successfully cached ${videoId}.m4a (${(fs.statSync(targetFile).size / 1024 / 1024).toFixed(2)} MB)`);
+      return `/uploads/audio-cache/${videoId}.m4a`;
+    }
+    throw new Error('Downloaded file too small or missing');
+  })();
+
+  downloadingAudioMap.set(videoId, dlPromise);
+
+  try {
+    const relativeUrl = await dlPromise;
+    const retObj = new String(relativeUrl);
+    retObj.url = relativeUrl;
+    retObj.duration = 210;
+    return retObj;
+  } catch (err) {
+    console.error(`[Audio-Server] Failed to resolve audio for ${videoId}:`, err.message);
+    return null;
+  } finally {
+    downloadingAudioMap.delete(videoId);
+  }
 }
 
 // Dedicated audio stream resolution endpoint with proxy support
@@ -4208,11 +4208,13 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
     const streamTarget = rawUrl || id || '';
     const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist);
     if (streamUrl) {
-      const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(streamUrl)}`;
+      const resolvedPath = streamUrl.url || String(streamUrl);
+      const isLocalUpload = resolvedPath.startsWith('/uploads/');
+      const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
       return res.json({
         success: true,
-        url: proxyUrl,
-        directUrl: streamUrl,
+        url: finalUrl,
+        directUrl: resolvedPath,
         duration: streamUrl.duration || track?.duration || 210
       });
     }
@@ -5038,11 +5040,13 @@ const resolveStreamHandler = async (req, res) => {
         if (vidCandidate) {
           const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '');
           if (directAudio) {
-            const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
+            const resolvedPath = directAudio.url || String(directAudio);
+            const isLocalUpload = resolvedPath.startsWith('/uploads/');
+            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
             return res.json({
               success: true,
-              url: proxyUrl,
-              directUrl: directAudio,
+              url: finalUrl,
+              directUrl: resolvedPath,
               duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
               cover: `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg`,
               isYouTube: false
@@ -5583,4 +5587,7 @@ app.get('*', (req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  ensureYtDlpBinary().catch((err) => console.warn('[yt-dlp] startup check notice:', err.message));
+});
