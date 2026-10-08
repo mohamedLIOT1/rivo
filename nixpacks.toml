@@ -1,0 +1,15 @@
+[providers]
+providers = ['node']
+
+[phases.setup]
+nixPkgs = ['nodejs_22', 'yt-dlp', 'ffmpeg']
+
+[phases.install]
+cmds = ['npm install', 'npm --prefix server install']
+
+[phases.build]
+cmds = ['npm run build']
+
+[start]
+cmd = 'node server/index.js'
+

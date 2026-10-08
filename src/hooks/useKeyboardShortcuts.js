@@ -1,0 +1,264 @@
+import { useEffect, useRef } from 'react';
+
+/**
+ * Custom hook to handle global keyboard shortcuts for Rivo:
+ * - Space / K: Toggle Play / Pause
+ * - ArrowRight: Seek forward 5s (Shift + ArrowRight: 10s)
+ * - ArrowLeft: Seek backward 5s (Shift + ArrowLeft: 10s)
+ * - Ctrl + ArrowRight / Cmd + ArrowRight: Next song
+ * - Ctrl + ArrowLeft / Cmd + ArrowLeft: Previous song
+ * - ArrowUp: Volume +5%
+ * - ArrowDown: Volume -5%
+ * - M: Toggle Mute
+ * - L: Toggle Like on current track
+ * - S: Toggle Shuffle
+ * - R: Toggle Repeat
+ * - J: Seek backward 10s
+ * - ?: Show Keyboard Shortcuts cheat sheet
+ */
+export function useKeyboardShortcuts({
+  togglePlay,
+  playNextTrack,
+  playPrevTrack,
+  seekTo,
+  currentTime,
+  duration,
+  volume,
+  setVolume,
+  setIsShuffle,
+  setIsRepeat,
+  currentTrack,
+  toggleLike,
+  onToggleShortcutsModal,
+}) {
+  const prevVolumeRef = useRef(volume || 0.8);
+  const currentTimeRef = useRef(currentTime);
+  const durationRef = useRef(duration);
+  const volumeRef = useRef(volume);
+
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
+  useEffect(() => { volumeRef.current = volume; }, [volume]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // 1. Ignore if typing in any text input, textarea, select or contenteditable
+      const target = e.target;
+      const activeEl = document.activeElement;
+      const isInput = (el) => {
+        if (!el) return false;
+        const tag = el.tagName?.toUpperCase();
+        return (
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          el.isContentEditable ||
+          el.getAttribute('role') === 'textbox'
+        );
+      };
+
+      if (isInput(target) || isInput(activeEl)) {
+        return;
+      }
+
+      // 1.1 Hardware Media Keys & Function Keys:
+      // F5 / MediaPlayPause: Play / Pause (توقيف / تشغيل) - يعمل مع زرار Fn أو بدونه
+      if (
+        e.code === 'F5' || e.key === 'F5' || e.key === 'f5' || e.keyCode === 116 || e.which === 116 ||
+        e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' || e.keyCode === 179 || e.which === 179 ||
+        e.code === 'F8' || e.key === 'F8' || e.keyCode === 119 || e.which === 119
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        togglePlay();
+        return;
+      }
+
+      // F6 / MediaTrackNext: Next Track (الأغنية التالية / نيكست) - يعمل مع زرار Fn أو بدونه
+      if (
+        e.code === 'F6' || e.key === 'F6' || e.key === 'f6' || e.keyCode === 117 || e.which === 117 ||
+        e.code === 'MediaTrackNext' || e.key === 'MediaTrackNext' || e.keyCode === 176 || e.which === 176 ||
+        e.code === 'F9' || e.key === 'F9' || e.keyCode === 120 || e.which === 120
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        playNextTrack();
+        return;
+      }
+
+      // F4 / MediaTrackPrevious: Previous Track (الأغنية السابقة / بريفيس) - يعمل مع زرار Fn أو بدونه
+      if (
+        e.code === 'F4' || e.key === 'F4' || e.key === 'f4' || e.keyCode === 115 || e.which === 115 ||
+        e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious' || e.keyCode === 177 || e.which === 177 ||
+        e.code === 'F7' || e.key === 'F7' || e.keyCode === 118 || e.which === 118 ||
+        e.code === 'F3' || e.key === 'F3'
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        playPrevTrack();
+        return;
+      }
+
+      if (e.code === 'MediaFastForward' || e.key === 'MediaFastForward') {
+        e.preventDefault();
+        e.stopPropagation();
+        const cur = currentTimeRef.current || 0;
+        const dur = durationRef.current || 999999;
+        seekTo(Math.min(dur, cur + 10));
+        return;
+      }
+
+      if (e.code === 'MediaRewind' || e.key === 'MediaRewind') {
+        e.preventDefault();
+        e.stopPropagation();
+        const cur = currentTimeRef.current || 0;
+        seekTo(Math.max(0, cur - 10));
+        return;
+      }
+
+      // 2. Play / Pause with Space
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+
+      // 3. Play / Pause with K
+      if (e.code === 'KeyK' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+
+      // 4. Next / Prev tracks (Ctrl/Cmd + Left/Right)
+      if (e.code === 'ArrowRight' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        playNextTrack();
+        return;
+      }
+
+      if (e.code === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        playPrevTrack();
+        return;
+      }
+
+      // 5. Seek Forward / Backward (ArrowRight / ArrowLeft without Ctrl/Cmd)
+      if (e.code === 'ArrowRight' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 5;
+        const cur = currentTimeRef.current || 0;
+        const dur = durationRef.current || 999999;
+        seekTo(Math.min(dur, cur + step));
+        return;
+      }
+
+      if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 5;
+        const cur = currentTimeRef.current || 0;
+        seekTo(Math.max(0, cur - step));
+        return;
+      }
+
+      // 6. YouTube standard J (seek back 10s)
+      if (e.code === 'KeyJ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const cur = currentTimeRef.current || 0;
+        seekTo(Math.max(0, cur - 10));
+        return;
+      }
+
+      // 7. Volume Up / Down
+      if (e.code === 'ArrowUp' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const currentVol = volumeRef.current || 0;
+        const newVol = Math.min(1, Math.round((currentVol + 0.05) * 100) / 100);
+        setVolume(newVol);
+        return;
+      }
+
+      if (e.code === 'ArrowDown' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const currentVol = volumeRef.current || 0;
+        const newVol = Math.max(0, Math.round((currentVol - 0.05) * 100) / 100);
+        setVolume(newVol);
+        return;
+      }
+
+      // 8. Mute / Unmute (M)
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const cur = volumeRef.current || 0;
+        if (cur > 0) {
+          prevVolumeRef.current = cur;
+          setVolume(0);
+        } else {
+          setVolume(prevVolumeRef.current > 0 ? prevVolumeRef.current : 0.8);
+        }
+        return;
+      }
+
+      // 9. Like currently playing track (L)
+      if (e.code === 'KeyL' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (currentTrack?.id && toggleLike) {
+          toggleLike(currentTrack.id);
+        }
+        return;
+      }
+
+      // 10. Shuffle (S)
+      if (e.code === 'KeyS' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setIsShuffle((prev) => !prev);
+        return;
+      }
+
+      // 11. Repeat (R)
+      if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setIsRepeat((prev) => !prev);
+        return;
+      }
+
+      // 12. Show Keyboard Shortcuts Cheat Sheet (?)
+      if ((e.key === '?' || (e.shiftKey && e.code === 'Slash')) && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        if (onToggleShortcutsModal) {
+          onToggleShortcutsModal();
+        }
+        return;
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.code === 'F5' || e.key === 'F5' || e.keyCode === 116 || e.which === 116) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    window.addEventListener('keyup', handleKeyUp, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+      window.removeEventListener('keyup', handleKeyUp, { capture: true });
+    };
+  }, [
+    togglePlay,
+    playNextTrack,
+    playPrevTrack,
+    seekTo,
+    setVolume,
+    setIsShuffle,
+    setIsRepeat,
+    currentTrack,
+    toggleLike,
+    onToggleShortcutsModal,
+  ]);
+}

@@ -1,0 +1,621 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
+import { isUserAdmin } from '../utils/adminUtils';
+
+const API = (() => {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    const { hostname, protocol, host } = window.location;
+    if (
+      window.Capacitor ||
+      protocol === 'capacitor:' ||
+      protocol === 'file:' ||
+      (hostname === 'localhost' && !host.includes('5000'))
+    ) {
+      return 'https://liofy-production-0f56.up.railway.app';
+    }
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    return `${protocol}//${host}`;
+  }
+  return 'https://liofy-production-0f56.up.railway.app';
+})();
+
+export const API_BASE_URL = API;
+
+const migrateLegacyStorage = () => {
+  try {
+    const keys = ['token', 'user', 'tracks', 'playlists', 'liked', 'followed_artists', 'activity_panel_open', 'daily_seed_date', 'daily_seed_track', 'last_played_music_track', 'active_transitions', 'listening_stats_v2'];
+    keys.forEach(k => {
+      const oldVal = localStorage.getItem(`liofy_${k}`);
+      if (oldVal && !localStorage.getItem(`rivo_${k}`)) {
+        localStorage.setItem(`rivo_${k}`, oldVal);
+      }
+    });
+  } catch {}
+};
+migrateLegacyStorage();
+
+const getToken = () => {
+  try { return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || ''; } catch { return ''; }
+};
+
+const authHeaders = () => ({
+  'Content-Type': 'application/json',
+  ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+});
+
+// ── API helpers ──────────────────────────────────────
+export const api = {
+  get: (path) => fetch(`${API}${path}`, { headers: authHeaders() })
+    .then(async r => {
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return { success: false, error: text || r.statusText }; }
+    }),
+  post: (path, body) => fetch(`${API}${path}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
+    .then(async r => {
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return { success: false, error: text || r.statusText }; }
+    }),
+  del: (path) => fetch(`${API}${path}`, { method: 'DELETE', headers: authHeaders() })
+    .then(async r => {
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return { success: false, error: text || r.statusText }; }
+    }),
+};
+
+// ── Context ──────────────────────────────────────────
+const UserContext = createContext(null);
+
+const isSoundCloudTrack = (t) => {
+  if (!t) return false;
+  if (t.source === 'SoundCloud' || t.album === 'SoundCloud') return true;
+  if (typeof t.audioUrl === 'string' && (t.audioUrl.includes('soundcloud.com') || t.audioUrl.includes('sndcdn.com'))) return true;
+  if (typeof t.id === 'string' && t.id.startsWith('sc-')) return true;
+  if (typeof t._id === 'string' && t._id.startsWith('sc-')) return true;
+  return false;
+};
+
+export function UserProvider({ children }) {
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem('rivo_user') || localStorage.getItem('liofy_user') || 'null');
+      if (u && isUserAdmin(u)) return { ...u, isAdmin: true, role: 'admin' };
+      return u;
+    } catch { return null; }
+  });
+
+  const [tracks, setTracks] = useState(() => {
+    try {
+      const s = localStorage.getItem('rivo_tracks') || localStorage.getItem('liofy_tracks');
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(t => !isSoundCloudTrack(t));
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem('rivo_tracks', JSON.stringify(cleaned));
+            localStorage.setItem('liofy_tracks', JSON.stringify(cleaned));
+          }
+          return cleaned;
+        }
+      }
+      return [];
+    } catch { return []; }
+  });
+
+  const [playlists, setPlaylists] = useState(() => {
+    try {
+      const s = localStorage.getItem('rivo_playlists') || localStorage.getItem('liofy_playlists');
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  });
+
+  const [likedTrackIds, setLikedTrackIds] = useState(() => {
+    try {
+      const s = localStorage.getItem('rivo_liked') || localStorage.getItem('liofy_liked');
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  });
+
+  const [followedArtists, setFollowedArtists] = useState(() => {
+    try {
+      const s = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+      return s ? JSON.parse(s) : [];
+    } catch { return []; }
+  });
+
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // ── Persist to localStorage ──────────────────────────
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('rivo_user', JSON.stringify(currentUser));
+      localStorage.setItem('liofy_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('rivo_user');
+      localStorage.removeItem('liofy_user');
+      localStorage.removeItem('rivo_token');
+      localStorage.removeItem('liofy_token');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rivo_tracks', JSON.stringify(tracks));
+    } catch {}
+  }, [tracks]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rivo_playlists', JSON.stringify(playlists));
+    } catch {}
+  }, [playlists]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rivo_liked', JSON.stringify(likedTrackIds));
+    } catch {}
+  }, [likedTrackIds]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rivo_followed_artists', JSON.stringify(followedArtists));
+    } catch {}
+  }, [followedArtists]);
+
+  const toggleFollowArtist = useCallback((artistName) => {
+    if (!artistName) return;
+    const cleanName = typeof artistName === 'string' ? artistName.trim() : (artistName.name || '').trim();
+    if (!cleanName) return;
+    setFollowedArtists(prev => {
+      const exists = prev.some(a => a.toLowerCase() === cleanName.toLowerCase());
+      const next = exists
+        ? prev.filter(a => a.toLowerCase() !== cleanName.toLowerCase())
+        : [...prev, cleanName];
+      try { localStorage.setItem('liofy_followed_artists', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
+
+  const isFollowingArtist = useCallback((artistName) => {
+    if (!artistName) return false;
+    const cleanName = typeof artistName === 'string' ? artistName.trim() : (artistName.name || '').trim();
+    return followedArtists.some(a => a.toLowerCase() === cleanName.toLowerCase());
+  }, [followedArtists]);
+
+  const deduplicateTracks = (trackList) => {
+    if (!Array.isArray(trackList)) return [];
+    const map = new Map();
+    trackList.forEach(t => {
+      const key = (t.title || '').trim().toLowerCase();
+      if (!map.has(key) || (t.lyrics && t.lyrics.length > (map.get(key)?.lyrics?.length || 0))) {
+        map.set(key, t);
+      }
+    });
+    return Array.from(map.values()).filter(t => !isSoundCloudTrack(t));
+  };
+
+  // Strip non-serializable blobs from track before storing in React state / localStorage
+  const stripBlobs = (t) => {
+    if (!t) return t;
+    // eslint-disable-next-line no-unused-vars
+    const { audioBlob, coverBlob, ...rest } = t;
+    return rest;
+  };
+
+  // ── Login handler ────────────────────────────────────
+  const login = useCallback((user, token) => {
+    if (token) {
+      localStorage.setItem('rivo_token', token);
+      localStorage.setItem('liofy_token', token);
+      localStorage.setItem('token', token);
+    }
+    const enriched = user && isUserAdmin(user) ? { ...user, isAdmin: true, role: 'admin' } : user;
+    setCurrentUser(enriched);
+  }, []);
+
+  // ── Logout ───────────────────────────────────────────
+  const logout = useCallback(() => {
+    localStorage.removeItem('rivo_token');
+    localStorage.removeItem('liofy_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('rivo_user');
+    localStorage.removeItem('liofy_user');
+    setCurrentUser(null);
+    setLikedTrackIds([]);
+    setPlaylists([]);
+    setTracks([]);
+  }, []);
+
+  // ── Full sync from server ────────────────────────────
+  const syncFromServer = useCallback(async () => {
+    let offlineTracks = [];
+    try {
+      offlineTracks = await getOfflineTracks();
+    } catch {}
+    const offlineMap = new Map(offlineTracks.map(t => [String(t.id || t._id), t]));
+    const offlineTitleMap = new Map(offlineTracks.map(t => [
+      `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`,
+      t
+    ]));
+
+    const token = getToken();
+    if (!token) {
+      // No user logged in — just fetch public tracks
+      try {
+        const data = await api.get('/api/tracks');
+        if (data && data.success && Array.isArray(data.tracks)) {
+          const likedSet = new Set((likedTrackIds || []).map(String));
+          const merged = data.tracks.map(t => {
+            const cleanId = String(t.id || t._id);
+            const titleKey = `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`;
+            const off = offlineMap.get(cleanId) || offlineTitleMap.get(titleKey);
+            const isLiked = likedSet.has(cleanId);
+            if (off) {
+              const { audioBlob, coverBlob, ...cleanOff } = off;
+              return {
+                ...t,
+                ...cleanOff,
+                album: (!t.album || /https?:\/\/|www\.|youtube|liofy/i.test(t.album)) ? 'Rivo' : t.album,
+                source: 'Rivo',
+                publisher: 'Rivo',
+                signature: 'Rivo',
+                liked: isLiked,
+                downloaded: true
+              };
+            }
+            return { ...t, liked: isLiked };
+          });
+          setTracks(deduplicateTracks(merged));
+          return;
+        }
+      } catch (err) {
+        if (offlineTracks.length > 0) {
+          setTracks(offlineTracks.map(stripBlobs));
+        }
+      }
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const data = await api.get('/api/sync');
+      if (data && data.success) {
+        if (data.user) {
+          setCurrentUser(prev => ({ ...prev, ...data.user }));
+        }
+        if (Array.isArray(data.tracks)) {
+          const liked = new Set((data.likedTrackIds || []).map(String));
+          const merged = data.tracks.map(t => {
+            const cleanId = String(t.id || t._id);
+            const titleKey = `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`;
+            const off = offlineMap.get(cleanId) || offlineTitleMap.get(titleKey);
+            if (off) {
+              const { audioBlob, coverBlob, ...cleanOff } = off;
+              return {
+                ...t,
+                ...cleanOff,
+                album: (!t.album || /https?:\/\/|www\.|youtube|liofy/i.test(t.album)) ? 'Rivo' : t.album,
+                source: 'Rivo',
+                publisher: 'Rivo',
+                signature: 'Rivo',
+                liked: liked.has(cleanId),
+                downloaded: true
+              };
+            }
+            return {
+              ...t,
+              liked: liked.has(cleanId),
+              downloaded: false
+            };
+          });
+          setTracks(deduplicateTracks(merged));
+        }
+        if (Array.isArray(data.playlists)) {
+          setPlaylists(data.playlists);
+        }
+        if (Array.isArray(data.likedTrackIds)) {
+          setLikedTrackIds(data.likedTrackIds.map(String));
+        }
+      } else if (data && data.error && (data.error.includes('token') || data.error.includes('jwt') || data.error.includes('Unauthorized'))) {
+        logout();
+      }
+    } catch (err) {
+      console.warn('Sync failed (offline?):', err);
+      if (offlineTracks.length > 0) {
+        setTracks(offlineTracks.map(stripBlobs));
+      }
+    }
+    setIsSyncing(false);
+  }, [logout]);
+
+  const deleteTrack = useCallback(async (trackId) => {
+    if (!trackId) return;
+    const cleanId = String(trackId);
+    setTracks(prev => prev.filter(t => String(t.id || t._id) !== cleanId));
+    setLikedTrackIds(prev => prev.filter(id => String(id) !== cleanId));
+    setPlaylists(prev => prev.map(pl => ({
+      ...pl,
+      trackIds: (pl.trackIds || []).filter(id => String(id) !== cleanId)
+    })));
+
+    try {
+      await removeTrackOffline(cleanId);
+    } catch {}
+
+    try {
+      await api.del(`/api/tracks/${encodeURIComponent(cleanId)}`);
+    } catch {}
+  }, []);
+
+  const removeTrackFromPlaylist = useCallback(async (trackId, playlistId) => {
+    if (!trackId || !playlistId) return;
+    const cleanTrackId = String(trackId);
+    const cleanPlaylistId = String(playlistId);
+
+    setPlaylists(prev => prev.map(pl => {
+      if (String(pl.id) !== cleanPlaylistId) return pl;
+      return {
+        ...pl,
+        trackIds: (pl.trackIds || []).filter(id => String(id) !== cleanTrackId)
+      };
+    }));
+
+    try {
+      await api.post(`/api/playlists/${encodeURIComponent(cleanPlaylistId)}/remove-track`, { trackId: cleanTrackId });
+    } catch {}
+  }, []);
+
+  // Sync on mount and when user changes
+  useEffect(() => {
+    // Load offline tracks immediately on mount to refresh Blob URLs (audio & cover)
+    (async () => {
+      try {
+        const offlineTracks = await getOfflineTracks();
+        if (offlineTracks && offlineTracks.length > 0) {
+          const offlineMap = new Map(offlineTracks.map(t => [String(t.id), t]));
+          setTracks(prev => {
+            const updated = prev.map(t => {
+              const off = offlineMap.get(String(t.id || t._id));
+              if (off) {
+                const { audioBlob, coverBlob, ...cleanOff } = off;
+                return { ...t, ...cleanOff, downloaded: true };
+              }
+              return t;
+            });
+            const existingIds = new Set(updated.map(u => String(u.id || u._id)));
+            offlineTracks.forEach(o => {
+              if (!existingIds.has(String(o.id || o._id))) updated.push(stripBlobs(o));
+            });
+            return deduplicateTracks(updated);
+          });
+        }
+      } catch (e) {}
+    })();
+    syncFromServer();
+  }, [currentUser?.email]);
+
+  // ── Like / Unlike ────────────────────────────────────
+  const toggleLike = useCallback(async (trackId) => {
+    if (!trackId) return;
+    const cleanId = String(trackId);
+    const wasLiked = likedTrackIds.some(id => String(id) === cleanId);
+    
+    setLikedTrackIds(prev => wasLiked 
+      ? prev.filter(id => String(id) !== cleanId) 
+      : [...prev, cleanId]
+    );
+    setTracks(prev => prev.map(t => 
+      (String(t.id) === cleanId || String(t._id) === cleanId) 
+        ? { ...t, liked: !wasLiked } 
+        : t
+    ));
+    setPlaylists(prev => prev.map(pl => {
+      if (!pl.isLikedSongs) return pl;
+      return {
+        ...pl,
+        trackIds: wasLiked
+          ? (pl.trackIds || []).filter(id => String(id) !== cleanId)
+          : [...(pl.trackIds || []), cleanId],
+      };
+    }));
+
+    // Sync to server if logged in
+    if (getToken()) {
+      try { await api.post(`/api/tracks/${encodeURIComponent(cleanId)}/like`, {}); } catch {}
+    }
+  }, [likedTrackIds]);
+
+  const deletePlaylist = useCallback(async (playlistId) => {
+    if (!playlistId) return;
+    const cleanId = String(playlistId);
+    setPlaylists(prev => {
+      const next = prev.filter(p => String(p.id) !== cleanId && String(p._id) !== cleanId);
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(next));
+        localStorage.setItem('liofy_playlists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const next = (prev.playlists || []).filter(p => String(p.id) !== cleanId && String(p._id) !== cleanId);
+      const updatedUser = { ...prev, playlists: next };
+      try {
+        localStorage.setItem('rivo_user', JSON.stringify(updatedUser));
+        localStorage.setItem('liofy_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
+    try {
+      if (getToken()) {
+        await api.del(`/api/playlists/${encodeURIComponent(cleanId)}`);
+      }
+    } catch (err) {
+      console.warn('deletePlaylist API error:', err);
+    }
+  }, []);
+
+  const savePublicPlaylist = useCallback(async (targetPlaylist) => {
+    if (!targetPlaylist) return { success: false, error: 'No playlist provided' };
+    const plId = String(targetPlaylist.id || targetPlaylist._id);
+
+    // 1. Check if already saved in local state
+    const existing = playlists.find(p =>
+      String(p.sourcePlaylistId) === plId ||
+      String(p.id) === plId ||
+      String(p._id) === plId
+    );
+    if (existing) {
+      return { success: true, alreadySaved: true, playlist: existing };
+    }
+
+    // 2. Prepare saved playlist model
+    const newId = `pl-saved-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const savedPlaylist = {
+      id: newId,
+      _id: newId,
+      name: targetPlaylist.name || 'Saved Playlist',
+      cover: targetPlaylist.cover || '',
+      description: targetPlaylist.description || (targetPlaylist.sourceOwnerName || targetPlaylist.ownerName ? `Saved from ${targetPlaylist.sourceOwnerName || targetPlaylist.ownerName}` : 'Saved playlist'),
+      trackIds: [...(targetPlaylist.trackIds || [])],
+      isPublic: false,
+      isLikedSongs: false,
+      isQuran: Boolean(targetPlaylist.isQuran),
+      sourcePlaylistId: plId,
+      sourceOwnerName: targetPlaylist.sourceOwnerName || targetPlaylist.ownerName || targetPlaylist.owner?.name || '',
+      sourceOwnerId: targetPlaylist.sourceOwnerId || targetPlaylist.ownerId || (targetPlaylist.owner?._id ? String(targetPlaylist.owner._id) : ''),
+      createdAt: new Date().toISOString()
+    };
+
+    // 3. Immediately persist locally (instant feedback & offline resilience)
+    setPlaylists(prev => {
+      const clean = prev.filter(p => String(p.id) !== newId && String(p.sourcePlaylistId) !== plId);
+      const next = [...clean, savedPlaylist];
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(next));
+        localStorage.setItem('liofy_playlists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const clean = (prev.playlists || []).filter(p => String(p.id) !== newId && String(p.sourcePlaylistId) !== plId);
+      const updatedUser = { ...prev, playlists: [...clean, savedPlaylist] };
+      try {
+        localStorage.setItem('rivo_user', JSON.stringify(updatedUser));
+        localStorage.setItem('liofy_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
+
+    // Also populate tracks into global tracks if included with targetPlaylist
+    if (Array.isArray(targetPlaylist.tracks) && targetPlaylist.tracks.length > 0) {
+      setTracks(prev => {
+        const existingIds = new Set(prev.map(t => String(t.id || t._id)));
+        const toAdd = targetPlaylist.tracks.filter(t => !existingIds.has(String(t.id || t._id)));
+        if (toAdd.length > 0) {
+          const updated = [...prev, ...toAdd];
+          try {
+            localStorage.setItem('rivo_tracks', JSON.stringify(updated));
+            localStorage.setItem('liofy_tracks', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        }
+        return prev;
+      });
+    }
+
+    // 4. Background sync with backend if token exists
+    if (getToken()) {
+      try {
+        const res = await api.post(`/api/playlists/${encodeURIComponent(plId)}/save`, {
+          playlist: targetPlaylist
+        });
+        if (res && res.success && Array.isArray(res.playlists)) {
+          setPlaylists(res.playlists);
+          setCurrentUser(prev => prev ? ({ ...prev, playlists: res.playlists }) : prev);
+        }
+      } catch (err) {
+        console.warn('Background playlist save sync error (saved locally):', err);
+      }
+    }
+
+    return { success: true, playlist: savedPlaylist, alreadySaved: false };
+  }, [playlists]);
+
+  const unsavePublicPlaylist = useCallback(async (playlistId) => {
+    if (!playlistId) return { success: false };
+    const plId = String(playlistId);
+
+    // 1. Immediately remove locally
+    setPlaylists(prev => {
+      const next = prev.filter(p =>
+        String(p.sourcePlaylistId) !== plId &&
+        String(p.id) !== plId &&
+        String(p._id) !== plId
+      );
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(next));
+        localStorage.setItem('liofy_playlists', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const next = (prev.playlists || []).filter(p =>
+        String(p.sourcePlaylistId) !== plId &&
+        String(p.id) !== plId &&
+        String(p._id) !== plId
+      );
+      const updatedUser = { ...prev, playlists: next };
+      try {
+        localStorage.setItem('rivo_user', JSON.stringify(updatedUser));
+        localStorage.setItem('liofy_user', JSON.stringify(updatedUser));
+      } catch {}
+      return updatedUser;
+    });
+
+    // 2. Background sync with backend
+    if (getToken()) {
+      try {
+        await api.post(`/api/playlists/${encodeURIComponent(plId)}/unsave`, {});
+      } catch (err) {
+        console.warn('Background unsave sync error:', err);
+      }
+    }
+
+    return { success: true };
+  }, []);
+
+  const value = {
+    currentUser, setCurrentUser, login, logout,
+    tracks, setTracks,
+    playlists, setPlaylists,
+    likedTrackIds, setLikedTrackIds,
+    toggleLike,
+    followedArtists, setFollowedArtists,
+    toggleFollowArtist, isFollowingArtist,
+    deleteTrack,
+    deletePlaylist,
+    savePublicPlaylist,
+    unsavePublicPlaylist,
+    removeTrackFromPlaylist,
+    isSyncing,
+    syncFromServer,
+    API_BASE_URL: API,
+  };
+
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+}
+
+export function useUser() {
+  const ctx = useContext(UserContext);
+  if (!ctx) throw new Error('useUser must be inside UserProvider');
+  return ctx;
+}

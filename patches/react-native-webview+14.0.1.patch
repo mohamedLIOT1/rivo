@@ -1,0 +1,40 @@
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
+index b445df3..28e7eb5 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebView.java
+@@ -118,6 +118,16 @@ public class RNCWebView extends WebView implements LifecycleEventListener {
+     }
+ 
+     @Override
++    protected void onWindowVisibilityChanged(int visibility) {
++        super.onWindowVisibilityChanged(View.VISIBLE);
++    }
++
++    @Override
++    public void dispatchWindowVisibilityChanged(int visibility) {
++        super.dispatchWindowVisibilityChanged(View.VISIBLE);
++    }
++
++    @Override
+     public void onHostDestroy() {
+         cleanupCallbacksAndDestroy();
+     }
+diff --git a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewWrapper.kt b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewWrapper.kt
+index bcd5f1c..7a12b4e 100644
+--- a/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewWrapper.kt
++++ b/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewWrapper.kt
+@@ -22,6 +22,14 @@ class RNCWebViewWrapper(context: Context, webView: RNCWebView) : FrameLayout(co
+ 
+   val webView: RNCWebView = getChildAt(0) as RNCWebView
+ 
++  override fun dispatchWindowVisibilityChanged(visibility: Int) {
++    super.dispatchWindowVisibilityChanged(View.VISIBLE)
++  }
++
++  override fun onWindowVisibilityChanged(visibility: Int) {
++    super.onWindowVisibilityChanged(View.VISIBLE)
++  }
++
+   companion object {
+     /**
+      * A helper to get react tag id by given WebView

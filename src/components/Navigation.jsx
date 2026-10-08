@@ -1,0 +1,481 @@
+import React, { useState } from 'react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff } from 'lucide-react';
+import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
+import { isUserAdmin } from '../utils/adminUtils';
+import { isQuranContent } from '../utils/quranUtils';
+import { buildUrl } from '../utils/router';
+import { FULL_VERSION, APP_VERSION } from '../version';
+import RivoLogo from './RivoLogo';
+
+export default function Navigation({ 
+  currentScreen = 'home', 
+  setCurrentScreen = () => {}, 
+  playlists = [], 
+  openCreatePlaylistModal = () => {}, 
+  openSettings = () => {},
+  openAddSongModal = () => {},
+  openAuthModal = () => {},
+  openImportPlaylistModal = () => {},
+  openImportSongModal = () => {},
+  openJamModal = () => {},
+  openChatModal = () => {},
+  openShortcutsModal = () => {},
+  unreadChatCount = 0,
+  currentUser,
+  isActivityPanelOpen = false,
+  toggleActivityPanel = () => {},
+  globalTheme = 'dark',
+  libraryMode = 'music',
+  likedTrackIds = [],
+  selectedPlaylist = null,
+  onSelectLikedSongs,
+}) {
+  const isDark = globalTheme === 'dark';
+  const [libraryFilter, setLibraryFilter] = useState('all');
+
+  const mainNavItems = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'search', label: 'Search', icon: Search },
+    { id: 'library', label: 'Library', icon: Disc },
+    { id: 'quran', label: 'Quran', icon: BookOpen },
+    { id: 'stats', label: 'Stats & History', icon: Activity },
+    ...(currentUser && isUserAdmin(currentUser) ? [
+      { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
+    ] : [])
+  ];
+
+  const mobileNavItems = [
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'search', label: 'Search', icon: Search },
+    { id: 'library', label: 'Library', icon: Disc },
+    { id: 'quran', label: 'Quran', icon: BookOpen },
+  ];
+
+  const safePlaylists = (Array.isArray(playlists) ? playlists : [])
+    .filter(pl => isQuranContent(pl) === (libraryMode === 'quran'))
+    .filter(pl => {
+      const name = (pl.name || '').trim().toLowerCase();
+      return name !== 'liked songs' && name !== 'liked prescriptions' && pl.id !== 'liked' && !pl.isLikedSongs;
+    });
+  const filteredPlaylists = safePlaylists.filter(pl => {
+    if (libraryFilter === 'playlists') return !pl.isArtistMix;
+    if (libraryFilter === 'artists') return Boolean(pl.isArtistMix);
+    return true;
+  });
+
+  return (
+    <>
+      {/* =============================================
+          DESKTOP LEFT APOTHECARY SIDEBAR
+          ============================================= */}
+      <aside 
+        className={`hidden md:flex flex-col h-full shrink-0 brutal-border border-y-0 border-l-0 p-3.5 justify-between select-none overflow-hidden transition-colors ${
+          isDark 
+            ? 'bg-[#101716] border-zinc-800 text-white' 
+            : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
+        }`} 
+        style={{ width: 'var(--nav-width)' }}
+      >
+        <div className="flex flex-col h-full space-y-3.5 overflow-hidden">
+          
+
+
+          {/* ── Primary Navigation: Discover ── */}
+          <div className="space-y-1">
+            <div className={`text-[10px] font-mono font-black uppercase px-2 mb-1 tracking-wider ${
+              isDark ? 'text-zinc-500' : 'text-zinc-500'
+            }`}>
+              Discover
+            </div>
+
+            {mainNavItems.map((item) => {
+              const Icon = item.icon;
+              const active = currentScreen === item.id;
+              const isAdminItem = item.id === 'admin';
+              return (
+                <a
+                  key={item.id}
+                  href={buildUrl(item.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setCurrentScreen(item.id);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn cursor-pointer ${
+                    active 
+                      ? (isAdminItem ? 'bg-[#f59e0b] text-[#0b1110] brutal-shadow-sm brutal-border font-black' : 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black')
+                      : isDark
+                        ? (isAdminItem ? 'text-[#f59e0b] hover:bg-zinc-800/80' : 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white')
+                        : (isAdminItem ? 'text-[#f59e0b] hover:bg-[#ede5d3]' : 'text-[#0b1110] hover:bg-[#ede5d3]')
+                  }`}
+                >
+                  <Icon 
+                    size={17} 
+                    className={active ? 'text-[#0b1110] shrink-0' : isAdminItem ? 'text-[#f59e0b] shrink-0' : isDark ? 'text-zinc-400 shrink-0' : 'text-zinc-600 shrink-0'}
+                    strokeWidth={2.5}
+                  />
+                  <span>{item.label}</span>
+                </a>
+              );
+            })}
+          </div>
+
+          {/* ── "Your Dispensary" Library Section ── */}
+          <div className={`pt-2 border-t-2 border-dashed flex-1 flex flex-col min-h-0 ${
+            isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
+          }`}>
+            <div className="flex items-center justify-between px-2 mb-2">
+              <button
+                onClick={() => setCurrentScreen('library')}
+                className={`flex items-center gap-1.5 text-[11px] font-display font-bold hover:underline cursor-pointer ${
+                  currentScreen === 'library'
+                    ? 'text-[#17a398]'
+                    : isDark ? 'text-zinc-200' : 'text-[#0b1110]'
+                }`}
+                title="View full library"
+              >
+                <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
+                <span>{libraryMode === 'quran' ? 'Quran Library' : 'Your Library'}</span>
+              </button>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={openImportSongModal}
+                  title={libraryMode === 'quran' ? "Import Surah by Link" : "Import Song by Link"}
+                  className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
+                    isDark 
+                      ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-[#17a398]' 
+                      : 'bg-white hover:bg-[#ede5d3] text-[#082621]'
+                  }`}
+                >
+                  <Link2 size={12} />
+                </button>
+                <button
+                  onClick={openImportPlaylistModal}
+                  title={libraryMode === 'quran' ? "Import Quran Playlist" : "Import Playlist"}
+                  className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
+                    isDark 
+                      ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-zinc-200' 
+                      : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <DownloadCloud size={12} />
+                </button>
+                <button
+                  onClick={openCreatePlaylistModal}
+                  title={libraryMode === 'quran' ? "New Quran Playlist" : "New Playlist"}
+                  className="w-6 h-6 rounded brutal-border bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] flex items-center justify-center font-bold text-xs transition brutal-shadow-sm"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            <div className="flex gap-1 mb-2 px-1">
+              {['All', 'Playlists', 'Artists'].map((f) => {
+                const active = libraryFilter === f.toLowerCase();
+                return (
+                  <button
+                    key={f}
+                    onClick={() => setLibraryFilter(f.toLowerCase())}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                      active
+                        ? 'bg-[#17a398] text-[#0b1110] brutal-border font-black'
+                        : isDark
+                          ? 'bg-zinc-800/80 text-zinc-300 border border-zinc-700 hover:bg-zinc-700'
+                          : 'bg-white text-zinc-700 border border-[#0b1110] hover:bg-[#ede5d3]'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Playlists List */}
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs font-bold">
+              {/* Liked Songs */}
+              {libraryMode === 'music' && (
+                <div
+                  onClick={() => {
+                    if (onSelectLikedSongs) {
+                      onSelectLikedSongs();
+                    } else {
+                      setCurrentScreen('playlist:liked');
+                    }
+                  }}
+                  className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
+                    (currentScreen === 'playlist' && (selectedPlaylist?.isLikedSongs || selectedPlaylist?.id === 'liked')) || currentScreen === 'liked'
+                      ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white font-black' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
+                      : isDark 
+                        ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
+                        : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
+                      <Heart size={12} fill="currentColor" />
+                    </div>
+                    <div className="truncate">
+                      <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
+                        {libraryMode === 'quran' ? 'Favorite Surahs' : 'Liked Songs'}
+                      </div>
+                      <span className="text-[10px] font-mono text-zinc-500 font-normal">
+                        {likedTrackIds && likedTrackIds.length > 0
+                          ? `${likedTrackIds.length} ${libraryMode === 'quran' ? (likedTrackIds.length === 1 ? 'surah' : 'surahs') : (likedTrackIds.length === 1 ? 'song' : 'songs')}`
+                          : 'Favorites'}
+                      </span>
+                    </div>
+                  </div>
+                  {likedTrackIds && likedTrackIds.length > 0 && (
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                      isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ded2bb] text-[#0b1110]'
+                    }`}>
+                      {likedTrackIds.length}
+                    </span>
+                  )}
+                </div>
+              )}
+
+
+              {filteredPlaylists.map((pl, idx) => {
+                const isActive = currentScreen === `playlist:${pl.id}` || (currentScreen === 'playlist' && pl.id);
+                const count = (pl.trackIds || []).length;
+                const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899'];
+                const badgeColor = colors[idx % colors.length];
+
+                return (
+                  <div
+                    key={pl.id || idx}
+                    onClick={() => setCurrentScreen(`playlist:${pl.id}`)}
+                    className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition ${
+                      isActive 
+                        ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm' : 'bg-[#ede5d3] brutal-shadow-sm'
+                        : isDark ? 'bg-zinc-900/90 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-white hover:bg-[#ede5d3]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {pl.cover ? (
+                        <img 
+                          src={pl.cover} 
+                          alt={pl.name} 
+                          className="w-6 h-6 rounded object-cover border border-zinc-700 shrink-0" 
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div 
+                          className="w-6 h-6 rounded text-white flex items-center justify-center shrink-0 font-mono text-[10px] font-bold"
+                          style={{ backgroundColor: badgeColor }}
+                        >
+                          {pl.name ? pl.name[0].toUpperCase() : 'P'}
+                        </div>
+                      )}
+                      <div className="truncate">
+                        <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>{pl.name}</div>
+                        <span className="text-[10px] font-mono text-zinc-500 font-normal">
+                          {count} {isQuranContent(pl) || libraryMode === 'quran' ? (count === 1 ? 'surah' : 'surahs') : (count === 1 ? 'song' : 'songs')}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
+                      isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
+                    }`}>
+                      {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : 'LIST'}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {filteredPlaylists.length === 0 && (
+                <div className={`p-3 text-center rounded-lg border border-dashed ${
+                  isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
+                }`}>
+                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                    {libraryMode === 'quran' ? 'No Quran playlists yet' : 'No playlists yet'}
+                  </p>
+                  <button
+                    onClick={openCreatePlaylistModal}
+                    className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
+                  >
+                    {libraryMode === 'quran' ? '+ Create Quran Playlist' : '+ Create Playlist'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Quality Guarantee Badge */}
+            <div className={`mt-2 p-2.5 rounded-xl brutal-border text-center shrink-0 ${
+              isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-[#0b1110]'
+            }`}>
+              <div className={`text-[10px] font-display font-black tracking-wide ${
+                isDark ? 'text-zinc-200' : 'text-[#0b1110]'
+              }`}>
+                HI-FI AUDIO QUALITY
+              </div>
+              <p className={`text-[9px] leading-snug mt-0.5 font-medium ${
+                isDark ? 'text-zinc-400' : 'text-zinc-700'
+              }`}>
+                High fidelity • Seamless streaming
+              </p>
+              <div className={`text-[9px] font-mono font-black pt-1 tracking-wider ${
+                isDark ? 'text-[#17a398]' : 'text-[#0f756d]'
+              }`}>
+                RIVO {FULL_VERSION}
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── Switch to Offline Mode Button (visible on mobile / tablet screens <= 1024px) ── */}
+          <div className="block lg:hidden mt-auto mb-1.5 shrink-0">
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'SET_APP_MODE',
+                    mode: 'offline'
+                  }));
+                }
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl brutal-border font-bold text-xs cursor-pointer transition ${
+                isDark ? 'bg-[#0b1110] border-[#17a398] text-[#26c4b7] hover:bg-[#17a398]/20' : 'bg-white border-[#17a398] text-[#082621] hover:bg-[#17a398]/10'
+              }`}
+              title="Switch to Offline Mode (Local Vault)"
+            >
+              <div className="flex items-center gap-2">
+                <WifiOff size={15} className="text-[#17a398]" strokeWidth={2.5} />
+                <span>Offline Vault</span>
+              </div>
+              <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
+                SWITCH
+              </span>
+            </button>
+          </div>
+
+          {/* ── User & Shortcuts Bar (Bottom) ── */}
+          <div className={`p-2 rounded-xl brutal-border flex items-center justify-between gap-2.5 mt-auto shrink-0 ${
+            isDark ? 'bg-[#141d1b] border-zinc-800' : 'bg-[#ede5d3] border-black'
+          }`}>
+            <button
+              onClick={openAuthModal}
+              className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
+              title={currentUser ? "Account Profile" : "Log In"}
+            >
+              <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-display font-black text-xs text-[#0b1110] brutal-shadow-sm shrink-0 overflow-hidden group-hover:scale-105 transition-transform">
+                {currentUser?.avatar ? (
+                  <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  currentUser?.name?.[0] || 'R'
+                )}
+              </div>
+              <div className="min-w-0 flex-1 flex flex-col justify-center pt-1">
+                <div className={`text-xs font-display font-black truncate flex items-center gap-1 leading-snug ${
+                  isDark ? 'text-zinc-100 group-hover:text-white' : 'text-[#0b1110] group-hover:text-black'
+                }`}>
+                  <span className="truncate">{currentUser ? currentUser.name : 'Sign In'}</span>
+                  {currentUser && isUserVerified(currentUser) && <VerifiedBadge size={13} />}
+                </div>
+                <div className="mt-0.5 flex items-center gap-1">
+                  <span 
+                    onClick={(e) => {
+                      if (currentUser && isUserAdmin(currentUser)) {
+                        e.stopPropagation();
+                        setCurrentScreen('admin');
+                      }
+                    }}
+                    className={`inline-flex items-center text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded brutal-border leading-none ${
+                      currentUser && isUserAdmin(currentUser) 
+                        ? 'bg-[#f59e0b] text-[#0b1110] hover:scale-105 transition-transform cursor-pointer' 
+                        : currentUser 
+                          ? 'bg-[#17a398] text-[#0b1110]' 
+                          : 'bg-[#f59e0b] text-[#0b1110]'
+                    }`}
+                    title={currentUser && isUserAdmin(currentUser) ? "Open Admin Portal (/admin)" : undefined}
+                  >
+                    {currentUser && isUserAdmin(currentUser) ? 'ADMIN' : currentUser ? 'ONLINE' : 'GUEST'}
+                  </span>
+                </div>
+              </div>
+            </button>
+
+            {openShortcutsModal && (
+              <button
+                onClick={openShortcutsModal}
+                title="Keyboard Shortcuts (?)"
+                className={`w-9 h-9 rounded-lg brutal-border flex items-center justify-center transition shrink-0 cursor-pointer ${
+                  isDark 
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white' 
+                    : 'bg-white border-[#0b1110] text-[#0b1110] hover:bg-[#ded2bb]'
+                }`}
+              >
+                <Command size={14} strokeWidth={2.5} />
+              </button>
+            )}
+          </div>
+
+        </div>
+      </aside>
+
+      {/* =============================================
+          MOBILE BOTTOM NAVIGATION — Rivo Apothecary Style
+          ============================================= */}
+      <nav className={`md:hidden fixed bottom-0 left-0 right-0 z-40 brutal-border-thick border-x-0 border-b-0 h-[58px] px-3 flex items-center justify-around shadow-2xl transition-colors ${
+        isDark 
+          ? 'bg-[#101716] border-zinc-800 text-white' 
+          : 'bg-[#fdfbf7] border-black text-[#0b1110]'
+      }`}>
+        {mobileNavItems.map((item) => {
+          const Icon = item.icon;
+          const active = currentScreen === item.id;
+
+          return (
+            <a
+              key={item.id}
+              href={buildUrl(item.id)}
+              onClick={(e) => {
+                e.preventDefault();
+                setCurrentScreen(item.id);
+              }}
+              className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+                active 
+                  ? 'bg-[#17a398] text-[#0b1110] brutal-border font-bold' 
+                  : isDark 
+                    ? 'text-zinc-400 hover:text-white' 
+                    : 'text-[#0b1110]'
+              }`}
+            >
+              <Icon 
+                size={18} 
+                className={active ? 'text-[#0b1110]' : isDark ? 'text-zinc-400' : 'text-[#0b1110]'} 
+                strokeWidth={2.5} 
+              />
+              <span className="text-[9px] font-display font-bold">
+                {item.label}
+              </span>
+            </a>
+          );
+        })}
+
+        {/* Mobile Messages Button */}
+        <button
+          onClick={openChatModal}
+          className={`relative flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition ${
+            isDark ? 'text-zinc-400 hover:text-white' : 'text-[#0b1110]'
+          }`}
+        >
+          <div className="relative">
+            <MessageSquare size={18} className={isDark ? 'text-zinc-400' : 'text-[#0b1110]'} strokeWidth={2.5} />
+            {unreadChatCount > 0 && (
+              <span className="absolute -top-1 -right-2 bg-[#dc2626] text-white text-[8px] font-mono px-1 rounded-full font-bold brutal-border">
+                {unreadChatCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] font-display font-bold">
+            Chat
+          </span>
+        </button>
+      </nav>
+    </>
+  );
+}

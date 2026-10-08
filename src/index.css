@@ -1,0 +1,865 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Disable CSS transitions during theme toggle to eliminate lag and stutter */
+.disable-transitions,
+.disable-transitions *,
+.disable-transitions *::before,
+.disable-transitions *::after {
+  -webkit-transition: none !important;
+  -moz-transition: none !important;
+  -o-transition: none !important;
+  -ms-transition: none !important;
+  transition: none !important;
+}
+
+/* =============================================
+   RIVO — Sonic Dispensary Neo-Brutalist System
+   ============================================= */
+
+:root {
+  /* Rivo Apothecary Colors */
+  --rivo-teal: #17a398;
+  --rivo-teal-light: #26c4b7;
+  --rivo-teal-dark: #0f756d;
+  --rivo-deep-forest: #082621;
+  --rivo-card-bg: #fdfbf7;
+  --rivo-cream: #f4ede1;
+  --rivo-paper: #ede5d3;
+  --rivo-paper-dark: #ded2bb;
+  --rivo-ink: #0b1110;
+  --rivo-crimson: #dc2626;
+  --rivo-amber: #f59e0b;
+  --rivo-navy: #1e3a8a;
+
+  /* Theme aliases mapped to Rivo palette */
+  --sp-green: #17a398;
+  --sp-green-hover: #26c4b7;
+  --sp-green-press: #0f756d;
+  --sp-black: #082621;
+  --sp-bg: #17a398;
+  --sp-surface: #fdfbf7;
+  --sp-elevated: #ede5d3;
+  --sp-elevated-hover: #ded2bb;
+  --sp-highlight: rgba(11, 17, 16, 0.08);
+  --sp-subtle: rgba(11, 17, 16, 0.04);
+
+  /* Text */
+  --sp-text-primary: #0b1110;
+  --sp-text-secondary: #4b5563;
+  --sp-text-subdued: #6b7280;
+  --sp-text-link: #0f756d;
+  --sp-text-link-hover: #17a398;
+
+  /* Borders */
+  --sp-border: #0b1110;
+  --sp-border-subtle: rgba(11, 17, 16, 0.2);
+
+  /* Layout Dimensions */
+  --nav-width: 275px;
+  --player-height: 96px;
+  --topbar-height: 66px;
+}
+
+/* =============================================
+   Neo-Brutalist Foundations (Rivo Design)
+   ============================================= */
+.brutal-border {
+  border: 2.5px solid #0b1110 !important;
+}
+.brutal-border-thick {
+  border: 3.5px solid #0b1110 !important;
+}
+.brutal-shadow-sm {
+  box-shadow: 2px 2px 0px #0b1110 !important;
+}
+.brutal-shadow {
+  box-shadow: 4px 4px 0px #0b1110 !important;
+}
+.brutal-shadow-lg {
+  box-shadow: 6px 6px 0px #0b1110 !important;
+}
+.brutal-shadow-teal {
+  box-shadow: 5px 5px 0px #082621 !important;
+}
+.brutal-shadow-amber {
+  box-shadow: 4px 4px 0px #f59e0b !important;
+}
+.brutal-shadow-crimson {
+  box-shadow: 4px 4px 0px #dc2626 !important;
+}
+
+.brutal-btn {
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.brutal-btn:hover {
+  transform: translate(-1.5px, -1.5px);
+  box-shadow: 5px 5px 0px #0b1110 !important;
+}
+.brutal-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #0b1110 !important;
+}
+
+/* Outer filmstrip / perforated strip margins matching rivo.host */
+.filmstrip-stripes {
+  background: repeating-linear-gradient(
+    0deg,
+    #0b1110,
+    #0b1110 12px,
+    #17a398 12px,
+    #17a398 24px
+  );
+}
+
+/* Sawtooth pharmaceutical guarantee badge */
+.sawtooth-badge {
+  clip-path: polygon(
+    50% 0%, 59% 7%, 70% 3%, 76% 12%, 87% 12%, 89% 23%, 99% 27%, 97% 38%, 
+    100% 50%, 97% 62%, 99% 73%, 89% 77%, 87% 88%, 76% 88%, 70% 97%, 59% 93%, 
+    50% 100%, 41% 93%, 30% 97%, 24% 88%, 13% 88%, 11% 77%, 1% 73%, 3% 62%, 
+    0% 50%, 3% 38%, 1% 27%, 11% 23%, 13% 12%, 24% 12%, 30% 3%, 41% 7%
+  );
+}
+
+/* Vintage paper texture */
+.paper-texture {
+  background-color: #fdfbf7;
+  background-image: radial-gradient(#d3c9b4 0.75px, transparent 0.75px);
+  background-size: 7px 7px;
+}
+
+.dark .paper-texture,
+.paper-texture-dark {
+  background-color: #141d1b !important;
+  background-image: radial-gradient(#263834 0.75px, transparent 0.75px) !important;
+  background-size: 7px 7px;
+}
+
+/* Dynamic Equalizer animations matching uploaded widget */
+@keyframes eqBounce1 { 0%, 100% { height: 6px; } 50% { height: 18px; } }
+@keyframes eqBounce2 { 0%, 100% { height: 13px; } 50% { height: 25px; } }
+@keyframes eqBounce3 { 0%, 100% { height: 5px; } 50% { height: 13px; } }
+@keyframes eqBounce4 { 0%, 100% { height: 17px; } 50% { height: 28px; } }
+@keyframes eqBounce5 { 0%, 100% { height: 8px; } 50% { height: 20px; } }
+
+.animate-eq-1 { animation: eqBounce1 0.7s infinite ease-in-out; }
+.animate-eq-2 { animation: eqBounce2 0.85s infinite ease-in-out; }
+.animate-eq-3 { animation: eqBounce3 0.6s infinite ease-in-out; }
+.animate-eq-4 { animation: eqBounce4 0.9s infinite ease-in-out; }
+.animate-eq-5 { animation: eqBounce5 0.75s infinite ease-in-out; }
+
+/* Font Family definitions */
+.font-sans { font-family: 'Plus Jakarta Sans', sans-serif; }
+.font-display { font-family: 'Space Grotesk', sans-serif; }
+.font-mono { font-family: 'Space Mono', monospace; }
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #ede5d3;
+  border-left: 1.5px solid #0b1110;
+}
+::-webkit-scrollbar-thumb {
+  background: #0b1110;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0f756d;
+}
+
+/* =============================================
+   Reset & Base
+   ============================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  height: -webkit-fill-available;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  background-color: var(--rivo-deep-forest);
+  color: var(--rivo-ink);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  user-select: none;
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* =============================================
+   Scrollbar — Spotify Style (thin, dark)
+   ============================================= */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* =============================================
+   Typography
+   ============================================= */
+.sp-title {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--sp-text-primary);
+}
+
+.sp-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sp-text-secondary);
+}
+
+/* =============================================
+   Spotify Buttons
+   ============================================= */
+.sp-btn-primary {
+  background-color: var(--sp-green);
+  color: #000;
+  font-weight: 700;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  border: none;
+  border-radius: 500px;
+  padding: 14px 32px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+  white-space: nowrap;
+}
+.sp-btn-primary:hover {
+  background-color: var(--sp-green-hover);
+  transform: scale(1.04);
+}
+.sp-btn-primary:active {
+  background-color: var(--sp-green-press);
+  transform: scale(0.98);
+}
+
+.sp-btn-ghost {
+  background: transparent;
+  color: var(--sp-text-secondary);
+  border: 1px solid var(--sp-text-secondary);
+  border-radius: 500px;
+  padding: 7px 15px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.sp-btn-ghost:hover {
+  color: var(--sp-text-primary);
+  border-color: var(--sp-text-primary);
+  transform: scale(1.04);
+}
+
+/* =============================================
+   Cards — Spotify Style
+   ============================================= */
+.sp-card {
+  background-color: var(--sp-surface);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+.sp-card:hover {
+  background-color: var(--sp-elevated);
+}
+.sp-card:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 768px) {
+  .sp-card {
+    padding: 10px;
+    background-color: rgba(255,255,255,0.05);
+    border-radius: 8px;
+  }
+  .sp-card-img {
+    margin-bottom: 8px !important;
+    border-radius: 6px !important;
+  }
+  .sp-card-title {
+    font-size: 0.8125rem;
+    margin: 0 0 2px;
+  }
+  .sp-card-subtitle {
+    font-size: 0.6875rem;
+    -webkit-line-clamp: 1;
+  }
+}
+
+.sp-card-img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+.sp-card-img-circle {
+  border-radius: 50%;
+}
+
+.sp-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--sp-text-primary);
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-card-subtitle {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--sp-text-secondary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+}
+
+/* Play button overlay on card */
+.sp-card-play {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--sp-green);
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+  border: none;
+}
+.sp-card:hover .sp-card-play,
+.sp-card-play:focus {
+  opacity: 1;
+  transform: translateY(0);
+}
+.sp-card-play:hover {
+  background-color: var(--sp-green-hover);
+  transform: scale(1.06) translateY(0);
+}
+
+/* =============================================
+   Quick Row Items (Home top grid)
+   ============================================= */
+.sp-quick-item {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background-color: rgba(255,255,255,0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+.sp-quick-item:hover {
+  background-color: rgba(255,255,255,0.18);
+}
+.sp-quick-item:active {
+  transform: scale(0.98);
+}
+.sp-quick-item:hover .sp-quick-play {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sp-quick-img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.sp-quick-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--sp-text-primary);
+  padding: 0 10px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.25;
+}
+
+.sp-quick-play {
+  position: absolute;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--sp-green);
+  color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: scale(0.9);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  transition: opacity 0.2s ease, transform 0.15s ease, background-color 0.15s ease;
+  border: none;
+  cursor: pointer;
+}
+.sp-quick-play:hover {
+  background-color: var(--sp-green-hover);
+  transform: scale(1.08);
+}
+
+@media (max-width: 768px) {
+  .sp-quick-item {
+    border-radius: 4px;
+    background-color: rgba(255,255,255,0.07);
+  }
+  .sp-quick-img {
+    width: 46px;
+    height: 46px;
+  }
+  .sp-quick-label {
+    font-size: 0.725rem;
+    padding: 0 8px;
+    -webkit-line-clamp: 2;
+    line-height: 1.2;
+  }
+  .sp-quick-play {
+    display: none !important;
+  }
+}
+
+/* =============================================
+   Spotify Now Playing Bar (MiniPlayer)
+   ============================================= */
+.sp-now-playing-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--player-height);
+  background: linear-gradient(var(--sp-elevated), var(--sp-elevated));
+  border-top: 1px solid var(--sp-border-subtle);
+  z-index: 100;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* =============================================
+   Sidebar — Spotify Desktop
+   ============================================= */
+.sp-sidebar {
+  width: var(--nav-width);
+  background-color: var(--sp-black);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sp-sidebar-top {
+  padding: 24px 8px 8px;
+  flex-shrink: 0;
+}
+
+.sp-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--sp-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+}
+.sp-nav-link:hover {
+  color: var(--sp-text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+.sp-nav-link.active {
+  color: var(--sp-text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+.sp-nav-link.active svg {
+  color: var(--sp-text-primary);
+}
+
+/* Library Panel */
+.sp-library-panel {
+  flex: 1;
+  background-color: var(--sp-surface);
+  border-radius: 8px;
+  margin: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =============================================
+   Range Inputs (Spotify style)
+   ============================================= */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #27272a;
+  border-radius: 9999px;
+  cursor: pointer;
+  height: 6px;
+  accent-color: #17a398;
+}
+input[type=range]:focus {
+  outline: none;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #3f3f46;
+}
+input[type=range]::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: #3f3f46;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  margin-top: -4px;
+  opacity: 1;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+input[type=range]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+}
+input[type=range]:hover::-webkit-slider-thumb,
+input[type=range]:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+  background: #ffffff;
+}
+
+/* Custom transparent range overlays for layered sliders */
+input[type=range].opacity-0 {
+  opacity: 0 !important;
+  background: transparent !important;
+}
+input[type=range].opacity-0::-webkit-slider-runnable-track {
+  background: transparent !important;
+}
+input[type=range].opacity-0::-moz-range-track {
+  background: transparent !important;
+}
+input[type=range].opacity-0::-webkit-slider-thumb {
+  opacity: 0 !important;
+}
+input[type=range].opacity-0::-moz-range-thumb {
+  opacity: 0 !important;
+}
+
+/* =============================================
+   Equalizer Bars Animation
+   ============================================= */
+@keyframes spEq1 {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+@keyframes spEq2 {
+  0%, 100% { height: 8px; }
+  50% { height: 4px; }
+}
+@keyframes spEq3 {
+  0%, 100% { height: 12px; }
+  50% { height: 20px; }
+}
+
+.sp-eq-bar {
+  width: 3px;
+  background-color: var(--sp-green);
+  border-radius: 1px;
+  display: inline-block;
+}
+.sp-eq-bar:nth-child(1) { animation: spEq1 0.8s ease infinite; }
+.sp-eq-bar:nth-child(2) { animation: spEq2 0.8s ease infinite 0.15s; }
+.sp-eq-bar:nth-child(3) { animation: spEq3 0.8s ease infinite 0.3s; }
+
+/* =============================================
+   Glassmorphism Panels
+   ============================================= */
+.glass-panel {
+  background: rgba(18, 18, 18, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--sp-border);
+}
+
+.glass-player {
+  background: rgba(18, 18, 18, 0.96);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border-top: 1px solid var(--sp-border-subtle);
+}
+
+/* =============================================
+   Topbar / Header Gradients
+   ============================================= */
+.sp-topbar {
+  height: var(--topbar-height);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* =============================================
+   Utility Classes
+   ============================================= */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* =============================================
+   Mobile Bottom Nav (Spotify Mobile)
+   ============================================= */
+.sp-mobile-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: rgba(15, 15, 15, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  height: 60px;
+}
+
+@media (min-width: 768px) {
+  .sp-mobile-nav {
+    display: none !important;
+  }
+}
+
+/* =============================================
+   Section Headings
+   ============================================= */
+.sp-section-title {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--sp-text-primary);
+  letter-spacing: -0.02em;
+  margin: 0 0 16px;
+}
+
+@media (max-width: 768px) {
+  .sp-section-title {
+    font-size: 1.1875rem !important;
+    margin: 0 0 10px !important;
+  }
+}
+
+.sp-section-link {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sp-text-secondary);
+  cursor: pointer;
+  transition: color 0.15s;
+  background: none;
+  border: none;
+}
+.sp-section-link:hover {
+  color: var(--sp-text-primary);
+  text-decoration: underline;
+}
+
+/* =============================================
+   Track Row (List items)
+   ============================================= */
+.sp-track-row {
+  display: grid;
+  grid-template-columns: 16px minmax(120px, 4fr) minmax(120px, 2fr) minmax(80px, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.sp-track-row:hover {
+  background: var(--sp-highlight);
+}
+
+/* =============================================
+   Animations
+   ============================================= */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-slide-up {
+  animation: fadeSlideUp 0.3s ease forwards;
+}
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(29, 185, 84, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(29, 185, 84, 0); }
+}
+
+/* =============================================
+   Vinyl Spin
+   ============================================= */
+@keyframes vinyl-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.vinyl-spin {
+  animation: vinyl-spin 3s linear infinite;
+}
+.vinyl-spin-slow {
+  animation: vinyl-spin 6s linear infinite;
+}
+
+/* =============================================
+   Mobile Performance & Smooth Scrolling
+   ============================================= */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Snappier lightweight shadows for mobile GPUs */
+  .brutal-shadow-lg {
+    box-shadow: 3px 3px 0px #0b1110 !important;
+  }
+
+  .brutal-shadow {
+    box-shadow: 2.5px 2.5px 0px #0b1110 !important;
+  }
+
+  /* Instant tap feedback without frame stutters */
+  .brutal-btn {
+    transition: transform 0.05s ease-out !important;
+  }
+
+  /* Lightweight blur on mobile to protect frame rates */
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl {
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+  }
+}
+
+/* =============================================
+   Native App High-Performance Acceleration
+   ============================================= */
+.rivo-native-app,
+.rivo-native-app body {
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  overscroll-behavior: none !important;
+}
+
+.rivo-native-app button,
+.rivo-native-app a,
+.rivo-native-app [role="button"] {
+  touch-action: manipulation !important;
+  -webkit-touch-callout: none !important;
+  cursor: pointer !important;
+}
+
+.rivo-native-app .backdrop-blur-md,
+.rivo-native-app .backdrop-blur-lg,
+.rivo-native-app .backdrop-blur-xl {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background-color: rgba(8, 38, 33, 0.95) !important;
+}
+

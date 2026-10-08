@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+.env
+*.log
+*-player-script.js
+*-watch.html
+.idea/
+.artifacts/
+*.apk
+*.ipa
+*.aab
+android/app/src/main/assets/
+ios/build/
+android/build/
+android/app/build/
+downloaded_ipa/
+uploads/audio-cache/
