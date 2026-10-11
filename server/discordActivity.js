@@ -211,74 +211,112 @@ function initDiscordBot(UserModel) {
     });
 
     botClient.on('messageCreate', async (msg) => {
-      if (msg.author.bot || msg.channel.type !== 'DM') return;
+      if (msg.author.bot) return;
+      if (msg.guildId || msg.guild) return; // DM only
       const discordId = msg.author.id;
+      const content = msg.content.trim();
 
-      // Handle interactive steps
-      if (awaitingUserStep.has(discordId)) {
-        const stepData = awaitingUserStep.get(discordId);
+      // Check if user sent a token directly (long string with at least 2 dots)
+      const isPossibleToken = content.length >= 50 && (content.match(/\./g) || []).length >= 2;
+      const stepData = awaitingUserStep.get(discordId);
 
-        if (stepData.step === 'LINK_CODE') {
-          const input = msg.content.trim();
-          // Find user by link code or email
-          const user = await UserModel.findOne({
-            $or: [
-              { 'discord.linkCode': input, 'discord.linkCodeExpires': { $gt: new Date() } },
-              { email: input.toLowerCase() }
-            ]
-          });
+      // 1. Process Token (either in step TOKEN or pasted directly)
+      if ((stepData && stepData.step === 'TOKEN') || isPossibleToken) {
+        const tokenInput = content.replace(/^token:\s*/i, '').trim();
+        let targetUserId = stepData?.rivoUserId;
+        let targetUserName = stepData?.rivoUserName;
 
-          if (!user) {
-            await msg.reply('❌ لم يتم العثور على حساب Rivo بهذا الكود أو الإيميل. تأكد من الكود وحاول ثانية أو افتح الإعدادات في الموقع.');
-            return;
+        if (!targetUserId) {
+          const existingUser = await UserModel.findOne({ 'discord.id': discordId });
+          if (existingUser) {
+            targetUserId = existingUser._id;
+            targetUserName = existingUser.name;
           }
+        }
 
-          stepData.rivoUserId = user._id;
-          stepData.rivoUserName = user.name;
-          stepData.step = 'TOKEN';
-
-          await msg.reply(`✅ تم التعرف على حسابك: **${user.name}**!\n\n🔑 الآن أرسل توكن حسابك الشخصي في ديسكورد لحفظه مشفراً:`);
+        if (!targetUserId) {
+          await msg.reply('❌ يرجى إرسال **كود الربط** المكون من 6 أرقام من موقع Rivo أولاً أو كتابة إيميلك المسجل في Rivo.');
           return;
         }
 
-        if (stepData.step === 'TOKEN') {
-          const tokenInput = msg.content.replace(/^token:\s*/i, '').trim();
-          if (tokenInput.length < 40) {
-            await msg.reply('❌ صيغة التوكن غير صحيحة. يرجى التأكد من نسخه بالكامل.');
-            return;
-          }
-
-          // Test token validity
-          const testClient = new SelfClient({ checkUpdate: false });
-          testClient.login(tokenInput).then(async () => {
-            const discordTag = testClient.user.tag;
-            testClient.destroy();
-
-            const encrypted = encryptToken(tokenInput);
-            await UserModel.findByIdAndUpdate(stepData.rivoUserId, {
-              $set: {
-                'discord.id': discordId,
-                'discord.username': discordTag,
-                'discord.token': encrypted,
-                'discord.enabled': true,
-                'discord.linkCode': '',
-                'discord.linkCodeExpires': null
-              }
-            });
-
-            awaitingUserStep.delete(discordId);
-
-            const successEmbed = new MessageEmbed()
-              .setColor('#00FF00')
-              .setTitle('🎉 تم ربط حسابك في Rivo بنجاح!')
-              .setDescription(`تم توصيل الحساب **${discordTag}** بحساب Rivo **${stepData.rivoUserName}**.\n\n🎵 الآن بمجرد أن تشغل أي أغنية على موقع Rivo، ستظهر في بروفايلك مباشرة مثل Spotify!`);
-
-            await msg.reply({ embeds: [successEmbed] });
-          }).catch(async (e) => {
-            await msg.reply('❌ فشل تسجيل الدخول بهذا التوكن! تأكد أنه توكن حسابك الصحيح وغير منتهي الصلاحية.');
-          });
+        if (tokenInput.length < 40) {
+          await msg.reply('❌ صيغة التوكن غير صحيحة. يرجى التأكد من نسخه بالكامل.');
           return;
         }
+
+        // Test token validity
+        const testClient = new SelfClient({ checkUpdate: false });
+        testClient.login(tokenInput).then(async () => {
+          const discordTag = testClient.user.tag;
+          testClient.destroy();
+
+          const encrypted = encryptToken(tokenInput);
+          await UserModel.findByIdAndUpdate(targetUserId, {
+            $set: {
+              'discord.id': discordId,
+              'discord.username': discordTag,
+              'discord.token': encrypted,
+              'discord.enabled': true,
+              'discord.linkCode': '',
+              'discord.linkCodeExpires': null
+            }
+          });
+
+          awaitingUserStep.delete(discordId);
+
+          const successEmbed = new MessageEmbed()
+            .setColor('#17a398')
+            .setTitle('🎉 تم ربط حسابك في Rivo بنجاح!')
+            .setDescription(`تم توصيل الحساب **${discordTag}** بحساب Rivo **${targetUserName}**.\n\n🎵 الآن بمجرد أن تشغل أي أغنية على [موقع Rivo](https://rivo-m.duckdns.org)، ستظهر في بروفايلك مباشرة مثل Spotify!`);
+
+          await msg.reply({ embeds: [successEmbed] });
+        }).catch(async (e) => {
+          await msg.reply('❌ فشل تسجيل الدخول بهذا التوكن! تأكد أنه توكن حسابك الصحيح وغير منتهي الصلاحية.');
+        });
+        return;
+      }
+
+      // 2. Check if input is a 6-digit link code or email
+      const isSixDigit = /^\d{6}$/.test(content);
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(content);
+
+      if ((stepData && stepData.step === 'LINK_CODE') || isSixDigit || isEmail) {
+        const user = await UserModel.findOne({
+          $or: [
+            { 'discord.linkCode': content, 'discord.linkCodeExpires': { $gt: new Date() } },
+            { email: content.toLowerCase() }
+          ]
+        });
+
+        if (!user) {
+          await msg.reply('❌ لم يتم العثور على حساب Rivo بهذا الكود أو الإيميل.\n\nتأكد من الكود أو الإيميل المسجل في موقع Rivo.');
+          return;
+        }
+
+        awaitingUserStep.set(discordId, {
+          step: 'TOKEN',
+          rivoUserId: user._id,
+          rivoUserName: user.name
+        });
+
+        const codeFoundEmbed = new MessageEmbed()
+          .setColor('#17a398')
+          .setTitle(`✅ تم التعرف على حسابك: ${user.name}`)
+          .setDescription('🔑 الآن أرسل **توكن حسابك الشخصي في ديسكورد** هنا في المحادثة لحفظه مشفراً وعرض الأغاني في بروفايلك.\n\n*(إذا كنت لا تعرف كيف تجلب التوكن، اضغط على أحد الأزرار بالأسفل)*');
+
+        const helpRow = new MessageActionRow().addComponents(
+          new MessageButton()
+            .setCustomId('btn_help_mobile')
+            .setLabel('📱 كيف تجيب التوكن من الموبايل؟')
+            .setStyle('PRIMARY'),
+          new MessageButton()
+            .setCustomId('btn_help_pc')
+            .setLabel('💻 كيف تجيب التوكن من الكمبيوتر؟')
+            .setStyle('PRIMARY')
+        );
+
+        await msg.reply({ embeds: [codeFoundEmbed], components: [helpRow] });
+        return;
       }
 
       // Default Menu

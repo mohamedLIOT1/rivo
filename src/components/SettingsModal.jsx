@@ -249,9 +249,17 @@ export default function SettingsModal({
                       {copiedCode ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
                     </button>
                   </div>
-                  <p className={`text-[10px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
+                  <p className={`text-[10px] mb-2 ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
                     Send this code to the Rivo Discord bot in DM to link your account.
                   </p>
+                  <a
+                    href="https://discord.com/users/1440997674630250506"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="brutal-btn inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#5865F2] hover:bg-[#4752c4] text-white font-mono text-[11px] font-bold uppercase brutal-border brutal-shadow-sm transition"
+                  >
+                    Open RIVO Bot in Discord ↗
+                  </a>
                 </div>
               ) : (
                 <button
