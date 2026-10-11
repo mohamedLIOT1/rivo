@@ -3,25 +3,24 @@ import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
 import { isUserAdmin } from '../utils/adminUtils';
 
 const API = (() => {
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
-  }
   if (typeof window !== 'undefined') {
     const { hostname, protocol, host } = window.location;
     if (
       window.Capacitor ||
       protocol === 'capacitor:' ||
-      protocol === 'file:' ||
-      (hostname === 'localhost' && !host.includes('5000'))
+      protocol === 'file:'
     ) {
-      return 'https://liofy-production-0f56.up.railway.app';
+      return 'https://rivo-m.duckdns.org';
     }
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && !host.includes('5000')) {
       return 'http://localhost:5000';
     }
     return `${protocol}//${host}`;
   }
-  return 'https://liofy-production-0f56.up.railway.app';
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
+  }
+  return 'https://rivo-m.duckdns.org';
 })();
 
 export const API_BASE_URL = API;

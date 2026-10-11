@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon, Menu, Disc, Sparkles, ShieldCheck, WifiOff, Activity } from 'lucide-react';
+import { Search as SearchIcon, X, Plus, Radio, MessageSquare, ChevronDown, Users, Sun, Moon, Menu, Disc, Sparkles, ShieldCheck, WifiOff, Activity, Settings } from 'lucide-react';
 import Navigation from './components/Navigation';
 import MiniPlayer from './components/MiniPlayer';
 import FullPlayerModal from './components/FullPlayerModal';
@@ -1821,6 +1821,7 @@ function AppContent() {
               onBack={() => handleNavigateBack('home')}
               logout={logout}
               openAuthModal={() => setIsAuthOpen(true)}
+              openSettings={() => setIsSettingsOpen(true)}
               onSelectPlaylist={(pl) => { handleSelectPlaylistView(pl); }}
               onOpenChat={(target) => {
                 handleOpenChat(target);
@@ -2304,6 +2305,20 @@ function AppContent() {
                   <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-zinc-700/50">
                     {globalTheme === 'dark' ? 'NIGHT' : 'DAY'}
                   </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsSettingsOpen(true);
+                    handleCloseMobileMenu();
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white brutal-border brutal-shadow-sm brutal-btn cursor-pointer font-bold"
+                >
+                  <div className="flex items-center gap-2">
+                    <Radio size={15} className="animate-pulse text-[#57F287]" />
+                    <span>Discord Rich Presence</span>
+                  </div>
+                  <Settings size={15} />
                 </button>
               </div>
             </div>
