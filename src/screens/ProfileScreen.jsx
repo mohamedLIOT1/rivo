@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Camera, Edit2, Check, X, Music, Heart, Globe, Lock,
   Eye, EyeOff, Search, User, Calendar, LogOut, LogIn, ChevronRight, Loader2,
-  MessageSquare, UserPlus, UserCheck, Radio, Disc, Plus, Activity, ShieldCheck
+  MessageSquare, UserPlus, UserCheck, Radio, Disc, Plus, Activity, ShieldCheck, Settings
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from '../components/VerifiedBadge';
@@ -23,6 +23,7 @@ export default function ProfileScreen({
   onBack, 
   logout, 
   openAuthModal,
+  openSettings,
   onSelectPlaylist,
   onOpenChat,
   onStartJamWithUser,
@@ -705,25 +706,39 @@ export default function ProfileScreen({
           </div>
         </div>
 
-        {currentUser ? (
-          <button
-            onClick={logout}
-            className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-[#dc2626] text-white rounded-lg brutal-border brutal-shadow-sm text-xs font-display font-black brutal-btn cursor-pointer shrink-0"
-            title="Log Out"
-          >
-            <LogOut size={13} strokeWidth={2.5} />
-            <span className="hidden sm:inline">Log Out</span>
-          </button>
-        ) : (
-          <button
-            onClick={openAuthModal}
-            className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-lg brutal-border brutal-shadow-sm text-xs font-display font-black brutal-btn cursor-pointer shrink-0"
-            title="Sign In / Register"
-          >
-            <LogIn size={14} strokeWidth={2.5} />
-            <span className="hidden sm:inline">Sign In</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {currentUser && openSettings && (
+            <button
+              onClick={openSettings}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#5865F2] hover:bg-[#4752C4] text-white rounded-lg brutal-border brutal-shadow-sm text-xs font-display font-black brutal-btn cursor-pointer shrink-0 transition active:scale-95 shadow-md"
+              title="Discord Presence & Settings"
+            >
+              <Radio size={13} className="animate-pulse text-[#57F287]" />
+              <span className="font-bold">Discord Presence</span>
+              <Settings size={13} />
+            </button>
+          )}
+
+          {currentUser ? (
+            <button
+              onClick={logout}
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 bg-[#dc2626] text-white rounded-lg brutal-border brutal-shadow-sm text-xs font-display font-black brutal-btn cursor-pointer shrink-0"
+              title="Log Out"
+            >
+              <LogOut size={13} strokeWidth={2.5} />
+              <span className="hidden sm:inline">Log Out</span>
+            </button>
+          ) : (
+            <button
+              onClick={openAuthModal}
+              className="flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] rounded-lg brutal-border brutal-shadow-sm text-xs font-display font-black brutal-btn cursor-pointer shrink-0"
+              title="Sign In / Register"
+            >
+              <LogIn size={14} strokeWidth={2.5} />
+              <span className="hidden sm:inline">Sign In</span>
+            </button>
+          )}
+        </div>
       </div>
 
         <div className="flex-1 overflow-y-auto p-2.5 sm:p-6" style={{ paddingBottom: 'calc(var(--player-height) + 40px)' }}>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff, Settings } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -396,6 +396,18 @@ export default function Navigation({
                   </span>
                 </div>
               </div>
+            </button>
+
+            <button
+              onClick={openSettings}
+              title="Discord Rich Presence & Audio Settings"
+              className={`w-9 h-9 rounded-lg brutal-border flex items-center justify-center transition shrink-0 cursor-pointer ${
+                isDark 
+                  ? 'bg-zinc-800 border-zinc-700 text-[#5865F2] hover:bg-zinc-700 hover:text-white' 
+                  : 'bg-white border-[#0b1110] text-[#5865F2] hover:bg-[#ded2bb]'
+              }`}
+            >
+              <Settings size={15} strokeWidth={2.5} />
             </button>
 
             {openShortcutsModal && (
