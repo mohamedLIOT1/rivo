@@ -147,6 +147,7 @@ export default function HomeScreen({
   const [activeFilter, setActiveFilter] = useState('all');
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(36);
 
   const isTrackActive = (t) => {
     if (!currentTrack || !t) return false;
@@ -316,6 +317,8 @@ export default function HomeScreen({
                   <img
                     src={getAlbumArtwork(alb, alb.cover)}
                     alt={alb.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
                   />
@@ -370,7 +373,7 @@ export default function HomeScreen({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-          {popularTracks.map((track, index) => {
+          {popularTracks.slice(0, visibleCount).map((track, index) => {
             const active = isTrackActive(track);
             const color = badgeColors[index % badgeColors.length];
             const durationFormatted = track.duration 
@@ -398,6 +401,8 @@ export default function HomeScreen({
                       <img 
                         src={track.cover} 
                         alt={track.title} 
+                        loading="lazy"
+                        decoding="async"
                         className="absolute inset-0 w-full h-full object-cover opacity-35" 
                       />
                     )}
@@ -488,6 +493,17 @@ export default function HomeScreen({
             );
           })}
         </div>
+
+        {visibleCount < popularTracks.length && (
+          <div className="mt-6 flex justify-center pb-2">
+            <button
+              onClick={() => setVisibleCount(prev => prev + 36)}
+              className="px-6 py-2.5 rounded-xl brutal-border brutal-shadow-sm font-display font-black text-xs uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] cursor-pointer transition active:scale-95"
+            >
+              Load More Tracks ({popularTracks.length - visibleCount} remaining)
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Confirm Delete Modal */}

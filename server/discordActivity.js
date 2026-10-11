@@ -66,8 +66,8 @@ async function applyTrackPresence(client, track) {
     const durationSec = track.duration && track.duration > 0 ? Math.round(track.duration) : 0;
     const appId = '1440997674630250506';
 
-    const coverUrl = track.cover && track.cover.startsWith('http') ? track.cover : 'https://rivo-m.duckdns.org/icon-192.png';
-    const iconUrl = 'https://rivo-m.duckdns.org/icon-192.png';
+    const coverUrl = track.cover && track.cover.startsWith('http') ? track.cover : 'https://rivo-m.duckdns.org/discord-badge.png';
+    const iconUrl = 'https://rivo-m.duckdns.org/discord-badge.png';
 
     let largeAsset = null;
     let smallAsset = null;

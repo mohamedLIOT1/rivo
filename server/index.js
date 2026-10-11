@@ -4253,6 +4253,13 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     } catch (e) {}
   }
 
+let ytdlpLock = Promise.resolve();
+function withYtDlpLock(fn) {
+  const next = ytdlpLock.then(fn, fn);
+  ytdlpLock = next.catch(() => {});
+  return next;
+}
+
   // 3. Download via yt-dlp to server cache
   const dlPromise = (async () => {
     const bin = getYtDlpBin();
@@ -4260,24 +4267,27 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const targetFile = cachedM4a;
 
     console.log(`[Audio-Server] Caching audio for YouTube track ${videoId} via yt-dlp...`);
-    await new Promise((resolve, reject) => {
-      const cookiesPath = path.join(__dirname, '../cookies.txt');
-      const ytdlpArgs = [
-        '--no-check-certificates',
-        '-f', 'ba[ext=m4a]/ba/b',
-        '-o', targetFile
-      ];
-      if (fs.existsSync(cookiesPath)) {
-        ytdlpArgs.push('--cookies', cookiesPath);
-      }
-      ytdlpArgs.push(ytUrl);
-
-      execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
-        if (err) {
-          console.warn(`[Audio-Server] yt-dlp download failed for ${videoId}:`, err.message);
-          return reject(err);
+    await withYtDlpLock(async () => {
+      if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) return;
+      return new Promise((resolve, reject) => {
+        const cookiesPath = path.join(__dirname, '../cookies.txt');
+        const ytdlpArgs = [
+          '--no-check-certificates',
+          '-f', 'ba[ext=m4a]/ba/b',
+          '-o', targetFile
+        ];
+        if (fs.existsSync(cookiesPath)) {
+          ytdlpArgs.push('--cookies', cookiesPath);
         }
-        resolve();
+        ytdlpArgs.push(ytUrl);
+
+        execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
+          if (err) {
+            console.warn(`[Audio-Server] yt-dlp download failed for ${videoId}:`, err.message);
+            return reject(err);
+          }
+          resolve();
+        });
       });
     });
 
