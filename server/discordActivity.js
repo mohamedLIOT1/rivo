@@ -59,23 +59,41 @@ function disconnectUserSession(userId) {
   }
 }
 
-function applyTrackPresence(client, track) {
+async function applyTrackPresence(client, track) {
   if (!client || !client.user || !track) return;
   try {
     const startTs = Date.now();
     const durationSec = track.duration && track.duration > 0 ? Math.round(track.duration) : 0;
+    const appId = '1440997674630250506';
+
+    const coverUrl = track.cover && track.cover.startsWith('http') ? track.cover : 'https://rivo-m.duckdns.org/icon-192.png';
+    const iconUrl = 'https://rivo-m.duckdns.org/icon-192.png';
+
+    let largeAsset = null;
+    let smallAsset = null;
+
+    try {
+      const assets = await RichPresence.getExternal(client, appId, coverUrl, iconUrl);
+      if (assets && assets[0]?.external_asset_path) largeAsset = assets[0].external_asset_path;
+      if (assets && assets[1]?.external_asset_path) smallAsset = assets[1].external_asset_path;
+    } catch (assetErr) {
+      console.warn('[Discord Activity] getExternal warning:', assetErr.message);
+    }
 
     const r = new RichPresence(client)
-      .setApplicationId('1440997674630250506')
+      .setApplicationId(appId)
       .setType('LISTENING')
       .setName('Rivo')
       .setDetails(track.title || 'Unknown Title')
       .setState(track.artist ? `by ${track.artist}` : 'Rivo Music')
-      .setAssetsLargeImage(track.cover && track.cover.startsWith('http') ? track.cover : 'https://rivo-m.duckdns.org/icon-192.png')
-      .setAssetsLargeText(track.album || track.title || 'Rivo')
-      .setAssetsSmallImage('https://rivo-m.duckdns.org/icon-192.png')
-      .setAssetsSmallText('Rivo Music')
       .setStartTimestamp(startTs);
+
+    if (largeAsset) {
+      r.setAssetsLargeImage(largeAsset).setAssetsLargeText(track.album || track.title || 'Rivo');
+    }
+    if (smallAsset) {
+      r.setAssetsSmallImage(smallAsset).setAssetsSmallText('Rivo Music');
+    }
 
     if (durationSec > 0) {
       r.setEndTimestamp(startTs + durationSec * 1000);
@@ -85,7 +103,7 @@ function applyTrackPresence(client, track) {
       r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org');
     } catch (e) {}
 
-    client.user.setActivity(r);
+    await client.user.setActivity(r);
   } catch (err) {
     console.warn('[Discord Activity] applyTrackPresence error:', err.message);
   }
