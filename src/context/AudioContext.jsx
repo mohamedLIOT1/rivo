@@ -1004,21 +1004,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     setCurrentTrack(trackToPlay);
     setIsPlaying(true);
 
-    // Quietly pre-resolve next track stream in background for zero-delay transition
-    try {
-      if (resolvedQueue && resolvedQueue.length > 0) {
-        const activeIdx = (queueIndex !== null && queueIndex !== undefined && queueIndex >= 0) ? queueIndex : currentQueueIndexRef.current;
-        if (activeIdx >= 0 && activeIdx + 1 < resolvedQueue.length) {
-          const nextTrack = resolvedQueue[activeIdx + 1];
-          if (nextTrack) {
-            setTimeout(() => {
-              resolvePlayableAudioStream(nextTrack).catch(() => {});
-            }, 1200);
-          }
-        }
-      }
-    } catch {}
-
     if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       try {
         const isLiked = likedTrackIds.some(id => String(id) === String(trackToPlay._id || trackToPlay.id));

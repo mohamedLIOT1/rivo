@@ -2000,6 +2000,7 @@ function AppContent() {
         setCrossfade={setCrossfade}
         isOfflineMode={isOfflineMode}
         setIsOfflineMode={setIsOfflineMode}
+        globalTheme={globalTheme}
       />
 
       <AddSongModal
