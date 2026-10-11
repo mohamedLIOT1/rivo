@@ -1,5 +1,5 @@
-// Rivo Service Worker v13 — iOS PWA & Offline Support
-const CACHE_VER = 'rivo-v14';
+// Rivo Service Worker v15 — Discord Presence & Hi-Fi
+const CACHE_VER = 'rivo-v15';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────

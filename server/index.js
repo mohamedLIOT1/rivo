@@ -21,6 +21,7 @@ const { Server } = require('socket.io');
 const { execFile, exec } = require('child_process');
 
 try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch (e) {}
+const discordActivity = require('./discordActivity');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -271,10 +272,19 @@ const UserSchema = new mongoose.Schema({
     cover: String,
     plays: { type: Number, default: 0 },
     seconds: { type: Number, default: 0 }
+  },
+  discord: {
+    id: { type: String, default: '' },
+    username: { type: String, default: '' },
+    token: { type: String, default: '' },
+    enabled: { type: Boolean, default: true },
+    linkCode: { type: String, default: '' },
+    linkCodeExpires: { type: Date, default: null }
   }
 }, { timestamps: true });
 
 const User = mongoose.model('User', UserSchema);
+try { discordActivity.initDiscordBot(User); } catch (e) {}
 
 const MessageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -1423,9 +1433,106 @@ app.post('/api/users/listening-activity', auth, async (req, res) => {
       isLive: Boolean(isPlaying && isOnline)
     });
 
+    // Update Discord Rich Presence
+    try { discordActivity.handleUserListening(user, track, isPlaying); } catch (e) {}
+
     res.json({ success: true, currentListening: user.currentListening });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ──────────────────────────────────────────
+// Discord Rich Presence Endpoints
+// ──────────────────────────────────────────
+app.get('/api/discord/status', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('discord');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({
+      linked: Boolean(user.discord?.token),
+      username: user.discord?.username || '',
+      enabled: user.discord?.enabled !== false,
+      linkCode: user.discord?.linkCode || ''
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/discord/link-code', auth, async (req, res) => {
+  try {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    await User.findByIdAndUpdate(req.user.id, {
+      $set: { 'discord.linkCode': code, 'discord.linkCodeExpires': expires }
+    });
+    res.json({ success: true, code, expires });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/discord/link-token', auth, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token || token.length < 40) return res.status(400).json({ error: 'Invalid Discord token format' });
+
+    const { Client: SelfClient } = require('discord.js-selfbot-v13');
+    const testClient = new SelfClient({ checkUpdate: false });
+
+    await testClient.login(token);
+    const discordTag = testClient.user.tag;
+    const discordId = testClient.user.id;
+    testClient.destroy();
+
+    const encrypted = discordActivity.encryptToken(token);
+    const user = await User.findByIdAndUpdate(req.user.id, {
+      $set: {
+        'discord.id': discordId,
+        'discord.username': discordTag,
+        'discord.token': encrypted,
+        'discord.enabled': true
+      }
+    }, { new: true });
+
+    if (user.currentListening?.isPlaying) {
+      discordActivity.handleUserListening(user, user.currentListening, true);
+    }
+
+    res.json({ success: true, username: discordTag });
+  } catch (err) {
+    res.status(400).json({ error: 'Failed to verify token: ' + err.message });
+  }
+});
+
+app.post('/api/discord/unlink', auth, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.user.id, {
+      $set: { 'discord.id': '', 'discord.username': '', 'discord.token': '', 'discord.enabled': false }
+    });
+    discordActivity.disconnectUserSession(String(req.user.id));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/discord/toggle', auth, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    const user = await User.findByIdAndUpdate(req.user.id, {
+      $set: { 'discord.enabled': Boolean(enabled) }
+    }, { new: true });
+
+    if (!enabled) {
+      discordActivity.disconnectUserSession(String(req.user.id));
+    } else if (user.currentListening?.isPlaying) {
+      discordActivity.handleUserListening(user, user.currentListening, true);
+    }
+    res.json({ success: true, enabled: user.discord.enabled });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -5201,6 +5308,9 @@ io.on('connection', (socket) => {
           isOnline: true,
           isLive: Boolean(isPlaying)
         });
+
+        // Sync Discord Rich Presence
+        try { discordActivity.handleUserListening(user, track, isPlaying); } catch (e) {}
       }
     } catch (e) {}
   });
@@ -5549,6 +5659,9 @@ io.on('connection', (socket) => {
           isLive: false,
           currentListening: { isPlaying: false }
         });
+
+        // Clean up Discord activity session
+        try { discordActivity.disconnectUserSession(uidStr); } catch (e) {}
       }
     }
 
