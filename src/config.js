@@ -18,12 +18,8 @@ export const API_BASE_URL = (() => {
     ) {
       return 'https://liofy-production-0f56.up.railway.app';
     }
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && !host.includes('5000')) {
       return 'http://localhost:5000';
-    }
-    // If accessed via local network IP (e.g. 10.x.x.x or 192.168.x.x), target port 5000
-    if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-      return `${protocol}//${hostname}:5000`;
     }
     return `${protocol}//${host}`;
   }

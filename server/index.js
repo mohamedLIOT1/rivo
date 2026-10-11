@@ -23,6 +23,7 @@ const { execFile, exec } = require('child_process');
 try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch (e) {}
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Security Headers (Helmet)
 app.use(helmet({
@@ -40,6 +41,7 @@ const generalLimiter = rateLimit({
   max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: 'Too many requests from this IP, please try again later.' }
 });
 app.use('/api/', generalLimiter);
@@ -50,6 +52,7 @@ const authLimiter = rateLimit({
   max: 25,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
   message: { error: 'Too many authentication attempts, please try again after 15 minutes.' }
 });
 app.use('/api/auth/login', authLimiter);
@@ -4151,12 +4154,18 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     console.log(`[Audio-Server] Caching audio for YouTube track ${videoId} via yt-dlp...`);
     await new Promise((resolve, reject) => {
-      execFile(bin, [
+      const cookiesPath = path.join(__dirname, '../cookies.txt');
+      const ytdlpArgs = [
         '--no-check-certificates',
         '-f', 'ba[ext=m4a]/ba/b',
-        '-o', targetFile,
-        ytUrl
-      ], { timeout: 45000 }, (err) => {
+        '-o', targetFile
+      ];
+      if (fs.existsSync(cookiesPath)) {
+        ytdlpArgs.push('--cookies', cookiesPath);
+      }
+      ytdlpArgs.push(ytUrl);
+
+      execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
         if (err) {
           console.warn(`[Audio-Server] yt-dlp download failed for ${videoId}:`, err.message);
           return reject(err);
@@ -4439,7 +4448,9 @@ app.get('/api/tracks/download', async (req, res) => {
 
       if (hasYtDlp) {
         const tempFile = path.join(os.tmpdir(), `dl-${Date.now()}-${videoId}.m4a`);
-        const ytdlpCmd = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
+        const cookiesPath = path.join(__dirname, '../cookies.txt');
+        const cookiesFlag = fs.existsSync(cookiesPath) ? `--cookies "${cookiesPath}"` : '';
+        const ytdlpCmd = `yt-dlp --no-check-certificates ${cookiesFlag} --extractor-args "youtube:player_client=ios,tv,mweb,android_creator" --user-agent "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148" -f "ba[ext=m4a]/ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
         let dlSuccess = await new Promise(resolve => {
           exec(ytdlpCmd, { timeout: 35000 }, (err) => {
             if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
@@ -4453,7 +4464,7 @@ app.get('/api/tracks/download', async (req, res) => {
 
         // Retry with tv player client if ios client fails
         if (!dlSuccess) {
-          const ytdlpCmdTv = `yt-dlp --no-check-certificates --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
+          const ytdlpCmdTv = `yt-dlp --no-check-certificates ${cookiesFlag} --extractor-args "youtube:player_client=tv" -f "ba/b/bestaudio/best" -o "${tempFile}" "${ytUrl}"`;
           dlSuccess = await new Promise(resolve => {
             exec(ytdlpCmdTv, { timeout: 25000 }, (err) => {
               if (!err && fs.existsSync(tempFile) && fs.statSync(tempFile).size > 10000) {
