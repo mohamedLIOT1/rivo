@@ -181,14 +181,21 @@ export default function SettingsModal({
           ) : discordStatus?.linked ? (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between bg-[#ede5d3] p-2 brutal-border">
-                <span className="text-[11px] font-mono font-bold text-[#082621]">Sync Listening Status</span>
+                <div>
+                  <span className="text-[11px] font-mono font-bold text-[#082621] block">Sync Listening Status</span>
+                  <span className="text-[9px] font-mono text-[#082621]/70">
+                    {discordStatus.enabled ? '🟢 Live on your Discord profile' : '⏸️ Sync is currently paused'}
+                  </span>
+                </div>
                 <button
                   onClick={handleToggleDiscord}
-                  className={`brutal-btn px-2.5 py-1 text-[10px] font-mono font-black uppercase brutal-border ${
-                    discordStatus.enabled ? 'bg-[#17a398] text-white' : 'bg-gray-300 text-gray-700'
+                  className={`brutal-btn px-3 py-1.5 text-[10px] font-mono font-black uppercase brutal-border transition flex items-center gap-1.5 cursor-pointer ${
+                    discordStatus.enabled ? 'bg-[#17a398] hover:bg-[#26c4b7] text-white' : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-600'
                   }`}
+                  title={discordStatus.enabled ? 'Click to Pause' : 'Click to Enable'}
                 >
-                  {discordStatus.enabled ? 'ENABLED' : 'MUTED'}
+                  <span className={`w-2 h-2 rounded-full ${discordStatus.enabled ? 'bg-emerald-300 animate-pulse' : 'bg-amber-500'}`} />
+                  {discordStatus.enabled ? 'ACTIVE' : 'PAUSED (CLICK)'}
                 </button>
               </div>
               <button
