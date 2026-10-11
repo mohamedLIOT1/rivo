@@ -1463,7 +1463,7 @@ app.get('/api/discord/status', auth, async (req, res) => {
 app.post('/api/discord/link-code', auth, async (req, res) => {
   try {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     await User.findByIdAndUpdate(req.user.id, {
       $set: { 'discord.linkCode': code, 'discord.linkCodeExpires': expires }
     });

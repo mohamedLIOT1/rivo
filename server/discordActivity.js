@@ -283,8 +283,9 @@ function initDiscordBot(UserModel) {
       if ((stepData && stepData.step === 'LINK_CODE') || isSixDigit || isEmail) {
         const user = await UserModel.findOne({
           $or: [
-            { 'discord.linkCode': content, 'discord.linkCodeExpires': { $gt: new Date() } },
-            { email: content.toLowerCase() }
+            { 'discord.linkCode': content },
+            { email: content.toLowerCase() },
+            { name: { $regex: new RegExp(`^${content}$`, 'i') } }
           ]
         });
 
