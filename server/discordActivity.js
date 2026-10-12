@@ -51,6 +51,11 @@ function disconnectUserSession(userId) {
   if (session) {
     try {
       if (session.client) {
+        try {
+          if (session.client.settings && typeof session.client.settings.setCustomStatus === 'function') {
+            session.client.settings.setCustomStatus(null).catch(() => {});
+          }
+        } catch (e) {}
         if (session.client.user) {
           try {
             session.client.user.setPresence({ activities: [] });
@@ -111,17 +116,24 @@ async function applyTrackPresence(client, track, currentTime = 0) {
       r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org');
     } catch (e) {}
 
+    // 1. Set Custom Status on User Profile (Shows externally on member list / friend list as: 🎵 [Song Title])
     try {
-      const customStatus = new CustomStatus(client)
-        .setEmoji('🎵')
-        .setState(track.title ? String(track.title).slice(0, 120) : 'Rivo');
+      if (client.settings && typeof client.settings.setCustomStatus === 'function') {
+        const titleStr = track.title ? String(track.title).slice(0, 120) : 'Rivo Music';
+        await client.settings.setCustomStatus({
+          text: titleStr,
+          emoji: '🎵'
+        });
+      }
+    } catch (csErr) {
+      console.warn('[Discord Activity] setCustomStatus error:', csErr.message);
+    }
 
-      await client.user.setPresence({
-        activities: [customStatus, r]
-      });
-    } catch (presenceErr) {
-      console.warn('[Discord Activity] setPresence fallback:', presenceErr.message);
+    // 2. Set Rich Presence Activity (Listening to Rivo card with song details and elapsed progress)
+    try {
       await client.user.setActivity(r);
+    } catch (presenceErr) {
+      console.warn('[Discord Activity] setActivity error:', presenceErr.message);
     }
   } catch (err) {
     console.warn('[Discord Activity] applyTrackPresence error:', err.message);
@@ -145,13 +157,20 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
     if (session) {
       session.isPlaying = false;
       session.lastStartTs = null;
-      if (session.client && session.client.user) {
+      if (session.client) {
         try {
-          session.client.user.setPresence({ activities: [] });
+          if (session.client.settings && typeof session.client.settings.setCustomStatus === 'function') {
+            session.client.settings.setCustomStatus(null).catch(() => {});
+          }
         } catch (e) {}
-        try {
-          session.client.user.setActivity(null);
-        } catch (e) {}
+        if (session.client.user) {
+          try {
+            session.client.user.setActivity(null);
+          } catch (e) {}
+          try {
+            session.client.user.setPresence({ activities: [] });
+          } catch (e) {}
+        }
       }
     }
     // Schedule clean disconnect after 5 minutes of inactivity to conserve RAM
