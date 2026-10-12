@@ -35,7 +35,7 @@ function extractYtId(input) {
 const clientStreamCache = new Map();
 const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
-export async function resolvePlayableAudioStream(track) {
+export async function resolvePlayableAudioStream(track, signal = null) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
   if (trackId && clientStreamCache.has(trackId)) {
@@ -47,7 +47,7 @@ export async function resolvePlayableAudioStream(track) {
     }
   }
 
-  const result = await doResolvePlayableAudioStream(track);
+  const result = await doResolvePlayableAudioStream(track, signal);
   if (trackId && result?.url) {
     clientStreamCache.set(trackId, { data: result, timestamp: Date.now() });
   }
@@ -55,7 +55,7 @@ export async function resolvePlayableAudioStream(track) {
 }
 
 // ── Direct Audio Stream Resolver (HTML5 <audio> & Web Audio API) ──
-async function doResolvePlayableAudioStream(track) {
+async function doResolvePlayableAudioStream(track, signal = null) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
   let targetUrl = track.audioUrl || '';
@@ -137,7 +137,7 @@ async function doResolvePlayableAudioStream(track) {
 
   // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream
   try {
-    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}`);
+    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}`, { signal });
     if (sRes.ok) {
       const sData = await sRes.json();
       let cand = sData?.url || sData?.directUrl;
@@ -150,11 +150,13 @@ async function doResolvePlayableAudioStream(track) {
         };
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+  }
 
   // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}`);
+    const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}`, { signal });
     if (res.ok) {
       const d = await res.json();
       if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
@@ -167,7 +169,9 @@ async function doResolvePlayableAudioStream(track) {
         };
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+  }
 
   // 7. Last-resort fallback for plain mp3/m4a URLs
   if (targetUrl && (targetUrl.endsWith('.mp3') || targetUrl.endsWith('.m4a'))) {
@@ -272,6 +276,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const toggleLikeRef     = useRef(null);
   const seekToRef         = useRef(null);
   const isUserPauseActionRef = useRef(false);
+  const playRequestSeqRef = useRef(0);
+  const isChangingTrackRef = useRef(false);
+  const historyStackRef   = useRef([]);
+  const isHistoryNavRef   = useRef(false);
+  const streamAbortControllerRef = useRef(null);
+  const lastPauseTimeRef  = useRef(0);
+  const stallRecoveryTimerRef = useRef(null);
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
@@ -344,32 +355,41 @@ export function AudioProvider({ children, tracks, setTracks }) {
     let lastTimeUpdate = 0;
     const handleTimeUpdate = () => {
       if (audio && !isNaN(audio.currentTime)) {
+        // Clear any stall recovery timer because playback is actively advancing!
+        if (stallRecoveryTimerRef.current) {
+          clearTimeout(stallRecoveryTimerRef.current);
+          stallRecoveryTimerRef.current = null;
+        }
+
         const now = Date.now();
         if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
           setCurrentTime(audio.currentTime);
           currentTimeRef.current = audio.currentTime;
 
-          // Proactive authentic end-of-track detection for iOS WebKit VBR streams
-          // Prevents the player from entering silence when WebKit miscalculates stream duration
-          if (durationRef.current > 0 && audio.currentTime >= durationRef.current - 0.75) {
-            handleEnded();
-            return;
-          }
-
-          // Only use audio.duration as last-resort fallback if no authentic duration was ever established
-          if ((!durationRef.current || durationRef.current <= 0) && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+          // Always accurately sync authentic duration from the audio stream itself!
+          if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
             const rounded = Math.round(audio.duration);
-            setDuration(rounded);
-            durationRef.current = rounded;
-            if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
+            if (rounded !== durationRef.current) {
+              setDuration(rounded);
+              durationRef.current = rounded;
+              if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
+            }
           }
         }
       }
     };
     const handleLoadedMetadata = () => {
-      // Only use audio.duration if no authentic duration is already established
-      if ((!durationRef.current || durationRef.current <= 0) && !isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 0 && audio.duration < 86400) {
+      // Establish authentic audio duration from media container
+      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
+        const rounded = Math.round(audio.duration);
+        setDuration(rounded);
+        durationRef.current = rounded;
+        if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
+      }
+    };
+    const handleDurationChange = () => {
+      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
         const rounded = Math.round(audio.duration);
         setDuration(rounded);
         durationRef.current = rounded;
@@ -386,20 +406,32 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     };
     const handlePlaying = () => {
+      if (stallRecoveryTimerRef.current) {
+        clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = null;
+      }
       resumeAudioContext();
     };
-    // If audio gets stuck/stalled, try to resume (only if actively playing)
-    const handleStalled = () => {
-      if (isPlayingRef.current) {
-        setTimeout(() => {
-          if (!isPlayingRef.current) return;
+    // If audio stream stalls or connection was dropped by server while paused:
+    // Automatically re-establish Range connection at exact current second without freezing or requiring manual seek!
+    const handleStalledOrWaiting = () => {
+      if (!isPlayingRef.current || isChangingTrackRef.current) return;
+      if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
+      stallRecoveryTimerRef.current = setTimeout(() => {
+        if (!isPlayingRef.current || isChangingTrackRef.current) return;
+        const cur = audio.currentTime || currentTimeRef.current || 0;
+        if (audio && audio.src && cur > 0) {
+          const s = audio.src;
+          audio.src = s;
+          audio.currentTime = cur;
           resumeAudioContext();
           audio.play().catch(() => {});
-        }, 500);
-      }
+        }
+      }, 1500);
     };
     const handleError = () => {
       audio.crossOrigin = null;
+      if (isChangingTrackRef.current) return;
       if (!isPlayingRef.current && !shouldPlayRef.current) return;
       const cur = currentTrackRef.current;
       if (cur && (cur.title || cur.artist) && !cur._retryDone) {
@@ -407,8 +439,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
           .then(r => r.json())
           .then(d => {
-            if (!isPlayingRef.current && !shouldPlayRef.current) return;
-            if (d.success && d.url && audio) {
+            if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
+            const latestCur = currentTrackRef.current;
+            if (latestCur && String(latestCur.id || latestCur._id) === String(cur.id || cur._id) && d.success && d.url && audio) {
               stopYouTube();
               audio.src = d.url;
               resumeAudioContext();
@@ -420,17 +453,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('durationchange', handleDurationChange);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('playing', handlePlaying);
-    audio.addEventListener('stalled', handleStalled);
+    audio.addEventListener('stalled', handleStalledOrWaiting);
+    audio.addEventListener('waiting', handleStalledOrWaiting);
     audio.addEventListener('error', handleError);
 
     return () => {
+      if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('durationchange', handleDurationChange);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('playing', handlePlaying);
-      audio.removeEventListener('stalled', handleStalled);
+      audio.removeEventListener('stalled', handleStalledOrWaiting);
+      audio.removeEventListener('waiting', handleStalledOrWaiting);
       audio.removeEventListener('error', handleError);
       audio.pause();
     };
@@ -477,12 +515,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
   // ── Main track playback logic (100% Direct Audio API) ──
   useEffect(() => {
     if (!currentTrack) return;
-
+    const effectSeq = ++playRequestSeqRef.current;
     let isEffectCancelled = false;
+
+    // Abort any pending stream resolve fetch
+    if (streamAbortControllerRef.current) {
+      streamAbortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    streamAbortControllerRef.current = abortController;
 
     (async () => {
       const newId = String(currentTrack.id || currentTrack._id || '');
-      const newUrl = currentTrack.audioUrl || '';
 
       // Guard: if track ID is the same and already loaded, don't reload audio stream on metadata updates
       if (newId && newId === lastLoadedIdRef.current) {
@@ -490,18 +534,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       lastLoadedIdRef.current = newId;
-      lastLoadedUrlRef.current = newUrl;
 
       // Ensure duration is set
       const sDur = sanitizeDuration(currentTrack.duration, 210);
       setDuration(sDur);
       durationRef.current = sDur;
 
-      const streamResult = await resolvePlayableAudioStream(currentTrack);
-      if (isEffectCancelled) return;
+      let streamResult = null;
+      try {
+        streamResult = await resolvePlayableAudioStream(currentTrack, abortController.signal);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      }
+
+      if (isEffectCancelled || effectSeq !== playRequestSeqRef.current) return;
 
       if (!streamResult?.url) {
         console.warn('[AudioContext] Could not resolve audio stream for track:', currentTrack.title);
+        isChangingTrackRef.current = false;
         return;
       }
 
@@ -511,7 +561,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       if (streamResult.cover && streamResult.cover !== currentTrack.cover) {
-        setCurrentTrack(prev => prev ? { ...prev, cover: streamResult.cover } : prev);
+        setCurrentTrack(prev => (prev && String(prev.id || prev._id) === newId) ? { ...prev, cover: streamResult.cover } : prev);
       }
       if (streamResult.duration && streamResult.duration > 0) {
         const resolvedDur = sanitizeDuration(streamResult.duration, sDur);
@@ -520,13 +570,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       const audio = audioRef.current;
-      if (!audio) return;
+      if (!audio) {
+        isChangingTrackRef.current = false;
+        return;
+      }
+
+      // Re-verify that no newer request came in while resolving
+      if (effectSeq !== playRequestSeqRef.current) return;
 
       if (lastLoadedStreamUrlRef.current !== playableUrl) {
         lastLoadedStreamUrlRef.current = playableUrl;
         audio.src = playableUrl;
+        audio.currentTime = 0;
       }
       audio.volume = volumeRef.current;
+      isChangingTrackRef.current = false;
 
       if (isPlayingRef.current || shouldPlayRef.current) {
         shouldPlayRef.current = false;
@@ -534,16 +592,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.catch(e => {
-            console.warn('[Audio] play() blocked or waiting for gesture:', e.name);
-            const retryPlay = () => {
-              if (!isPlayingRef.current) return;
-              resumeAudioContext();
-              audio.play().catch(() => {});
-              document.removeEventListener('touchstart', retryPlay);
-              document.removeEventListener('click', retryPlay);
-            };
-            document.addEventListener('touchstart', retryPlay, { once: true, passive: true });
-            document.addEventListener('click', retryPlay, { once: true });
+            if (e.name !== 'AbortError') {
+              console.warn('[Audio] play() blocked or waiting for gesture:', e.name);
+              const retryPlay = () => {
+                if (!isPlayingRef.current) return;
+                resumeAudioContext();
+                audio.play().catch(() => {});
+                document.removeEventListener('touchstart', retryPlay);
+                document.removeEventListener('click', retryPlay);
+              };
+              document.addEventListener('touchstart', retryPlay, { once: true, passive: true });
+              document.addEventListener('click', retryPlay, { once: true });
+            }
           });
         }
         setIsPlaying(true);
@@ -554,8 +614,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     return () => {
       isEffectCancelled = true;
+      abortController.abort();
     };
-  }, [currentTrack]);
+  }, [currentTrack?.id || currentTrack?._id]);
 
   // ── MediaSession API (Lockscreen & Bluetooth Controls) ──
   useEffect(() => {
@@ -759,6 +820,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (audio) {
       if (nextPlaying) {
         resumeAudioContext();
+        // If paused for more than 8 seconds or connection dropped by server while idle:
+        // Proactively refresh Range connection at exact current timestamp so user never experiences freeze/lag!
+        const pausedDuration = Date.now() - (lastPauseTimeRef.current || 0);
+        if (lastPauseTimeRef.current > 0 && pausedDuration > 8000 && audio.src) {
+          const cur = audio.currentTime || currentTimeRef.current || 0;
+          if (cur > 0) {
+            const s = audio.src;
+            audio.src = s;
+            audio.currentTime = cur;
+          }
+        }
+        lastPauseTimeRef.current = 0;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.catch(e => {
@@ -766,6 +839,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           });
         }
       } else {
+        lastPauseTimeRef.current = Date.now();
         audio.pause();
       }
     }
@@ -901,23 +975,33 @@ export function AudioProvider({ children, tracks, setTracks }) {
     resumeAudioContext();
     isUserPauseActionRef.current = false;
 
-    if (!isSeamless) {
-      // Immediately stop previous audio synchronously to prevent overlap
-      if (audioRef.current) {
-        audioRef.current.pause();
+    // Track playback history for accurate Previous button navigation (including Shuffle mode)
+    if (currentTrackRef.current && !isHistoryNavRef.current) {
+      const curId = String(currentTrackRef.current.id || currentTrackRef.current._id || '');
+      const nextId = String(track.id || track._id || '');
+      if (curId && curId !== nextId) {
+        historyStackRef.current.push({
+          track: currentTrackRef.current,
+          queueIndex: currentQueueIndexRef.current
+        });
+        if (historyStackRef.current.length > 50) {
+          historyStackRef.current.shift();
+        }
       }
     }
 
-    let trackToPlay = { ...track };
-
-    const offlineAudioUrl = await getOfflineTrackAudioUrl(track.id || track._id, track.title, track.artist);
-    if (offlineAudioUrl) {
-      trackToPlay.audioUrl = offlineAudioUrl;
-      trackToPlay.downloaded = true;
-      trackToPlay.nativeAudioUri = offlineAudioUrl;
-      trackToPlay.album = (!trackToPlay.album || /https?:\/\/|www\.|youtube|liofy/i.test(trackToPlay.album)) ? 'Rivo' : trackToPlay.album;
-      trackToPlay.source = 'Rivo';
+    isChangingTrackRef.current = true;
+    if (!isSeamless) {
+      // Immediately stop previous audio synchronously & reset progress to prevent overlap/lag
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+      setCurrentTime(0);
+      currentTimeRef.current = 0;
     }
+
+    let trackToPlay = { ...track };
 
     // ── STRICT QUEUE ISOLATION (Quran vs Music) ──
     const isTargetQuran = isQuranContent(trackToPlay);
@@ -972,14 +1056,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     onTrackStarted(trackToPlay);
-
-    if (setTracks) {
-      setTracks(prev => {
-        const exists = prev.some(t => t.id === trackToPlay.id);
-        if (!exists) return [trackToPlay, ...prev];
-        return prev.map(t => t.id === trackToPlay.id ? { ...t, plays: (Number(t.plays) || 0) + 1 } : t);
-      });
-    }
 
     // Broadcast track play event to Jam room if active and local action
     if (!isRemote && jamSessionRef.current && socketRef.current) {
@@ -1338,7 +1414,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentQueueIndex(safeChosenIdx);
       playTrack(chosen, activeList, false, safeChosenIdx);
     } else if (isShuffleRef.current) {
-      const nextIdx = Math.floor(Math.random() * activeList.length);
+      let nextIdx = Math.floor(Math.random() * activeList.length);
+      if (activeList.length > 1 && nextIdx === currentQueueIndexRef.current) {
+        nextIdx = (nextIdx + 1 + Math.floor(Math.random() * (activeList.length - 1))) % activeList.length;
+      }
       currentQueueIndexRef.current = nextIdx;
       setCurrentQueueIndex(nextIdx);
       playTrack(activeList[nextIdx], activeList, false, nextIdx);
@@ -1410,6 +1489,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     isTransitionTriggeredRef.current = false;
     isSeamlessYtHandoffRef.current = false;
+
+    // 1. True Playback History: Pop and play previously played track (essential for Shuffle & skip navigation)
+    if (historyStackRef.current.length > 0) {
+      const prevItem = historyStackRef.current.pop();
+      if (prevItem && prevItem.track) {
+        isHistoryNavRef.current = true;
+        try {
+          playTrack(prevItem.track, currentQueueRef.current, false, prevItem.queueIndex);
+        } finally {
+          setTimeout(() => {
+            isHistoryNavRef.current = false;
+          }, 150);
+        }
+        return;
+      }
+    }
+
+    // 2. Fallback: linear queue backwards
     const isCurQuran = isQuranContent(currentTrackRef.current);
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
@@ -1441,6 +1538,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => {
     playPrevTrackRef.current = playPrevTrack;
   }, [playPrevTrack]);
+
+  // Background stream prefetching for next track in queue (Instant 0ms transitions)
+  useEffect(() => {
+    if (!isPlaying || !currentTrack) return;
+    const timer = setTimeout(() => {
+      if (!isPlayingRef.current) return;
+      const q = currentQueueRef.current;
+      const curIdx = currentQueueIndexRef.current;
+      if (q && q.length > 1 && curIdx >= 0) {
+        const nextIdx = (curIdx + 1) % q.length;
+        const nextTrack = q[nextIdx];
+        if (nextTrack) {
+          const trackId = String(nextTrack.id || nextTrack._id || '');
+          if (trackId && !clientStreamCache.has(trackId)) {
+            resolvePlayableAudioStream(nextTrack).catch(() => {});
+          }
+        }
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [currentTrack?.id || currentTrack?._id, isPlaying]);
 
   const seekTo = useCallback((seconds, isRemote = false) => {
     if (isNaN(seconds)) return;

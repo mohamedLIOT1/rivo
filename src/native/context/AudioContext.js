@@ -30,6 +30,8 @@ export const AudioProvider = ({ children }) => {
   const playNextTrackRef = useRef(null);
   const playPrevTrackRef = useRef(null);
   const seekToRef = useRef(null);
+  const historyStackRef = useRef([]);
+  const isHistoryNavRef = useRef(false);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -384,6 +386,17 @@ export const AudioProvider = ({ children }) => {
 
   const playTrack = async (track, trackList = [], isRetry = false) => {
     if (!track) return;
+
+    if (!isHistoryNavRef.current && currentTrackRef.current) {
+      const curId = currentTrackRef.current._id || currentTrackRef.current.id;
+      const newId = track._id || track.id;
+      if (curId && curId !== newId) {
+        historyStackRef.current.push(currentTrackRef.current);
+        if (historyStackRef.current.length > 50) historyStackRef.current.shift();
+      }
+    }
+    isHistoryNavRef.current = false;
+
     const trackId = String(track._id || track.id || '');
     const requestTs = Date.now();
     playbackStatusRef.current.lastRequestTs = requestTs;
@@ -536,7 +549,10 @@ export const AudioProvider = ({ children }) => {
     }
 
     if (isShuffle) {
-      const nextIdx = Math.floor(Math.random() * q.length);
+      let nextIdx = Math.floor(Math.random() * q.length);
+      if (q.length > 1 && nextIdx === i) {
+        nextIdx = (nextIdx + 1) % q.length;
+      }
       playTrack(q[nextIdx], q);
     } else if (i >= 0 && i < q.length - 1) {
       playTrack(q[i + 1], q);
@@ -548,6 +564,13 @@ export const AudioProvider = ({ children }) => {
   const playPrevTrack = () => {
     if ((playbackStatusRef.current.currentTime || 0) > 3) {
       seekTo(0);
+      return;
+    }
+
+    if (historyStackRef.current.length > 0) {
+      const prev = historyStackRef.current.pop();
+      isHistoryNavRef.current = true;
+      playTrack(prev, queueRef.current);
       return;
     }
 
