@@ -71,6 +71,10 @@ function normalizeArabicText(str = '') {
     .trim();
 }
 
+const NORM_MEGA_HITS = MEGA_HITS.map(h => normalizeArabicText(h));
+const NORM_MAJOR_HITS = MAJOR_HITS.map(h => normalizeArabicText(h));
+const ARTIST_SCORES_ENTRIES = Object.entries(ARTIST_GLOBAL_SCORES);
+
 export function getGlobalTrackScore(t) {
   if (!t) return 0;
   const normTitle = normalizeArabicText(t.title);
@@ -87,8 +91,8 @@ export function getGlobalTrackScore(t) {
   if (t.popular) score += 10000000;
 
   // Global Mega Hits
-  for (const hit of MEGA_HITS) {
-    const nh = normalizeArabicText(hit);
+  for (let i = 0; i < NORM_MEGA_HITS.length; i++) {
+    const nh = NORM_MEGA_HITS[i];
     if (normTitle === nh || normTitle.includes(nh)) {
       score += 20000000;
       break;
@@ -96,8 +100,8 @@ export function getGlobalTrackScore(t) {
   }
 
   // Major Hits
-  for (const hit of MAJOR_HITS) {
-    const nh = normalizeArabicText(hit);
+  for (let i = 0; i < NORM_MAJOR_HITS.length; i++) {
+    const nh = NORM_MAJOR_HITS[i];
     if (normTitle === nh || normTitle.includes(nh)) {
       score += 10000000;
       break;
@@ -105,7 +109,8 @@ export function getGlobalTrackScore(t) {
   }
 
   // Artist Global Stature
-  for (const [art, weight] of Object.entries(ARTIST_GLOBAL_SCORES)) {
+  for (let i = 0; i < ARTIST_SCORES_ENTRIES.length; i++) {
+    const [art, weight] = ARTIST_SCORES_ENTRIES[i];
     if (normArtist.includes(art)) {
       score += weight;
       break;
@@ -118,7 +123,7 @@ export function getGlobalTrackScore(t) {
 export default function HomeScreen({ 
   tracks = [], 
   playlists = [], 
-  albums = [],
+  albums = [], 
   artists = [], 
   onSelectTrack, 
   onSelectPlaylist, 
@@ -161,13 +166,17 @@ export default function HomeScreen({
     return (tracks || []).filter(t => !isQuranContent(t));
   }, [tracks]);
 
-  // Sort tracks by global popularity, stream views, plays, and likes
-  // Deterministic tie-breaker by title (never createdAt descending, so new songs don't hijack the top)
+  // Sort tracks by global popularity with single-pass score caching (O(N) scoring instead of O(N log N * hits))
   const popularTracks = useMemo(() => {
+    const scoreMap = new Map();
+    for (let i = 0; i < displayTracks.length; i++) {
+      const t = displayTracks[i];
+      scoreMap.set(t, getGlobalTrackScore(t));
+    }
     const list = [...displayTracks];
     return list.sort((a, b) => {
-      const scoreA = getGlobalTrackScore(a);
-      const scoreB = getGlobalTrackScore(b);
+      const scoreA = scoreMap.get(a) || 0;
+      const scoreB = scoreMap.get(b) || 0;
       if (scoreB !== scoreA) {
         return scoreB - scoreA;
       }
