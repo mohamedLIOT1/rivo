@@ -18,7 +18,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const axios = require('axios');
 const { Server } = require('socket.io');
-const { execFile, exec } = require('child_process');
+const { execFile, exec, spawn } = require('child_process');
 
 try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } catch (e) {}
 const discordActivity = require('./discordActivity');
@@ -1989,7 +1989,7 @@ async function searchTracksInternal(query) {
     // 2. Query YouTube Data API v3 FIRST for official releases (Instant & High Quality)
     let ytTracks = [];
     const apiKey = process.env.YOUTUBE_API_KEY;
-    if (apiKey) {
+    if (apiKey && Date.now() > ytQuotaExceededUntil) {
       try {
         const ytRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
           params: {
@@ -2031,7 +2031,11 @@ async function searchTracksInternal(query) {
             .filter(t => isMusicTrackServer(t.title, t.artist));
         }
       } catch (err) {
-        console.warn('[Search] YouTube API search error:', err?.response?.data?.error?.message || err.message);
+        const errMsg = err?.response?.data?.error?.message || err.message || '';
+        if (err?.response?.status === 403 || errMsg.toLowerCase().includes('quota')) {
+          ytQuotaExceededUntil = Date.now() + 2 * 3600 * 1000;
+        }
+        console.warn('[Search] YouTube API search error:', errMsg);
       }
     }
 
@@ -4263,17 +4267,121 @@ async function ensureYtDlpBinary() {
 
 const directStreamCache = new Map(); // videoId -> { url, expireAt }
 const activeBackgroundDownloads = new Set();
-const MAX_CONCURRENT_BG_DOWNLOADS = 2;
+const MAX_CONCURRENT_BG_DOWNLOADS = 3;
 const bgDownloadQueue = [];
 
-function queueBackgroundAudioCache(videoId, targetFile) {
+// ── Persistent Warm In-Memory Python yt_dlp Engine (Zero cold-start overhead) ──
+let ytWorkerProc = null;
+const ytWorkerPending = new Map();
+let ytWorkerReqSeq = 0;
+
+function initWarmYtWorker() {
+  if (process.platform === 'win32' || ytWorkerProc) return;
+  try {
+    const cookiesPath = path.join(__dirname, '../cookies.txt');
+    const pyScript = `
+import sys, os, json
+sys.path.insert(0, '/usr/local/bin/yt-dlp')
+import yt_dlp
+
+opts = {
+    'quiet': True,
+    'no_warnings': True,
+    'nocheckcertificate': True,
+    'noplaylist': True,
+    'format': 'ba[ext=m4a]/ba/b',
+    'extractor_args': {'youtube': {'player_client': ['web'], 'player_skip': ['configs', 'initial_data']}}
+}
+cpath = ${JSON.stringify(cookiesPath)}
+if os.path.exists(cpath):
+    opts['cookiefile'] = cpath
+
+ydl = yt_dlp.YoutubeDL(opts)
+print("READY", flush=True)
+
+for line in sys.stdin:
+    line = line.strip()
+    if not line: continue
+    rid = 0
+    try:
+        req = json.loads(line)
+        rid = req.get('id', 0)
+        vid = req.get('videoId', '')
+        info = ydl.extract_info(f'https://www.youtube.com/watch?v={vid}', download=False)
+        print(json.dumps({'id': rid, 'url': info.get('url'), 'duration': info.get('duration')}), flush=True)
+    except Exception as e:
+        print(json.dumps({'id': rid, 'url': None, 'error': str(e)}), flush=True)
+`;
+    const proc = spawn('python3', ['-u', '-c', pyScript], { stdio: ['pipe', 'pipe', 'ignore'] });
+    let buf = '';
+    proc.stdout.on('data', (chunk) => {
+      buf += chunk.toString();
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const l of lines) {
+        const trimmed = l.trim();
+        if (!trimmed || trimmed === 'READY') continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && ytWorkerPending.has(parsed.id)) {
+            const { resolve, timer } = ytWorkerPending.get(parsed.id);
+            clearTimeout(timer);
+            ytWorkerPending.delete(parsed.id);
+            resolve(parsed.url || null);
+          }
+        } catch {}
+      }
+    });
+    proc.on('exit', () => {
+      ytWorkerProc = null;
+      for (const [, { resolve, timer }] of ytWorkerPending.entries()) {
+        clearTimeout(timer);
+        resolve(null);
+      }
+      ytWorkerPending.clear();
+      setTimeout(initWarmYtWorker, 3000);
+    });
+    ytWorkerProc = proc;
+    console.log('⚡ [Audio-Server] Warm in-memory yt-dlp Python worker started');
+  } catch (e) {}
+}
+
+function extractViaWarmWorker(videoId) {
+  if (!ytWorkerProc || !ytWorkerProc.stdin || !ytWorkerProc.stdin.writable) {
+    initWarmYtWorker();
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    const id = ++ytWorkerReqSeq;
+    const timer = setTimeout(() => {
+      ytWorkerPending.delete(id);
+      resolve(null);
+    }, 8000);
+    ytWorkerPending.set(id, { resolve, timer });
+    try {
+      ytWorkerProc.stdin.write(JSON.stringify({ id, videoId }) + '\n');
+    } catch {
+      clearTimeout(timer);
+      ytWorkerPending.delete(id);
+      resolve(null);
+    }
+  });
+}
+
+setTimeout(initWarmYtWorker, 1500);
+
+function queueBackgroundAudioCache(videoId, targetFile, highPriority = false) {
   try {
     if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) return;
   } catch {}
   if (activeBackgroundDownloads.has(videoId)) return;
   if (bgDownloadQueue.some(item => item.videoId === videoId)) return;
 
-  bgDownloadQueue.push({ videoId, targetFile });
+  if (highPriority) {
+    bgDownloadQueue.unshift({ videoId, targetFile });
+  } else {
+    bgDownloadQueue.push({ videoId, targetFile });
+  }
   processNextBgDownload();
 }
 
@@ -4294,6 +4402,8 @@ function processNextBgDownload() {
   const cookiesPath = path.join(__dirname, '../cookies.txt');
   const ytdlpArgs = [
     '--no-check-certificates',
+    '--no-playlist',
+    '--extractor-args', 'youtube:player_client=web;player_skip=configs,initial_data',
     '-f', 'ba[ext=m4a]/ba/b',
     '-o', targetFile
   ];
@@ -4302,7 +4412,7 @@ function processNextBgDownload() {
   }
   ytdlpArgs.push(ytUrl);
 
-  execFile(bin, ytdlpArgs, { timeout: 60000 }, (err) => {
+  execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
     activeBackgroundDownloads.delete(videoId);
     try {
       if (!err && fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) {
@@ -4313,12 +4423,52 @@ function processNextBgDownload() {
   });
 }
 
+// Auto pre-warm library tracks on disk so they play in 0ms
+setTimeout(async () => {
+  try {
+    if (mongoose.connection.readyState !== 1) return;
+    const audioCacheDir = path.join(__dirname, '../uploads/audio-cache');
+    if (!fs.existsSync(audioCacheDir)) fs.mkdirSync(audioCacheDir, { recursive: true });
+    const allTracks = await Track.find({}).select('audioUrl').lean();
+    let queued = 0;
+    for (const t of allTracks) {
+      if (!t.audioUrl) continue;
+      const m = String(t.audioUrl).match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      if (m && m[1]) {
+        const vid = m[1];
+        const targetM4a = path.join(audioCacheDir, `${vid}.m4a`);
+        const targetMp3 = path.join(audioCacheDir, `${vid}.mp3`);
+        const hasM4a = fs.existsSync(targetM4a) && fs.statSync(targetM4a).size > 20000;
+        const hasMp3 = fs.existsSync(targetMp3) && fs.statSync(targetMp3).size > 20000;
+        if (!hasM4a && !hasMp3) {
+          queueBackgroundAudioCache(vid, targetM4a, false);
+          queued++;
+        }
+      }
+    }
+    if (queued > 0) {
+      console.log(`🚀 [Audio-Server] Queued ${queued} uncached library tracks for background SSD caching`);
+    }
+  } catch (e) {}
+}, 8000);
+
 async function extractDirectStreamUrl(videoId) {
+  // 1. Try persistent warm Python yt_dlp worker first (~2.5s vs 19.6s cold start)
+  try {
+    const warmUrl = await extractViaWarmWorker(videoId);
+    if (warmUrl && warmUrl.startsWith('http')) {
+      return warmUrl;
+    }
+  } catch {}
+
+  // 2. Fallback to fast CLI with player_client=web
   const bin = getYtDlpBin();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const cookiesPath = path.join(__dirname, '../cookies.txt');
   const ytdlpArgs = [
     '--no-check-certificates',
+    '--no-playlist',
+    '--extractor-args', 'youtube:player_client=web;player_skip=configs,initial_data',
     '-g',
     '-f', 'ba[ext=m4a]/ba/b'
   ];
@@ -4328,7 +4478,7 @@ async function extractDirectStreamUrl(videoId) {
   ytdlpArgs.push(ytUrl);
 
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 15000 }, (err, stdout) => {
+    execFile(bin, ytdlpArgs, { timeout: 12000 }, (err, stdout) => {
       if (err || !stdout) {
         return resolve(null);
       }
@@ -4395,7 +4545,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   // 2. Direct stream URL memory cache (Instant ~0ms)
   const cachedStream = directStreamCache.get(videoId);
   if (cachedStream && Date.now() < cachedStream.expireAt) {
-    queueBackgroundAudioCache(videoId, cachedM4a);
+    queueBackgroundAudioCache(videoId, cachedM4a, true);
     const retObj = new String(cachedStream.url);
     retObj.url = cachedStream.url;
     retObj.duration = 210;
@@ -4415,12 +4565,12 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     } catch (e) {}
   }
 
-  // 4. Fast direct stream URL extraction (1-2s response)
+  // 4. Fast direct stream URL extraction (2s response via warm worker)
   const extractPromise = (async () => {
     const directUrl = await extractDirectStreamUrl(videoId);
     if (directUrl) {
       directStreamCache.set(videoId, { url: directUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
-      queueBackgroundAudioCache(videoId, cachedM4a);
+      queueBackgroundAudioCache(videoId, cachedM4a, true);
       return directUrl;
     }
 
@@ -4430,6 +4580,8 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const cookiesPath = path.join(__dirname, '../cookies.txt');
     const ytdlpArgs = [
       '--no-check-certificates',
+      '--no-playlist',
+      '--extractor-args', 'youtube:player_client=web;player_skip=configs,initial_data',
       '-f', 'ba[ext=m4a]/ba/b',
       '-o', cachedM4a
     ];
@@ -4437,7 +4589,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     ytdlpArgs.push(ytUrl);
 
     await new Promise((resolve) => {
-      execFile(bin, ytdlpArgs, { timeout: 35000 }, (err) => {
+      execFile(bin, ytdlpArgs, { timeout: 25000 }, (err) => {
         resolve();
       });
     });
@@ -5060,9 +5212,10 @@ app.post('/api/playlists/:id/transitions', auth, async (req, res) => {
 // ──────────────────────────────────────────
 // AI SMART SHUFFLE & INTELLIGENT RECOMMENDATIONS
 // ──────────────────────────────────────────
+let geminiDisabledUntil = 0;
 async function getGeminiMusicSuggestions(seedTracks, vibePrompt = '', followedArtists = []) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey || Date.now() < geminiDisabledUntil) return null;
 
   try {
     const seeds = seedTracks.slice(0, 6).map(t => `"${t.title}" by ${t.artist}`).join(', ');
@@ -5076,14 +5229,14 @@ ${vibePrompt ? `User mood/vibe request: "${vibePrompt}".` : 'Recommend tracks th
 Provide 6 song recommendations.
 Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason" (short 4-word reason like "Followed Artist Hit" or "Matching Energy"). No markdown, no formatting.`;
 
-    const model = 'gemini-1.5-flash';
+    const model = 'gemini-2.0-flash';
     const res = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
       },
-      { timeout: 3000 }
+      { timeout: 2500 }
     );
 
     const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -5091,6 +5244,10 @@ Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason"
     const parsed = JSON.parse(clean);
     if (Array.isArray(parsed) && parsed.length > 0) return parsed;
   } catch (err) {
+    const status = err?.response?.status;
+    if (status === 404 || status === 403 || status === 429) {
+      geminiDisabledUntil = Date.now() + 3600 * 1000;
+    }
     console.warn('[Gemini AI] Smart Shuffle recommendations fallback:', err.message);
   }
   return null;
@@ -5354,11 +5511,13 @@ const resolveStreamHandler = async (req, res) => {
           }
           const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist);
           if (directAudio) {
-            const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
+            const resolvedPath = directAudio.url || String(directAudio);
+            const isLocalUpload = resolvedPath.startsWith('/uploads/');
+            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
             return res.json({
               success: true,
-              url: proxyUrl,
-              directUrl: directAudio,
+              url: finalUrl,
+              directUrl: resolvedPath,
               duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210),
               cover: dbTrack.cover,
               isYouTube: false
@@ -5372,11 +5531,13 @@ const resolveStreamHandler = async (req, res) => {
     if (title || artist || url) {
       const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '');
       if (directAudio) {
-        const proxyUrl = `/api/tracks/stream-proxy?url=${encodeURIComponent(directAudio)}`;
+        const resolvedPath = directAudio.url || String(directAudio);
+        const isLocalUpload = resolvedPath.startsWith('/uploads/');
+        const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
         return res.json({
           success: true,
-          url: proxyUrl,
-          directUrl: directAudio,
+          url: finalUrl,
+          directUrl: resolvedPath,
           duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
           isYouTube: false,
         });
