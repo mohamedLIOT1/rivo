@@ -31,6 +31,17 @@ function extractYtId(input) {
   return null;
 }
 
+// ── Fisher-Yates Array Shuffler ───────────────────────────────────
+export function shuffleArray(array) {
+  if (!Array.isArray(array)) return [];
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 // ── Client-side Stream Cache (Instant 0ms repeated playbacks) ──
 const clientStreamCache = new Map();
 const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
@@ -247,6 +258,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const activeTransRef    = useRef(activeTransitions);
   const currentQueueRef   = useRef(currentQueue);
   const currentQueueIndexRef = useRef(currentQueueIndex);
+  const unshuffledQueueRef = useRef([]);
   const tracksRef         = useRef(tracks);
   const currentTrackRef   = useRef(currentTrack);
   const isPlayingRef      = useRef(isPlaying);
@@ -467,12 +479,25 @@ export function AudioProvider({ children, tracks, setTracks }) {
             const latestCur = currentTrackRef.current;
             if (latestCur && String(latestCur.id || latestCur._id) === String(cur.id || cur._id) && d.success && d.url && audio) {
               stopYouTube();
-              audio.src = d.url;
+              const fullUrl = d.url.startsWith('/') ? `${API_BASE_URL}${d.url}` : d.url;
+              audio.src = fullUrl;
               resumeAudioContext();
               audio.play().catch(() => {});
+            } else {
+              setTimeout(() => {
+                if (playNextTrackRef.current && isPlayingRef.current) {
+                  playNextTrackRef.current();
+                }
+              }, 1500);
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            setTimeout(() => {
+              if (playNextTrackRef.current && isPlayingRef.current) {
+                playNextTrackRef.current();
+              }
+            }, 1500);
+          });
       }
     };
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -1027,7 +1052,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     let trackToPlay = { ...track };
 
-    // ── STRICT QUEUE ISOLATION (Quran vs Music) ──
+    // ── STRICT QUEUE ISOLATION (Quran vs Music) & RELEVANT BATCHING ──
     const isTargetQuran = isQuranContent(trackToPlay);
     let resolvedQueue = currentQueueRef.current;
     if (newQueue?.length > 0) {
@@ -1037,7 +1062,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueue(sanitized);
       } else {
         const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        resolvedQueue = pool.length > 0 ? pool : [trackToPlay];
+        resolvedQueue = pool.length > 0 ? pool.slice(0, 30) : [trackToPlay];
         setCurrentQueue(resolvedQueue);
       }
     } else {
@@ -1045,21 +1070,45 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const targetId = String(trackToPlay.id || trackToPlay._id || '');
       const isTrackInCurQ = curQ.some(t => String(t.id || t._id) === targetId);
 
-      // If playing remotely or if track is completely absent from current queue, build contextual queue from library
+      // If playing remotely or if track is absent from current queue, build relevant contextual queue (not 680 songs!)
       if (!isTrackInCurQ) {
         const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        const hasInPool = pool.some(t => String(t.id || t._id) === targetId);
-        resolvedQueue = hasInPool ? pool : [trackToPlay, ...pool];
+        let contextual = [];
+        if (trackToPlay.album && !isTargetQuran) {
+          contextual = pool.filter(t => t.album && t.album.toLowerCase().trim() === trackToPlay.album.toLowerCase().trim());
+        }
+        if (contextual.length <= 1 && trackToPlay.artist) {
+          contextual = pool.filter(t => t.artist && t.artist.toLowerCase().trim() === trackToPlay.artist.toLowerCase().trim());
+        }
+        if (contextual.length <= 1) {
+          const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
+          if (foundIdx >= 0) {
+            contextual = pool.slice(Math.max(0, foundIdx), Math.min(pool.length, foundIdx + 30));
+          } else {
+            contextual = [trackToPlay, ...pool.slice(0, 25)];
+          }
+        }
+        resolvedQueue = contextual.length > 0 ? contextual : [trackToPlay];
         setCurrentQueue(resolvedQueue);
       } else {
         // Check if current queue is strictly composed of the same type
         const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
         if (!curQMatchesType) {
           const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-          resolvedQueue = pool.length > 0 ? pool : [trackToPlay];
+          resolvedQueue = pool.length > 0 ? pool.slice(0, 30) : [trackToPlay];
           setCurrentQueue(resolvedQueue);
         }
       }
+    }
+
+    // If Shuffle mode is active, shuffle the upcoming queue so what displays matches playback 100%
+    if (isShuffleRef.current && resolvedQueue.length > 1) {
+      unshuffledQueueRef.current = [...resolvedQueue];
+      const targetId = String(trackToPlay.id || trackToPlay._id || '');
+      const otherTracks = resolvedQueue.filter(t => String(t.id || t._id) !== targetId);
+      const shuffledOthers = shuffleArray(otherTracks);
+      resolvedQueue = [trackToPlay, ...shuffledOthers];
+      setCurrentQueue(resolvedQueue);
     }
 
     // Set and track active queue index accurately (handles duplicate tracks in queue)
@@ -1312,14 +1361,39 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const toggleShuffle = useCallback(() => {
     setIsShuffle(prev => {
-      if (!prev || prev === false) return 'shuffle';
-      if (prev === 'shuffle' || prev === true) {
-        if (currentTrackRef.current) {
-          fetchSmartShuffleTracks(currentTrackRef.current, currentQueueRef.current);
+      const nextMode = (!prev || prev === false) ? 'shuffle' : (prev === 'shuffle' || prev === true ? 'smart' : false);
+      const curList = currentQueueRef.current;
+      const curIdx = currentQueueIndexRef.current;
+      const curTrack = currentTrackRef.current;
+
+      if (nextMode === 'shuffle') {
+        unshuffledQueueRef.current = [...curList];
+        if (curList.length > 1) {
+          const played = curList.slice(0, Math.max(0, curIdx + 1));
+          const upcoming = curList.slice(Math.max(0, curIdx + 1));
+          const shuffledUpcoming = shuffleArray(upcoming);
+          const newQueue = [...played, ...shuffledUpcoming];
+          currentQueueRef.current = newQueue;
+          setCurrentQueue(newQueue);
         }
-        return 'smart';
+      } else if (nextMode === false) {
+        if (unshuffledQueueRef.current.length > 0) {
+          const original = unshuffledQueueRef.current;
+          const curId = String(curTrack?.id || curTrack?._id || '');
+          let origIdx = curId ? original.findIndex(t => String(t.id || t._id) === curId) : -1;
+          if (origIdx === -1) origIdx = 0;
+          currentQueueRef.current = original;
+          setCurrentQueue(original);
+          currentQueueIndexRef.current = origIdx;
+          setCurrentQueueIndex(origIdx);
+        }
+      } else if (nextMode === 'smart') {
+        if (curTrack) {
+          fetchSmartShuffleTracks(curTrack, curList);
+        }
       }
-      return false;
+
+      return nextMode;
     });
   }, [fetchSmartShuffleTracks]);
 
@@ -1438,9 +1512,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentQueueIndex(safeChosenIdx);
       playTrack(chosen, activeList, false, safeChosenIdx);
     } else if (isShuffleRef.current) {
-      let nextIdx = Math.floor(Math.random() * activeList.length);
-      if (activeList.length > 1 && nextIdx === currentQueueIndexRef.current) {
-        nextIdx = (nextIdx + 1 + Math.floor(Math.random() * (activeList.length - 1))) % activeList.length;
+      // In shuffle mode, currentQueue is ALREADY shuffled in place!
+      // Simply take the next item in the queue so what was displayed under Up Next plays!
+      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id);
+      let idx = currentQueueIndexRef.current;
+      if (idx < 0 || idx >= activeList.length || String(activeList[idx]?.id || activeList[idx]?._id) !== curId) {
+        idx = activeList.findIndex(t => String(t.id || t._id) === curId);
+      }
+      let nextIdx = idx + 1;
+      if (nextIdx >= activeList.length) {
+        if (repeatModeRef.current === 'all' || isRepeatRef.current) {
+          nextIdx = 0;
+          const reshuffled = shuffleArray(activeList);
+          currentQueueRef.current = reshuffled;
+          setCurrentQueue(reshuffled);
+          currentQueueIndexRef.current = 0;
+          setCurrentQueueIndex(0);
+          playTrack(reshuffled[0], reshuffled, false, 0);
+          return;
+        } else {
+          return;
+        }
       }
       currentQueueIndexRef.current = nextIdx;
       setCurrentQueueIndex(nextIdx);
