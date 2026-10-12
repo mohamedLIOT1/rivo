@@ -201,6 +201,10 @@ export default function FullPlayerModal({
   const lastGoodColorRef = useRef(null); // Persists last successfully extracted color
 
   useEffect(() => {
+    if (!isOpen) {
+      if (currentTrack?.color) setDynamicColor(currentTrack.color);
+      return;
+    }
     if (!currentTrack?.cover) {
       // No cover: use stored color or track.color, but keep lastGoodColor if available
       setDynamicColor(lastGoodColorRef.current || currentTrack?.color || '#17a398');
@@ -226,25 +230,29 @@ export default function FullPlayerModal({
       return;
     }
 
-    // Try direct first, then via proxy (bypass YouTube CORS)
-    extractColorFromImage(coverUrl, (color) => {
-      if (color) {
-        lastGoodColorRef.current = color;
-        setDynamicColor(color);
-      } else {
-        // Fallback: use server proxy to bypass CORS for YouTube thumbnails
-        const proxiedUrl = `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(coverUrl)}`;
-        extractColorFromImage(proxiedUrl, (c2) => {
-          if (c2) {
-            lastGoodColorRef.current = c2;
-            setDynamicColor(c2);
-          } else if (lastGoodColorRef.current) {
-            setDynamicColor(lastGoodColorRef.current);
-          }
-        });
-      }
-    });
-  }, [currentTrack?.cover, currentTrack?.color]);
+    const timer = setTimeout(() => {
+      // Try direct first, then via proxy (bypass YouTube CORS)
+      extractColorFromImage(coverUrl, (color) => {
+        if (color) {
+          lastGoodColorRef.current = color;
+          setDynamicColor(color);
+        } else {
+          // Fallback: use server proxy to bypass CORS for YouTube thumbnails
+          const proxiedUrl = `${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(coverUrl)}`;
+          extractColorFromImage(proxiedUrl, (c2) => {
+            if (c2) {
+              lastGoodColorRef.current = c2;
+              setDynamicColor(c2);
+            } else if (lastGoodColorRef.current) {
+              setDynamicColor(lastGoodColorRef.current);
+            }
+          });
+        }
+      });
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, currentTrack?.cover, currentTrack?.color]);
 
   const trackColor = dynamicColor || currentTrack?.color || '#17a398';
 
@@ -288,70 +296,81 @@ export default function FullPlayerModal({
     setTranslatedLyrics(null);
     setShowTranslation(false);
 
-    if (currentTrack) {
-      // 1. If track already has embedded or loaded lyrics (LRC string or array), parse and preserve
-      if (currentTrack.lyrics) {
-        const parsed = parseLrcLyrics(currentTrack.lyrics);
-        if (parsed.length > 0) {
-          setLocalLyrics(parsed);
-          currentTrack.lyrics = parsed;
-          return;
-        }
-      }
+    if (!isOpen || !currentTrack) return;
 
-      // 2. If track is local import or downloaded, do not generate AI lyrics
-      if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
-        setLocalLyrics([]);
+    // 1. If track already has embedded or loaded lyrics (LRC string or array), parse and preserve
+    if (currentTrack.lyrics) {
+      const parsed = parseLrcLyrics(currentTrack.lyrics);
+      if (parsed.length > 0) {
+        setLocalLyrics(parsed);
+        currentTrack.lyrics = parsed;
         return;
       }
-
-      const qTitle = currentTrack.title;
-      const qArtist = currentTrack.artist;
-      const tId = currentTrack.id || currentTrack._id;
-      if (qTitle) {
-        // First check server for manually saved or cached lyrics
-        fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${encodeURIComponent(tId || '')}&title=${encodeURIComponent(qTitle || '')}&artist=${encodeURIComponent(qArtist || '')}`)
-          .then(r => r.json())
-          .then(d => {
-            if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
-              const parsed = parseLrcLyrics(d.lyrics);
-              setLocalLyrics(parsed);
-              setIsLyricsVerified(Boolean(d.isVerified));
-              setLyricsVerifiedBy(d.verifiedBy || null);
-              currentTrack.lyrics = parsed;
-            } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
-              if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
-                return;
-              }
-              setIsLyricsVerified(false);
-              setLyricsVerifiedBy(null);
-              fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  trackId: tId,
-                  title: qTitle,
-                  artist: qArtist,
-                  duration: currentTrack.duration || 180,
-                })
-              })
-              .then(r => r.json())
-              .then(g => {
-                if (g.success && Array.isArray(g.lyrics) && g.lyrics.length > 0) {
-                  const parsedAi = parseLrcLyrics(g.lyrics);
-                  setLocalLyrics(parsedAi);
-                  setIsLyricsVerified(false);
-                  setLyricsVerifiedBy(null);
-                  currentTrack.lyrics = parsedAi;
-                }
-              })
-              .catch(() => {});
-            }
-          })
-          .catch(() => {});
-      }
     }
-  }, [currentTrack?.id, currentTrack?._id, currentTrack?.title]);
+
+    // 2. If track is local import or downloaded, do not generate AI lyrics
+    if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
+      setLocalLyrics([]);
+      return;
+    }
+
+    let isCancelled = false;
+    const qTitle = currentTrack.title;
+    const qArtist = currentTrack.artist;
+    const tId = currentTrack.id || currentTrack._id;
+    if (!qTitle) return;
+
+    // Debounce lyrics fetch so rapid skips do not trigger parallel AI generation
+    const timer = setTimeout(() => {
+      // First check server for manually saved or cached lyrics
+      fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${encodeURIComponent(tId || '')}&title=${encodeURIComponent(qTitle || '')}&artist=${encodeURIComponent(qArtist || '')}`)
+        .then(r => r.json())
+        .then(d => {
+          if (isCancelled) return;
+          if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
+            const parsed = parseLrcLyrics(d.lyrics);
+            setLocalLyrics(parsed);
+            setIsLyricsVerified(Boolean(d.isVerified));
+            setLyricsVerifiedBy(d.verifiedBy || null);
+            currentTrack.lyrics = parsed;
+          } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
+            if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded || isCancelled) {
+              return;
+            }
+            setIsLyricsVerified(false);
+            setLyricsVerifiedBy(null);
+            fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                trackId: tId,
+                title: qTitle,
+                artist: qArtist,
+                duration: currentTrack.duration || 180,
+              })
+            })
+            .then(r => r.json())
+            .then(g => {
+              if (isCancelled) return;
+              if (g.success && Array.isArray(g.lyrics) && g.lyrics.length > 0) {
+                const parsedAi = parseLrcLyrics(g.lyrics);
+                setLocalLyrics(parsedAi);
+                setIsLyricsVerified(false);
+                setLyricsVerifiedBy(null);
+                currentTrack.lyrics = parsedAi;
+              }
+            })
+            .catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }, 350);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isOpen, currentTrack?.id, currentTrack?._id, currentTrack?.title]);
 
   // Real-time socket listener for lyrics updates from ANY user
   useEffect(() => {

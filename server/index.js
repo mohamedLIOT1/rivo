@@ -4195,6 +4195,84 @@ async function ensureYtDlpBinary() {
   return localBin;
 }
 
+const directStreamCache = new Map(); // videoId -> { url, expireAt }
+const activeBackgroundDownloads = new Set();
+const MAX_CONCURRENT_BG_DOWNLOADS = 2;
+const bgDownloadQueue = [];
+
+function queueBackgroundAudioCache(videoId, targetFile) {
+  try {
+    if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) return;
+  } catch {}
+  if (activeBackgroundDownloads.has(videoId)) return;
+  if (bgDownloadQueue.some(item => item.videoId === videoId)) return;
+
+  bgDownloadQueue.push({ videoId, targetFile });
+  processNextBgDownload();
+}
+
+function processNextBgDownload() {
+  if (activeBackgroundDownloads.size >= MAX_CONCURRENT_BG_DOWNLOADS) return;
+  if (bgDownloadQueue.length === 0) return;
+
+  const { videoId, targetFile } = bgDownloadQueue.shift();
+  try {
+    if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) {
+      return processNextBgDownload();
+    }
+  } catch {}
+
+  activeBackgroundDownloads.add(videoId);
+  const bin = getYtDlpBin();
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const cookiesPath = path.join(__dirname, '../cookies.txt');
+  const ytdlpArgs = [
+    '--no-check-certificates',
+    '-f', 'ba[ext=m4a]/ba/b',
+    '-o', targetFile
+  ];
+  if (fs.existsSync(cookiesPath)) {
+    ytdlpArgs.push('--cookies', cookiesPath);
+  }
+  ytdlpArgs.push(ytUrl);
+
+  execFile(bin, ytdlpArgs, { timeout: 60000 }, (err) => {
+    activeBackgroundDownloads.delete(videoId);
+    try {
+      if (!err && fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) {
+        console.log(`[Audio-Server] Background cached ${videoId}.m4a (${(fs.statSync(targetFile).size / 1024 / 1024).toFixed(2)} MB)`);
+      }
+    } catch {}
+    processNextBgDownload();
+  });
+}
+
+async function extractDirectStreamUrl(videoId) {
+  const bin = getYtDlpBin();
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const cookiesPath = path.join(__dirname, '../cookies.txt');
+  const ytdlpArgs = [
+    '--no-check-certificates',
+    '-g',
+    '-f', 'ba[ext=m4a]/ba/b'
+  ];
+  if (fs.existsSync(cookiesPath)) {
+    ytdlpArgs.push('--cookies', cookiesPath);
+  }
+  ytdlpArgs.push(ytUrl);
+
+  return new Promise((resolve) => {
+    execFile(bin, ytdlpArgs, { timeout: 15000 }, (err, stdout) => {
+      if (err || !stdout) {
+        return resolve(null);
+      }
+      const lines = stdout.trim().split(/\r?\n/);
+      const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
+      resolve(directUrl);
+    });
+  });
+}
+
 async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '') {
   let videoId = null;
   const candidates = [rawUrl];
@@ -4242,70 +4320,73 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     return retObj;
   }
 
-  // 2. In-flight download deduplication
+  // 2. Direct stream URL memory cache (Instant ~0ms)
+  const cachedStream = directStreamCache.get(videoId);
+  if (cachedStream && Date.now() < cachedStream.expireAt) {
+    queueBackgroundAudioCache(videoId, cachedM4a);
+    const retObj = new String(cachedStream.url);
+    retObj.url = cachedStream.url;
+    retObj.duration = 210;
+    return retObj;
+  }
+
+  // 3. In-flight extraction deduplication
   if (downloadingAudioMap.has(videoId)) {
     try {
       const url = await downloadingAudioMap.get(videoId);
-      const retObj = new String(url);
-      retObj.url = url;
-      retObj.duration = 210;
-      return retObj;
+      if (url) {
+        const retObj = new String(url);
+        retObj.url = url;
+        retObj.duration = 210;
+        return retObj;
+      }
     } catch (e) {}
   }
 
-let ytdlpLock = Promise.resolve();
-function withYtDlpLock(fn) {
-  const next = ytdlpLock.then(fn, fn);
-  ytdlpLock = next.catch(() => {});
-  return next;
-}
+  // 4. Fast direct stream URL extraction (1-2s response)
+  const extractPromise = (async () => {
+    const directUrl = await extractDirectStreamUrl(videoId);
+    if (directUrl) {
+      directStreamCache.set(videoId, { url: directUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
+      queueBackgroundAudioCache(videoId, cachedM4a);
+      return directUrl;
+    }
 
-  // 3. Download via yt-dlp to server cache
-  const dlPromise = (async () => {
+    // Fallback: If direct stream extraction fails, try direct download to file
     const bin = getYtDlpBin();
     const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const targetFile = cachedM4a;
+    const cookiesPath = path.join(__dirname, '../cookies.txt');
+    const ytdlpArgs = [
+      '--no-check-certificates',
+      '-f', 'ba[ext=m4a]/ba/b',
+      '-o', cachedM4a
+    ];
+    if (fs.existsSync(cookiesPath)) ytdlpArgs.push('--cookies', cookiesPath);
+    ytdlpArgs.push(ytUrl);
 
-    console.log(`[Audio-Server] Caching audio for YouTube track ${videoId} via yt-dlp...`);
-    await withYtDlpLock(async () => {
-      if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) return;
-      return new Promise((resolve, reject) => {
-        const cookiesPath = path.join(__dirname, '../cookies.txt');
-        const ytdlpArgs = [
-          '--no-check-certificates',
-          '-f', 'ba[ext=m4a]/ba/b',
-          '-o', targetFile
-        ];
-        if (fs.existsSync(cookiesPath)) {
-          ytdlpArgs.push('--cookies', cookiesPath);
-        }
-        ytdlpArgs.push(ytUrl);
-
-        execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
-          if (err) {
-            console.warn(`[Audio-Server] yt-dlp download failed for ${videoId}:`, err.message);
-            return reject(err);
-          }
-          resolve();
-        });
+    await new Promise((resolve) => {
+      execFile(bin, ytdlpArgs, { timeout: 35000 }, (err) => {
+        resolve();
       });
     });
 
-    if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) {
-      console.log(`[Audio-Server] Successfully cached ${videoId}.m4a (${(fs.statSync(targetFile).size / 1024 / 1024).toFixed(2)} MB)`);
+    if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
       return `/uploads/audio-cache/${videoId}.m4a`;
     }
-    throw new Error('Downloaded file too small or missing');
+    return null;
   })();
 
-  downloadingAudioMap.set(videoId, dlPromise);
+  downloadingAudioMap.set(videoId, extractPromise);
 
   try {
-    const relativeUrl = await dlPromise;
-    const retObj = new String(relativeUrl);
-    retObj.url = relativeUrl;
-    retObj.duration = 210;
-    return retObj;
+    const resolvedUrl = await extractPromise;
+    if (resolvedUrl) {
+      const retObj = new String(resolvedUrl);
+      retObj.url = resolvedUrl;
+      retObj.duration = 210;
+      return retObj;
+    }
+    return null;
   } catch (err) {
     console.error(`[Audio-Server] Failed to resolve audio for ${videoId}:`, err.message);
     return null;
