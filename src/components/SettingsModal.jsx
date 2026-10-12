@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink } from 'lucide-react';
+import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Zap } from 'lucide-react';
 import { FULL_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
 
@@ -37,6 +37,69 @@ export default function SettingsModal({
       })
       .catch(() => {});
   }, [isOpen]);
+
+  useEffect(() => {
+    const handleMsg = (e) => {
+      if (e.data?.type === 'RIVO_LINK_SUCCESS' && e.data.username) {
+        setDiscordStatus({ linked: true, username: e.data.username, enabled: true });
+        setDiscordMsg(`✅ تم ربط الحساب بنجاح: ${e.data.username}`);
+      }
+    };
+    window.addEventListener('message', handleMsg);
+    return () => window.removeEventListener('message', handleMsg);
+  }, []);
+
+  const handleExtensionSync = () => {
+    setDiscordLoading(true);
+    setDiscordMsg('جاري الاتصال بالإضافة...');
+    let handled = false;
+
+    const timer = setTimeout(() => {
+      if (!handled) {
+        setDiscordLoading(false);
+        setDiscordMsg('لم يتم العثور على الإضافة! تأكد من تثبيتها وتفعيلها في المتصفح.');
+      }
+    }, 1500);
+
+    const onMessage = async (e) => {
+      if (e.data?.type === 'RIVO_EXTENSION_PONG' || e.data?.type === 'RIVO_EXTENSION_SYNC_DONE') {
+        handled = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+
+        const token = e.data.token;
+        if (token) {
+          setDiscordMsg('تم العثور على التوكين! جاري الربط...');
+          const userToken = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/discord/link-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
+              body: JSON.stringify({ token })
+            });
+            const data = await res.json();
+            if (data.success) {
+              setDiscordStatus({ linked: true, username: data.username, enabled: true });
+              setDiscordMsg(`✅ تم الربط بنجاح بحساب ${data.username}!`);
+            } else {
+              setDiscordMsg(data.error || 'فشل التحقق من التوكين');
+            }
+          } catch (err) {
+            setDiscordMsg('فشل الاتصال بالسيرفر');
+          } finally {
+            setDiscordLoading(false);
+          }
+        } else {
+          setDiscordLoading(false);
+          setDiscordMsg('⚠️ الإضافة مثبتة ولكن لم تسجل دخول في discord.com بعد.');
+        }
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    window.postMessage({ type: 'RIVO_EXTENSION_REQUEST_SYNC' }, '*');
+    window.postMessage({ type: 'RIVO_EXTENSION_PING' }, '*');
+  };
 
   const handleGenerateCode = async () => {
     setDiscordLoading(true);
@@ -232,6 +295,14 @@ export default function SettingsModal({
             </div>
           ) : (
             <div className="flex flex-col gap-2">
+              <button
+                onClick={handleExtensionSync}
+                disabled={discordLoading}
+                className="brutal-btn w-full py-2 px-3 bg-[#5865F2] hover:bg-[#4752c4] text-white font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center gap-2 cursor-pointer transition active:scale-95 disabled:opacity-50"
+              >
+                <Zap size={14} className="text-amber-300 fill-amber-300 animate-bounce" />
+                {discordLoading ? 'Connecting...' : '⚡ Connect with Extension (1-Click)'}
+              </button>
               {linkCode ? (
                 <div className={`p-3 brutal-border text-center ${
                   isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
