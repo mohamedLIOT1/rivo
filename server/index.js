@@ -694,6 +694,7 @@ const searchCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 const ytSearchCache = new Map();
+let ytQuotaExceededUntil = 0;
 
 async function searchYouTubeId(query) {
   if (!query || !query.trim()) return null;
@@ -703,9 +704,9 @@ async function searchYouTubeId(query) {
     return ytSearchCache.get(cacheKey);
   }
 
-  // 1. YouTube Data API v3 (Official, unblocked on Railway)
+  // 1. YouTube Data API v3 (Official) - with circuit breaker to avoid hanging on quota limits
   const apiKey = process.env.YOUTUBE_API_KEY || 'AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs';
-  if (apiKey) {
+  if (apiKey && Date.now() > ytQuotaExceededUntil) {
     try {
       const res = await axios.get('https://www.googleapis.com/youtube/v3/search', {
         params: {
@@ -715,51 +716,65 @@ async function searchYouTubeId(query) {
           maxResults: 1,
           key: apiKey
         },
-        timeout: 4500
+        timeout: 2500
       });
       const videoId = res.data?.items?.[0]?.id?.videoId;
       if (videoId && videoId.length === 11) {
-        if (ytSearchCache.size > 2000) ytSearchCache.clear();
+        if (ytSearchCache.size > 5000) ytSearchCache.clear();
         ytSearchCache.set(cacheKey, videoId);
         return videoId;
       }
     } catch (err) {
-      console.warn('[searchYouTubeId] YouTube API error:', err?.response?.data?.error?.message || err.message);
+      const errMsg = err?.response?.data?.error?.message || err.message;
+      if (err?.response?.status === 403 || /quota/i.test(errMsg)) {
+        console.warn('[searchYouTubeId] YouTube API quota exceeded, disabling Google API for 2 hours.');
+        ytQuotaExceededUntil = Date.now() + 2 * 3600 * 1000;
+      }
     }
   }
 
-  // 2. Invidious & Piped fallback
-  const invidiousEndpoints = [
-    'https://inv.nadeko.net/api/v1/search',
-    'https://invidious.jing.rocks/api/v1/search',
-    'https://yewtu.be/api/v1/search'
-  ];
-  for (const ep of invidiousEndpoints) {
-    try {
-      const invRes = await axios.get(`${ep}?q=${encodeURIComponent(q)}&type=video`, { timeout: 2500 });
-      if (invRes.data && Array.isArray(invRes.data) && invRes.data[0]?.videoId) {
-        const vid = invRes.data[0].videoId;
-        ytSearchCache.set(cacheKey, vid);
-        return vid;
-      }
-    } catch {}
-  }
-
-  // 3. Fallback scraping
+  // 2. High-speed Direct YouTube Search Scraping (~400-800ms)
   try {
     const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
       },
-      timeout: 3500
+      timeout: 3000
     });
     const matches = [...res.data.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map(m => m[1]);
     const valid = matches.filter(id => id && id.length === 11);
     if (valid[0]) {
+      if (ytSearchCache.size > 5000) ytSearchCache.clear();
       ytSearchCache.set(cacheKey, valid[0]);
       return valid[0];
     }
-  } catch {}
+  } catch (err) {}
+
+  // 3. Resilient Fallback to yt-dlp search with cookies (~1-2s)
+  try {
+    const bin = getYtDlpBin();
+    const cookiesPath = path.join(__dirname, '../cookies.txt');
+    const ytdlpArgs = ['--no-check-certificates', '--get-id', `ytsearch1:${q}`];
+    if (fs.existsSync(cookiesPath)) {
+      ytdlpArgs.splice(1, 0, '--cookies', cookiesPath);
+    }
+
+    const videoId = await new Promise((resolve) => {
+      execFile(bin, ytdlpArgs, { timeout: 6000 }, (err, stdout) => {
+        if (err || !stdout) return resolve(null);
+        const lines = stdout.trim().split(/\r?\n/);
+        const id = lines.find(l => /^[a-zA-Z0-9_-]{11}$/.test(l.trim()));
+        resolve(id?.trim() || null);
+      });
+    });
+
+    if (videoId) {
+      if (ytSearchCache.size > 5000) ytSearchCache.clear();
+      ytSearchCache.set(cacheKey, videoId);
+      return videoId;
+    }
+  } catch (err) {}
 
   return null;
 }
@@ -4341,6 +4356,12 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   if (!videoId && (title || artist)) {
     try {
       videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
+      if (videoId && (title || artist)) {
+        Track.updateOne(
+          { $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }] },
+          { $set: { audioUrl: `https://www.youtube.com/watch?v=${videoId}` } }
+        ).catch(() => {});
+      }
     } catch {}
   }
   if (!videoId && rawUrl) {
@@ -5055,14 +5076,14 @@ ${vibePrompt ? `User mood/vibe request: "${vibePrompt}".` : 'Recommend tracks th
 Provide 6 song recommendations.
 Respond ONLY with a JSON array of objects with keys: "title", "artist", "reason" (short 4-word reason like "Followed Artist Hit" or "Matching Energy"). No markdown, no formatting.`;
 
-    const model = 'gemini-flash-latest';
+    const model = 'gemini-1.5-flash';
     const res = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
       },
-      { timeout: 7000 }
+      { timeout: 3000 }
     );
 
     const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';

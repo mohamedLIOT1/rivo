@@ -61,6 +61,14 @@ export async function resolvePlayableAudioStream(track, signal = null) {
   const result = await doResolvePlayableAudioStream(track, signal);
   if (trackId && result?.url) {
     clientStreamCache.set(trackId, { data: result, timestamp: Date.now() });
+    // Pre-warm browser audio cache for zero-latency start
+    try {
+      if (typeof window !== 'undefined' && result.url.startsWith('http')) {
+        const preloader = new Audio();
+        preloader.preload = 'auto';
+        preloader.src = result.url;
+      }
+    } catch {}
   }
   return result;
 }
@@ -410,6 +418,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
               setDuration(rounded);
               durationRef.current = rounded;
               if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
+            }
+
+            // Seamless prefetch: When within 15s of track completion, ensure next track is resolved & buffered
+            if (audio.currentTime >= rounded - 15) {
+              const q = currentQueueRef.current;
+              const curIdx = currentQueueIndexRef.current;
+              if (q && q.length > 1 && curIdx >= 0) {
+                const nextIdx = (curIdx + 1) % q.length;
+                const nextTrack = q[nextIdx];
+                const nextId = String(nextTrack?.id || nextTrack?._id || '');
+                if (nextId && !clientStreamCache.has(nextId)) {
+                  resolvePlayableAudioStream(nextTrack).catch(() => {});
+                }
+              }
             }
           }
         }
@@ -1655,7 +1677,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     playPrevTrackRef.current = playPrevTrack;
   }, [playPrevTrack]);
 
-  // Background stream prefetching for next track in queue (Instant 0ms transitions)
+  // Background stream prefetching for next tracks in queue (Instant 0ms transitions)
   useEffect(() => {
     if (!isPlaying || !currentTrack) return;
     const timer = setTimeout(() => {
@@ -1663,6 +1685,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const q = currentQueueRef.current;
       const curIdx = currentQueueIndexRef.current;
       if (q && q.length > 1 && curIdx >= 0) {
+        // Prefetch immediate next track
         const nextIdx = (curIdx + 1) % q.length;
         const nextTrack = q[nextIdx];
         if (nextTrack) {
@@ -1671,8 +1694,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
             resolvePlayableAudioStream(nextTrack).catch(() => {});
           }
         }
+        // Also prefetch 2nd track ahead for seamless continuous listening
+        if (q.length > 2) {
+          const secondNextIdx = (curIdx + 2) % q.length;
+          const secondNextTrack = q[secondNextIdx];
+          if (secondNextTrack) {
+            const trackId2 = String(secondNextTrack.id || secondNextTrack._id || '');
+            if (trackId2 && !clientStreamCache.has(trackId2)) {
+              resolvePlayableAudioStream(secondNextTrack).catch(() => {});
+            }
+          }
+        }
       }
-    }, 3000);
+    }, 800);
     return () => clearTimeout(timer);
   }, [currentTrack?.id || currentTrack?._id, isPlaying]);
 
