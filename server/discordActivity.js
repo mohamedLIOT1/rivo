@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Client: BotClient, MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
-const { Client: SelfClient, RichPresence, CustomStatus } = require('discord.js-selfbot-v13');
+const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
 
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
@@ -116,20 +116,7 @@ async function applyTrackPresence(client, track, currentTime = 0) {
       r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org');
     } catch (e) {}
 
-    // 1. Set Custom Status on User Profile (Shows externally on member list / friend list as: 🎵 [Song Title])
-    try {
-      if (client.settings && typeof client.settings.setCustomStatus === 'function') {
-        const titleStr = track.title ? String(track.title).slice(0, 120) : 'Rivo Music';
-        await client.settings.setCustomStatus({
-          text: titleStr,
-          emoji: '🎵'
-        });
-      }
-    } catch (csErr) {
-      console.warn('[Discord Activity] setCustomStatus error:', csErr.message);
-    }
-
-    // 2. Set Rich Presence Activity (Listening to Rivo card with song details and elapsed progress)
+    // Set Rich Presence Activity (Listening to Rivo card)
     try {
       await client.user.setActivity(r);
     } catch (presenceErr) {
