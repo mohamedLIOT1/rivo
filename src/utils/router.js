@@ -18,6 +18,8 @@ export function buildUrl(screen, params = {}) {
       return '/quran';
     case 'stats':
       return '/stats';
+    case 'download':
+      return '/download';
     case 'admin':
       return '/admin';
     case 'profile':
@@ -73,6 +75,10 @@ export function parseLocation(pathname = '/', search = '') {
 
   if (lowerPath === '/stats') {
     return { screen: 'stats', params: {} };
+  }
+
+  if (lowerPath === '/download' || lowerPath === '/downloads') {
+    return { screen: 'download', params: {} };
   }
 
   if (lowerPath === '/admin') {

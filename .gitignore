@@ -15,3 +15,6 @@ android/build/
 android/app/build/
 downloaded_ipa/
 uploads/audio-cache/
+*.exe
+*.pdb
+temp_artifacts_*/

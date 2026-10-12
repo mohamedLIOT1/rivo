@@ -38,6 +38,7 @@ export default function Navigation({
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
+    { id: 'download', label: 'Download App', icon: DownloadCloud },
     { id: 'stats', label: 'Stats & History', icon: Activity },
     ...(currentUser && isUserAdmin(currentUser) ? [
       { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
@@ -49,6 +50,7 @@ export default function Navigation({
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
+    { id: 'download', label: 'Apps', icon: DownloadCloud },
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])
