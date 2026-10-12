@@ -261,6 +261,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const socketRef         = useRef(null);
   const isRemoteActionRef = useRef(false);
   const seekTimeoutRef    = useRef(null);
+  const seekListeningSyncTimeoutRef = useRef(null);
   const volumeRef         = useRef(0.8);
   const shouldPlayRef     = useRef(false); // Force autoplay on track change
   const lastLoadedUrlRef  = useRef(null);  // Last URL loaded into audio element (prevents interruption on metadata-only changes)
@@ -299,20 +300,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { durationRef.current    = duration;     }, [duration]);
   useEffect(() => { jamSessionRef.current   = jamSession;  }, [jamSession]);
 
-  // Broadcast live listening activity to server for Friend Activity
+  // Broadcast live listening activity to server for Friend Activity & Discord Rich Presence
   useEffect(() => {
     if (!currentTrack) return;
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
 
+    const curDur = (durationRef.current > 0 ? durationRef.current : currentTrack.duration) || 0;
+    const payloadTrack = {
+      ...currentTrack,
+      duration: curDur
+    };
+    const curSec = currentTimeRef.current || 0;
+
     // If socket is available, emit immediate zero-latency listening update
     if (socketRef.current) {
-      socketRef.current.emit('activity:listening', { track: currentTrack, isPlaying });
+      socketRef.current.emit('activity:listening', { track: payloadTrack, isPlaying, currentTime: curSec });
     }
 
     if (!token) return;
 
-    // Fast sync: 50ms if paused so friends see pause immediately, 800ms when playing to throttle track changes
-    const delay = isPlaying ? 800 : 50;
+    // Fast sync: 50ms if paused so friends/Discord see pause immediately, 500ms when playing to throttle track changes
+    const delay = isPlaying ? 500 : 50;
     const timeout = setTimeout(() => {
       fetch(`${API_BASE_URL}/api/users/listening-activity`, {
         method: 'POST',
@@ -320,12 +328,28 @@ export function AudioProvider({ children, tracks, setTracks }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ track: currentTrack, isPlaying })
+        body: JSON.stringify({ track: payloadTrack, isPlaying, currentTime: curSec })
       }).catch(() => {});
     }, delay);
 
     return () => clearTimeout(timeout);
   }, [currentTrack?.id || currentTrack?._id, isPlaying]);
+
+  // Continuous sync heartbeat to prevent Discord Presence and Friend Activity drift
+  useEffect(() => {
+    if (!isPlaying || !currentTrack) return;
+    const interval = setInterval(() => {
+      if (socketRef.current && currentTrackRef.current && isPlayingRef.current) {
+        const curDur = (durationRef.current > 0 ? durationRef.current : currentTrackRef.current.duration) || 0;
+        socketRef.current.emit('activity:listening', {
+          track: { ...currentTrackRef.current, duration: curDur },
+          isPlaying: true,
+          currentTime: currentTimeRef.current || 0
+        });
+      }
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [isPlaying, currentTrack?.id || currentTrack?._id]);
 
   // ── Regular HTML Audio element (for uploaded tracks) ──
   const audioRef = useRef(null);
@@ -1586,6 +1610,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
           });
         }
       }, 150);
+    }
+
+    if (!isRemote) {
+      if (seekListeningSyncTimeoutRef.current) clearTimeout(seekListeningSyncTimeoutRef.current);
+      seekListeningSyncTimeoutRef.current = setTimeout(() => {
+        if (socketRef.current && currentTrackRef.current) {
+          const curDur = (durationRef.current > 0 ? durationRef.current : currentTrackRef.current.duration) || 0;
+          socketRef.current.emit('activity:listening', {
+            track: { ...currentTrackRef.current, duration: curDur },
+            isPlaying: isPlayingRef.current,
+            currentTime: s
+          });
+        }
+      }, 250);
     }
   }, []);
 

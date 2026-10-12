@@ -1403,8 +1403,9 @@ app.get('/api/users/listening-activity', optionalAuth, async (req, res) => {
 
 app.post('/api/users/listening-activity', auth, async (req, res) => {
   try {
-    const { track, isPlaying } = req.body;
+    const { track, isPlaying, currentTime } = req.body;
     const now = new Date();
+    const curSec = Math.max(0, Number(currentTime) || 0);
     const updateData = {
       lastActiveAt: now,
       currentListening: track ? {
@@ -1413,7 +1414,9 @@ app.post('/api/users/listening-activity', auth, async (req, res) => {
         artist: track.artist,
         cover: track.cover,
         audioUrl: track.audioUrl,
+        duration: track.duration,
         isPlaying: Boolean(isPlaying),
+        currentTime: curSec,
         updatedAt: now
       } : null
     };
@@ -1434,7 +1437,7 @@ app.post('/api/users/listening-activity', auth, async (req, res) => {
     });
 
     // Update Discord Rich Presence
-    try { discordActivity.handleUserListening(user, track, isPlaying); } catch (e) {}
+    try { discordActivity.handleUserListening(user, track, isPlaying, curSec); } catch (e) {}
 
     res.json({ success: true, currentListening: user.currentListening });
   } catch (e) {
@@ -5370,10 +5373,11 @@ io.on('connection', (socket) => {
   });
 
   // Client emits live listening state changes over socket for instant zero-lag sync
-  socket.on('activity:listening', async ({ track, isPlaying }) => {
+  socket.on('activity:listening', async ({ track, isPlaying, currentTime }) => {
     const uidStr = socket.userId;
     if (!uidStr) return;
     const now = new Date();
+    const curSec = Math.max(0, Number(currentTime) || 0);
     const updateData = {
       lastActiveAt: now,
       currentListening: track ? {
@@ -5382,7 +5386,9 @@ io.on('connection', (socket) => {
         artist: track.artist,
         cover: track.cover,
         audioUrl: track.audioUrl,
+        duration: track.duration,
         isPlaying: Boolean(isPlaying),
+        currentTime: curSec,
         updatedAt: now
       } : null
     };
@@ -5401,7 +5407,7 @@ io.on('connection', (socket) => {
         });
 
         // Sync Discord Rich Presence
-        try { discordActivity.handleUserListening(user, track, isPlaying); } catch (e) {}
+        try { discordActivity.handleUserListening(user, track, isPlaying, curSec); } catch (e) {}
       }
     } catch (e) {}
   });

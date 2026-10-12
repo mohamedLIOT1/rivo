@@ -59,10 +59,11 @@ function disconnectUserSession(userId) {
   }
 }
 
-async function applyTrackPresence(client, track) {
+async function applyTrackPresence(client, track, currentTime = 0) {
   if (!client || !client.user || !track) return;
   try {
-    const startTs = Date.now();
+    const curSec = Math.max(0, Number(currentTime) || 0);
+    const startTs = Date.now() - Math.round(curSec * 1000);
     const durationSec = track.duration && track.duration > 0 ? Math.round(track.duration) : 0;
     const appId = '1440997674630250506';
 
@@ -109,7 +110,7 @@ async function applyTrackPresence(client, track) {
   }
 }
 
-async function handleUserListening(user, track, isPlaying) {
+async function handleUserListening(user, track, isPlaying, currentTime = 0) {
   if (!user || !user._id) return;
   const uidStr = String(user._id);
 
@@ -123,10 +124,14 @@ async function handleUserListening(user, track, isPlaying) {
   // If stopped or paused:
   if (!isPlaying || !track) {
     const session = activeUserBots.get(uidStr);
-    if (session && session.client && session.client.user) {
-      try {
-        session.client.user.setActivity(null);
-      } catch (e) {}
+    if (session) {
+      session.isPlaying = false;
+      session.lastStartTs = null;
+      if (session.client && session.client.user) {
+        try {
+          session.client.user.setActivity(null);
+        } catch (e) {}
+      }
     }
     // Schedule clean disconnect after 5 minutes of inactivity to conserve RAM
     if (!userIdleTimers.has(uidStr)) {
@@ -149,32 +154,66 @@ async function handleUserListening(user, track, isPlaying) {
     return;
   }
 
+  const curSec = Math.max(0, Number(currentTime) || 0);
+  const now = Date.now();
   let session = activeUserBots.get(uidStr);
 
-  // If already ready, update presence directly
+  // If already ready, update presence with drift check
   if (session && session.status === 'ready' && session.client && session.client.user) {
+    const prevTrackId = session.currentTrack ? String(session.currentTrack.id || session.currentTrack._id || '') : '';
+    const newTrackId = track ? String(track.id || track._id || '') : '';
+    const prevDuration = session.currentTrack?.duration || 0;
+    const newDuration = track?.duration || 0;
+
+    const expectedCurSec = session.lastStartTs ? Math.max(0, (now - session.lastStartTs) / 1000) : 0;
+    const driftSec = Math.abs(curSec - expectedCurSec);
+
+    const shouldUpdate =
+      prevTrackId !== newTrackId ||
+      !session.isPlaying ||
+      !session.lastStartTs ||
+      Math.abs(prevDuration - newDuration) >= 2 ||
+      driftSec >= 3;
+
     session.currentTrack = track;
-    applyTrackPresence(session.client, track);
+    session.currentTime = curSec;
+    session.isPlaying = true;
+
+    if (shouldUpdate) {
+      session.lastStartTs = now - Math.round(curSec * 1000);
+      applyTrackPresence(session.client, track, curSec);
+    }
     return;
   }
 
   // If currently connecting, save track for ready event
   if (session && session.status === 'connecting') {
     session.currentTrack = track;
+    session.currentTime = curSec;
+    session.isPlaying = true;
+    session.lastStartTs = now - Math.round(curSec * 1000);
     return;
   }
 
   // Otherwise, create new client instance
   try {
     const client = new SelfClient({ checkUpdate: false });
-    session = { client, status: 'connecting', currentTrack: track };
+    session = {
+      client,
+      status: 'connecting',
+      currentTrack: track,
+      currentTime: curSec,
+      isPlaying: true,
+      lastStartTs: now - Math.round(curSec * 1000)
+    };
     activeUserBots.set(uidStr, session);
 
     client.on('ready', () => {
       console.log(`[Discord Activity] User ${uidStr} logged in to Discord as: ${client.user.tag}`);
       session.status = 'ready';
-      if (session.currentTrack) {
-        applyTrackPresence(client, session.currentTrack);
+      if (session.currentTrack && session.isPlaying) {
+        const elapsedSinceConnect = session.lastStartTs ? Math.max(0, (Date.now() - session.lastStartTs) / 1000) : session.currentTime;
+        applyTrackPresence(client, session.currentTrack, elapsedSinceConnect);
       }
     });
 
