@@ -1447,7 +1447,6 @@ app.post('/api/users/listening-activity', auth, async (req, res) => {
 
 // ──────────────────────────────────────────
 // Discord Rich Presence Endpoints
-// ──────────────────────────────────────────
 app.get('/api/discord/status', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('discord');
@@ -1512,7 +1511,12 @@ app.post('/api/discord/link-token', auth, async (req, res) => {
 app.post('/api/discord/unlink', auth, async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user.id, {
-      $set: { 'discord.id': '', 'discord.username': '', 'discord.token': '', 'discord.enabled': false }
+      $set: {
+        'discord.id': '',
+        'discord.username': '',
+        'discord.token': '',
+        'discord.enabled': false
+      }
     });
     discordActivity.disconnectUserSession(String(req.user.id));
     res.json({ success: true });
