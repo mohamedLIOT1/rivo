@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   PermissionsAndroid,
+  Linking,
 } from 'react-native';
 import {
   Home,
@@ -41,6 +42,7 @@ import { ConnectivityProvider, useConnectivity } from './src/native/context/Conn
 import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
+import { API_BASE_URL } from './src/native/config';
 
 import OnlineWebView from './src/native/screens/OnlineWebView';
 import ErrorBoundary from './src/native/components/ErrorBoundary';
@@ -72,9 +74,6 @@ const TABS = [
 ];
 
 function MainAppShell() {
-  const { appMode } = useConnectivity();
-  const isOnline = appMode === 'online';
-
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
@@ -84,30 +83,65 @@ function MainAppShell() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
-
-      {/* ─── ONLINE MODE: WebView (both iOS and Android when connected to internet) ─── */}
-      <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
-        <OnlineWebView />
-      </View>
-
-      {/* ─── OFFLINE MODE: Native Shell (Offline Vault, Quran, Library) ─── */}
-      <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
-        <ErrorBoundary>
-          <OfflineNativeShell />
-        </ErrorBoundary>
-      </View>
+      <ErrorBoundary>
+        <NativeAppShell />
+      </ErrorBoundary>
     </SafeAreaView>
   );
 }
 
 /**
- * OfflineNativeShell
+ * NativeAppShell
  *
- * The native React Native app shell for Offline Vault, Quran, and local playback.
+ * 100% Native React Native UI with online/offline streaming, Vault, Quran, and in-app auto updates.
  */
-function OfflineNativeShell() {
+function NativeAppShell() {
   const { appMode, setAppMode } = useConnectivity();
-  const [activeTab, setActiveTab] = useState(appMode === 'online' ? 'home' : 'offline');
+  const [activeTab, setActiveTab] = useState('home');
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+  useEffect(() => {
+    checkAppUpdates();
+  }, []);
+
+  const checkAppUpdates = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/app/version`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const currentPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
+      const remotePlatform = data?.platforms?.[currentPlatform];
+      const remoteVersion = remotePlatform?.version || data?.version;
+
+      if (remoteVersion && isNewerVersion(remoteVersion, APP_VERSION)) {
+        setUpdateInfo({
+          remoteVersion,
+          releaseNotes: remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
+          downloadUrl: remotePlatform?.downloadUrl 
+            ? `${API_BASE_URL}${remotePlatform.downloadUrl}`
+            : `${API_BASE_URL}/downloads/Rivo.${Platform.OS === 'ios' ? 'ipa' : 'apk'}`
+        });
+        setIsUpdateModalOpen(true);
+      }
+    } catch {}
+  };
+
+  const isNewerVersion = (remote, current) => {
+    try {
+      const r = remote.replace(/[^0-9.]/g, '').split('.').map(Number);
+      const c = current.replace(/[^0-9.]/g, '').split('.').map(Number);
+      for (let i = 0; i < Math.max(r.length, c.length); i++) {
+        const rv = r[i] || 0;
+        const cv = c[i] || 0;
+        if (rv > cv) return true;
+        if (rv < cv) return false;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
   const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
@@ -460,6 +494,56 @@ function OfflineNativeShell() {
         visible={isJamOpen}
         onClose={() => setIsJamOpen(false)}
       />
+
+      {/* ─────────────────────────────────────────
+          IN-APP AUTO-UPDATE MODAL
+          ───────────────────────────────────────── */}
+      <Modal
+        visible={isUpdateModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsUpdateModalOpen(false)}
+      >
+        <View style={styles.updateModalOverlay}>
+          <View style={styles.updateModalBox}>
+            <View style={styles.updateHeaderRow}>
+              <View style={styles.updateBadge}>
+                <Text style={styles.updateBadgeText}>UPDATE AVAILABLE</Text>
+              </View>
+              <Text style={styles.updateTitle}>RIVO v{updateInfo?.remoteVersion}</Text>
+            </View>
+
+            <Text style={styles.updateVersionText}>
+              Current: v{APP_VERSION} → New: v{updateInfo?.remoteVersion}
+            </Text>
+
+            <Text style={styles.updateNotesText}>
+              {updateInfo?.releaseNotes}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.updateDownloadBtn}
+              onPress={() => {
+                if (updateInfo?.downloadUrl) {
+                  Linking.openURL(updateInfo.downloadUrl);
+                }
+                setIsUpdateModalOpen(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.updateDownloadBtnText}>DOWNLOAD UPDATE NOW</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.updateCancelBtn}
+              onPress={() => setIsUpdateModalOpen(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.updateCancelBtnText}>STAY ON CURRENT VERSION</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -783,5 +867,90 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#64748b',
     marginTop: 2,
+  },
+  updateModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  updateModalBox: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#0e1716',
+    borderWidth: 2,
+    borderColor: '#17a398',
+    borderRadius: 8,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 4 },
+    shadowOpacity: 0.8,
+    shadowRadius: 0,
+    elevation: 8,
+  },
+  updateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  updateBadge: {
+    backgroundColor: '#17a398',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  updateBadgeText: {
+    color: '#0b1110',
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    fontSize: 10,
+  },
+  updateTitle: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  updateVersionText: {
+    fontFamily: 'monospace',
+    fontSize: 12,
+    color: '#17a398',
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  updateNotesText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 20,
+  },
+  updateDownloadBtn: {
+    backgroundColor: '#17a398',
+    paddingVertical: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  updateDownloadBtnText: {
+    color: '#0b1110',
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    fontSize: 13,
+    letterSpacing: 0.5,
+  },
+  updateCancelBtn: {
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  updateCancelBtnText: {
+    color: '#94a3b8',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

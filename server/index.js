@@ -1046,6 +1046,50 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// ──────────────────────────────────────────
+// App Versions & Updates Manifest
+// ──────────────────────────────────────────
+const APP_VERSIONS_DATA = {
+  version: '1.4.3',
+  releaseNotes: 'Native mobile experience, official Discord Rich Presence sync, performance optimizations.',
+  publishedAt: '2026-10-12T16:00:00Z',
+  platforms: {
+    windows: {
+      version: '1.4.3',
+      name: 'Rivo for Windows',
+      downloadUrl: '/downloads/Rivo.exe',
+      directFile: 'Rivo.exe',
+      mandatory: false,
+      notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
+    },
+    android: {
+      version: '1.4.3',
+      build: 16,
+      name: 'Rivo for Android',
+      downloadUrl: '/downloads/Rivo.apk',
+      directFile: 'Rivo.apk',
+      mandatory: false,
+      notes: '100% Native design, offline vault, lock screen audio controls.'
+    },
+    ios: {
+      version: '1.4.3',
+      build: 16,
+      name: 'Rivo for iOS',
+      downloadUrl: '/downloads/Rivo.ipa',
+      directFile: 'Rivo.ipa',
+      mandatory: false,
+      notes: 'Native audio controls, sideloadable via AltStore or Scarlet.'
+    }
+  }
+};
+
+app.get('/api/app/version', (req, res) => {
+  res.json(APP_VERSIONS_DATA);
+});
+
+// Direct downloads route
+app.use('/downloads', express.static(path.join(__dirname, '../public/downloads')));
+
 app.get('/api/auth/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');

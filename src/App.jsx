@@ -31,6 +31,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import MixesScreen from './screens/MixesScreen';
 import QuranScreen from './screens/QuranScreen';
 import AdminScreen from './screens/AdminScreen';
+import DownloadScreen from './screens/DownloadScreen';
 import { isUserAdmin } from './utils/adminUtils';
 import { isQuranContent, getQuranReciterName } from './utils/quranUtils';
 
@@ -1812,6 +1813,10 @@ function AppContent() {
               onBack={() => handleNavigateBack('home')}
               globalTheme={globalTheme}
             />
+          )}
+
+          {currentScreen === 'download' && (
+            <DownloadScreen globalTheme={globalTheme} />
           )}
 
           {currentScreen === 'profile' && (

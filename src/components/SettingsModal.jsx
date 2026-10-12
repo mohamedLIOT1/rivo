@@ -513,6 +513,21 @@ export default function SettingsModal({
           </div>
         </div>
 
+        <a
+          href="/download"
+          onClick={(e) => {
+            e.preventDefault();
+            onClose();
+            if (typeof window !== 'undefined') {
+              window.history.pushState({}, '', '/download');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+          }}
+          className="brutal-btn w-full mb-3 py-2.5 bg-[#17a398] hover:bg-[#148f85] text-black font-mono text-xs font-black uppercase brutal-border flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_#000]"
+        >
+          <Download size={15} /> GET APPS (WINDOWS / ANDROID / IOS)
+        </a>
+
         <button
           onClick={onClose}
           className="brutal-btn w-full py-2.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow cursor-pointer"
