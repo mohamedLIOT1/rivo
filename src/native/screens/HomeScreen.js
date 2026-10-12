@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Play, Plus } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -20,8 +21,8 @@ export default function HomeScreen({
   onOpenAddSong,
   onTrackAction,
 }) {
-  const { playTrack, downloadedTracks = [] } = useAudioPlayer();
-  const { currentUser, tracks: userTracks, fetchPublicTracks } = useUser();
+  const { playTrack, currentTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { currentUser, tracks: userTracks, likedTrackIds = [], fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
@@ -43,6 +44,9 @@ export default function HomeScreen({
     return displayTracks.slice(0, visibleCount);
   }, [displayTracks, visibleCount]);
 
+  const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
+  const likedSet = useMemo(() => new Set((likedTrackIds || []).map(String)), [likedTrackIds]);
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -59,20 +63,8 @@ export default function HomeScreen({
     }
   };
 
-  return (
-    <ScrollView
-      style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor="#17a398"
-          colors={['#17a398']}
-        />
-      }
-    >
+  const renderHeader = useCallback(() => (
+    <View>
       {/* ─────────────────────────────────────────
           HERO BANNER (MUSIC STREAMING LAB)
           Matching exact website layout
@@ -173,43 +165,75 @@ export default function HomeScreen({
           </TouchableOpacity>
         )}
       </View>
+    </View>
+  ), [currentUser?.name, displayTracks, activeFilter, downloadedTracks, isOffline, onOpenAddSong, playTrack]);
 
-      {/* ─────────────────────────────────────────
-          TRACKS LIST
-          ───────────────────────────────────────── */}
-      <View style={styles.tracksContainer}>
-        {visibleTracks.map((track, index) => (
-          <SongItem
-            key={track._id || track.id || index}
-            track={track}
-            onPlay={() => playTrack(track, displayTracks)}
-            onMorePress={() => onTrackAction && onTrackAction(track)}
-          />
-        ))}
+  const renderFooter = useCallback(() => {
+    if (displayTracks.length > visibleCount) {
+      return (
+        <TouchableOpacity
+          style={styles.loadMoreBtn}
+          onPress={() => setVisibleCount((c) => c + 30)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.loadMoreText}>
+            + LOAD MORE TRACKS ({displayTracks.length - visibleCount} MORE)
+          </Text>
+        </TouchableOpacity>
+      );
+    }
 
-        {displayTracks.length > visibleCount && (
-          <TouchableOpacity
-            style={styles.loadMoreBtn}
-            onPress={() => setVisibleCount((c) => c + 30)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.loadMoreText}>
-              + LOAD MORE TRACKS ({displayTracks.length - visibleCount} MORE)
-            </Text>
-          </TouchableOpacity>
-        )}
+    if (displayTracks.length === 0) {
+      return (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyText}>
+            {isOffline
+              ? 'No offline songs saved yet.\nDownload songs while connected to listen offline here!'
+              : 'Loading dispensary tracks...'}
+          </Text>
+        </View>
+      );
+    }
 
-        {displayTracks.length === 0 && (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              {isOffline
-                ? 'No offline songs saved yet.\nDownload songs while connected to listen offline here!'
-                : 'Loading dispensary tracks...'}
-            </Text>
-          </View>
-        )}
-      </View>
-    </ScrollView>
+    return null;
+  }, [displayTracks.length, visibleCount, isOffline]);
+
+  const renderItem = useCallback(({ item }) => {
+    const itemId = String(item._id || item.id || '');
+    return (
+      <SongItem
+        track={item}
+        isCurrent={curTrackId !== '' && curTrackId === itemId}
+        isLiked={likedSet.has(itemId)}
+        onPlay={() => playTrack(item, displayTracks)}
+        onMorePress={() => onTrackAction && onTrackAction(item)}
+      />
+    );
+  }, [curTrackId, likedSet, displayTracks, onTrackAction, playTrack]);
+
+  return (
+    <FlatList
+      style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
+      contentContainerStyle={styles.content}
+      data={visibleTracks}
+      keyExtractor={(item, index) => item._id || item.id || String(index)}
+      renderItem={renderItem}
+      ListHeaderComponent={renderHeader}
+      ListFooterComponent={renderFooter}
+      initialNumToRender={10}
+      maxToRenderPerBatch={8}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS === 'android'}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#17a398"
+          colors={['#17a398']}
+        />
+      }
+    />
   );
 }
 
