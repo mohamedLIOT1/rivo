@@ -201,6 +201,8 @@ public partial class Form1 : Form
 
                 _discord.SetPresence(new RichPresence()
                 {
+                    Type = ActivityType.Listening,
+                    StatusDisplay = StatusDisplayType.Details,
                     Details = title,
                     State = $"by {artist}",
                     Timestamps = new Timestamps()
