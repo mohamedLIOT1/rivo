@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const { Client: BotClient, MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
-const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
+const { Client: SelfClient, RichPresence, CustomStatus } = require('discord.js-selfbot-v13');
 
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
@@ -51,7 +51,14 @@ function disconnectUserSession(userId) {
   if (session) {
     try {
       if (session.client) {
-        if (session.client.user) session.client.user.setActivity(null);
+        if (session.client.user) {
+          try {
+            session.client.user.setPresence({ activities: [] });
+          } catch (e) {}
+          try {
+            session.client.user.setActivity(null);
+          } catch (e) {}
+        }
         session.client.destroy();
       }
     } catch (e) {}
@@ -104,7 +111,18 @@ async function applyTrackPresence(client, track, currentTime = 0) {
       r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org');
     } catch (e) {}
 
-    await client.user.setActivity(r);
+    try {
+      const customStatus = new CustomStatus(client)
+        .setEmoji('🎵')
+        .setState(track.title ? String(track.title).slice(0, 120) : 'Rivo');
+
+      await client.user.setPresence({
+        activities: [customStatus, r]
+      });
+    } catch (presenceErr) {
+      console.warn('[Discord Activity] setPresence fallback:', presenceErr.message);
+      await client.user.setActivity(r);
+    }
   } catch (err) {
     console.warn('[Discord Activity] applyTrackPresence error:', err.message);
   }
@@ -128,6 +146,9 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
       session.isPlaying = false;
       session.lastStartTs = null;
       if (session.client && session.client.user) {
+        try {
+          session.client.user.setPresence({ activities: [] });
+        } catch (e) {}
         try {
           session.client.user.setActivity(null);
         } catch (e) {}
