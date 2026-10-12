@@ -5,7 +5,14 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 
-export default React.memo(function SongItem({ track, onPlay, onOpenActionMenu, onMorePress }) {
+export default React.memo(function SongItem({ 
+  track, 
+  onPlay, 
+  onOpenActionMenu, 
+  onMorePress,
+  isCurrent: propIsCurrent,
+  isLiked: propIsLiked
+}) {
   const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
 
@@ -14,8 +21,12 @@ export default React.memo(function SongItem({ track, onPlay, onOpenActionMenu, o
   const handleAction = onOpenActionMenu || onMorePress;
 
   const trackId = String(track._id || track.id || '');
-  const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
-  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+  const isCurrent = propIsCurrent !== undefined 
+    ? propIsCurrent 
+    : (String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '');
+  const isLiked = propIsLiked !== undefined
+    ? propIsLiked
+    : (Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false);
   const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
   const isDownloaded = safeDownloaded.some(t => String(t._id || t.id) === trackId) || Boolean(track?.isDownloaded || track?.localAudioUri);
 
@@ -36,6 +47,8 @@ export default React.memo(function SongItem({ track, onPlay, onOpenActionMenu, o
         <Image
           source={{ uri: track.coverUrl || track.cover || defaultCover }}
           style={styles.cover}
+          fadeDuration={0}
+          resizeMode="cover"
         />
       </View>
 
