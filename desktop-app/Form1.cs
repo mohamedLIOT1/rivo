@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows.Forms;
 using DiscordRPC;
@@ -11,6 +12,13 @@ namespace desktop_app;
 
 public partial class Form1 : Form
 {
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    private const int DWMWA_CAPTION_COLOR = 35;
+
     private WebView2 _webView = null!;
     private DiscordRpcClient? _discord;
     private string _lastTrackId = "";
@@ -32,6 +40,16 @@ public partial class Form1 : Form
         this.MinimumSize = new Size(800, 600);
         this.StartPosition = FormStartPosition.CenterScreen;
         this.BackColor = Color.FromArgb(16, 23, 22);
+
+        try
+        {
+            int trueVal = 1;
+            DwmSetWindowAttribute(this.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref trueVal, sizeof(int));
+            DwmSetWindowAttribute(this.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref trueVal, sizeof(int));
+            int titleColor = 0x00161710; // Dark color matching Rivo (#101716 -> BGR: 0x161710)
+            DwmSetWindowAttribute(this.Handle, DWMWA_CAPTION_COLOR, ref titleColor, sizeof(int));
+        }
+        catch { }
 
         try
         {
@@ -71,21 +89,32 @@ public partial class Form1 : Form
     {
         _webView = new WebView2
         {
-            Dock = DockStyle.Fill
+            Dock = DockStyle.Fill,
+            DefaultBackgroundColor = Color.FromArgb(16, 23, 22)
         };
         this.Controls.Add(_webView);
 
         try
         {
-            await _webView.EnsureCoreWebView2Async();
+            var options = new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required --enable-features=OverlayScrollbar");
+            string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Rivo", "WebView2Data");
+            var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
+
+            await _webView.EnsureCoreWebView2Async(environment);
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+            _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            _webView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
+            _webView.CoreWebView2.Settings.IsZoomControlEnabled = false;
+            _webView.CoreWebView2.Settings.IsBuiltInErrorPageEnabled = false;
+            _webView.CoreWebView2.Settings.IsPinchZoomEnabled = false;
 
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
-            // Injected script to sync audio playback with Discord RPC natively
+            // Injected script to flag RIVO_DESKTOP and sync audio playback with Discord RPC natively
             string syncScript = @"
                 (function() {
+                    window.RIVO_DESKTOP = true;
                     let lastState = '';
                     setInterval(() => {
                         try {

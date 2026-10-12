@@ -33,12 +33,22 @@ export default function Navigation({
   const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
 
+  const isInstalledClient = typeof window !== 'undefined' && Boolean(
+    window.RIVO_DESKTOP || 
+    window.chrome?.webview || 
+    window.RIVO_NATIVE || 
+    window.ReactNativeWebView ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+  );
+
   const mainNavItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
-    { id: 'download', label: 'Download App', icon: DownloadCloud },
+    ...(!isInstalledClient ? [
+      { id: 'download', label: 'Download App', icon: DownloadCloud }
+    ] : []),
     { id: 'stats', label: 'Stats & History', icon: Activity },
     ...(currentUser && isUserAdmin(currentUser) ? [
       { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
@@ -50,7 +60,9 @@ export default function Navigation({
     { id: 'search', label: 'Search', icon: Search },
     { id: 'library', label: 'Library', icon: Disc },
     { id: 'quran', label: 'Quran', icon: BookOpen },
-    { id: 'download', label: 'Apps', icon: DownloadCloud },
+    ...(!isInstalledClient ? [
+      { id: 'download', label: 'Apps', icon: DownloadCloud }
+    ] : []),
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])
