@@ -487,7 +487,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     if ([remoteUrl hasPrefix:@"//"]) {
         remoteUrl = [@"https:" stringByAppendingString:remoteUrl];
     } else if ([remoteUrl hasPrefix:@"/"]) {
-        remoteUrl = [@"https://liofy-production-0f56.up.railway.app" stringByAppendingString:remoteUrl];
+        remoteUrl = [@"https://rivo-m.duckdns.org" stringByAppendingString:remoteUrl];
     } else if ([remoteUrl hasPrefix:@"http://"]) {
         remoteUrl = [@"https://" stringByAppendingString:[remoteUrl substringFromIndex:7]];
     }

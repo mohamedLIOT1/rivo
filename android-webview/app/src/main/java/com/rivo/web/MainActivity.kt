@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity() {
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var fullscreenContainer: FrameLayout? = null
 
-    private val targetUrl = "https://liofy-production-0f56.up.railway.app/"
+    private val targetUrl = "https://rivo-m.duckdns.org/"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -214,8 +214,9 @@ class MainActivity : AppCompatActivity() {
                 val uri = request?.url ?: return false
                 val host = uri.host ?: ""
 
-                // Keep internal railway and media domains inside webview
-                if (host.contains("railway.app") ||
+                // Keep internal domains inside webview
+                if (host.contains("duckdns.org") ||
+                    host.contains("railway.app") ||
                     host.contains("youtube.com") ||
                     host.contains("googlevideo.com") ||
                     host.contains("accounts.google.com") ||
