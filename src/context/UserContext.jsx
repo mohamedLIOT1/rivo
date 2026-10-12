@@ -142,9 +142,12 @@ export function UserProvider({ children }) {
   }, [currentUser]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('rivo_tracks', JSON.stringify(tracks));
-    } catch {}
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem('rivo_tracks', JSON.stringify(tracks));
+      } catch {}
+    }, 1200);
+    return () => clearTimeout(timer);
   }, [tracks]);
 
   useEffect(() => {
