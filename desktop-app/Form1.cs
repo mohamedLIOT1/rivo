@@ -96,11 +96,30 @@ public partial class Form1 : Form
 
         try
         {
-            var options = new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required --enable-features=OverlayScrollbar");
-            string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Rivo", "WebView2Data");
-            var environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
+            CoreWebView2Environment? environment = null;
+            try
+            {
+                var options = new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required --enable-features=OverlayScrollbar");
+                string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Rivo", "Profile");
+                environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
+            }
+            catch { }
 
-            await _webView.EnsureCoreWebView2Async(environment);
+            try
+            {
+                if (environment != null)
+                {
+                    await _webView.EnsureCoreWebView2Async(environment);
+                }
+                else
+                {
+                    await _webView.EnsureCoreWebView2Async();
+                }
+            }
+            catch (Exception ex) when (ex.HResult == unchecked((int)0x800700AA) || ex.Message.Contains("0x800700AA"))
+            {
+                await _webView.EnsureCoreWebView2Async();
+            }
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
