@@ -28,6 +28,9 @@ import {
   Shield,
   Sparkles,
   X,
+  ArrowLeft,
+  ChevronRight,
+  UserPlus,
 } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -62,6 +65,10 @@ export default function ProfileScreen({
     ? currentUser.following.length 
     : (currentUser?.followingCount || 0);
 
+  const [viewingProfile, setViewingProfile] = useState(null);
+  const [viewingLoading, setViewingLoading] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
   const [socialModal, setSocialModal] = useState({
     isOpen: false,
     type: 'followers',
@@ -70,7 +77,7 @@ export default function ProfileScreen({
     loading: false,
   });
 
-  const handleOpenSocialModal = async (type) => {
+  const handleOpenSocialModal = async (type, targetUserId = null) => {
     const isFollowers = type === 'followers';
     setSocialModal({
       isOpen: true,
@@ -80,7 +87,7 @@ export default function ProfileScreen({
       loading: true,
     });
     try {
-      const uId = currentUser?._id || currentUser?.id;
+      const uId = targetUserId || currentUser?._id || currentUser?.id;
       if (!uId) {
         setSocialModal(p => ({ ...p, loading: false }));
         return;
@@ -104,8 +111,319 @@ export default function ProfileScreen({
     }
   };
 
+  const handleSelectSocialUser = async (u) => {
+    const targetId = u?._id || u?.id;
+    if (!targetId) return;
+    setSocialModal(p => ({ ...p, isOpen: false }));
+    if (String(targetId) === String(currentUser?._id || currentUser?.id)) {
+      setViewingProfile(null);
+      return;
+    }
+    setViewingLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('@rivo_auth_token_v2');
+      const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(targetId)}/profile`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data?.success && data?.user) {
+        setViewingProfile(data.user);
+      }
+    } catch {}
+    setViewingLoading(false);
+  };
+
+  const handleToggleFollow = async () => {
+    if (!viewingProfile || followLoading) return;
+    const targetId = viewingProfile.id || viewingProfile._id;
+    if (!targetId) return;
+    setFollowLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('@rivo_auth_token_v2');
+      const isCurrentlyFollowing = viewingProfile.isFollowing;
+      const endpoint = isCurrentlyFollowing ? 'unfollow' : 'follow';
+      const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(targetId)}/${endpoint}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.success) {
+        setViewingProfile(prev => ({
+          ...prev,
+          isFollowing: data.isFollowing,
+          followersCount: data.followersCount,
+        }));
+      }
+    } catch {}
+    setFollowLoading(false);
+  };
+
   const userIdStr = currentUser?._id || currentUser?.id || '';
   const shortId = userIdStr ? String(userIdStr).slice(-6).toUpperCase() : 'GUEST';
+
+  const renderSocialModal = () => (
+    <Modal
+      visible={socialModal.isOpen}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={() => setSocialModal(p => ({ ...p, isOpen: false }))}
+    >
+      <TouchableOpacity
+        style={styles.socialModalOverlay}
+        activeOpacity={1}
+        onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))}
+      >
+        <View style={styles.socialModalCard}>
+          <View style={styles.socialModalHeader}>
+            <Text style={styles.socialModalTitle}>{socialModal.title}</Text>
+            <TouchableOpacity onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <X size={18} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
+          {socialModal.loading ? (
+            <View style={{ padding: 28, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#17a398" />
+            </View>
+          ) : socialModal.users.length === 0 ? (
+            <View style={{ padding: 28, alignItems: 'center' }}>
+              <Text style={{ color: '#94a3b8', fontSize: 12 }}>No {socialModal.title.toLowerCase()} found</Text>
+            </View>
+          ) : (
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {socialModal.users.map((u, i) => (
+                <TouchableOpacity
+                  key={u._id || u.id || String(i)}
+                  style={styles.socialUserItem}
+                  onPress={() => handleSelectSocialUser(u)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.socialUserAvatarWrap}>
+                    {u.avatar ? (
+                      <Image source={{ uri: normalizeCoverUri(u.avatar) }} style={styles.socialUserAvatar} />
+                    ) : (
+                      <Text style={styles.socialUserLetter}>{u.name ? u.name[0].toUpperCase() : 'U'}</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.socialUserName} numberOfLines={1}>{u.name}</Text>
+                    {u.bio ? <Text style={styles.socialUserBio} numberOfLines={1}>{u.bio}</Text> : null}
+                  </View>
+                  <ChevronRight size={16} color="#94a3b8" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  if (viewingLoading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }, !isDark && styles.containerLight]}>
+        <ActivityIndicator size="large" color="#17a398" />
+        <Text style={{ color: '#94a3b8', marginTop: 12, fontFamily: 'monospace', fontSize: 12 }}>Loading Citizen Dossier...</Text>
+      </View>
+    );
+  }
+
+  if (viewingProfile) {
+    const isMe = String(viewingProfile.id || viewingProfile._id) === String(currentUser?._id || currentUser?.id);
+    const vCrates = viewingProfile.publicPlaylists || [];
+    const vFollowers = viewingProfile.followersCount || 0;
+    const vFollowing = viewingProfile.followingCount || 0;
+
+    return (
+      <ScrollView
+        style={[styles.container, !isDark && styles.containerLight]}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Back Button Bar */}
+        <TouchableOpacity
+          style={styles.backNavBar}
+          onPress={() => setViewingProfile(null)}
+          activeOpacity={0.8}
+        >
+          <ArrowLeft size={16} color="#17a398" strokeWidth={2.5} />
+          <Text style={styles.backNavText}>BACK TO MY PROFILE</Text>
+        </TouchableOpacity>
+
+        {/* Hero Card for Target User */}
+        <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
+          <View style={styles.cardHeaderBar}>
+            <View style={styles.statusIndicatorRow}>
+              <View style={[styles.pulseDot, { backgroundColor: '#17a398' }]} />
+              <Text style={[styles.statusText, !isDark && styles.statusTextLight]}>
+                USER PROFILE // @{viewingProfile.name || 'USER'}
+              </Text>
+            </View>
+            <View style={styles.memberBadge}>
+              <Text style={styles.memberBadgeText}>MEMBER</Text>
+            </View>
+          </View>
+
+          <View style={styles.userHeaderRow}>
+            <View style={styles.avatarWrap}>
+              {viewingProfile.avatar ? (
+                <Image source={{ uri: normalizeCoverUri(viewingProfile.avatar) }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {viewingProfile.name ? viewingProfile.name[0].toUpperCase() : 'U'}
+                </Text>
+              )}
+              {viewingProfile.isVerified && (
+                <View style={styles.verifiedBadge}>
+                  <Check size={10} color="#0b1110" strokeWidth={3} />
+                </View>
+              )}
+            </View>
+
+            <View style={styles.userInfoCol}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.userName, !isDark && styles.userNameLight]} numberOfLines={1}>
+                  {viewingProfile.name || 'User'}
+                </Text>
+                {viewingProfile.isVerified && (
+                  <Check size={14} color="#17a398" strokeWidth={3} />
+                )}
+              </View>
+
+              {viewingProfile.bio ? (
+                <Text style={styles.userBioText} numberOfLines={2}>
+                  {viewingProfile.bio}
+                </Text>
+              ) : null}
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View style={styles.rolePill}>
+                  <Text style={styles.rolePillText}>LISTENER</Text>
+                </View>
+                <View style={styles.idPill}>
+                  <Text style={styles.idPillText}>ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Social Stats */}
+          <View style={styles.statsGrid}>
+            <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
+              <Text style={[styles.statNumber, !isDark && styles.statNumberLight]}>{vCrates.length}</Text>
+              <Text style={styles.statLabel}>CRATES</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.statBox, !isDark && styles.statBoxLight]}
+              onPress={() => handleOpenSocialModal('followers', viewingProfile.id || viewingProfile._id)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.statNumber, { color: '#17a398' }]}>{vFollowers}</Text>
+              <Text style={styles.statLabel}>FOLLOWERS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.statBox, !isDark && styles.statBoxLight]}
+              onPress={() => handleOpenSocialModal('following', viewingProfile.id || viewingProfile._id)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.statNumber, { color: '#17a398' }]}>{vFollowing}</Text>
+              <Text style={styles.statLabel}>FOLLOWING</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Follow / Unfollow and Message Buttons */}
+          {!isMe && currentUser && (
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={[styles.actionFollowBtn, viewingProfile.isFollowing && styles.actionFollowingBtn]}
+                onPress={handleToggleFollow}
+                disabled={followLoading}
+                activeOpacity={0.8}
+              >
+                {followLoading ? (
+                  <ActivityIndicator size="small" color="#0b1110" />
+                ) : viewingProfile.isFollowing ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Check size={14} color="#0b1110" strokeWidth={3} />
+                    <Text style={styles.actionFollowBtnText}>FOLLOWING</Text>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <UserPlus size={14} color="#0b1110" strokeWidth={3} />
+                    <Text style={styles.actionFollowBtnText}>FOLLOW</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionMsgBtn}
+                onPress={() => onOpenChat && onOpenChat({
+                  id: viewingProfile.id || viewingProfile._id,
+                  name: viewingProfile.name,
+                  avatar: viewingProfile.avatar
+                })}
+                activeOpacity={0.8}
+              >
+                <MessageSquare size={14} color="#17a398" strokeWidth={2.4} />
+                <Text style={styles.actionMsgBtnText}>MESSAGE</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Public Crates Section */}
+        <View style={styles.sectionHeader}>
+          <Disc size={16} color="#17a398" strokeWidth={2.5} />
+          <Text style={styles.sectionTitle}>
+            PUBLIC CRATES ({vCrates.length})
+          </Text>
+        </View>
+
+        {vCrates.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Disc size={32} color="#94a3b8" />
+            <Text style={styles.emptyTitle}>No Public Crates</Text>
+            <Text style={styles.emptySub}>This listener hasn't published any public playlists yet.</Text>
+          </View>
+        ) : (
+          <View style={{ gap: 10, marginTop: 10 }}>
+            {vCrates.map((crate, idx) => (
+              <TouchableOpacity
+                key={crate._id || crate.id || String(idx)}
+                style={styles.crateItemCard}
+                onPress={() => {
+                  if (crate.trackIds?.length > 0 && playPlaylist) {
+                    playPlaylist(crate.tracks || crate.trackIds || []);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.crateItemCoverWrap}>
+                  {crate.cover ? (
+                    <Image source={{ uri: normalizeCoverUri(crate.cover) }} style={styles.crateItemCover} />
+                  ) : (
+                    <Disc size={20} color="#17a398" />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.crateItemTitle} numberOfLines={1}>{crate.name}</Text>
+                  <Text style={styles.crateItemSub}>{crate.trackCount || (crate.trackIds || []).length} TRACKS</Text>
+                </View>
+                <View style={styles.cratePlayPill}>
+                  <Play size={12} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Social Modal within viewingProfile */}
+        {renderSocialModal()}
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -373,55 +691,7 @@ export default function ProfileScreen({
       </View>
 
       {/* SOCIAL FOLLOWERS / FOLLOWING MODAL */}
-      <Modal
-        visible={socialModal.isOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setSocialModal(p => ({ ...p, isOpen: false }))}
-      >
-        <TouchableOpacity
-          style={styles.socialModalOverlay}
-          activeOpacity={1}
-          onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))}
-        >
-          <View style={styles.socialModalCard}>
-            <View style={styles.socialModalHeader}>
-              <Text style={styles.socialModalTitle}>{socialModal.title}</Text>
-              <TouchableOpacity onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <X size={18} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-
-            {socialModal.loading ? (
-              <View style={{ padding: 28, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="#17a398" />
-              </View>
-            ) : socialModal.users.length === 0 ? (
-              <View style={{ padding: 28, alignItems: 'center' }}>
-                <Text style={{ color: '#94a3b8', fontSize: 12 }}>No {socialModal.title.toLowerCase()} found</Text>
-              </View>
-            ) : (
-              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-                {socialModal.users.map((u, i) => (
-                  <View key={u._id || u.id || String(i)} style={styles.socialUserItem}>
-                    <View style={styles.socialUserAvatarWrap}>
-                      {u.avatar ? (
-                        <Image source={{ uri: normalizeCoverUri(u.avatar) }} style={styles.socialUserAvatar} />
-                      ) : (
-                        <Text style={styles.socialUserLetter}>{u.name ? u.name[0].toUpperCase() : 'U'}</Text>
-                      )}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.socialUserName} numberOfLines={1}>{u.name}</Text>
-                      {u.bio ? <Text style={styles.socialUserBio} numberOfLines={1}>{u.bio}</Text> : null}
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {renderSocialModal()}
     </ScrollView>
   );
 }
@@ -901,5 +1171,129 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 11,
     marginTop: 2,
+  },
+  backNavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: '#141d1b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#263330',
+    marginBottom: 14,
+  },
+  backNavText: {
+    color: '#17a398',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  userBioText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 4,
+    lineHeight: 15,
+  },
+  actionFollowBtn: {
+    flex: 1,
+    height: 42,
+    backgroundColor: '#17a398',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionFollowingBtn: {
+    backgroundColor: '#34d399',
+  },
+  actionFollowBtnText: {
+    color: '#0b1110',
+    fontWeight: '900',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  actionMsgBtn: {
+    flex: 1,
+    height: 42,
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: '#17a398',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionMsgBtnText: {
+    color: '#17a398',
+    fontWeight: '900',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  crateItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    backgroundColor: '#141d1b',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#263330',
+  },
+  crateItemCoverWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#1d2a27',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  crateItemCover: {
+    width: '100%',
+    height: '100%',
+  },
+  crateItemTitle: {
+    color: '#fdfbf7',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  crateItemSub: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  cratePlayPill: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#17a398',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCard: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#141d1b',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#263330',
+    marginTop: 10,
+  },
+  emptyTitle: {
+    color: '#fdfbf7',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
+  emptySub: {
+    color: '#94a3b8',
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

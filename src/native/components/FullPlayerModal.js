@@ -5,7 +5,8 @@ import {
 } from 'react-native';
 import {
   ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
-  Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw
+  Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw,
+  MoreHorizontal, Mic, Volume2
 } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -18,7 +19,7 @@ import { parseLrcLyrics } from '../../utils/lrcParser';
 
 const { width, height } = Dimensions.get('window');
 
-export default function FullPlayerModal({ visible, onClose }) {
+export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const {
     currentTrack,
     isPlaying,
@@ -38,6 +39,8 @@ export default function FullPlayerModal({ visible, onClose }) {
     downloadedTracks = [],
     downloadingIds = {},
     handleDownloadTrack,
+    volume = 0.8,
+    setVolume,
   } = useAudioPlayer();
 
   const { currentTime, duration } = useAudioProgress();
@@ -139,10 +142,10 @@ export default function FullPlayerModal({ visible, onClose }) {
         />
         <View style={[styles.ambientOverlay, { backgroundColor: isDark ? 'rgba(5, 10, 9, 0.88)' : 'rgba(8, 38, 33, 0.88)' }]} />
 
-        {/* ── Top Header Bar ── */}
+        {/* ── Top Header Bar (Matching Reference Screenshot) ── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.topBtn} activeOpacity={0.8}>
-            <ChevronDown size={22} color={colors.ink} />
+          <TouchableOpacity onPress={onClose} style={styles.topWhiteBtn} activeOpacity={0.8}>
+            <ChevronDown size={20} color="#000000" strokeWidth={3} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
@@ -154,20 +157,23 @@ export default function FullPlayerModal({ visible, onClose }) {
             </Text>
           </View>
 
-          <TouchableOpacity onPress={() => setIsSleepTimerOpen(true)} style={styles.topBtn} activeOpacity={0.8}>
-            <Moon size={18} color={colors.ink} />
+          <TouchableOpacity
+            onPress={() => onTrackAction && onTrackAction(currentTrack)}
+            style={styles.topWhiteBtn}
+            activeOpacity={0.8}
+          >
+            <MoreHorizontal size={20} color="#000000" strokeWidth={3} />
           </TouchableOpacity>
         </View>
 
         {/* ── Tab Switcher: Now Playing / Lyrics / Queue ── */}
         <View style={styles.tabsRow}>
           {[
-            { id: 'player', label: 'Now Playing', icon: Disc },
-            { id: 'lyrics', label: 'Lyrics', icon: AlignLeft },
-            { id: 'queue', label: `Queue (${queue.length})`, icon: ListMusic },
+            { id: 'player', label: 'Now Playing' },
+            { id: 'lyrics', label: 'Lyrics' },
+            { id: 'queue', label: `Queue (${queue.length})` },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
-            const IconComponent = tab.icon;
             return (
               <TouchableOpacity
                 key={tab.id}
@@ -178,10 +184,6 @@ export default function FullPlayerModal({ visible, onClose }) {
                 onPress={() => setActiveTab(tab.id)}
                 activeOpacity={0.8}
               >
-                <IconComponent
-                  size={14}
-                  color={isActive ? colors.ink : '#9ca3af'}
-                />
                 <Text style={[styles.tabText, isActive && styles.activeTabText]}>
                   {tab.label}
                 </Text>
@@ -194,12 +196,12 @@ export default function FullPlayerModal({ visible, onClose }) {
         {activeTab === 'player' && (
           <ScrollView contentContainerStyle={styles.playerScroll} showsVerticalScrollIndicator={false} bounces={false}>
             {/* ── Master Cassette Audio Deck / CRT Console ── */}
-            <View style={[styles.deckCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
+            <View style={styles.deckCard}>
               {/* Deck Top Label */}
-              <View style={[styles.deckHeader, { borderBottomColor: isDark ? '#1f2e2a' : colors.ink }]}>
+              <View style={styles.deckHeader}>
                 <View style={styles.deckHeaderLeft}>
                   <View style={[styles.pulsingDot, isPlaying && styles.pulsingDotActive]} />
-                  <Text style={[styles.deckTitle, { color: isDark ? colors.mint : '#082621' }]}>
+                  <Text style={styles.deckTitle}>
                     RIVO STEREO DECK // CR-500
                   </Text>
                 </View>
@@ -209,7 +211,7 @@ export default function FullPlayerModal({ visible, onClose }) {
               </View>
 
               {/* ── Retro TV / CRT Monitor Enclosure ── */}
-              <View style={[styles.tvEnclosure, { backgroundColor: tvBg, borderColor: deckBorder }]}>
+              <View style={styles.tvEnclosure}>
                 <View style={styles.tvScreen}>
                   <Image
                     source={{ uri: coverUri }}
@@ -221,7 +223,7 @@ export default function FullPlayerModal({ visible, onClose }) {
                 </View>
 
                 {/* Cassette Mechanical Spool Bar */}
-                <View style={[styles.cassetteSpoolBar, { borderTopColor: isDark ? '#243531' : '#ded2bb' }]}>
+                <View style={styles.cassetteSpoolBar}>
                   <View style={styles.spoolLeft}>
                     <View style={[styles.liveDot, { backgroundColor: isPlaying ? '#10b981' : '#dc2626' }]} />
                     <Text style={styles.spoolText}>SIDE A // STEREO</Text>
@@ -247,58 +249,42 @@ export default function FullPlayerModal({ visible, onClose }) {
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <View style={styles.genreBadge}>
                     <Text style={styles.genreBadgeText}>
-                      {(currentTrack.genre || 'STEREO').toUpperCase()}
+                      {(currentTrack.genre || 'IMPORTED').toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={[styles.songTitle, { color: textTitle }]} numberOfLines={1}>
+                  <Text style={styles.songTitle} numberOfLines={1}>
                     {currentTrack.title || 'Untitled Track'}
                   </Text>
-                  <Text style={[styles.songArtist, { color: textSub }]} numberOfLines={1}>
+                  <Text style={styles.songArtist} numberOfLines={1}>
                     {currentTrack.artist || 'Unknown Artist'}
                   </Text>
                 </View>
 
-                {/* Download & Like Buttons */}
-                <View style={styles.trackActions}>
-                  <TouchableOpacity
-                    onPress={() => !isDownloaded && !isDownloading && handleDownloadTrack(currentTrack)}
-                    style={[styles.brutalIconBtn, { backgroundColor: isDark ? '#182421' : '#ffffff', borderColor: deckBorder }]}
-                    disabled={isDownloading || isDownloaded}
-                    activeOpacity={0.8}
-                  >
-                    {isDownloading ? (
-                      <ActivityIndicator size="small" color={colors.tealLight} />
-                    ) : isDownloaded ? (
-                      <CheckCircle2 size={20} color={colors.tealLight} />
-                    ) : (
-                      <Download size={20} color={isDark ? '#fdfbf7' : colors.ink} />
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => toggleLikeTrack(trackId)}
-                    style={[styles.brutalIconBtn, { backgroundColor: isDark ? '#182421' : '#ffffff', borderColor: deckBorder }]}
-                    activeOpacity={0.8}
-                  >
-                    <Heart
-                      size={20}
-                      color={isLiked ? colors.crimson : (isDark ? '#9ca3af' : colors.ink)}
-                      fill={isLiked ? colors.crimson : 'transparent'}
-                    />
-                  </TouchableOpacity>
-                </View>
+                {/* Rounded Heart Button */}
+                <TouchableOpacity
+                  onPress={() => toggleLikeTrack(trackId)}
+                  style={styles.deckHeartBtn}
+                  activeOpacity={0.8}
+                >
+                  <Heart
+                    size={20}
+                    color={isLiked ? colors.crimson : '#9ca3af'}
+                    fill={isLiked ? colors.crimson : 'transparent'}
+                  />
+                </TouchableOpacity>
               </View>
 
-              {/* ── Seekbar ── */}
+              {/* ── Seekbar with White Circular Thumb Indicator ── */}
               <View style={styles.seekSection}>
                 <TouchableOpacity activeOpacity={1} onPress={handleSeekPress} style={styles.seekTouchArea}>
-                  <View style={[styles.seekTrack, { backgroundColor: isDark ? '#070c0a' : '#ded2bb', borderColor: deckBorder }]}>
+                  <View style={styles.seekTrack}>
                     <View style={[styles.seekFill, { width: `${progressPercent}%` }]} />
+                    <View style={[styles.seekThumb, { left: `${Math.max(0, Math.min(100, progressPercent))}%` }]} />
                   </View>
                 </TouchableOpacity>
                 <View style={styles.timeRow}>
-                  <Text style={[styles.timeText, { color: textSub }]}>{formatTime(currentTime)}</Text>
-                  <Text style={[styles.timeText, { color: textSub }]}>{formatTime(duration)}</Text>
+                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
                 </View>
               </View>
 
@@ -306,44 +292,41 @@ export default function FullPlayerModal({ visible, onClose }) {
               <View style={styles.controlsRow}>
                 {/* Shuffle Button */}
                 <TouchableOpacity
-                  style={styles.transportBtn}
+                  style={styles.transportBtnBox}
                   onPress={() => setIsShuffle(!isShuffle)}
                   activeOpacity={0.7}
                 >
-                  <Shuffle size={20} color={isShuffle ? colors.mint : '#6b7280'} />
+                  <Shuffle size={18} color={isShuffle ? colors.mint : '#9ca3af'} />
                 </TouchableOpacity>
 
                 {/* Skip Prev */}
-                <TouchableOpacity style={styles.transportBtn} onPress={playPrevTrack} activeOpacity={0.7}>
-                  <SkipBack size={26} color={textTitle} />
+                <TouchableOpacity style={styles.transportBtnBox} onPress={playPrevTrack} activeOpacity={0.7}>
+                  <SkipBack size={20} color="#ffffff" fill="#ffffff" />
                 </TouchableOpacity>
 
                 {/* Center Brutalist Play/Pause Button */}
-                <View style={styles.mainPlayWrapper}>
-                  <View style={styles.mainPlayShadow} />
-                  <TouchableOpacity
-                    style={styles.mainPlayBtn}
-                    onPress={togglePlay}
-                    activeOpacity={0.8}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color={colors.ink} />
-                    ) : isPlaying ? (
-                      <Pause size={28} color={colors.ink} fill={colors.ink} />
-                    ) : (
-                      <Play size={28} color={colors.ink} fill={colors.ink} style={{ marginLeft: 3 }} />
-                    )}
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.mainPlayBtn}
+                  onPress={togglePlay}
+                  activeOpacity={0.8}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator size="small" color="#0b1110" />
+                  ) : isPlaying ? (
+                    <Pause size={24} color="#0b1110" fill="#0b1110" />
+                  ) : (
+                    <Play size={24} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+                  )}
+                </TouchableOpacity>
 
                 {/* Skip Next */}
-                <TouchableOpacity style={styles.transportBtn} onPress={playNextTrack} activeOpacity={0.7}>
-                  <SkipForward size={26} color={textTitle} />
+                <TouchableOpacity style={styles.transportBtnBox} onPress={playNextTrack} activeOpacity={0.7}>
+                  <SkipForward size={20} color="#ffffff" fill="#ffffff" />
                 </TouchableOpacity>
 
                 {/* Repeat Button */}
-                <TouchableOpacity style={styles.transportBtn} onPress={toggleRepeat} activeOpacity={0.7}>
-                  <Repeat size={20} color={repeatMode !== 'off' ? colors.mint : '#6b7280'} />
+                <TouchableOpacity style={styles.transportBtnBox} onPress={toggleRepeat} activeOpacity={0.7}>
+                  <Repeat size={18} color={repeatMode !== 'off' ? colors.mint : '#9ca3af'} />
                   {repeatMode === 'one' && (
                     <View style={styles.repeatOneBadge}>
                       <Text style={styles.repeatOneText}>1</Text>
@@ -352,16 +335,59 @@ export default function FullPlayerModal({ visible, onClose }) {
                 </TouchableOpacity>
               </View>
 
-              {/* ── Bottom Deck Footer: Sleep Timer ── */}
-              <View style={styles.deckFooterRow}>
-                <TouchableOpacity
-                  style={[styles.footerPillBtn, { backgroundColor: isDark ? '#141d1b' : '#ede5d3', borderColor: deckBorder }]}
-                  onPress={() => setIsSleepTimerOpen(true)}
-                  activeOpacity={0.8}
-                >
-                  <Moon size={14} color={isDark ? colors.mint : colors.ink} />
-                  <Text style={[styles.footerPillText, { color: textTitle }]}>Sleep Timer</Text>
-                </TouchableOpacity>
+              {/* ── Dashed Divider ── */}
+              <View style={styles.dashedDivider} />
+
+              {/* ── Audio Toolbar Row: Volume + Quick Actions ── */}
+              <View style={styles.audioToolbarRow}>
+                {/* Left: Volume Control */}
+                <View style={styles.volumeGroup}>
+                  <Volume2 size={16} color="#94a3b8" />
+                  <TouchableOpacity activeOpacity={1} onPress={handleVolumePress} style={styles.volTouchArea}>
+                    <View style={styles.volTrack}>
+                      <View style={[styles.volFill, { width: `${Math.round((volume || 0.8) * 100)}%` }]} />
+                      <View style={[styles.volThumb, { left: `${Math.round((volume || 0.8) * 100)}%` }]} />
+                    </View>
+                  </TouchableOpacity>
+                  <Text style={styles.volPercentText}>{Math.round((volume || 0.8) * 100)}%</Text>
+                </View>
+
+                {/* Right: Quick Action Buttons */}
+                <View style={styles.quickActionsGroup}>
+                  {/* Vinyl Disc Toggle */}
+                  <TouchableOpacity
+                    style={styles.quickToolBtn}
+                    onPress={() => setIsSleepTimerOpen(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Disc size={17} color="#94a3b8" />
+                  </TouchableOpacity>
+
+                  {/* Lyrics Quick Button (Teal Box) */}
+                  <TouchableOpacity
+                    style={styles.quickToolBtnTeal}
+                    onPress={() => setActiveTab('lyrics')}
+                    activeOpacity={0.8}
+                  >
+                    <Mic size={17} color="#0b1110" strokeWidth={2.4} />
+                  </TouchableOpacity>
+
+                  {/* Download Button */}
+                  <TouchableOpacity
+                    style={styles.quickToolBtn}
+                    onPress={() => !isDownloaded && !isDownloading && handleDownloadTrack(currentTrack)}
+                    disabled={isDownloading || isDownloaded}
+                    activeOpacity={0.8}
+                  >
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color="#17a398" />
+                    ) : isDownloaded ? (
+                      <CheckCircle2 size={17} color="#17a398" />
+                    ) : (
+                      <Download size={17} color="#94a3b8" />
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </ScrollView>
@@ -500,77 +526,78 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingTop: Platform.OS === 'ios' ? 44 : 12,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
     zIndex: 10,
   },
-  topBtn: {
+  topWhiteBtn: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#fdfbf7',
+    backgroundColor: '#ffffff',
     borderWidth: 2,
-    borderColor: colors.ink,
-    justifyContent: 'center',
+    borderColor: '#000000',
     alignItems: 'center',
-    shadowColor: colors.ink,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
+    justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
     elevation: 3,
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
   },
   headerPill: {
-    backgroundColor: colors.teal,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
+    backgroundColor: 'rgba(23,163,152,0.18)',
+    borderWidth: 1,
+    borderColor: '#17a398',
     borderRadius: 4,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
   headerPillText: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontWeight: '900',
-    color: colors.ink,
+    color: '#17a398',
     letterSpacing: 0.5,
   },
   headerTitle: {
     fontSize: 13,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    marginTop: 4,
+    fontWeight: '800',
+    color: '#ffffff',
+    marginTop: 3,
   },
   tabsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
-    padding: 3,
-    marginVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
     zIndex: 10,
   },
   tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
   },
   activeTabBtn: {
-    backgroundColor: colors.teal,
+    backgroundColor: '#262f2d',
   },
   tabText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#9ca3af',
   },
   activeTabText: {
-    color: colors.ink,
+    color: '#ffffff',
+    fontWeight: '900',
   },
   playerScroll: {
     flexGrow: 1,
@@ -578,9 +605,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   deckCard: {
-    borderRadius: 20,
-    borderWidth: 2.5,
+    backgroundColor: '#0c1815',
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: '#1d3630',
     padding: 14,
+    marginHorizontal: 14,
+    marginBottom: 18,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.7,
@@ -591,8 +622,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 1.5,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1d3630',
     marginBottom: 10,
   },
   deckHeaderLeft: {
@@ -604,47 +636,50 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.teal,
+    backgroundColor: '#17a398',
   },
   pulsingDotActive: {
     backgroundColor: '#10b981',
   },
   deckTitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontWeight: '900',
-    letterSpacing: 0.8,
+    color: '#17a398',
+    letterSpacing: 0.6,
   },
   deckBadge: {
-    backgroundColor: colors.ink,
+    backgroundColor: '#0c1815',
     borderWidth: 1,
-    borderColor: colors.mint,
+    borderColor: '#17a398',
     borderRadius: 4,
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 1.5,
   },
   deckBadgeText: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontWeight: '900',
-    color: colors.mint,
+    color: '#17a398',
   },
   tvEnclosure: {
+    backgroundColor: '#11201c',
     borderRadius: 16,
-    borderWidth: 2,
+    borderWidth: 1.5,
+    borderColor: '#233d36',
     padding: 8,
     marginBottom: 12,
     alignItems: 'center',
   },
   tvScreen: {
     width: '100%',
-    height: Math.min(240, height * 0.3),
-    borderRadius: 12,
+    height: Math.min(210, height * 0.26),
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: '#000000',
-    borderWidth: 2,
-    borderColor: '#070b0a',
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   coverImage: {
     width: '100%',
@@ -662,6 +697,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     marginTop: 6,
     borderTopWidth: 1,
+    borderTopColor: '#1d3630',
     borderStyle: 'dashed',
     paddingHorizontal: 4,
   },
@@ -679,7 +715,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontWeight: '900',
-    color: colors.mint,
+    color: '#17a398',
     letterSpacing: 0.5,
   },
   spoolWheels: {
@@ -692,7 +728,7 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: colors.mint,
+    borderColor: '#17a398',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -700,12 +736,12 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: colors.mint,
+    backgroundColor: '#17a398',
   },
   spoolBelt: {
     width: 14,
     height: 2,
-    backgroundColor: colors.mint,
+    backgroundColor: '#17a398',
     borderRadius: 1,
   },
   trackInfoRow: {
@@ -715,41 +751,40 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   genreBadge: {
-    backgroundColor: colors.teal,
+    backgroundColor: '#17a398',
     alignSelf: 'flex-start',
-    borderRadius: 3,
+    borderRadius: 4,
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 2,
     marginBottom: 4,
   },
   genreBadgeText: {
     fontSize: 8,
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontWeight: '900',
-    color: colors.ink,
+    color: '#0b1110',
   },
   songTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
-    letterSpacing: -0.3,
+    color: '#ffffff',
+    letterSpacing: -0.2,
   },
   songArtist: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
+    color: '#9ca3af',
     marginTop: 2,
   },
-  trackActions: {
-    flexDirection: 'row',
+  deckHeartBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#13231f',
+    borderWidth: 1,
+    borderColor: '#243a34',
     alignItems: 'center',
-    gap: 8,
-  },
-  brutalIconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    borderWidth: 1.5,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   seekSection: {
     width: '100%',
@@ -759,41 +794,58 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   seekTrack: {
-    height: 7,
-    borderRadius: 4,
-    borderWidth: 1,
-    overflow: 'hidden',
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: '#182b26',
+    position: 'relative',
   },
   seekFill: {
     height: '100%',
-    backgroundColor: colors.teal,
+    backgroundColor: '#17a398',
+    borderRadius: 1.5,
+  },
+  seekThumb: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+    top: -4.5,
+    marginLeft: -6,
   },
   timeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 4,
   },
   timeText: {
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#17a398',
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     marginVertical: 4,
   },
-  transportBtn: {
-    padding: 10,
-    position: 'relative',
+  transportBtnBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#13231f',
+    borderWidth: 1,
+    borderColor: '#243a34',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   repeatOneBadge: {
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: colors.mint,
+    backgroundColor: '#17a398',
     borderRadius: 5,
     width: 10,
     height: 10,
@@ -803,35 +855,92 @@ const styles = StyleSheet.create({
   repeatOneText: {
     fontSize: 7,
     fontWeight: '900',
-    color: colors.ink,
-  },
-  mainPlayWrapper: {
-    position: 'relative',
-  },
-  mainPlayShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: -4,
-    bottom: -4,
-    backgroundColor: colors.ink,
-    borderRadius: 12,
+    color: '#0b1110',
   },
   mainPlayBtn: {
-    width: 62,
-    height: 62,
-    borderRadius: 12,
-    backgroundColor: colors.teal,
-    borderWidth: 2.5,
-    borderColor: colors.ink,
-    justifyContent: 'center',
+    width: 58,
+    height: 58,
+    borderRadius: 16,
+    backgroundColor: '#4fd1c5',
     alignItems: 'center',
-  },
-  deckFooterRow: {
-    flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 12,
-    paddingTop: 8,
+    shadowColor: '#4fd1c5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  dashedDivider: {
+    borderBottomWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#1f3630',
+    marginVertical: 14,
+  },
+  audioToolbarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  volumeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    marginRight: 14,
+  },
+  volTouchArea: {
+    flex: 1,
+    paddingVertical: 8,
+  },
+  volTrack: {
+    height: 3,
+    backgroundColor: '#182b26',
+    borderRadius: 1.5,
+    position: 'relative',
+  },
+  volFill: {
+    height: '100%',
+    backgroundColor: '#17a398',
+    borderRadius: 1.5,
+  },
+  volThumb: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ffffff',
+    position: 'absolute',
+    top: -3.5,
+    marginLeft: -5,
+  },
+  volPercentText: {
+    color: '#17a398',
+    fontSize: 10.5,
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+    fontWeight: '800',
+  },
+  quickActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quickToolBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#13231f',
+    borderWidth: 1,
+    borderColor: '#243a34',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickToolBtnTeal: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#4fd1c5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.06)',
   },

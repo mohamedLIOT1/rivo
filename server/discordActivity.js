@@ -42,7 +42,7 @@ function decryptToken(text) {
 const activeUserBots = new Map();
 const userIdleTimers = new Map();
 
-function disconnectUserSession(userId) {
+async function disconnectUserSession(userId) {
   if (userIdleTimers.has(userId)) {
     clearTimeout(userIdleTimers.get(userId));
     userIdleTimers.delete(userId);
@@ -53,17 +53,19 @@ function disconnectUserSession(userId) {
       if (session.client) {
         try {
           if (session.client.settings && typeof session.client.settings.setCustomStatus === 'function') {
-            session.client.settings.setCustomStatus(null).catch(() => {});
+            await session.client.settings.setCustomStatus(null).catch(() => {});
           }
         } catch (e) {}
         if (session.client.user) {
           try {
-            session.client.user.setPresence({ activities: [] });
+            await session.client.user.setPresence({ activities: [] });
           } catch (e) {}
           try {
-            session.client.user.setActivity(null);
+            await session.client.user.setActivity(null);
           } catch (e) {}
         }
+        // Give Discord Gateway 400ms to register clear presence before tearing down client
+        await new Promise(r => setTimeout(r, 400));
         session.client.destroy();
       }
     } catch (e) {}

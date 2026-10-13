@@ -654,7 +654,7 @@ function makeToken(u) {
 }
 
 function auth(req, res, next) {
-  const t = (req.headers.authorization || '').replace('Bearer ', '');
+  const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
   if (!t) return res.status(401).json({ error: 'Auth required' });
   try {
     req.user = verifyJwt(t);
@@ -665,7 +665,7 @@ function auth(req, res, next) {
 }
 
 function adminAuth(req, res, next) {
-  const t = (req.headers.authorization || '').replace('Bearer ', '');
+  const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
   if (!t) return res.status(401).json({ error: 'Auth required' });
   try {
     const decoded = verifyJwt(t);
@@ -680,7 +680,7 @@ function adminAuth(req, res, next) {
 }
 
 function optionalAuth(req, res, next) {
-  const t = (req.headers.authorization || '').replace('Bearer ', '');
+  const t = (req.headers.authorization || '').replace('Bearer ', '') || req.query.token;
   if (t) {
     try { req.user = verifyJwt(t); } catch {}
   }
@@ -5632,7 +5632,29 @@ app.post('/api/tracks/purge-soundcloud', adminAuth, async (req, res) => {
 const jamRooms = {};
 const jamDisconnectTimeouts = new Map();
 
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+  if (token) {
+    try {
+      const decoded = verifyJwt(token);
+      if (decoded?.id) {
+        socket.userId = String(decoded.id);
+      }
+    } catch (e) {}
+  }
+  next();
+});
+
 io.on('connection', (socket) => {
+  if (socket.userId) {
+    const uidStr = socket.userId;
+    socket.join(`user:${uidStr}`);
+    if (!userSocketMap.has(uidStr)) {
+      userSocketMap.set(uidStr, new Set());
+    }
+    userSocketMap.get(uidStr).add(socket.id);
+  }
+
   // User connects & registers their socket ID
   socket.on('user:online', ({ userId }) => {
     if (!userId) return;
@@ -5645,6 +5667,22 @@ io.on('connection', (socket) => {
     userSocketMap.get(uidStr).add(socket.id);
 
     // Notify all clients that this user is now online
+    io.emit('user:status', {
+      userId: uidStr,
+      isOnline: true
+    });
+  });
+
+  socket.on('user_connected', (data) => {
+    const userId = data?.userId || data?.id;
+    if (!userId) return;
+    const uidStr = String(userId);
+    socket.userId = uidStr;
+    socket.join(`user:${uidStr}`);
+    if (!userSocketMap.has(uidStr)) {
+      userSocketMap.set(uidStr, new Set());
+    }
+    userSocketMap.get(uidStr).add(socket.id);
     io.emit('user:status', {
       userId: uidStr,
       isOnline: true
@@ -6007,12 +6045,20 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async () => {
     // Clean up presence tracking for this user
     const uidStr = socket.userId;
-    if (uidStr && userSocketMap.has(uidStr)) {
-      const sockets = userSocketMap.get(uidStr);
-      sockets.delete(socket.id);
-      if (sockets.size === 0) {
-        userSocketMap.delete(uidStr);
+    if (uidStr) {
+      let isFullyOffline = false;
+      if (userSocketMap.has(uidStr)) {
+        const sockets = userSocketMap.get(uidStr);
+        sockets.delete(socket.id);
+        if (sockets.size === 0) {
+          userSocketMap.delete(uidStr);
+          isFullyOffline = true;
+        }
+      } else {
+        isFullyOffline = true;
+      }
 
+      if (isFullyOffline) {
         // When user has closed all tabs/connections: mark offline and stop live playing
         try {
           await User.findByIdAndUpdate(uidStr, {
@@ -6037,7 +6083,7 @@ io.on('connection', (socket) => {
         });
 
         // Clean up Discord activity session
-        try { discordActivity.disconnectUserSession(uidStr); } catch (e) {}
+        try { await discordActivity.disconnectUserSession(uidStr); } catch (e) {}
       }
     }
 

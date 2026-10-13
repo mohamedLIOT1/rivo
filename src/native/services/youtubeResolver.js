@@ -165,7 +165,7 @@ export const resolveAudioStream = async (track) => {
   // 4. Server-side Stream Resolution via Proxy Fallback
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const serverStreamRes = await fetch(
       `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
       { signal: controller.signal }

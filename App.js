@@ -207,6 +207,7 @@ function NativeAppShell() {
   const [isFriendActivityOpen, setIsFriendActivityOpen] = useState(false);
   const [isIntroAuthOpen, setIsIntroAuthOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [chatTargetUser, setChatTargetUser] = useState(null);
 
   const { currentTrack } = useAudioPlayer();
   const { currentUser } = useUser();
@@ -250,7 +251,10 @@ function NativeAppShell() {
             onOpenAuth={() => setIsIntroAuthOpen(true)}
             onOpenFriendActivity={() => setIsFriendActivityOpen(true)}
             onOpenJam={() => setIsJamOpen(true)}
-            onOpenChat={() => setIsChatOpen(true)}
+            onOpenChat={(target) => {
+              if (target) setChatTargetUser(target);
+              setIsChatOpen(true);
+            }}
             onSelectPlaylist={() => setActiveTab('library')}
           />
         );
@@ -405,36 +409,36 @@ function NativeAppShell() {
             </View>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}
+              style={styles.menuItem}
               onPress={() => {
                 setIsMenuOpen(false);
                 setIsFriendActivityOpen(true);
               }}
             >
               <Users size={18} color="#17a398" strokeWidth={2.4} />
-              <Text style={[styles.menuItemText, { color: '#17a398', fontWeight: '800' }]}>Friend Activity Radar</Text>
+              <Text style={styles.menuItemText}>Friend Activity Radar</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: 'rgba(245,158,11,0.18)', borderColor: '#f59e0b' }]}
+              style={styles.menuItem}
               onPress={() => {
                 setIsMenuOpen(false);
                 setIsJamOpen(true);
               }}
             >
               <Radio size={18} color="#f59e0b" strokeWidth={2.4} />
-              <Text style={[styles.menuItemText, { color: '#f59e0b', fontWeight: '800' }]}>Live Jam Room</Text>
+              <Text style={styles.menuItemText}>Live Jam Room</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: 'rgba(56,189,248,0.18)', borderColor: '#38bdf8' }]}
+              style={styles.menuItem}
               onPress={() => {
                 setIsMenuOpen(false);
                 setIsChatOpen(true);
               }}
             >
               <MessageSquare size={18} color="#38bdf8" strokeWidth={2.4} />
-              <Text style={[styles.menuItemText, { color: '#38bdf8', fontWeight: '800' }]}>Direct Messages / Chat</Text>
+              <Text style={styles.menuItemText}>Direct Messages / Chat</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -509,6 +513,7 @@ function NativeAppShell() {
       <FullPlayerModal
         visible={isFullPlayerOpen}
         onClose={() => setIsFullPlayerOpen(false)}
+        onTrackAction={(track) => setActionTrack(track)}
       />
 
       <TrackActionMenuModal
@@ -532,7 +537,11 @@ function NativeAppShell() {
 
       <ChatModal
         visible={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
+        onClose={() => {
+          setIsChatOpen(false);
+          setChatTargetUser(null);
+        }}
+        initialTargetUser={chatTargetUser}
       />
 
       <SettingsModal
