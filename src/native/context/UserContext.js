@@ -9,6 +9,19 @@ const USER_KEY = '@rivo_current_user_v2';
 const CACHE_TRACKS_KEY = '@rivo_cached_tracks_v2';
 const CACHE_PLAYLISTS_KEY = '@rivo_cached_playlists_v2';
 
+const normalizePlaylists = (rawList) => {
+  if (!Array.isArray(rawList)) return [];
+  return rawList.map(p => {
+    const pTracks = (Array.isArray(p.tracks) && p.tracks.length > 0) ? p.tracks : (p.trackIds || []);
+    const pTrackIds = (Array.isArray(p.trackIds) && p.trackIds.length > 0) ? p.trackIds : (p.tracks || []);
+    return {
+      ...p,
+      tracks: pTracks,
+      trackIds: pTrackIds,
+    };
+  });
+};
+
 export const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [token, setToken] = useState(null);
@@ -45,7 +58,12 @@ export const UserProvider = ({ children }) => {
           }
         }
       }
-      if (cachedPlaylists) setPlaylists(JSON.parse(cachedPlaylists));
+      if (cachedPlaylists) {
+        const parsedPl = JSON.parse(cachedPlaylists);
+        if (Array.isArray(parsedPl)) {
+          setPlaylists(normalizePlaylists(parsedPl));
+        }
+      }
 
       if (storedToken && storedUser) {
         setToken(storedToken);
@@ -92,11 +110,12 @@ export const UserProvider = ({ children }) => {
       if (res.ok) {
         const data = await res.json();
         if (data.user) {
+          const normalized = normalizePlaylists(data.user.playlists || []);
           setCurrentUser(data.user);
           setLikedTrackIds(data.user.likedTrackIds || []);
-          setPlaylists(data.user.playlists || []);
+          setPlaylists(normalized);
           AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user)).catch(() => {});
-          AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(data.user.playlists || [])).catch(() => {});
+          AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(normalized)).catch(() => {});
         }
       }
     } catch {}
@@ -116,12 +135,14 @@ export const UserProvider = ({ children }) => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || data.message || 'Login failed');
 
+      const normalized = normalizePlaylists(data.user?.playlists || []);
       setToken(data.token);
       setCurrentUser(data.user);
       setLikedTrackIds(data.user?.likedTrackIds || []);
-      setPlaylists(data.user?.playlists || []);
+      setPlaylists(normalized);
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      await AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(normalized));
       return data.user;
     } catch (e) {
       clearTimeout(timer);

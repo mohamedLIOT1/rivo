@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.4.3',
-  releaseNotes: 'Native mobile experience, official Discord Rich Presence sync, performance optimizations.',
-  publishedAt: '2026-10-12T16:00:00Z',
+  version: '1.4.4',
+  releaseNotes: 'Complete Rivo Web experience on iOS & Android: full design, all playlists & songs, Discord sync, Friend Activity, Chat & Jam, plus native lock screen controls.',
+  publishedAt: '2026-10-13T09:30:00Z',
   platforms: {
     windows: {
-      version: '1.4.3',
+      version: '1.4.4',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,22 +1078,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.4.3',
-      build: 16,
+      version: '1.4.4',
+      build: 17,
       name: 'Rivo for Android',
       downloadUrl: '/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: '100% Native design, offline vault, lock screen audio controls.'
+      notes: 'Full web UI & design, Discord sync, Friend Activity, offline vault, lock screen audio controls.'
     },
     ios: {
-      version: '1.4.3',
-      build: 16,
+      version: '1.4.4',
+      build: 17,
       name: 'Rivo for iOS',
       downloadUrl: '/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'Native audio controls, sideloadable via AltStore or Scarlet.'
+      notes: 'Full web UI & design, all playlists & songs, Discord sync, Friend Activity, Chat & Jam, Control Center media controls.'
     }
   }
 };
