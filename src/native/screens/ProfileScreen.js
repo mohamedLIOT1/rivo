@@ -267,11 +267,17 @@ export default function ProfileScreen({
           <View style={styles.userHeaderRow}>
             <View style={styles.avatarWrap}>
               {viewingProfile.avatar ? (
-                <Image source={{ uri: normalizeCoverUri(viewingProfile.avatar) }} style={styles.avatarImage} />
+                <Image
+                  source={{ uri: normalizeCoverUri(viewingProfile.avatar) }}
+                  style={styles.avatarImg}
+                  resizeMode="cover"
+                />
               ) : (
-                <Text style={styles.avatarText}>
-                  {viewingProfile.name ? viewingProfile.name[0].toUpperCase() : 'U'}
-                </Text>
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarLetter}>
+                    {viewingProfile.name ? viewingProfile.name[0].toUpperCase() : 'U'}
+                  </Text>
+                </View>
               )}
               {viewingProfile.isVerified && (
                 <View style={styles.verifiedBadge}>

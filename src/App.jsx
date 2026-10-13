@@ -1123,7 +1123,7 @@ function AppContent() {
   useEffect(() => { handleOpenChatRef.current = handleOpenChat; }, [handleOpenChat]);
 
   useEffect(() => {
-    const token = getToken();
+    const token = getStoredToken();
     const s = io(API_BASE_URL, {
       auth: { token: token || undefined },
       transports: ['websocket', 'polling']
@@ -1332,7 +1332,7 @@ function AppContent() {
       if (jamSession?.code && socket) {
         socket.emit('jam:leave_room', { roomCode: jamSession.code });
       }
-      const token = getToken();
+      const token = getStoredToken();
       if (token) {
         try {
           const payload = JSON.stringify({ isPlaying: false, track: null, currentTime: 0 });

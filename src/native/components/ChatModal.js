@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Send, MessageSquare, ArrowLeft, Search, User, Users } from 'lucide-react-native';
+import { X, Send, MessageSquare, ArrowLeft, Search, User, Users, CheckCheck, Check } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
@@ -81,13 +81,16 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
     setLoadingHub(false);
   };
 
-  // Load message history with active user
+  // Load message history with active user & mark thread as read
   useEffect(() => {
     const activeUserId = activeUser?._id || activeUser?.id;
     if (!visible || !activeUserId) return;
 
     fetchMessages(activeUserId);
-  }, [visible, activeUser]);
+    if (socket) {
+      socket.emit('chat:mark_read', { senderId: activeUserId });
+    }
+  }, [visible, activeUser, socket]);
 
   const fetchMessages = async (userId) => {
     setLoadingMessages(true);
@@ -106,7 +109,7 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
     setLoadingMessages(false);
   };
 
-  // Socket listener for real-time private messages
+  // Socket listener for real-time private messages and seen receipts
   useEffect(() => {
     if (!socket || !visible) return;
 
@@ -119,6 +122,9 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
         (String(msg.sender) === myId && String(msg.recipient) === activeUserId);
 
       if (isForActiveThread) {
+        if (String(msg.sender) === activeUserId) {
+          socket.emit('chat:mark_read', { senderId: activeUserId });
+        }
         setMessages((prev) => {
           const exists = prev.some((m) => String(m._id || m.id) === String(msg._id || msg.id));
           if (exists) return prev;
@@ -130,9 +136,23 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
       fetchHubData();
     };
 
+    const onSeen = (data) => {
+      const activeUserId = String(activeUser?._id || activeUser?.id || '');
+      const myId = String(currentUser?._id || currentUser?.id || '');
+
+      if (String(data?.seenBy) === activeUserId) {
+        setMessages((prev) =>
+          prev.map((m) => (String(m.sender) === myId ? { ...m, read: true } : m))
+        );
+      }
+    };
+
     socket.on('chat:message', onIncomingMessage);
+    socket.on('chat:seen', onSeen);
+
     return () => {
       socket.off('chat:message', onIncomingMessage);
+      socket.off('chat:seen', onSeen);
     };
   }, [socket, visible, activeUser, currentUser]);
 
@@ -193,13 +213,34 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
   const renderMessage = ({ item }) => {
     const myId = String(currentUser?._id || currentUser?.id || '');
     const isMe = String(item.sender) === myId;
+    const timeStr = item.createdAt
+      ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '';
 
     return (
       <View style={[styles.msgRow, isMe ? styles.myMsgRow : styles.otherMsgRow]}>
-        <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-          <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.otherMsgText]}>
-            {item.text}
-          </Text>
+        <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '82%' }}>
+          <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+            <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.otherMsgText]}>
+              {item.text}
+            </Text>
+          </View>
+          <View style={[styles.msgMetaRow, isMe ? styles.myMetaRow : styles.otherMetaRow]}>
+            {timeStr ? <Text style={styles.msgTimeText}>{timeStr}</Text> : null}
+            {isMe && (
+              item.read ? (
+                <View style={styles.seenBadge}>
+                  <CheckCheck size={13} color="#26c4b7" strokeWidth={2.6} />
+                  <Text style={styles.seenText}>سين</Text>
+                </View>
+              ) : (
+                <View style={styles.sentBadge}>
+                  <Check size={12} color="#64748b" strokeWidth={2.2} />
+                  <Text style={styles.sentText}>تم الإرسال</Text>
+                </View>
+              )
+            )}
+          </View>
         </View>
       </View>
     );
@@ -672,6 +713,44 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#263330',
     borderBottomLeftRadius: 2,
+  },
+  msgMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+    paddingHorizontal: 2,
+  },
+  myMetaRow: {
+    justifyContent: 'flex-end',
+  },
+  otherMetaRow: {
+    justifyContent: 'flex-start',
+  },
+  msgTimeText: {
+    fontSize: 9.5,
+    color: '#64748b',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  seenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  seenText: {
+    fontSize: 9.5,
+    color: '#26c4b7',
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  sentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  sentText: {
+    fontSize: 9,
+    color: '#64748b',
   },
   msgText: {
     fontSize: 13,
