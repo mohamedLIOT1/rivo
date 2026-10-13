@@ -273,18 +273,17 @@ function NativeAppShell() {
   return (
     <View style={[styles.offlineShell, !isDark && styles.offlineShellLight]}>
       <View style={[styles.topHeader, !isDark && styles.topHeaderLight]}>
-        {/* Brand Logo: [R] RIVO v1.3.0 */}
+        {/* Brand Logo: [Icon] RIVO v1.5.0 */}
         <TouchableOpacity
           style={styles.brandingRow}
           onPress={() => setActiveTab('home')}
           activeOpacity={0.8}
         >
-          <View style={styles.logoBadge}>
-            <View style={styles.logoTealOffset} />
-            <View style={styles.logoCreamDisc}>
-              <Text style={styles.logoLetter}>R</Text>
-            </View>
-          </View>
+          <Image
+            source={require('./assets/logo.png')}
+            style={{ width: 28, height: 28, borderRadius: 14, marginRight: 6 }}
+            resizeMode="contain"
+          />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
             <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
@@ -293,35 +292,8 @@ function NativeAppShell() {
           </View>
         </TouchableOpacity>
 
-        {/* Right Actions: Friend Activity, Jam, Chat, Sun/Moon, Menu (☰), User Avatar */}
+        {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
-          {/* Friend Activity (👥) */}
-          <TouchableOpacity
-            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
-            onPress={() => setIsFriendActivityOpen(true)}
-            activeOpacity={0.8}
-          >
-            <Users size={16} color="#17a398" strokeWidth={2.4} />
-          </TouchableOpacity>
-
-          {/* Live Jam (📻) */}
-          <TouchableOpacity
-            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
-            onPress={() => setIsJamOpen(true)}
-            activeOpacity={0.8}
-          >
-            <Radio size={16} color="#f59e0b" strokeWidth={2.4} />
-          </TouchableOpacity>
-
-          {/* Community Chat (💬) */}
-          <TouchableOpacity
-            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
-            onPress={() => setIsChatOpen(true)}
-            activeOpacity={0.8}
-          >
-            <MessageSquare size={16} color="#38bdf8" strokeWidth={2.4} />
-          </TouchableOpacity>
-
           {/* Sun / Moon (Theme toggle) */}
           <TouchableOpacity
             style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
@@ -462,7 +434,7 @@ function NativeAppShell() {
               }}
             >
               <MessageSquare size={18} color="#38bdf8" strokeWidth={2.4} />
-              <Text style={[styles.menuItemText, { color: '#38bdf8', fontWeight: '800' }]}>Cairo Community Chat</Text>
+              <Text style={[styles.menuItemText, { color: '#38bdf8', fontWeight: '800' }]}>Direct Messages / Chat</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Dimensions,
+  Image,
 } from 'react-native';
 import {
   Disc,
@@ -111,6 +112,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
       <View style={styles.backdrop}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
           style={styles.keyboardWrap}
         >
           <View style={styles.modalCard}>
@@ -123,14 +125,17 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
               contentContainerStyle={styles.scrollBody}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="none"
+              bounces={false}
             >
-              {/* Header: Vinyl Disc + Rivo Title */}
+              {/* Header: Official App Logo + Rivo Title */}
               <View style={styles.brandingHeader}>
                 <View style={styles.discBadge}>
-                  <View style={styles.discOuterRing}>
-                    <Disc size={36} color="#17a398" strokeWidth={2.4} />
-                  </View>
-                  <View style={styles.discCenterGlow} />
+                  <Image
+                    source={require('../../../assets/logo.png')}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                  />
                 </View>
                 <Text style={styles.appTitle}>RIVO</Text>
                 <View style={styles.versionPill}>
@@ -336,6 +341,8 @@ const styles = StyleSheet.create({
   keyboardWrap: {
     width: '100%',
     maxWidth: 420,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalCard: {
     backgroundColor: '#0e1715',
@@ -344,7 +351,8 @@ const styles = StyleSheet.create({
     borderColor: '#263330',
     overflow: 'hidden',
     position: 'relative',
-    maxHeight: '92%',
+    maxHeight: Math.min(620, Dimensions.get('window').height * 0.86),
+    width: '100%',
   },
   closeBtn: {
     position: 'absolute',
@@ -367,10 +375,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   discBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#141f1c',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#0b1110',
     borderWidth: 2,
     borderColor: '#17a398',
     alignItems: 'center',
@@ -380,19 +388,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
+    overflow: 'hidden',
   },
-  discOuterRing: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  discCenterGlow: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#0e1715',
-    borderWidth: 2,
-    borderColor: '#17a398',
+  logoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
   },
   appTitle: {
     color: '#ffffff',

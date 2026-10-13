@@ -7,8 +7,10 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
+  Image,
+  Dimensions,
 } from 'react-native';
-import { Play, Plus } from 'lucide-react-native';
+import { Play, Plus, Disc } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -16,13 +18,17 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import { isQuranContent } from '../../utils/quranUtils';
+import { normalizeCoverUri } from '../utils/coverUtils';
+
+const { width } = Dimensions.get('window');
+const ALBUM_CARD_WIDTH = (width - 34) / 2;
 
 export default function HomeScreen({
   onOpenAddSong,
   onTrackAction,
 }) {
   const { playTrack, currentTrack, downloadedTracks = [] } = useAudioPlayer();
-  const { currentUser, tracks: userTracks, likedTrackIds = [], fetchPublicTracks } = useUser();
+  const { currentUser, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
@@ -39,6 +45,46 @@ export default function HomeScreen({
     let list = (userTracks || []).filter((t) => !isQuranContent(t));
     return list;
   }, [userTracks, activeFilter, downloadedTracks, isOffline]);
+
+  // Discography Featured Albums (Matching Web UI & Image 3)
+  const displayAlbums = useMemo(() => {
+    const dbAlbums = (albums || []).filter((alb) => !isQuranContent(alb));
+    if (dbAlbums.length > 0) return dbAlbums;
+
+    // Fallback: Group from userTracks
+    const map = new Map();
+    (userTracks || []).forEach((t) => {
+      if (t.album && t.album.trim() && !isQuranContent(t)) {
+        const key = t.album.trim().toLowerCase();
+        if (!map.has(key)) {
+          map.set(key, {
+            name: t.album.trim(),
+            artist: t.artist || 'Various Artists',
+            cover: t.cover,
+            tracks: [t],
+          });
+        } else {
+          map.get(key).tracks.push(t);
+        }
+      }
+    });
+    return Array.from(map.values()).slice(0, 16);
+  }, [albums, userTracks]);
+
+  const handlePlayAlbum = useCallback((album) => {
+    let albTracks = [];
+    if (Array.isArray(album.tracks) && album.tracks.length > 0) {
+      albTracks = album.tracks;
+    } else {
+      albTracks = (userTracks || []).filter(t => 
+        (t.album && t.album.toLowerCase().trim() === (album.name || '').toLowerCase().trim()) ||
+        (album.trackIds && album.trackIds.map(String).includes(String(t.id || t._id)))
+      );
+    }
+    if (albTracks.length > 0) {
+      playTrack(albTracks[0], albTracks);
+    }
+  }, [userTracks, playTrack]);
 
   const visibleTracks = useMemo(() => {
     return displayTracks.slice(0, visibleCount);
@@ -95,10 +141,10 @@ export default function HomeScreen({
             : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.'}
         </Text>
 
-        {/* 2 Primary CTA Buttons */}
+        {/* 2 Primary CTA Buttons (Matching Image 3) */}
         <View style={styles.heroBtnRow}>
           <TouchableOpacity
-            style={styles.playDailyBtn}
+            style={styles.playTopChartsBtn}
             onPress={() => {
               if (displayTracks.length > 0) {
                 playTrack(displayTracks[0], displayTracks);
@@ -107,7 +153,7 @@ export default function HomeScreen({
             activeOpacity={0.85}
           >
             <Play size={14} color="#0b1110" fill="#0b1110" />
-            <Text style={styles.playDailyBtnText}>PLAY DAILY MIX</Text>
+            <Text style={styles.playTopChartsBtnText}>PLAY TOP CHARTS</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -120,6 +166,61 @@ export default function HomeScreen({
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ─────────────────────────────────────────
+          FEATURED ALBUMS SECTION (Matching Image 3)
+          ───────────────────────────────────────── */}
+      {displayAlbums && displayAlbums.length > 0 && (
+        <View style={styles.albumsSection}>
+          <View style={styles.albumsHeaderRow}>
+            <View style={styles.albumsTitleGroup}>
+              <Disc size={18} color="#f59e0b" strokeWidth={2.4} />
+              <Text style={[styles.albumsSectionTitle, !isDark && styles.albumsSectionTitleLight]}>
+                Featured Albums
+              </Text>
+              <View style={styles.albumsCountPill}>
+                <Text style={styles.albumsCountText}>
+                  {displayAlbums.length} {displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* 2-Column Grid */}
+          <View style={styles.albumsGrid}>
+            {displayAlbums.slice(0, 8).map((alb, index) => {
+              const coverUri = alb.cover || alb.coverUrl;
+              return (
+                <TouchableOpacity
+                  key={alb.id || alb._id || alb.name || String(index)}
+                  style={[styles.albumCard, !isDark && styles.albumCardLight]}
+                  onPress={() => handlePlayAlbum(alb)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.albumCoverWrap}>
+                    <Image
+                      source={{ uri: normalizeCoverUri(coverUri) }}
+                      style={styles.albumCover}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.albumPlayOverlay}>
+                      <View style={styles.albumPlayPill}>
+                        <Play size={11} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
+                    {alb.name}
+                  </Text>
+                  <Text style={styles.albumArtist} numberOfLines={1}>
+                    {alb.artist || 'Various Artists'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
 
       {/* ─────────────────────────────────────────
           SECTION HEADER & FILTER PILLS
@@ -166,7 +267,7 @@ export default function HomeScreen({
         )}
       </View>
     </View>
-  ), [currentUser?.name, displayTracks, activeFilter, downloadedTracks, isOffline, onOpenAddSong, playTrack]);
+  ), [currentUser?.name, displayTracks, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, playTrack, handlePlayAlbum]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -308,7 +409,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  playDailyBtn: {
+  playTopChartsBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -318,11 +419,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     gap: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
   },
-  playDailyBtnText: {
+  playTopChartsBtnText: {
     fontSize: 12,
     fontWeight: '900',
     color: '#0b1110',
+    letterSpacing: 0.5,
   },
   addTrackBtn: {
     flexDirection: 'row',
@@ -338,6 +444,106 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     color: '#0b1110',
+  },
+  albumsSection: {
+    marginBottom: 20,
+  },
+  albumsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  albumsTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  albumsSectionTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.2,
+  },
+  albumsSectionTitleLight: {
+    color: '#0b1110',
+  },
+  albumsCountPill: {
+    backgroundColor: '#0b1110',
+    borderWidth: 1,
+    borderColor: '#17a398',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  albumsCountText: {
+    color: '#17a398',
+    fontSize: 9,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  albumsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  albumCard: {
+    width: ALBUM_CARD_WIDTH,
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    borderRadius: 14,
+    padding: 10,
+  },
+  albumCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+  },
+  albumCoverWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#0b1110',
+    marginBottom: 8,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#263330',
+  },
+  albumCover: {
+    width: '100%',
+    height: '100%',
+  },
+  albumPlayOverlay: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+  },
+  albumPlayPill: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  albumTitle: {
+    color: '#ffffff',
+    fontSize: 12.5,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  albumTitleLight: {
+    color: '#0b1110',
+  },
+  albumArtist: {
+    color: '#94a3b8',
+    fontSize: 10.5,
+    fontWeight: '600',
   },
   sectionHeaderRow: {
     flexDirection: 'row',

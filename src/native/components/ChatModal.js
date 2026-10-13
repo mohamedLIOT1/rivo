@@ -1,29 +1,205 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList } from 'react-native';
-import { X, Send, MessageSquare } from 'lucide-react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  TextInput,
+  FlatList,
+  Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { X, Send, MessageSquare, ArrowLeft, Search, User, Users } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
-import { colors } from '../theme/colors';
-import CassetteTag from '../ui/CassetteTag';
+import { API_BASE_URL } from '../config';
+import { normalizeCoverUri } from '../utils/coverUtils';
 
-export default function ChatModal({ visible, onClose }) {
-  const { chatMessages, sendChatMessage } = useSocket();
-  const { currentUser } = useUser();
+export default function ChatModal({ visible, onClose, initialTargetUser = null }) {
+  const { socket } = useSocket();
+  const { currentUser, token } = useUser();
+
+  const [activeUser, setActiveUser] = useState(initialTargetUser);
+  const [conversations, setConversations] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'friends'
+  const [loadingHub, setLoadingHub] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
-    sendChatMessage(inputText.trim());
-    setInputText('');
+  const flatListRef = useRef(null);
+
+  useEffect(() => {
+    if (initialTargetUser) {
+      setActiveUser(initialTargetUser);
+    }
+  }, [initialTargetUser]);
+
+  useEffect(() => {
+    if (visible && !activeUser) {
+      fetchHubData();
+    }
+  }, [visible, activeUser]);
+
+  // Load conversations and friends
+  const fetchHubData = async () => {
+    setLoadingHub(true);
+    try {
+      const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
+      if (!activeToken) {
+        setLoadingHub(false);
+        return;
+      }
+
+      const headers = { Authorization: `Bearer ${activeToken}` };
+      const [convRes, friendsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/chat/conversations`, { headers }).catch(() => null),
+        fetch(`${API_BASE_URL}/api/users/friends`, { headers }).catch(() => null),
+      ]);
+
+      if (convRes && convRes.ok) {
+        const convData = await convRes.json();
+        if (convData.success) {
+          setConversations(convData.conversations || []);
+        }
+      }
+
+      if (friendsRes && friendsRes.ok) {
+        const friendsData = await friendsRes.json();
+        if (friendsData.success) {
+          setFriends(friendsData.friends || []);
+        }
+      }
+    } catch {}
+    setLoadingHub(false);
   };
 
+  // Load message history with active user
+  useEffect(() => {
+    const activeUserId = activeUser?._id || activeUser?.id;
+    if (!visible || !activeUserId) return;
+
+    fetchMessages(activeUserId);
+  }, [visible, activeUser]);
+
+  const fetchMessages = async (userId) => {
+    setLoadingMessages(true);
+    try {
+      const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
+      const res = await fetch(`${API_BASE_URL}/api/chat/${userId}`, {
+        headers: activeToken ? { Authorization: `Bearer ${activeToken}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setMessages(data.messages || []);
+        }
+      }
+    } catch {}
+    setLoadingMessages(false);
+  };
+
+  // Socket listener for real-time private messages
+  useEffect(() => {
+    if (!socket || !visible) return;
+
+    const onIncomingMessage = (msg) => {
+      const activeUserId = String(activeUser?._id || activeUser?.id || '');
+      const myId = String(currentUser?._id || currentUser?.id || '');
+
+      const isForActiveThread =
+        (String(msg.sender) === activeUserId && String(msg.recipient) === myId) ||
+        (String(msg.sender) === myId && String(msg.recipient) === activeUserId);
+
+      if (isForActiveThread) {
+        setMessages((prev) => {
+          const exists = prev.some((m) => String(m._id || m.id) === String(msg._id || msg.id));
+          if (exists) return prev;
+          return [...prev, msg];
+        });
+      }
+
+      // Update conversations hub in background
+      fetchHubData();
+    };
+
+    socket.on('chat:message', onIncomingMessage);
+    return () => {
+      socket.off('chat:message', onIncomingMessage);
+    };
+  }, [socket, visible, activeUser, currentUser]);
+
+  const handleSend = async () => {
+    const text = inputText.trim();
+    const activeUserId = activeUser?._id || activeUser?.id;
+    if (!text || !activeUserId || isSending) return;
+
+    setIsSending(true);
+    setInputText('');
+
+    const tempMsg = {
+      _id: `temp-${Date.now()}`,
+      sender: currentUser?._id || currentUser?.id,
+      recipient: activeUserId,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
+      const res = await fetch(`${API_BASE_URL}/api/chat/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
+        },
+        body: JSON.stringify({
+          recipientId: activeUserId,
+          text,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.message) {
+          setMessages((prev) =>
+            prev.map((m) => (m._id === tempMsg._id ? data.message : m))
+          );
+        }
+      }
+    } catch {}
+    setIsSending(false);
+  };
+
+  // Filter friends / conversations by search query
+  const filteredConversations = conversations.filter((c) => {
+    const name = c.user?.name || '';
+    return name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  const filteredFriends = friends.filter((f) => {
+    const name = f.name || '';
+    return name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   const renderMessage = ({ item }) => {
-    const isMe = item.senderId === (currentUser?._id || currentUser?.id);
+    const myId = String(currentUser?._id || currentUser?.id || '');
+    const isMe = String(item.sender) === myId;
+
     return (
       <View style={[styles.msgRow, isMe ? styles.myMsgRow : styles.otherMsgRow]}>
         <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-          {!isMe && <Text style={styles.senderName}>{item.senderName || 'Listener'}</Text>}
-          <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.otherMsgText]}>{item.text}</Text>
+          <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.otherMsgText]}>
+            {item.text}
+          </Text>
         </View>
       </View>
     );
@@ -32,59 +208,248 @@ export default function ChatModal({ visible, onClose }) {
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetOuter}>
-          <View style={styles.hardShadow} />
-          <View style={styles.sheet}>
-            {/* Header */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardWrap}
+        >
+          <View style={styles.sheetCard}>
+            {/* ── HEADER ── */}
             <View style={styles.header}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={styles.iconBox}>
-                  <MessageSquare size={18} color={colors.ink} />
+              {activeUser ? (
+                <View style={styles.activeUserHeaderRow}>
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => setActiveUser(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <ArrowLeft size={18} color="#17a398" strokeWidth={2.5} />
+                  </TouchableOpacity>
+
+                  <View style={styles.activeAvatarWrap}>
+                    {activeUser.avatar ? (
+                      <Image
+                        source={{ uri: normalizeCoverUri(activeUser.avatar) }}
+                        style={styles.activeAvatar}
+                      />
+                    ) : (
+                      <Text style={styles.activeAvatarLetter}>
+                        {activeUser.name ? activeUser.name[0].toUpperCase() : 'U'}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activeUserName} numberOfLines={1}>
+                      {activeUser.name || 'Friend'}
+                    </Text>
+                    <Text style={styles.activeUserStatus}>DIRECT MESSAGE</Text>
+                  </View>
                 </View>
-                <View>
-                  <Text style={styles.title}>COMMUNITY CHAT</Text>
-                  <CassetteTag label="REAL-TIME DISPENSARY CHAT" bg={colors.ink} textColor={colors.tealLight} />
+              ) : (
+                <View style={styles.hubHeaderRow}>
+                  <View style={styles.hubIconBox}>
+                    <MessageSquare size={16} color="#17a398" strokeWidth={2.5} />
+                  </View>
+                  <View>
+                    <Text style={styles.title}>DIRECT MESSAGES</Text>
+                    <Text style={styles.subTitle}>Chat with followed listeners</Text>
+                  </View>
+                </View>
+              )}
+
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.closeBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={18} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* ── VIEW 1: CONVERSATIONS / FRIENDS HUB ── */}
+            {!activeUser && (
+              <View style={styles.hubContainer}>
+                {/* Search Input */}
+                <View style={styles.searchBar}>
+                  <Search size={15} color="#64748b" />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search followers / friends..."
+                    placeholderTextColor="#64748b"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+
+                {/* Tabs Switcher: Chats vs Following */}
+                <View style={styles.tabSwitch}>
+                  <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'chats' && styles.tabBtnActive]}
+                    onPress={() => setActiveTab('chats')}
+                  >
+                    <Text style={[styles.tabBtnText, activeTab === 'chats' && styles.tabBtnTextActive]}>
+                      CHATS ({conversations.length})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'friends' && styles.tabBtnActive]}
+                    onPress={() => setActiveTab('friends')}
+                  >
+                    <Text style={[styles.tabBtnText, activeTab === 'friends' && styles.tabBtnTextActive]}>
+                      FOLLOWING ({friends.length})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {loadingHub ? (
+                  <View style={styles.loadingBox}>
+                    <ActivityIndicator size="small" color="#17a398" />
+                  </View>
+                ) : activeTab === 'chats' ? (
+                  <FlatList
+                    data={filteredConversations}
+                    keyExtractor={(item, index) => item.user?._id || item.user?.id || String(index)}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.userListItem}
+                        onPress={() => setActiveUser(item.user)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.listAvatarWrap}>
+                          {item.user?.avatar ? (
+                            <Image
+                              source={{ uri: normalizeCoverUri(item.user.avatar) }}
+                              style={styles.listAvatar}
+                            />
+                          ) : (
+                            <Text style={styles.listAvatarLetter}>
+                              {item.user?.name ? item.user.name[0].toUpperCase() : 'U'}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.listUserName} numberOfLines={1}>
+                            {item.user?.name || 'Listener'}
+                          </Text>
+                          <Text style={styles.listLastMsg} numberOfLines={1}>
+                            {item.lastMessage?.text || 'Sent an attachment'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.emptyBox}>
+                        <Users size={32} color="#334155" style={{ marginBottom: 8 }} />
+                        <Text style={styles.emptyTitle}>No active chats yet</Text>
+                        <Text style={styles.emptyText}>
+                          Select someone from Following to begin a direct conversation!
+                        </Text>
+                      </View>
+                    }
+                  />
+                ) : (
+                  <FlatList
+                    data={filteredFriends}
+                    keyExtractor={(item, index) => item._id || item.id || String(index)}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.userListItem}
+                        onPress={() => setActiveUser(item)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.listAvatarWrap}>
+                          {item.avatar ? (
+                            <Image
+                              source={{ uri: normalizeCoverUri(item.avatar) }}
+                              style={styles.listAvatar}
+                            />
+                          ) : (
+                            <Text style={styles.listAvatarLetter}>
+                              {item.name ? item.name[0].toUpperCase() : 'U'}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.listUserName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          {item.bio ? (
+                            <Text style={styles.listLastMsg} numberOfLines={1}>
+                              {item.bio}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    ListEmptyComponent={
+                      <View style={styles.emptyBox}>
+                        <Users size={32} color="#334155" style={{ marginBottom: 8 }} />
+                        <Text style={styles.emptyTitle}>Not following anyone yet</Text>
+                        <Text style={styles.emptyText}>
+                          Follow friends from their profiles or live listening radar!
+                        </Text>
+                      </View>
+                    }
+                  />
+                )}
+              </View>
+            )}
+
+            {/* ── VIEW 2: 1-ON-1 MESSAGES THREAD ── */}
+            {activeUser && (
+              <View style={styles.threadContainer}>
+                {loadingMessages ? (
+                  <View style={styles.loadingBox}>
+                    <ActivityIndicator size="small" color="#17a398" />
+                  </View>
+                ) : (
+                  <FlatList
+                    ref={flatListRef}
+                    data={messages}
+                    keyExtractor={(item, index) => item._id || item.id || String(index)}
+                    renderItem={renderMessage}
+                    contentContainerStyle={{ paddingVertical: 12 }}
+                    showsVerticalScrollIndicator={false}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    ListEmptyComponent={
+                      <View style={styles.emptyBox}>
+                        <Text style={styles.emptyText}>
+                          No messages yet. Say hello to {activeUser.name}!
+                        </Text>
+                      </View>
+                    }
+                  />
+                )}
+
+                {/* Input Bar */}
+                <View style={styles.inputBar}>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder={`Message ${activeUser.name}...`}
+                    placeholderTextColor="#64748b"
+                    value={inputText}
+                    onChangeText={setInputText}
+                    onSubmitEditing={handleSend}
+                  />
+                  <TouchableOpacity
+                    style={[styles.sendBtn, !inputText.trim() && { opacity: 0.5 }]}
+                    onPress={handleSend}
+                    disabled={!inputText.trim() || isSending}
+                  >
+                    {isSending ? (
+                      <ActivityIndicator size="small" color="#0b1110" />
+                    ) : (
+                      <Send size={15} color="#0b1110" strokeWidth={2.5} />
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X size={20} color={colors.ink} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Messages List */}
-            <FlatList
-              data={chatMessages}
-              keyExtractor={(item, index) => item.id || String(index)}
-              renderItem={renderMessage}
-              style={{ flex: 1, marginVertical: 8 }}
-              contentContainerStyle={{ paddingVertical: 8 }}
-              ListEmptyComponent={
-                <View style={styles.emptyBox}>
-                  <Text style={styles.emptyText}>No messages logged yet. Say hello to fellow listeners!</Text>
-                </View>
-              }
-            />
-
-            {/* Input Bar */}
-            <View style={styles.inputBar}>
-              <TextInput
-                style={styles.textInput}
-                placeholder="Log a dispatch..."
-                placeholderTextColor="#9ca3af"
-                value={inputText}
-                onChangeText={setInputText}
-                onSubmitEditing={handleSend}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, !inputText.trim() && { opacity: 0.5 }]}
-                onPress={handleSend}
-                disabled={!inputText.trim()}
-              >
-                <Send size={16} color={colors.ink} />
-              </TouchableOpacity>
-            </View>
+            )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -93,54 +458,194 @@ export default function ChatModal({ visible, onClose }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(8, 38, 33, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'flex-end',
-    padding: 12,
   },
-  sheetOuter: {
-    position: 'relative',
-    height: '75%',
+  keyboardWrap: {
+    width: '100%',
+    height: '85%',
   },
-  hardShadow: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    right: -6,
-    bottom: -6,
-    backgroundColor: colors.ink,
-  },
-  sheet: {
+  sheetCard: {
     flex: 1,
-    backgroundColor: colors.paper,
-    borderWidth: 3.5,
-    borderColor: colors.ink,
+    backgroundColor: '#0e1715',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    overflow: 'hidden',
     padding: 14,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.ink,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#263330',
   },
-  iconBox: {
+  hubHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  hubIconBox: {
     width: 32,
     height: 32,
-    backgroundColor: colors.teal,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: 'rgba(23,163,152,0.18)',
+    borderWidth: 1,
+    borderColor: '#17a398',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
-    color: colors.ink,
-    letterSpacing: 1,
+    color: '#ffffff',
+    letterSpacing: 0.8,
+  },
+  subTitle: {
+    fontSize: 10,
+    color: '#94a3b8',
   },
   closeBtn: {
     padding: 6,
+    backgroundColor: '#162220',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#263330',
+  },
+  activeUserHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  backBtn: {
+    padding: 6,
+    backgroundColor: '#162220',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#263330',
+  },
+  activeAvatarWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#17a398',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  activeAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  activeAvatarLetter: {
+    color: '#0b1110',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  activeUserName: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  activeUserStatus: {
+    color: '#17a398',
+    fontSize: 9,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  hubContainer: {
+    flex: 1,
+    paddingTop: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: '#263330',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 13,
+    padding: 0,
+  },
+  tabSwitch: {
+    flexDirection: 'row',
+    backgroundColor: '#141d1b',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#263330',
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabBtnActive: {
+    backgroundColor: '#17a398',
+  },
+  tabBtnText: {
+    color: '#94a3b8',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  tabBtnTextActive: {
+    color: '#0b1110',
+    fontWeight: '900',
+  },
+  userListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c2826',
+    gap: 12,
+  },
+  listAvatarWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#17a398',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  listAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  listAvatarLetter: {
+    color: '#0b1110',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  listUserName: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  listLastMsg: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  threadContainer: {
+    flex: 1,
   },
   msgRow: {
     marginVertical: 4,
@@ -153,68 +658,82 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   bubble: {
-    maxWidth: '80%',
-    padding: 10,
-    borderWidth: 2,
-    borderColor: colors.ink,
+    maxWidth: '78%',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
   myBubble: {
-    backgroundColor: colors.teal,
+    backgroundColor: '#17a398',
+    borderBottomRightRadius: 2,
   },
   otherBubble: {
-    backgroundColor: colors.cardBg,
-  },
-  senderName: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: colors.tealDark,
-    marginBottom: 2,
-    textTransform: 'uppercase',
+    backgroundColor: '#1c2826',
+    borderWidth: 1,
+    borderColor: '#263330',
+    borderBottomLeftRadius: 2,
   },
   msgText: {
     fontSize: 13,
-    fontWeight: '700',
+    lineHeight: 18,
   },
   myMsgText: {
-    color: colors.ink,
+    color: '#0b1110',
+    fontWeight: '700',
   },
   otherMsgText: {
-    color: colors.ink,
-  },
-  emptyBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '600',
+    color: '#ffffff',
+    fontWeight: '500',
   },
   inputBar: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
     paddingTop: 8,
-    borderTopWidth: 2,
-    borderTopColor: colors.ink,
+    borderTopWidth: 1,
+    borderTopColor: '#263330',
   },
   textInput: {
     flex: 1,
-    backgroundColor: colors.cardBg,
-    borderWidth: 2,
-    borderColor: colors.ink,
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: '#263330',
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: colors.ink,
+    paddingVertical: 9,
+    color: '#ffffff',
     fontSize: 13,
-    fontWeight: '700',
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    backgroundColor: colors.teal,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    justifyContent: 'center',
+    backgroundColor: '#17a398',
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+  },
+  emptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyTitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });

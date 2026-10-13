@@ -4833,28 +4833,62 @@ app.get('/api/tracks/download', async (req, res) => {
     }
 
     if (videoId) {
-      // Prioritize fast direct stream resolution first
+      // 1. Instant check: Already cached on disk (> 20KB)? Stream directly from local storage (~10ms)
+      const cachedM4a = path.join(__dirname, `../uploads/audio-cache/${videoId}.m4a`);
+      const cachedMp3 = path.join(__dirname, `../uploads/audio-cache/${videoId}.mp3`);
+      const localCachedFile = (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000)
+        ? cachedM4a
+        : ((fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) ? cachedMp3 : null);
+
+      if (localCachedFile) {
+        const ext = path.extname(localCachedFile) || '.m4a';
+        const mime = ext === '.mp3' ? 'audio/mpeg' : 'audio/mp4';
+        const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+        res.set({
+          'Content-Type': mime,
+          'Content-Disposition': `attachment; filename="${safeAscii}${ext}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}${ext}`,
+          'Access-Control-Allow-Origin': '*'
+        });
+        return fs.createReadStream(localCachedFile).pipe(res);
+      }
+
+      // 2. Prioritize fast direct stream resolution
       const streamTarget = url || `https://www.youtube.com/watch?v=${videoId}`;
       const directStreamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, cleanTitle, cleanArtist);
       if (directStreamUrl) {
-        try {
-          const streamRes = await axios({
-            method: 'get',
-            url: directStreamUrl,
-            responseType: 'stream',
-            headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X)' },
-            timeout: 45000,
-          });
-          const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
-          res.set({
-            'Content-Type': 'audio/mp4',
-            'Content-Disposition': `attachment; filename="${safeAscii}.m4a"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.m4a`,
-            'Access-Control-Allow-Origin': '*'
-          });
-          return streamRes.data.pipe(res);
-        } catch (streamErr) {
-          res.set({ 'Access-Control-Allow-Origin': '*' });
-          return res.redirect(directStreamUrl);
+        const streamStr = String(directStreamUrl);
+        if (streamStr.startsWith('/uploads/')) {
+          const absPath = path.join(__dirname, '..', streamStr);
+          if (fs.existsSync(absPath)) {
+            const ext = path.extname(absPath) || '.m4a';
+            const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+            res.set({
+              'Content-Type': ext === '.mp3' ? 'audio/mpeg' : 'audio/mp4',
+              'Content-Disposition': `attachment; filename="${safeAscii}${ext}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}${ext}`,
+              'Access-Control-Allow-Origin': '*'
+            });
+            return fs.createReadStream(absPath).pipe(res);
+          }
+        } else if (streamStr.startsWith('http')) {
+          try {
+            const streamRes = await axios({
+              method: 'get',
+              url: streamStr,
+              responseType: 'stream',
+              headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X)' },
+              timeout: 45000,
+            });
+            const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+            res.set({
+              'Content-Type': 'audio/mp4',
+              'Content-Disposition': `attachment; filename="${safeAscii}.m4a"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}.m4a`,
+              'Access-Control-Allow-Origin': '*'
+            });
+            return streamRes.data.pipe(res);
+          } catch (streamErr) {
+            res.set({ 'Access-Control-Allow-Origin': '*' });
+            return res.redirect(streamStr);
+          }
         }
       }
 
@@ -4996,19 +5030,20 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
   try {
     const { trackId, title, artist, audioUrl, lyrics, isVerified } = req.body;
     const isAdmin = isAdminUser(req.user);
-    const isVer = isAdmin ? (isVerified !== undefined ? Boolean(isVerified) : true) : false;
+    // Allow verifying lyrics permanently when markVerified is checked
+    const isVer = isVerified !== undefined ? Boolean(isVerified) : true;
     const trackKey = getTrackKey(title, artist);
 
-    // If admin marks lyrics as NOT correct / unverified, remove custom record
+    // If marked as NOT verified / false, remove custom record
     // so the song continues using the normal function (LRCLIB / OVH scraper)
-    if (!isVer && isAdmin && isVerified === false) {
+    if (!isVer && isVerified === false) {
       if (trackKey && trackKey !== '___') {
         await SongLyrics.deleteOne({ trackKey }).catch(() => {});
       }
       if (trackId) {
         await SongLyrics.deleteOne({ trackId: String(trackId) }).catch(() => {});
         if (mongoose.isValidObjectId(trackId)) {
-          await Track.updateOne({ _id: trackId }, { $set: { lyrics: [] } }).catch(() => {});
+          await Track.updateOne({ _id: trackId }, { $set: { lyrics: [], isVerified: false, isVerifiedLyrics: false } }).catch(() => {});
         }
       }
       io.emit('lyrics:updated', {
@@ -5026,6 +5061,8 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
       return res.status(400).json({ error: 'Lyrics must be an array' });
     }
 
+    const userName = req.user?.name || req.user?.username || (isAdmin ? 'Admin' : 'Listener');
+
     // 1. Save / upsert into universal SongLyrics collection
     if (trackKey && trackKey !== '___') {
       await SongLyrics.findOneAndUpdate(
@@ -5037,9 +5074,9 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
             title: title || '',
             artist: artist || '',
             lyrics,
-            updatedBy: req.user.name || req.user.username || (isAdmin ? 'Admin' : 'User'),
+            updatedBy: userName,
             isVerified: isVer,
-            verifiedBy: isVer ? (req.user.name || 'Admin') : '',
+            verifiedBy: isVer ? userName : '',
             verifiedAt: isVer ? new Date() : null,
             source: isVer ? 'verified' : 'community'
           }
@@ -5048,7 +5085,7 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
       );
     }
 
-    // 2. Also index by trackId if available
+    // 2. Also index by trackId in SongLyrics
     if (trackId) {
       await SongLyrics.findOneAndUpdate(
         { trackId: String(trackId) },
@@ -5057,18 +5094,29 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
             lyrics,
             title: title || '',
             artist: artist || '',
-            isVerified: true,
-            verifiedBy: req.user.name || 'Admin',
-            verifiedAt: new Date(),
-            source: 'verified'
+            isVerified: isVer,
+            verifiedBy: isVer ? userName : '',
+            verifiedAt: isVer ? new Date() : null,
+            source: isVer ? 'verified' : 'community'
           }
         },
         { upsert: true }
       ).catch(() => {});
 
-      // 3. If MongoDB ObjectId, update Track collection as well
+      // 3. Update Track collection as well with lyrics and isVerified!
       if (mongoose.isValidObjectId(trackId)) {
-        await Track.updateOne({ _id: trackId }, { $set: { lyrics } }).catch(() => {});
+        await Track.updateOne(
+          { _id: trackId },
+          { 
+            $set: { 
+              lyrics,
+              isVerified: isVer,
+              isVerifiedLyrics: isVer,
+              verifiedBy: isVer ? userName : '',
+              verifiedAt: isVer ? new Date() : null
+            } 
+          }
+        ).catch(() => {});
       }
     }
 
@@ -5079,12 +5127,12 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
       title,
       artist,
       lyrics,
-      isVerified: true,
-      verifiedBy: req.user.name || 'Admin'
+      isVerified: isVer,
+      verifiedBy: isVer ? userName : ''
     });
 
-    console.log(`[Lyrics] Verified lyrics saved for "${title}" by "${artist}" by admin ${req.user.name}`);
-    res.json({ success: true, trackKey, isVerified: true });
+    console.log(`[Lyrics] Verified lyrics saved for "${title}" by "${artist}" by ${userName}`);
+    res.json({ success: true, trackKey, isVerified: isVer });
   } catch (e) {
     console.error('Update lyrics error:', e.message);
     res.status(500).json({ error: e.message });
@@ -5131,8 +5179,9 @@ app.get('/api/tracks/lyrics', async (req, res) => {
           return res.json({
             success: true,
             lyrics: trk.lyrics,
-            source: 'manual',
-            isVerified: false
+            source: trk.isVerified ? 'verified' : 'manual',
+            isVerified: Boolean(trk.isVerified || trk.isVerifiedLyrics),
+            verifiedBy: trk.verifiedBy || ''
           });
         }
       }
