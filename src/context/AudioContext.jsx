@@ -1384,24 +1384,50 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const toggleShuffle = useCallback(() => {
     setIsShuffle(prev => {
       const nextMode = (!prev || prev === false) ? 'shuffle' : (prev === 'shuffle' || prev === true ? 'smart' : false);
-      const curList = currentQueueRef.current;
-      const curIdx = currentQueueIndexRef.current;
+      let curList = currentQueueRef.current;
       const curTrack = currentTrackRef.current;
+      const isCurQuran = isQuranContent(curTrack);
+
+      // If curList is empty or only 1 item, ensure we populate from tracksRef so the queue NEVER empties or freezes
+      if (!curList || curList.length <= 1) {
+        const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+        curList = pool.length > 0 ? pool : (curList || []);
+      }
+
+      const curId = String(curTrack?.id || curTrack?._id || '');
+      let curIdx = curId ? curList.findIndex(t => String(t.id || t._id) === curId) : -1;
+      if (curIdx === -1 && curTrack) {
+        curList = [curTrack, ...curList.filter(t => String(t.id || t._id) !== curId)];
+        curIdx = 0;
+      }
 
       if (nextMode === 'shuffle') {
         unshuffledQueueRef.current = [...curList];
         if (curList.length > 1) {
           const played = curList.slice(0, Math.max(0, curIdx + 1));
-          const upcoming = curList.slice(Math.max(0, curIdx + 1));
-          const shuffledUpcoming = shuffleArray(upcoming);
-          const newQueue = [...played, ...shuffledUpcoming];
-          currentQueueRef.current = newQueue;
-          setCurrentQueue(newQueue);
+          let upcoming = curList.slice(Math.max(0, curIdx + 1));
+          if (upcoming.length === 0) {
+            const otherTracks = curList.filter(t => String(t.id || t._id) !== curId);
+            const shuffledOthers = shuffleArray(otherTracks);
+            const newQueue = curTrack ? [curTrack, ...shuffledOthers] : shuffleArray([...curList]);
+            currentQueueRef.current = newQueue;
+            setCurrentQueue(newQueue);
+            currentQueueIndexRef.current = 0;
+            setCurrentQueueIndex(0);
+          } else {
+            const shuffledUpcoming = shuffleArray(upcoming);
+            const newQueue = [...played, ...shuffledUpcoming];
+            currentQueueRef.current = newQueue;
+            setCurrentQueue(newQueue);
+            const newIdx = curId ? newQueue.findIndex(t => String(t.id || t._id) === curId) : curIdx;
+            const safeNewIdx = newIdx >= 0 ? newIdx : 0;
+            currentQueueIndexRef.current = safeNewIdx;
+            setCurrentQueueIndex(safeNewIdx);
+          }
         }
       } else if (nextMode === false) {
         if (unshuffledQueueRef.current.length > 0) {
           const original = unshuffledQueueRef.current;
-          const curId = String(curTrack?.id || curTrack?._id || '');
           let origIdx = curId ? original.findIndex(t => String(t.id || t._id) === curId) : -1;
           if (origIdx === -1) origIdx = 0;
           currentQueueRef.current = original;
@@ -1414,6 +1440,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
           fetchSmartShuffleTracks(curTrack, curList);
         }
       }
+
+      try {
+        localStorage.setItem('rivo_shuffle', nextMode ? 'true' : 'false');
+      } catch {}
 
       return nextMode;
     });

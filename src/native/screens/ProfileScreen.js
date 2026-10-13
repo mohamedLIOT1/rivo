@@ -8,7 +8,10 @@ import {
   Image,
   Dimensions,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   User,
   Disc,
@@ -24,12 +27,14 @@ import {
   Play,
   Shield,
   Sparkles,
+  X,
 } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTheme } from '../context/ThemeContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
+import { API_BASE_URL } from '../config';
 
 const { width } = Dimensions.get('window');
 
@@ -48,6 +53,56 @@ export default function ProfileScreen({
   const safeLikedCount = Array.isArray(likedTrackIds) ? likedTrackIds.length : 0;
   const safeCratesCount = Array.isArray(playlists) ? playlists.length : 0;
   const safeDownloadedCount = Array.isArray(downloadedTracks) ? downloadedTracks.length : 0;
+
+  const followersCount = Array.isArray(currentUser?.followers) 
+    ? currentUser.followers.length 
+    : (currentUser?.followersCount || 0);
+
+  const followingCount = Array.isArray(currentUser?.following) 
+    ? currentUser.following.length 
+    : (currentUser?.followingCount || 0);
+
+  const [socialModal, setSocialModal] = useState({
+    isOpen: false,
+    type: 'followers',
+    title: 'Followers',
+    users: [],
+    loading: false,
+  });
+
+  const handleOpenSocialModal = async (type) => {
+    const isFollowers = type === 'followers';
+    setSocialModal({
+      isOpen: true,
+      type,
+      title: isFollowers ? 'Followers' : 'Following',
+      users: [],
+      loading: true,
+    });
+    try {
+      const uId = currentUser?._id || currentUser?.id;
+      if (!uId) {
+        setSocialModal(p => ({ ...p, loading: false }));
+        return;
+      }
+      const token = await AsyncStorage.getItem('@rivo_auth_token_v2');
+      const res = await fetch(`${API_BASE_URL}/api/users/${uId}/${isFollowers ? 'followers' : 'following'}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSocialModal(p => ({
+          ...p,
+          users: isFollowers ? (data.followers || []) : (data.following || []),
+          loading: false,
+        }));
+      } else {
+        setSocialModal(p => ({ ...p, loading: false }));
+      }
+    } catch {
+      setSocialModal(p => ({ ...p, loading: false }));
+    }
+  };
 
   const userIdStr = currentUser?._id || currentUser?.id || '';
   const shortId = userIdStr ? String(userIdStr).slice(-6).toUpperCase() : 'GUEST';
@@ -116,21 +171,34 @@ export default function ProfileScreen({
           </View>
         </View>
 
-        {/* PUNCH CARD STATS (Web Style) */}
+        {/* PUNCH CARD STATS (Web Style & Image 4) */}
         <View style={styles.statsGrid}>
           <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
             <Text style={[styles.statNumber, !isDark && styles.statNumberLight]}>{safeCratesCount}</Text>
             <Text style={styles.statLabel}>CRATES</Text>
           </View>
 
+          <TouchableOpacity
+            style={[styles.statBox, !isDark && styles.statBoxLight]}
+            onPress={() => handleOpenSocialModal('followers')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.statNumber, { color: '#17a398' }]}>{followersCount}</Text>
+            <Text style={styles.statLabel}>FOLLOWERS</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.statBox, !isDark && styles.statBoxLight]}
+            onPress={() => handleOpenSocialModal('following')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.statNumber, { color: '#17a398' }]}>{followingCount}</Text>
+            <Text style={styles.statLabel}>FOLLOWING</Text>
+          </TouchableOpacity>
+
           <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
             <Text style={[styles.statNumber, !isDark && styles.statNumberLight, { color: '#ef4444' }]}>{safeLikedCount}</Text>
             <Text style={styles.statLabel}>LIKED</Text>
-          </View>
-
-          <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
-            <Text style={[styles.statNumber, !isDark && styles.statNumberLight, { color: '#38bdf8' }]}>{safeDownloadedCount}</Text>
-            <Text style={styles.statLabel}>OFFLINE</Text>
           </View>
         </View>
       </View>
@@ -303,6 +371,57 @@ export default function ProfileScreen({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* SOCIAL FOLLOWERS / FOLLOWING MODAL */}
+      <Modal
+        visible={socialModal.isOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setSocialModal(p => ({ ...p, isOpen: false }))}
+      >
+        <TouchableOpacity
+          style={styles.socialModalOverlay}
+          activeOpacity={1}
+          onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))}
+        >
+          <View style={styles.socialModalCard}>
+            <View style={styles.socialModalHeader}>
+              <Text style={styles.socialModalTitle}>{socialModal.title}</Text>
+              <TouchableOpacity onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={18} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+
+            {socialModal.loading ? (
+              <View style={{ padding: 28, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color="#17a398" />
+              </View>
+            ) : socialModal.users.length === 0 ? (
+              <View style={{ padding: 28, alignItems: 'center' }}>
+                <Text style={{ color: '#94a3b8', fontSize: 12 }}>No {socialModal.title.toLowerCase()} found</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+                {socialModal.users.map((u, i) => (
+                  <View key={u._id || u.id || String(i)} style={styles.socialUserItem}>
+                    <View style={styles.socialUserAvatarWrap}>
+                      {u.avatar ? (
+                        <Image source={{ uri: normalizeCoverUri(u.avatar) }} style={styles.socialUserAvatar} />
+                      ) : (
+                        <Text style={styles.socialUserLetter}>{u.name ? u.name[0].toUpperCase() : 'U'}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.socialUserName} numberOfLines={1}>{u.name}</Text>
+                      {u.bio ? <Text style={styles.socialUserBio} numberOfLines={1}>{u.bio}</Text> : null}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </ScrollView>
   );
 }
@@ -715,5 +834,72 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.8,
+  },
+  socialModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  socialModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#141d1b',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    padding: 16,
+  },
+  socialModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#263330',
+    marginBottom: 10,
+  },
+  socialModalTitle: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  socialUserItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c2826',
+    gap: 10,
+  },
+  socialUserAvatarWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#17a398',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  socialUserAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  socialUserLetter: {
+    color: '#0b1110',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  socialUserName: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  socialUserBio: {
+    color: '#94a3b8',
+    fontSize: 11,
+    marginTop: 2,
   },
 });

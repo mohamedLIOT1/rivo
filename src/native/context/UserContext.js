@@ -8,6 +8,7 @@ const TOKEN_KEY = '@rivo_auth_token_v2';
 const USER_KEY = '@rivo_current_user_v2';
 const CACHE_TRACKS_KEY = '@rivo_cached_tracks_v2';
 const CACHE_PLAYLISTS_KEY = '@rivo_cached_playlists_v2';
+const CACHE_ALBUMS_KEY = '@rivo_cached_albums_v2';
 
 const normalizePlaylists = (rawList) => {
   if (!Array.isArray(rawList)) return [];
@@ -27,6 +28,7 @@ export const UserProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
   const [playlists, setPlaylists] = useState([]);
+  const [albums, setAlbums] = useState([]);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
 
   useEffect(() => {
@@ -40,6 +42,14 @@ export const UserProvider = ({ children }) => {
       const storedUser = await AsyncStorage.getItem(USER_KEY);
       const cachedTracks = await AsyncStorage.getItem(CACHE_TRACKS_KEY);
       const cachedPlaylists = await AsyncStorage.getItem(CACHE_PLAYLISTS_KEY);
+      const cachedAlbums = await AsyncStorage.getItem(CACHE_ALBUMS_KEY);
+
+      if (cachedAlbums) {
+        try {
+          const parsedAlb = JSON.parse(cachedAlbums);
+          if (Array.isArray(parsedAlb)) setAlbums(parsedAlb);
+        } catch {}
+      }
 
       if (cachedTracks) {
         const parsed = JSON.parse(cachedTracks);
@@ -95,6 +105,19 @@ export const UserProvider = ({ children }) => {
         if (cleaned.length > 0) {
           setTracks(cleaned);
           AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
+        }
+      }
+    } catch {}
+
+    // Fetch discography albums
+    try {
+      const albRes = await fetch(`${API_BASE_URL}/api/albums`);
+      if (albRes.ok) {
+        const albData = await albRes.json();
+        const albList = Array.isArray(albData?.albums) ? albData.albums : [];
+        if (albList.length > 0) {
+          setAlbums(albList);
+          AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
         }
       }
     } catch {}
@@ -261,6 +284,7 @@ export const UserProvider = ({ children }) => {
         token,
         tracks,
         playlists,
+        albums,
         likedTrackIds,
         login,
         register,
