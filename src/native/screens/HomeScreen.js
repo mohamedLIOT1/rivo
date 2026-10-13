@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import AlbumDetailModal from '../components/AlbumDetailModal';
+import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
@@ -38,6 +39,7 @@ export default function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [selectedArtist, setSelectedArtist] = useState(null);
 
   // Filter music only (strictly exclude Quran from main music home) & apply smart popularity sorting
   const displayTracks = useMemo(() => {
@@ -354,6 +356,22 @@ export default function HomeScreen({
         album={selectedAlbum}
         onClose={() => setSelectedAlbum(null)}
         allTracks={userTracks}
+        onTrackAction={onTrackAction}
+        onSelectArtist={(artistName) => {
+          setSelectedAlbum(null);
+          setSelectedArtist({ name: artistName });
+        }}
+      />
+      <ArtistDetailModal
+        visible={Boolean(selectedArtist)}
+        artist={selectedArtist}
+        onClose={() => setSelectedArtist(null)}
+        allTracks={userTracks}
+        allAlbums={albums}
+        onSelectAlbum={(alb) => {
+          setSelectedArtist(null);
+          setSelectedAlbum(alb);
+        }}
         onTrackAction={onTrackAction}
       />
     </>

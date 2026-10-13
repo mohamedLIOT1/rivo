@@ -28,6 +28,7 @@ import { API_BASE_URL } from '../config';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import AlbumDetailModal from '../components/AlbumDetailModal';
+import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { splitArtists } from '../../utils/artistUtils.jsx';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -61,6 +62,7 @@ export default function SearchScreen({ onTrackAction }) {
   const [remoteResults, setRemoteResults] = useState([]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [selectedArtist, setSelectedArtist] = useState(null);
   const searchTimeoutRef = useRef(null);
 
   const isOffline = appMode === 'offline';
@@ -370,10 +372,7 @@ export default function SearchScreen({ onTrackAction }) {
                   <TouchableOpacity
                     key={artist.name || idx}
                     style={[styles.artistCard, !isDark && styles.artistCardLight]}
-                    onPress={() => {
-                      setQuery(artist.name);
-                      setActiveFilter('songs');
-                    }}
+                    onPress={() => setSelectedArtist(artist)}
                     activeOpacity={0.85}
                   >
                     <View style={styles.artistAvatarWrap}>
@@ -480,6 +479,24 @@ export default function SearchScreen({ onTrackAction }) {
         album={selectedAlbum}
         onClose={() => setSelectedAlbum(null)}
         allTracks={allTracks}
+        onTrackAction={onTrackAction}
+        onSelectArtist={(artistName) => {
+          setSelectedAlbum(null);
+          setSelectedArtist({ name: artistName });
+        }}
+      />
+
+      {/* Artist Details Modal */}
+      <ArtistDetailModal
+        visible={Boolean(selectedArtist)}
+        artist={selectedArtist}
+        onClose={() => setSelectedArtist(null)}
+        allTracks={allTracks}
+        allAlbums={userAlbums}
+        onSelectAlbum={(alb) => {
+          setSelectedArtist(null);
+          setSelectedAlbum(alb);
+        }}
         onTrackAction={onTrackAction}
       />
     </View>

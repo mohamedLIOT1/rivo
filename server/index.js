@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.8',
-  releaseNotes: 'Fix album detail view, Jam room modal hooks, search artists/albums, stream audio resilience, Android app icon sync, and web playlist cover upload.',
+  version: '1.5.9',
+  releaseNotes: 'Retro cassette album detail view, authentic artist profile view with discography, web playlist cover uploads, and stability fixes.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.8',
+      version: '1.5.9',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,22 +1078,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.8',
-      build: 26,
+      version: '1.5.9',
+      build: 27,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.5.8.apk',
-      directFile: 'Rivo-v1.5.8.apk',
+      downloadUrl: '/downloads/Rivo-v1.5.9.apk',
+      directFile: 'Rivo-v1.5.9.apk',
       mandatory: false,
-      notes: 'Fix album detail view, Jam room modal hooks, search artists/albums, stream audio resilience, Android app icon sync, and web playlist cover upload.'
+      notes: 'Retro cassette album detail view, authentic artist profile view with discography, web playlist cover uploads, and stability fixes.'
     },
     ios: {
-      version: '1.5.8',
-      build: 26,
+      version: '1.5.9',
+      build: 27,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.5.8.ipa',
-      directFile: 'Rivo-v1.5.8.ipa',
+      downloadUrl: '/downloads/Rivo-v1.5.9.ipa',
+      directFile: 'Rivo-v1.5.9.ipa',
       mandatory: false,
-      notes: 'Fix album detail view, Jam room modal hooks, search artists/albums, stream audio resilience, and web playlist cover upload.'
+      notes: 'Retro cassette album detail view, authentic artist profile view with discography, web playlist cover uploads, and stability fixes.'
     }
   }
 };
@@ -1105,30 +1105,31 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.5.9.apk',
   '/downloads/Rivo-v1.5.8.apk',
   '/downloads/Rivo-v1.5.7.apk',
   '/downloads/Rivo-v1.5.6.apk',
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.apk');
-  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.apk');
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
+  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
   if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.5.8.apk');
+    return res.download(localVersionedPath, 'Rivo-v1.5.9.apk');
   }
   if (fs.existsSync(localOldVersionedPath)) {
-    return res.download(localOldVersionedPath, 'Rivo-v1.5.7.apk');
+    return res.download(localOldVersionedPath, 'Rivo-v1.5.8.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.5.8.apk');
+    return res.download(localApkPath, 'Rivo-v1.5.9.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.8', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.9', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1154,35 +1155,36 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.8/Rivo-v1.5.8.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.9/Rivo-v1.5.9.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.5.9.ipa',
   '/downloads/Rivo-v1.5.8.ipa',
   '/downloads/Rivo-v1.5.7.ipa',
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.ipa');
-  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.ipa');
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
+  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
   if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.5.8.ipa');
+    return res.download(localVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localOldVersionedPath)) {
-    return res.download(localOldVersionedPath, 'Rivo-v1.5.7.ipa');
+    return res.download(localOldVersionedPath, 'Rivo-v1.5.8.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.5.8.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.5.9.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.8', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.9', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1208,7 +1210,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.8/Rivo-v1.5.8.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.9/Rivo-v1.5.9.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -3948,22 +3950,26 @@ if (!fs.existsSync(uploadsDir)) {
 app.use('/uploads', express.static(uploadsDir));
 
 const ALLOWED_AUDIO_EXTS = ['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac'];
-const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp'];
+const ALLOWED_IMAGE_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.jfif', '.avif', '.gif', '.bmp', '.heic', '.heif'];
 
 const fileFilter = (req, file, cb) => {
   const ext = path.extname(file.originalname).toLowerCase();
+  const mime = (file.mimetype || '').toLowerCase();
   if (file.fieldname === 'audio') {
-    if (ALLOWED_AUDIO_EXTS.includes(ext)) {
+    if (ALLOWED_AUDIO_EXTS.includes(ext) || mime.startsWith('audio/')) {
       return cb(null, true);
     }
     return cb(new Error('Invalid audio file type. Allowed: MP3, M4A, WAV, OGG, FLAC, AAC'), false);
   }
   if (file.fieldname === 'cover') {
     // Strictly block HTML, SVG, scripts or executables to eliminate Stored XSS
-    if (ALLOWED_IMAGE_EXTS.includes(ext)) {
+    if (mime.includes('svg') || mime.includes('html') || mime.includes('xml') || ext === '.svg' || ext === '.html' || ext === '.htm') {
+      return cb(new Error('SVG and HTML files are disallowed for security'), false);
+    }
+    if (ALLOWED_IMAGE_EXTS.includes(ext) || mime.startsWith('image/')) {
       return cb(null, true);
     }
-    return cb(new Error('Invalid image file type. Allowed: JPG, PNG, WEBP (SVG and HTML are disallowed)'), false);
+    return cb(new Error('Invalid image file type. Allowed: JPG, PNG, WEBP, JFIF, AVIF, GIF, BMP, HEIC'), false);
   }
   return cb(new Error('Unexpected file upload field'), false);
 };
@@ -3971,8 +3977,14 @@ const fileFilter = (req, file, cb) => {
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const baseName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    let ext = path.extname(file.originalname).toLowerCase();
+    if (!ext && file.mimetype) {
+      if (file.mimetype.includes('jpeg') || file.mimetype.includes('jpg')) ext = '.jpg';
+      else if (file.mimetype.includes('png')) ext = '.png';
+      else if (file.mimetype.includes('webp')) ext = '.webp';
+      else ext = '.png';
+    }
+    const baseName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_') || 'cover';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
     cb(null, `${uniqueSuffix}-${baseName}${ext}`);
   }
@@ -4028,24 +4040,46 @@ app.post('/api/tracks/upload', auth, upload.fields([{ name: 'audio', maxCount: 1
   }
 });
 
-app.post('/api/playlists/:id/upload-cover', auth, upload.single('cover'), async (req, res) => {
+app.post('/api/playlists/:id/upload-cover', auth, (req, res, next) => {
+  upload.single('cover')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: 'No image uploaded' });
     const coverUrl = `/uploads/${req.file.filename}`;
+    const targetId = String(req.params.id);
+
     let u = await User.findById(req.user.id);
-    if (!u) return res.status(404).json({ success: false, error: 'User not found' });
-    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
-    if (!pl && isAdminUser(req.user)) {
-      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
-      if (u) {
-        pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    let pl = u ? u.playlists.find(p => String(p.id || p._id) === targetId) : null;
+
+    if (!pl) {
+      const anyUser = await User.findOne({ $or: [{ 'playlists.id': targetId }, { 'playlists._id': targetId }] });
+      if (anyUser) {
+        u = anyUser;
+        pl = u.playlists.find(p => String(p.id || p._id) === targetId);
       }
     }
-    if (!pl) return res.status(403).json({ success: false, error: 'Playlist not found' });
-    pl.cover = coverUrl;
-    u.markModified('playlists');
-    await u.save();
-    res.json({ success: true, cover: coverUrl, playlist: pl });
+
+    try {
+      const alb = await Album.findOne({ $or: [{ id: targetId }, { _id: mongoose.isValidObjectId(targetId) ? targetId : undefined }] });
+      if (alb) {
+        alb.cover = coverUrl;
+        await alb.save();
+      }
+    } catch {}
+
+    if (pl && u) {
+      pl.cover = coverUrl;
+      u.markModified('playlists');
+      await u.save();
+      return res.json({ success: true, cover: coverUrl, playlist: pl });
+    }
+
+    res.json({ success: true, cover: coverUrl });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
