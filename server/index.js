@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.3',
-  releaseNotes: 'Fixed volume handler, seamless zero-logo launch, auto YouTube album artwork covers, user profile avatars, and real-time chat seen status (سين).',
+  version: '1.5.4',
+  releaseNotes: 'Offline artwork resilience across iOS updates, MiniPlayer & queue cover fix, Playlist edit & cover upload, Playlist batch download, and auto-download on completed playback.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.3',
+      version: '1.5.4',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,8 +1078,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.3',
-      build: 21,
+      version: '1.5.4',
+      build: 22,
       name: 'Rivo for Android',
       downloadUrl: '/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -1087,13 +1087,13 @@ const APP_VERSIONS_DATA = {
       notes: '100% Native design, playlist tracks sync, Discord status sync, Friend Activity, offline vault.'
     },
     ios: {
-      version: '1.5.3',
-      build: 21,
+      version: '1.5.4',
+      build: 22,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.5.3.ipa',
-      directFile: 'Rivo-v1.5.3.ipa',
+      downloadUrl: '/downloads/Rivo-v1.5.4.ipa',
+      directFile: 'Rivo-v1.5.4.ipa',
       mandatory: false,
-      notes: 'Fixed volume slider handler, seamless zero-logo launch, auto YouTube artwork covers, user profile avatars, and real-time chat seen status (سين).'
+      notes: 'Offline artwork resilience across iOS updates, MiniPlayer & queue cover fix, Playlist edit & cover upload, Playlist batch download, and auto-download on completed playback.'
     }
   }
 };
@@ -3906,6 +3906,28 @@ app.post('/api/tracks/upload', auth, upload.fields([{ name: 'audio', maxCount: 1
     res.json({ success: true, track: newTrack });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/playlists/:id/upload-cover', auth, upload.single('cover'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: 'No image uploaded' });
+    const coverUrl = `/uploads/${req.file.filename}`;
+    let u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ success: false, error: 'User not found' });
+    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl && isAdminUser(req.user)) {
+      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+      if (u) {
+        pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+      }
+    }
+    if (!pl) return res.status(403).json({ success: false, error: 'Playlist not found' });
+    pl.cover = coverUrl;
+    await u.save();
+    res.json({ success: true, cover: coverUrl, playlist: pl });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -12,13 +12,17 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
 
+  React.useEffect(() => {
+    setImageError(false);
+  }, [currentTrack?._id, currentTrack?.id]);
+
   if (!currentTrack) return null;
 
   const trackId = String(currentTrack._id || currentTrack.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const rawCover = currentTrack.coverUrl || currentTrack.cover || '';
-  const coverUri = imageError ? normalizeCoverUri(null) : normalizeCoverUri(rawCover);
+  const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 
   return (
     <View style={styles.outerDock}>

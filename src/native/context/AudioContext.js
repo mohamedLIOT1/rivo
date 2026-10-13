@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { downloadTrack, getDownloadedTracks, removeDownloadedTrack, isTrackDownloaded } from '../services/downloadManager';
@@ -83,10 +84,33 @@ export const AudioProvider = ({ children }) => {
   const [isOfflineMode, setIsOfflineMode] = useState(isOffline);
   const [downloadedTracks, setDownloadedTracks] = useState([]);
   const [downloadingIds, setDownloadingIds] = useState({});
+  const [autoDownloadFinished, setAutoDownloadFinished] = useState(true);
+  const autoDownloadFinishedRef = useRef(true);
+  autoDownloadFinishedRef.current = autoDownloadFinished;
+  const downloadedTracksRef = useRef([]);
+  downloadedTracksRef.current = downloadedTracks;
+  const downloadingIdsRef = useRef({});
+  downloadingIdsRef.current = downloadingIds;
+  const isOfflineRef = useRef(isOffline);
+  isOfflineRef.current = isOffline;
   const [queue, setQueueState] = useState([]);
   const [progress, setProgress] = useState({ currentTime: 0, duration: 0 });
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@rivo_auto_download_finished').then((val) => {
+      if (val !== null) {
+        setAutoDownloadFinished(val === 'true' || val === true);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const toggleAutoDownloadFinished = async (val) => {
+    const nextVal = typeof val === 'boolean' ? val : !autoDownloadFinished;
+    setAutoDownloadFinished(nextVal);
+    await AsyncStorage.setItem('@rivo_auto_download_finished', String(nextVal)).catch(() => {});
+  };
 
   const setVolume = async (val) => {
     const clamped = Math.max(0, Math.min(1, Number(val) || 0));
@@ -242,6 +266,22 @@ export const AudioProvider = ({ children }) => {
     }
 
     if (status.didJustFinish) {
+      const finishedTrack = currentTrackRef.current;
+      if (finishedTrack && !isOfflineRef.current && autoDownloadFinishedRef.current) {
+        const fId = String(finishedTrack._id || finishedTrack.id || '');
+        const isAlreadyDl = (downloadedTracksRef.current || []).some(d => String(d._id || d.id) === fId);
+        if (!isAlreadyDl && !downloadingIdsRef.current[fId]) {
+          downloadTrack(finishedTrack)
+            .then((rec) => {
+              if (rec) {
+                setDownloadedTracks(prev => [rec, ...(prev || []).filter(t => String(t._id || t.id) !== fId)]);
+                showToast(`Auto-cached "${finishedTrack.title || 'Track'}" to Vault`, 'success');
+              }
+            })
+            .catch(() => {});
+        }
+      }
+
       if (repeatMode === 'one') {
         if (soundRef.current) soundRef.current.replayAsync().catch(() => {});
       } else {
@@ -484,15 +524,50 @@ export const AudioProvider = ({ children }) => {
 
       let uri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || track.nativeAudioUri || track.localAudioUri;
 
+      // Direct check on physical storage by trackId (detects local files on device even if not yet in state)
+      if (!uri || !uri.startsWith('file://')) {
+        const directMp3 = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.mp3`;
+        const directM4a = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.m4a`;
+        try {
+          const mInfo = await FileSystem.getInfoAsync(directMp3);
+          if (mInfo.exists && mInfo.size > 10000) {
+            uri = directMp3;
+          } else {
+            const m4Info = await FileSystem.getInfoAsync(directM4a);
+            if (m4Info.exists && m4Info.size > 10000) {
+              uri = directM4a;
+            }
+          }
+        } catch {}
+      }
+
       if (uri && uri.startsWith('file://')) {
+        // Re-anchor iOS container documents if path is from prior app installation
+        if (uri.includes('/Documents/')) {
+          const rel = uri.split('/Documents/')[1];
+          uri = `${FileSystem.documentDirectory}${rel}`;
+        }
         try {
           const fileInfo = await FileSystem.getInfoAsync(uri);
-          if (!fileInfo.exists || fileInfo.size < 1000) {
+          if (!fileInfo.exists || fileInfo.size < 10000) {
             uri = null; // file was missing or corrupt
           }
         } catch {
           uri = null;
         }
+      }
+
+      if (uri && uri.startsWith('file://')) {
+        console.log(`[AudioContext] ⚡ Offline-first: playing "${track.title}" locally:`, uri);
+        track = {
+          ...track,
+          localAudioUri: uri,
+          nativeAudioUri: uri,
+          audioUrl: uri,
+          isDownloaded: true,
+          downloaded: true,
+        };
+        setCurrentTrack(track);
       }
 
       if (!uri) {
@@ -733,8 +808,9 @@ export const AudioProvider = ({ children }) => {
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
+    autoDownloadFinished, toggleAutoDownloadFinished,
     syncFromOnlineTrack, pauseNativePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, syncFromOnlineTrack, pauseNativePlayback]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback]);
 
   return (
     <AudioContext.Provider value={controls}>

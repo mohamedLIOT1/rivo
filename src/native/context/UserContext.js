@@ -268,6 +268,65 @@ export const UserProvider = ({ children }) => {
     if (res.ok) await syncUserData();
   };
 
+  const updatePlaylist = async (playlistId, { name, description, cover }) => {
+    if (!token) return { success: false, error: 'Not authenticated' };
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name, description, cover }),
+      });
+      const data = await res.json().catch(() => ({ success: false }));
+      if (res.ok && data.success) {
+        setPlaylists(prev => prev.map(p => {
+          if (String(p.id || p._id) === String(playlistId)) {
+            return {
+              ...p,
+              name: name !== undefined ? name : p.name,
+              description: description !== undefined ? description : p.description,
+              cover: cover !== undefined ? cover : p.cover,
+            };
+          }
+          return p;
+        }));
+        await syncUserData();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  const uploadPlaylistCover = async (playlistId, fileUri) => {
+    if (!token) return { success: false, error: 'Not authenticated' };
+    try {
+      const formData = new FormData();
+      const filename = fileUri.split('/').pop() || 'cover.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
+      formData.append('cover', { uri: fileUri, name: filename, type });
+
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/upload-cover`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({ success: false }));
+      if (res.ok && data.success) {
+        setPlaylists(prev => prev.map(p => {
+          if (String(p.id || p._id) === String(playlistId)) {
+            return { ...p, cover: data.cover };
+          }
+          return p;
+        }));
+        await syncUserData();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   const deletePlaylist = async (playlistId) => {
     if (!token) return;
     const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}`, {
@@ -294,6 +353,8 @@ export const UserProvider = ({ children }) => {
         fetchPublicTracks,
         syncUserData,
         createPlaylist,
+        updatePlaylist,
+        uploadPlaylistCover,
         addToPlaylist,
         removeTrackFromPlaylist,
         deletePlaylist,

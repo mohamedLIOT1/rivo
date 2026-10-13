@@ -128,6 +128,15 @@ const saveToStorageAndManifest = async (list) => {
   }
 };
 
+export const reanchorDocumentUri = (uri) => {
+  if (!uri || typeof uri !== 'string') return uri;
+  if (uri.startsWith('file://') && uri.includes('/Documents/')) {
+    const rel = uri.split('/Documents/')[1];
+    return `${FileSystem.documentDirectory}${rel}`;
+  }
+  return uri;
+};
+
 export const getDownloadedTracks = async () => {
   try {
     await ensureDirs();
@@ -191,6 +200,42 @@ export const getDownloadedTracks = async () => {
           }
         }
       } catch {}
+    }
+
+    // 3.5 Re-anchor all local paths to current iOS container UUID & verify covers
+    for (const t of tracks) {
+      if (!t) continue;
+      if (t.localAudioUri) t.localAudioUri = reanchorDocumentUri(t.localAudioUri);
+      if (t.nativeAudioUri) t.nativeAudioUri = reanchorDocumentUri(t.nativeAudioUri);
+      if (t.audioUrl && t.audioUrl.startsWith('file://')) t.audioUrl = reanchorDocumentUri(t.audioUrl);
+      if (t.coverUrl && t.coverUrl.startsWith('file://')) t.coverUrl = reanchorDocumentUri(t.coverUrl);
+      if (t.cover && t.cover.startsWith('file://')) t.cover = reanchorDocumentUri(t.cover);
+
+      const tid = String(t._id || t.id);
+      const stdCover = `${COVERS_DIR}${tid}.jpg`;
+      const currentCover = t.coverUrl || t.cover;
+      if (currentCover && currentCover.startsWith('file://')) {
+        const cCheck = await FileSystem.getInfoAsync(currentCover).catch(() => ({ exists: false }));
+        if (!cCheck.exists) {
+          const stdCheck = await FileSystem.getInfoAsync(stdCover).catch(() => ({ exists: false }));
+          if (stdCheck.exists) {
+            t.coverUrl = stdCover;
+            t.cover = stdCover;
+          } else {
+            const fallbackCover = t.remoteCoverUrl || t.originalCoverUrl;
+            if (fallbackCover) {
+              t.coverUrl = fallbackCover;
+              t.cover = fallbackCover;
+            }
+          }
+        }
+      } else if (!t.coverUrl && !t.cover) {
+        const stdCheck = await FileSystem.getInfoAsync(stdCover).catch(() => ({ exists: false }));
+        if (stdCheck.exists) {
+          t.coverUrl = stdCover;
+          t.cover = stdCover;
+        }
+      }
     }
 
     // 4. Physical Disk Reconciliation: Scan TRACKS_DIR on device
@@ -885,6 +930,8 @@ export const downloadTrack = async (track, onProgress) => {
     } catch {}
   }
 
+  const originalCoverUrl = track.remoteCoverUrl || track.originalCoverUrl || track.coverUrl || track.cover || '';
+
   const record = {
     ...track,
     id: trackId,
@@ -895,12 +942,14 @@ export const downloadTrack = async (track, onProgress) => {
     source: 'Rivo',
     publisher: 'Rivo',
     signature: 'Rivo',
+    remoteCoverUrl: originalCoverUrl,
+    originalCoverUrl: originalCoverUrl,
     localAudioUri: audioFileUri,
     nativeAudioUri: audioFileUri,
     audioUrl: audioFileUri,
     duration: sanitizeDuration(resolvedDuration || track.duration || 210),
-    coverUrl: localCover,
-    cover: localCover,
+    coverUrl: localCover || originalCoverUrl,
+    cover: localCover || originalCoverUrl,
     lyrics: trackLyrics,
     isDownloaded: true,
     downloaded: true,
