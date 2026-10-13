@@ -498,7 +498,12 @@ export const AudioProvider = ({ children }) => {
 
     const trackId = String(track._id || track.id || '');
     const requestTs = Date.now();
-    playbackStatusRef.current.lastRequestTs = requestTs;
+    playbackStatusRef.current = {
+      currentTime: 0,
+      duration: Number(track.duration || 0),
+      lastRequestTs: requestTs,
+    };
+    setProgress({ currentTime: 0, duration: Number(track.duration || 0) });
 
     try {
       setIsLoading(true);

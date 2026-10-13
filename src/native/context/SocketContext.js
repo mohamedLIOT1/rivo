@@ -37,8 +37,17 @@ export const SocketProvider = ({ children }) => {
       setIsConnected(false);
     });
 
+    // Listen to real Jam Room server events
+    s.on('jam:room_updated', (data) => {
+      setJamSession(data);
+    });
+
     s.on('jam_updated', (data) => {
       setJamSession(data);
+    });
+
+    s.on('jam:kicked', () => {
+      setJamSession(null);
     });
 
     s.on('jam_ended', () => {
@@ -76,15 +85,84 @@ export const SocketProvider = ({ children }) => {
   }, [token, currentUser?._id, currentUser?.id]);
 
   const joinJam = (roomCode) => {
-    if (socket && isConnected) {
-      socket.emit('join_jam', { roomCode, user: currentUser });
+    if (socket && isConnected && roomCode) {
+      const cleanCode = String(roomCode).trim().toUpperCase();
+      const userPayload = currentUser ? {
+        id: currentUser._id || currentUser.id,
+        _id: currentUser._id || currentUser.id,
+        name: currentUser.name,
+        avatar: currentUser.avatar || '',
+      } : {
+        id: socket.id,
+        _id: socket.id,
+        name: 'Listener',
+        avatar: '',
+      };
+      socket.emit('jam:join_room', { roomCode: cleanCode, user: userPayload });
     }
   };
 
   const leaveJam = () => {
-    if (socket && isConnected && jamSession) {
-      socket.emit('leave_jam', { roomId: jamSession.roomId });
-      setJamSession(null);
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code) {
+      socket.emit('jam:leave_room', { roomCode: code });
+    }
+    setJamSession(null);
+  };
+
+  const addToJamQueue = (track) => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code && track) {
+      socket.emit('jam:add_to_queue', { roomCode: code, track });
+    }
+  };
+
+  const removeFromJamQueue = (trackIndex, trackId) => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code) {
+      socket.emit('jam:remove_from_queue', { roomCode: code, trackIndex, trackId });
+    }
+  };
+
+  const reorderJamQueue = (fromIndex, toIndex) => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code) {
+      socket.emit('jam:reorder_queue', { roomCode: code, fromIndex, toIndex });
+    }
+  };
+
+  const transferJamHost = (member) => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code && member) {
+      socket.emit('jam:transfer_host', {
+        roomCode: code,
+        targetSocketId: member.socketId,
+        targetUserId: member.id || member._id,
+      });
+    }
+  };
+
+  const kickJamMember = (member) => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code && member) {
+      socket.emit('jam:kick_member', {
+        roomCode: code,
+        memberSocketId: member.socketId,
+        memberId: member.id || member._id,
+      });
+    }
+  };
+
+  const syncJamPlayState = (isPlaying, currentTrack, currentTime) => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && code) {
+      socket.emit('jam:sync_play_state', {
+        roomCode: code,
+        isPlaying: Boolean(isPlaying),
+        currentTrack,
+        currentTime: Number(currentTime || 0),
+        initiatorId: socket.id,
+      });
     }
   };
 
@@ -112,6 +190,12 @@ export const SocketProvider = ({ children }) => {
         chatMessages,
         joinJam,
         leaveJam,
+        addToJamQueue,
+        removeFromJamQueue,
+        reorderJamQueue,
+        transferJamHost,
+        kickJamMember,
+        syncJamPlayState,
         sendChatMessage,
       }}
     >

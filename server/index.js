@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.5',
-  releaseNotes: 'Fixed audio seeking state & notification sync, smart popularity & artist interleaving for top charts, clean UI categories, and standardized modern streaming terms.',
+  version: '1.5.6',
+  releaseNotes: 'Redesigned Jam Session UI & full socket queue controls, real weekly platform listening stats & leaderboard, modernized Admin Panel with 5 tabs and full song search, and fixed notification position reset on track change.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.5',
+      version: '1.5.6',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,17 +1078,17 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.5',
-      build: 23,
+      version: '1.5.6',
+      build: 24,
       name: 'Rivo for Android',
-      downloadUrl: 'https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.5/Rivo-v1.5.5.apk',
-      directFile: 'Rivo-v1.5.5.apk',
+      downloadUrl: 'https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.6/Rivo-v1.5.6.apk',
+      directFile: 'Rivo-v1.5.6.apk',
       mandatory: false,
-      notes: 'Fixed audio seeking state & notification sync, smart popularity & artist interleaving for top charts, clean UI categories, and standardized modern streaming terms.'
+      notes: 'Redesigned Jam Session UI & full socket queue controls, real weekly platform listening stats & leaderboard, modernized Admin Panel with 5 tabs and full song search, and fixed notification position reset on track change.'
     },
     ios: {
-      version: '1.5.5',
-      build: 23,
+      version: '1.5.6',
+      build: 24,
       name: 'Rivo for iOS',
       downloadUrl: '/downloads/Rivo-v1.5.4.ipa',
       directFile: 'Rivo-v1.5.4.ipa',
@@ -1103,8 +1103,8 @@ app.get('/api/app/version', (req, res) => {
 });
 
 // Direct downloads redirect for release APKs
-app.get(['/downloads/Rivo.apk', '/downloads/Rivo-v1.5.5.apk', '/downloads/Rivo-v1.5.4.apk', '/downloads/app-release.apk'], (req, res) => {
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.5/Rivo-v1.5.5.apk');
+app.get(['/downloads/Rivo.apk', '/downloads/Rivo-v1.5.6.apk', '/downloads/Rivo-v1.5.5.apk', '/downloads/app-release.apk'], (req, res) => {
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.6/Rivo-v1.5.6.apk');
 });
 
 // Direct downloads route

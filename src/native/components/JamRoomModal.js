@@ -1,29 +1,130 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList } from 'react-native';
-import { X, Radio, LogOut, Sparkles } from 'lucide-react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Modal,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+  Image,
+  Alert,
+  Clipboard,
+} from 'react-native';
+import {
+  X,
+  Radio,
+  Users,
+  Copy,
+  Check,
+  Headphones,
+  Music,
+  Plus,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Crown,
+  UserMinus,
+  Search,
+} from 'lucide-react-native';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
-import CassetteTag from '../ui/CassetteTag';
 
 export default function JamRoomModal({ visible, onClose }) {
-  const { jamSession, joinJam, leaveJam } = useSocket();
-  const { currentUser } = useUser();
-  const { currentTrack } = useAudioPlayer();
-  const [roomInput, setRoomInput] = useState('');
+  const {
+    socket,
+    jamSession,
+    joinJam,
+    leaveJam,
+    addToJamQueue,
+    removeFromJamQueue,
+    reorderJamQueue,
+    transferJamHost,
+    kickJamMember,
+  } = useSocket();
 
-  const handleJoin = () => {
-    if (roomInput.trim()) {
-      joinJam(roomInput.trim().toUpperCase());
-      setRoomInput('');
+  const { currentUser, tracks = [] } = useUser();
+  const { currentTrack, isPlaying, playTrack } = useAudioPlayer();
+  const { showToast } = useToast();
+
+  const [inputCode, setInputCode] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [justAddedId, setJustAddedId] = useState(null);
+
+  if (!visible) return null;
+
+  const handleCopyCode = () => {
+    const code = jamSession?.code || jamSession?.roomCode;
+    if (code) {
+      try {
+        Clipboard.setString(code);
+      } catch {}
+      setCopied(true);
+      showToast('Jam code copied to clipboard!', 'success');
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleCreateNew = () => {
-    const code = Math.random().toString(36).substring(2, 7).toUpperCase();
-    joinJam(code);
+  const handleTuneIn = () => {
+    if (jamSession?.currentTrack) {
+      playTrack(jamSession.currentTrack);
+      showToast('Audio resynced with Jam room', 'info');
+    } else if (currentTrack) {
+      playTrack(currentTrack);
+      showToast('Broadcasting track to Jam room', 'info');
+    }
   };
+
+  const handleCreateJam = () => {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const code = `JAM-${randomNum}`;
+    joinJam(code);
+    showToast(`Created Jam Room ${code}`, 'success');
+  };
+
+  const handleJoin = () => {
+    if (!inputCode.trim()) return;
+    const cleanCode = inputCode.trim().toUpperCase();
+    joinJam(cleanCode);
+    setInputCode('');
+    showToast(`Joining ${cleanCode}...`, 'info');
+  };
+
+  const handleAddTrack = (track) => {
+    if (!track) return;
+    addToJamQueue(track);
+    const tId = track._id || track.id;
+    setJustAddedId(tId);
+    showToast(`Added "${track.title}" to Jam queue`, 'success');
+    setTimeout(() => setJustAddedId(null), 1500);
+  };
+
+  const handleReorder = (fromIdx, toIdx) => {
+    if (fromIdx < 0 || toIdx < 0) return;
+    if (fromIdx >= (jamSession?.queue?.length || 0)) return;
+    if (toIdx >= (jamSession?.queue?.length || 0)) return;
+    reorderJamQueue(fromIdx, toIdx);
+  };
+
+  const filteredTracks = searchQuery.trim()
+    ? (tracks || []).filter(
+        (t) =>
+          (t?.title && t.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (t?.artist && t.artist.toLowerCase().includes(searchQuery.toLowerCase()))
+      ).slice(0, 10)
+    : (tracks || []).slice(0, 8);
+
+  const myId = String(currentUser?._id || currentUser?.id || '');
+  const isCurrentUserHost = Boolean(
+    jamSession &&
+      ((jamSession.hostUserId && myId && String(jamSession.hostUserId) === myId) ||
+        (jamSession.hostId && socket?.id && jamSession.hostId === socket.id))
+  );
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -33,76 +134,372 @@ export default function JamRoomModal({ visible, onClose }) {
           <View style={styles.sheet}>
             {/* Header */}
             <View style={styles.header}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={styles.headerLeft}>
                 <View style={styles.iconBox}>
-                  <Radio size={18} color={colors.ink} />
+                  <Radio size={18} color="#082621" />
                 </View>
                 <View>
-                  <Text style={styles.title}>RIVO JAM ROOM</Text>
-                  <CassetteTag label="REAL-TIME BROADCAST" bg={colors.amber} textColor={colors.ink} />
+                  <View style={styles.titleRow}>
+                    <Text style={styles.title}>JAM SESSION</Text>
+                    {jamSession && <View style={styles.liveDot} />}
+                  </View>
+                  <Text style={styles.subTitle}>Listen together with friends in real-time</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X size={20} color={colors.ink} />
+              <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
+                <X size={18} color={colors.ink} />
               </TouchableOpacity>
             </View>
 
-            {jamSession ? (
-              <View style={styles.activeSession}>
-                <View style={styles.codeCard}>
-                  <Text style={styles.codeSubtitle}>ROOM BROADCAST CODE</Text>
-                  <Text style={styles.codeText}>{jamSession.roomCode || 'LIVE'}</Text>
-                </View>
+            <ScrollView
+              style={styles.scrollArea}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {jamSession ? (
+                /* ── Active Jam Room View ── */
+                <View style={styles.activeContainer}>
+                  {/* Banner Card */}
+                  <View style={styles.codeCard}>
+                    <Text style={styles.codeSubtitle}>ACTIVE JAM ROOM CODE</Text>
+                    <Text style={styles.codeText}>{jamSession.code || jamSession.roomCode || 'LIVE'}</Text>
+                    <Text style={styles.codeDesc}>
+                      Share this code with friends to synchronize listening.
+                    </Text>
 
-                {currentTrack && (
-                  <View style={styles.syncBox}>
-                    <Text style={styles.syncLabel}>SYNCHRONIZED TAPE:</Text>
-                    <Text style={styles.syncTitle} numberOfLines={1}>{currentTrack.title}</Text>
+                    <View style={styles.codeBtnRow}>
+                      <TouchableOpacity
+                        style={styles.copyBtn}
+                        onPress={handleCopyCode}
+                        activeOpacity={0.8}
+                      >
+                        {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} color="#ffffff" />}
+                        <Text style={styles.copyBtnText}>{copied ? 'COPIED!' : 'COPY CODE'}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.syncBtn}
+                        onPress={handleTuneIn}
+                        activeOpacity={0.8}
+                      >
+                        <Headphones size={14} color="#082621" />
+                        <Text style={styles.syncBtnText}>SYNC AUDIO</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                )}
 
-                <TouchableOpacity style={styles.leaveBtn} onPress={leaveJam}>
-                  <LogOut size={16} color={colors.cardBg} />
-                  <Text style={styles.leaveBtnText}>TERMINATE JAM LINK</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.inactiveSession}>
-                <Text style={styles.desc}>
-                  Broadcast audio in sync across multiple devices. Enter an active clinical room code or generate a new station:
-                </Text>
+                  {/* Currently Synced Track */}
+                  {currentTrack && (
+                    <View style={styles.syncedTrackCard}>
+                      <Image
+                        source={{
+                          uri:
+                            currentTrack.coverUrl ||
+                            currentTrack.cover ||
+                            'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
+                        }}
+                        style={styles.syncedTrackCover}
+                      />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={styles.syncStatusRow}>
+                          <Text style={styles.syncStatusText}>
+                            {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusPulseDot,
+                              { backgroundColor: isPlaying ? colors.mint : '#f59e0b' },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.syncedTrackTitle} numberOfLines={1}>
+                          {currentTrack.title}
+                        </Text>
+                        <Text style={styles.syncedTrackArtist} numberOfLines={1}>
+                          {currentTrack.artist}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
 
-                <View style={styles.inputRow}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="ROOM CODE"
-                    placeholderTextColor="#9ca3af"
-                    value={roomInput}
-                    onChangeText={setRoomInput}
-                    autoCapitalize="characters"
-                    maxLength={6}
-                  />
-                  <TouchableOpacity
-                    style={[styles.joinBtn, !roomInput.trim() && { opacity: 0.5 }]}
-                    onPress={handleJoin}
-                    disabled={!roomInput.trim()}
-                  >
-                    <Text style={styles.joinBtnText}>JOIN</Text>
+                  {/* ── Linked Shared Queue ── */}
+                  <View style={styles.queueCard}>
+                    <View style={styles.queueHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Music size={15} color={colors.mint} />
+                        <Text style={styles.queueTitle}>
+                          JAM QUEUE ({jamSession.queue?.length || 0})
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.addSongToggleBtn}
+                        onPress={() => setIsSearchOpen((p) => !p)}
+                        activeOpacity={0.8}
+                      >
+                        <Plus size={13} color="#082621" />
+                        <Text style={styles.addSongToggleText}>
+                          {isSearchOpen ? 'CLOSE' : 'ADD SONG'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Add Song Drawer */}
+                    {isSearchOpen && (
+                      <View style={styles.searchDrawer}>
+                        <View style={styles.searchBox}>
+                          <Search size={14} color="#9ca3af" />
+                          <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search songs to queue..."
+                            placeholderTextColor="#6b7280"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoCorrect={false}
+                          />
+                        </View>
+
+                        <View style={styles.searchResultsList}>
+                          {filteredTracks.map((track) => {
+                            const tId = track._id || track.id;
+                            const isQueued = justAddedId === tId;
+                            return (
+                              <View key={tId} style={styles.searchResultItem}>
+                                <Image
+                                  source={{
+                                    uri:
+                                      track.cover ||
+                                      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                                  }}
+                                  style={styles.resultCover}
+                                />
+                                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                                  <Text style={styles.resultTitle} numberOfLines={1}>
+                                    {track.title}
+                                  </Text>
+                                  <Text style={styles.resultArtist} numberOfLines={1}>
+                                    {track.artist}
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.queueAddBtn,
+                                    isQueued && { backgroundColor: colors.mint },
+                                  ]}
+                                  onPress={() => handleAddTrack(track)}
+                                  activeOpacity={0.8}
+                                >
+                                  {isQueued ? (
+                                    <Check size={11} color="#082621" />
+                                  ) : (
+                                    <Plus size={11} color="#082621" />
+                                  )}
+                                  <Text style={styles.queueAddBtnText}>
+                                    {isQueued ? 'QUEUED' : 'QUEUE'}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Shared Queue List Items */}
+                    {Array.isArray(jamSession.queue) && jamSession.queue.length > 0 ? (
+                      <View style={styles.queueList}>
+                        {jamSession.queue.map((qTrack, idx) => {
+                          const qId = qTrack._id || qTrack.id || idx;
+                          return (
+                            <View key={`${qId}-${idx}`} style={styles.queueItem}>
+                              <Text style={styles.queueIndex}>{idx + 1}</Text>
+                              <Image
+                                source={{
+                                  uri:
+                                    qTrack.cover ||
+                                    'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                                }}
+                                style={styles.queueCover}
+                              />
+                              <View style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
+                                <Text style={styles.queueTrackTitle} numberOfLines={1}>
+                                  {qTrack.title}
+                                </Text>
+                                <Text style={styles.queueTrackArtist} numberOfLines={1}>
+                                  {qTrack.artist}
+                                </Text>
+                              </View>
+                              <View style={styles.queueActionsRow}>
+                                <TouchableOpacity
+                                  disabled={idx === 0}
+                                  onPress={() => handleReorder(idx, idx - 1)}
+                                  style={[styles.reorderBtn, idx === 0 && { opacity: 0.2 }]}
+                                >
+                                  <ChevronUp size={14} color="#ffffff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  disabled={idx === jamSession.queue.length - 1}
+                                  onPress={() => handleReorder(idx, idx + 1)}
+                                  style={[
+                                    styles.reorderBtn,
+                                    idx === jamSession.queue.length - 1 && { opacity: 0.2 },
+                                  ]}
+                                >
+                                  <ChevronDown size={14} color="#ffffff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => removeFromJamQueue(idx, qId)}
+                                  style={styles.removeQueueBtn}
+                                >
+                                  <Trash2 size={13} color="#ef4444" />
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <Text style={styles.emptyQueueText}>JAM QUEUE IS CURRENTLY EMPTY.</Text>
+                    )}
+                  </View>
+
+                  {/* ── Active Members ── */}
+                  <View style={styles.membersCard}>
+                    <View style={styles.membersHeader}>
+                      <Users size={14} color={colors.mint} />
+                      <Text style={styles.membersTitle}>
+                        LISTENERS IN ROOM ({jamSession.members?.length || 1})
+                      </Text>
+                    </View>
+
+                    <View style={styles.membersList}>
+                      {(jamSession.members || []).map((m) => {
+                        const mId = m.id || m._id || m.socketId;
+                        return (
+                          <View key={mId} style={styles.memberItem}>
+                            <Image
+                              source={{
+                                uri:
+                                  m.avatar ||
+                                  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+                              }}
+                              style={styles.memberAvatar}
+                            />
+                            <Text style={styles.memberName} numberOfLines={1}>
+                              {m.name || 'Listener'}
+                            </Text>
+
+                            <View style={styles.memberRight}>
+                              {m.isHost && (
+                                <View style={styles.hostBadge}>
+                                  <Crown size={10} color="#082621" strokeWidth={3} />
+                                  <Text style={styles.hostBadgeText}>HOST</Text>
+                                </View>
+                              )}
+
+                              {isCurrentUserHost && !m.isHost && (
+                                <View style={{ flexDirection: 'row', gap: 6 }}>
+                                  <TouchableOpacity
+                                    style={styles.makeHostBtn}
+                                    onPress={() => {
+                                      Alert.alert(
+                                        'Transfer Host',
+                                        `Make ${m.name} the host of this Jam?`,
+                                        [
+                                          { text: 'Cancel', style: 'cancel' },
+                                          {
+                                            text: 'Make Host',
+                                            onPress: () => transferJamHost(m),
+                                          },
+                                        ]
+                                      );
+                                    }}
+                                  >
+                                    <Crown size={10} color="#082621" />
+                                    <Text style={styles.makeHostText}>MAKE HOST</Text>
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.kickBtn}
+                                    onPress={() => {
+                                      Alert.alert(
+                                        'Disconnect Listener',
+                                        `Disconnect ${m.name} from this Jam?`,
+                                        [
+                                          { text: 'Cancel', style: 'cancel' },
+                                          {
+                                            text: 'Disconnect',
+                                            style: 'destructive',
+                                            onPress: () => kickJamMember(m),
+                                          },
+                                        ]
+                                      );
+                                    }}
+                                  >
+                                    <UserMinus size={12} color="#ef4444" />
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Leave Jam Button */}
+                  <TouchableOpacity style={styles.leaveBtn} onPress={leaveJam} activeOpacity={0.8}>
+                    <Text style={styles.leaveBtnText}>LEAVE JAM ROOM</Text>
                   </TouchableOpacity>
                 </View>
+              ) : (
+                /* ── Inactive View: Host or Join ── */
+                <View style={styles.inactiveContainer}>
+                  {/* Host Card */}
+                  <View style={styles.actionCard}>
+                    <Text style={styles.actionCardTitle}>HOST A JAM</Text>
+                    <Text style={styles.actionCardDesc}>
+                      Start a live Jam room and invite friends to listen together in real-time.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.createJamBtn}
+                      onPress={handleCreateJam}
+                      activeOpacity={0.8}
+                    >
+                      <Radio size={16} color="#082621" />
+                      <Text style={styles.createJamBtnText}>CREATE JAM</Text>
+                    </TouchableOpacity>
+                  </View>
 
-                <View style={styles.dividerRow}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>OR</Text>
-                  <View style={styles.dividerLine} />
+                  {/* Join Card */}
+                  <View style={styles.actionCard}>
+                    <Text style={styles.actionCardTitle}>JOIN A JAM</Text>
+                    <Text style={styles.actionCardDesc}>
+                      Enter the Jam room code provided by another listener.
+                    </Text>
+
+                    <View style={styles.joinInputRow}>
+                      <TextInput
+                        style={styles.joinInput}
+                        placeholder="e.g. JAM-9921"
+                        placeholderTextColor="#6b7280"
+                        value={inputCode}
+                        onChangeText={(t) => setInputCode(t.toUpperCase())}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                      />
+                      <TouchableOpacity
+                        style={[styles.joinSubmitBtn, !inputCode.trim() && { opacity: 0.5 }]}
+                        onPress={handleJoin}
+                        disabled={!inputCode.trim()}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.joinSubmitBtnText}>JOIN</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 </View>
-
-                <TouchableOpacity style={styles.createBtn} onPress={handleCreateNew}>
-                  <Sparkles size={18} color={colors.ink} />
-                  <Text style={styles.createBtnText}>START NEW JAM SESSION</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              )}
+            </ScrollView>
           </View>
         </View>
       </View>
@@ -113,12 +510,13 @@ export default function JamRoomModal({ visible, onClose }) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(8, 38, 33, 0.85)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
-    padding: 12,
+    padding: 10,
   },
   sheetOuter: {
     position: 'relative',
+    maxHeight: '88%',
   },
   hardShadow: {
     position: 'absolute',
@@ -126,162 +524,516 @@ const styles = StyleSheet.create({
     left: 6,
     right: -6,
     bottom: -6,
-    backgroundColor: colors.ink,
+    backgroundColor: '#000000',
+    borderRadius: 16,
   },
   sheet: {
-    backgroundColor: colors.paper,
-    borderWidth: 3.5,
-    borderColor: colors.ink,
-    padding: 18,
-    paddingBottom: 28,
+    backgroundColor: '#121212',
+    borderWidth: 2,
+    borderColor: '#27272a',
+    borderRadius: 16,
+    padding: 16,
+    paddingBottom: 24,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#27272a',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   iconBox: {
     width: 32,
     height: 32,
-    backgroundColor: colors.amber,
-    borderWidth: 2,
-    borderColor: colors.ink,
+    backgroundColor: '#17a398',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
-    fontSize: 16,
+    fontFamily: 'monospace',
     fontWeight: '900',
-    color: colors.ink,
-    letterSpacing: 1,
+    fontSize: 15,
+    color: '#ffffff',
+    textTransform: 'uppercase',
+  },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#17a398',
+  },
+  subTitle: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 2,
   },
   closeBtn: {
-    padding: 6,
+    width: 30,
+    height: 30,
+    backgroundColor: '#27272a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  desc: {
-    fontSize: 12,
-    color: '#374151',
-    fontWeight: '600',
-    lineHeight: 18,
-    marginBottom: 16,
+  scrollArea: {
+    maxHeight: 520,
+    marginTop: 10,
   },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
+  scrollContent: {
+    paddingBottom: 20,
+  },
+  // Inactive
+  inactiveContainer: {
+    gap: 12,
+    paddingTop: 8,
+  },
+  actionCard: {
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#27272a',
+    borderRadius: 12,
+    padding: 14,
+  },
+  actionCardTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 14,
+    color: '#ffffff',
+    textTransform: 'uppercase',
+  },
+  actionCardDesc: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 4,
     marginBottom: 12,
   },
-  input: {
-    flex: 1,
-    backgroundColor: colors.cardBg,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    padding: 12,
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 2,
-    textAlign: 'center',
-    color: colors.ink,
-  },
-  joinBtn: {
-    backgroundColor: colors.teal,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  joinBtnText: {
-    fontWeight: '900',
-    color: colors.ink,
-    fontSize: 13,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 12,
-    gap: 8,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: colors.ink,
-  },
-  dividerText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: colors.ink,
-  },
-  createBtn: {
+  createJamBtn: {
+    backgroundColor: '#17a398',
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+    borderRadius: 8,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.amber,
-    borderWidth: 2.5,
-    borderColor: colors.ink,
-    paddingVertical: 14,
   },
-  createBtnText: {
+  createJamBtnText: {
+    fontFamily: 'monospace',
     fontWeight: '900',
-    color: colors.ink,
-    fontSize: 13,
-    letterSpacing: 0.5,
+    fontSize: 12,
+    color: '#082621',
+    textTransform: 'uppercase',
   },
-  activeSession: {
+  joinInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  joinInput: {
+    flex: 1,
+    backgroundColor: '#09090b',
+    borderWidth: 1.5,
+    borderColor: '#3f3f46',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#ffffff',
+  },
+  joinSubmitBtn: {
+    backgroundColor: '#17a398',
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  joinSubmitBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: '#082621',
+  },
+  // Active
+  activeContainer: {
     gap: 12,
+    paddingTop: 6,
   },
   codeCard: {
-    backgroundColor: colors.ink,
-    borderWidth: 2,
-    borderColor: colors.amber,
-    padding: 16,
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#27272a',
+    borderRadius: 12,
+    padding: 14,
     alignItems: 'center',
   },
   codeSubtitle: {
-    fontSize: 10,
+    fontFamily: 'monospace',
     fontWeight: '900',
-    color: colors.amber,
-    letterSpacing: 1,
+    fontSize: 10,
+    color: '#17a398',
+    textTransform: 'uppercase',
   },
   codeText: {
-    fontSize: 32,
+    fontFamily: 'monospace',
     fontWeight: '900',
-    color: colors.cardBg,
-    letterSpacing: 4,
-    marginTop: 4,
+    fontSize: 28,
+    color: '#f59e0b',
+    marginVertical: 4,
+    letterSpacing: 2,
   },
-  syncBox: {
-    backgroundColor: colors.cardBg,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    padding: 12,
+  codeDesc: {
+    fontSize: 11,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 10,
   },
-  syncLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: colors.tealDark,
-    letterSpacing: 1,
+  codeBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  syncTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.ink,
-    marginTop: 2,
-  },
-  leaveBtn: {
+  copyBtn: {
+    backgroundColor: '#27272a',
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.crimson,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    paddingVertical: 12,
+    gap: 6,
   },
-  leaveBtnText: {
-    color: colors.cardBg,
+  copyBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#ffffff',
+  },
+  syncBtn: {
+    backgroundColor: '#17a398',
+    borderWidth: 1,
+    borderColor: '#082621',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  syncBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#082621',
+  },
+  // Synced Track Card
+  syncedTrackCard: {
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#27272a',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  syncedTrackCover: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#27272a',
+  },
+  syncStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  syncStatusText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#17a398',
+  },
+  statusPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  syncedTrackTitle: {
+    fontWeight: 'bold',
+    fontSize: 13,
+    color: '#ffffff',
+    marginTop: 2,
+  },
+  syncedTrackArtist: {
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  // Queue Card
+  queueCard: {
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#27272a',
+    borderRadius: 12,
+    padding: 12,
+  },
+  queueHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#27272a',
+  },
+  queueTitle: {
+    fontFamily: 'monospace',
     fontWeight: '900',
     fontSize: 12,
+    color: '#ffffff',
+  },
+  addSongToggleBtn: {
+    backgroundColor: '#17a398',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  addSongToggleText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#082621',
+  },
+  searchDrawer: {
+    backgroundColor: '#27272a',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#18181b',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#ffffff',
+    padding: 0,
+  },
+  searchResultsList: {
+    maxHeight: 180,
+    gap: 6,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#18181b',
+    borderRadius: 6,
+    padding: 6,
+  },
+  resultCover: {
+    width: 30,
+    height: 30,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  resultTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  resultArtist: {
+    fontSize: 10,
+    color: '#9ca3af',
+  },
+  queueAddBtn: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  queueAddBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#082621',
+  },
+  queueList: {
+    marginTop: 8,
+    gap: 6,
+  },
+  queueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#27272a',
+    borderRadius: 8,
+    padding: 8,
+  },
+  queueIndex: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#9ca3af',
+    width: 18,
+    textAlign: 'center',
+  },
+  queueCover: {
+    width: 32,
+    height: 32,
+    borderRadius: 4,
+    marginHorizontal: 6,
+  },
+  queueTrackTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  queueTrackArtist: {
+    fontSize: 10,
+    color: '#9ca3af',
+  },
+  queueActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  reorderBtn: {
+    padding: 3,
+  },
+  removeQueueBtn: {
+    padding: 4,
+    marginLeft: 2,
+  },
+  emptyQueueText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    color: '#6b7280',
+    textAlign: 'center',
+    paddingVertical: 14,
+  },
+  // Members Card
+  membersCard: {
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#27272a',
+    borderRadius: 12,
+    padding: 12,
+  },
+  membersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  membersTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#9ca3af',
+  },
+  membersList: {
+    gap: 6,
+  },
+  memberItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#27272a',
+    borderRadius: 8,
+    padding: 8,
+  },
+  memberAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    marginRight: 8,
+  },
+  memberName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  memberRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  hostBadge: {
+    backgroundColor: '#17a398',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  hostBadgeText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#082621',
+  },
+  makeHostBtn: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  makeHostText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#082621',
+  },
+  kickBtn: {
+    padding: 4,
+  },
+  leaveBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1.5,
+    borderColor: '#ef4444',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  leaveBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: '#ef4444',
   },
 });
