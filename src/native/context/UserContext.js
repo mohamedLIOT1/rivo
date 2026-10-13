@@ -327,6 +327,8 @@ export const UserProvider = ({ children }) => {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  };
+
   const deletePlaylist = async (playlistId) => {
     if (!token) return;
     const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}`, {
