@@ -16,6 +16,7 @@ import {
   ChevronUp,
   Info
 } from 'lucide-react';
+import { APP_VERSION } from '../version';
 
 export default function DownloadScreen({ globalTheme = 'dark' }) {
   const [detectedOs, setDetectedOs] = useState('windows');
@@ -43,7 +44,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       name: 'Rivo for Windows',
       osLabel: 'Windows 10 / 11 (64-bit)',
       badge: 'NATIVE DESKTOP',
-      version: 'v1.4.4',
+      version: `v${APP_VERSION}`,
       fileType: '.EXE',
       fileSize: '1.8 MB',
       icon: Monitor,
@@ -62,7 +63,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       name: 'Rivo for Android',
       osLabel: 'Android 8.0 & Above',
       badge: 'HYBRID HI-FI',
-      version: 'v1.4.4',
+      version: `v${APP_VERSION}`,
       fileType: '.APK',
       fileSize: '67 MB',
       icon: Smartphone,
@@ -81,12 +82,12 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       name: 'Rivo for iOS',
       osLabel: 'iOS 15.0 & Above',
       badge: 'HYBRID HI-FI',
-      version: 'v1.4.4',
+      version: `v${APP_VERSION}`,
       fileType: '.IPA',
-      fileSize: '8.8 MB',
+      fileSize: '7.8 MB',
       icon: Apple,
-      downloadUrl: '/downloads/Rivo.ipa',
-      directName: 'Rivo.ipa',
+      downloadUrl: `/downloads/Rivo-v${APP_VERSION}.ipa`,
+      directName: `Rivo-v${APP_VERSION}.ipa`,
       highlights: [
         'Complete Rivo Web UI: 100% web design, all playlists & songs',
         'Full Profile, real-time Chat, Live Jam & Friend Activity',

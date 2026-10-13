@@ -1090,8 +1090,8 @@ const APP_VERSIONS_DATA = {
       version: '1.5.3',
       build: 21,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo.ipa',
-      directFile: 'Rivo.ipa',
+      downloadUrl: '/downloads/Rivo-v1.5.3.ipa',
+      directFile: 'Rivo-v1.5.3.ipa',
       mandatory: false,
       notes: 'Fixed volume slider handler, seamless zero-logo launch, auto YouTube artwork covers, user profile avatars, and real-time chat seen status (سين).'
     }
@@ -1103,7 +1103,12 @@ app.get('/api/app/version', (req, res) => {
 });
 
 // Direct downloads route
-app.use('/downloads', express.static(path.join(__dirname, '../public/downloads')));
+app.use('/downloads', (req, res, next) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+}, express.static(path.join(__dirname, '../public/downloads')));
 
 app.get('/api/auth/me', auth, async (req, res) => {
   try {
