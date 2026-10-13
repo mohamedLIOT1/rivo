@@ -29,7 +29,7 @@
         "backgroundColor": "#082621"
       },
       "package": "com.rivo.app",
-      "versionCode": 5,
+      "versionCode": 22,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
