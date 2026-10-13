@@ -41,7 +41,39 @@ export const AudioProvider = ({ children }) => {
   try {
     userCtx = useUser() || {};
   } catch {}
-  const { likedTrackIds = [], toggleLikeTrack } = userCtx;
+  const { token, currentUser, likedTrackIds = [], toggleLikeTrack } = userCtx;
+
+  const tokenRef = useRef(token);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
+  const broadcastListeningActivity = useCallback((track, playingState, posSeconds = 0) => {
+    const activeToken = tokenRef.current;
+    if (!activeToken) return;
+
+    const payload = {
+      track: track ? {
+        id: track._id || track.id,
+        title: track.title,
+        artist: track.artist,
+        cover: track.coverUrl || track.cover,
+        audioUrl: track.audioUrl,
+        duration: track.duration,
+      } : null,
+      isPlaying: Boolean(playingState),
+      currentTime: Math.max(0, Number(posSeconds) || 0)
+    };
+
+    fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${activeToken}`
+      },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  }, []);
 
   const [currentTrack, setCurrentTrackState] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -159,8 +191,19 @@ export const AudioProvider = ({ children }) => {
       if (soundRef.current) soundRef.current.unloadAsync().catch(() => {});
       if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
       hideMediaNotification();
+      broadcastListeningActivity(null, false, 0);
     };
-  }, []);
+  }, [broadcastListeningActivity]);
+
+  // Periodic heartbeat every 18 seconds to keep Discord Rich Presence active
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (isPlayingRef.current && currentTrackRef.current) {
+        broadcastListeningActivity(currentTrackRef.current, true, playbackStatusRef.current?.currentTime || 0);
+      }
+    }, 18000);
+    return () => clearInterval(timer);
+  }, [broadcastListeningActivity]);
 
   const refreshDownloadedTracks = async () => {
     try {
@@ -489,6 +532,7 @@ export const AudioProvider = ({ children }) => {
           liked: isLikedTrack,
         }, true, repeatMode, isShuffle, isLikedTrack);
       } catch {}
+      broadcastListeningActivity(track, true, 0);
     } catch (err) {
       setIsLoading(false);
       if (!isRetry && !isOffline) {
@@ -519,10 +563,12 @@ export const AudioProvider = ({ children }) => {
       await soundRef.current.pauseAsync().catch(() => {});
       setIsPlaying(false);
       updateMediaNotification(false, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
+      broadcastListeningActivity(currentTrackRef.current, false, playbackStatusRef.current?.currentTime || 0);
     } else {
       await soundRef.current.playAsync().catch(() => {});
       setIsPlaying(true);
       updateMediaNotification(true, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
+      broadcastListeningActivity(currentTrackRef.current, true, playbackStatusRef.current?.currentTime || 0);
     }
   };
 
@@ -531,6 +577,7 @@ export const AudioProvider = ({ children }) => {
     const safeSecs = Math.max(0, Number(secs) || 0);
     await soundRef.current.setPositionAsync(safeSecs * 1000).catch(() => {});
     setProgress(p => ({ ...p, currentTime: safeSecs }));
+    broadcastListeningActivity(currentTrackRef.current, isPlayingRef.current, safeSecs);
   };
 
   const playNextTrack = () => {
