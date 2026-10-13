@@ -131,7 +131,32 @@ export const resolveAudioStream = async (track) => {
     return rawUrl;
   }
 
-  // 3. Ultra-fast Client-side YouTube Audio Stream Resolution (resolves official Googlevideo stream directly on device in <1s)
+  // 3. Server-side Stream Resolution via Proxy (Primary - handles yt-dlp warm worker & proxying)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const serverStreamRes = await fetch(
+      `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
+    if (serverStreamRes.ok) {
+      const data = await serverStreamRes.json();
+      let streamUrl = data?.url || data?.directUrl;
+      if (streamUrl) {
+        if (streamUrl.startsWith('/')) {
+          streamUrl = `${API_BASE_URL}${streamUrl}`;
+        }
+        if (trackId) streamCache.set(trackId, streamUrl);
+        if (data?.duration && trackId) streamDurationCache.set(trackId, data.duration);
+        return streamUrl;
+      }
+    }
+  } catch (e) {
+    // Backend request failed or timed out, fallback to client-side
+  }
+
+  // 4. Client-side YouTube Audio Stream Resolution Fallback
   let ytId = extractYouTubeId(rawUrl) ||
              (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
 
@@ -162,31 +187,12 @@ export const resolveAudioStream = async (track) => {
     } catch (e) {}
   }
 
-  // 4. Server-side Stream Resolution via Proxy Fallback
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    const serverStreamRes = await fetch(
-      `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timeoutId);
-    if (serverStreamRes.ok) {
-      const data = await serverStreamRes.json();
-      let streamUrl = data?.url || data?.directUrl;
-      if (streamUrl) {
-        if (streamUrl.startsWith('/')) {
-          streamUrl = `${API_BASE_URL}${streamUrl}`;
-        }
-        if (trackId) streamCache.set(trackId, streamUrl);
-        return streamUrl;
-      }
-    }
-  } catch (e) {
-    // Backend request timed out or failed
+  // Safety guard: never pass HTML web URLs (youtube.com / youtu.be) into audio player
+  if (rawUrl && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be')) {
+    return rawUrl;
   }
 
-  return rawUrl || null;
+  return null;
 };
 
 /**

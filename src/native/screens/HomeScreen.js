@@ -17,6 +17,7 @@ import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
+import AlbumDetailModal from '../components/AlbumDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
@@ -36,6 +37,7 @@ export default function HomeScreen({
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
 
   // Filter music only (strictly exclude Quran from main music home) & apply smart popularity sorting
   const displayTracks = useMemo(() => {
@@ -195,7 +197,7 @@ export default function HomeScreen({
                 <TouchableOpacity
                   key={alb.id || alb._id || alb.name || String(index)}
                   style={[styles.albumCard, !isDark && styles.albumCardLight]}
-                  onPress={() => handlePlayAlbum(alb)}
+                  onPress={() => setSelectedAlbum(alb)}
                   activeOpacity={0.85}
                 >
                   <View style={styles.albumCoverWrap}>
@@ -207,11 +209,18 @@ export default function HomeScreen({
                       style={styles.albumCover}
                       resizeMode="cover"
                     />
-                    <View style={styles.albumPlayOverlay}>
+                    <TouchableOpacity
+                      style={styles.albumPlayOverlay}
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        handlePlayAlbum(alb);
+                      }}
+                      activeOpacity={0.8}
+                    >
                       <View style={styles.albumPlayPill}>
                         <Play size={11} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                   <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
                     {alb.name}
@@ -317,28 +326,37 @@ export default function HomeScreen({
   }, [curTrackId, likedSet, displayTracks, onTrackAction, playTrack]);
 
   return (
-    <FlatList
-      style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
-      contentContainerStyle={styles.content}
-      data={visibleTracks}
-      keyExtractor={(item, index) => item._id || item.id || String(index)}
-      renderItem={renderItem}
-      ListHeaderComponent={renderHeader}
-      ListFooterComponent={renderFooter}
-      initialNumToRender={10}
-      maxToRenderPerBatch={8}
-      windowSize={5}
-      removeClippedSubviews={Platform.OS === 'android'}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor="#17a398"
-          colors={['#17a398']}
-        />
-      }
-    />
+    <>
+      <FlatList
+        style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
+        contentContainerStyle={styles.content}
+        data={visibleTracks}
+        keyExtractor={(item, index) => item._id || item.id || String(index)}
+        renderItem={renderItem}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#17a398"
+            colors={['#17a398']}
+          />
+        }
+      />
+      <AlbumDetailModal
+        visible={Boolean(selectedAlbum)}
+        album={selectedAlbum}
+        onClose={() => setSelectedAlbum(null)}
+        allTracks={userTracks}
+        onTrackAction={onTrackAction}
+      />
+    </>
   );
 }
 

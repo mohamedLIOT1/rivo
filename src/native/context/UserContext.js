@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
-import { INITIAL_TRACKS } from '../data/initialTracks';
+import { INITIAL_TRACKS, INITIAL_ALBUMS } from '../data/initialTracks';
 
 const UserContext = createContext();
 const TOKEN_KEY = '@rivo_auth_token_v2';
@@ -28,7 +28,7 @@ export const UserProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
   const [playlists, setPlaylists] = useState([]);
-  const [albums, setAlbums] = useState([]);
+  const [albums, setAlbums] = useState(INITIAL_ALBUMS || []);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
 
   useEffect(() => {

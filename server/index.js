@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.7',
-  releaseNotes: '1-Click In-App APK Updater & Installer, Instant Jam Session Invites in Chat, Real-Time Jam Audio Latency Synchronization, Admin Panel instant pagination, and improved discovery in Jam Room.',
+  version: '1.5.8',
+  releaseNotes: 'Fix album detail view, Jam room modal hooks, search artists/albums, stream audio resilience, Android app icon sync, and web playlist cover upload.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.7',
+      version: '1.5.8',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,22 +1078,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.7',
-      build: 25,
+      version: '1.5.8',
+      build: 26,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.5.7.apk',
-      directFile: 'Rivo-v1.5.7.apk',
+      downloadUrl: '/downloads/Rivo-v1.5.8.apk',
+      directFile: 'Rivo-v1.5.8.apk',
       mandatory: false,
-      notes: '1-Click In-App APK Updater & Installer, Instant Jam Session Invites in Chat, Real-Time Jam Audio Latency Synchronization, Admin Panel instant pagination, and improved discovery in Jam Room.'
+      notes: 'Fix album detail view, Jam room modal hooks, search artists/albums, stream audio resilience, Android app icon sync, and web playlist cover upload.'
     },
     ios: {
-      version: '1.5.7',
-      build: 25,
+      version: '1.5.8',
+      build: 26,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.5.7.ipa',
-      directFile: 'Rivo-v1.5.7.ipa',
+      downloadUrl: '/downloads/Rivo-v1.5.8.ipa',
+      directFile: 'Rivo-v1.5.8.ipa',
       mandatory: false,
-      notes: 'Offline artwork resilience across iOS updates, MiniPlayer & queue cover fix, Playlist edit & cover upload, Playlist batch download, and auto-download on completed playback.'
+      notes: 'Fix album detail view, Jam room modal hooks, search artists/albums, stream audio resilience, and web playlist cover upload.'
     }
   }
 };
@@ -1105,25 +1105,30 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.5.8.apk',
   '/downloads/Rivo-v1.5.7.apk',
   '/downloads/Rivo-v1.5.6.apk',
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.apk');
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.apk');
+  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
   if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.5.7.apk');
+    return res.download(localVersionedPath, 'Rivo-v1.5.8.apk');
+  }
+  if (fs.existsSync(localOldVersionedPath)) {
+    return res.download(localOldVersionedPath, 'Rivo-v1.5.7.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.5.7.apk');
+    return res.download(localApkPath, 'Rivo-v1.5.8.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.7', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.8', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1149,30 +1154,35 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.7/Rivo-v1.5.7.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.8/Rivo-v1.5.8.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.5.8.ipa',
   '/downloads/Rivo-v1.5.7.ipa',
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.ipa');
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.ipa');
+  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
   if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.5.7.ipa');
+    return res.download(localVersionedPath, 'Rivo-v1.5.8.ipa');
+  }
+  if (fs.existsSync(localOldVersionedPath)) {
+    return res.download(localOldVersionedPath, 'Rivo-v1.5.7.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.5.7.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.5.8.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.7', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.8', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1198,7 +1208,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.7/Rivo-v1.5.7.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.8/Rivo-v1.5.8.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -3110,8 +3120,9 @@ app.post('/api/playlists/:id/update', auth, async (req, res) => {
     if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
     if (req.body.name) pl.name = req.body.name;
     if (req.body.description !== undefined) pl.description = req.body.description;
-    if (req.body.cover) pl.cover = req.body.cover;
+    if (req.body.cover !== undefined) pl.cover = req.body.cover;
     if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
+    u.markModified('playlists');
     await u.save();
     res.json({ success: true, isPublic: pl.isPublic, playlist: pl });
   } catch (e) {
@@ -4032,6 +4043,7 @@ app.post('/api/playlists/:id/upload-cover', auth, upload.single('cover'), async 
     }
     if (!pl) return res.status(403).json({ success: false, error: 'Playlist not found' });
     pl.cover = coverUrl;
+    u.markModified('playlists');
     await u.save();
     res.json({ success: true, cover: coverUrl, playlist: pl });
   } catch (err) {
@@ -4272,7 +4284,7 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
     try {
       const res = await axios.get('https://lrclib.net/api/search', {
         params: { q },
-        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/mohamedLIOT1/liofy)' },
+        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/mohamedLIOT1/rivo)' },
         timeout: 4500
       });
       const items = res.data || [];
@@ -4755,11 +4767,11 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 }
 
 // Dedicated audio stream resolution endpoint with proxy support
-app.get('/api/tracks/:id/stream', async (req, res) => {
+const handleTrackStream = async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = req.params?.id || req.query?.trackId || req.query?.id || '';
     let track = null;
-    if (mongoose.isValidObjectId(id)) {
+    if (id && mongoose.isValidObjectId(id)) {
       track = await Track.findById(id).lean();
     }
     const rawUrl = req.query.url || track?.audioUrl || '';
@@ -4788,7 +4800,8 @@ app.get('/api/tracks/:id/stream', async (req, res) => {
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
-});
+};
+app.get(['/api/tracks/stream', '/api/tracks/:id/stream'], handleTrackStream);
 
 // Resilient Stream Proxy with full Range header support for zero-lag seeking & buffering
 app.get('/api/tracks/stream-proxy', async (req, res) => {

@@ -359,16 +359,51 @@ export default function PlaylistScreen({
   const isMixView = playlist.isMix || playlist.name.toUpperCase().includes('MIX');
   const isPublic = playlist.isPublic !== false;
 
-  const handleCoverUpload = (e) => {
+  const resolvePlaylistCover = (cover) => {
+    if (!cover) return `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist?.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
+    if (cover.startsWith('/uploads/')) {
+      return `${API_BASE_URL}${cover}`;
+    }
+    return cover;
+  };
+
+  const handleCoverUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUpdatingCover(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      onUpdatePlaylist({ ...playlist, cover: reader.result });
+    const plId = String(playlist?.id || playlist?._id || '');
+    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+    try {
+      if (token && plId) {
+        const formData = new FormData();
+        formData.append('cover', file);
+        const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/upload-cover`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+        const data = await res.json();
+        if (data.success && data.cover) {
+          onUpdatePlaylist({ ...playlist, cover: data.cover });
+          if (onToast) onToast('Playlist cover updated successfully', 'success');
+          return;
+        }
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onUpdatePlaylist({ ...playlist, cover: reader.result });
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.warn('Cover upload failed, falling back:', err);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onUpdatePlaylist({ ...playlist, cover: reader.result });
+      };
+      reader.readAsDataURL(file);
+    } finally {
       setIsUpdatingCover(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleTogglePrivacy = async () => {
@@ -594,20 +629,24 @@ export default function PlaylistScreen({
             ) : (
               <>
                 <img 
-                  src={(playlist.isAlbum || isSiteAlbum) ? getAlbumArtwork(playlist, playlist.cover) : (playlist.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name)}&background=082621&color=26c4b7&size=512&bold=true&format=svg`)} 
+                  src={(playlist.isAlbum || isSiteAlbum) ? getAlbumArtwork(playlist, playlist.cover) : resolvePlaylistCover(playlist.cover)} 
                   alt={playlist.name} 
                   className="w-full h-full object-cover" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
+                  }}
                 />
-                {isOwner && (
+                {isUpdatingCover && (
+                  <div className="absolute inset-0 bg-[#082621]/80 flex flex-col items-center justify-center gap-1 sm:gap-2 text-[#26c4b7] z-10 pointer-events-none">
+                    <Loader2 size={24} className="animate-spin text-white" />
+                    <span className="text-[9px] sm:text-xs font-mono font-black uppercase text-white">UPDATING...</span>
+                  </div>
+                )}
+                {isOwner && !isUpdatingCover && (
                   <label className="absolute inset-0 bg-[#082621]/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 sm:gap-2 cursor-pointer text-[#26c4b7]">
-                    {isUpdatingCover ? (
-                      <Loader2 size={20} className="animate-spin text-white" />
-                    ) : (
-                      <>
-                        <Camera size={20} className="sm:w-7 sm:h-7" />
-                        <span className="text-[9px] sm:text-xs font-mono font-black uppercase text-white text-center px-1">CHANGE</span>
-                      </>
-                    )}
+                    <Camera size={20} className="sm:w-7 sm:h-7" />
+                    <span className="text-[9px] sm:text-xs font-mono font-black uppercase text-white text-center px-1">CHANGE</span>
                     <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
                   </label>
                 )}

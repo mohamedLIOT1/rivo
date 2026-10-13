@@ -59,7 +59,7 @@ export default function JamRoomModal({ visible, onClose }) {
   const [justAddedId, setJustAddedId] = useState(null);
   const [shuffleSeed, setShuffleSeed] = useState(0);
 
-  if (!visible) return null;
+  // Modal visibility handled by <Modal visible={visible}>
 
   const handleCopyCode = () => {
     const code = jamSession?.code || jamSession?.roomCode;
