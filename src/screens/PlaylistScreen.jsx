@@ -1291,12 +1291,12 @@ export default function PlaylistScreen({
               <h3 className={`text-sm font-mono font-black uppercase ${
                 isDark ? 'text-white' : 'text-[#082621]'
               }`}>
-                {isQuran ? 'ADD SURAHS FROM YOUR LIBRARY' : 'ADD TRACKS FROM YOUR DISPENSARY'}
+                {isQuran ? 'ADD SURAHS FROM YOUR LIBRARY' : 'ADD TRACKS FROM YOUR LIBRARY'}
               </h3>
               <p className={`text-[11px] font-sans ${
                 isDark ? 'text-zinc-400' : 'text-[#082621]/70'
               }`}>
-                {isQuran ? 'Click ADD to append these surahs to this collection' : 'Click ADD to append these records to this cassette'}
+                {isQuran ? 'Click ADD to append these surahs to this collection' : 'Click ADD to append these tracks to this playlist'}
               </p>
             </div>
             <div className="relative w-full sm:w-56">

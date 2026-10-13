@@ -25,10 +25,10 @@ export default class ErrorBoundary extends React.Component {
               <AlertTriangle size={28} />
             </div>
             <div className="text-[10px] font-mono font-black uppercase text-[#17a398] mb-1">
-              APOTHECARY SAFETY INTERVENTION
+              APPLICATION ERROR
             </div>
             <h1 className="text-xl md:text-2xl font-mono font-black uppercase text-[#082621] mb-2">
-              DISPENSARY INTERRUPTION
+              SOMETHING WENT WRONG
             </h1>
             <p className="text-xs text-[#082621]/70 mb-4 font-sans">
               Click below to reset local audio storage and relaunch Rivo cleanly.

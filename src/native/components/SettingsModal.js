@@ -467,14 +467,14 @@ export default function SettingsModal({ visible, onClose }) {
                 <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                   <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                     <ShieldCheck size={18} color={colors.teal} />
-                    <Text style={[styles.sectionTitle, { color: textTitle }]}>ACTIVE CITIZEN</Text>
+                    <Text style={[styles.sectionTitle, { color: textTitle }]}>ACCOUNT DETAILS</Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={[styles.label, { color: textMuted }]}>Handle:</Text>
+                    <Text style={[styles.label, { color: textMuted }]}>Username:</Text>
                     <Text style={[styles.valueMono, { color: textTitle }]}>@{currentUser.name || currentUser.username}</Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={[styles.label, { color: textMuted }]}>Identity:</Text>
+                    <Text style={[styles.label, { color: textMuted }]}>Email:</Text>
                     <Text style={[styles.valueMono, { color: textTitle }]}>{currentUser.email}</Text>
                   </View>
                   <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>

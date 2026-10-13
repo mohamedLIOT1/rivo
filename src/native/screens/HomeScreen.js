@@ -19,6 +19,7 @@ import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import { isQuranContent } from '../../utils/quranUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { sortTracksByPopularity } from '../utils/trackPopularity';
 
 const { width } = Dimensions.get('window');
 const ALBUM_CARD_WIDTH = (width - 34) / 2;
@@ -36,14 +37,14 @@ export default function HomeScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
 
-  // Filter music only (strictly exclude Quran from main music home)
+  // Filter music only (strictly exclude Quran from main music home) & apply smart popularity sorting
   const displayTracks = useMemo(() => {
     if (isOffline || activeFilter === 'downloaded') {
       const safeDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).filter((t) => !isQuranContent(t));
-      return safeDownloaded;
+      return sortTracksByPopularity(safeDownloaded);
     }
-    let list = (userTracks || []).filter((t) => !isQuranContent(t));
-    return list;
+    const list = (userTracks || []).filter((t) => !isQuranContent(t));
+    return sortTracksByPopularity(list);
   }, [userTracks, activeFilter, downloadedTracks, isOffline]);
 
   // Discography Featured Albums (Matching Web UI & Image 3)
@@ -293,7 +294,7 @@ export default function HomeScreen({
           <Text style={styles.emptyText}>
             {isOffline
               ? 'No offline songs saved yet.\nDownload songs while connected to listen offline here!'
-              : 'Loading dispensary tracks...'}
+              : 'Loading tracks...'}
           </Text>
         </View>
       );

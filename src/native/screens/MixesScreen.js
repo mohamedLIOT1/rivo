@@ -134,8 +134,8 @@ export default function MixesScreen({ onTrackAction }) {
         ) : (
           <View style={styles.headerMainRow}>
             <View>
-              <Text style={styles.headerTitle}>DISPENSARY MIXES</Text>
-              <Text style={styles.headerSub}>AI-ALIGNED TASTE CRATES</Text>
+              <Text style={styles.headerTitle}>CURATED MIXES</Text>
+              <Text style={styles.headerSub}>SMART PLAYLISTS & MOODS</Text>
             </View>
             <CassetteTag label="STEREO HI-FI" bg={colors.ink} textColor={colors.mint} />
           </View>
@@ -152,7 +152,7 @@ export default function MixesScreen({ onTrackAction }) {
               <View style={[styles.moodBanner, { borderColor: colors.ink }]}>
                 <Image source={{ uri: selectedMood.cover }} style={styles.bannerImg} />
                 <View style={styles.bannerOverlay}>
-                  <CassetteTag label="CURATED DISPENSARY MIX" bg={colors.ink} textColor={colors.tealLight} />
+                  <CassetteTag label="CURATED MIX" bg={colors.ink} textColor={colors.tealLight} />
                   <Text style={styles.bannerTitle}>{selectedMood.label}</Text>
                   <Text style={styles.bannerDesc}>{selectedMood.desc}</Text>
                   <TouchableOpacity
@@ -160,7 +160,7 @@ export default function MixesScreen({ onTrackAction }) {
                     onPress={() => handlePlayMood(selectedMood, false)}
                   >
                     <Play size={16} color={colors.ink} fill={colors.ink} />
-                    <Text style={styles.bannerPlayBtnText}>PLAY FULL CASSETTE</Text>
+                    <Text style={styles.bannerPlayBtnText}>PLAY MIX</Text>
                   </TouchableOpacity>
                 </View>
               </View>

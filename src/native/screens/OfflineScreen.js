@@ -101,7 +101,7 @@ export default function OfflineScreen() {
 
   const handleDelete = (track) => {
     Alert.alert(
-      'REMOVE OFFLINE TAPE',
+      'REMOVE OFFLINE SONG',
       `Delete "${track.title}" from local device storage?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -147,7 +147,7 @@ export default function OfflineScreen() {
     } else {
       sel.forEach((t) => playTrack(t));
     }
-    showToast(`Added ${sel.length} tape(s) to queue`, 'info');
+    showToast(`Added ${sel.length} song(s) to queue`, 'info');
     setIsSelectMode(false);
     setSelectedIds([]);
   };
@@ -156,8 +156,8 @@ export default function OfflineScreen() {
     const sel = getSelectedTracks();
     if (sel.length === 0) return;
     Alert.alert(
-      'REMOVE SELECTED TAPES',
-      `Delete ${sel.length} tape(s) from local device storage?`,
+      'REMOVE SELECTED SONGS',
+      `Delete ${sel.length} song(s) from local device storage?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -174,10 +174,10 @@ export default function OfflineScreen() {
               setOfflineTracks((prev) => prev.filter((t) => !selSet.has(String(t._id || t.id))));
               setSelectedIds([]);
               setIsSelectMode(false);
-              showToast(`Removed ${sel.length} tape(s) from storage`, 'info');
+              showToast(`Removed ${sel.length} song(s) from storage`, 'info');
               loadOffline();
             } catch {
-              showToast('Error removing some tapes', 'error');
+              showToast('Error removing some songs', 'error');
             } finally {
               setActionLoading(false);
             }
@@ -218,7 +218,7 @@ export default function OfflineScreen() {
               <CassetteTag label="NO WI-FI REQUIRED" bg={colors.ink} textColor={colors.mint} />
             </View>
 
-            <Text style={styles.heroTitle}>OFFLINE TAPES</Text>
+            <Text style={styles.heroTitle}>OFFLINE SONGS</Text>
             <Text style={[styles.heroSub, { marginBottom: 12 }]}>
               Audio tracks saved on your device for zero-latency, offline listening.
             </Text>
@@ -232,7 +232,7 @@ export default function OfflineScreen() {
                 </Text>
               </View>
               <Text style={styles.vaultSizeText}>
-                {formatBytes(storageUsed)} • {(offlineTracks || []).length} TAPES
+                {formatBytes(storageUsed)} • {(offlineTracks || []).length} SONGS
               </Text>
             </View>
 
@@ -284,21 +284,21 @@ export default function OfflineScreen() {
         {/* Offline Tracks List */}
         <View style={styles.listSection}>
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>DOWNLOADED AUDIO CASSETTES</Text>
+            <Text style={styles.listTitle}>DOWNLOADED SONGS</Text>
             <Text style={styles.listCount}>{(offlineTracks || []).length} SAVED</Text>
           </View>
 
           {(!offlineTracks || offlineTracks.length === 0) ? (
             <View style={styles.emptyCard}>
               <WifiOff size={40} color={colors.teal} />
-              <Text style={styles.emptyTitle}>No offline tapes saved</Text>
+              <Text style={styles.emptyTitle}>No offline songs saved</Text>
               <Text style={styles.emptySub}>
                 Switch to online mode and tap the download icon on any song to save it for offline playback — no Wi-Fi needed.
               </Text>
               <View style={styles.goOnlineBanner}>
                 <Wifi size={13} color={colors.teal} />
                 <Text style={styles.goOnlineText}>
-                  Use the toggle button to go online and download tapes
+                  Use the toggle button to go online and download songs
                 </Text>
               </View>
             </View>
@@ -368,7 +368,7 @@ export default function OfflineScreen() {
                             styles.localPillText,
                             track?.isLocalImport && { color: colors.mint }
                           ]}>
-                            {track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE TAPE'}
+                            {track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE SONG'}
                           </Text>
                         </View>
                       </View>

@@ -538,10 +538,10 @@ export default function SettingsModal({
         {/* Version Information */}
         <div className={`mt-4 pt-3 border-t-2 text-center ${isDark ? 'border-zinc-700' : 'border-[#0b1110]'}`}>
           <p className="font-mono text-[11px] font-black uppercase tracking-wider text-[#17a398]">
-            Rivo Sonic Dispensary {FULL_VERSION}
+            Rivo Music Streaming {FULL_VERSION}
           </p>
           <p className={`font-mono text-[9px] mt-0.5 ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-            Non-stop Flow • Pure Sound Relief
+            High Fidelity Audio • Offline & Synchronized
           </p>
         </div>
       </div>

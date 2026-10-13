@@ -65,8 +65,8 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
             {/* Header */}
             <View style={styles.header}>
               <View style={{ flex: 1 }}>
-                <CassetteTag label="DISPENSARY ARCHIVE" bg={colors.ink} textColor={colors.mint} />
-                <Text style={styles.title}>ADD TO CRATE</Text>
+                <CassetteTag label="PLAYLIST" bg={colors.ink} textColor={colors.mint} />
+                <Text style={styles.title}>ADD TO PLAYLIST</Text>
                 <Text style={styles.subTitle} numberOfLines={1}>
                   "{track.title}" - {track.artist || 'Unknown'}
                 </Text>
@@ -106,7 +106,7 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
             {playlists.length === 0 ? (
               <View style={styles.emptyBox}>
                 <FolderPlus size={32} color={colors.teal} />
-                <Text style={styles.emptyText}>No playlists found in your crate.</Text>
+                <Text style={styles.emptyText}>No playlists found.</Text>
                 <Text style={styles.emptySub}>Create your first one above!</Text>
               </View>
             ) : (

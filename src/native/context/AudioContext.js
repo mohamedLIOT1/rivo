@@ -33,6 +33,7 @@ export const AudioProvider = ({ children }) => {
   const seekToRef = useRef(null);
   const historyStackRef = useRef([]);
   const isHistoryNavRef = useRef(false);
+  const isSeekingRef = useRef(false);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -251,10 +252,12 @@ export const AudioProvider = ({ children }) => {
 
   const onPlaybackStatusUpdate = (status) => {
     if (!status.isLoaded) return;
-    if (isPlaying !== status.isPlaying) {
-      setIsPlaying(status.isPlaying);
-      const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
-      updateMediaNotification(status.isPlaying, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
+    if (!isSeekingRef.current && !status.isBuffering) {
+      if (isPlaying !== status.isPlaying) {
+        setIsPlaying(status.isPlaying);
+        const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
+        updateMediaNotification(status.isPlaying, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
+      }
     }
 
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
@@ -666,9 +669,25 @@ export const AudioProvider = ({ children }) => {
   const seekTo = async (secs) => {
     if (!soundRef.current) return;
     const safeSecs = Math.max(0, Number(secs) || 0);
-    await soundRef.current.setPositionAsync(safeSecs * 1000).catch(() => {});
+    const wasPlaying = isPlayingRef.current;
+    isSeekingRef.current = true;
+    try {
+      await soundRef.current.setPositionAsync(safeSecs * 1000);
+      if (wasPlaying) {
+        await soundRef.current.playAsync().catch(() => {});
+      }
+    } catch {} finally {
+      setTimeout(() => {
+        isSeekingRef.current = false;
+      }, 400);
+    }
     setProgress(p => ({ ...p, currentTime: safeSecs }));
-    broadcastListeningActivity(currentTrackRef.current, isPlayingRef.current, safeSecs);
+    if (wasPlaying) {
+      setIsPlaying(true);
+      const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
+      updateMediaNotification(true, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
+    }
+    broadcastListeningActivity(currentTrackRef.current, wasPlaying, safeSecs);
   };
 
   const playNextTrack = () => {

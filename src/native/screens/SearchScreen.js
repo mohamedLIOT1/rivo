@@ -131,15 +131,15 @@ export default function SearchScreen({ onTrackAction }) {
       {/* Header & Search Bar */}
       <View style={styles.searchHeader}>
         <View style={styles.headerTitleRow}>
-          <Text style={styles.headerTitle}>DISPENSARY SEARCH</Text>
-          <CassetteTag label={isOffline ? "LOCAL ARCHIVE" : "ONLINE MATRIX"} bg={colors.ink} textColor={colors.mint} />
+          <Text style={styles.headerTitle}>EXPLORE & SEARCH</Text>
+          <CassetteTag label={isOffline ? "OFFLINE SONGS" : "ONLINE"} bg={colors.ink} textColor={colors.mint} />
         </View>
 
         <View style={styles.inputContainer}>
           <SearchIcon size={18} color={colors.ink} style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search tracks, artists, reciters, tapes..."
+            placeholder="Search songs, artists, reciters..."
             placeholderTextColor={colors.grayText}
             value={query}
             onChangeText={setQuery}
@@ -177,7 +177,7 @@ export default function SearchScreen({ onTrackAction }) {
           <View style={styles.genresSection}>
             <View style={styles.sectionTitleRow}>
               <Disc size={16} color={colors.mint} />
-              <Text style={styles.sectionHeading}>DISPENSARY GENRES & SHELVES</Text>
+              <Text style={styles.sectionHeading}>POPULAR GENRES & MOODS</Text>
             </View>
 
             <View style={styles.genresGrid}>
@@ -206,15 +206,15 @@ export default function SearchScreen({ onTrackAction }) {
           <View style={styles.resultsSection}>
             <View style={styles.resultsHeader}>
               <Text style={styles.resultsCount}>
-                FOUND {filteredTracks.length} TAPES IN ARCHIVE
+                FOUND {filteredTracks.length} SONGS
               </Text>
             </View>
 
             {filteredTracks.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Disc size={36} color={colors.teal} />
-                <Text style={styles.emptyText}>No matching recordings found.</Text>
-                <Text style={styles.emptySub}>Try searching for another artist or tape title.</Text>
+                <Text style={styles.emptyText}>No matching songs found.</Text>
+                <Text style={styles.emptySub}>Try searching for another artist or song title.</Text>
               </View>
             ) : (
               <View style={styles.tracksList}>

@@ -289,22 +289,22 @@ export default function LibraryScreen({
                 {selectedView === 'liked' ? 'LIKED RECORDINGS' : selectedView.name}
               </Text>
               <Text style={styles.headerSub}>
-                DISPENSARY ARCHIVE •{' '}
+                PLAYLIST •{' '}
                 {selectedView === 'liked'
-                  ? `${likedTracks.length} TAPES`
-                  : `${(selectedView.tracks || selectedView.trackIds || []).length} TAPES`}
+                  ? `${likedTracks.length} SONGS`
+                  : `${(selectedView.tracks || selectedView.trackIds || []).length} SONGS`}
               </Text>
             </View>
           </View>
         ) : (
           <View style={styles.headerMainRow}>
             <View>
-              <Text style={styles.headerTitle}>YOUR AUDIO VAULT</Text>
-              <Text style={styles.headerSub}>CASSETTES, CRATES & OFFLINE</Text>
+              <Text style={styles.headerTitle}>YOUR LIBRARY</Text>
+              <Text style={styles.headerSub}>PLAYLISTS & DOWNLOADS</Text>
             </View>
             <TouchableOpacity style={styles.newPlaylistBtn} onPress={onOpenCreatePlaylist}>
               <Plus size={16} color={colors.ink} strokeWidth={3} />
-              <Text style={styles.newPlaylistBtnText}>CRATE</Text>
+              <Text style={styles.newPlaylistBtnText}>NEW</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -321,9 +321,9 @@ export default function LibraryScreen({
                   <Heart size={32} color={colors.rust} fill={colors.rust} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="FAVORITE ARCHIVE" bg={colors.ink} textColor={colors.mint} />
-                  <Text style={styles.likedHeroTitle}>LIKED TAPES</Text>
-                  <Text style={styles.likedHeroSub}>{likedTracks.length} recordings preserved</Text>
+                  <CassetteTag label="FAVORITES" bg={colors.ink} textColor={colors.mint} />
+                  <Text style={styles.likedHeroTitle}>LIKED SONGS</Text>
+                  <Text style={styles.likedHeroSub}>{likedTracks.length} songs preserved</Text>
                   <View style={styles.likedBtnRow}>
                     <TouchableOpacity
                       style={styles.playHeroBtn}
@@ -483,9 +483,9 @@ export default function LibraryScreen({
                   <Heart size={28} color={colors.rust} fill={colors.rust} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="PRIMARY TAPE" bg={colors.ink} textColor={colors.mint} />
-                  <Text style={styles.likedBannerTitle}>LIKED RECORDINGS</Text>
-                  <Text style={styles.likedBannerSub}>{likedTracks.length} TAPES ARCHIVED</Text>
+                  <CassetteTag label="FAVORITES" bg={colors.ink} textColor={colors.mint} />
+                  <Text style={styles.likedBannerTitle}>LIKED SONGS</Text>
+                  <Text style={styles.likedBannerSub}>{likedTracks.length} SONGS SAVED</Text>
                 </View>
                 <View style={styles.cardArrowPill}>
                   <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -506,8 +506,8 @@ export default function LibraryScreen({
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <CassetteTag label="OFFLINE STORAGE" bg={colors.ink} textColor={colors.tealLight} />
-                  <Text style={styles.likedBannerTitle}>CACHED TAPES (NO WI-FI)</Text>
-                  <Text style={styles.likedBannerSub}>LOCAL AUDIO REELS READY</Text>
+                  <Text style={styles.likedBannerTitle}>OFFLINE VAULT</Text>
+                  <Text style={styles.likedBannerSub}>PLAY ANYWHERE WITHOUT WI-FI</Text>
                 </View>
                 <View style={styles.cardArrowPill}>
                   <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -515,18 +515,18 @@ export default function LibraryScreen({
               </View>
             </TouchableOpacity>
 
-            {/* User Crates / Playlists */}
+            {/* User Playlists */}
             <View style={styles.cratesHeader}>
-              <Text style={styles.cratesTitle}>YOUR CRATES ({playlists.length})</Text>
-              <CassetteTag label="PHYSICAL DISPENSARY" bg={colors.ink} textColor={colors.mint} />
+              <Text style={styles.cratesTitle}>YOUR PLAYLISTS ({playlists.length})</Text>
+              <CassetteTag label="COLLECTION" bg={colors.ink} textColor={colors.mint} />
             </View>
 
             {playlists.length === 0 ? (
               <View style={styles.emptyCard}>
                 <FolderHeart size={36} color={colors.teal} />
-                <Text style={styles.emptyTitle}>No crates created yet</Text>
+                <Text style={styles.emptyTitle}>No playlists created yet</Text>
                 <Text style={styles.emptySub}>
-                  Create custom playlists to organize your favorite Cairo sounds.
+                  Create custom playlists to organize your favorite songs.
                 </Text>
               </View>
             ) : (

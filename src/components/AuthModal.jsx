@@ -113,12 +113,12 @@ export default function AuthModal({ isOpen, onClose }) {
 
               {mode === 'register' && (
                 <div>
-                  <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">PATIENT NAME</label>
+                  <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">FULL NAME</label>
                   <input
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="e.g. Dr. Mohamed"
+                    placeholder="e.g. Mohamed Ali"
                     className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2 brutal-border focus:outline-none focus:bg-white"
                   />
                 </div>
@@ -126,20 +126,20 @@ export default function AuthModal({ isOpen, onClose }) {
 
               <div>
                 <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">
-                  {mode === 'login' ? 'EMAIL OR USER IDENTIFIER' : 'OFFICIAL EMAIL'}
+                  {mode === 'login' ? 'EMAIL OR USERNAME' : 'EMAIL ADDRESS'}
                 </label>
                 <input
                   type={mode === 'login' ? 'text' : 'email'}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  placeholder={mode === 'login' ? 'Username or email' : 'patient@hospital.org'}
+                  placeholder={mode === 'login' ? 'Username or email' : 'user@rivo.fm'}
                   required
                   className="w-full bg-[#ede5d3] text-[#0b1110] text-xs font-sans font-bold px-3 py-2 brutal-border focus:outline-none focus:bg-white"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">SECRET CIPHER (PASSWORD)</label>
+                <label className="text-[10px] font-mono font-black uppercase text-[#082621] block mb-1">PASSWORD</label>
                 <div className="relative">
                   <input
                     type={showPass ? 'text' : 'password'}
