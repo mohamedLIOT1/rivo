@@ -223,7 +223,7 @@ export default function ProfileScreen({
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }, !isDark && styles.containerLight]}>
         <ActivityIndicator size="large" color="#17a398" />
-        <Text style={{ color: '#94a3b8', marginTop: 12, fontFamily: 'monospace', fontSize: 12 }}>Loading Citizen Dossier...</Text>
+        <Text style={{ color: '#94a3b8', marginTop: 12, fontFamily: 'monospace', fontSize: 12 }}>Loading Profile...</Text>
       </View>
     );
   }
@@ -317,7 +317,7 @@ export default function ProfileScreen({
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
               <Text style={[styles.statNumber, !isDark && styles.statNumberLight]}>{vCrates.length}</Text>
-              <Text style={styles.statLabel}>CRATES</Text>
+              <Text style={styles.statLabel}>PLAYLISTS</Text>
             </View>
 
             <TouchableOpacity
@@ -379,19 +379,19 @@ export default function ProfileScreen({
           )}
         </View>
 
-        {/* Public Crates Section */}
+        {/* Public Playlists Section */}
         <View style={styles.sectionHeader}>
           <Disc size={16} color="#17a398" strokeWidth={2.5} />
           <Text style={styles.sectionTitle}>
-            PUBLIC CRATES ({vCrates.length})
+            PUBLIC PLAYLISTS ({vCrates.length})
           </Text>
         </View>
 
         {vCrates.length === 0 ? (
           <View style={styles.emptyCard}>
             <Disc size={32} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>No Public Crates</Text>
-            <Text style={styles.emptySub}>This listener hasn't published any public playlists yet.</Text>
+            <Text style={styles.emptyTitle}>No Public Playlists</Text>
+            <Text style={styles.emptySub}>No public playlists published yet.</Text>
           </View>
         ) : (
           <View style={{ gap: 10, marginTop: 10 }}>
@@ -444,7 +444,7 @@ export default function ProfileScreen({
           <View style={styles.statusIndicatorRow}>
             <View style={[styles.pulseDot, { backgroundColor: currentUser ? '#17a398' : '#f59e0b' }]} />
             <Text style={[styles.statusText, !isDark && styles.statusTextLight]}>
-              {currentUser ? `USER PROFILE // @${currentUser.name || 'listener'}` : 'GUEST MODE // ANONYMOUS'}
+              {currentUser ? `@${currentUser.name || 'listener'}` : 'GUEST LISTENER'}
             </Text>
           </View>
           <View style={styles.memberBadge}>
@@ -479,7 +479,7 @@ export default function ProfileScreen({
             </View>
 
             <Text style={styles.userEmail} numberOfLines={1}>
-              {currentUser?.email || 'Sign in to sync your crates & Discord presence'}
+              {currentUser?.email || 'Sign in to sync your playlists & Discord presence'}
             </Text>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -495,11 +495,11 @@ export default function ProfileScreen({
           </View>
         </View>
 
-        {/* PUNCH CARD STATS (Web Style & Image 4) */}
+        {/* PUNCH CARD STATS */}
         <View style={styles.statsGrid}>
           <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
             <Text style={[styles.statNumber, !isDark && styles.statNumberLight]}>{safeCratesCount}</Text>
-            <Text style={styles.statLabel}>CRATES</Text>
+            <Text style={styles.statLabel}>PLAYLISTS</Text>
           </View>
 
           <TouchableOpacity
@@ -522,7 +522,7 @@ export default function ProfileScreen({
 
           <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
             <Text style={[styles.statNumber, !isDark && styles.statNumberLight, { color: '#ef4444' }]}>{safeLikedCount}</Text>
-            <Text style={styles.statLabel}>LIKED</Text>
+            <Text style={styles.statLabel}>LIKED SONGS</Text>
           </View>
         </View>
       </View>
@@ -539,7 +539,7 @@ export default function ProfileScreen({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.guestBannerTitle}>Unlock Full Rivo Experience</Text>
-            <Text style={styles.guestBannerSub}>Sign in to save crates, follow friends & sync Discord.</Text>
+            <Text style={styles.guestBannerSub}>Sign in to save playlists, follow friends & sync Discord.</Text>
           </View>
           <View style={styles.guestBannerBtn}>
             <LogIn size={13} color="#0b1110" strokeWidth={2.8} />
@@ -557,7 +557,7 @@ export default function ProfileScreen({
           <View style={{ flex: 1 }}>
             <Text style={styles.discordTitle}>DISCORD RICH PRESENCE</Text>
             <Text style={styles.discordSub}>
-              {currentUser ? 'Zero-latency live track sync enabled' : 'Connect account to broadcast tracks'}
+              {currentUser ? 'Live track sync enabled' : 'Connect account to broadcast tracks'}
             </Text>
           </View>
           <View style={styles.discordPulseWrap}>
@@ -570,78 +570,11 @@ export default function ProfileScreen({
         </Text>
       </View>
 
-      {/* ── QUICK ACTIONS (FRIEND ACTIVITY, JAM, CHAT, SETTINGS) ── */}
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>COMMUNITY & SOUND TOOLS</Text>
-      </View>
-
-      <View style={styles.actionGrid}>
-        {/* Friend Activity */}
-        <TouchableOpacity
-          style={[styles.actionCard, !isDark && styles.actionCardLight]}
-          onPress={onOpenFriendActivity}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.actionIconBox, { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
-            <Users size={18} color="#17a398" strokeWidth={2.5} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Friend Activity</Text>
-            <Text style={styles.actionCardSub}>Live radar & listen along</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Live Jam Rooms */}
-        <TouchableOpacity
-          style={[styles.actionCard, !isDark && styles.actionCardLight]}
-          onPress={onOpenJam}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.actionIconBox, { backgroundColor: 'rgba(245,158,11,0.18)', borderColor: '#f59e0b' }]}>
-            <Radio size={18} color="#f59e0b" strokeWidth={2.5} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Live Jam Room</Text>
-            <Text style={styles.actionCardSub}>Group synchronizer</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Community Chat */}
-        <TouchableOpacity
-          style={[styles.actionCard, !isDark && styles.actionCardLight]}
-          onPress={onOpenChat}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.actionIconBox, { backgroundColor: 'rgba(56,189,248,0.18)', borderColor: '#38bdf8' }]}>
-            <MessageSquare size={18} color="#38bdf8" strokeWidth={2.5} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Cairo Chat</Text>
-            <Text style={styles.actionCardSub}>Share tapes & messages</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Settings */}
-        <TouchableOpacity
-          style={[styles.actionCard, !isDark && styles.actionCardLight]}
-          onPress={onOpenSettings}
-          activeOpacity={0.85}
-        >
-          <View style={[styles.actionIconBox, { backgroundColor: 'rgba(148,163,184,0.18)', borderColor: '#94a3b8' }]}>
-            <SettingsIcon size={18} color="#94a3b8" strokeWidth={2.5} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Engine Settings</Text>
-            <Text style={styles.actionCardSub}>Audio buffer & vault</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── USER CRATES / PLAYLISTS SUMMARY ── */}
+      {/* ── USER PLAYLISTS SUMMARY ── */}
       {playlists.length > 0 && (
         <View style={{ marginTop: 20 }}>
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>YOUR CRATES ({playlists.length})</Text>
+            <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>YOUR PLAYLISTS ({playlists.length})</Text>
           </View>
           {playlists.map((pl) => (
             <TouchableOpacity
@@ -662,7 +595,7 @@ export default function ProfileScreen({
                   {pl.name}
                 </Text>
                 <Text style={styles.playlistRowCount}>
-                  {(pl.tracks || pl.trackIds || []).length} TAPES
+                  {(pl.tracks || pl.trackIds || []).length} SONGS
                 </Text>
               </View>
               <View style={styles.playlistPlayBtn}>
@@ -673,8 +606,23 @@ export default function ProfileScreen({
         </View>
       )}
 
-      {/* ── LOG OUT / SIGN IN FOOTER BUTTON ── */}
-      <View style={{ marginTop: 24, marginBottom: 30 }}>
+      {/* ── SETTINGS & LOG OUT BUTTONS ── */}
+      <View style={{ marginTop: 24, marginBottom: 30, gap: 10 }}>
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={onOpenSettings}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.actionIconBox, { backgroundColor: 'rgba(148,163,184,0.18)', borderColor: '#94a3b8' }]}>
+            <SettingsIcon size={18} color="#94a3b8" strokeWidth={2.5} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Settings</Text>
+            <Text style={styles.actionCardSub}>Audio buffer, theme & account</Text>
+          </View>
+          <ChevronRight size={16} color="#64748b" />
+        </TouchableOpacity>
+
         {currentUser ? (
           <TouchableOpacity
             style={styles.logoutBtn}
@@ -682,7 +630,7 @@ export default function ProfileScreen({
             activeOpacity={0.85}
           >
             <LogOut size={16} color="#ef4444" strokeWidth={2.5} />
-            <Text style={styles.logoutBtnText}>LOG OUT OF CITIZEN IDENTITY</Text>
+            <Text style={styles.logoutBtnText}>LOG OUT</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity

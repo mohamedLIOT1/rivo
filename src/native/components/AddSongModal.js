@@ -56,8 +56,8 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                   <Plus size={18} color={colors.ink} />
                 </View>
                 <View>
-                  <Text style={styles.title}>ADD AUDIO TAPE</Text>
-                  <CassetteTag label="STREAM RESOLVER" bg={colors.ink} textColor={colors.tealLight} />
+                  <Text style={styles.title}>ADD SONG</Text>
+                  <CassetteTag label="AUDIO STREAM" bg={colors.ink} textColor={colors.tealLight} />
                 </View>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -66,7 +66,7 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
             </View>
 
             <Text style={styles.desc}>
-              Paste a YouTube or direct MP3 stream URL to register it into the dispensary catalog:
+              Paste a YouTube or direct MP3 stream URL to add it to your library:
             </Text>
 
             <TextInput

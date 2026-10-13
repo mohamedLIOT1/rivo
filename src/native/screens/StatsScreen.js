@@ -60,10 +60,10 @@ export default function StatsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>DISPENSARY METRICS</Text>
-          <Text style={styles.headerSub}>REAL-TIME AUDIO TELEMETRY</Text>
+          <Text style={styles.headerTitle}>LISTENING STATS</Text>
+          <Text style={styles.headerSub}>YOUR MUSIC ACTIVITY</Text>
         </View>
-        <CassetteTag label="CITIZEN STATS" bg={colors.ink} textColor={colors.mint} />
+        <CassetteTag label="OVERVIEW" bg={colors.ink} textColor={colors.mint} />
       </View>
 
       {/* 2x2 Grid of Brutal Stat Cards */}

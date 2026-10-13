@@ -464,7 +464,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                   <ListMusic size={32} color={colors.mint} style={{ marginBottom: 12 }} />
                   <Text style={[styles.emptyLyricsTitle, { color: textTitle }]}>No Lyrics Found</Text>
                   <Text style={styles.emptyLyricsText}>
-                    {isLoadingLyrics ? 'Retrieving synchronized lyrics from dispensary...' : 'Lyrics could not be loaded for this track.'}
+                    {isLoadingLyrics ? 'Retrieving synchronized lyrics...' : 'Lyrics could not be loaded for this track.'}
                   </Text>
                 </View>
               )}

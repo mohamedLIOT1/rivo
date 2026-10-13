@@ -38,13 +38,13 @@ const FEATURES = [
   {
     icon: Sparkles,
     title: '24-bit Hi-Fi Audio',
-    desc: 'Pure Cairo underground sound relief & zero-compression reels',
+    desc: 'High-fidelity music streaming and crystal-clear sound quality',
     color: '#17a398',
   },
   {
     icon: Download,
     title: 'Offline Vault',
-    desc: 'Cache your favorite crates and listen anywhere without internet',
+    desc: 'Download your favorite playlists and listen anywhere offline',
     color: '#38bdf8',
   },
   {
@@ -139,10 +139,10 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                 </View>
                 <Text style={styles.appTitle}>RIVO</Text>
                 <View style={styles.versionPill}>
-                  <Text style={styles.versionText}>v{APP_VERSION} • SONIC DISPENSARY</Text>
+                  <Text style={styles.versionText}>v{APP_VERSION} • MUSIC STREAMING</Text>
                 </View>
                 <Text style={styles.tagline}>
-                  Pure sound relief, offline vault & synchronized live listening for Cairo.
+                  Music streaming, offline downloads & synchronized listening.
                 </Text>
               </View>
 
@@ -236,7 +236,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
 
                   {mode === 'register' && (
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>LISTENER NAME</Text>
+                      <Text style={styles.inputLabel}>FULL NAME</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="e.g. Karim Tarek"
@@ -249,7 +249,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                   )}
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>EMAIL / USERNAME</Text>
+                    <Text style={styles.inputLabel}>EMAIL OR USERNAME</Text>
                     <TextInput
                       style={styles.input}
                       placeholder="listener@rivo.fm"
@@ -262,7 +262,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>PASSWORD CIPHER</Text>
+                    <Text style={styles.inputLabel}>PASSWORD</Text>
                     <View style={styles.passwordRow}>
                       <TextInput
                         style={[styles.input, { flex: 1, paddingRight: 40 }]}
@@ -299,7 +299,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                       <>
                         <ShieldCheck size={16} color="#0b1110" strokeWidth={2.8} />
                         <Text style={styles.primaryAuthBtnText}>
-                          {mode === 'login' ? 'AUTHENTICATE & ENTER' : 'CREATE CITIZEN PROFILE'}
+                          {mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT'}
                         </Text>
                       </>
                     )}

@@ -63,7 +63,7 @@ export default function AdminScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>ADMIN CONSOLE</Text>
-          <Text style={styles.headerSub}>DISPENSARY MODERATION & VAULT CONTROL</Text>
+          <Text style={styles.headerSub}>CONTENT MODERATION & SYSTEM CONTROL</Text>
         </View>
         <CassetteTag
           label={isAdmin ? 'ADMIN AUTHORIZED' : 'RESTRICTED VIEW'}
@@ -77,7 +77,7 @@ export default function AdminScreen() {
         <View style={styles.warningCard}>
           <AlertTriangle size={18} color={colors.rust} />
           <Text style={styles.warningText}>
-            You are logged in as a standard citizen. Destructive commands require administrative privileges.
+            You are logged in as a standard user. Administrative commands require elevated privileges.
           </Text>
         </View>
       )}

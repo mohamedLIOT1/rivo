@@ -69,11 +69,11 @@ import FriendActivityModal from './src/native/components/FriendActivityModal';
 import IntroAuthModal from './src/native/components/IntroAuthModal';
 
 const TABS = [
-  { id: 'offline', label: 'Vault', icon: Download },
-  { id: 'quran', label: 'Quran', icon: BookOpen },
-  { id: 'library', label: 'Library', icon: Disc },
-  { id: 'search', label: 'Search', icon: Search },
   { id: 'home', label: 'Home', icon: Home },
+  { id: 'search', label: 'Search', icon: Search },
+  { id: 'library', label: 'Library', icon: Disc },
+  { id: 'quran', label: 'Quran', icon: BookOpen },
+  { id: 'offline', label: 'Vault', icon: Download },
 ];
 
 function MainAppShell() {
@@ -402,106 +402,134 @@ function NativeAppShell() {
         >
           <View style={styles.menuSheet}>
             <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>RIVO TOOLS</Text>
+              <Text style={styles.menuTitle}>RIVO MENU</Text>
               <TouchableOpacity onPress={() => setIsMenuOpen(false)}>
-                <X size={20} color="#ffffff" />
+                <X size={18} color="#ffffff" />
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setIsFriendActivityOpen(true);
-              }}
-            >
-              <Users size={18} color="#17a398" strokeWidth={2.4} />
-              <Text style={styles.menuItemText}>Friend Activity Radar</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setIsJamOpen(true);
-              }}
-            >
-              <Radio size={18} color="#f59e0b" strokeWidth={2.4} />
-              <Text style={styles.menuItemText}>Live Jam Room</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setIsChatOpen(true);
-              }}
-            >
-              <MessageSquare size={18} color="#38bdf8" strokeWidth={2.4} />
-              <Text style={styles.menuItemText}>Direct Messages / Chat</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setActiveTab('profile');
-              }}
-            >
-              <User size={18} color="#10b981" />
-              <Text style={styles.menuItemText}>My Profile</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setActiveTab('stats');
-              }}
-            >
-              <Activity size={18} color="#f59e0b" />
-              <Text style={styles.menuItemText}>Stats & History</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setActiveTab('offline');
-              }}
-            >
-              <Download size={18} color="#38bdf8" />
-              <Text style={styles.menuItemText}>Offline Vault</Text>
-            </TouchableOpacity>
-
-            {(currentUser?.role === 'admin' || currentUser?.email?.includes('admin')) && (
+            {/* Category: Community & Live */}
+            <View style={styles.menuSection}>
+              <Text style={styles.menuSectionHeader}>COMMUNITY & LIVE</Text>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
                   setIsMenuOpen(false);
-                  setActiveTab('admin');
+                  setIsFriendActivityOpen(true);
                 }}
               >
-                <Shield size={18} color="#dc2626" />
-                <Text style={styles.menuItemText}>Admin Console</Text>
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(23,163,152,0.18)' }]}>
+                  <Users size={15} color="#17a398" strokeWidth={2.4} />
+                </View>
+                <Text style={styles.menuItemText}>Friend Activity</Text>
               </TouchableOpacity>
-            )}
 
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setIsSettingsOpen(true);
-              }}
-            >
-              <SettingsIcon size={18} color="#ede5d3" />
-              <Text style={styles.menuItemText}>Settings</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsJamOpen(true);
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(245,158,11,0.18)' }]}>
+                  <Radio size={15} color="#f59e0b" strokeWidth={2.4} />
+                </View>
+                <Text style={styles.menuItemText}>Live Jam Room</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsChatOpen(true);
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(56,189,248,0.18)' }]}>
+                  <MessageSquare size={15} color="#38bdf8" strokeWidth={2.4} />
+                </View>
+                <Text style={styles.menuItemText}>Messages & Chat</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Category: Music & Library */}
+            <View style={styles.menuSection}>
+              <Text style={styles.menuSectionHeader}>LIBRARY & STATS</Text>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setActiveTab('profile');
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(16,185,129,0.18)' }]}>
+                  <User size={15} color="#10b981" />
+                </View>
+                <Text style={styles.menuItemText}>My Profile</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setActiveTab('stats');
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(245,158,11,0.18)' }]}>
+                  <Activity size={15} color="#f59e0b" />
+                </View>
+                <Text style={styles.menuItemText}>Listening Stats</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setActiveTab('offline');
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(56,189,248,0.18)' }]}>
+                  <Download size={15} color="#38bdf8" />
+                </View>
+                <Text style={styles.menuItemText}>Offline Vault</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Category: System */}
+            <View style={styles.menuSection}>
+              <Text style={styles.menuSectionHeader}>PREFERENCES</Text>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  setIsSettingsOpen(true);
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(237,229,211,0.15)' }]}>
+                  <SettingsIcon size={15} color="#ede5d3" />
+                </View>
+                <Text style={styles.menuItemText}>Settings</Text>
+              </TouchableOpacity>
+
+              {(currentUser?.role === 'admin' || currentUser?.email?.includes('admin')) && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    setIsMenuOpen(false);
+                    setActiveTab('admin');
+                  }}
+                >
+                  <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(220,38,38,0.18)' }]}>
+                    <Shield size={15} color="#dc2626" />
+                  </View>
+                  <Text style={styles.menuItemText}>Admin Portal</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Version Information Footer */}
             <View style={styles.menuFooter}>
               <Text style={styles.menuFooterVersion}>{FULL_VERSION}</Text>
-              <Text style={styles.menuFooterSub}>Sonic Dispensary • Pure Sound Relief</Text>
+              <Text style={styles.menuFooterSub}>Rivo Music Streaming</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -762,35 +790,61 @@ const styles = StyleSheet.create({
     paddingRight: 14,
   },
   menuSheet: {
-    width: 200,
-    backgroundColor: '#141d1b',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#263330',
+    width: 224,
+    backgroundColor: '#0f1716',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#1e2e2a',
     padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    elevation: 12,
   },
   menuHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#263330',
+    borderBottomColor: '#1e2e2a',
     paddingBottom: 8,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   menuTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#17a398',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
+    fontFamily: 'monospace',
+  },
+  menuSection: {
+    marginBottom: 6,
+  },
+  menuSectionHeader: {
+    fontSize: 8.5,
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    color: '#64748b',
+    letterSpacing: 0.8,
+    marginBottom: 3,
+    marginTop: 2,
+    textTransform: 'uppercase',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 6,
-    borderRadius: 6,
+    gap: 9,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+  },
+  menuIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuItemText: {
     fontSize: 12,

@@ -33,9 +33,9 @@ export default class ErrorBoundary extends React.Component {
             <View style={styles.iconCircle}>
               <AlertTriangle size={32} color={colors.rust} />
             </View>
-            <Text style={styles.title}>DISPENSARY RECOVERY</Text>
+            <Text style={styles.title}>APP RECOVERY</Text>
             <Text style={styles.subtitle}>
-              An unexpected UI glitch occurred in offline mode. The session has been protected and stabilized.
+              An unexpected error occurred. The app has stabilized your session.
             </Text>
             {this.state.error?.message && (
               <View style={styles.errorBox}>
