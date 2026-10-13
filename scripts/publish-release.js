@@ -39,7 +39,7 @@ async function publish() {
   const apkBytes = fs.readFileSync(apkPath);
   console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
 
-  const repos = ['mohamedLIOT1/rivo', 'mohamedLIOT1/liofy'];
+  const repos = ['mohamedLIOT1/rivo'];
 
   for (const repo of repos) {
     console.log(`\n=== Processing repo: ${repo} ===`);
