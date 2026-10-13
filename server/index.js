@@ -4893,10 +4893,7 @@ app.get('/api/tracks/download', async (req, res) => {
       }
 
       const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      const { exec } = require('child_process');
       const os = require('os');
-      const path = require('path');
-      const fs = require('fs');
 
       const hasYtDlp = await new Promise(resolve => {
         exec('yt-dlp --version', (err, stdout) => resolve(!err && stdout && stdout.trim().length > 0));
