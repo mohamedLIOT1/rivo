@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,31 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
+  TextInput,
   Dimensions,
+  Platform,
 } from 'react-native';
-import { X, Play, Shuffle, Disc } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Play,
+  Pause,
+  Shuffle,
+  Disc,
+  Heart,
+  Download,
+  CheckCircle2,
+  ListPlus,
+  Search,
+  MoreVertical,
+  CheckSquare,
+  BookmarkPlus,
+  BookmarkCheck,
+} from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
-import SongItem from '../ui/SongItem';
 
 const { width } = Dimensions.get('window');
 
@@ -24,9 +41,13 @@ export default function AlbumDetailModal({
   onClose,
   allTracks = [],
   onTrackAction,
+  onSelectArtist,
 }) {
-  const { playTrack } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, addToQueue, downloadedTracks = [], downloadTrack } = useAudioPlayer();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const { isDark } = useTheme();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSaved, setIsSaved] = useState(false);
 
   // Resolve album tracks
   const albumTracks = useMemo(() => {
@@ -45,11 +66,29 @@ export default function AlbumDetailModal({
     });
   }, [album, allTracks]);
 
+  // Filtered tracks by search
+  const filteredTracks = useMemo(() => {
+    if (!searchQuery.trim()) return albumTracks;
+    const q = searchQuery.toLowerCase().trim();
+    return albumTracks.filter(
+      (t) =>
+        (t.title && t.title.toLowerCase().includes(q)) ||
+        (t.artist && t.artist.toLowerCase().includes(q))
+    );
+  }, [albumTracks, searchQuery]);
+
+  // Total runtime minutes
+  const totalMinutes = useMemo(() => {
+    const totalSec = albumTracks.reduce((acc, t) => acc + (parseInt(t.duration, 10) || 210), 0);
+    return Math.round(totalSec / 60);
+  }, [albumTracks]);
+
   if (!visible || !album) return null;
 
   const coverUri = album.cover || album.coverUrl || albumTracks[0]?.cover || albumTracks[0]?.coverUrl;
   const albumTitle = album.name || 'Untitled Album';
   const albumArtist = album.artist || albumTracks[0]?.artist || 'Various Artists';
+  const batchNumber = Math.abs(albumTitle.split('').reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)) % 9000 + 1000;
 
   const handlePlayAll = (shuffle = false) => {
     if (albumTracks.length === 0) return;
@@ -60,25 +99,37 @@ export default function AlbumDetailModal({
     playTrack(queue[0], queue);
   };
 
+  const handleDownloadAll = () => {
+    if (downloadTrack && albumTracks.length > 0) {
+      albumTracks.forEach((t) => downloadTrack(t));
+    }
+  };
+
+  const formatDuration = (sec) => {
+    const s = parseInt(sec, 10) || 210;
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
+  };
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle="fullScreen"
       onRequestClose={onClose}
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
-        {/* Header Bar */}
-        <View style={[styles.header, !isDark && styles.headerLight]}>
-          <View style={styles.headerTitleGroup}>
-            <Disc size={18} color="#f59e0b" strokeWidth={2.2} />
-            <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]} numberOfLines={1}>
-              {albumTitle}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={onClose} style={[styles.closeBtn, !isDark && styles.closeBtnLight]} activeOpacity={0.8}>
-            <X size={20} color={isDark ? '#ffffff' : '#0b1110'} />
+        {/* Top Header Bar matching Image 3 */}
+        <View style={styles.topBar}>
+          <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.8}>
+            <ArrowLeft size={20} color="#fdfbf7" strokeWidth={2.5} />
+            <Text style={styles.backText}>RETURN</Text>
           </TouchableOpacity>
+
+          <View style={styles.batchBadge}>
+            <Text style={styles.batchText}>OFFICIAL AUDIO PRESCRIPTION • BATCH #{batchNumber}</Text>
+          </View>
         </View>
 
         <ScrollView
@@ -86,90 +137,215 @@ export default function AlbumDetailModal({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Album Hero Card */}
-          <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
-            <View style={styles.coverWrapper}>
-              <View style={styles.coverPlaceholder}>
-                <Disc size={48} color="#1f3630" strokeWidth={1.5} />
+          {/* Hero Card matching Image 3 */}
+          <View style={styles.heroCard}>
+            <View style={styles.heroLayout}>
+              {/* Cover Art with RIVO-TAPE badge */}
+              <View style={styles.coverWrapper}>
+                <Image
+                  source={{ uri: normalizeCoverUri(coverUri) }}
+                  style={styles.heroCover}
+                  resizeMode="cover"
+                />
+                <View style={styles.tapeBadge}>
+                  <Text style={styles.tapeText}>RIVO-TAPE</Text>
+                </View>
               </View>
-              <Image
-                source={{ uri: normalizeCoverUri(coverUri) }}
-                style={styles.heroCover}
-                resizeMode="cover"
+
+              {/* Title & Meta Info */}
+              <View style={styles.heroInfo}>
+                <View style={styles.albumBadge}>
+                  <Text style={styles.albumBadgeText}>OFFICIAL ALBUM</Text>
+                </View>
+
+                <Text style={styles.albumTitle} numberOfLines={2}>
+                  {albumTitle}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (onSelectArtist) {
+                      onClose();
+                      onSelectArtist(albumArtist);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.albumArtist}>
+                    Album by <Text style={styles.artistHighlight}>{albumArtist}</Text>
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.statsPillRow}>
+                  <View style={styles.statsPill}>
+                    <Text style={styles.statsPillText}>ALBUM</Text>
+                  </View>
+                  <Text style={styles.statsDot}>•</Text>
+                  <Text style={styles.statsMeta}>{albumTracks.length} TRACKS</Text>
+                  <Text style={styles.statsDot}>•</Text>
+                  <Text style={styles.statsMeta}>{totalMinutes} MIN</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Action Buttons Bar matching Image 3 */}
+            <View style={styles.actionBar}>
+              {/* Big Yellow Play Button */}
+              <TouchableOpacity
+                style={styles.playBtn}
+                onPress={() => handlePlayAll(false)}
+                activeOpacity={0.85}
+              >
+                <Play size={22} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+              </TouchableOpacity>
+
+              {/* Queue Playlist Button */}
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => {
+                  if (addToQueue && albumTracks.length > 0) addToQueue(albumTracks);
+                }}
+                activeOpacity={0.8}
+              >
+                <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
+                <Text style={styles.actionBtnText}>QUEUE ALL</Text>
+              </TouchableOpacity>
+
+              {/* Save to Library Button */}
+              <TouchableOpacity
+                style={[styles.actionBtn, isSaved && styles.actionBtnActive]}
+                onPress={() => setIsSaved(!isSaved)}
+                activeOpacity={0.8}
+              >
+                {isSaved ? (
+                  <BookmarkCheck size={15} color="#17a398" strokeWidth={2.4} />
+                ) : (
+                  <BookmarkPlus size={15} color="#fdfbf7" strokeWidth={2.2} />
+                )}
+                <Text style={styles.actionBtnText}>{isSaved ? 'SAVED' : 'SAVE'}</Text>
+              </TouchableOpacity>
+
+              {/* Download All Button */}
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={handleDownloadAll}
+                activeOpacity={0.8}
+              >
+                <Download size={15} color="#26c4b7" strokeWidth={2.2} />
+                <Text style={styles.actionBtnText}>DOWNLOAD ({albumTracks.length})</Text>
+              </TouchableOpacity>
+
+              {/* Shuffle Button */}
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => handlePlayAll(true)}
+                activeOpacity={0.8}
+              >
+                <Shuffle size={15} color="#f59e0b" strokeWidth={2.2} />
+                <Text style={styles.actionBtnText}>SHUFFLE</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Prescription Search Bar matching Image 3 */}
+            <View style={styles.searchBar}>
+              <Search size={16} color="#6b7280" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search in prescription list..."
+                placeholderTextColor="#6b7280"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
               />
             </View>
-
-            <View style={styles.heroDetails}>
-              <View style={styles.albumBadge}>
-                <Text style={styles.albumBadgeText}>DISCOGRAPHY ALBUM</Text>
-              </View>
-              <Text style={[styles.heroTitle, !isDark && styles.heroTitleLight]} numberOfLines={2}>
-                {albumTitle}
-              </Text>
-              <Text style={styles.heroArtist} numberOfLines={1}>
-                {albumArtist}
-              </Text>
-              <Text style={styles.heroTrackCount}>
-                {albumTracks.length} {albumTracks.length === 1 ? 'Track' : 'Tracks'}
-              </Text>
-            </View>
           </View>
 
-          {/* Action Buttons Row */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.playAllBtn}
-              onPress={() => handlePlayAll(false)}
-              activeOpacity={0.85}
-              disabled={albumTracks.length === 0}
-            >
-              <Play size={15} color="#0b1110" fill="#0b1110" style={{ marginRight: 6 }} />
-              <Text style={styles.playAllBtnText}>PLAY ALL</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.shuffleBtn}
-              onPress={() => handlePlayAll(true)}
-              activeOpacity={0.85}
-              disabled={albumTracks.length === 0}
-            >
-              <Shuffle size={15} color="#0b1110" style={{ marginRight: 6 }} />
-              <Text style={styles.shuffleBtnText}>SHUFFLE</Text>
-            </TouchableOpacity>
+          {/* Table Header matching Image 3 */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.colHeader, { width: 34 }]}>#</Text>
+            <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>TITLE & ARTIST</Text>
+            <Text style={[styles.colHeader, { width: 90, textAlign: 'right' }]}>ACTIONS</Text>
           </View>
 
-          {/* Track List Section */}
-          <View style={styles.tracksSection}>
-            <View style={styles.tracksHeaderRow}>
-              <Text style={[styles.tracksHeaderTitle, !isDark && styles.tracksHeaderTitleLight]}>
-                TRACKLIST
-              </Text>
-              <Text style={styles.tracksHeaderCount}>
-                {albumTracks.length} SONGS
-              </Text>
-            </View>
+          {/* Tracklist Rows */}
+          {filteredTracks.map((t, index) => {
+            const trackId = String(t._id || t.id || '');
+            const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
+            const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+            const isDl = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(
+              (d) => String(d._id || d.id) === trackId
+            ) || Boolean(t.isDownloaded || t.localAudioUri);
 
-            {albumTracks.length === 0 ? (
-              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
-                <Disc size={32} color="#17a398" />
-                <Text style={styles.emptyTitle}>No tracks found in this album</Text>
-                <Text style={styles.emptySub}>Tracks for this album have not been indexed yet.</Text>
-              </View>
-            ) : (
-              <View style={styles.tracksList}>
-                {albumTracks.map((track, index) => (
-                  <SongItem
-                    key={track._id || track.id || String(index)}
-                    track={track}
-                    index={index + 1}
-                    onPlay={() => playTrack(track, albumTracks)}
-                    onTrackAction={onTrackAction}
-                    onMorePress={() => onTrackAction && onTrackAction(track)}
+            const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
+            const trackCover = normalizeCoverUri(t.coverUrl || t.cover || coverUri);
+
+            return (
+              <TouchableOpacity
+                key={trackId || index}
+                style={[styles.trackRow, isCurrent && styles.trackRowActive]}
+                onPress={() => playTrack(t, albumTracks)}
+                activeOpacity={0.8}
+              >
+                {/* Index # */}
+                <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
+                  {numStr}
+                </Text>
+
+                {/* Cover Thumbnail */}
+                <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
+
+                {/* Title & Artist */}
+                <View style={styles.trackDetails}>
+                  <Text style={[styles.trackTitle, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
+                    {t.title || 'Untitled Track'}
+                  </Text>
+                  <Text style={styles.trackArtist} numberOfLines={1}>
+                    {t.artist || albumArtist}
+                  </Text>
+                </View>
+
+                {/* Duration */}
+                <Text style={styles.trackDuration}>{formatDuration(t.duration)}</Text>
+
+                {/* Download Button */}
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => downloadTrack && downloadTrack(t)}
+                  activeOpacity={0.7}
+                >
+                  {isDl ? (
+                    <CheckCircle2 size={16} color="#17a398" />
+                  ) : (
+                    <Download size={16} color="#6b7280" />
+                  )}
+                </TouchableOpacity>
+
+                {/* Like Button */}
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => toggleLikeTrack && toggleLikeTrack(trackId)}
+                  activeOpacity={0.7}
+                >
+                  <Heart
+                    size={16}
+                    color={isLiked ? '#dc2626' : '#6b7280'}
+                    fill={isLiked ? '#dc2626' : 'transparent'}
                   />
-                ))}
-              </View>
-            )}
-          </View>
+                </TouchableOpacity>
+
+                {/* Action Menu (3 dots) */}
+                <TouchableOpacity
+                  style={styles.iconBtn}
+                  onPress={() => onTrackAction && onTrackAction(t)}
+                  activeOpacity={0.7}
+                >
+                  <MoreVertical size={16} color="#9ca3af" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
+
+          <View style={{ height: 100 }} />
         </ScrollView>
       </View>
     </Modal>
@@ -180,226 +356,308 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0b1110',
+    paddingTop: Platform.OS === 'ios' ? 48 : 16,
   },
   containerLight: {
-    backgroundColor: '#fdfbf7',
+    backgroundColor: '#f4ede1',
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 2,
-    borderBottomColor: '#172722',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  headerLight: {
-    borderBottomColor: '#0b1110',
-  },
-  headerTitleGroup: {
+  backBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#ffffff',
-    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
-    textTransform: 'uppercase',
-  },
-  headerTitleLight: {
-    color: '#082621',
-  },
-  closeBtn: {
-    width: 36,
-    height: 36,
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#14201d',
-    borderWidth: 2,
-    borderColor: '#243b35',
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
   },
-  closeBtnLight: {
-    backgroundColor: '#ede5d3',
-    borderColor: '#0b1110',
+  backText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#fdfbf7',
+    letterSpacing: 0.5,
+  },
+  batchBadge: {
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  batchText: {
+    fontFamily: 'monospace',
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#9ca3af',
+    letterSpacing: 0.5,
   },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
   },
   heroCard: {
-    flexDirection: 'row',
-    backgroundColor: '#0d1815',
+    backgroundColor: '#141d1b',
     borderWidth: 2,
-    borderColor: '#172722',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-    gap: 14,
-    alignItems: 'center',
+    borderColor: '#000000',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0 },
+      android: { elevation: 4 },
+    }),
   },
-  heroCardLight: {
-    backgroundColor: '#f6f2e8',
-    borderColor: '#0b1110',
+  heroLayout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 16,
   },
   coverWrapper: {
-    width: 110,
-    height: 110,
-    borderRadius: 10,
+    width: 105,
+    height: 105,
     borderWidth: 2,
-    borderColor: '#0b1110',
+    borderColor: '#000000',
+    borderRadius: 8,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#07100e',
-  },
-  coverPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#ded2bb',
   },
   heroCover: {
     width: '100%',
     height: '100%',
   },
-  heroDetails: {
+  tapeBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#0b1110',
+    borderBottomWidth: 1,
+    borderLeftWidth: 1,
+    borderColor: '#000000',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  tapeText: {
+    fontFamily: 'monospace',
+    fontSize: 7,
+    fontWeight: '900',
+    color: '#26c4b7',
+  },
+  heroInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   albumBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignSelf: 'flex-start',
+    backgroundColor: '#082621',
     borderWidth: 1,
-    borderColor: '#f59e0b',
-    paddingHorizontal: 6,
+    borderColor: '#17a398',
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
-    alignSelf: 'flex-start',
     marginBottom: 6,
   },
   albumBadgeText: {
-    fontSize: 9,
+    fontFamily: 'monospace',
+    fontSize: 8.5,
     fontWeight: '900',
-    color: '#f59e0b',
-    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+    color: '#26c4b7',
+    letterSpacing: 0.5,
   },
-  heroTitle: {
+  albumTitle: {
+    fontFamily: 'monospace',
     fontSize: 17,
     fontWeight: '900',
-    color: '#ffffff',
+    color: '#fdfbf7',
     marginBottom: 4,
     lineHeight: 22,
   },
-  heroTitleLight: {
-    color: '#082621',
-  },
-  heroArtist: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#17a398',
-    marginBottom: 4,
-  },
-  heroTrackCount: {
+  albumArtist: {
+    fontFamily: 'monospace',
     fontSize: 11,
-    color: '#71717a',
-    fontWeight: '600',
+    color: '#9ca3af',
+    marginBottom: 8,
   },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
+  artistHighlight: {
+    color: '#26c4b7',
+    fontWeight: '900',
   },
-  playAllBtn: {
-    flex: 1,
-    height: 44,
-    backgroundColor: '#17a398',
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#0b1110',
+  statsPillRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
   },
-  playAllBtnText: {
-    fontSize: 13,
+  statsPill: {
+    backgroundColor: '#0b1110',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  statsPillText: {
+    fontFamily: 'monospace',
+    fontSize: 8.5,
     fontWeight: '900',
-    color: '#0b1110',
-    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+    color: '#fdfbf7',
   },
-  shuffleBtn: {
-    flex: 1,
+  statsDot: {
+    color: '#6b7280',
+    fontSize: 10,
+  },
+  statsMeta: {
+    fontFamily: 'monospace',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#9ca3af',
+  },
+  actionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 14,
+  },
+  playBtn: {
+    width: 44,
     height: 44,
+    borderRadius: 8,
     backgroundColor: '#f59e0b',
-    borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#0b1110',
-    flexDirection: 'row',
+    borderColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.3, shadowRadius: 0 },
+      android: { elevation: 3 },
+    }),
   },
-  shuffleBtnText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#0b1110',
-    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
-  },
-  tracksSection: {
-    marginTop: 4,
-  },
-  tracksHeaderRow: {
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    backgroundColor: '#182320',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 5,
   },
-  tracksHeaderTitle: {
-    fontSize: 12,
+  actionBtnActive: {
+    borderColor: '#17a398',
+  },
+  actionBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 9.5,
     fontWeight: '900',
-    color: '#ffffff',
-    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+    color: '#fdfbf7',
+    letterSpacing: 0.3,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0b1110',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: 'monospace',
+    fontSize: 11,
+    color: '#fdfbf7',
+    padding: 0,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    marginBottom: 6,
+  },
+  colHeader: {
+    fontFamily: 'monospace',
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#6b7280',
     letterSpacing: 0.5,
   },
-  tracksHeaderTitleLight: {
-    color: '#082621',
+  trackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    marginVertical: 1,
   },
-  tracksHeaderCount: {
+  trackRowActive: {
+    backgroundColor: 'rgba(23,163,152,0.12)',
+  },
+  trackNum: {
+    width: 24,
+    fontFamily: 'monospace',
     fontSize: 11,
     fontWeight: '800',
+    color: '#6b7280',
+  },
+  trackNumActive: {
     color: '#17a398',
-    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
   },
-  tracksList: {
-    gap: 6,
+  trackThumb: {
+    width: 38,
+    height: 38,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#000000',
+    marginRight: 10,
+    backgroundColor: '#182320',
   },
-  emptyCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 30,
-    backgroundColor: '#0d1815',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#172722',
-    marginTop: 10,
+  trackDetails: {
+    flex: 1,
+    marginRight: 8,
   },
-  emptyCardLight: {
-    backgroundColor: '#f6f2e8',
-    borderColor: '#0b1110',
-  },
-  emptyTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginTop: 10,
-  },
-  emptySub: {
+  trackTitle: {
+    fontFamily: 'monospace',
     fontSize: 12,
-    color: '#71717a',
-    marginTop: 4,
-    textAlign: 'center',
+    fontWeight: '800',
+    color: '#fdfbf7',
+    marginBottom: 2,
+  },
+  trackTitleActive: {
+    color: '#26c4b7',
+  },
+  trackArtist: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    color: '#9ca3af',
+  },
+  trackDuration: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    color: '#6b7280',
+    marginRight: 8,
+  },
+  iconBtn: {
+    padding: 6,
   },
 });
