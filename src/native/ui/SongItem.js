@@ -4,6 +4,7 @@ import { Play, Pause, Heart, MoreVertical } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
+import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default React.memo(function SongItem({ 
   track, 
@@ -15,6 +16,7 @@ export default React.memo(function SongItem({
 }) {
   const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
+  const [imageError, setImageError] = React.useState(false);
 
   if (!track) return null;
 
@@ -30,7 +32,8 @@ export default React.memo(function SongItem({
   const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
   const isDownloaded = safeDownloaded.some(t => String(t._id || t.id) === trackId) || Boolean(track?.isDownloaded || track?.localAudioUri);
 
-  const defaultCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400';
+  const rawCover = track.coverUrl || track.cover || track.coverImage || '';
+  const coverSourceUri = imageError ? normalizeCoverUri(null) : normalizeCoverUri(rawCover);
 
   return (
     <TouchableOpacity
@@ -45,10 +48,11 @@ export default React.memo(function SongItem({
       {/* Cover Image */}
       <View style={styles.coverBox}>
         <Image
-          source={{ uri: track.coverUrl || track.cover || defaultCover }}
+          source={{ uri: coverSourceUri }}
           style={styles.cover}
           fadeDuration={0}
           resizeMode="cover"
+          onError={() => setImageError(true)}
         />
       </View>
 

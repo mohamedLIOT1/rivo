@@ -12,6 +12,7 @@ import {
   PermissionsAndroid,
   Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Home,
   Search,
@@ -32,6 +33,7 @@ import {
   Activity,
   Settings as SettingsIcon,
   Globe,
+  Users,
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
@@ -44,7 +46,6 @@ import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 
-import OnlineWebView from './src/native/screens/OnlineWebView';
 import ErrorBoundary from './src/native/components/ErrorBoundary';
 
 import HomeScreen from './src/native/screens/HomeScreen';
@@ -64,6 +65,8 @@ import AddSongModal from './src/native/components/AddSongModal';
 import ChatModal from './src/native/components/ChatModal';
 import SettingsModal from './src/native/components/SettingsModal';
 import JamRoomModal from './src/native/components/JamRoomModal';
+import FriendActivityModal from './src/native/components/FriendActivityModal';
+import IntroAuthModal from './src/native/components/IntroAuthModal';
 
 const TABS = [
   { id: 'offline', label: 'Vault', icon: Download },
@@ -128,13 +131,8 @@ function MainAppShell() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
 
-      {/* ─── ONLINE MODE: Full Web App (100% web design, playlists with tracks, full profile, discord sync, friend activity, chat, jam) ─── */}
-      <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
-        <OnlineWebView />
-      </View>
-
-      {/* ─── OFFLINE MODE: Native Shell (Offline Vault, Quran, local storage playback) ─── */}
-      <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
+      {/* ─── 100% PURE NATIVE APP SHELL (NO WEBVIEW) ─── */}
+      <View style={styles.modeContainer}>
         <ErrorBoundary>
           <NativeAppShell />
         </ErrorBoundary>
@@ -198,7 +196,7 @@ function MainAppShell() {
  */
 function NativeAppShell() {
   const { appMode, setAppMode } = useConnectivity();
-  const [activeTab, setActiveTab] = useState(appMode === 'online' ? 'home' : 'offline');
+  const [activeTab, setActiveTab] = useState('home');
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
@@ -206,11 +204,23 @@ function NativeAppShell() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isJamOpen, setIsJamOpen] = useState(false);
+  const [isFriendActivityOpen, setIsFriendActivityOpen] = useState(false);
+  const [isIntroAuthOpen, setIsIntroAuthOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const { currentTrack } = useAudioPlayer();
   const { currentUser } = useUser();
   const { isDark, toggleTheme } = useTheme();
+
+  // First launch auto-intro for guests
+  useEffect(() => {
+    AsyncStorage.getItem('@rivo_intro_seen_v15').then((seen) => {
+      if (!seen && !currentUser) {
+        setIsIntroAuthOpen(true);
+        AsyncStorage.setItem('@rivo_intro_seen_v15', 'true').catch(() => {});
+      }
+    }).catch(() => {});
+  }, [currentUser]);
 
   const handleTabPress = (tabId) => {
     if (tabId === 'chat') {
@@ -234,7 +244,16 @@ function NativeAppShell() {
       case 'quran':
         return <QuranScreen onTrackAction={(track) => setActionTrack(track)} />;
       case 'profile':
-        return <ProfileScreen onOpenSettings={() => setIsSettingsOpen(true)} />;
+        return (
+          <ProfileScreen
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenAuth={() => setIsIntroAuthOpen(true)}
+            onOpenFriendActivity={() => setIsFriendActivityOpen(true)}
+            onOpenJam={() => setIsJamOpen(true)}
+            onOpenChat={() => setIsChatOpen(true)}
+            onSelectPlaylist={() => setActiveTab('library')}
+          />
+        );
       case 'stats':
         return <StatsScreen />;
       case 'offline':
@@ -274,19 +293,34 @@ function NativeAppShell() {
           </View>
         </TouchableOpacity>
 
-        {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
+        {/* Right Actions: Friend Activity, Jam, Chat, Sun/Moon, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
-          {/* Switch to Online Mode */}
-          {appMode !== 'online' && (
-            <TouchableOpacity
-              style={[styles.topIconBtn, { backgroundColor: '#17a398', borderColor: '#0b1110', width: 'auto', paddingHorizontal: 8 }]}
-              onPress={() => setAppMode('online')}
-              activeOpacity={0.8}
-            >
-              <Wifi size={13} color="#0b1110" strokeWidth={2.8} />
-              <Text style={{ color: '#0b1110', fontSize: 10, fontWeight: '900', marginLeft: 4 }}>ONLINE</Text>
-            </TouchableOpacity>
-          )}
+          {/* Friend Activity (👥) */}
+          <TouchableOpacity
+            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
+            onPress={() => setIsFriendActivityOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Users size={16} color="#17a398" strokeWidth={2.4} />
+          </TouchableOpacity>
+
+          {/* Live Jam (📻) */}
+          <TouchableOpacity
+            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
+            onPress={() => setIsJamOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Radio size={16} color="#f59e0b" strokeWidth={2.4} />
+          </TouchableOpacity>
+
+          {/* Community Chat (💬) */}
+          <TouchableOpacity
+            style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
+            onPress={() => setIsChatOpen(true)}
+            activeOpacity={0.8}
+          >
+            <MessageSquare size={16} color="#38bdf8" strokeWidth={2.4} />
+          </TouchableOpacity>
 
           {/* Sun / Moon (Theme toggle) */}
           <TouchableOpacity
@@ -310,10 +344,16 @@ function NativeAppShell() {
             <Menu size={16} color="#ffffff" strokeWidth={2.5} />
           </TouchableOpacity>
 
-          {/* User Profile Avatar */}
+          {/* User Profile Avatar / Sign In */}
           <TouchableOpacity
             style={styles.avatarBtn}
-            onPress={() => setActiveTab('profile')}
+            onPress={() => {
+              if (currentUser) {
+                setActiveTab('profile');
+              } else {
+                setIsIntroAuthOpen(true);
+              }
+            }}
             activeOpacity={0.8}
           >
             {currentUser?.avatar ? (
@@ -392,29 +432,38 @@ function NativeAppShell() {
               </TouchableOpacity>
             </View>
 
-            {appMode !== 'online' ? (
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: '#17a398', borderColor: '#0b1110', marginBottom: 8 }]}
-                onPress={() => {
-                  setIsMenuOpen(false);
-                  setAppMode('online');
-                }}
-              >
-                <Wifi size={18} color="#0b1110" strokeWidth={2.8} />
-                <Text style={[styles.menuItemText, { color: '#0b1110', fontWeight: '900' }]}>Switch to Online Mode</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.menuItem, { backgroundColor: 'rgba(56,189,248,0.18)', borderWidth: 1, borderColor: '#38bdf8', marginBottom: 8 }]}
-                onPress={() => {
-                  setIsMenuOpen(false);
-                  setAppMode('offline');
-                }}
-              >
-                <WifiOff size={18} color="#38bdf8" strokeWidth={2.8} />
-                <Text style={[styles.menuItemText, { color: '#38bdf8', fontWeight: '900' }]}>Switch to Offline Mode</Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}
+              onPress={() => {
+                setIsMenuOpen(false);
+                setIsFriendActivityOpen(true);
+              }}
+            >
+              <Users size={18} color="#17a398" strokeWidth={2.4} />
+              <Text style={[styles.menuItemText, { color: '#17a398', fontWeight: '800' }]}>Friend Activity Radar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: 'rgba(245,158,11,0.18)', borderColor: '#f59e0b' }]}
+              onPress={() => {
+                setIsMenuOpen(false);
+                setIsJamOpen(true);
+              }}
+            >
+              <Radio size={18} color="#f59e0b" strokeWidth={2.4} />
+              <Text style={[styles.menuItemText, { color: '#f59e0b', fontWeight: '800' }]}>Live Jam Room</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.menuItem, { backgroundColor: 'rgba(56,189,248,0.18)', borderColor: '#38bdf8' }]}
+              onPress={() => {
+                setIsMenuOpen(false);
+                setIsChatOpen(true);
+              }}
+            >
+              <MessageSquare size={18} color="#38bdf8" strokeWidth={2.4} />
+              <Text style={[styles.menuItemText, { color: '#38bdf8', fontWeight: '800' }]}>Cairo Community Chat</Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -461,17 +510,6 @@ function NativeAppShell() {
                 <Text style={styles.menuItemText}>Admin Console</Text>
               </TouchableOpacity>
             )}
-
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                setIsMenuOpen(false);
-                setAppMode('online');
-              }}
-            >
-              <Globe size={18} color="#17a398" />
-              <Text style={styles.menuItemText}>Switch to Online (Web Mode)</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.menuItem}
@@ -533,6 +571,16 @@ function NativeAppShell() {
       <JamRoomModal
         visible={isJamOpen}
         onClose={() => setIsJamOpen(false)}
+      />
+
+      <FriendActivityModal
+        visible={isFriendActivityOpen}
+        onClose={() => setIsFriendActivityOpen(false)}
+      />
+
+      <IntroAuthModal
+        visible={isIntroAuthOpen}
+        onClose={() => setIsIntroAuthOpen(false)}
       />
     </View>
   );

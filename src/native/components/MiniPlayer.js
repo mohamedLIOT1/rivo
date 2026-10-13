@@ -4,18 +4,21 @@ import { Play, Pause, Heart } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
+import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default function MiniPlayer({ onOpenFullPlayer }) {
   const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
+  const [imageError, setImageError] = React.useState(false);
 
   if (!currentTrack) return null;
 
   const trackId = String(currentTrack._id || currentTrack.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const defaultCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300';
+  const rawCover = currentTrack.coverUrl || currentTrack.cover || '';
+  const coverUri = imageError ? normalizeCoverUri(null) : normalizeCoverUri(rawCover);
 
   return (
     <View style={styles.outerDock}>
@@ -33,8 +36,9 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
           {/* Cover Art */}
           <View style={styles.coverFrame}>
             <Image
-              source={{ uri: currentTrack.coverUrl || currentTrack.cover || defaultCover }}
+              source={{ uri: coverUri }}
               style={styles.cover}
+              onError={() => setImageError(true)}
             />
           </View>
 

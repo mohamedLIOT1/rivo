@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   Dimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import {
   Heart,
@@ -25,6 +26,8 @@ import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
+import { API_BASE_URL } from '../config';
+import { normalizeCoverUri } from '../utils/coverUtils';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 
@@ -41,16 +44,83 @@ export default function LibraryScreen({
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
+  const [fetchedTracks, setFetchedTracks] = useState([]);
+  const [isLoadingTracks, setIsLoadingTracks] = useState(false);
 
   const allTracks = isOffline
     ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
     : ((userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []));
   const safeLikedIds = Array.isArray(likedTrackIds) ? likedTrackIds : [];
 
+  // Unified track pool
+  const trackPoolMap = useMemo(() => {
+    const list = [...(allTracks || []), ...(fetchedTracks || [])];
+    const map = new Map();
+    for (const t of list) {
+      if (t) {
+        const id = String(t._id || t.id || '');
+        if (id) map.set(id, t);
+      }
+    }
+    return map;
+  }, [allTracks, fetchedTracks]);
+
   // Liked tracks
-  const likedTracks = (allTracks || []).filter((t) =>
-    safeLikedIds.includes(String(t?._id || t?.id))
-  );
+  const likedTracks = useMemo(() => {
+    return (allTracks || []).filter((t) =>
+      safeLikedIds.includes(String(t?._id || t?.id))
+    );
+  }, [allTracks, safeLikedIds]);
+
+  // Fetch tracks for currently selected playlist if they aren't in trackPoolMap
+  useEffect(() => {
+    if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
+    const rawItems = selectedView.tracks || selectedView.trackIds || [];
+    if (rawItems.length === 0) return;
+
+    const missingIds = rawItems
+      .map(item => typeof item === 'object' ? String(item._id || item.id) : String(item))
+      .filter(id => id && !trackPoolMap.has(id));
+
+    if (missingIds.length > 0) {
+      setIsLoadingTracks(true);
+      fetch(`${API_BASE_URL}/api/tracks/by-ids`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: missingIds })
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data?.success && Array.isArray(data.tracks)) {
+            setFetchedTracks(prev => {
+              const merged = [...prev, ...data.tracks];
+              const seen = new Set();
+              return merged.filter(t => {
+                const id = String(t._id || t.id);
+                if (seen.has(id)) return false;
+                seen.add(id);
+                return true;
+              });
+            });
+          }
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingTracks(false));
+    }
+  }, [selectedView, trackPoolMap]);
+
+  // Real tracks list for currently selected playlist
+  const activePlaylistTracks = useMemo(() => {
+    if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return [];
+    const rawItems = selectedView.tracks || selectedView.trackIds || [];
+    return rawItems.map(item => {
+      const idStr = String(typeof item === 'object' ? (item._id || item.id) : item);
+      const found = trackPoolMap.get(idStr);
+      if (found) return found;
+      if (typeof item === 'object' && item.title) return item;
+      return null;
+    }).filter(Boolean);
+  }, [selectedView, trackPoolMap]);
 
   const handlePlayLiked = (shuffle = false) => {
     if (!likedTracks || likedTracks.length === 0) return;
@@ -70,12 +140,7 @@ export default function LibraryScreen({
 
   const handlePlayPlaylist = (playlist, shuffle = false) => {
     if (!playlist) return;
-    const pTracks = playlist.tracks || playlist.trackIds || [];
-    const list = pTracks.map((tId) => {
-      const idStr = String(typeof tId === 'object' ? (tId._id || tId.id) : tId);
-      const found = (allTracks || []).find((t) => String(t?._id || t?.id) === idStr);
-      return found || (typeof tId === 'object' ? tId : null);
-    }).filter(Boolean);
+    const list = [...activePlaylistTracks];
     if (list.length === 0) return;
     if (shuffle) {
       for (let i = list.length - 1; i > 0; i--) {
@@ -184,7 +249,15 @@ export default function LibraryScreen({
               <View style={styles.hardShadow} />
               <View style={styles.playlistHero}>
                 <View style={styles.playlistBigBox}>
-                  <Disc size={36} color={colors.mint} />
+                  {selectedView.cover ? (
+                    <Image
+                      source={{ uri: normalizeCoverUri(selectedView.cover) }}
+                      style={{ width: '100%', height: '100%', borderRadius: 8 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Disc size={36} color={colors.mint} />
+                  )}
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
@@ -211,21 +284,36 @@ export default function LibraryScreen({
               </View>
             </View>
 
-            <View style={styles.tracksList}>
-              {(selectedView.tracks || selectedView.trackIds || []).map((tItem, idx) => {
-                const idStr = String(typeof tItem === 'object' ? (tItem._id || tItem.id) : tItem);
-                const found = (allTracks || []).find((t) => String(t._id || t.id) === idStr);
-                const track = found || (typeof tItem === 'object' ? tItem : { _id: idStr, id: idStr, title: 'Track', artist: 'Rivo' });
-                return (
+            {isLoadingTracks && activePlaylistTracks.length === 0 ? (
+              <View style={[styles.emptyCard, { paddingVertical: 40 }]}>
+                <ActivityIndicator size="large" color="#17a398" />
+                <Text style={[styles.emptyTitle, { marginTop: 12 }]}>Loading playlist tracks...</Text>
+              </View>
+            ) : activePlaylistTracks.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Disc size={36} color={colors.mint} />
+                <Text style={styles.emptyTitle}>No tracks in this crate yet</Text>
+                <Text style={styles.emptySub}>Add songs from Home or Search to fill this crate.</Text>
+              </View>
+            ) : (
+              <View style={styles.tracksList}>
+                {activePlaylistTracks.map((track, idx) => (
                   <SongItem
                     key={track._id || track.id || idx}
                     track={track}
                     index={idx + 1}
+                    onPlay={() => {
+                      if (typeof playPlaylist === 'function') {
+                        playPlaylist(activePlaylistTracks, idx);
+                      } else if (typeof playTrack === 'function') {
+                        playTrack(track, activePlaylistTracks);
+                      }
+                    }}
                     onMorePress={() => onTrackAction && onTrackAction(track)}
                   />
-                );
-              })}
-            </View>
+                ))}
+              </View>
+            )}
           </View>
         ) : (
           /* Main Library Overview */
@@ -298,7 +386,15 @@ export default function LibraryScreen({
                     onPress={() => setSelectedView(playlist)}
                   >
                     <View style={styles.playlistCoverBox}>
-                      <Disc size={28} color={colors.mint} />
+                      {playlist.cover ? (
+                        <Image
+                          source={{ uri: normalizeCoverUri(playlist.cover) }}
+                          style={{ width: '100%', height: '100%' }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Disc size={28} color={colors.mint} />
+                      )}
                     </View>
                     <Text style={styles.playlistCardName} numberOfLines={1}>
                       {playlist.name}

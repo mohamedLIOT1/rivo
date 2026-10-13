@@ -4,6 +4,7 @@ import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2 } from 'lucide
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
+import { normalizeCoverUri } from '../utils/coverUtils';
 import CassetteTag from '../ui/CassetteTag';
 
 export default function TrackActionMenuModal({ visible, track, onClose, onOpenAddToPlaylist }) {
@@ -37,7 +38,7 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
             <View style={styles.header}>
               <View style={styles.coverBox}>
                 <Image
-                  source={{ uri: track.coverUrl || track.cover || defaultCover }}
+                  source={{ uri: normalizeCoverUri(track.coverUrl || track.cover) }}
                   style={styles.cover}
                 />
               </View>

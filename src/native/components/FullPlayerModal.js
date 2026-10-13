@@ -10,6 +10,7 @@ import {
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
+import { normalizeCoverUri } from '../utils/coverUtils';
 import CassetteTag from '../ui/CassetteTag';
 import SleepTimerModal from './SleepTimerModal';
 import { parseLrcLyrics } from '../../utils/lrcParser';
@@ -147,7 +148,7 @@ export default function FullPlayerModal({ visible, onClose }) {
               <View style={styles.artworkShadow} />
               <View style={styles.artworkBox}>
                 <Image
-                  source={{ uri: currentTrack.coverUrl || currentTrack.cover || defaultCover }}
+                  source={{ uri: normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover) }}
                   style={styles.coverArt}
                   resizeMode="cover"
                 />
