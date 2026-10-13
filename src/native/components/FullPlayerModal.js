@@ -116,7 +116,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   };
 
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const coverUri = normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover);
+  const coverUri = normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover, currentTrack);
 
   const handleSeekPress = (e) => {
     const { locationX } = e.nativeEvent;
@@ -479,7 +479,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
             keyExtractor={(item, index) => `${item._id || item.id}-${index}`}
             renderItem={({ item, index }) => {
               const isItemPlaying = String(item._id || item.id) === trackId;
-              const itemCover = normalizeCoverUri(item.coverUrl || item.cover);
+              const itemCover = normalizeCoverUri(item.coverUrl || item.cover, item);
               return (
                 <TouchableOpacity
                   style={[

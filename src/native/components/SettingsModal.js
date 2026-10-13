@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAudioPlayer } from '../context/AudioContext';
 import { API_BASE_URL } from '../config';
 import { colors } from '../theme/colors';
 import { FULL_VERSION } from '../version';
@@ -19,6 +20,7 @@ export default function SettingsModal({ visible, onClose }) {
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
+  const { autoDownloadFinished = true, toggleAutoDownloadFinished } = useAudioPlayer();
 
   const [audioQuality, setAudioQuality] = useState('320'); // '320' | '256' | '128'
   const [hapticFeedback, setHapticFeedback] = useState(true);
@@ -419,6 +421,19 @@ export default function SettingsModal({ visible, onClose }) {
                     <RefreshCw size={13} color={colors.mint} />
                     <Text style={styles.storageActionTextSec}>RE-SYNC VAULT</Text>
                   </TouchableOpacity>
+                </View>
+
+                <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 12 }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>Auto-Cache Completed Songs</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>Automatically save songs to Vault when listened to the end</Text>
+                  </View>
+                  <Switch
+                    value={Boolean(autoDownloadFinished)}
+                    onValueChange={toggleAutoDownloadFinished}
+                    trackColor={{ false: '#374151', true: colors.mint }}
+                    thumbColor="#fdfbf7"
+                  />
                 </View>
               </View>
 

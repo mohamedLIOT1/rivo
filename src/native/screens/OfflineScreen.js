@@ -16,6 +16,7 @@ import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
+import { normalizeCoverUri } from '../utils/coverUtils';
 import {
   getDownloadedTracks,
   removeDownloadedTrack,
@@ -336,15 +337,17 @@ export default function OfflineScreen() {
                       </View>
                     )}
 
-                    <Image
-                      source={{
-                        uri:
-                          track?.coverUrl ||
-                          track?.cover ||
-                          'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400',
-                      }}
-                      style={styles.cover}
-                    />
+                    <View style={styles.coverBox}>
+                      <View style={styles.coverPlaceholder}>
+                        <Disc size={20} color="#1c332e" />
+                      </View>
+                      <Image
+                        source={{
+                          uri: normalizeCoverUri(track?.coverUrl || track?.cover, track),
+                        }}
+                        style={styles.cover}
+                      />
+                    </View>
 
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={styles.trackTitle} numberOfLines={1}>
@@ -578,12 +581,26 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
   },
+  coverBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 6,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#0a1412',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+  },
+  coverPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0a1412',
+  },
   cover: {
     width: 46,
     height: 46,
     borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
   },
   trackTitle: {
     fontFamily: 'monospace',

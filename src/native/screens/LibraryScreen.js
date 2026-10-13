@@ -9,7 +9,10 @@ import {
   Dimensions,
   Alert,
   ActivityIndicator,
+  Modal,
+  TextInput,
 } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import {
   Heart,
   Plus,
@@ -20,11 +23,17 @@ import {
   Play,
   Shuffle,
   Disc,
+  Edit3,
+  Check,
+  X,
+  Image as ImageIcon,
+  FolderPlus,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -38,14 +47,27 @@ export default function LibraryScreen({
   onNavigateOffline,
   onTrackAction,
 }) {
-  const { playTrack, playPlaylist, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
-  const { currentUser, playlists, likedTrackIds, tracks: userTracks } = useUser();
+  const { playTrack, playPlaylist, tracks: audioTracks, downloadedTracks = [], handleDownloadTrack } = useAudioPlayer();
+  const { currentUser, playlists, likedTrackIds, tracks: userTracks, updatePlaylist, uploadPlaylistCover } = useUser();
+  const { showToast } = useToast();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
   const [fetchedTracks, setFetchedTracks] = useState([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ done: 0, total: 0 });
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editCover, setEditCover] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [coverFailed, setCoverFailed] = useState(false);
+
+  useEffect(() => {
+    setCoverFailed(false);
+  }, [selectedView?.id, selectedView?._id]);
 
   const allTracks = isOffline
     ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
@@ -155,6 +177,104 @@ export default function LibraryScreen({
     }
   };
 
+  const handleDownloadAllPlaylist = async () => {
+    if (!activePlaylistTracks || activePlaylistTracks.length === 0) {
+      showToast('No tracks in crate to download', 'warning');
+      return;
+    }
+    const downloadedSet = new Set((downloadedTracks || []).map(t => String(t._id || t.id)));
+    const toDownload = activePlaylistTracks.filter(t => !downloadedSet.has(String(t._id || t.id)));
+
+    if (toDownload.length === 0) {
+      showToast('All tracks are already saved in Offline Vault!', 'info');
+      return;
+    }
+
+    setIsDownloadingAll(true);
+    setDownloadProgress({ done: 0, total: toDownload.length });
+    showToast(`Downloading ${toDownload.length} track(s)...`, 'info');
+
+    let count = 0;
+    for (const t of toDownload) {
+      try {
+        await handleDownloadTrack(t);
+        count++;
+        setDownloadProgress({ done: count, total: toDownload.length });
+      } catch (err) {
+        console.warn('Playlist track dl error:', err.message);
+      }
+    }
+
+    setIsDownloadingAll(false);
+    showToast(`Saved all ${count} track(s) to Offline Vault!`, 'success');
+  };
+
+  const openEditPlaylist = (pl) => {
+    setEditName(pl.name || '');
+    setEditDesc(pl.description || '');
+    setEditCover(pl.cover || '');
+    setIsEditModalOpen(true);
+  };
+
+  const handlePickCoverFile = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled) return;
+      const asset = res.assets ? res.assets[0] : res;
+      if (asset?.uri) {
+        setEditCover(asset.uri);
+      }
+    } catch {
+      showToast('Failed to pick image file', 'error');
+    }
+  };
+
+  const handleSavePlaylistEdit = async () => {
+    if (!editName.trim()) {
+      showToast('Please enter a playlist name', 'warning');
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const plId = String(selectedView.id || selectedView._id);
+      let finalCover = editCover;
+
+      if (editCover && editCover.startsWith('file://')) {
+        const upRes = await uploadPlaylistCover(plId, editCover);
+        if (upRes?.cover) {
+          finalCover = upRes.cover;
+        }
+      }
+
+      const updateRes = await updatePlaylist(plId, {
+        name: editName.trim(),
+        description: editDesc.trim(),
+        cover: finalCover,
+      });
+
+      if (updateRes && updateRes.success) {
+        setSelectedView(prev => ({
+          ...prev,
+          name: editName.trim(),
+          description: editDesc.trim(),
+          cover: finalCover,
+        }));
+        setCoverFailed(false);
+        showToast('Playlist updated successfully!', 'success');
+        setIsEditModalOpen(false);
+      } else {
+        showToast(updateRes?.error || 'Failed to update playlist', 'error');
+      }
+    } catch (err) {
+      showToast('Failed to update playlist: ' + err.message, 'error');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header */}
@@ -249,21 +369,39 @@ export default function LibraryScreen({
               <View style={styles.hardShadow} />
               <View style={styles.playlistHero}>
                 <View style={styles.playlistBigBox}>
-                  {selectedView.cover ? (
+                  <View style={StyleSheet.absoluteFillObject}>
+                    <Disc size={32} color={colors.mint} style={{ alignSelf: 'center', marginTop: 12 }} />
+                  </View>
+                  {((!coverFailed && selectedView.cover) || (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)) ? (
                     <Image
-                      source={{ uri: normalizeCoverUri(selectedView.cover) }}
+                      source={{
+                        uri: normalizeCoverUri(
+                          (!coverFailed && selectedView.cover)
+                            ? selectedView.cover
+                            : (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)
+                        ),
+                      }}
                       style={{ width: '100%', height: '100%', borderRadius: 8 }}
                       resizeMode="cover"
+                      onError={() => setCoverFailed(true)}
                     />
-                  ) : (
-                    <Disc size={36} color={colors.mint} />
-                  )}
+                  ) : null}
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
+                    <TouchableOpacity
+                      style={styles.editHeroPill}
+                      onPress={() => openEditPlaylist(selectedView)}
+                      activeOpacity={0.7}
+                    >
+                      <Edit3 size={11} color={colors.mint} />
+                      <Text style={styles.editHeroPillText}>EDIT</Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.playlistHeroTitle}>{selectedView.name}</Text>
                   <Text style={styles.playlistHeroSub}>
-                    {(selectedView.tracks || selectedView.trackIds || []).length} recordings compiled
+                    {(selectedView.tracks || selectedView.trackIds || activePlaylistTracks || []).length} recordings compiled
                   </Text>
                   <View style={styles.likedBtnRow}>
                     <TouchableOpacity
@@ -271,13 +409,28 @@ export default function LibraryScreen({
                       onPress={() => handlePlayPlaylist(selectedView, false)}
                     >
                       <Play size={14} color={colors.ink} fill={colors.ink} />
-                      <Text style={styles.playHeroBtnText}>PLAY CRATE</Text>
+                      <Text style={styles.playHeroBtnText}>PLAY</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.shuffleHeroBtn}
                       onPress={() => handlePlayPlaylist(selectedView, true)}
                     >
                       <Shuffle size={14} color={colors.paper} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.downloadHeroBtn, isDownloadingAll && { opacity: 0.7 }]}
+                      onPress={handleDownloadAllPlaylist}
+                      disabled={isDownloadingAll}
+                      activeOpacity={0.8}
+                    >
+                      {isDownloadingAll ? (
+                        <ActivityIndicator size="small" color={colors.ink} />
+                      ) : (
+                        <Download size={13} color={colors.ink} />
+                      )}
+                      <Text style={styles.downloadHeroBtnText}>
+                        {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : 'DOWNLOAD ALL'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -409,6 +562,146 @@ export default function LibraryScreen({
           </View>
         )}
       </ScrollView>
+
+      {/* ── Edit Playlist Modal ── */}
+      <Modal
+        visible={isEditModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsEditModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#111a18' : '#fdfbf7' }]}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={[styles.modalTitle, { color: isDark ? colors.paper : colors.ink }]}>EDIT CRATE</Text>
+              <TouchableOpacity onPress={() => setIsEditModalOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={20} color={isDark ? colors.paper : colors.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {/* Cover Preview & Pick Row */}
+              <View style={styles.editCoverRow}>
+                <View style={styles.editCoverPreview}>
+                  {editCover ? (
+                    <Image
+                      source={{ uri: normalizeCoverUri(editCover) }}
+                      style={{ width: '100%', height: '100%', borderRadius: 8 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Disc size={30} color={colors.mint} />
+                  )}
+                </View>
+                <View style={{ flex: 1, marginLeft: 12, gap: 6 }}>
+                  <TouchableOpacity
+                    style={styles.pickFileBtn}
+                    onPress={handlePickCoverFile}
+                    activeOpacity={0.8}
+                  >
+                    <FolderPlus size={14} color={colors.ink} />
+                    <Text style={styles.pickFileBtnText}>CHOOSE PHOTO</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.pickFileHint}>Upload JPG/PNG from device</Text>
+                </View>
+              </View>
+
+              {/* Quick Pick From Playlist Tracks */}
+              {activePlaylistTracks && activePlaylistTracks.length > 0 && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>OR USE TRACK ARTWORK:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 4 }}>
+                    {activePlaylistTracks.slice(0, 8).map((t, idx) => {
+                      const tCover = t.cover || t.coverUrl;
+                      if (!tCover) return null;
+                      return (
+                        <TouchableOpacity
+                          key={t._id || t.id || idx}
+                          onPress={() => setEditCover(tCover)}
+                          style={[
+                            styles.trackThumbBtn,
+                            editCover === tCover && { borderColor: colors.mint, borderWidth: 2 }
+                          ]}
+                          activeOpacity={0.8}
+                        >
+                          <Image
+                            source={{ uri: normalizeCoverUri(tCover, t) }}
+                            style={{ width: 44, height: 44, borderRadius: 6 }}
+                          />
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Title input */}
+              <View style={{ marginTop: 14 }}>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>PLAYLIST TITLE</Text>
+                <TextInput
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="e.g. My Favorite Tracks"
+                  placeholderTextColor="#6b7280"
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
+                />
+              </View>
+
+              {/* Description input */}
+              <View style={{ marginTop: 12 }}>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>DESCRIPTION (OPTIONAL)</Text>
+                <TextInput
+                  value={editDesc}
+                  onChangeText={setEditDesc}
+                  placeholder="Describe this collection..."
+                  placeholderTextColor="#6b7280"
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
+                />
+              </View>
+
+              {/* Custom Cover URL */}
+              <View style={{ marginTop: 12 }}>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>IMAGE URL (OPTIONAL)</Text>
+                <TextInput
+                  value={editCover.startsWith('file://') ? '' : editCover}
+                  onChangeText={setEditCover}
+                  placeholder="https://images... / direct image link"
+                  placeholderTextColor="#6b7280"
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
+                  autoCapitalize="none"
+                />
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions */}
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsEditModalOpen(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCancelBtnText}>CANCEL</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSavePlaylistEdit}
+                disabled={isSavingEdit}
+                activeOpacity={0.8}
+              >
+                {isSavingEdit ? (
+                  <ActivityIndicator size="small" color={colors.ink} />
+                ) : (
+                  <>
+                    <Check size={14} color={colors.ink} strokeWidth={2.5} />
+                    <Text style={styles.modalSaveBtnText}>SAVE CRATE</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -712,5 +1005,176 @@ const styles = StyleSheet.create({
   },
   tracksList: {
     gap: 8,
+  },
+  editHeroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0a1714',
+    borderWidth: 1.5,
+    borderColor: colors.mint,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  editHeroPillText: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 10,
+    color: colors.mint,
+  },
+  downloadHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.mint,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  downloadHeroBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: colors.ink,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    padding: 18,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    paddingBottom: 10,
+  },
+  modalTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  editCoverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  editCoverPreview: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: colors.deepForest,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  pickFileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.mint,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  pickFileBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: colors.ink,
+  },
+  pickFileHint: {
+    fontSize: 10,
+    color: colors.paperMuted,
+  },
+  trackThumbBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#05110f',
+  },
+  inputLabel: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 10,
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+    borderTopWidth: 1.5,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 14,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    backgroundColor: '#1f2937',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 11,
+    color: colors.paper,
+  },
+  modalSaveBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    backgroundColor: colors.mint,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  modalSaveBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: colors.ink,
   },
 });
