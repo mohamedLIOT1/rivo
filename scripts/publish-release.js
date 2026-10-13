@@ -38,7 +38,14 @@ async function publish() {
   const apkBytes = fs.readFileSync(apkPath);
   console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
 
-  const repos = ['mohamedLIOT1/liofy', 'mohamedLIOT1/rivo'];
+  const ipaPath = path.resolve(__dirname, '../Rivo-v1.5.7.ipa');
+  let ipaBytes = null;
+  if (fs.existsSync(ipaPath)) {
+    ipaBytes = fs.readFileSync(ipaPath);
+    console.log(`Loaded IPA from ${ipaPath} (${ipaBytes.length} bytes)`);
+  }
+
+  const repos = ['mohamedLIOT1/rivo'];
 
   for (const repo of repos) {
     console.log(`\n=== Processing repo: ${repo} ===`);
@@ -76,11 +83,15 @@ async function publish() {
       console.log(`Created release ID: ${release.id}`);
     }
 
-    // 2. Upload assets: Rivo-v1.5.7.apk and app-release.apk
+    // 2. Upload assets: APK and IPA
     const assetsToUpload = [
-      { name: 'Rivo-v1.5.7.apk', data: apkBytes },
-      { name: 'app-release.apk', data: apkBytes }
+      { name: 'Rivo-v1.5.7.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' },
+      { name: 'app-release.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' }
     ];
+    if (ipaBytes) {
+      assetsToUpload.push({ name: 'Rivo-v1.5.7.ipa', data: ipaBytes, mime: 'application/octet-stream' });
+      assetsToUpload.push({ name: 'Rivo.ipa', data: ipaBytes, mime: 'application/octet-stream' });
+    }
 
     for (const asset of assetsToUpload) {
       // Check if asset already exists in release
@@ -99,7 +110,7 @@ async function publish() {
         method: 'POST',
         headers: {
           ...headers,
-          'Content-Type': 'application/vnd.android.package-archive',
+          'Content-Type': asset.mime || 'application/octet-stream',
           'Content-Length': String(asset.data.length)
         },
         body: asset.data

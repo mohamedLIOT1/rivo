@@ -11,6 +11,7 @@ import {
   Platform,
   PermissionsAndroid,
   Linking,
+  AppState,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -39,7 +40,7 @@ import {
 import { UserProvider, useUser } from './src/native/context/UserContext';
 import { ToastProvider } from './src/native/context/ToastContext';
 import { AudioProvider, useAudioPlayer } from './src/native/context/AudioContext';
-import { SocketProvider } from './src/native/context/SocketContext';
+import { SocketProvider, useSocket } from './src/native/context/SocketContext';
 import { ConnectivityProvider, useConnectivity } from './src/native/context/ConnectivityContext';
 import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
@@ -81,35 +82,61 @@ const TABS = [
 function MainAppShell() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
+  const { socket } = useSocket();
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+  const handleRemoteUpdateManifest = (data) => {
+    if (!data) return;
+    const currentPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
+    const remotePlatform = data?.platforms?.[currentPlatform];
+    const remoteVersion = remotePlatform?.version || data?.version;
+
+    if (remoteVersion && isNewerVersion(remoteVersion, APP_VERSION)) {
+      setUpdateInfo({
+        remoteVersion,
+        releaseNotes: remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
+        downloadUrl: remotePlatform?.downloadUrl 
+          ? (remotePlatform.downloadUrl.startsWith('http') ? remotePlatform.downloadUrl : `${API_BASE_URL}${remotePlatform.downloadUrl}`)
+          : `${API_BASE_URL}/downloads/Rivo.${Platform.OS === 'ios' ? 'ipa' : 'apk'}`
+      });
+      setIsUpdateModalOpen(true);
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
     }
     checkAppUpdates();
+
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        checkAppUpdates();
+      }
+    });
+    return () => sub.remove();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onUpdateManifest = (data) => {
+      handleRemoteUpdateManifest(data);
+    };
+    socket.on('app:update_manifest', onUpdateManifest);
+    socket.on('app:update_available', onUpdateManifest);
+    return () => {
+      socket.off('app:update_manifest', onUpdateManifest);
+      socket.off('app:update_available', onUpdateManifest);
+    };
+  }, [socket]);
 
   const checkAppUpdates = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/app/version`);
       if (!res.ok) return;
       const data = await res.json();
-      const currentPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
-      const remotePlatform = data?.platforms?.[currentPlatform];
-      const remoteVersion = remotePlatform?.version || data?.version;
-
-      if (remoteVersion && isNewerVersion(remoteVersion, APP_VERSION)) {
-        setUpdateInfo({
-          remoteVersion,
-          releaseNotes: remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
-          downloadUrl: remotePlatform?.downloadUrl 
-            ? (remotePlatform.downloadUrl.startsWith('http') ? remotePlatform.downloadUrl : `${API_BASE_URL}${remotePlatform.downloadUrl}`)
-            : `${API_BASE_URL}/downloads/Rivo.${Platform.OS === 'ios' ? 'ipa' : 'apk'}`
-        });
-        setIsUpdateModalOpen(true);
-      }
+      handleRemoteUpdateManifest(data);
     } catch {}
   };
 
