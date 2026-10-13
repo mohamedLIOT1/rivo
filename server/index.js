@@ -1152,6 +1152,64 @@ app.get([
   res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.7/Rivo-v1.5.7.apk');
 });
 
+// Direct downloads redirect / proxy for release IPAs (iOS)
+app.get([
+  '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.5.7.ipa',
+  '/downloads/Rivo-v1.5.6.ipa',
+  '/downloads/Rivo-v1.5.4.ipa'
+], async (req, res) => {
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.ipa');
+  const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localVersionedPath)) {
+    return res.download(localVersionedPath, 'Rivo-v1.5.7.ipa');
+  }
+  if (fs.existsSync(localIpaPath)) {
+    return res.download(localIpaPath, 'Rivo-v1.5.7.ipa');
+  }
+
+  // If server has GitHub Token configured, proxy release stream directly
+  const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (ghToken) {
+    try {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.7', {
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Rivo-Server'
+        }
+      });
+      const ipaAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.ipa'));
+      if (ipaAsset) {
+        const streamRes = await axios.get(ipaAsset.url, {
+          headers: {
+            'Authorization': `Bearer ${ghToken}`,
+            'Accept': 'application/octet-stream',
+            'User-Agent': 'Rivo-Server'
+          },
+          responseType: 'stream'
+        });
+        res.setHeader('Content-Disposition', `attachment; filename="${ipaAsset.name}"`);
+        res.setHeader('Content-Type', 'application/octet-stream');
+        return streamRes.data.pipe(res);
+      }
+    } catch (e) {
+      console.error('Error proxying GitHub release IPA asset:', e.message);
+    }
+  }
+
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.7/Rivo-v1.5.7.ipa');
+});
+
+// Broadcast app update notification to all active web and mobile clients
+app.all('/api/app/broadcast-update', (req, res) => {
+  if (io) {
+    io.emit('app:update_manifest', APP_VERSIONS_DATA);
+    io.emit('app:update_available', APP_VERSIONS_DATA);
+  }
+  res.json({ success: true, message: 'Update notification broadcasted to all connected clients', data: APP_VERSIONS_DATA });
+});
+
 // Direct downloads route
 app.use('/downloads', (req, res, next) => {
   res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -5720,6 +5778,9 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
+  // Push latest version manifest to newly connected client immediately
+  socket.emit('app:update_manifest', APP_VERSIONS_DATA);
+
   if (socket.userId) {
     const uidStr = socket.userId;
     socket.join(`user:${uidStr}`);
