@@ -22,20 +22,18 @@ function getGitHubToken() {
 
 async function publish() {
   const token = await getGitHubToken();
-  const tag = 'v1.5.5';
-  const releaseName = 'Rivo v1.5.5';
-  const releaseBody = `## Rivo v1.5.5 Update
+  const tag = 'v1.5.6';
+  const releaseName = 'Rivo v1.5.6';
+  const releaseBody = `## Rivo v1.5.6 Update
 
 ### What's Changed
-- **Audio Seek & Notification Sync:** Fixed audio seek jitter where moving forward/backward briefly falsely paused the app and affected Android system media notifications.
-- **Intelligent Song Popularity & Interleaving:** Overhauled the Home and Web "Top Listened" / "Most Popular" sections with smart scoring and artist diversity interleaving so all top charts feature diverse hits rather than just newly uploaded tracks in bulk.
-- **Categorized Hamburger Menu:** Reorganized the top tools menu into clear, distinct categories (COMMUNITY & LIVE, LIBRARY & STATS, PREFERENCES).
-- **Aligned Bottom Navigation:** Updated mobile tab order (Home, Search, Library, Quran, Vault) to mirror the web platform.
-- **Clean Terminology:** Replaced confusing and cyberpunk terms (Citizen identity, Password cipher, Tapes, Crates, Sonic Dispensary) with standard, modern music streaming terms across mobile and web interfaces.
-- **Profile Screen Simplification:** Removed redundant duplicated tool sections for a clean, streamlined profile.
+- **Jam Session UI & Full Functionality:** Redesigned Jam Room to match web design with complete socket event support. Users can host/create a Jam, join via code, copy room code, sync audio, and manage the shared queue (+ Add song search, reorder, remove) and participants (Host badge, transfer host, disconnect listener).
+- **Real Platform Listening Stats & Leaderboard:** Replaced static dummy cards with live platform leaderboard from \`/api/stats/leaderboard\`. Displays Top Listener of the Week hero card, user's real listening time (weekly and total), real community rank, and full ranked leaderboard.
+- **Admin Console Overhaul:** Upgraded admin screen to mirror web panel with 5 distinct tabs (Songs, Accounts, Albums, Artists, Playlists). Allows searching across all songs with filters (All / Songs / Quran), play and delete songs, and user role promotion/demotion.
+- **Media Notification Time Reset Fix:** Resolved Android media notification position bug where moving to the next track kept the seekbar stuck at the end of the previous track.
 `;
 
-  const apkPath = path.resolve(__dirname, '../Rivo-v1.5.5.apk');
+  const apkPath = path.resolve(__dirname, '../Rivo-v1.5.6.apk');
   const apkBytes = fs.readFileSync(apkPath);
   console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
 
@@ -77,9 +75,9 @@ async function publish() {
       console.log(`Created release ID: ${release.id}`);
     }
 
-    // 2. Upload assets: Rivo-v1.5.5.apk and app-release.apk
+    // 2. Upload assets: Rivo-v1.5.6.apk and app-release.apk
     const assetsToUpload = [
-      { name: 'Rivo-v1.5.5.apk', data: apkBytes },
+      { name: 'Rivo-v1.5.6.apk', data: apkBytes },
       { name: 'app-release.apk', data: apkBytes }
     ];
 

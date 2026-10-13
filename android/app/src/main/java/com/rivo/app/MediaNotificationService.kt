@@ -206,6 +206,7 @@ class MediaNotificationService : Service() {
             ACTION_SHOW -> {
                 val now = SystemClock.elapsedRealtime()
                 val incomingTitle = intent.getStringExtra("title")
+                val isTitleChanged = !incomingTitle.isNullOrBlank() && incomingTitle != currentTitle && currentTitle != "Rivo Music"
                 if (!incomingTitle.isNullOrBlank() && incomingTitle != "Unknown Track") {
                     currentTitle = incomingTitle
                 } else if (currentTitle == "Rivo Music" && !incomingTitle.isNullOrBlank()) {
@@ -247,12 +248,14 @@ class MediaNotificationService : Service() {
                 }
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
-                    if (cSec >= 0 && (now - lastUserSeekTimeMs > 4000L)) {
+                    if (cSec >= 0) {
                         val newPosMs = (cSec * 1000).toLong()
-                        if (newPosMs > 0 || !isPlaying || currentPositionMs < 2000L) {
+                        if (isTitleChanged || newPosMs > 0 || !isPlaying || currentPositionMs < 2000L || (now - lastUserSeekTimeMs > 4000L)) {
                             currentPositionMs = newPosMs
                         }
                     }
+                } else if (isTitleChanged) {
+                    currentPositionMs = 0L
                 }
 
                 if (isPlaying) {
@@ -281,6 +284,7 @@ class MediaNotificationService : Service() {
                 }
 
                 val incomingTitle = intent.getStringExtra("title")
+                val isTitleChanged = !incomingTitle.isNullOrBlank() && incomingTitle != currentTitle && currentTitle != "Rivo Music"
                 if (!incomingTitle.isNullOrBlank() && incomingTitle != "Unknown Track") {
                     currentTitle = incomingTitle
                 } else if (currentTitle == "Rivo Music" && !incomingTitle.isNullOrBlank()) {
@@ -300,12 +304,14 @@ class MediaNotificationService : Service() {
                 }
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
-                    if (cSec >= 0 && (now - lastUserSeekTimeMs > 4000L)) {
+                    if (cSec >= 0) {
                         val newPosMs = (cSec * 1000).toLong()
-                        if (newPosMs > 0 || !isPlaying || currentPositionMs < 2000L) {
+                        if (isTitleChanged || newPosMs > 0 || !isPlaying || currentPositionMs < 2000L || (now - lastUserSeekTimeMs > 4000L)) {
                             currentPositionMs = newPosMs
                         }
                     }
+                } else if (isTitleChanged) {
+                    currentPositionMs = 0L
                 }
 
                 val incomingCover = intent.getStringExtra("coverUrl")
