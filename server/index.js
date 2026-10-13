@@ -1081,8 +1081,8 @@ const APP_VERSIONS_DATA = {
       version: '1.5.4',
       build: 22,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo.apk',
-      directFile: 'Rivo.apk',
+      downloadUrl: 'https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.4/Rivo-v1.5.4.apk',
+      directFile: 'Rivo-v1.5.4.apk',
       mandatory: false,
       notes: '100% Native design, playlist tracks sync, Discord status sync, Friend Activity, offline vault.'
     },
@@ -1100,6 +1100,11 @@ const APP_VERSIONS_DATA = {
 
 app.get('/api/app/version', (req, res) => {
   res.json(APP_VERSIONS_DATA);
+});
+
+// Direct downloads redirect for release APKs
+app.get(['/downloads/Rivo.apk', '/downloads/Rivo-v1.5.4.apk', '/downloads/app-release.apk'], (req, res) => {
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.4/Rivo-v1.5.4.apk');
 });
 
 // Direct downloads route

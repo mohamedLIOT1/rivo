@@ -67,8 +67,8 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       fileType: '.APK',
       fileSize: '67 MB',
       icon: Smartphone,
-      downloadUrl: '/downloads/Rivo.apk',
-      directName: 'Rivo.apk',
+      downloadUrl: `https://github.com/mohamedLIOT1/rivo/releases/download/v${APP_VERSION}/Rivo-v${APP_VERSION}.apk`,
+      directName: `Rivo-v${APP_VERSION}.apk`,
       highlights: [
         'Complete Rivo Web UI: all playlists, full profile & Friend Activity',
         'Real-time Chat, Live Jam Rooms & Discord Rich Presence sync',
