@@ -12,16 +12,18 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { X, Send, MessageSquare, ArrowLeft, Search, User, Users, CheckCheck, Check } from 'lucide-react-native';
+import { X, Send, MessageSquare, ArrowLeft, Search, User, Users, CheckCheck, Check, Radio, Headphones, Sparkles } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
+import { useToast } from '../context/ToastContext';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
-export default function ChatModal({ visible, onClose, initialTargetUser = null }) {
-  const { socket } = useSocket();
+export default function ChatModal({ visible, onClose, initialTargetUser = null, onOpenJam = null }) {
+  const { socket, jamSession, joinJam } = useSocket();
   const { currentUser, token } = useUser();
+  const { showToast } = useToast();
 
   const [activeUser, setActiveUser] = useState(initialTargetUser);
   const [conversations, setConversations] = useState([]);
@@ -128,6 +130,22 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
         setMessages((prev) => {
           const exists = prev.some((m) => String(m._id || m.id) === String(msg._id || msg.id));
           if (exists) return prev;
+
+          // Deduplicate: If this message matches my own pending temp message, replace it instead of appending!
+          const tempIdx = prev.findIndex(
+            (m) =>
+              m._id &&
+              String(m._id).startsWith('temp-') &&
+              String(m.sender) === String(msg.sender) &&
+              String(m.recipient) === String(msg.recipient) &&
+              (m.text === msg.text || (m.jamInvite?.roomCode && m.jamInvite.roomCode === msg.jamInvite?.roomCode))
+          );
+          if (tempIdx !== -1) {
+            const updated = [...prev];
+            updated[tempIdx] = msg;
+            return updated;
+          }
+
           return [...prev, msg];
         });
       }
@@ -190,13 +208,63 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.message) {
-          setMessages((prev) =>
-            prev.map((m) => (m._id === tempMsg._id ? data.message : m))
-          );
+          setMessages((prev) => {
+            const hasReal = prev.some((m) => String(m._id || m.id) === String(data.message._id));
+            if (hasReal) {
+              return prev.filter((m) => m._id !== tempMsg._id);
+            }
+            return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
+          });
         }
       }
     } catch {}
     setIsSending(false);
+  };
+
+  const handleInviteToJam = async () => {
+    const activeUserId = activeUser?._id || activeUser?.id;
+    if (!activeUserId) return;
+
+    let roomCode = jamSession?.code || jamSession?.roomCode;
+    if (!roomCode) {
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      roomCode = `JAM-${randomNum}`;
+      joinJam(roomCode);
+    }
+
+    const invitePayload = {
+      roomCode,
+      hostName: currentUser?.name || 'Listener',
+      hostAvatar: currentUser?.avatar || '',
+    };
+
+    const tempMsg = {
+      _id: `temp-${Date.now()}`,
+      sender: currentUser?._id || currentUser?.id,
+      recipient: activeUserId,
+      text: `📻 Let's listen together in real-time! Jam Room: ${roomCode}`,
+      jamInvite: invitePayload,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
+      await fetch(`${API_BASE_URL}/api/chat/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeToken ? { Authorization: `Bearer ${activeToken}` } : {}),
+        },
+        body: JSON.stringify({
+          recipientId: activeUserId,
+          text: `📻 Let's listen together in real-time! Jam Room: ${roomCode}`,
+          jamInvite: invitePayload,
+        }),
+      });
+    } catch {}
+
+    showToast(`Sent Jam invite (${roomCode}) to ${activeUser.name}`, 'success');
   };
 
   // Filter friends / conversations by search query
@@ -219,24 +287,48 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
 
     return (
       <View style={[styles.msgRow, isMe ? styles.myMsgRow : styles.otherMsgRow]}>
-        <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '82%' }}>
+        <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
           <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
-            <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.otherMsgText]}>
-              {item.text}
-            </Text>
+            {item.jamInvite?.roomCode ? (
+              <View style={styles.jamInviteCard}>
+                <View style={styles.jamInviteHeader}>
+                  <Radio size={13} color="#17a398" />
+                  <Text style={styles.jamInviteTag}>JAM SESSION INVITE</Text>
+                </View>
+                <Text style={styles.jamInviteCode}>{item.jamInvite.roomCode}</Text>
+                <Text style={styles.jamInviteSub}>Tap to join and listen together in sync</Text>
+                <TouchableOpacity
+                  style={styles.jamInviteJoinBtn}
+                  onPress={() => {
+                    joinJam(item.jamInvite.roomCode);
+                    if (onOpenJam) {
+                      onOpenJam();
+                    }
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Headphones size={13} color="#082621" />
+                  <Text style={styles.jamInviteJoinBtnText}>JOIN JAM NOW</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={[styles.msgText, isMe ? styles.myMsgText : styles.otherMsgText]}>
+                {item.text}
+              </Text>
+            )}
           </View>
           <View style={[styles.msgMetaRow, isMe ? styles.myMetaRow : styles.otherMetaRow]}>
             {timeStr ? <Text style={styles.msgTimeText}>{timeStr}</Text> : null}
             {isMe && (
               item.read ? (
                 <View style={styles.seenBadge}>
-                  <CheckCheck size={13} color="#26c4b7" strokeWidth={2.6} />
-                  <Text style={styles.seenText}>سين</Text>
+                  <CheckCheck size={12} color="#26c4b7" strokeWidth={2.4} />
+                  <Text style={styles.seenText}>Seen</Text>
                 </View>
               ) : (
                 <View style={styles.sentBadge}>
-                  <Check size={12} color="#64748b" strokeWidth={2.2} />
-                  <Text style={styles.sentText}>تم الإرسال</Text>
+                  <Check size={11} color="#64748b" strokeWidth={2.0} />
+                  <Text style={styles.sentText}>Sent</Text>
                 </View>
               )
             )}
@@ -279,12 +371,21 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
                     )}
                   </View>
 
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                     <Text style={styles.activeUserName} numberOfLines={1}>
                       {activeUser.name || 'Friend'}
                     </Text>
                     <Text style={styles.activeUserStatus}>DIRECT MESSAGE</Text>
                   </View>
+
+                  <TouchableOpacity
+                    style={styles.headerJamInviteBtn}
+                    onPress={handleInviteToJam}
+                    activeOpacity={0.8}
+                  >
+                    <Radio size={12} color="#082621" />
+                    <Text style={styles.headerJamInviteText}>JAM</Text>
+                  </TouchableOpacity>
                 </View>
               ) : (
                 <View style={styles.hubHeaderRow}>
@@ -467,6 +568,14 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null }
 
                 {/* Input Bar */}
                 <View style={styles.inputBar}>
+                  <TouchableOpacity
+                    style={styles.inputJamBtn}
+                    onPress={handleInviteToJam}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Radio size={16} color="#17a398" />
+                  </TouchableOpacity>
                   <TextInput
                     style={styles.textInput}
                     placeholder={`Message ${activeUser.name}...`}
@@ -504,7 +613,7 @@ const styles = StyleSheet.create({
   },
   keyboardWrap: {
     width: '100%',
-    height: '85%',
+    height: '90%',
   },
   sheetCard: {
     flex: 1,
@@ -699,20 +808,20 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   bubble: {
-    maxWidth: '78%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
+    maxWidth: '100%',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 16,
   },
   myBubble: {
     backgroundColor: '#17a398',
-    borderBottomRightRadius: 2,
+    borderBottomRightRadius: 3,
   },
   otherBubble: {
-    backgroundColor: '#1c2826',
-    borderWidth: 1,
+    backgroundColor: '#1a2725',
+    borderWidth: 1.5,
     borderColor: '#263330',
-    borderBottomLeftRadius: 2,
+    borderBottomLeftRadius: 3,
   },
   msgMetaRow: {
     flexDirection: 'row',
@@ -814,5 +923,80 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     lineHeight: 16,
+  },
+  headerJamInviteBtn: {
+    backgroundColor: '#17a398',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerJamInviteText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#082621',
+  },
+  inputJamBtn: {
+    backgroundColor: '#162421',
+    borderWidth: 1,
+    borderColor: '#263330',
+    borderRadius: 10,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  jamInviteCard: {
+    backgroundColor: '#111c19',
+    borderWidth: 1.5,
+    borderColor: '#263d38',
+    borderRadius: 12,
+    padding: 10,
+    minWidth: 190,
+  },
+  jamInviteHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 4,
+  },
+  jamInviteTag: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#17a398',
+    letterSpacing: 0.5,
+  },
+  jamInviteCode: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '900',
+    fontSize: 18,
+    color: '#f59e0b',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  jamInviteSub: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginBottom: 8,
+  },
+  jamInviteJoinBtn: {
+    backgroundColor: '#17a398',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  jamInviteJoinBtnText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#082621',
   },
 });

@@ -45,6 +45,8 @@ import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
+import * as FileSystem from 'expo-file-system';
+import { installApk } from './src/native/services/mediaControls';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
 
@@ -127,6 +129,61 @@ function MainAppShell() {
     }
   };
 
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadBytes, setDownloadBytes] = useState({ written: 0, total: 0 });
+  const [downloadError, setDownloadError] = useState(null);
+
+  const handleDownloadAndInstall = async () => {
+    if (Platform.OS === 'ios') {
+      if (updateInfo?.downloadUrl) {
+        Linking.openURL(updateInfo.downloadUrl);
+      }
+      setIsUpdateModalOpen(false);
+      return;
+    }
+
+    try {
+      setIsDownloadingUpdate(true);
+      setDownloadError(null);
+      setDownloadProgress(0);
+
+      const downloadUrl = updateInfo.downloadUrl;
+      const targetUri = `${FileSystem.documentDirectory}Rivo-v${updateInfo.remoteVersion}.apk`;
+
+      const downloadResumable = FileSystem.createDownloadResumable(
+        downloadUrl,
+        targetUri,
+        {},
+        (progress) => {
+          const written = progress.totalBytesWritten;
+          const total = progress.totalBytesExpectedToWrite;
+          setDownloadBytes({ written, total });
+          if (total > 0) {
+            setDownloadProgress(Math.min(1, written / total));
+          }
+        }
+      );
+
+      const result = await downloadResumable.downloadAsync();
+      if (result && result.uri) {
+        setDownloadProgress(1);
+        try {
+          await installApk(result.uri);
+        } catch (e) {
+          Linking.openURL(downloadUrl);
+        }
+      }
+    } catch (err) {
+      setDownloadError(err.message || 'Download error');
+      if (updateInfo?.downloadUrl) {
+        Linking.openURL(updateInfo.downloadUrl);
+      }
+    } finally {
+      setIsDownloadingUpdate(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
@@ -143,7 +200,9 @@ function MainAppShell() {
         visible={isUpdateModalOpen}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setIsUpdateModalOpen(false)}
+        onRequestClose={() => {
+          if (!isDownloadingUpdate) setIsUpdateModalOpen(false);
+        }}
       >
         <View style={styles.updateModalOverlay}>
           <View style={styles.updateModalBox}>
@@ -162,26 +221,61 @@ function MainAppShell() {
               {updateInfo?.releaseNotes}
             </Text>
 
-            <TouchableOpacity
-              style={styles.updateDownloadBtn}
-              onPress={() => {
-                if (updateInfo?.downloadUrl) {
-                  Linking.openURL(updateInfo.downloadUrl);
-                }
-                setIsUpdateModalOpen(false);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.updateDownloadBtnText}>DOWNLOAD UPDATE NOW</Text>
-            </TouchableOpacity>
+            {isDownloadingUpdate ? (
+              <View style={styles.downloadProgressWrap}>
+                <View style={styles.progressBarTrack}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      { width: `${Math.round(downloadProgress * 100)}%` },
+                    ]}
+                  />
+                </View>
+                <View style={styles.progressInfoRow}>
+                  <Text style={styles.progressPctText}>{Math.round(downloadProgress * 100)}%</Text>
+                  {downloadBytes.total > 0 && (
+                    <Text style={styles.progressMbText}>
+                      {(downloadBytes.written / 1024 / 1024).toFixed(1)} MB /{' '}
+                      {(downloadBytes.total / 1024 / 1024).toFixed(1)} MB
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.installingNoteText}>
+                  {downloadProgress >= 1
+                    ? 'Launching package installer...'
+                    : 'Downloading APK update directly in app...'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.updateDownloadBtn}
+                  onPress={handleDownloadAndInstall}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateDownloadBtnText}>1-CLICK IN-APP UPDATE & INSTALL</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.updateCancelBtn}
-              onPress={() => setIsUpdateModalOpen(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.updateCancelBtnText}>STAY ON CURRENT VERSION</Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.updateBrowserBtn}
+                  onPress={() => {
+                    if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
+                    setIsUpdateModalOpen(false);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateBrowserBtnText}>OPEN DOWNLOAD IN BROWSER</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.updateCancelBtn}
+                  onPress={() => setIsUpdateModalOpen(false)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateCancelBtnText}>STAY ON CURRENT VERSION</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -570,6 +664,10 @@ function NativeAppShell() {
           setChatTargetUser(null);
         }}
         initialTargetUser={chatTargetUser}
+        onOpenJam={() => {
+          setIsChatOpen(false);
+          setIsJamOpen(true);
+        }}
       />
 
       <SettingsModal
@@ -1025,5 +1123,63 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     fontWeight: '700',
+  },
+  updateBrowserBtn: {
+    backgroundColor: '#162321',
+    borderWidth: 1,
+    borderColor: '#17a398',
+    paddingVertical: 10,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  updateBrowserBtnText: {
+    color: '#17a398',
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  downloadProgressWrap: {
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  progressBarTrack: {
+    height: 10,
+    backgroundColor: '#1a2624',
+    borderRadius: 5,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#2d3748',
+    marginBottom: 8,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#17a398',
+    borderRadius: 4,
+  },
+  progressInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  progressPctText: {
+    color: '#17a398',
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 13,
+  },
+  progressMbText: {
+    color: '#94a3b8',
+    fontFamily: 'monospace',
+    fontSize: 11,
+  },
+  installingNoteText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontFamily: 'monospace',
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

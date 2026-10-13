@@ -200,4 +200,33 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
                 ?.emit("onMediaAction", action)
         }
     }
+
+    @ReactMethod
+    fun installApk(filePath: String, promise: com.facebook.react.bridge.Promise) {
+        try {
+            val context = reactContext.currentActivity ?: reactContext.applicationContext
+            val cleanPath = filePath.replace("file://", "")
+            val file = java.io.File(cleanPath)
+            if (!file.exists()) {
+                promise.reject("FILE_NOT_FOUND", "APK file does not exist at $cleanPath")
+                return
+            }
+
+            val uri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "com.rivo.app.fileprovider",
+                file
+            )
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("INSTALL_ERROR", e.message, e)
+        }
+    }
 }

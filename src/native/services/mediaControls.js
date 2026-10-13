@@ -147,3 +147,10 @@ export const dismissAllChatNotifications = () => {
   } catch (e) {}
 };
 
+export const installApk = async (filePath) => {
+  if (!RivoMediaControls || !RivoMediaControls.installApk) {
+    return;
+  }
+  return RivoMediaControls.installApk(filePath);
+};
+
