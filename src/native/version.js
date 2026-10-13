@@ -1,6 +1,6 @@
 // Centralized Application Version for React Native Layer
-export const APP_VERSION = '1.5.1';
-export const BUILD_NUMBER = '19';
+export const APP_VERSION = '1.5.2';
+export const BUILD_NUMBER = '20';
 export const FULL_VERSION = `v${APP_VERSION} (Build ${BUILD_NUMBER})`;
 export const BUILD_DATE = '2026-10-13';
 

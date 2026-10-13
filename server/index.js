@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.1',
-  releaseNotes: 'All-new native CRT cassette player UI, Featured Albums grid, 1-on-1 direct messaging, profile follower counters, Discord Rich Presence, and fixed lyrics & shuffle.',
-  publishedAt: '2026-10-13T14:45:00Z',
+  version: '1.5.2',
+  releaseNotes: 'Exact CRT cassette player design, user profiles with social follow & instant DMs, zero green splash flash, fast downloads, and persistent lyrics & shuffle.',
+  publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.1',
+      version: '1.5.2',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,8 +1078,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.1',
-      build: 19,
+      version: '1.5.2',
+      build: 20,
       name: 'Rivo for Android',
       downloadUrl: '/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -1087,13 +1087,13 @@ const APP_VERSIONS_DATA = {
       notes: '100% Native design, playlist tracks sync, Discord status sync, Friend Activity, offline vault.'
     },
     ios: {
-      version: '1.5.1',
-      build: 19,
+      version: '1.5.2',
+      build: 20,
       name: 'Rivo for iOS',
       downloadUrl: '/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'All-new native CRT cassette player UI, Featured Albums grid, 1-on-1 direct messaging, profile follower counters, Discord Rich Presence, and fixed lyrics & shuffle.'
+      notes: 'Exact CRT cassette player design, user profiles with social follow & instant DMs, zero green splash flash, and fast downloads.'
     }
   }
 };
