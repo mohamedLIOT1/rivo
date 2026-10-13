@@ -22,22 +22,23 @@ function getGitHubToken() {
 
 async function publish() {
   const token = await getGitHubToken();
-  const tag = 'v1.5.6';
-  const releaseName = 'Rivo v1.5.6';
-  const releaseBody = `## Rivo v1.5.6 Update
+  const tag = 'v1.5.7';
+  const releaseName = 'Rivo v1.5.7';
+  const releaseBody = `## Rivo v1.5.7 Update
 
 ### What's Changed
-- **Jam Session UI & Full Functionality:** Redesigned Jam Room to match web design with complete socket event support. Users can host/create a Jam, join via code, copy room code, sync audio, and manage the shared queue (+ Add song search, reorder, remove) and participants (Host badge, transfer host, disconnect listener).
-- **Real Platform Listening Stats & Leaderboard:** Replaced static dummy cards with live platform leaderboard from \`/api/stats/leaderboard\`. Displays Top Listener of the Week hero card, user's real listening time (weekly and total), real community rank, and full ranked leaderboard.
-- **Admin Console Overhaul:** Upgraded admin screen to mirror web panel with 5 distinct tabs (Songs, Accounts, Albums, Artists, Playlists). Allows searching across all songs with filters (All / Songs / Quran), play and delete songs, and user role promotion/demotion.
-- **Media Notification Time Reset Fix:** Resolved Android media notification position bug where moving to the next track kept the seekbar stuck at the end of the previous track.
+- **In-App 1-Click APK Auto-Updater & Installer:** Users no longer need to browse GitHub or download manually! The app detects new releases, shows a live download progress bar with written/total MBs, and automatically opens the native Android package installer.
+- **Admin Panel Performance Fix:** Replaced heavy eager loading of all songs with smooth chunked pagination (Load More Songs / Load More Accounts), eliminating app freezing and UI lag.
+- **Jam Session Smart Discovery & Modal Scroll Fix:** "Add Song" now surfaces intelligent recommendations mixing saved/liked tracks with randomized library tracks (plus a Shuffle button). The queue list has nested scrolling enabled and stays contained cleanly within the card box.
+- **Jam Session Web <-> Native Live Playback & Stream Latency Sync:** Joining or tuning into a Jam session now auto-syncs playback time with latency compensation so the mobile client starts at the exact second matching web and host listeners.
+- **Chat Overhaul:** Expanded message bubble width, fixed duplicate socket message echoes, added clean English read receipts ("Seen" with teal double checks), and added a 1-tap "JAM INVITE" card directly into the chat flow.
 `;
 
-  const apkPath = path.resolve(__dirname, '../Rivo-v1.5.6.apk');
+  const apkPath = path.resolve(__dirname, '../Rivo-v1.5.7.apk');
   const apkBytes = fs.readFileSync(apkPath);
   console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
 
-  const repos = ['mohamedLIOT1/rivo'];
+  const repos = ['mohamedLIOT1/liofy', 'mohamedLIOT1/rivo'];
 
   for (const repo of repos) {
     console.log(`\n=== Processing repo: ${repo} ===`);
@@ -75,9 +76,9 @@ async function publish() {
       console.log(`Created release ID: ${release.id}`);
     }
 
-    // 2. Upload assets: Rivo-v1.5.6.apk and app-release.apk
+    // 2. Upload assets: Rivo-v1.5.7.apk and app-release.apk
     const assetsToUpload = [
-      { name: 'Rivo-v1.5.6.apk', data: apkBytes },
+      { name: 'Rivo-v1.5.7.apk', data: apkBytes },
       { name: 'app-release.apk', data: apkBytes }
     ];
 

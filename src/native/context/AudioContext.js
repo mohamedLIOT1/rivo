@@ -483,7 +483,7 @@ export const AudioProvider = ({ children }) => {
     };
   }, [currentTrack?._id, currentTrack?.id, currentTrack?.title, isOffline]);
 
-  const playTrack = async (track, trackList = [], isRetry = false) => {
+  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0) => {
     if (!track) return;
 
     if (!isHistoryNavRef.current && currentTrackRef.current) {
@@ -498,12 +498,15 @@ export const AudioProvider = ({ children }) => {
 
     const trackId = String(track._id || track.id || '');
     const requestTs = Date.now();
+    const connectStartTime = Date.now();
+    const safeTargetSec = Math.max(0, Number(targetTime) || 0);
+
     playbackStatusRef.current = {
-      currentTime: 0,
+      currentTime: safeTargetSec,
       duration: Number(track.duration || 0),
       lastRequestTs: requestTs,
     };
-    setProgress({ currentTime: 0, duration: Number(track.duration || 0) });
+    setProgress({ currentTime: safeTargetSec, duration: Number(track.duration || 0) });
 
     try {
       setIsLoading(true);
@@ -604,9 +607,14 @@ export const AudioProvider = ({ children }) => {
             },
           };
 
+      const initialPosMs = Math.round(safeTargetSec * 1000);
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
-        { shouldPlay: true, progressUpdateIntervalMillis: 250 },
+        {
+          shouldPlay: true,
+          positionMillis: initialPosMs > 0 ? initialPosMs : 0,
+          progressUpdateIntervalMillis: 250,
+        },
         onPlaybackStatusUpdate
       );
 
@@ -619,6 +627,14 @@ export const AudioProvider = ({ children }) => {
       if (volumeRef.current !== undefined) {
         await sound.setVolumeAsync(volumeRef.current).catch(() => {});
       }
+
+      // If playing with target time, compensate for stream connect delay so it stays in exact sync!
+      if (safeTargetSec > 0) {
+        const streamConnectElapsed = (Date.now() - connectStartTime) / 1000;
+        const compensatedTargetSec = safeTargetSec + Math.min(streamConnectElapsed, 8);
+        await sound.setPositionAsync(Math.round(compensatedTargetSec * 1000)).catch(() => {});
+      }
+
       setIsPlaying(true);
       setIsLoading(false);
       try {
@@ -627,7 +643,7 @@ export const AudioProvider = ({ children }) => {
           ...track,
           duration: Number(track.duration || (playbackStatusRef.current?.duration || 240)),
           coverUrl: track.coverUrl || track.cover || '',
-          currentTime: 0,
+          currentTime: safeTargetSec,
           liked: isLikedTrack,
         }, true, repeatMode, isShuffle, isLikedTrack);
       } catch {}
@@ -824,6 +840,42 @@ export const AudioProvider = ({ children }) => {
     } catch (e) {}
   }, []);
 
+  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt }) => {
+    let targetTime = Number(syncTime) || 0;
+    if (syncPlaying && updatedAt) {
+      const elapsed = (Date.now() - updatedAt) / 1000;
+      if (elapsed > 0 && elapsed < 3600) {
+        targetTime += elapsed;
+      }
+    }
+
+    const cur = currentTrackRef.current;
+    const isDifferentTrack = syncTrack && String(syncTrack.id || syncTrack._id) !== String(cur?.id || cur?._id);
+
+    if (isDifferentTrack) {
+      await playTrack(syncTrack, null, false, targetTime);
+      if (syncPlaying !== undefined && !syncPlaying && soundRef.current) {
+        await soundRef.current.pauseAsync().catch(() => {});
+        setIsPlaying(false);
+      }
+    } else {
+      // Same track: sync drift if > 2.0s
+      if (targetTime !== undefined && Math.abs(targetTime - (playbackStatusRef.current?.currentTime || 0)) > 2.0) {
+        seekTo(targetTime);
+      }
+      // Sync play/pause
+      if (syncPlaying !== undefined && syncPlaying !== isPlayingRef.current && soundRef.current) {
+        if (syncPlaying) {
+          await soundRef.current.playAsync().catch(() => {});
+          setIsPlaying(true);
+        } else {
+          await soundRef.current.pauseAsync().catch(() => {});
+          setIsPlaying(false);
+        }
+      }
+    }
+  }, [playTrack, seekTo]);
+
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
@@ -833,8 +885,8 @@ export const AudioProvider = ({ children }) => {
     startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
     autoDownloadFinished, toggleAutoDownloadFinished,
-    syncFromOnlineTrack, pauseNativePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback]);
+    syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState]);
 
   return (
     <AudioContext.Provider value={controls}>

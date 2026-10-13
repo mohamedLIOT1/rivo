@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,8 @@ import {
   Crown,
   UserMinus,
   Search,
+  Shuffle,
+  Sparkles,
 } from 'lucide-react-native';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
@@ -47,7 +49,7 @@ export default function JamRoomModal({ visible, onClose }) {
   } = useSocket();
 
   const { currentUser, tracks = [] } = useUser();
-  const { currentTrack, isPlaying, playTrack } = useAudioPlayer();
+  const { currentTrack, isPlaying, playTrack, syncRemotePlayState, likedTrackIds = [] } = useAudioPlayer();
   const { showToast } = useToast();
 
   const [inputCode, setInputCode] = useState('');
@@ -55,6 +57,7 @@ export default function JamRoomModal({ visible, onClose }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [justAddedId, setJustAddedId] = useState(null);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
 
   if (!visible) return null;
 
@@ -72,7 +75,23 @@ export default function JamRoomModal({ visible, onClose }) {
 
   const handleTuneIn = () => {
     if (jamSession?.currentTrack) {
-      playTrack(jamSession.currentTrack);
+      let liveTime = Number(jamSession.currentTime) || 0;
+      if (jamSession.isPlaying && jamSession.updatedAt) {
+        const elapsed = (Date.now() - jamSession.updatedAt) / 1000;
+        if (elapsed > 0 && elapsed < 3600) {
+          liveTime += elapsed;
+        }
+      }
+      if (syncRemotePlayState) {
+        syncRemotePlayState({
+          isPlaying: jamSession.isPlaying,
+          currentTrack: jamSession.currentTrack,
+          currentTime: liveTime,
+          updatedAt: Date.now(),
+        });
+      } else {
+        playTrack(jamSession.currentTrack, null, false, liveTime);
+      }
       showToast('Audio resynced with Jam room', 'info');
     } else if (currentTrack) {
       playTrack(currentTrack);
@@ -111,13 +130,27 @@ export default function JamRoomModal({ visible, onClose }) {
     reorderJamQueue(fromIdx, toIdx);
   };
 
+  // Smart recommendations: user liked tracks + randomized library mix instead of chronological uploads
+  const smartRecommendations = useMemo(() => {
+    if (!Array.isArray(tracks) || tracks.length === 0) return [];
+    const liked = tracks.filter((t) =>
+      likedTrackIds.some((id) => String(id) === String(t._id || t.id))
+    );
+    const others = tracks.filter((t) =>
+      !likedTrackIds.some((id) => String(id) === String(t._id || t.id))
+    );
+    const shuffledOthers = [...others].sort(() => 0.5 - Math.random());
+    const mixed = [...liked, ...shuffledOthers];
+    return mixed.slice(0, 18);
+  }, [tracks, likedTrackIds, shuffleSeed]);
+
   const filteredTracks = searchQuery.trim()
     ? (tracks || []).filter(
         (t) =>
           (t?.title && t.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (t?.artist && t.artist.toLowerCase().includes(searchQuery.toLowerCase()))
-      ).slice(0, 10)
-    : (tracks || []).slice(0, 8);
+      ).slice(0, 20)
+    : smartRecommendations;
 
   const myId = String(currentUser?._id || currentUser?.id || '');
   const isCurrentUserHost = Boolean(
@@ -256,9 +289,38 @@ export default function JamRoomModal({ visible, onClose }) {
                             onChangeText={setSearchQuery}
                             autoCorrect={false}
                           />
+                          {searchQuery ? (
+                            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <X size={13} color="#9ca3af" />
+                            </TouchableOpacity>
+                          ) : null}
                         </View>
 
-                        <View style={styles.searchResultsList}>
+                        <View style={styles.recsHeaderRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Sparkles size={11} color={colors.mint} />
+                            <Text style={styles.recsHeaderTitle}>
+                              {searchQuery.trim() ? `RESULTS (${filteredTracks.length})` : 'YOUR FAVORITES & DISCOVERIES'}
+                            </Text>
+                          </View>
+                          {!searchQuery.trim() && (
+                            <TouchableOpacity
+                              style={styles.recsShuffleBtn}
+                              onPress={() => setShuffleSeed((s) => s + 1)}
+                              activeOpacity={0.8}
+                            >
+                              <Shuffle size={11} color="#17a398" />
+                              <Text style={styles.recsShuffleBtnText}>SHUFFLE</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        <ScrollView
+                          nestedScrollEnabled={true}
+                          style={styles.searchResultsList}
+                          contentContainerStyle={{ gap: 6, paddingBottom: 6 }}
+                          showsVerticalScrollIndicator={true}
+                        >
                           {filteredTracks.map((track) => {
                             const tId = track._id || track.id;
                             const isQueued = justAddedId === tId;
@@ -300,7 +362,7 @@ export default function JamRoomModal({ visible, onClose }) {
                               </View>
                             );
                           })}
-                        </View>
+                        </ScrollView>
                       </View>
                     )}
 
@@ -516,6 +578,7 @@ const styles = StyleSheet.create({
   },
   sheetOuter: {
     position: 'relative',
+    height: '88%',
     maxHeight: '88%',
   },
   hardShadow: {
@@ -528,12 +591,14 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   sheet: {
+    flex: 1,
     backgroundColor: '#121212',
     borderWidth: 2,
     borderColor: '#27272a',
     borderRadius: 16,
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 20,
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
@@ -592,11 +657,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollArea: {
-    maxHeight: 520,
+    flex: 1,
     marginTop: 10,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: 28,
   },
   // Inactive
   inactiveContainer: {
@@ -847,9 +912,39 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     padding: 0,
   },
+  recsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  recsHeaderTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9.5,
+    color: '#9ca3af',
+    letterSpacing: 0.5,
+  },
+  recsShuffleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#3f3f46',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  recsShuffleBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 8.5,
+    color: colors.mint,
+  },
   searchResultsList: {
-    maxHeight: 180,
-    gap: 6,
+    maxHeight: 220,
   },
   searchResultItem: {
     flexDirection: 'row',

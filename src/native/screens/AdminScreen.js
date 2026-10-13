@@ -64,6 +64,10 @@ export default function AdminScreen() {
 
   const [deletingId, setDeletingId] = useState(null);
 
+  // Pagination for smooth 60fps rendering without UI lockup
+  const [visibleTrackCount, setVisibleTrackCount] = useState(35);
+  const [visibleUserCount, setVisibleUserCount] = useState(30);
+
   // 1. Fetch Users
   const fetchUsers = async () => {
     if (!token) return;
@@ -435,9 +439,9 @@ export default function AdminScreen() {
               </Text>
             </View>
 
-            {/* Tracks List */}
+            {/* Tracks List (Paginated for instant 60fps rendering without lag) */}
             <View style={styles.itemsList}>
-              {filteredTracks.map((track, idx) => {
+              {filteredTracks.slice(0, visibleTrackCount).map((track, idx) => {
                 const tId = track._id || track.id || idx;
                 const isDeleting = deletingId === tId;
                 return (
@@ -487,6 +491,18 @@ export default function AdminScreen() {
                   </View>
                 );
               })}
+
+              {visibleTrackCount < filteredTracks.length && (
+                <TouchableOpacity
+                  style={styles.loadMoreBtn}
+                  onPress={() => setVisibleTrackCount((prev) => prev + 50)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.loadMoreBtnText}>
+                    LOAD MORE SONGS ({filteredTracks.length - visibleTrackCount} MORE)
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -514,7 +530,7 @@ export default function AdminScreen() {
               <ActivityIndicator size="large" color={colors.mint} style={{ marginTop: 20 }} />
             ) : (
               <View style={styles.itemsList}>
-                {filteredUsers.map((user) => {
+                {filteredUsers.slice(0, visibleUserCount).map((user) => {
                   const uId = user._id || user.id;
                   const isUserAdminRole = user.role === 'admin' || user.isAdmin;
                   return (
@@ -568,6 +584,18 @@ export default function AdminScreen() {
                     </View>
                   );
                 })}
+
+                {visibleUserCount < filteredUsers.length && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    onPress={() => setVisibleUserCount((prev) => prev + 30)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.loadMoreBtnText}>
+                      LOAD MORE ACCOUNTS ({filteredUsers.length - visibleUserCount} MORE)
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -1020,5 +1048,23 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 8,
     color: '#ffffff',
+  },
+  loadMoreBtn: {
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#27272a',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  loadMoreBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: colors.mint,
+    letterSpacing: 0.5,
   },
 });

@@ -2,12 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
 import { useUser } from './UserContext';
+import { useAudioPlayer } from './AudioContext';
 import { showChatNotification, dismissChatNotification } from '../services/mediaControls';
 
 const SocketContext = createContext();
 
 export const SocketProvider = ({ children }) => {
   const { currentUser, token } = useUser();
+  const { syncRemotePlayState } = useAudioPlayer();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [jamSession, setJamSession] = useState(null);
@@ -40,6 +42,33 @@ export const SocketProvider = ({ children }) => {
     // Listen to real Jam Room server events
     s.on('jam:room_updated', (data) => {
       setJamSession(data);
+      if (data?.currentTrack && syncRemotePlayState) {
+        const myId = String(currentUser?._id || currentUser?.id || '');
+        const isHost = Boolean(
+          (data.hostUserId && myId && String(data.hostUserId) === myId) ||
+          (data.hostId && s?.id && data.hostId === s.id)
+        );
+        if (!isHost) {
+          syncRemotePlayState({
+            isPlaying: data.isPlaying,
+            currentTrack: data.currentTrack,
+            currentTime: data.currentTime,
+            updatedAt: data.updatedAt,
+          });
+        }
+      }
+    });
+
+    s.on('jam:sync_play_state', (data) => {
+      if (data?.currentTrack && syncRemotePlayState) {
+        syncRemotePlayState(data);
+      }
+    });
+
+    s.on('jam:on_play_state_changed', (data) => {
+      if (data?.initiatorId !== s.id && data?.currentTrack && syncRemotePlayState) {
+        syncRemotePlayState(data);
+      }
     });
 
     s.on('jam_updated', (data) => {

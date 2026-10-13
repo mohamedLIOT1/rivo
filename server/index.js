@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.6',
-  releaseNotes: 'Redesigned Jam Session UI & full socket queue controls, real weekly platform listening stats & leaderboard, modernized Admin Panel with 5 tabs and full song search, and fixed notification position reset on track change.',
+  version: '1.5.7',
+  releaseNotes: '1-Click In-App APK Updater & Installer, Instant Jam Session Invites in Chat, Real-Time Jam Audio Latency Synchronization, Admin Panel instant pagination, and improved discovery in Jam Room.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.6',
+      version: '1.5.7',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,20 +1078,20 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.6',
-      build: 24,
+      version: '1.5.7',
+      build: 25,
       name: 'Rivo for Android',
-      downloadUrl: 'https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.6/Rivo-v1.5.6.apk',
-      directFile: 'Rivo-v1.5.6.apk',
+      downloadUrl: '/downloads/Rivo-v1.5.7.apk',
+      directFile: 'Rivo-v1.5.7.apk',
       mandatory: false,
-      notes: 'Redesigned Jam Session UI & full socket queue controls, real weekly platform listening stats & leaderboard, modernized Admin Panel with 5 tabs and full song search, and fixed notification position reset on track change.'
+      notes: '1-Click In-App APK Updater & Installer, Instant Jam Session Invites in Chat, Real-Time Jam Audio Latency Synchronization, Admin Panel instant pagination, and improved discovery in Jam Room.'
     },
     ios: {
-      version: '1.5.6',
-      build: 24,
+      version: '1.5.7',
+      build: 25,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.5.4.ipa',
-      directFile: 'Rivo-v1.5.4.ipa',
+      downloadUrl: '/downloads/Rivo-v1.5.7.ipa',
+      directFile: 'Rivo-v1.5.7.ipa',
       mandatory: false,
       notes: 'Offline artwork resilience across iOS updates, MiniPlayer & queue cover fix, Playlist edit & cover upload, Playlist batch download, and auto-download on completed playback.'
     }
@@ -1102,9 +1102,54 @@ app.get('/api/app/version', (req, res) => {
   res.json(APP_VERSIONS_DATA);
 });
 
-// Direct downloads redirect for release APKs
-app.get(['/downloads/Rivo.apk', '/downloads/Rivo-v1.5.6.apk', '/downloads/Rivo-v1.5.5.apk', '/downloads/app-release.apk'], (req, res) => {
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.6/Rivo-v1.5.6.apk');
+// Direct downloads redirect / proxy for release APKs
+app.get([
+  '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.5.7.apk',
+  '/downloads/Rivo-v1.5.6.apk',
+  '/downloads/Rivo-v1.5.5.apk',
+  '/downloads/app-release.apk'
+], async (req, res) => {
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.7.apk');
+  const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localVersionedPath)) {
+    return res.download(localVersionedPath, 'Rivo-v1.5.7.apk');
+  }
+  if (fs.existsSync(localApkPath)) {
+    return res.download(localApkPath, 'Rivo-v1.5.7.apk');
+  }
+
+  // If server has GitHub Token configured, proxy release stream directly
+  const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (ghToken) {
+    try {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.7', {
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Rivo-Server'
+        }
+      });
+      const apkAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.apk'));
+      if (apkAsset) {
+        const streamRes = await axios.get(apkAsset.url, {
+          headers: {
+            'Authorization': `Bearer ${ghToken}`,
+            'Accept': 'application/octet-stream',
+            'User-Agent': 'Rivo-Server'
+          },
+          responseType: 'stream'
+        });
+        res.setHeader('Content-Disposition', `attachment; filename="${apkAsset.name}"`);
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        return streamRes.data.pipe(res);
+      }
+    } catch (e) {
+      console.error('Error proxying GitHub release asset:', e.message);
+    }
+  }
+
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.7/Rivo-v1.5.7.apk');
 });
 
 // Direct downloads route
