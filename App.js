@@ -74,34 +74,15 @@ const TABS = [
 ];
 
 function MainAppShell() {
-  useEffect(() => {
-    if (Platform.OS === 'android' && Platform.Version >= 33) {
-      PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
-    }
-  }, []);
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
-      <ErrorBoundary>
-        <NativeAppShell />
-      </ErrorBoundary>
-    </SafeAreaView>
-  );
-}
-
-/**
- * NativeAppShell
- *
- * 100% Native React Native UI with online/offline streaming, Vault, Quran, and in-app auto updates.
- */
-function NativeAppShell() {
-  const { appMode, setAppMode } = useConnectivity();
-  const [activeTab, setActiveTab] = useState('home');
+  const { appMode } = useConnectivity();
+  const isOnline = appMode === 'online';
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   useEffect(() => {
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
+    }
     checkAppUpdates();
   }, []);
 
@@ -142,7 +123,82 @@ function NativeAppShell() {
       return false;
     }
   };
-  const [isWebPortalOpen, setIsWebPortalOpen] = useState(false);
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#0b1110" />
+
+      {/* ─── ONLINE MODE: Full Web App (100% web design, playlists with tracks, full profile, discord sync, friend activity, chat, jam) ─── */}
+      <View style={[styles.modeContainer, !isOnline && styles.hiddenMode]}>
+        <OnlineWebView />
+      </View>
+
+      {/* ─── OFFLINE MODE: Native Shell (Offline Vault, Quran, local storage playback) ─── */}
+      <View style={[styles.modeContainer, isOnline && styles.hiddenMode]}>
+        <ErrorBoundary>
+          <NativeAppShell />
+        </ErrorBoundary>
+      </View>
+
+      {/* ─── IN-APP AUTO-UPDATE MODAL (Global) ─── */}
+      <Modal
+        visible={isUpdateModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsUpdateModalOpen(false)}
+      >
+        <View style={styles.updateModalOverlay}>
+          <View style={styles.updateModalBox}>
+            <View style={styles.updateHeaderRow}>
+              <View style={styles.updateBadge}>
+                <Text style={styles.updateBadgeText}>UPDATE AVAILABLE</Text>
+              </View>
+              <Text style={styles.updateTitle}>RIVO v{updateInfo?.remoteVersion}</Text>
+            </View>
+
+            <Text style={styles.updateVersionText}>
+              Current: v{APP_VERSION} → New: v{updateInfo?.remoteVersion}
+            </Text>
+
+            <Text style={styles.updateNotesText}>
+              {updateInfo?.releaseNotes}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.updateDownloadBtn}
+              onPress={() => {
+                if (updateInfo?.downloadUrl) {
+                  Linking.openURL(updateInfo.downloadUrl);
+                }
+                setIsUpdateModalOpen(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.updateDownloadBtnText}>DOWNLOAD UPDATE NOW</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.updateCancelBtn}
+              onPress={() => setIsUpdateModalOpen(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.updateCancelBtnText}>STAY ON CURRENT VERSION</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * NativeAppShell
+ *
+ * Native React Native UI for Offline Vault, Quran, and local storage playback.
+ */
+function NativeAppShell() {
+  const { appMode, setAppMode } = useConnectivity();
+  const [activeTab, setActiveTab] = useState(appMode === 'online' ? 'home' : 'offline');
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
@@ -410,11 +466,11 @@ function NativeAppShell() {
               style={styles.menuItem}
               onPress={() => {
                 setIsMenuOpen(false);
-                setIsWebPortalOpen(true);
+                setAppMode('online');
               }}
             >
               <Globe size={18} color="#17a398" />
-              <Text style={styles.menuItemText}>Rivo Web Portal</Text>
+              <Text style={styles.menuItemText}>Switch to Online (Web Mode)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -440,22 +496,6 @@ function NativeAppShell() {
       {/* ─────────────────────────────────────────
           MODALS
           ───────────────────────────────────────── */}
-      <Modal
-        visible={isWebPortalOpen}
-        animationType="slide"
-        onRequestClose={() => setIsWebPortalOpen(false)}
-      >
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#0b1110' }}>
-          <View style={{ height: 44, backgroundColor: '#0b1110', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#1a2624' }}>
-            <Text style={{ color: '#17a398', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>RIVO WEB PORTAL</Text>
-            <TouchableOpacity onPress={() => setIsWebPortalOpen(false)} style={{ padding: 6 }}>
-              <X size={20} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-          <OnlineWebView />
-        </SafeAreaView>
-      </Modal>
-
       <FullPlayerModal
         visible={isFullPlayerOpen}
         onClose={() => setIsFullPlayerOpen(false)}
@@ -494,56 +534,6 @@ function NativeAppShell() {
         visible={isJamOpen}
         onClose={() => setIsJamOpen(false)}
       />
-
-      {/* ─────────────────────────────────────────
-          IN-APP AUTO-UPDATE MODAL
-          ───────────────────────────────────────── */}
-      <Modal
-        visible={isUpdateModalOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsUpdateModalOpen(false)}
-      >
-        <View style={styles.updateModalOverlay}>
-          <View style={styles.updateModalBox}>
-            <View style={styles.updateHeaderRow}>
-              <View style={styles.updateBadge}>
-                <Text style={styles.updateBadgeText}>UPDATE AVAILABLE</Text>
-              </View>
-              <Text style={styles.updateTitle}>RIVO v{updateInfo?.remoteVersion}</Text>
-            </View>
-
-            <Text style={styles.updateVersionText}>
-              Current: v{APP_VERSION} → New: v{updateInfo?.remoteVersion}
-            </Text>
-
-            <Text style={styles.updateNotesText}>
-              {updateInfo?.releaseNotes}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.updateDownloadBtn}
-              onPress={() => {
-                if (updateInfo?.downloadUrl) {
-                  Linking.openURL(updateInfo.downloadUrl);
-                }
-                setIsUpdateModalOpen(false);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.updateDownloadBtnText}>DOWNLOAD UPDATE NOW</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.updateCancelBtn}
-              onPress={() => setIsUpdateModalOpen(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.updateCancelBtnText}>STAY ON CURRENT VERSION</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }

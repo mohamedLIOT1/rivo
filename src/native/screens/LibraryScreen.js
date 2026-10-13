@@ -70,9 +70,11 @@ export default function LibraryScreen({
 
   const handlePlayPlaylist = (playlist, shuffle = false) => {
     if (!playlist) return;
-    const list = (playlist.tracks || []).map((tId) => {
-      const found = (allTracks || []).find((t) => String(t?._id || t?.id) === String(tId?._id || tId));
-      return found || tId;
+    const pTracks = playlist.tracks || playlist.trackIds || [];
+    const list = pTracks.map((tId) => {
+      const idStr = String(typeof tId === 'object' ? (tId._id || tId.id) : tId);
+      const found = (allTracks || []).find((t) => String(t?._id || t?.id) === idStr);
+      return found || (typeof tId === 'object' ? tId : null);
     }).filter(Boolean);
     if (list.length === 0) return;
     if (shuffle) {
@@ -105,7 +107,7 @@ export default function LibraryScreen({
                 DISPENSARY ARCHIVE •{' '}
                 {selectedView === 'liked'
                   ? `${likedTracks.length} TAPES`
-                  : `${selectedView.tracks?.length || 0} TAPES`}
+                  : `${(selectedView.tracks || selectedView.trackIds || []).length} TAPES`}
               </Text>
             </View>
           </View>
@@ -188,7 +190,7 @@ export default function LibraryScreen({
                   <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
                   <Text style={styles.playlistHeroTitle}>{selectedView.name}</Text>
                   <Text style={styles.playlistHeroSub}>
-                    {selectedView.tracks?.length || 0} recordings compiled
+                    {(selectedView.tracks || selectedView.trackIds || []).length} recordings compiled
                   </Text>
                   <View style={styles.likedBtnRow}>
                     <TouchableOpacity
@@ -210,11 +212,10 @@ export default function LibraryScreen({
             </View>
 
             <View style={styles.tracksList}>
-              {(selectedView.tracks || []).map((tItem, idx) => {
-                const track =
-                  allTracks.find(
-                    (t) => String(t._id || t.id) === String(tItem._id || tItem)
-                  ) || tItem;
+              {(selectedView.tracks || selectedView.trackIds || []).map((tItem, idx) => {
+                const idStr = String(typeof tItem === 'object' ? (tItem._id || tItem.id) : tItem);
+                const found = (allTracks || []).find((t) => String(t._id || t.id) === idStr);
+                const track = found || (typeof tItem === 'object' ? tItem : { _id: idStr, id: idStr, title: 'Track', artist: 'Rivo' });
                 return (
                   <SongItem
                     key={track._id || track.id || idx}
@@ -303,7 +304,7 @@ export default function LibraryScreen({
                       {playlist.name}
                     </Text>
                     <Text style={styles.playlistCardCount}>
-                      {playlist.tracks?.length || 0} TRACKS
+                      {(playlist.tracks || playlist.trackIds || []).length} TRACKS
                     </Text>
                   </TouchableOpacity>
                 ))}

@@ -11,7 +11,7 @@ import {
   AppState,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { RefreshCw, WifiOff, AlertTriangle } from 'lucide-react-native';
+import { RefreshCw, WifiOff, AlertTriangle, Download } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -873,6 +873,14 @@ export default function OnlineWebView() {
           >
             <RefreshCw size={14} color="#0b1110" />
             <Text style={styles.retryText}>RETRY CONNECTION</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.retryBtn, { marginTop: 10, backgroundColor: '#182321', borderWidth: 1.5, borderColor: colors.teal }]}
+            onPress={() => setAppMode('offline')}
+            activeOpacity={0.8}
+          >
+            <Download size={14} color={colors.teal} />
+            <Text style={[styles.retryText, { color: colors.teal, marginLeft: 6 }]}>OPEN OFFLINE VAULT</Text>
           </TouchableOpacity>
         </View>
       </View>

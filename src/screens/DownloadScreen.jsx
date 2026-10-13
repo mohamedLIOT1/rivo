@@ -43,7 +43,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       name: 'Rivo for Windows',
       osLabel: 'Windows 10 / 11 (64-bit)',
       badge: 'NATIVE DESKTOP',
-      version: 'v1.4.3',
+      version: 'v1.4.4',
       fileType: '.EXE',
       fileSize: '1.8 MB',
       icon: Monitor,
@@ -61,18 +61,18 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       id: 'android',
       name: 'Rivo for Android',
       osLabel: 'Android 8.0 & Above',
-      badge: '100% NATIVE MOBILE',
-      version: 'v1.4.3',
+      badge: 'HYBRID HI-FI',
+      version: 'v1.4.4',
       fileType: '.APK',
       fileSize: '67 MB',
       icon: Smartphone,
       downloadUrl: '/downloads/Rivo.apk',
       directName: 'Rivo.apk',
       highlights: [
-        '100% Native React Native UI (Zero webview lag)',
-        'Full Offline Vault & local MP3 cache playback',
+        'Complete Rivo Web UI: all playlists, full profile & Friend Activity',
+        'Real-time Chat, Live Jam Rooms & Discord Rich Presence sync',
         'Lock screen controls & background audio streaming',
-        'Automatic in-app update prompts for new releases'
+        'Full Offline Vault & local MP3 cache playback'
       ],
       isRecommended: detectedOs === 'android'
     },
@@ -80,18 +80,19 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       id: 'ios',
       name: 'Rivo for iOS',
       osLabel: 'iOS 15.0 & Above',
-      badge: 'UNRESTRICTED HI-FI',
-      version: 'v1.4.3',
+      badge: 'HYBRID HI-FI',
+      version: 'v1.4.4',
       fileType: '.IPA',
       fileSize: '8.8 MB',
       icon: Apple,
       downloadUrl: '/downloads/Rivo.ipa',
       directName: 'Rivo.ipa',
       highlights: [
-        'Native Apple Media Controls & Control Center sync',
-        'Uncapped streaming audio quality & offline local tracks',
-        'Sideloadable without jailbreak via AltStore, Scarlet, or TrollStore',
-        'In-app update notifications & direct release downloads'
+        'Complete Rivo Web UI: 100% web design, all playlists & songs',
+        'Full Profile, real-time Chat, Live Jam & Friend Activity',
+        'Live Discord Rich Presence sync across devices',
+        'Native Apple Media Controls & iOS Control Center sync',
+        'Full Offline Vault for cached music & Quran'
       ],
       isRecommended: detectedOs === 'ios'
     }
