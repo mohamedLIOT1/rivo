@@ -177,7 +177,10 @@ export function UserProvider({ children }) {
       const next = exists
         ? prev.filter(a => a.toLowerCase() !== cleanName.toLowerCase())
         : [...prev, cleanName];
-      try { localStorage.setItem('liofy_followed_artists', JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem('rivo_followed_artists', JSON.stringify(next));
+        localStorage.setItem('liofy_followed_artists', JSON.stringify(next));
+      } catch {}
       return next;
     });
   }, []);

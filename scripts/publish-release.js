@@ -22,26 +22,37 @@ function getGitHubToken() {
 
 async function publish() {
   const token = await getGitHubToken();
-  const tag = 'v1.5.7';
-  const releaseName = 'Rivo v1.5.7';
-  const releaseBody = `## Rivo v1.5.7 Update
+  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
+  const version = pkg.version || '1.5.8';
+  const tag = `v${version}`;
+  const releaseName = `Rivo v${version}`;
+  const releaseBody = `## Rivo v${version} Update
 
 ### What's Changed
-- **In-App 1-Click APK Auto-Updater & Installer:** Users no longer need to browse GitHub or download manually! The app detects new releases, shows a live download progress bar with written/total MBs, and automatically opens the native Android package installer.
-- **Admin Panel Performance Fix:** Replaced heavy eager loading of all songs with smooth chunked pagination (Load More Songs / Load More Accounts), eliminating app freezing and UI lag.
-- **Jam Session Smart Discovery & Modal Scroll Fix:** "Add Song" now surfaces intelligent recommendations mixing saved/liked tracks with randomized library tracks (plus a Shuffle button). The queue list has nested scrolling enabled and stays contained cleanly within the card box.
-- **Jam Session Web <-> Native Live Playback & Stream Latency Sync:** Joining or tuning into a Jam session now auto-syncs playback time with latency compensation so the mobile client starts at the exact second matching web and host listeners.
-- **Chat Overhaul:** Expanded message bubble width, fixed duplicate socket message echoes, added clean English read receipts ("Seen" with teal double checks), and added a 1-tap "JAM INVITE" card directly into the chat flow.
+- **Album Detail Modal:** Clicking any album card now opens an authentic brutalist album modal with full tracklist, Play All, and Shuffle, rather than auto-playing.
+- **Jam Room Hooks Fix:** Resolved React hook order violation that previously crashed the app when tapping the Jam room button.
+- **Search Artists & Albums:** Added native Artists and Albums discovery sections with dedicated category filter pills (ALL, SONGS, ARTISTS, ALBUMS).
+- **Stream Audio Resilience:** Updated audio stream resolver to prevent player buffering stalls and prioritize proxy streaming.
+- **Android App Icon Sync:** Updated all Android mipmap launcher icons and background colors to perfectly match the iPhone Rivo emblem.
+- **Website Playlist Cover Upload:** Fixed playlist cover photo updates with direct multipart uploads and image fallback resilience.
 `;
 
-  const apkPath = path.resolve(__dirname, '../Rivo-v1.5.7.apk');
-  const apkBytes = fs.readFileSync(apkPath);
-  console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
+  const rootFiles = fs.readdirSync(path.resolve(__dirname, '..'));
+  const apkFileName = rootFiles.find(f => f.endsWith('.apk') && f.includes(version)) ||
+                     rootFiles.find(f => f.endsWith('.apk') && f.includes('1.5.')) ||
+                     rootFiles.find(f => f.endsWith('.apk'));
+  const apkPath = apkFileName ? path.resolve(__dirname, '..', apkFileName) : null;
+  const apkBytes = apkPath && fs.existsSync(apkPath) ? fs.readFileSync(apkPath) : null;
+  if (apkBytes) {
+    console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
+  }
 
-  const ipaPath = path.resolve(__dirname, '../Rivo-v1.5.7.ipa');
-  let ipaBytes = null;
-  if (fs.existsSync(ipaPath)) {
-    ipaBytes = fs.readFileSync(ipaPath);
+  const ipaFileName = rootFiles.find(f => f.endsWith('.ipa') && f.includes(version)) ||
+                     rootFiles.find(f => f.endsWith('.ipa') && f.includes('1.5.')) ||
+                     rootFiles.find(f => f.endsWith('.ipa'));
+  const ipaPath = ipaFileName ? path.resolve(__dirname, '..', ipaFileName) : null;
+  const ipaBytes = ipaPath && fs.existsSync(ipaPath) ? fs.readFileSync(ipaPath) : null;
+  if (ipaBytes) {
     console.log(`Loaded IPA from ${ipaPath} (${ipaBytes.length} bytes)`);
   }
 
@@ -84,12 +95,14 @@ async function publish() {
     }
 
     // 2. Upload assets: APK and IPA
-    const assetsToUpload = [
-      { name: 'Rivo-v1.5.7.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' },
-      { name: 'app-release.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' }
-    ];
+    const assetsToUpload = [];
+    if (apkBytes) {
+      assetsToUpload.push({ name: `Rivo-v${version}.apk`, data: apkBytes, mime: 'application/vnd.android.package-archive' });
+      assetsToUpload.push({ name: 'app-release.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' });
+      assetsToUpload.push({ name: 'Rivo.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' });
+    }
     if (ipaBytes) {
-      assetsToUpload.push({ name: 'Rivo-v1.5.7.ipa', data: ipaBytes, mime: 'application/octet-stream' });
+      assetsToUpload.push({ name: `Rivo-v${version}.ipa`, data: ipaBytes, mime: 'application/octet-stream' });
       assetsToUpload.push({ name: 'Rivo.ipa', data: ipaBytes, mime: 'application/octet-stream' });
     }
 
