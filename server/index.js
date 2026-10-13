@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.0',
-  releaseNotes: '100% Native Rivo iOS experience: professional intro onboarding, all playlist tracks loaded, real-time Discord Rich Presence sync, Friend Activity radar, Live Jam & Cairo chat.',
-  publishedAt: '2026-10-13T10:30:00Z',
+  version: '1.5.1',
+  releaseNotes: 'All-new native CRT cassette player UI, Featured Albums grid, 1-on-1 direct messaging, profile follower counters, Discord Rich Presence, and fixed lyrics & shuffle.',
+  publishedAt: '2026-10-13T14:45:00Z',
   platforms: {
     windows: {
-      version: '1.5.0',
+      version: '1.5.1',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,8 +1078,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.0',
-      build: 18,
+      version: '1.5.1',
+      build: 19,
       name: 'Rivo for Android',
       downloadUrl: '/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -1087,13 +1087,13 @@ const APP_VERSIONS_DATA = {
       notes: '100% Native design, playlist tracks sync, Discord status sync, Friend Activity, offline vault.'
     },
     ios: {
-      version: '1.5.0',
-      build: 18,
+      version: '1.5.1',
+      build: 19,
       name: 'Rivo for iOS',
       downloadUrl: '/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: '100% Native React Native UI, professional intro onboarding, playlist songs loaded, Discord RPC sync, Friend Activity radar, Live Jam rooms & Community Chat.'
+      notes: 'All-new native CRT cassette player UI, Featured Albums grid, 1-on-1 direct messaging, profile follower counters, Discord Rich Presence, and fixed lyrics & shuffle.'
     }
   }
 };
