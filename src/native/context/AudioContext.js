@@ -85,6 +85,19 @@ export const AudioProvider = ({ children }) => {
   const [downloadingIds, setDownloadingIds] = useState({});
   const [queue, setQueueState] = useState([]);
   const [progress, setProgress] = useState({ currentTime: 0, duration: 0 });
+  const [volume, setVolumeState] = useState(0.8);
+  const volumeRef = useRef(0.8);
+
+  const setVolume = async (val) => {
+    const clamped = Math.max(0, Math.min(1, Number(val) || 0));
+    volumeRef.current = clamped;
+    setVolumeState(clamped);
+    if (soundRef.current) {
+      try {
+        await soundRef.current.setVolumeAsync(clamped);
+      } catch {}
+    }
+  };
 
   // Sleep Timer
   const [sleepTimerRemaining, setSleepTimerRemaining] = useState(null);
@@ -520,6 +533,9 @@ export const AudioProvider = ({ children }) => {
       }
 
       soundRef.current = sound;
+      if (volumeRef.current !== undefined) {
+        await sound.setVolumeAsync(volumeRef.current).catch(() => {});
+      }
       setIsPlaying(true);
       setIsLoading(false);
       try {
@@ -712,13 +728,13 @@ export const AudioProvider = ({ children }) => {
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
-    sleepTimerRemaining, lyrics, isLoadingLyrics,
+    sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume,
     playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
     syncFromOnlineTrack, pauseNativePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, syncFromOnlineTrack, pauseNativePlayback]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, syncFromOnlineTrack, pauseNativePlayback]);
 
   return (
     <AudioContext.Provider value={controls}>

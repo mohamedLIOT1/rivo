@@ -1123,7 +1123,11 @@ function AppContent() {
   useEffect(() => { handleOpenChatRef.current = handleOpenChat; }, [handleOpenChat]);
 
   useEffect(() => {
-    const s = io(API_BASE_URL, { transports: ['websocket', 'polling'] });
+    const token = getToken();
+    const s = io(API_BASE_URL, {
+      auth: { token: token || undefined },
+      transports: ['websocket', 'polling']
+    });
     setSocket(s);
 
     s.on('connect', () => {
@@ -1328,9 +1332,21 @@ function AppContent() {
       if (jamSession?.code && socket) {
         socket.emit('jam:leave_room', { roomCode: jamSession.code });
       }
+      const token = getToken();
+      if (token) {
+        try {
+          const payload = JSON.stringify({ isPlaying: false, track: null, currentTime: 0 });
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon(`${API_BASE_URL}/api/users/listening-activity?token=${encodeURIComponent(token)}`, blob);
+        } catch (e) {}
+      }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
   }, [jamSession?.code, socket]);
 
   const handleKickMember = (member) => {

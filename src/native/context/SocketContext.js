@@ -23,8 +23,10 @@ export const SocketProvider = ({ children }) => {
     s.on('connect', () => {
       setIsConnected(true);
       if (currentUser) {
+        const uId = currentUser._id || currentUser.id;
+        s.emit('user:online', { userId: uId });
         s.emit('user_connected', {
-          userId: currentUser._id || currentUser.id,
+          userId: uId,
           name: currentUser.name,
           avatar: currentUser.avatar,
         });

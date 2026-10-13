@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
-import { Play, Pause, Heart } from 'lucide-react-native';
+import { Play, Pause, Heart, Disc } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
@@ -35,6 +35,9 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
         <View style={styles.contentRow}>
           {/* Cover Art */}
           <View style={styles.coverFrame}>
+            <View style={styles.coverPlaceholder}>
+              <Disc size={18} color="#17a398" strokeWidth={1.8} />
+            </View>
             <Image
               source={{ uri: coverUri }}
               style={styles.cover}
@@ -138,6 +141,12 @@ const styles = StyleSheet.create({
   cover: {
     width: '100%',
     height: '100%',
+  },
+  coverPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#12211e',
   },
   textColumn: {
     flex: 1,

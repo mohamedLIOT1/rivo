@@ -189,7 +189,7 @@ export default function HomeScreen({
           {/* 2-Column Grid */}
           <View style={styles.albumsGrid}>
             {displayAlbums.slice(0, 8).map((alb, index) => {
-              const coverUri = alb.cover || alb.coverUrl;
+              const coverUri = alb.cover || alb.coverUrl || alb.tracks?.[0]?.cover || alb.tracks?.[0]?.coverUrl;
               return (
                 <TouchableOpacity
                   key={alb.id || alb._id || alb.name || String(index)}
@@ -198,6 +198,9 @@ export default function HomeScreen({
                   activeOpacity={0.85}
                 >
                   <View style={styles.albumCoverWrap}>
+                    <View style={styles.albumCoverPlaceholder}>
+                      <Disc size={36} color="#1f3630" strokeWidth={1.5} />
+                    </View>
                     <Image
                       source={{ uri: normalizeCoverUri(coverUri) }}
                       style={styles.albumCover}
@@ -513,6 +516,12 @@ const styles = StyleSheet.create({
   albumCover: {
     width: '100%',
     height: '100%',
+  },
+  albumCoverPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#101c19',
   },
   albumPlayOverlay: {
     position: 'absolute',
