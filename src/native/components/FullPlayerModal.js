@@ -125,6 +125,20 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
     seekTo(targetPercent * duration);
   };
 
+  const handleVolumePress = (e) => {
+    try {
+      const x = e?.nativeEvent?.locationX;
+      if (typeof x === 'number' && x >= 0) {
+        const ratio = Math.max(0, Math.min(1, x / 75));
+        if (setVolume) setVolume(ratio);
+        return;
+      }
+    } catch {}
+    if (setVolume) {
+      setVolume((volume || 0.8) > 0.1 ? 0 : 0.8);
+    }
+  };
+
   const deckBg = isDark ? '#0e1614' : '#fdfbf7';
   const deckBorder = isDark ? '#243632' : colors.ink;
   const tvBg = isDark ? '#14201c' : '#ede5d3';

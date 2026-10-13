@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.2',
-  releaseNotes: 'Exact CRT cassette player design, user profiles with social follow & instant DMs, zero green splash flash, fast downloads, and persistent lyrics & shuffle.',
+  version: '1.5.3',
+  releaseNotes: 'Fixed volume handler, seamless zero-logo launch, auto YouTube album artwork covers, user profile avatars, and real-time chat seen status (سين).',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.2',
+      version: '1.5.3',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,8 +1078,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.2',
-      build: 20,
+      version: '1.5.3',
+      build: 21,
       name: 'Rivo for Android',
       downloadUrl: '/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -1087,13 +1087,13 @@ const APP_VERSIONS_DATA = {
       notes: '100% Native design, playlist tracks sync, Discord status sync, Friend Activity, offline vault.'
     },
     ios: {
-      version: '1.5.2',
-      build: 20,
+      version: '1.5.3',
+      build: 21,
       name: 'Rivo for iOS',
       downloadUrl: '/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'Exact CRT cassette player design, user profiles with social follow & instant DMs, zero green splash flash, and fast downloads.'
+      notes: 'Fixed volume slider handler, seamless zero-logo launch, auto YouTube artwork covers, user profile avatars, and real-time chat seen status (سين).'
     }
   }
 };

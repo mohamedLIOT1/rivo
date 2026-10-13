@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
-import { Play, Pause, Heart, MoreVertical } from 'lucide-react-native';
+import { Play, Pause, Heart, MoreVertical, Disc } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
@@ -33,7 +33,7 @@ export default React.memo(function SongItem({
   const isDownloaded = safeDownloaded.some(t => String(t._id || t.id) === trackId) || Boolean(track?.isDownloaded || track?.localAudioUri);
 
   const rawCover = track.coverUrl || track.cover || track.coverImage || '';
-  const coverSourceUri = imageError ? normalizeCoverUri(null) : normalizeCoverUri(rawCover);
+  const coverSourceUri = imageError ? normalizeCoverUri(null, track) : normalizeCoverUri(rawCover, track);
 
   return (
     <TouchableOpacity
@@ -47,6 +47,9 @@ export default React.memo(function SongItem({
     >
       {/* Cover Image */}
       <View style={styles.coverBox}>
+        <View style={styles.coverPlaceholder}>
+          <Disc size={20} color="#1c332e" strokeWidth={1.8} />
+        </View>
         <Image
           source={{ uri: coverSourceUri }}
           style={styles.cover}
@@ -144,6 +147,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     backgroundColor: '#0b1110',
+    position: 'relative',
+  },
+  coverPlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0f1c19',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cover: {
     width: '100%',
