@@ -29,6 +29,11 @@ export default function QuranScreen({ onTrackAction }) {
   const { isDark } = useTheme();
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(30);
+
+  React.useEffect(() => {
+    setVisibleLimit(30);
+  }, [selectedReciter, searchQuery]);
 
   const isOffline = appMode === 'offline';
   const allTracks = isOffline
@@ -181,9 +186,8 @@ export default function QuranScreen({ onTrackAction }) {
                 : 'جرب البحث باسم سورة أو قارئ آخر.'}
             </Text>
           </View>
-        ) : (
           <View style={styles.tracksList}>
-            {displayedTracks.map((track, idx) => (
+            {displayedTracks.slice(0, visibleLimit).map((track, idx) => (
               <SongItem
                 key={track._id || track.id || idx}
                 track={track}
@@ -192,6 +196,18 @@ export default function QuranScreen({ onTrackAction }) {
                 onMorePress={() => onTrackAction && onTrackAction(track)}
               />
             ))}
+
+            {displayedTracks.length > visibleLimit && (
+              <TouchableOpacity
+                style={styles.loadMoreBtn}
+                onPress={() => setVisibleLimit((prev) => prev + 35)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.loadMoreText}>
+                  عرض المزيد من التلاوات ({displayedTracks.length - visibleLimit} متبقية) ↓
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -367,5 +383,22 @@ const styles = StyleSheet.create({
   },
   tracksList: {
     gap: 8,
+  },
+  loadMoreBtn: {
+    backgroundColor: '#182320',
+    borderWidth: 1.5,
+    borderColor: colors.mint,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  loadMoreText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: colors.mint,
   },
 });

@@ -34,6 +34,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
+import UserDetailModal from './UserDetailModal';
 
 export default function JamRoomModal({ visible, onClose }) {
   const {
@@ -59,6 +60,7 @@ export default function JamRoomModal({ visible, onClose }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [justAddedId, setJustAddedId] = useState(null);
   const [shuffleSeed, setShuffleSeed] = useState(0);
+  const [selectedUser, setSelectedUser] = useState(null);
 
   // Modal visibility handled by <Modal visible={visible}>
 
@@ -75,11 +77,17 @@ export default function JamRoomModal({ visible, onClose }) {
   };
 
   const handleTuneIn = () => {
+    const roomCode = jamSession?.code || jamSession?.roomCode;
+    if (socket && roomCode) {
+      socket.emit('jam:request_sync', { roomCode });
+    }
     if (jamSession?.currentTrack) {
       let liveTime = Number(jamSession.currentTime) || 0;
       if (jamSession.isPlaying && jamSession.updatedAt) {
         const elapsed = (Date.now() - jamSession.updatedAt) / 1000;
-        if (elapsed > 0 && elapsed < 3600) {
+        if (liveTime <= 2 && elapsed > 2) {
+          liveTime = Math.min(2, liveTime);
+        } else if (elapsed > 0 && elapsed < 3600) {
           liveTime += elapsed;
         }
       }
@@ -444,17 +452,23 @@ export default function JamRoomModal({ visible, onClose }) {
                         const mId = m.id || m._id || m.socketId;
                         return (
                           <View key={mId} style={styles.memberItem}>
-                            <Image
-                              source={{
-                                uri:
-                                  m.avatar ||
-                                  'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-                              }}
-                              style={styles.memberAvatar}
-                            />
-                            <Text style={styles.memberName} numberOfLines={1}>
-                              {m.name || 'Listener'}
-                            </Text>
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                              onPress={() => setSelectedUser(m)}
+                              activeOpacity={0.7}
+                            >
+                              <Image
+                                source={{
+                                  uri:
+                                    m.avatar ||
+                                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+                                }}
+                                style={styles.memberAvatar}
+                              />
+                              <Text style={styles.memberName} numberOfLines={1}>
+                                {m.name || 'Listener'}
+                              </Text>
+                            </TouchableOpacity>
 
                             <View style={styles.memberRight}>
                               {m.isHost && (
@@ -571,6 +585,13 @@ export default function JamRoomModal({ visible, onClose }) {
           </View>
         </View>
       </View>
+
+      <UserDetailModal
+        visible={Boolean(selectedUser)}
+        user={selectedUser}
+        userId={selectedUser?.id || selectedUser?._id}
+        onClose={() => setSelectedUser(null)}
+      />
     </Modal>
   );
 }

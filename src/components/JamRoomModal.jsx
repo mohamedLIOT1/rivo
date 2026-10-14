@@ -24,6 +24,7 @@ export default function JamRoomModal({
   currentUser = null,
   socket = null,
   onKickMember = () => {},
+  onViewProfile = () => {},
   globalTheme = 'dark'
 }) {
   const [inputCode, setInputCode] = useState('');
@@ -47,7 +48,9 @@ export default function JamRoomModal({
 
   const handleTuneIn = () => {
     resumeAudioContext();
-    if (currentTrack && onPlayTrack) {
+    if (jamSession && socket) {
+      socket.emit('jam:request_sync', { roomCode: jamSession.code });
+    } else if (currentTrack && onPlayTrack) {
       onPlayTrack(currentTrack);
     }
   };
@@ -66,8 +69,8 @@ export default function JamRoomModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 select-none">
-      <div className={`rounded-2xl max-w-lg w-full p-6 max-h-[92vh] flex flex-col overflow-hidden relative brutal-shadow-lg ${
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 select-none">
+      <div className={`rounded-2xl w-full max-w-lg md:max-w-2xl lg:max-w-3xl landscape:max-w-3xl p-4 sm:p-6 max-h-[95vh] flex flex-col overflow-hidden relative brutal-shadow-lg ${
         isDark ? 'bg-[#121212] text-white border-2 border-zinc-800' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
       }`}>
         {/* Modal Header */}
@@ -338,11 +341,19 @@ export default function JamRoomModal({
                     <div key={m.id || m.socketId} className={`flex items-center justify-between p-2 brutal-border text-xs rounded-lg ${
                       isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ede5d3] border-black'
                     }`}>
-                      <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-                        <img src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'} alt={m.name} className="w-6 h-6 brutal-border object-cover shrink-0 bg-white rounded" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose?.();
+                          if (onViewProfile) onViewProfile(m.id || m._id);
+                        }}
+                        className="flex items-center gap-2 min-w-0 flex-1 mr-2 text-left hover:underline cursor-pointer group"
+                        title={`View ${m.name}'s profile`}
+                      >
+                        <img src={m.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop'} alt={m.name} className="w-6 h-6 brutal-border object-cover shrink-0 bg-white rounded group-hover:scale-105 transition-transform" />
                         <span className={`font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{m.name}</span>
                         <VerifiedBadge userOrName={m} size={12} />
-                      </div>
+                      </button>
                       
                       <div className="flex items-center gap-1.5 shrink-0">
                         {m.isHost && (

@@ -28,6 +28,11 @@ export default function QuranScreen({
   const isDark = globalTheme === 'dark';
   const [activeTab, setActiveTab] = useState('surahs'); // 'surahs' | 'playlists' | 'reciters'
   const [searchQuery, setSearchQuery] = useState('');
+  const [visibleLimit, setVisibleLimit] = useState(40);
+
+  React.useEffect(() => {
+    setVisibleLimit(40);
+  }, [searchQuery, activeTab]);
 
   // Strictly filter only Quranic tracks & playlists
   const quranTracks = useMemo(() => {
@@ -281,7 +286,7 @@ export default function QuranScreen({
             </div>
           ) : (
             <div className="space-y-1.5">
-              {filteredTracks.map((track, idx) => {
+              {filteredTracks.slice(0, visibleLimit).map((track, idx) => {
                 const active = isTrackActive(track);
                 const reciterName = getQuranReciterName(track, quranPlaylists);
                 const cleanTitle = cleanQuranTrackTitle(track.title);
@@ -387,6 +392,17 @@ export default function QuranScreen({
                   </div>
                 );
               })}
+
+              {filteredTracks.length > visibleLimit && (
+                <div className="text-center pt-4 pb-2">
+                  <button
+                    onClick={() => setVisibleLimit((prev) => prev + 40)}
+                    className="px-6 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-black font-mono font-black text-xs brutal-border brutal-shadow-sm cursor-pointer transition-transform hover:scale-105"
+                  >
+                    عرض المزيد من التلاوات ({filteredTracks.length - visibleLimit} متبقية) ↓
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

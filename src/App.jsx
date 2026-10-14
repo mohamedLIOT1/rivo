@@ -2076,6 +2076,7 @@ function AppContent() {
         currentUser={currentUser}
         socket={socket}
         onKickMember={handleKickMember}
+        onViewProfile={(uid) => navigateTo('profile', { userId: uid })}
         globalTheme={globalTheme}
       />
 

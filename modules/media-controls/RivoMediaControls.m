@@ -641,25 +641,38 @@ RCT_EXPORT_METHOD(hideNotification) {
 RCT_EXPORT_METHOD(showChatNotification:(NSDictionary *)options) {
     if (@available(iOS 10.0, *)) {
         UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        center.delegate = self;
         [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge) completionHandler:^(BOOL granted, NSError * _Nullable error) {
             if (!granted) return;
 
-            NSString *senderId = options[@"senderId"] ?: @"unknown";
-            NSString *senderName = options[@"senderName"] ?: @"Friend";
-            NSString *message = options[@"message"] ?: @"";
-            BOOL isJam = [options[@"isJam"] boolValue];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSString *senderId = options[@"senderId"] ?: @"unknown";
+                NSString *senderName = options[@"senderName"] ?: @"Friend";
+                NSString *message = options[@"message"] ?: @"";
+                BOOL isJam = [options[@"isJam"] boolValue];
 
-            UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
-            content.title = isJam ? [NSString stringWithFormat:@"📻 Jam Session • %@", senderName] : [NSString stringWithFormat:@"💬 %@", senderName];
-            content.body = message;
-            content.sound = [UNNotificationSound defaultSound];
-            content.userInfo = options;
+                UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+                content.title = isJam ? [NSString stringWithFormat:@"📻 Jam Session • %@", senderName] : [NSString stringWithFormat:@"💬 %@", senderName];
+                content.body = message;
+                content.sound = [UNNotificationSound defaultSound];
+                content.userInfo = options;
 
-            NSString *identifier = [NSString stringWithFormat:@"rivo_chat_%@", senderId];
-            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier content:content trigger:nil];
+                NSString *identifier = [NSString stringWithFormat:@"rivo_chat_%@", senderId];
+                UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier content:content trigger:nil];
 
-            [center addNotificationRequest:request withCompletionHandler:nil];
+                [center addNotificationRequest:request withCompletionHandler:nil];
+            });
         }];
+    }
+}
+
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+       willPresentNotification:(UNNotification *)notification
+         withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
+    if (@available(iOS 14.0, *)) {
+        completionHandler(UNNotificationPresentationOptionBanner | UNNotificationPresentationOptionSound | UNNotificationPresentationOptionBadge);
+    } else {
+        completionHandler(UNNotificationPresentationOptionAlert | UNNotificationPresentationOptionSound | UNNotificationPresentationOptionBadge);
     }
 }
 

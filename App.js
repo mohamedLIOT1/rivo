@@ -64,6 +64,7 @@ import MiniPlayer from './src/native/components/MiniPlayer';
 import FullPlayerModal from './src/native/components/FullPlayerModal';
 import TrackActionMenuModal from './src/native/components/TrackActionMenuModal';
 import PlaylistPickerModal from './src/native/components/PlaylistPickerModal';
+import CreatePlaylistModal from './src/native/components/CreatePlaylistModal';
 import AddSongModal from './src/native/components/AddSongModal';
 import ChatModal from './src/native/components/ChatModal';
 import SettingsModal from './src/native/components/SettingsModal';
@@ -321,6 +322,7 @@ function NativeAppShell() {
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
+  const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [isAddSongOpen, setIsAddSongOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -369,6 +371,7 @@ function NativeAppShell() {
       case 'library':
         return (
           <LibraryScreen
+            onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
             onNavigateOffline={() => setActiveTab('offline')}
             onTrackAction={(track) => setActionTrack(track)}
           />
@@ -687,6 +690,12 @@ function NativeAppShell() {
         visible={!!playlistTrack}
         track={playlistTrack}
         onClose={() => setPlaylistTrack(null)}
+      />
+
+      <CreatePlaylistModal
+        visible={isCreatePlaylistOpen}
+        onClose={() => setIsCreatePlaylistOpen(false)}
+        onSuccess={() => setIsCreatePlaylistOpen(false)}
       />
 
       <AddSongModal

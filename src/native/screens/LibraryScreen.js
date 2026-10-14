@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  BackHandler,
+  RefreshControl,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -67,6 +69,7 @@ export default function LibraryScreen({
     updatePlaylist,
     uploadPlaylistCover,
     togglePlaylistVisibility,
+    syncUserData,
   } = useUser();
   const { showToast } = useToast();
   const { appMode } = useConnectivity();
@@ -75,6 +78,7 @@ export default function LibraryScreen({
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
   const [fetchedTracks, setFetchedTracks] = useState([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ done: 0, total: 0 });
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -85,6 +89,29 @@ export default function LibraryScreen({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
+
+  // Hardware Back button returns to library main view instead of closing app
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectedView) {
+        setSelectedView(null);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [selectedView]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      if (syncUserData) await syncUserData();
+    } catch {}
+    finally {
+      setIsRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     setCoverFailed(false);
@@ -372,7 +399,18 @@ export default function LibraryScreen({
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.mint}
+            colors={[colors.mint]}
+          />
+        }
+      >
         {selectedView === 'liked' ? (
           /* Detailed Liked Tracks */
           <View>

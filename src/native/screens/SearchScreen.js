@@ -150,7 +150,17 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
     return () => {
       if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
     };
-  }, [query, activeFilter, isOffline]);
+  const normalizeFuzzy = (str) => {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .toLowerCase()
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[-_.\s/\\,:+()~`'"!?#@*&^%$[\]{}|<>]+/g, '')
+      .trim();
+  };
 
   // Matching songs
   const filteredTracks = useMemo(() => {
@@ -173,11 +183,15 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
 
     if (query.trim()) {
       const q = query.toLowerCase().trim();
+      const fq = normalizeFuzzy(q);
       localResult = localResult.filter(
         (t) =>
           t.title?.toLowerCase().includes(q) ||
           t.artist?.toLowerCase().includes(q) ||
-          t.album?.toLowerCase().includes(q)
+          t.album?.toLowerCase().includes(q) ||
+          (fq && normalizeFuzzy(t.title).includes(fq)) ||
+          (fq && normalizeFuzzy(t.artist).includes(fq)) ||
+          (fq && normalizeFuzzy(t.album).includes(fq))
       );
     }
 
@@ -224,13 +238,17 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
       });
     });
 
-    return Array.from(map.values()).filter((a) => a.name.toLowerCase().includes(q));
+    const fq = normalizeFuzzy(q);
+    return Array.from(map.values()).filter(
+      (a) => a.name.toLowerCase().includes(q) || (fq && normalizeFuzzy(a.name).includes(fq))
+    );
   }, [allTracks, query]);
 
   // Matching Albums
   const matchingAlbums = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase().trim();
+    const fq = normalizeFuzzy(q);
     const map = new Map();
 
     // From DB albums
@@ -272,7 +290,9 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
     return Array.from(map.values()).filter(
       (a) =>
         (a.name && a.name.toLowerCase().includes(q)) ||
-        (a.artist && a.artist.toLowerCase().includes(q))
+        (a.artist && a.artist.toLowerCase().includes(q)) ||
+        (fq && normalizeFuzzy(a.name).includes(fq)) ||
+        (fq && normalizeFuzzy(a.artist).includes(fq))
     );
   }, [userAlbums, allTracks, query]);
 
