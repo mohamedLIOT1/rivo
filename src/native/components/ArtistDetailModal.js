@@ -70,36 +70,60 @@ export default function ArtistDetailModal({
   // Discography Albums for this artist
   const artistAlbums = useMemo(() => {
     if (!artistName) return [];
-    const lower = artistName.toLowerCase();
+    const lower = artistName.toLowerCase().trim();
     const map = new Map();
 
     (allAlbums || []).forEach((alb) => {
       if (alb && alb.artist && (matchesArtist(alb, artistName) || alb.artist.toLowerCase().includes(lower))) {
         const key = (alb.name || '').toLowerCase().trim();
         if (key && !map.has(key)) {
-          map.set(key, alb);
-        }
-      }
-    });
-
-    // Also collect from tracks
-    artistTracks.forEach((t) => {
-      if (t.album && t.album.trim()) {
-        const key = t.album.toLowerCase().trim();
-        if (!map.has(key)) {
+          const albTracks = (Array.isArray(alb.tracks) && alb.tracks.length > 0)
+            ? alb.tracks
+            : (allTracks || []).filter(t => {
+                if (!t) return false;
+                const tAlb = (t.album || '').trim().toLowerCase();
+                const tId = String(t.id || t._id || '');
+                const inIds = Array.isArray(alb.trackIds) && alb.trackIds.map(String).includes(tId);
+                return (tAlb && tAlb === key) || inIds;
+              });
           map.set(key, {
-            id: `album-${key}`,
-            name: t.album.trim(),
-            artist: artistName,
-            cover: t.coverUrl || t.cover,
-            tracks: [t],
+            ...alb,
+            name: alb.name || key,
+            artist: alb.artist || artistName,
+            cover: alb.cover || alb.coverUrl || albTracks[0]?.coverUrl || albTracks[0]?.cover,
+            tracks: albTracks,
           });
         }
       }
     });
 
+    // Also collect and merge from artistTracks
+    artistTracks.forEach((t) => {
+      if (t.album && t.album.trim()) {
+        const key = t.album.toLowerCase().trim();
+        const tCover = t.coverUrl || t.cover;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: `album-${key}`,
+            name: t.album.trim(),
+            artist: artistName,
+            cover: tCover,
+            tracks: [t],
+          });
+        } else {
+          const existing = map.get(key);
+          if (!existing.cover && tCover) existing.cover = tCover;
+          if (!existing.tracks) existing.tracks = [];
+          const tId = String(t.id || t._id || '');
+          if (!existing.tracks.some(x => String(x.id || x._id || '') === tId)) {
+            existing.tracks.push(t);
+          }
+        }
+      }
+    });
+
     return Array.from(map.values());
-  }, [allAlbums, artistTracks, artistName]);
+  }, [allAlbums, artistTracks, artistName, allTracks]);
 
   if (!visible || !artistName) return null;
 
@@ -230,7 +254,7 @@ export default function ArtistDetailModal({
                 {artistAlbums.map((album, idx) => {
                   const albumKey = album.id || album.name || idx;
                   const albCover = normalizeCoverUri(album.cover || album.coverUrl || artistCover);
-                  const songCount = (album.tracks && album.tracks.length) || (album.trackIds && album.trackIds.length) || 3;
+                  const songCount = (album.tracks && album.tracks.length) || (album.trackIds && album.trackIds.length) || 0;
 
                   return (
                     <TouchableOpacity

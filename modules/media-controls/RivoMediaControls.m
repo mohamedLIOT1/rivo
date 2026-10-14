@@ -2,6 +2,7 @@
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
 #import <WebKit/WebKit.h>
+#import <UserNotifications/UserNotifications.h>
 
 static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
 
@@ -588,6 +589,8 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                     nowPlaying[MPMediaItemPropertyArtwork] = artwork;
                 } else if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
                     self->_currentCoverUrl = [coverUrl copy];
+                    self->_currentArtwork = nil;
+                    [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
 
                     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
                         UIImage *loadedImg = [self loadImageFromSource:coverUrl];
@@ -633,6 +636,44 @@ RCT_EXPORT_METHOD(hideNotification) {
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
         } @catch (NSException *e) {}
     });
+}
+
+RCT_EXPORT_METHOD(showChatNotification:(NSDictionary *)options) {
+    if (@available(iOS 10.0, *)) {
+        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge) completionHandler:^(BOOL granted, NSError * _Nullable error) {
+            if (!granted) return;
+
+            NSString *senderId = options[@"senderId"] ?: @"unknown";
+            NSString *senderName = options[@"senderName"] ?: @"Friend";
+            NSString *message = options[@"message"] ?: @"";
+            BOOL isJam = [options[@"isJam"] boolValue];
+
+            UNMutableNotificationContent *content = [[UNMutableNotificationContent alloc] init];
+            content.title = isJam ? [NSString stringWithFormat:@"📻 Jam Session • %@", senderName] : [NSString stringWithFormat:@"💬 %@", senderName];
+            content.body = message;
+            content.sound = [UNNotificationSound defaultSound];
+            content.userInfo = options;
+
+            NSString *identifier = [NSString stringWithFormat:@"rivo_chat_%@", senderId];
+            UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:identifier content:content trigger:nil];
+
+            [center addNotificationRequest:request withCompletionHandler:nil];
+        }];
+    }
+}
+
+RCT_EXPORT_METHOD(dismissChatNotification:(NSString *)senderId) {
+    if (@available(iOS 10.0, *)) {
+        NSString *identifier = [NSString stringWithFormat:@"rivo_chat_%@", senderId ?: @""];
+        [[UNUserNotificationCenter currentNotificationCenter] removeDeliveredNotificationsWithIdentifiers:@[identifier]];
+    }
+}
+
+RCT_EXPORT_METHOD(dismissAllChatNotifications) {
+    if (@available(iOS 10.0, *)) {
+        [[UNUserNotificationCenter currentNotificationCenter] removeAllDeliveredNotifications];
+    }
 }
 
 @end

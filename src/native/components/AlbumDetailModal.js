@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { API_BASE_URL } from '../config';
 
 import MiniPlayer from './MiniPlayer';
 
@@ -52,6 +53,8 @@ export default function AlbumDetailModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaved, setIsSaved] = useState(false);
 
+  const [remoteTracks, setRemoteTracks] = useState([]);
+
   // Resolve album tracks
   const albumTracks = useMemo(() => {
     if (!album) return [];
@@ -69,33 +72,68 @@ export default function AlbumDetailModal({
     });
   }, [album, allTracks]);
 
+  // Fallback: Fetch tracks remotely if 0 found locally
+  useEffect(() => {
+    if (!visible || !album) {
+      setRemoteTracks([]);
+      return;
+    }
+    if (albumTracks.length > 0) {
+      setRemoteTracks([]);
+      return;
+    }
+    let isMounted = true;
+    const albId = album._id || album.id;
+    const targetUrl = albId && String(albId).length === 24
+      ? `${API_BASE_URL}/api/albums/${albId}`
+      : `${API_BASE_URL}/api/tracks?album=${encodeURIComponent(album.name || '')}`;
+
+    fetch(targetUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!isMounted || !d) return;
+        const list = d.tracks || (Array.isArray(d) ? d : []);
+        if (Array.isArray(list) && list.length > 0) {
+          setRemoteTracks(list);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [visible, album?.id, album?._id, album?.name, albumTracks.length]);
+
+  const effectiveAlbumTracks = albumTracks.length > 0 ? albumTracks : remoteTracks;
+
   // Filtered tracks by search
   const filteredTracks = useMemo(() => {
-    if (!searchQuery.trim()) return albumTracks;
+    if (!searchQuery.trim()) return effectiveAlbumTracks;
     const q = searchQuery.toLowerCase().trim();
-    return albumTracks.filter(
+    return effectiveAlbumTracks.filter(
       (t) =>
         (t.title && t.title.toLowerCase().includes(q)) ||
         (t.artist && t.artist.toLowerCase().includes(q))
     );
-  }, [albumTracks, searchQuery]);
+  }, [effectiveAlbumTracks, searchQuery]);
 
   // Total runtime minutes
   const totalMinutes = useMemo(() => {
-    const totalSec = albumTracks.reduce((acc, t) => acc + (parseInt(t.duration, 10) || 210), 0);
+    const totalSec = effectiveAlbumTracks.reduce((acc, t) => acc + (parseInt(t.duration, 10) || 210), 0);
     return Math.round(totalSec / 60);
-  }, [albumTracks]);
+  }, [effectiveAlbumTracks]);
 
   if (!visible || !album) return null;
 
-  const coverUri = album.cover || album.coverUrl || albumTracks[0]?.cover || albumTracks[0]?.coverUrl;
-  const albumTitle = album.name || 'Untitled Album';
-  const albumArtist = album.artist || albumTracks[0]?.artist || 'Various Artists';
+  const isPlaylist = Boolean(album.isPlaylist);
+  const coverUri = album.cover || album.coverUrl || effectiveAlbumTracks[0]?.cover || effectiveAlbumTracks[0]?.coverUrl;
+  const albumTitle = album.name || (isPlaylist ? 'Untitled Playlist' : 'Untitled Album');
+  const albumArtist = album.artist || effectiveAlbumTracks[0]?.artist || (isPlaylist ? 'Curator' : 'Various Artists');
   const batchNumber = Math.abs(albumTitle.split('').reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)) % 9000 + 1000;
 
   const handlePlayAll = (shuffle = false) => {
-    if (albumTracks.length === 0) return;
-    let queue = [...albumTracks];
+    if (effectiveAlbumTracks.length === 0) return;
+    let queue = [...effectiveAlbumTracks];
     if (shuffle) {
       queue.sort(() => Math.random() - 0.5);
     }
@@ -103,8 +141,8 @@ export default function AlbumDetailModal({
   };
 
   const handleDownloadAll = () => {
-    if (downloadTrack && albumTracks.length > 0) {
-      albumTracks.forEach((t) => downloadTrack(t));
+    if (downloadTrack && effectiveAlbumTracks.length > 0) {
+      effectiveAlbumTracks.forEach((t) => downloadTrack(t));
     }
   };
 
@@ -157,8 +195,10 @@ export default function AlbumDetailModal({
 
               {/* Title & Meta Info */}
               <View style={styles.heroInfo}>
-                <View style={styles.albumBadge}>
-                  <Text style={styles.albumBadgeText}>OFFICIAL ALBUM</Text>
+                <View style={[styles.albumBadge, isPlaylist && { borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                  <Text style={[styles.albumBadgeText, isPlaylist && { color: '#f59e0b' }]}>
+                    {isPlaylist ? 'OFFICIAL PLAYLIST' : 'OFFICIAL ALBUM'}
+                  </Text>
                 </View>
 
                 <Text style={styles.albumTitle} numberOfLines={2}>
@@ -167,7 +207,7 @@ export default function AlbumDetailModal({
 
                 <TouchableOpacity
                   onPress={() => {
-                    if (onSelectArtist) {
+                    if (onSelectArtist && !isPlaylist) {
                       onClose();
                       onSelectArtist(albumArtist);
                     }
@@ -175,16 +215,19 @@ export default function AlbumDetailModal({
                   activeOpacity={0.8}
                 >
                   <Text style={styles.albumArtist}>
-                    Album by <Text style={styles.artistHighlight}>{albumArtist}</Text>
+                    {isPlaylist ? 'Curated by ' : 'Album by '}
+                    <Text style={styles.artistHighlight}>{albumArtist}</Text>
                   </Text>
                 </TouchableOpacity>
 
                 <View style={styles.statsPillRow}>
-                  <View style={styles.statsPill}>
-                    <Text style={styles.statsPillText}>ALBUM</Text>
+                  <View style={[styles.statsPill, isPlaylist && { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
+                    <Text style={[styles.statsPillText, isPlaylist && { color: '#17a398' }]}>
+                      {isPlaylist ? 'PLAYLIST' : 'ALBUM'}
+                    </Text>
                   </View>
                   <Text style={styles.statsDot}>•</Text>
-                  <Text style={styles.statsMeta}>{albumTracks.length} TRACKS</Text>
+                  <Text style={styles.statsMeta}>{effectiveAlbumTracks.length} TRACKS</Text>
                   <Text style={styles.statsDot}>•</Text>
                   <Text style={styles.statsMeta}>{totalMinutes} MIN</Text>
                 </View>
@@ -206,12 +249,12 @@ export default function AlbumDetailModal({
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => {
-                  if (addToQueue && albumTracks.length > 0) addToQueue(albumTracks);
+                  if (addToQueue && effectiveAlbumTracks.length > 0) addToQueue(effectiveAlbumTracks);
                 }}
                 activeOpacity={0.8}
               >
                 <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
-                <Text style={styles.actionBtnText}>QUEUE ALL</Text>
+                <Text style={styles.actionBtnText}>{isPlaylist ? 'QUEUE PLAYLIST' : 'QUEUE ALL'}</Text>
               </TouchableOpacity>
 
               {/* Save to Library Button */}
@@ -235,7 +278,7 @@ export default function AlbumDetailModal({
                 activeOpacity={0.8}
               >
                 <Download size={15} color="#26c4b7" strokeWidth={2.2} />
-                <Text style={styles.actionBtnText}>DOWNLOAD ({albumTracks.length})</Text>
+                <Text style={styles.actionBtnText}>DOWNLOAD ({effectiveAlbumTracks.length})</Text>
               </TouchableOpacity>
 
               {/* Shuffle Button */}

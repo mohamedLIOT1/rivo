@@ -552,10 +552,16 @@ export default function OnlineWebView() {
           const isDurationChanged = Math.abs((currentTrackRef.current?._lastDuration || 0) - trackDur) > 2;
           currentTrackRef.current._lastDuration = trackDur;
 
-          // On iOS, avoid calling updateMediaNotification on periodic time ticks to prevent audio session stutter,
-          // but ALWAYS update when track changes, play/pause changes, or duration becomes known/updated
-          if (Platform.OS === 'ios' && !isNewTrack && !isPlayStateChanged && !isDurationChanged) {
+          const lastSyncedTime = currentTrackRef.current?._lastSyncedTime || 0;
+          const isDrifting = Math.abs(trackTime - lastSyncedTime) >= 3;
+
+          // On iOS, sync time periodically every 3s, or when track changes, play/pause changes, or duration updates
+          if (Platform.OS === 'ios' && !isNewTrack && !isPlayStateChanged && !isDurationChanged && !isDrifting) {
             break;
+          }
+
+          if (isDrifting || isNewTrack || isPlayStateChanged) {
+            currentTrackRef.current._lastSyncedTime = trackTime;
           }
 
           if (isNewTrack) {

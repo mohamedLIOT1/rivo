@@ -190,11 +190,16 @@ class MediaNotificationService : Service() {
                 }
 
                 val incomingCover = intent.getStringExtra("coverUrl")
+                val isCoverChanged = incomingCover != currentCoverUrl
+                if (isTitleChanged || isCoverChanged) {
+                    currentBitmap = null
+                    lastLoadedCoverUrl = null
+                }
                 if (!incomingCover.isNullOrBlank()) {
-                    if (incomingCover != currentCoverUrl || currentBitmap == null) {
-                        currentCoverUrl = incomingCover
-                        loadCoverBitmapAsync(incomingCover)
-                    }
+                    currentCoverUrl = incomingCover
+                    loadCoverBitmapAsync(incomingCover)
+                } else {
+                    currentCoverUrl = null
                 }
 
                 isPlaying = intent.getBooleanExtra("isPlaying", true)
@@ -218,10 +223,7 @@ class MediaNotificationService : Service() {
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
                     if (cSec >= 0) {
-                        val newPosMs = (cSec * 1000).toLong()
-                        if (isTitleChanged || newPosMs > 0 || !isPlaying || currentPositionMs < 2000L || (now - lastUserSeekTimeMs > 4000L)) {
-                            currentPositionMs = newPosMs
-                        }
+                        currentPositionMs = (cSec * 1000).toLong()
                     }
                 } else if (isTitleChanged) {
                     currentPositionMs = 0L
@@ -274,21 +276,23 @@ class MediaNotificationService : Service() {
                 if (intent.hasExtra("currentTime")) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
                     if (cSec >= 0) {
-                        val newPosMs = (cSec * 1000).toLong()
-                        if (isTitleChanged || newPosMs > 0 || !isPlaying || currentPositionMs < 2000L || (now - lastUserSeekTimeMs > 4000L)) {
-                            currentPositionMs = newPosMs
-                        }
+                        currentPositionMs = (cSec * 1000).toLong()
                     }
                 } else if (isTitleChanged) {
                     currentPositionMs = 0L
                 }
 
                 val incomingCover = intent.getStringExtra("coverUrl")
+                val isCoverChanged = incomingCover != currentCoverUrl
+                if (isTitleChanged || isCoverChanged) {
+                    currentBitmap = null
+                    lastLoadedCoverUrl = null
+                }
                 if (!incomingCover.isNullOrBlank()) {
-                    if (incomingCover != currentCoverUrl || currentBitmap == null) {
-                        currentCoverUrl = incomingCover
-                        loadCoverBitmapAsync(incomingCover)
-                    }
+                    currentCoverUrl = incomingCover
+                    loadCoverBitmapAsync(incomingCover)
+                } else {
+                    currentCoverUrl = null
                 }
 
                 if (isPlaying) {
@@ -458,10 +462,14 @@ class MediaNotificationService : Service() {
             metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDurationMs)
         }
 
-        currentBitmap?.let {
-            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
-            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, it)
-            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it)
+        if (currentBitmap != null) {
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, currentBitmap)
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, currentBitmap)
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, currentBitmap)
+        } else {
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, null)
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, null)
+            metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, null)
         }
         mediaSession?.setMetadata(metadataBuilder.build())
 
@@ -490,9 +498,7 @@ class MediaNotificationService : Service() {
             .addAction(R.drawable.ic_notification_next, "Next", nextIntent)           // 3
             .addAction(repeatIconRes, repeatLabel, repeatIntent)                     // 4
 
-        currentBitmap?.let {
-            builder.setLargeIcon(it)
-        }
+        builder.setLargeIcon(currentBitmap)
 
         // Apply MediaStyle with compact actions (Prev = 1, Play/Pause = 2, Next = 3)
         val style = MediaStyle()
