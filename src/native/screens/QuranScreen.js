@@ -186,6 +186,7 @@ export default function QuranScreen({ onTrackAction }) {
                 : 'جرب البحث باسم سورة أو قارئ آخر.'}
             </Text>
           </View>
+        ) : (
           <View style={styles.tracksList}>
             {displayedTracks.slice(0, visibleLimit).map((track, idx) => (
               <SongItem

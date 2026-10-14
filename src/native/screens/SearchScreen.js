@@ -150,6 +150,8 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
     return () => {
       if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
     };
+  }, [query, activeFilter, isOffline]);
+
   const normalizeFuzzy = (str) => {
     if (!str || typeof str !== 'string') return '';
     return str
