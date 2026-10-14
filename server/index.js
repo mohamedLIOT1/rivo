@@ -1065,35 +1065,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.6',
-  releaseNotes: "Instant cross-device playback pause synchronization (Spotify Connect), live position counter, immediate Jam host transfer on app close/kill, rock-solid Jam pause sync, and enhanced tablet landscape layout.",
+  version: '1.6.7',
+  releaseNotes: "Fixed mobile profile playlists and songs playback, immediate Jam host transfer on app close/kill, rock-solid Jam pause sync across all devices (including iOS IPA), and album/playlist routing.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.6',
+      version: '1.6.7',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Cross-device playback pause sync, Jam host transfer on exit, responsive landscape UI.'
+      notes: 'Profile playlist fixes, Jam host transfer on exit, rock-solid Jam pause sync.'
     },
     android: {
-      version: '1.6.6',
-      build: 35,
+      version: '1.6.7',
+      build: 36,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.6.apk',
-      directFile: 'Rivo-v1.6.6.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.7.apk',
+      directFile: 'Rivo-v1.6.7.apk',
       mandatory: false,
-      notes: 'Real-time cross-device playback pause sync, live minute/second counter, immediate Jam host transfer on exit/kill, fixed Jam pause sync on guest devices, responsive tablet landscape Jam UI.'
+      notes: 'Profile playlist and tracks playback fix, immediate Jam host transfer on exit/kill, complete Jam pause sync across devices.'
     },
     ios: {
-      version: '1.6.6',
-      build: 35,
+      version: '1.6.7',
+      build: 36,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.6.ipa',
-      directFile: 'Rivo-v1.6.6.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.7.ipa',
+      directFile: 'Rivo-v1.6.7.ipa',
       mandatory: false,
-      notes: 'Real-time cross-device playback pause sync, live minute/second counter, immediate Jam host transfer on exit/kill, fixed Jam pause sync on guest devices, responsive tablet landscape Jam UI.'
+      notes: 'Profile playlist and tracks playback fix, immediate Jam host transfer on exit/kill, fixed AVPlayer pause sync on iOS IPA.'
     }
   }
 };
@@ -1105,6 +1105,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.7.apk',
   '/downloads/Rivo-v1.6.6.apk',
   '/downloads/Rivo-v1.6.5.apk',
   '/downloads/Rivo-v1.6.4.apk',
@@ -1119,6 +1120,7 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.apk');
   const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.apk');
   const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.apk');
   const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.apk');
@@ -1128,6 +1130,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV167Path)) {
+    return res.download(localV167Path, 'Rivo-v1.6.7.apk');
+  }
   if (fs.existsSync(localV166Path)) {
     return res.download(localV166Path, 'Rivo-v1.6.6.apk');
   }
@@ -1153,14 +1158,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.6.5.apk');
+    return res.download(localApkPath, 'Rivo-v1.6.7.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.5', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.7', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1186,12 +1191,13 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.5/Rivo-v1.6.5.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.7/Rivo-v1.6.7.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.7.ipa',
   '/downloads/Rivo-v1.6.6.ipa',
   '/downloads/Rivo-v1.6.5.ipa',
   '/downloads/Rivo-v1.6.4.ipa',
@@ -1205,6 +1211,7 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.ipa');
   const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.ipa');
   const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.ipa');
   const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.ipa');
@@ -1214,6 +1221,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV167Path)) {
+    return res.download(localV167Path, 'Rivo-v1.6.7.ipa');
+  }
   if (fs.existsSync(localV166Path)) {
     return res.download(localV166Path, 'Rivo-v1.6.6.ipa');
   }
@@ -1239,14 +1249,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.6.5.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.6.7.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.5', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.7', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1272,7 +1282,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.5/Rivo-v1.6.5.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.7/Rivo-v1.6.7.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -3169,6 +3179,63 @@ app.post('/api/tracks/by-ids', async (req, res) => {
 // ──────────────────────────────────────────
 // PLAYLISTS CRUD
 // ──────────────────────────────────────────
+app.get('/api/playlists/:id', async (req, res) => {
+  try {
+    const plId = String(req.params.id || '');
+    if (!plId) return res.status(400).json({ error: 'Playlist ID is required' });
+
+    const owner = await User.findOne({
+      $or: [
+        { 'playlists.id': plId },
+        { 'playlists._id': mongoose.isValidObjectId(plId) ? plId : null }
+      ]
+    }).select('name avatar playlists');
+
+    if (!owner) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const pl = (owner.playlists || []).find(p => String(p.id || p._id) === plId);
+    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+
+    const rawIds = (pl.trackIds || pl.tracks || []).map(String).filter(Boolean);
+    const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+
+    let populatedTracks = [];
+    if (validObjectIds.length > 0) {
+      populatedTracks = await Track.find({
+        $or: [
+          { _id: { $in: validObjectIds } },
+          { id: { $in: rawIds } }
+        ]
+      }).lean();
+    } else if (rawIds.length > 0) {
+      populatedTracks = await Track.find({ id: { $in: rawIds } }).lean();
+    }
+
+    const trackMap = new Map(populatedTracks.map(t => [String(t._id || t.id), t]));
+    const orderedTracks = rawIds.map(id => trackMap.get(id)).filter(Boolean);
+
+    res.json({
+      success: true,
+      playlist: {
+        id: pl.id || pl._id,
+        _id: pl._id || pl.id,
+        name: pl.name,
+        cover: pl.cover || (orderedTracks[0]?.coverUrl || orderedTracks[0]?.cover || ''),
+        ownerName: owner.name,
+        ownerAvatar: owner.avatar,
+        isPublic: pl.isPublic !== false,
+        isQuran: Boolean(pl.isQuran),
+        trackIds: rawIds,
+        tracks: orderedTracks,
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/playlists/create', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
@@ -6334,6 +6401,11 @@ io.on('connection', (socket) => {
           updatedAt: room.updatedAt,
           initiatorId: initiatorId || socket.id
         });
+        io.to(roomCode).emit('jam:pause_all', {
+          roomCode,
+          currentTime: room.currentTime,
+          currentTrack: room.currentTrack
+        });
         io.to(roomCode).emit('jam:room_updated', room);
         io.to(roomCode).emit('jam_updated', room);
       } else {
@@ -6611,28 +6683,39 @@ io.on('connection', (socket) => {
     // Clean up user from all jam rooms with grace period (avoids glitches on reconnect/refresh/offline-toggle)
     for (const code in jamRooms) {
       const room = jamRooms[code];
-      const member = room.members.find(m => m.socketId === socket.id);
-      if (member) {
-        member.isDisconnected = true;
+      const member = room.members.find(m => m.socketId === socket.id || (socket.userId && (String(m.id || m._id) === String(socket.userId))));
+      const isHostDisconnect = Boolean(room.hostId === socket.id || member?.isHost || (room.hostUserId && socket.userId && String(room.hostUserId) === String(socket.userId)));
+
+      if (member || isHostDisconnect) {
+        if (member) member.isDisconnected = true;
 
         // If the host closed the app or was killed from RAM: immediately transfer host to an active connected guest!
-        if (room.hostId === socket.id || member.isHost) {
-          const activeGuests = room.members.filter(m => !m.isDisconnected && m.socketId !== socket.id);
-          if (activeGuests.length > 0) {
-            const randomIdx = Math.floor(Math.random() * activeGuests.length);
-            const newHost = activeGuests[randomIdx];
+        if (isHostDisconnect) {
+          const otherMembers = room.members.filter(m => m.socketId !== socket.id && (!socket.userId || String(m.id || m._id) !== String(socket.userId)));
+          const activeGuests = otherMembers.filter(m => !m.isDisconnected);
+          const targetPool = activeGuests.length > 0 ? activeGuests : otherMembers;
+
+          if (targetPool.length > 0) {
+            const randomIdx = Math.floor(Math.random() * targetPool.length);
+            const newHost = targetPool[randomIdx];
+            newHost.isHost = true;
+            newHost.isDisconnected = false;
             room.hostId = newHost.socketId;
             room.hostUserId = newHost.id || newHost._id || null;
             room.members.forEach(m => {
               m.isHost = (m.socketId === newHost.socketId);
             });
-            console.log(`[Jam] Host disconnected. Transferred host immediately to ${newHost.name} in room ${code}`);
+            console.log(`[Jam] Host closed app/RAM killed. Transferred host immediately to ${newHost.name} in room ${code}`);
             io.to(code).emit('jam:room_updated', room);
             io.to(code).emit('jam_updated', room);
+            io.to(code).emit('jam:host_changed', { hostId: room.hostId, hostUserId: room.hostUserId, hostName: newHost.name });
+            if (newHost.socketId) {
+              io.to(newHost.socketId).emit('jam:you_are_host', { roomCode: code });
+            }
           }
         }
 
-        const key = `${code}:${member.id || socket.id}`;
+        const key = `${code}:${member?.id || socket.userId || socket.id}`;
         
         // Clear any existing timer
         if (jamDisconnectTimeouts.has(key)) {
@@ -6644,7 +6727,7 @@ io.on('connection', (socket) => {
           const currentRoom = jamRooms[code];
           if (!currentRoom) return;
 
-          currentRoom.members = currentRoom.members.filter(m => m.socketId !== socket.id && (!member.id || m.id !== member.id));
+          currentRoom.members = currentRoom.members.filter(m => m.socketId !== socket.id && (!member?.id || m.id !== member.id));
           if (currentRoom.members.length === 0) {
             // Keep room alive for 5 minutes before deleting in case users reconnect
             setTimeout(() => {

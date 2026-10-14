@@ -1174,6 +1174,23 @@ function AppContent() {
       syncRemotePlayState(data);
     });
 
+    s.on('jam:pause_all', (data) => {
+      setSelectedPlaylist(null);
+      syncRemotePlayState({
+        isPlaying: false,
+        currentTrack: data?.currentTrack,
+        currentTime: data?.currentTime
+      });
+    });
+
+    s.on('jam:host_changed', ({ hostName }) => {
+      if (hostName) showToast(`Jam Host transferred to ${hostName}`);
+    });
+
+    s.on('jam:you_are_host', () => {
+      showToast('👑 You are now the host of this Jam session!');
+    });
+
     s.on('jam:on_play_state_changed', (data) => {
       setSelectedPlaylist(null);
       syncRemotePlayState(data);

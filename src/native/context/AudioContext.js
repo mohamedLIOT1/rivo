@@ -38,6 +38,7 @@ export const AudioProvider = ({ children }) => {
   const isSeekingRef = useRef(false);
   const isSmartMoodQueueRef = useRef(false);
   const playedSmartSongIdsRef = useRef(new Set());
+  const shouldBePlayingRef = useRef(false);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -47,7 +48,7 @@ export const AudioProvider = ({ children }) => {
   try {
     userCtx = useUser() || {};
   } catch {}
-  const { token, currentUser, likedTrackIds = [], toggleLikeTrack } = userCtx;
+  const { token, currentUser, likedTrackIds = [], toggleLikeTrack, tracks: userTracks = [] } = userCtx;
 
   const tokenRef = useRef(token);
   useEffect(() => {
@@ -328,9 +329,22 @@ export const AudioProvider = ({ children }) => {
 
   const onPlaybackStatusUpdate = (status) => {
     if (!status.isLoaded) return;
+
+    // Hard safeguard: If playback should be paused, immediately kill any rogue playing state
+    if (!shouldBePlayingRef.current && status.isPlaying) {
+      if (soundRef.current) {
+        soundRef.current.pauseAsync().catch(() => {});
+      }
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      return;
+    }
+
     if (!isSeekingRef.current && !status.isBuffering) {
       if (isPlayingRef.current !== status.isPlaying) {
         setIsPlaying(status.isPlaying);
+        isPlayingRef.current = status.isPlaying;
+        shouldBePlayingRef.current = status.isPlaying;
         const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
         updateMediaNotification(status.isPlaying, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
       }
@@ -593,8 +607,11 @@ export const AudioProvider = ({ children }) => {
     };
   }, [currentTrack?._id, currentTrack?.id, currentTrack?.title, isOffline]);
 
-  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0, isRemote = false, isSmartMood = false) => {
+  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0, isRemote = false, isSmartMood = false, autoPlay = true) => {
     if (!track) return;
+    if (autoPlay) {
+      shouldBePlayingRef.current = true;
+    }
 
     if (isSmartMood || (Array.isArray(trackList) && trackList.some(t => t.isSmartMoodQueue)) || track?.isSmartMoodQueue) {
       isSmartMoodQueueRef.current = true;
@@ -716,10 +733,11 @@ export const AudioProvider = ({ children }) => {
       const soundSource = { uri };
 
       const initialPosMs = Math.round(safeTargetSec * 1000);
+      const willPlay = Boolean(autoPlay && shouldBePlayingRef.current);
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
-          shouldPlay: true,
+          shouldPlay: willPlay,
           positionMillis: initialPosMs > 0 ? initialPosMs : 0,
           progressUpdateIntervalMillis: 250,
         },
@@ -736,6 +754,15 @@ export const AudioProvider = ({ children }) => {
         await sound.setVolumeAsync(volumeRef.current).catch(() => {});
       }
 
+      // If user/remote paused while sound was creating:
+      if (!autoPlay || !shouldBePlayingRef.current) {
+        await sound.pauseAsync().catch(() => {});
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        setIsLoading(false);
+        return;
+      }
+
       // If playing with target time, compensate for stream connect delay so it stays in exact sync!
       if (safeTargetSec > 0) {
         const streamConnectElapsed = (Date.now() - connectStartTime) / 1000;
@@ -744,6 +771,7 @@ export const AudioProvider = ({ children }) => {
       }
 
       setIsPlaying(true);
+      isPlayingRef.current = true;
       setIsLoading(false);
 
       if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
@@ -790,12 +818,45 @@ export const AudioProvider = ({ children }) => {
     }
   };
 
-  const playPlaylist = async (playlistTracks, startIndex = 0) => {
-    if (!Array.isArray(playlistTracks) || playlistTracks.length === 0) return;
-    const safeIndex = Math.max(0, Math.min(startIndex, playlistTracks.length - 1));
-    const targetTrack = playlistTracks[safeIndex];
-    setQueue(playlistTracks);
-    return playTrack(targetTrack, playlistTracks);
+  const playPlaylist = async (playlistOrTracks, startIndex = 0) => {
+    let list = [];
+    if (Array.isArray(playlistOrTracks)) {
+      list = playlistOrTracks;
+    } else if (playlistOrTracks && typeof playlistOrTracks === 'object') {
+      if (Array.isArray(playlistOrTracks.tracks) && playlistOrTracks.tracks.length > 0 && typeof playlistOrTracks.tracks[0] === 'object' && playlistOrTracks.tracks[0].title) {
+        list = playlistOrTracks.tracks;
+      } else {
+        const pool = (userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []);
+        const rawList = Array.isArray(playlistOrTracks.tracks) ? playlistOrTracks.tracks : (Array.isArray(playlistOrTracks.trackIds) ? playlistOrTracks.trackIds : []);
+        list = rawList.map(item => {
+          if (item && typeof item === 'object' && item.title) return item;
+          const id = typeof item === 'object' ? String(item._id || item.id) : String(item);
+          return pool.find(t => String(t._id || t.id) === id);
+        }).filter(Boolean);
+
+        const plId = playlistOrTracks._id || playlistOrTracks.id;
+        if (list.length === 0 && plId) {
+          try {
+            const res = await fetch(`${API_BASE_URL}/api/playlists/${plId}`);
+            if (res.ok) {
+              const data = await res.json();
+              const plTracks = data?.playlist?.tracks || data?.tracks;
+              if (Array.isArray(plTracks) && plTracks.length > 0) {
+                list = plTracks;
+              }
+            }
+          } catch (e) {}
+        }
+      }
+    }
+    if (!Array.isArray(list) || list.length === 0) {
+      showToast('No tracks found in playlist', 'info');
+      return;
+    }
+    const safeIndex = Math.max(0, Math.min(startIndex, list.length - 1));
+    const targetTrack = list[safeIndex];
+    setQueue(list);
+    return playTrack(targetTrack, list);
   };
 
   const togglePlay = async (isRemote = false) => {
@@ -807,12 +868,14 @@ export const AudioProvider = ({ children }) => {
     }
     const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
     const nextPlaying = !isPlaying;
+    shouldBePlayingRef.current = nextPlaying;
     const curPos = playbackStatusRef.current?.currentTime || 0;
     const curDur = playbackStatusRef.current?.duration || Number(currentTrackRef.current?.duration || 240);
 
     if (isPlaying) {
       await soundRef.current.pauseAsync().catch(() => {});
       setIsPlaying(false);
+      isPlayingRef.current = false;
       updateMediaNotification(false, repeatMode, isShuffle, isLikedTrack, {
         ...currentTrackRef.current,
         currentTime: curPos,
@@ -822,6 +885,7 @@ export const AudioProvider = ({ children }) => {
     } else {
       await soundRef.current.playAsync().catch(() => {});
       setIsPlaying(true);
+      isPlayingRef.current = true;
       updateMediaNotification(true, repeatMode, isShuffle, isLikedTrack, {
         ...currentTrackRef.current,
         currentTime: curPos,
@@ -1130,8 +1194,9 @@ export const AudioProvider = ({ children }) => {
 
   const pauseNativePlayback = useCallback(async () => {
     try {
+      shouldBePlayingRef.current = false;
       if (soundRef.current) {
-        await soundRef.current.pauseAsync();
+        await soundRef.current.pauseAsync().catch(() => {});
         isPlayingRef.current = false;
         setIsPlaying(false);
       }
@@ -1154,20 +1219,25 @@ export const AudioProvider = ({ children }) => {
 
     // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
     if (syncPlaying === false) {
+      shouldBePlayingRef.current = false;
       if (soundRef.current) {
         await soundRef.current.pauseAsync().catch(() => {});
       }
       setIsPlaying(false);
       isPlayingRef.current = false;
       if (isDifferentTrack) {
-        await playTrack(syncTrack, null, false, targetTime, true);
+        await playTrack(syncTrack, null, false, targetTime, true, false, false);
         if (soundRef.current) {
           await soundRef.current.pauseAsync().catch(() => {});
         }
         setIsPlaying(false);
         isPlayingRef.current = false;
       } else if (targetTime !== undefined && soundRef.current) {
-        await soundRef.current.setPositionAsync(Math.max(0, targetTime * 1000)).catch(() => {});
+        const localCur = playbackStatusRef.current?.currentTime || 0;
+        if (Math.abs(targetTime - localCur) > 3) {
+          await soundRef.current.setPositionAsync(Math.max(0, targetTime * 1000)).catch(() => {});
+          await soundRef.current.pauseAsync().catch(() => {});
+        }
         setProgress(p => ({ ...p, currentTime: Math.max(0, targetTime) }));
       }
       if (jamSyncRef.current.jamSession) {

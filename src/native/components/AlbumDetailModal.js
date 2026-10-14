@@ -49,7 +49,7 @@ export default function AlbumDetailModal({
   onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadPlaylist } = useAudioPlayer();
-  const { token, syncUserData, likedTrackIds = [], toggleLikeTrack } = useUser();
+  const { token, syncUserData, likedTrackIds = [], toggleLikeTrack, tracks: contextTracks = [] } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,24 +60,38 @@ export default function AlbumDetailModal({
   // Resolve album tracks
   const albumTracks = useMemo(() => {
     if (!album) return [];
-    if (Array.isArray(album.tracks) && album.tracks.length > 0) {
+    if (Array.isArray(album.tracks) && album.tracks.length > 0 && typeof album.tracks[0] === 'object' && album.tracks[0].title) {
       return album.tracks;
     }
+
+    const pool = (allTracks && allTracks.length > 0) ? allTracks : (contextTracks && contextTracks.length > 0 ? contextTracks : []);
+    const rawIds = [
+      ...(Array.isArray(album.trackIds) ? album.trackIds : []),
+      ...(Array.isArray(album.tracks) ? album.tracks : []),
+    ];
+
+    if (rawIds.length > 0) {
+      const idMatches = rawIds.map(item => {
+        if (item && typeof item === 'object' && item.title) return item;
+        const id = typeof item === 'object' ? String(item._id || item.id) : String(item);
+        return pool.find(t => String(t._id || t.id) === id);
+      }).filter(Boolean);
+
+      if (idMatches.length > 0) {
+        return idMatches;
+      }
+    }
+
     const albName = (album.name || '').trim().toLowerCase();
     const cleanAlbName = albName.replace(/^album-/, '').replace(/[-_\s]+/g, ' ').trim();
-    const trackIds = Array.isArray(album.trackIds) ? album.trackIds.map(String) : [];
 
-    return (allTracks || []).filter((t) => {
-      if (!t) return false;
+    return (pool || []).filter((t) => {
+      if (!t || typeof t !== 'object') return false;
       const tAlb = (t.album || '').trim().toLowerCase();
       const cleanTAlb = tAlb.replace(/[-_\s]+/g, ' ').trim();
-      const tId = String(t.id || t._id || '');
-      return (
-        (albName && (tAlb === albName || cleanTAlb === cleanAlbName)) ||
-        (trackIds.length > 0 && trackIds.includes(tId))
-      );
+      return albName && (tAlb === albName || cleanTAlb === cleanAlbName);
     });
-  }, [album, allTracks]);
+  }, [album, allTracks, contextTracks]);
 
   // Fallback: Fetch tracks remotely if 0 found locally
   useEffect(() => {
@@ -85,40 +99,62 @@ export default function AlbumDetailModal({
       setRemoteTracks([]);
       return;
     }
-    if (albumTracks.length > 0) {
+    const hasFullTracks = albumTracks.length > 0 && albumTracks.every(t => t && typeof t === 'object' && t.title);
+    if (hasFullTracks) {
       setRemoteTracks([]);
       return;
     }
     let isMounted = true;
     const albId = album._id || album.id;
     const cleanId = albId ? String(albId).replace(/^album-/, '') : '';
-    const queryName = album.name || cleanId || albId || '';
-    const targetUrl = (albId && String(albId).length === 24)
-      ? `${API_BASE_URL}/api/albums/${albId}`
-      : (cleanId && cleanId.length === 24)
-        ? `${API_BASE_URL}/api/albums/${cleanId}`
-        : `${API_BASE_URL}/api/albums/${encodeURIComponent(cleanId || queryName)}`;
+    const isPl = Boolean(album.isPlaylist || album.trackIds);
 
-    fetch(targetUrl)
-      .then((r) => {
-        if (r && r.ok) return r.json();
-        return fetch(`${API_BASE_URL}/api/tracks?album=${encodeURIComponent(queryName)}`).then(res => res.ok ? res.json() : null);
-      })
-      .then((d) => {
-        if (!isMounted || !d) return;
-        const list = d.tracks || (Array.isArray(d) ? d : []);
-        if (Array.isArray(list) && list.length > 0) {
-          setRemoteTracks(list);
+    const tryFetch = async () => {
+      try {
+        if (isPl && (albId || cleanId)) {
+          const res = await fetch(`${API_BASE_URL}/api/playlists/${albId || cleanId}`);
+          if (res.ok) {
+            const d = await res.json();
+            const list = d.playlist?.tracks || d.tracks || [];
+            if (isMounted && Array.isArray(list) && list.length > 0) {
+              setRemoteTracks(list);
+              return;
+            }
+          }
         }
-      })
-      .catch(() => {});
+
+        const queryName = album.name || cleanId || albId || '';
+        const targetUrl = (albId && String(albId).length === 24)
+          ? `${API_BASE_URL}/api/albums/${albId}`
+          : (cleanId && cleanId.length === 24)
+            ? `${API_BASE_URL}/api/albums/${cleanId}`
+            : `${API_BASE_URL}/api/albums/${encodeURIComponent(cleanId || queryName)}`;
+
+        let r = await fetch(targetUrl);
+        if (!r.ok) {
+          r = await fetch(`${API_BASE_URL}/api/tracks?album=${encodeURIComponent(queryName)}`);
+        }
+        if (r.ok) {
+          const d = await r.json();
+          const list = d.tracks || (Array.isArray(d) ? d : []);
+          if (isMounted && Array.isArray(list) && list.length > 0) {
+            setRemoteTracks(list);
+          }
+        }
+      } catch {}
+    };
+
+    tryFetch();
 
     return () => {
       isMounted = false;
     };
-  }, [visible, album?.id, album?._id, album?.name, albumTracks.length]);
+  }, [visible, album?.id, album?._id, album?.name, album?.isPlaylist, albumTracks.length]);
 
-  const effectiveAlbumTracks = albumTracks.length > 0 ? albumTracks : remoteTracks;
+  const effectiveAlbumTracks = useMemo(() => {
+    const list = albumTracks.length > 0 ? albumTracks : remoteTracks;
+    return list.filter(t => t && typeof t === 'object' && t.title);
+  }, [albumTracks, remoteTracks]);
 
   // Filtered tracks by search
   const filteredTracks = useMemo(() => {
@@ -374,7 +410,7 @@ export default function AlbumDetailModal({
               <TouchableOpacity
                 key={trackId || index}
                 style={[styles.trackRow, isCurrent && styles.trackRowActive]}
-                onPress={() => playTrack(t, albumTracks)}
+                onPress={() => playTrack(t, effectiveAlbumTracks)}
                 activeOpacity={0.8}
               >
                 {/* Index # */}

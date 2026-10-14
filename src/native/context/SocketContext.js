@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../config';
 import { useUser } from './UserContext';
 import { useAudioPlayer } from './AudioContext';
 import { showChatNotification, dismissChatNotification } from '../services/mediaControls';
+import { useToast } from './ToastContext';
 
 const SocketContext = createContext();
 
@@ -19,9 +20,14 @@ export const SocketProvider = ({ children }) => {
     syncRemotePlayStateRef.current = syncRemotePlayState;
   }, [syncRemotePlayState]);
 
+  const { showToast } = useToast();
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [jamSession, setJamSession] = useState(null);
+  const jamSessionRef = useRef(null);
+  useEffect(() => {
+    jamSessionRef.current = jamSession;
+  }, [jamSession]);
   const [chatMessages, setChatMessages] = useState([]);
 
   useEffect(() => {
@@ -39,13 +45,33 @@ export const SocketProvider = ({ children }) => {
 
     s.on('connect', () => {
       setIsConnected(true);
-      if (currentUser) {
-        const uId = currentUser._id || currentUser.id;
+      const cur = currentUserRef.current;
+      if (cur) {
+        const uId = cur._id || cur.id;
         s.emit('user:online', { userId: uId });
         s.emit('user_connected', {
           userId: uId,
-          name: currentUser.name,
-          avatar: currentUser.avatar,
+          name: cur.name,
+          avatar: cur.avatar,
+        });
+      }
+
+      // Re-join active Jam room on reconnect/network switch
+      if (jamSessionRef.current?.code || jamSessionRef.current?.roomCode) {
+        const roomCode = jamSessionRef.current.code || jamSessionRef.current.roomCode;
+        s.emit('jam:join_room', {
+          roomCode,
+          user: cur ? {
+            id: cur._id || cur.id,
+            _id: cur._id || cur.id,
+            name: cur.name,
+            avatar: cur.avatar || '',
+          } : {
+            id: s.id,
+            _id: s.id,
+            name: 'Listener',
+            avatar: '',
+          }
         });
       }
     });
@@ -85,6 +111,54 @@ export const SocketProvider = ({ children }) => {
       }) : null);
       if (data?.initiatorId !== s.id && syncRemotePlayStateRef.current) {
         syncRemotePlayStateRef.current(data);
+      }
+    });
+
+    s.on('jam:pause_all', (data) => {
+      setJamSession(prev => prev ? ({ ...prev, isPlaying: false, updatedAt: Date.now() }) : null);
+      if (syncRemotePlayStateRef.current) {
+        syncRemotePlayStateRef.current({
+          isPlaying: false,
+          currentTrack: data?.currentTrack,
+          currentTime: data?.currentTime,
+          updatedAt: Date.now(),
+        });
+      }
+    });
+
+    s.on('jam:you_are_host', ({ roomCode }) => {
+      const cur = currentUserRef.current;
+      const myId = String(cur?._id || cur?.id || s.id);
+      setJamSession(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          hostId: s.id,
+          hostUserId: cur?._id || cur?.id || null,
+          members: (prev.members || []).map(m => ({
+            ...m,
+            isHost: m.socketId === s.id || (myId && String(m.id || m._id) === myId)
+          }))
+        };
+      });
+      showToast('You are now the Jam Room Host! 👑', 'info');
+    });
+
+    s.on('jam:host_changed', ({ hostId, hostUserId, hostName }) => {
+      setJamSession(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          hostId,
+          hostUserId,
+          members: (prev.members || []).map(m => ({
+            ...m,
+            isHost: m.socketId === hostId || (hostUserId && String(m.id || m._id) === String(hostUserId))
+          }))
+        };
+      });
+      if (hostName) {
+        showToast(`Jam Host transferred to ${hostName}`, 'info');
       }
     });
 

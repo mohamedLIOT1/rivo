@@ -37,6 +37,13 @@ export default function MiniPlayer({
   const rawDuration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
   const duration = rawDuration > 10000 ? Math.round(rawDuration / 1000) : rawDuration;
   const seekTo = propSeekTo || audio?.seekTo;
+  const formatTime = (secs) => {
+    if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
+    const sVal = secs > 10000 ? Math.round(secs / 1000) : Math.round(secs);
+    const m = Math.floor(sVal / 60);
+    const s = Math.floor(sVal % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
 
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const remotePlayback = audio?.remoteDevicePlayback;
@@ -109,14 +116,6 @@ export default function MiniPlayer({
   const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
-
-  const formatTime = (secs) => {
-    if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
-    const sVal = secs > 10000 ? Math.round(secs / 1000) : Math.round(secs);
-    const m = Math.floor(sVal / 60);
-    const s = Math.floor(sVal % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
 
   const seekFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;
