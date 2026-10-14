@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '../config';
 import { useUser } from './UserContext';

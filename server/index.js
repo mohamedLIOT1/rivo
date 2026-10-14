@@ -1079,7 +1079,7 @@ const APP_VERSIONS_DATA = {
     },
     android: {
       version: '1.6.1',
-      build: 29,
+      build: 30,
       name: 'Rivo for Android',
       downloadUrl: '/downloads/Rivo-v1.6.1.apk',
       directFile: 'Rivo-v1.6.1.apk',
@@ -1088,7 +1088,7 @@ const APP_VERSIONS_DATA = {
     },
     ios: {
       version: '1.6.1',
-      build: 29,
+      build: 30,
       name: 'Rivo for iOS',
       downloadUrl: '/downloads/Rivo-v1.6.1.ipa',
       directFile: 'Rivo-v1.6.1.ipa',
