@@ -6031,9 +6031,13 @@ io.on('connection', (socket) => {
     if (room) {
       let trackChanged = false;
       if (isPlaying !== undefined) room.isPlaying = isPlaying;
-      if (currentTrack !== undefined && JSON.stringify(currentTrack) !== JSON.stringify(room.currentTrack)) {
+      if (currentTrack !== undefined) {
+        const curTId = String(room.currentTrack?._id || room.currentTrack?.id || '');
+        const newTId = String(currentTrack?._id || currentTrack?.id || '');
+        if (curTId !== newTId || JSON.stringify(currentTrack) !== JSON.stringify(room.currentTrack)) {
+          trackChanged = true;
+        }
         room.currentTrack = currentTrack;
-        trackChanged = true;
       }
       if (currentTime !== undefined) room.currentTime = currentTime;
       room.updatedAt = Date.now();

@@ -8,6 +8,7 @@ import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getAlbumArtwork } from './ArtistScreen';
 import { sortTracksByPopularity, getGlobalTrackScore } from '../utils/trackPopularity';
+import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 export { getGlobalTrackScore };
 
 export default function HomeScreen({ 
@@ -76,6 +77,31 @@ export default function HomeScreen({
     return 'Good evening';
   };
 
+  const handlePlaySmartCassette = () => {
+    let followed = [];
+    try {
+      const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+      if (raw) followed = JSON.parse(raw);
+    } catch {}
+
+    const smart10 = getSmartTasteAndMoodTracks({
+      allTracks: displayTracks,
+      currentUser,
+      followedArtists: followed,
+      likedTrackIds: currentUser?.likedTracks || [],
+      limit: 10,
+    });
+
+    if (smart10.length > 0) {
+      const tagged = smart10.map(t => ({ ...t, isSmartMoodQueue: true }));
+      onSelectTrack(tagged[0], tagged);
+    } else if (popularTracks.length > 0) {
+      onSelectTrack(popularTracks[0], popularTracks.slice(0, 10));
+    }
+  };
+
+  const currentMood = getCurrentTimeMood();
+
   return (
     <div 
       className={`flex-1 overflow-y-auto select-none p-3.5 sm:p-6 ${
@@ -103,7 +129,7 @@ export default function HomeScreen({
           <div className="max-w-xl text-left w-full">
             <div className="inline-flex items-center gap-1.5 bg-[#fdfbf7] text-[#0b1110] px-2.5 py-0.5 rounded-full brutal-border text-[10px] sm:text-xs font-display font-bold mb-2.5 brutal-shadow-sm">
               <span className="w-2 h-2 rounded-full bg-[#17a398] animate-pulse"></span>
-              <span>🎵 UNLIMITED HI-FI STREAMING • CAIRO MUSIC LAB</span>
+              <span>{currentMood.label}</span>
             </div>
 
             <h1 className="font-display text-2xl sm:text-4xl lg:text-5xl font-black leading-tight mb-2 tracking-tight text-white">
@@ -116,15 +142,12 @@ export default function HomeScreen({
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button 
-                onClick={() => {
-                  if (popularTracks.length > 0) {
-                    onSelectTrack(popularTracks[0], popularTracks);
-                  }
-                }}
+                onClick={handlePlaySmartCassette}
                 className="flex-1 sm:flex-initial bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-black text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-2 cursor-pointer"
+                title="Play 10 personalized songs matching your taste and mood"
               >
                 <Play size={15} fill="currentColor" />
-                <span>PLAY TOP CHARTS</span>
+                <span>PLAY TOP CHARTS (10)</span>
               </button>
 
               <button 
@@ -138,7 +161,11 @@ export default function HomeScreen({
           </div>
 
           {/* Authentic Rivo Cassette Deck Graphic (Shown on tablets and desktop) */}
-          <div className="hidden md:flex relative shrink-0 items-center justify-center self-center lg:self-auto mt-2 lg:mt-0">
+          <div 
+            onClick={handlePlaySmartCassette}
+            title="Click to play 10 songs matching your mood & followed artists"
+            className="hidden md:flex relative shrink-0 items-center justify-center self-center lg:self-auto mt-2 lg:mt-0 cursor-pointer"
+          >
             <div className="w-56 sm:w-64 bg-[#fdfbf7] text-[#0b1110] rounded-xl brutal-border-thick p-3.5 sm:p-4 brutal-shadow-lg transform rotate-2 hover:rotate-0 transition duration-300">
               <div className="border-2 border-dashed border-[#0b1110] rounded-lg p-2.5 sm:p-3 bg-white text-center">
                 <div className="flex items-center justify-between text-[10px] font-mono font-bold border-b-2 border-black pb-1 mb-2">
@@ -151,7 +178,7 @@ export default function HomeScreen({
                     <Disc size={30} className="text-[#0b1110]" strokeWidth={2.2} />
                   </div>
                   <div className="font-display font-black text-lg sm:text-xl text-[#0b1110] leading-tight">RIVO CASSETTE</div>
-                  <div className="text-[10px] sm:text-[11px] text-zinc-600 font-bold">Daily Tape Rotation</div>
+                  <div className="text-[10px] sm:text-[11px] text-zinc-600 font-bold">{currentMood.label}</div>
                 </div>
 
                 <div className="bg-[#0b1110] text-[#17a398] text-[9px] sm:text-[10px] font-mono py-1 rounded mt-1.5 font-bold">

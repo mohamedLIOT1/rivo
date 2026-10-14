@@ -6,6 +6,7 @@ import { isQuranContent } from '../utils/quranUtils';
 import { API_BASE_URL } from '../config';
 import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/listeningTracker';
 import { useUser } from './UserContext';
+import { getSmartTasteAndMoodTracks } from '../utils/tasteAlgorithm';
 
 const AudioPlayerContext = createContext(null);
 
@@ -1680,6 +1681,35 @@ export function AudioProvider({ children, tracks, setTracks }) {
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
       } else {
         let targetList = activeList;
+
+        // Auto-generate next 10 mood & taste tracks if running a smart cassette queue
+        const hasSmartQueue = activeList.some(t => t.isSmartMoodQueue);
+        if (hasSmartQueue && idx >= activeList.length - 2 && !isOfflineMode) {
+          let followed = [];
+          try {
+            const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+            if (raw) followed = JSON.parse(raw);
+          } catch {}
+
+          const existingIds = new Set(activeList.map(t => String(t.id || t._id)));
+          const next10 = getSmartTasteAndMoodTracks({
+            allTracks: tracksRef.current || [],
+            currentUser,
+            followedArtists: followed,
+            likedTrackIds: currentUser?.likedTracks || [],
+            excludeTrackIds: existingIds,
+            limit: 10,
+          });
+
+          if (next10.length > 0) {
+            const tagged = next10.map(t => ({ ...t, isSmartMoodQueue: true }));
+            const updated = [...activeList, ...tagged];
+            currentQueueRef.current = updated;
+            setCurrentQueue(updated);
+            targetList = updated;
+          }
+        }
+
         let nextIdx = (idx + 1) % targetList.length;
         if (targetList.length <= 1 && tracksRef.current && tracksRef.current.length > 1) {
           const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
