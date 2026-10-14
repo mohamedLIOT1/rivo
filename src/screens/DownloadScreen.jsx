@@ -46,15 +46,16 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       badge: 'NATIVE DESKTOP',
       version: `v${APP_VERSION}`,
       fileType: '.EXE',
-      fileSize: '1.8 MB',
+      fileSize: '52 MB',
       icon: Monitor,
       downloadUrl: '/downloads/Rivo.exe',
       directName: 'Rivo.exe',
       highlights: [
         'Official Discord Rich Presence sync (No extensions needed)',
         'Native Windows media session & taskbar playback controls',
-        'Built-in auto-update checker on startup',
-        'Hardware-accelerated WebView2 engine with 24-bit Hi-Fi audio'
+        'Automatic in-place self-updater without website redirects',
+        'Automatic song saving into Downloads\\Rivo folder',
+        'Standalone package with zero missing DLL dependencies'
       ],
       isRecommended: detectedOs === 'windows' || detectedOs === 'mac'
     },
@@ -67,7 +68,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       fileType: '.APK',
       fileSize: '67 MB',
       icon: Smartphone,
-      downloadUrl: `https://github.com/mohamedLIOT1/rivo/releases/download/v${APP_VERSION}/Rivo-v${APP_VERSION}.apk`,
+      downloadUrl: `/downloads/Rivo-v${APP_VERSION}.apk`,
       directName: `Rivo-v${APP_VERSION}.apk`,
       highlights: [
         'Complete Rivo Web UI: all playlists, full profile & Friend Activity',
@@ -84,7 +85,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       badge: 'HYBRID HI-FI',
       version: `v${APP_VERSION}`,
       fileType: '.IPA',
-      fileSize: '7.8 MB',
+      fileSize: '7.9 MB',
       icon: Apple,
       downloadUrl: `/downloads/Rivo-v${APP_VERSION}.ipa`,
       directName: `Rivo-v${APP_VERSION}.ipa`,

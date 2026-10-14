@@ -20,6 +20,7 @@ import ListeningActivityPanel from './components/ListeningActivityPanel';
 import RivoLogo from './components/RivoLogo';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { buildUrl, parseLocation } from './utils/router';
+import { APP_VERSION } from './version';
 
 import HomeScreen from './screens/HomeScreen';
 import SearchScreen from './screens/SearchScreen';
@@ -165,6 +166,45 @@ function AppContent() {
   const [chatTargetUser,      setChatTargetUser]      = useState(null);
   const [unreadChatCount,     setUnreadChatCount]     = useState(0);
   const [socket,              setSocket]              = useState(null);
+  const [updateAvailable,     setUpdateAvailable]     = useState(null);
+
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/app/version`);
+        const data = await res.json();
+        if (data && data.version) {
+          const isDismissed = localStorage.getItem(`rivo_update_dismissed_${data.version}`);
+          if (!isDismissed) {
+            const [curMaj = 0, curMin = 0, curPatch = 0] = (APP_VERSION || '1.0.0').split('.').map(Number);
+            const [remMaj = 0, remMin = 0, remPatch = 0] = data.version.split('.').map(Number);
+            const isNewer = (remMaj > curMaj) || 
+                            (remMaj === curMaj && remMin > curMin) || 
+                            (remMaj === curMaj && remMin === curMin && remPatch > curPatch);
+            if (isNewer) {
+              setUpdateAvailable(data);
+            }
+          }
+        }
+      } catch {}
+    };
+    checkUpdate();
+  }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdateNotice = (data) => {
+      if (data && data.version) {
+        setUpdateAvailable(data);
+      }
+    };
+    socket.on('app:update_available', handleUpdateNotice);
+    socket.on('app:update_manifest', handleUpdateNotice);
+    return () => {
+      socket.off('app:update_available', handleUpdateNotice);
+      socket.off('app:update_manifest', handleUpdateNotice);
+    };
+  }, [socket]);
 
   // Sync refs for popstate and background handling
   const isChatOpenRef = useRef(isChatOpen);
@@ -1455,6 +1495,39 @@ function AppContent() {
   return (
     <DownloadProvider tracks={tracks} setTracks={setTracks} showToast={showToast}>
       <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
+
+        {/* ── UPDATE AVAILABLE BANNER ── */}
+        {updateAvailable && (
+          <div className="bg-[#17a398] text-[#0b1110] px-3 sm:px-5 py-2 font-mono text-xs font-black flex items-center justify-between border-b-2 border-black z-50 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse inline-block shrink-0" />
+              <span className="truncate">🎉 يتوفر إصدار جديد من ريفو (v{updateAvailable.version})! اضغط هنا للتحديث والاستمتاع بالميزات الجديدة.</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button 
+                onClick={() => {
+                  navigateTo('download');
+                  setUpdateAvailable(null);
+                }}
+                className="px-3 py-1 bg-[#0b1110] text-[#26c4b7] brutal-border text-[11px] uppercase cursor-pointer hover:bg-black font-bold"
+              >
+                تحديث الآن
+              </button>
+              <button 
+                onClick={() => {
+                  try {
+                    localStorage.setItem(`rivo_update_dismissed_${updateAvailable.version}`, 'true');
+                  } catch {}
+                  setUpdateAvailable(null);
+                }}
+                className="text-black/70 hover:text-black p-0.5 cursor-pointer"
+                title="إغلاق"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* ── TOP APOTHECARY NAV BAR (Rivo Design) ── */}
       <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
