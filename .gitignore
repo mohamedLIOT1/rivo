@@ -17,4 +17,5 @@ downloaded_ipa/
 uploads/audio-cache/
 *.exe
 *.pdb
+*.tar.gz
 temp_artifacts_*/

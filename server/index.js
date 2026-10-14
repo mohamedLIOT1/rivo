@@ -1062,40 +1062,38 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ──────────────────────────────────────────
-// App Versions & Updates Manifest
-// ──────────────────────────────────────────
-// App Versions & Updates Manifest
+/// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.4',
-  releaseNotes: "Fixed profile screen crash (Property 'useEffect' doesn't exist) on mobile apps, along with Jam sync, cross-device connect sync, and playlist improvements.",
+  version: '1.6.5',
+  releaseNotes: "Mobile profile web-matching redesign (edit name & bio, change avatar, playlist privacy toggle), Lege-Cy empty albums fix (Plan-B & 191-181), Jam pause sync & freeze resolution, cross-device playback presence display, and AI smart autoplay with strict Quran/music separation.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.4',
+      version: '1.6.5',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Native Windows system tray balloon notifications, embedded icon, cross-device connect sync, zero missing DLL errors.'
+      notes: 'Mobile profile redesign, Jam pause sync, Spotify Connect device presence, strict Quran/music separation.'
     },
     android: {
-      version: '1.6.4',
-      build: 33,
+      version: '1.6.5',
+      build: 34,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.4.apk',
-      directFile: 'Rivo-v1.6.4.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.5.apk',
+      directFile: 'Rivo-v1.6.5.apk',
       mandatory: false,
-      notes: 'Fixed profile screen crash, new playlist creation & link import, song search by name, Quran screen optimization, hardware back button navigation, pull-to-refresh, Placebo album fix, cross-device sync.'
+      notes: 'Profile screen redesign (edit bio & name, change avatar, playlist privacy toggle), fixed empty albums (Plan-B, 191-181), Jam pause sync & anti-kick keepalive, cross-device playback presence, AI autoplay with Quran isolation.'
     },
     ios: {
-      version: '1.6.4',
-      build: 33,
+      version: '1.6.5',
+      build: 34,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.4.ipa',
-      directFile: 'Rivo-v1.6.4.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.5.ipa',
+      directFile: 'Rivo-v1.6.5.ipa',
       mandatory: false,
-      notes: 'Fixed profile screen crash, native iOS foreground & background chat banner notifications with sound, hardware back stack, Jam audio zero-drift sync, cross-device sync.'
+      notes: 'Profile screen redesign (edit bio & name, change avatar, playlist privacy toggle), fixed empty albums (Plan-B, 191-181), Jam pause sync & anti-kick keepalive, cross-device playback presence, AI autoplay with Quran isolation.'
     }
   }
 };
@@ -1107,6 +1105,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.5.apk',
   '/downloads/Rivo-v1.6.4.apk',
   '/downloads/Rivo-v1.6.3.apk',
   '/downloads/Rivo-v1.6.2.apk',
@@ -1119,6 +1118,7 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.apk');
   const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.apk');
   const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.apk');
   const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.apk');
@@ -1126,6 +1126,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV165Path)) {
+    return res.download(localV165Path, 'Rivo-v1.6.5.apk');
+  }
   if (fs.existsSync(localV164Path)) {
     return res.download(localV164Path, 'Rivo-v1.6.4.apk');
   }
@@ -1145,14 +1148,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.6.3.apk');
+    return res.download(localApkPath, 'Rivo-v1.6.5.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.3', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.5', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1178,12 +1181,13 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.4/Rivo-v1.6.4.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.5/Rivo-v1.6.5.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.5.ipa',
   '/downloads/Rivo-v1.6.4.ipa',
   '/downloads/Rivo-v1.6.3.ipa',
   '/downloads/Rivo-v1.6.2.ipa',
@@ -1195,6 +1199,7 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.ipa');
   const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.ipa');
   const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.ipa');
   const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.ipa');
@@ -1202,6 +1207,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV165Path)) {
+    return res.download(localV165Path, 'Rivo-v1.6.5.ipa');
+  }
   if (fs.existsSync(localV164Path)) {
     return res.download(localV164Path, 'Rivo-v1.6.4.ipa');
   }
@@ -1221,14 +1229,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.6.4.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.6.5.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.4', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.5', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1254,7 +1262,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.3/Rivo-v1.6.3.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.5/Rivo-v1.6.5.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -4086,8 +4094,28 @@ app.get('/api/tracks', async (req, res) => {
       audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
     };
     if (req.query.album) {
-      const albName = req.query.album.trim().replace(/^album-/i, '').replace(/[-_]/g, ' ');
-      filter.album = new RegExp(`^${albName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+      const rawAlbName = req.query.album.trim().replace(/^album-/i, '');
+      const escaped = rawAlbName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const flexiblePattern = escaped.replace(/[-_\s]+/g, '[-_\\s]*');
+
+      // Also check if this album exists in Album model and has trackIds
+      const foundAlbum = await Album.findOne({
+        $or: [
+          { name: new RegExp(`^${flexiblePattern}$`, 'i') },
+          { id: rawAlbName }
+        ]
+      }).lean();
+
+      if (foundAlbum && Array.isArray(foundAlbum.trackIds) && foundAlbum.trackIds.length > 0) {
+        const validIds = foundAlbum.trackIds.filter(id => mongoose.isValidObjectId(id));
+        filter.$or = [
+          { album: new RegExp(`^${flexiblePattern}$`, 'i') },
+          { _id: { $in: validIds } },
+          { id: { $in: foundAlbum.trackIds } }
+        ];
+      } else {
+        filter.album = new RegExp(`^${flexiblePattern}$`, 'i');
+      }
     }
     if (req.query.artist) {
       filter.artist = new RegExp(`^${req.query.artist.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
@@ -5650,6 +5678,12 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
   try {
     const { currentTrack, seedTracks = [], limit = 6, followedArtists = [] } = req.body;
     const allSeeds = [currentTrack, ...seedTracks].filter(Boolean);
+    const checkTrackQuran = (t) => {
+      if (!t) return false;
+      if (t.isQuran === true) return true;
+      return Boolean(isQuranContent(t.title, t.artist, t.album, t.genre, t.description));
+    };
+    const isQuranSeed = Boolean(allSeeds.some(s => checkTrackQuran(s)));
 
     // 1. Try Gemini AI recommendations first if key exists
     let aiRecs = await getGeminiMusicSuggestions(allSeeds, '', followedArtists);
@@ -5662,11 +5696,15 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
           const q = `${item.title} ${item.artist}`;
           const searchResults = await searchTracksInternal(q);
           if (searchResults && searchResults.length > 0) {
-            return {
-              ...searchResults[0],
-              isSmartShuffle: true,
-              smartReason: item.reason || 'AI Smart Vibe Match'
-            };
+            const first = searchResults[0];
+            const isQ = checkTrackQuran(first);
+            if (isQuranSeed ? isQ : !isQ) {
+              return {
+                ...first,
+                isSmartShuffle: true,
+                smartReason: item.reason || 'AI Smart Vibe Match'
+              };
+            }
           }
           return null;
         })
@@ -5683,27 +5721,30 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
       const artists = [...new Set(allSeeds.map(t => t.artist).filter(Boolean))];
       const titles = allSeeds.map(t => t.title).filter(Boolean);
 
-      // Search DB for tracks by similar artists
+      // Search DB for tracks by similar artists, strictly obeying Quran / Music boundary
+      const quranFilter = isQuranSeed ? { $or: [{ isQuran: true }, { genre: 'Quran' }] } : { isQuran: { $ne: true } };
       const dbMatches = await Track.find({
+        ...quranFilter,
         $or: [
           { artist: { $in: artists } },
-          { genre: allSeeds[0]?.genre || 'Pop' }
+          { genre: allSeeds[0]?.genre || (isQuranSeed ? 'Quran' : 'Pop') }
         ]
-      }).limit(10).lean();
+      }).limit(15).lean();
 
       const existingIds = new Set(allSeeds.map(t => String(t.id || t._id)));
       for (const t of dbMatches) {
-        if (!existingIds.has(String(t._id)) && tracks.length < limit) {
+        const isQ = checkTrackQuran(t);
+        if ((isQuranSeed ? isQ : !isQ) && !existingIds.has(String(t._id)) && tracks.length < limit) {
           tracks.push({
             id: String(t._id),
             title: t.title,
             artist: t.artist,
-            album: t.album || 'Single',
+            album: t.album || (isQuranSeed ? 'Quran' : 'Single'),
             cover: t.cover,
             audioUrl: t.audioUrl,
             duration: t.duration || 180,
             isSmartShuffle: true,
-            smartReason: 'Matching Artist & Genre',
+            smartReason: isQuranSeed ? 'Quran Recitation' : 'Matching Artist & Genre',
             source: 'Rivo'
           });
         }
@@ -5716,11 +5757,12 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
           const extTracks = await searchTracksInternal(topArtist);
           if (extTracks && extTracks.length > 0) {
             for (const t of extTracks) {
-              if (!existingIds.has(String(t.id)) && !tracks.some(x => x.id === t.id) && tracks.length < limit) {
+              const isQ = checkTrackQuran(t);
+              if ((isQuranSeed ? isQ : !isQ) && !existingIds.has(String(t.id)) && !tracks.some(x => x.id === t.id) && tracks.length < limit) {
                 tracks.push({
                   ...t,
                   isSmartShuffle: true,
-                  smartReason: 'Artist Top Track'
+                  smartReason: isQuranSeed ? 'Quran Recitation' : 'Artist Top Track'
                 });
               }
             }
@@ -5728,6 +5770,12 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
         } catch {}
       }
     }
+
+    // Strict final filter ensuring 100% boundary isolation
+    tracks = tracks.filter(t => {
+      const isQ = checkTrackQuran(t);
+      return isQuranSeed ? isQ : !isQ;
+    });
 
     res.json({ success: true, tracks });
   } catch (e) {
@@ -5740,6 +5788,16 @@ app.post('/api/ai/smart-shuffle', async (req, res) => {
 app.post('/api/ai/recommendations', async (req, res) => {
   try {
     const { playlistName, seedTracks = [], prompt = '' } = req.body;
+    const checkTrackQuran = (t) => {
+      if (!t) return false;
+      if (t.isQuran === true) return true;
+      return Boolean(isQuranContent(t.title, t.artist, t.album, t.genre, t.description));
+    };
+    const isQuranSeed = Boolean(
+      (playlistName && /قرآن|قران|سورة|سوره|تلاوة|تلاوه|مصحف|quran/i.test(playlistName)) ||
+      seedTracks.some(s => checkTrackQuran(s))
+    );
+
     let aiRecs = await getGeminiMusicSuggestions(seedTracks, prompt || `Songs that fit "${playlistName || 'My Playlist'}"`);
     let recommendations = [];
 
@@ -5749,10 +5807,14 @@ app.post('/api/ai/recommendations', async (req, res) => {
           const q = `${item.title} ${item.artist}`;
           const searchResults = await searchTracksInternal(q);
           if (searchResults && searchResults.length > 0) {
-            return {
-              ...searchResults[0],
-              aiReason: item.reason || 'Perfect match for playlist vibe'
-            };
+            const first = searchResults[0];
+            const isQ = checkTrackQuran(first);
+            if (isQuranSeed ? isQ : !isQ) {
+              return {
+                ...first,
+                aiReason: item.reason || 'Perfect match for playlist vibe'
+              };
+            }
           }
           return null;
         })
@@ -5767,17 +5829,23 @@ app.post('/api/ai/recommendations', async (req, res) => {
     if (recommendations.length === 0) {
       // Internal heuristic fallback
       const artists = [...new Set(seedTracks.map(t => t.artist).filter(Boolean))];
-      const dbTracks = await Track.find({ artist: { $in: artists } }).limit(6).lean();
-      recommendations = dbTracks.map(t => ({
-        id: String(t._id),
-        title: t.title,
-        artist: t.artist,
-        cover: t.cover,
-        audioUrl: t.audioUrl,
-        duration: t.duration || 180,
-        aiReason: 'Similar to artists in your playlist'
-      }));
+      const quranFilter = isQuranSeed ? { $or: [{ isQuran: true }, { genre: 'Quran' }] } : { isQuran: { $ne: true } };
+      const dbTracks = await Track.find({ ...quranFilter, artist: { $in: artists } }).limit(6).lean();
+      recommendations = dbTracks
+        .filter(t => (isQuranSeed ? checkTrackQuran(t) : !checkTrackQuran(t)))
+        .map(t => ({
+          id: String(t._id),
+          title: t.title,
+          artist: t.artist,
+          cover: t.cover,
+          audioUrl: t.audioUrl,
+          duration: t.duration || 180,
+          aiReason: isQuranSeed ? 'Recommended Quran Recitation' : 'Similar to artists in your playlist'
+        }));
     }
+
+    // Strict final filter
+    recommendations = recommendations.filter(t => (isQuranSeed ? checkTrackQuran(t) : !checkTrackQuran(t)));
 
     res.json({ success: true, recommendations });
   } catch (e) {
@@ -6255,6 +6323,8 @@ io.on('connection', (socket) => {
           updatedAt: room.updatedAt,
           initiatorId: initiatorId || socket.id
         });
+        io.to(roomCode).emit('jam:room_updated', room);
+        io.to(roomCode).emit('jam_updated', room);
       } else {
         // Broadcast play/seek state to other participants
         socket.to(roomCode).emit('jam:on_play_state_changed', {
@@ -6264,10 +6334,8 @@ io.on('connection', (socket) => {
           updatedAt: room.updatedAt,
           initiatorId: initiatorId || socket.id
         });
-      }
-
-      if (trackChanged) {
         io.to(roomCode).emit('jam:room_updated', room);
+        io.to(roomCode).emit('jam_updated', room);
       }
     }
   });
@@ -6547,7 +6615,12 @@ io.on('connection', (socket) => {
 
           currentRoom.members = currentRoom.members.filter(m => m.socketId !== socket.id && (!member.id || m.id !== member.id));
           if (currentRoom.members.length === 0) {
-            delete jamRooms[code];
+            // Keep room alive for 5 minutes before deleting in case users reconnect
+            setTimeout(() => {
+              if (jamRooms[code] && (!jamRooms[code].members || jamRooms[code].members.length === 0)) {
+                delete jamRooms[code];
+              }
+            }, 300000);
           } else {
             if (currentRoom.hostId === socket.id || !currentRoom.members.some(m => m.socketId === currentRoom.hostId)) {
               const activeMembers = currentRoom.members.filter(m => !m.isDisconnected);
@@ -6557,8 +6630,9 @@ io.on('connection', (socket) => {
               currentRoom.hostId = newHost.socketId;
             }
             io.to(code).emit('jam:room_updated', currentRoom);
+            io.to(code).emit('jam_updated', currentRoom);
           }
-        }, 30000); // 30 second grace period
+        }, 120000); // 2 minute grace period to prevent accidental kicks on backgrounding/network switch
 
         jamDisconnectTimeouts.set(key, timer);
       }

@@ -259,6 +259,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   });
 
   const [jamSession, setJamSessionState] = useState(null);
+  const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
 
   const repeatModeRef     = useRef(repeatMode);
   const isRepeatRef       = useRef(isRepeat);
@@ -2038,14 +2039,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
         });
 
-        // Cross-Device Connect Sync (Requirement 15)
+        // Cross-Device Connect Sync (Item 4: Non-intrusive status notification)
         socket.off('device:remote_playing');
         socket.on('device:remote_playing', (remoteSession) => {
-          if (remoteSession && isPlayingRef.current) {
-            if (audioRef.current) {
-              audioRef.current.pause();
-            }
-            setIsPlaying(false);
+          if (remoteSession && remoteSession.track) {
+            setRemoteDevicePlayback(remoteSession);
+          } else {
+            setRemoteDevicePlayback(null);
           }
         });
       }
@@ -2204,6 +2204,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     jamSession, setJamSync,
     syncRemotePlayState,
     addToJamQueue, removeFromJamQueue, reorderJamQueue,
+    remoteDevicePlayback,
   };
 
   return (

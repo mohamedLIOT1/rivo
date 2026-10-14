@@ -1911,7 +1911,7 @@ function AppContent() {
       </div>
 
       {/* ── Now Playing Bar ── */}
-      {currentTrack && (
+      {(currentTrack || audio?.remoteDevicePlayback?.track) && (
         <MiniPlayer
           currentTrack={currentTrack}
           isPlaying={isPlaying}
