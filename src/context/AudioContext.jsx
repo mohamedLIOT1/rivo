@@ -216,7 +216,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   try {
     userCtx = useUser() || {};
   } catch {}
-  const { likedTrackIds = [], toggleLike } = userCtx;
+  const { currentUser = null, likedTrackIds = [], toggleLike } = userCtx;
 
   const [currentTrack, setCurrentTrack] = useState(null);
   const [currentQueue, setCurrentQueue] = useState([]);
@@ -306,6 +306,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const streamAbortControllerRef = useRef(null);
   const lastPauseTimeRef  = useRef(0);
   const stallRecoveryTimerRef = useRef(null);
+  const isSmartMoodQueueRef = useRef(false);
+  const playedSmartSongIdsRef = useRef(new Set());
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
   useEffect(() => { isRepeatRef.current     = isRepeat;    }, [isRepeat]);
   useEffect(() => { isShuffleRef.current    = isShuffle;   }, [isShuffle]);
@@ -997,7 +1001,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
   }, [togglePlay]);
 
-  const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null) => {
+  const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null, isSmartMood = false) => {
     if (!track) return;
 
     // Track daily listening seed for dynamic personalized mixes
@@ -1083,12 +1087,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
       if (sanitized.length > 0) {
         resolvedQueue = sanitized;
+        currentQueueRef.current = sanitized;
         setCurrentQueue(sanitized);
       } else {
         const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
         resolvedQueue = pool.length > 0 ? pool.slice(0, 30) : [trackToPlay];
+        currentQueueRef.current = resolvedQueue;
         setCurrentQueue(resolvedQueue);
       }
+    }
+
+    if (isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue) {
+      isSmartMoodQueueRef.current = true;
+    } else if (newQueue) {
+      isSmartMoodQueueRef.current = false;
     } else {
       const curQ = currentQueueRef.current;
       const targetId = String(trackToPlay.id || trackToPlay._id || '');
@@ -1527,6 +1539,75 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Immediately stop current audio only if NOT a seamless handoff
     if (audioRef.current) audioRef.current.pause();
 
+    const cur = currentTrackRef.current;
+    const curId = String(cur?.id || cur?._id || '');
+    let curIdx = currentQueueIndexRef.current;
+    if (curIdx < 0 || curIdx >= activeList.length || String(activeList[curIdx]?.id || activeList[curIdx]?._id) !== curId) {
+      curIdx = curId ? activeList.findIndex(t => String(t.id || t._id) === curId) : -1;
+    }
+
+    // ── SMART MOOD / TASTE 10-TRACK QUEUE ROTATION ──
+    const isSmartQueue = isSmartMoodQueueRef.current || activeList.some(t => t.isSmartMoodQueue);
+    if (isSmartQueue) {
+      // 1. Advance to next track within the current 10-track set
+      if (curIdx >= 0 && curIdx < activeList.length - 1) {
+        const nextIdx = curIdx + 1;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx, true);
+        setIsPlaying(true);
+        return;
+      }
+
+      // 2. All 10 tracks finished! Exclude played tracks and fetch 10 BRAND NEW tracks matching current mood & taste!
+      activeList.forEach(t => playedSmartSongIdsRef.current.add(String(t.id || t._id)));
+
+      let followed = [];
+      try {
+        const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+        if (raw) followed = JSON.parse(raw);
+      } catch {}
+
+      const allAvailable = tracksRef.current && tracksRef.current.length > 0 ? tracksRef.current : activeList;
+      let next10 = getSmartTasteAndMoodTracks({
+        allTracks: allAvailable,
+        currentUser: currentUserRef.current,
+        followedArtists: followed,
+        likedTrackIds: likedTrackIds || [],
+        excludeTrackIds: playedSmartSongIdsRef.current,
+        limit: 10,
+      });
+
+      // If library runs out of unplayed tracks, reset history except current track and fetch again
+      if (!next10 || next10.length === 0) {
+        playedSmartSongIdsRef.current = new Set(curId ? [curId] : []);
+        next10 = getSmartTasteAndMoodTracks({
+          allTracks: allAvailable,
+          currentUser: currentUserRef.current,
+          followedArtists: followed,
+          likedTrackIds: likedTrackIds || [],
+          excludeTrackIds: playedSmartSongIdsRef.current,
+          limit: 10,
+        });
+      }
+
+      if (next10 && next10.length > 0) {
+        const tagged = next10.map(t => ({ ...t, isSmartMoodQueue: true }));
+        let newQueue = tagged;
+        if (isShuffleRef.current && tagged.length > 1) {
+          const [first, ...rest] = tagged;
+          newQueue = [first, ...shuffleArray(rest)];
+        }
+        currentQueueRef.current = newQueue;
+        setCurrentQueue(newQueue);
+        currentQueueIndexRef.current = 0;
+        setCurrentQueueIndex(0);
+        playTrack(newQueue[0], newQueue, false, 0, true);
+        setIsPlaying(true);
+        return;
+      }
+    }
+
     const isSmart = isShuffleRef.current === 'smart';
     if (isSmart) {
       const cur = currentTrackRef.current;
@@ -1681,35 +1762,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
       } else {
         let targetList = activeList;
-
-        // Auto-generate next 10 mood & taste tracks if running a smart cassette queue
-        const hasSmartQueue = activeList.some(t => t.isSmartMoodQueue);
-        if (hasSmartQueue && idx >= activeList.length - 2 && !isOfflineMode) {
-          let followed = [];
-          try {
-            const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
-            if (raw) followed = JSON.parse(raw);
-          } catch {}
-
-          const existingIds = new Set(activeList.map(t => String(t.id || t._id)));
-          const next10 = getSmartTasteAndMoodTracks({
-            allTracks: tracksRef.current || [],
-            currentUser,
-            followedArtists: followed,
-            likedTrackIds: currentUser?.likedTracks || [],
-            excludeTrackIds: existingIds,
-            limit: 10,
-          });
-
-          if (next10.length > 0) {
-            const tagged = next10.map(t => ({ ...t, isSmartMoodQueue: true }));
-            const updated = [...activeList, ...tagged];
-            currentQueueRef.current = updated;
-            setCurrentQueue(updated);
-            targetList = updated;
-          }
-        }
-
         let nextIdx = (idx + 1) % targetList.length;
         if (targetList.length <= 1 && tracksRef.current && tracksRef.current.length > 1) {
           const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));

@@ -35,6 +35,8 @@ export const AudioProvider = ({ children }) => {
   const historyStackRef = useRef([]);
   const isHistoryNavRef = useRef(false);
   const isSeekingRef = useRef(false);
+  const isSmartMoodQueueRef = useRef(false);
+  const playedSmartSongIdsRef = useRef(new Set());
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -518,8 +520,14 @@ export const AudioProvider = ({ children }) => {
     };
   }, [currentTrack?._id, currentTrack?.id, currentTrack?.title, isOffline]);
 
-  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0, isRemote = false) => {
+  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0, isRemote = false, isSmartMood = false) => {
     if (!track) return;
+
+    if (isSmartMood || (Array.isArray(trackList) && trackList.some(t => t.isSmartMoodQueue)) || track?.isSmartMoodQueue) {
+      isSmartMoodQueueRef.current = true;
+    } else if (Array.isArray(trackList) && trackList.length > 0) {
+      isSmartMoodQueueRef.current = false;
+    }
 
     if (!isHistoryNavRef.current && currentTrackRef.current) {
       const curId = currentTrackRef.current._id || currentTrackRef.current.id;
@@ -812,23 +820,47 @@ export const AudioProvider = ({ children }) => {
       i = q.findIndex(t => String(t.title || '').trim().toLowerCase() === currentTitle);
     }
 
-    // 2. Auto-generate next 10 taste & mood tracks if running smart queue or nearing end
-    const hasSmartQueue = q.some(t => t.isSmartMoodQueue);
-    if ((hasSmartQueue || isShuffle) && i >= q.length - 2 && !isOfflineRef.current) {
-      const existingIds = new Set(q.map(t => String(t._id || t.id)));
-      const next10 = getSmartTasteAndMoodTracks({
-        allTracks: INITIAL_TRACKS,
+    const isSmartQueue = isSmartMoodQueueRef.current || q.some(t => t.isSmartMoodQueue);
+    if (isSmartQueue) {
+      if (i >= 0 && i < q.length - 1) {
+        playTrack(q[i + 1], q, false, 0, false, true);
+        return;
+      }
+
+      // Reached the end of the 10 songs! Refresh and fetch 10 BRAND NEW tracks matching current mood & taste!
+      q.forEach(t => playedSmartSongIdsRef.current.add(String(t._id || t.id)));
+      const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0) ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : q);
+      let next10 = getSmartTasteAndMoodTracks({
+        allTracks: pool,
         currentUser,
         followedArtists: currentUser?.following || [],
         likedTrackIds,
-        excludeTrackIds: existingIds,
+        excludeTrackIds: playedSmartSongIdsRef.current,
         limit: 10,
       });
-      if (next10.length > 0) {
+
+      if (!next10 || next10.length === 0) {
+        playedSmartSongIdsRef.current = new Set(currentId ? [currentId] : []);
+        next10 = getSmartTasteAndMoodTracks({
+          allTracks: pool,
+          currentUser,
+          followedArtists: currentUser?.following || [],
+          likedTrackIds,
+          excludeTrackIds: playedSmartSongIdsRef.current,
+          limit: 10,
+        });
+      }
+
+      if (next10 && next10.length > 0) {
         const tagged = next10.map(t => ({ ...t, isSmartMoodQueue: true }));
-        const newQueue = [...q, ...tagged];
-        setQueue(newQueue);
-        q = newQueue;
+        let newQ = tagged;
+        if (isShuffle && tagged.length > 1) {
+          const [first, ...rest] = tagged;
+          newQ = [first, ...[...rest].sort(() => Math.random() - 0.5)];
+        }
+        setQueue(newQ);
+        playTrack(newQ[0], newQ, false, 0, false, true);
+        return;
       }
     }
 

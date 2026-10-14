@@ -1065,35 +1065,35 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.0',
-  releaseNotes: 'Android adaptive icon safe zone fix, clean splash launch without logo, auto auth modal on launch, mini player in album/artist modals & audio playback fix, people & listeners search, playlist public/private control & queue playlist button.',
+  version: '1.6.1',
+  releaseNotes: 'Jam real-time auto-synchronization across all devices, 10-track taste & mood cassette rotation algorithm, high-speed CDN downloads, embedded desktop icon & WebView2 fix.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.0',
+      version: '1.6.1',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
+      notes: 'Embedded official icon, self-contained launcher, zero missing DLL errors.'
     },
     android: {
-      version: '1.6.0',
-      build: 28,
+      version: '1.6.1',
+      build: 29,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.0.apk',
-      directFile: 'Rivo-v1.6.0.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.1.apk',
+      directFile: 'Rivo-v1.6.1.apk',
       mandatory: false,
-      notes: 'Android adaptive icon safe zone fix, clean splash launch, auth modal on launch, mini player in modals, ExoPlayer audio fix, people search, playlist public/private control & queue playlist button.'
+      notes: 'Automatic Jam playback sync, 10-track taste and mood algorithm, ultra-fast download streaming.'
     },
     ios: {
-      version: '1.6.0',
-      build: 28,
+      version: '1.6.1',
+      build: 29,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.0.ipa',
-      directFile: 'Rivo-v1.6.0.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.1.ipa',
+      directFile: 'Rivo-v1.6.1.ipa',
       mandatory: false,
-      notes: 'Clean splash launch, auth modal on launch, mini player in modals, people search, playlist public/private control & queue playlist button.'
+      notes: 'Automatic Jam playback sync, 10-track taste and mood algorithm, smooth audio handoff.'
     }
   }
 };
@@ -1105,6 +1105,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.1.apk',
   '/downloads/Rivo-v1.6.0.apk',
   '/downloads/Rivo-v1.5.9.apk',
   '/downloads/Rivo-v1.5.8.apk',
@@ -1113,9 +1114,13 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.apk');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV161Path)) {
+    return res.download(localV161Path, 'Rivo-v1.6.1.apk');
+  }
   if (fs.existsSync(localVersionedPath)) {
     return res.download(localVersionedPath, 'Rivo-v1.6.0.apk');
   }
@@ -1162,6 +1167,7 @@ app.get([
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.1.ipa',
   '/downloads/Rivo-v1.6.0.ipa',
   '/downloads/Rivo-v1.5.9.ipa',
   '/downloads/Rivo-v1.5.8.ipa',
@@ -1169,9 +1175,13 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.ipa');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV161Path)) {
+    return res.download(localV161Path, 'Rivo-v1.6.1.ipa');
+  }
   if (fs.existsSync(localVersionedPath)) {
     return res.download(localVersionedPath, 'Rivo-v1.6.0.ipa');
   }
