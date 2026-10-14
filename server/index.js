@@ -1067,12 +1067,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.3',
-  releaseNotes: 'Fixed Jam audio sync drift and 0:00 restart, responsive tablet landscape Jam modal, click-to-profile Jam listeners, automatic "Added Links" playlist, mobile playlist creation & Spotify/YouTube import, mobile song search by name, optimized Quran pagination, fuzzy search normalization (e.g. legecy / lege-cy), Placebo album track fix with Queue All & Download & Save, fixed Discord presence sync toggle, mobile hardware back button stack navigation & pull-to-refresh, iOS chat notifications, and cross-device Spotify Connect playback sync.',
+  version: '1.6.4',
+  releaseNotes: "Fixed profile screen crash (Property 'useEffect' doesn't exist) on mobile apps, along with Jam sync, cross-device connect sync, and playlist improvements.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.3',
+      version: '1.6.4',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1080,22 +1080,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Windows system tray balloon notifications, embedded icon, cross-device connect sync, zero missing DLL errors.'
     },
     android: {
-      version: '1.6.3',
-      build: 32,
+      version: '1.6.4',
+      build: 33,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.3.apk',
-      directFile: 'Rivo-v1.6.3.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.4.apk',
+      directFile: 'Rivo-v1.6.4.apk',
       mandatory: false,
-      notes: 'New playlist creation & link import, song search by name, Quran screen optimization, hardware back button navigation, pull-to-refresh, Placebo album fix, cross-device sync.'
+      notes: 'Fixed profile screen crash, new playlist creation & link import, song search by name, Quran screen optimization, hardware back button navigation, pull-to-refresh, Placebo album fix, cross-device sync.'
     },
     ios: {
-      version: '1.6.3',
-      build: 32,
+      version: '1.6.4',
+      build: 33,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.3.ipa',
-      directFile: 'Rivo-v1.6.3.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.4.ipa',
+      directFile: 'Rivo-v1.6.4.ipa',
       mandatory: false,
-      notes: 'Native iOS foreground & background chat banner notifications with sound, hardware back stack, Jam audio zero-drift sync, cross-device sync.'
+      notes: 'Fixed profile screen crash, native iOS foreground & background chat banner notifications with sound, hardware back stack, Jam audio zero-drift sync, cross-device sync.'
     }
   }
 };
@@ -1107,6 +1107,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.4.apk',
   '/downloads/Rivo-v1.6.3.apk',
   '/downloads/Rivo-v1.6.2.apk',
   '/downloads/Rivo-v1.6.1.apk',
@@ -1118,12 +1119,16 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.apk');
   const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.apk');
   const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.apk');
   const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.apk');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV164Path)) {
+    return res.download(localV164Path, 'Rivo-v1.6.4.apk');
+  }
   if (fs.existsSync(localV163Path)) {
     return res.download(localV163Path, 'Rivo-v1.6.3.apk');
   }
@@ -1173,12 +1178,13 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.3/Rivo-v1.6.3.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.4/Rivo-v1.6.4.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.4.ipa',
   '/downloads/Rivo-v1.6.3.ipa',
   '/downloads/Rivo-v1.6.2.ipa',
   '/downloads/Rivo-v1.6.1.ipa',
@@ -1189,12 +1195,16 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.ipa');
   const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.ipa');
   const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.ipa');
   const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.ipa');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV164Path)) {
+    return res.download(localV164Path, 'Rivo-v1.6.4.ipa');
+  }
   if (fs.existsSync(localV163Path)) {
     return res.download(localV163Path, 'Rivo-v1.6.3.ipa');
   }
@@ -1211,14 +1221,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.6.3.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.6.4.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.3', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.4', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
