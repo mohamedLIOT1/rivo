@@ -107,7 +107,37 @@ export const AudioProvider = ({ children }) => {
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
     if (socket !== undefined) {
+      if (jamSyncRef.current.socket && jamSyncRef.current.socket !== socket) {
+        jamSyncRef.current.socket.off('jam:get_host_time');
+        jamSyncRef.current.socket.off('device:remote_playing');
+      }
       jamSyncRef.current.socket = socket;
+      if (socket) {
+        socket.off('jam:get_host_time');
+        socket.on('jam:get_host_time', ({ requesterSocketId }) => {
+          if (jamSyncRef.current.jamSession?.isHost) {
+            socket.emit('jam:report_host_time', {
+              roomCode: jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode,
+              currentTime: playbackStatusRef.current?.currentTime || 0,
+              isPlaying: isPlayingRef.current,
+              currentTrack: currentTrackRef.current,
+              requesterSocketId
+            });
+          }
+        });
+
+        // Cross-device connect sync (Requirement 15)
+        socket.off('device:remote_playing');
+        socket.on('device:remote_playing', (remoteSession) => {
+          if (remoteSession && isPlayingRef.current) {
+            if (soundRef.current) {
+              soundRef.current.pauseAsync().catch(() => {});
+            }
+            isPlayingRef.current = false;
+            setIsPlaying(false);
+          }
+        });
+      }
     }
     if (newJamSession !== undefined) {
       jamSyncRef.current.jamSession = newJamSession;
@@ -706,6 +736,16 @@ export const AudioProvider = ({ children }) => {
         }
       }
 
+      if (!isRemote && jamSyncRef.current.socket) {
+        jamSyncRef.current.socket.emit('device:playback_state', {
+          isPlaying: true,
+          track,
+          currentTime: safeTargetSec,
+          deviceType: 'mobile',
+          deviceName: Platform.OS === 'ios' ? 'iPhone' : 'Android'
+        });
+      }
+
       try {
         const isLikedTrack = track ? likedTrackIds.some(id => String(id) === String(track._id || track.id)) : false;
         showMediaNotification({
@@ -778,6 +818,16 @@ export const AudioProvider = ({ children }) => {
           initiatorId: jamSyncRef.current.socket.id,
         });
       }
+    }
+
+    if (!isRemote && jamSyncRef.current.socket) {
+      jamSyncRef.current.socket.emit('device:playback_state', {
+        isPlaying: nextPlaying,
+        track: currentTrackRef.current,
+        currentTime: curPos || 0,
+        deviceType: 'mobile',
+        deviceName: Platform.OS === 'ios' ? 'iPhone' : 'Android'
+      });
     }
   };
 
@@ -1020,7 +1070,9 @@ export const AudioProvider = ({ children }) => {
     let targetTime = Number(syncTime) || 0;
     if (syncPlaying && updatedAt) {
       const elapsed = (Date.now() - updatedAt) / 1000;
-      if (elapsed > 0 && elapsed < 3600) {
+      if (targetTime <= 2 && elapsed > 2) {
+        targetTime = Math.min(2, targetTime);
+      } else if (elapsed > 0 && elapsed < 3600) {
         targetTime += elapsed;
       }
     }

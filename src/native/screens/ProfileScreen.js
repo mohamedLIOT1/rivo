@@ -51,9 +51,26 @@ export default function ProfileScreen({
   onSelectPlaylist,
   onOpenFullPlayer,
 }) {
-  const { currentUser, logout, playlists = [], likedTrackIds = [], tracks: userTracks = [] } = useUser();
+  const { currentUser, logout, playlists = [], likedTrackIds = [], tracks: userTracks = [], token } = useUser();
   const { downloadedTracks = [], playPlaylist } = useAudioPlayer();
   const { isDark } = useTheme();
+
+  const [discordStatus, setDiscordStatus] = useState(null);
+
+  useEffect(() => {
+    if (!token) {
+      setDiscordStatus(null);
+      return;
+    }
+    fetch(`${API_BASE_URL}/api/discord/status`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d && !d.error) setDiscordStatus(d);
+      })
+      .catch(() => {});
+  }, [token, currentUser]);
 
   const safeLikedCount = Array.isArray(likedTrackIds) ? likedTrackIds.length : 0;
   const safeCratesCount = Array.isArray(playlists) ? playlists.length : 0;
@@ -590,7 +607,11 @@ export default function ProfileScreen({
       )}
 
       {/* ── DISCORD RICH PRESENCE INTEGRATION CARD ── */}
-      <View style={styles.discordCard}>
+      <TouchableOpacity
+        style={styles.discordCard}
+        onPress={() => onOpenSettings && onOpenSettings()}
+        activeOpacity={0.85}
+      >
         <View style={styles.discordHeader}>
           <View style={styles.discordIconWrap}>
             <Radio size={16} color="#ffffff" strokeWidth={2.5} />
@@ -598,18 +619,37 @@ export default function ProfileScreen({
           <View style={{ flex: 1 }}>
             <Text style={styles.discordTitle}>DISCORD RICH PRESENCE</Text>
             <Text style={styles.discordSub}>
-              {currentUser ? 'Live track sync enabled' : 'Connect account to broadcast tracks'}
+              {discordStatus?.linked
+                ? (discordStatus.enabled ? `@${discordStatus.username} • Live sync active` : `@${discordStatus.username} • Sync disabled`)
+                : 'Connect Discord account to broadcast tracks'}
             </Text>
           </View>
-          <View style={styles.discordPulseWrap}>
-            <View style={styles.discordPulseDot} />
-            <Text style={styles.discordPulseText}>SYNC ON</Text>
+          <View style={[
+            styles.discordPulseWrap,
+            !(discordStatus?.linked && discordStatus?.enabled) && { backgroundColor: 'rgba(156,163,175,0.2)' }
+          ]}>
+            <View style={[
+              styles.discordPulseDot,
+              !(discordStatus?.linked && discordStatus?.enabled) && { backgroundColor: '#9ca3af' }
+            ]} />
+            <Text style={[
+              styles.discordPulseText,
+              !(discordStatus?.linked && discordStatus?.enabled) && { color: '#9ca3af' }
+            ]}>
+              {discordStatus?.linked
+                ? (discordStatus.enabled ? 'SYNC ON' : 'SYNC OFF')
+                : 'NOT LINKED'}
+            </Text>
           </View>
         </View>
         <Text style={styles.discordDesc}>
-          Songs playing on this device automatically sync to your Discord profile activity as "Listening to Rivo".
+          {discordStatus?.linked
+            ? (discordStatus.enabled
+                ? 'Songs playing on this device automatically sync to your Discord profile activity.'
+                : 'Discord sync is currently paused. Tap here to open settings and enable.')
+            : 'Tap here to link your Discord account and broadcast live listening activity.'}
         </Text>
-      </View>
+      </TouchableOpacity>
 
       {/* ── USER PLAYLISTS SUMMARY ── */}
       {playlists.length > 0 && (

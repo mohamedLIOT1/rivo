@@ -29,6 +29,7 @@ import {
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -47,8 +48,9 @@ export default function AlbumDetailModal({
   onSelectArtist,
   onOpenFullPlayer,
 }) {
-  const { playTrack, currentTrack, isPlaying, addToQueue, downloadedTracks = [], downloadTrack } = useAudioPlayer();
-  const { likedTrackIds = [], toggleLikeTrack } = useUser();
+  const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadPlaylist } = useAudioPlayer();
+  const { token, syncUserData, likedTrackIds = [], toggleLikeTrack } = useUser();
+  const { showToast } = useToast();
   const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaved, setIsSaved] = useState(false);
@@ -84,9 +86,12 @@ export default function AlbumDetailModal({
     }
     let isMounted = true;
     const albId = album._id || album.id;
-    const targetUrl = albId && String(albId).length === 24
+    const cleanId = albId ? String(albId).replace(/^album-/, '') : '';
+    const targetUrl = (albId && String(albId).length === 24)
       ? `${API_BASE_URL}/api/albums/${albId}`
-      : `${API_BASE_URL}/api/tracks?album=${encodeURIComponent(album.name || '')}`;
+      : (cleanId && cleanId.length === 24)
+        ? `${API_BASE_URL}/api/albums/${cleanId}`
+        : `${API_BASE_URL}/api/tracks?album=${encodeURIComponent(album.name || '')}`;
 
     fetch(targetUrl)
       .then((r) => (r.ok ? r.json() : null))
@@ -141,8 +146,37 @@ export default function AlbumDetailModal({
   };
 
   const handleDownloadAll = () => {
-    if (downloadTrack && effectiveAlbumTracks.length > 0) {
-      effectiveAlbumTracks.forEach((t) => downloadTrack(t));
+    if (handleDownloadPlaylist && effectiveAlbumTracks.length > 0) {
+      handleDownloadPlaylist(effectiveAlbumTracks);
+      showToast(`Downloading ${effectiveAlbumTracks.length} tracks offline...`, 'info');
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (!album) return;
+    const nextSaved = !isSaved;
+    setIsSaved(nextSaved);
+    try {
+      const albId = album._id || album.id;
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(albId)}/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: album.name || album.title,
+          cover: album.cover || album.coverUrl,
+          artist: album.artist,
+          isAlbum: true,
+        }),
+      });
+      if (res.ok) {
+        showToast(nextSaved ? 'Saved album to your library!' : 'Removed from saved albums', 'success');
+        if (syncUserData) await syncUserData();
+      }
+    } catch {
+      showToast('Failed to update album in library', 'error');
     }
   };
 
@@ -249,7 +283,9 @@ export default function AlbumDetailModal({
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => {
-                  if (addToQueue && effectiveAlbumTracks.length > 0) addToQueue(effectiveAlbumTracks);
+                  if (addMultipleToQueue && effectiveAlbumTracks.length > 0) {
+                    addMultipleToQueue(effectiveAlbumTracks);
+                  }
                 }}
                 activeOpacity={0.8}
               >
@@ -260,7 +296,7 @@ export default function AlbumDetailModal({
               {/* Save to Library Button */}
               <TouchableOpacity
                 style={[styles.actionBtn, isSaved && styles.actionBtnActive]}
-                onPress={() => setIsSaved(!isSaved)}
+                onPress={handleToggleSave}
                 activeOpacity={0.8}
               >
                 {isSaved ? (

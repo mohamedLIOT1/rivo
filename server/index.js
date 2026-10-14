@@ -1067,35 +1067,35 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.2',
-  releaseNotes: 'Fixed people search speed & lag, instant user profile playlist viewer, unified brutalist mobile profile, fixed 0-track albums, Jam host pause sync, exact notification time tracking on Android/iOS, and chat notifications across iOS, Android and Desktop (.exe).',
+  version: '1.6.3',
+  releaseNotes: 'Fixed Jam audio sync drift and 0:00 restart, responsive tablet landscape Jam modal, click-to-profile Jam listeners, automatic "Added Links" playlist, mobile playlist creation & Spotify/YouTube import, mobile song search by name, optimized Quran pagination, fuzzy search normalization (e.g. legecy / lege-cy), Placebo album track fix with Queue All & Download & Save, fixed Discord presence sync toggle, mobile hardware back button stack navigation & pull-to-refresh, iOS chat notifications, and cross-device Spotify Connect playback sync.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.2',
+      version: '1.6.3',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Native Windows system tray balloon notifications, embedded icon, zero missing DLL errors.'
+      notes: 'Native Windows system tray balloon notifications, embedded icon, cross-device connect sync, zero missing DLL errors.'
     },
     android: {
-      version: '1.6.2',
-      build: 31,
+      version: '1.6.3',
+      build: 32,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.2.apk',
-      directFile: 'Rivo-v1.6.2.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.3.apk',
+      directFile: 'Rivo-v1.6.3.apk',
       mandatory: false,
-      notes: 'Instant people search, fixed profile playlists, Jam host pause sync, accurate notification time and artwork.'
+      notes: 'New playlist creation & link import, song search by name, Quran screen optimization, hardware back button navigation, pull-to-refresh, Placebo album fix, cross-device sync.'
     },
     ios: {
-      version: '1.6.2',
-      build: 31,
+      version: '1.6.3',
+      build: 32,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.2.ipa',
-      directFile: 'Rivo-v1.6.2.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.3.ipa',
+      directFile: 'Rivo-v1.6.3.ipa',
       mandatory: false,
-      notes: 'Native iOS chat banner notifications, accurate lockscreen elapsed time, fixed artwork display, Jam pause sync.'
+      notes: 'Native iOS foreground & background chat banner notifications with sound, hardware back stack, Jam audio zero-drift sync, cross-device sync.'
     }
   }
 };
@@ -1107,6 +1107,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.3.apk',
   '/downloads/Rivo-v1.6.2.apk',
   '/downloads/Rivo-v1.6.1.apk',
   '/downloads/Rivo-v1.6.0.apk',
@@ -1117,11 +1118,15 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.apk');
   const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.apk');
   const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.apk');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV163Path)) {
+    return res.download(localV163Path, 'Rivo-v1.6.3.apk');
+  }
   if (fs.existsSync(localV162Path)) {
     return res.download(localV162Path, 'Rivo-v1.6.2.apk');
   }
@@ -1135,14 +1140,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.6.2.apk');
+    return res.download(localApkPath, 'Rivo-v1.6.3.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.2', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.3', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1168,12 +1173,13 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.2/Rivo-v1.6.2.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.3/Rivo-v1.6.3.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.3.ipa',
   '/downloads/Rivo-v1.6.2.ipa',
   '/downloads/Rivo-v1.6.1.ipa',
   '/downloads/Rivo-v1.6.0.ipa',
@@ -1183,11 +1189,15 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.ipa');
   const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.ipa');
   const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.ipa');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV163Path)) {
+    return res.download(localV163Path, 'Rivo-v1.6.3.ipa');
+  }
   if (fs.existsSync(localV162Path)) {
     return res.download(localV162Path, 'Rivo-v1.6.2.ipa');
   }
@@ -1201,14 +1211,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.6.2.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.6.3.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.2', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.3', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1234,7 +1244,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.2/Rivo-v1.6.2.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.3/Rivo-v1.6.3.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -2142,13 +2152,20 @@ async function searchTracksInternal(query) {
   }
 
   try {
-    // 1. Check local DB tracks
+    // 1. Check local DB tracks with fuzzy normalization (matches 'legecy' against 'lege-cy')
+    const fuzzyChars = q.trim().replace(/[-_.'"`!?:;,/\\~@#$%^&*()[\]{}|<>+=]/g, '').split('');
+    const fuzzyPattern = fuzzyChars.map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[-_\\s]*');
+    const fuzzyRegex = new RegExp(fuzzyPattern, 'i');
+    const exactRegex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+
     const dbTracks = await Track.find({
       $or: [
-        { title: { $regex: q, $options: 'i' } },
-        { artist: { $regex: q, $options: 'i' } }
+        { title: { $regex: exactRegex } },
+        { artist: { $regex: exactRegex } },
+        { title: { $regex: fuzzyRegex } },
+        { artist: { $regex: fuzzyRegex } }
       ]
-    }).limit(10).lean();
+    }).limit(15).lean();
 
     const formattedDbTracks = dbTracks
       .filter(t => isMusicTrackServer(t.title, t.artist))
@@ -2735,9 +2752,38 @@ app.post('/api/playlists/import', auth, async (req, res) => {
   }
 });
 
-// ──────────────────────────────────────────
-// TRACK IMPORT BY LINK (Spotify, YouTube, SoundCloud, Apple Music, Direct)
-// ──────────────────────────────────────────
+// Automatically place any track added via link into user's dedicated "🔗 روابط مضافة" (Added Links) playlist (Requirement 3)
+async function autoAddTrackToUserLinksPlaylist(userId, trackId, cover) {
+  if (!userId || userId === 'guest' || userId === 'user') return;
+  try {
+    const user = await User.findById(userId);
+    if (!user) return;
+    if (!user.playlists) user.playlists = [];
+    let pl = user.playlists.find(p => p.id === 'added-links' || p.name === 'Added Links' || p.name === '🔗 روابط مضافة');
+    if (!pl) {
+      pl = {
+        id: `pl-${Date.now()}-added-links`,
+        name: '🔗 روابط مضافة',
+        description: 'الأغاني والمقاطع المضافة عبر الروابط المباشرة',
+        cover: cover || '',
+        trackIds: [],
+        isPublic: true,
+        createdAt: new Date().toISOString()
+      };
+      user.playlists.unshift(pl);
+    }
+    const tidStr = String(trackId);
+    if (!pl.trackIds.map(String).includes(tidStr)) {
+      pl.trackIds.unshift(tidStr);
+      if (!pl.cover && cover) pl.cover = cover;
+      user.markModified('playlists');
+      await user.save();
+    }
+  } catch (err) {
+    console.warn('[autoAddTrackToUserLinksPlaylist] error:', err.message);
+  }
+}
+
 app.post(['/api/tracks/import', '/api/tracks/import-link'], optionalAuth, async (req, res) => {
   try {
     const rawUrl = (req.body.url || '').trim();
@@ -2974,6 +3020,11 @@ app.post(['/api/tracks/import', '/api/tracks/import-link'], optionalAuth, async 
 
     // If album detected, sync to system Album
     syncTrackToAlbum(trackObj).catch(() => {});
+
+    // Automatically add track to user's Added Links playlist
+    if (req.user?.id) {
+      await autoAddTrackToUserLinksPlaylist(req.user.id, trackId, cover);
+    }
 
     res.json({
       success: true,
@@ -3250,15 +3301,24 @@ app.post('/api/playlists/:id/save', auth, async (req, res) => {
 
     // Fallback: look up in Album collection if applicable
     if (!sourcePlaylist) {
-      const album = await Album.findOne({ $or: [{ id: targetId }, { _id: targetId }] }).lean();
+      const cleanTargetName = targetId.replace(/^album-/i, '').replace(/[-_]/g, ' ').trim();
+      const album = await Album.findOne({
+        $or: [
+          { id: targetId },
+          { _id: mongoose.isValidObjectId(targetId) ? targetId : undefined },
+          { name: new RegExp(`^${targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          { name: new RegExp(`^${cleanTargetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        ].filter(Boolean)
+      }).lean();
       if (album) {
         sourcePlaylist = {
-          id: album.id,
-          name: album.title,
+          id: album.id || String(album._id),
+          name: album.name || album.title || 'Saved Album',
           cover: album.cover || '',
-          description: album.description || '',
+          description: album.description || `Album by ${album.artist || 'Various Artists'}`,
           trackIds: album.trackIds || [],
-          isPublic: true
+          isPublic: true,
+          isAlbum: true
         };
       }
     }
@@ -3470,7 +3530,14 @@ app.get('/api/albums/:id', async (req, res) => {
       album = await Album.findById(rawId).lean();
     }
     if (!album) {
-      album = await Album.findOne({ $or: [{ id: rawId }, { name: rawId }] }).lean();
+      const cleanName = rawId.replace(/^album-/i, '').replace(/[-_]/g, ' ').trim();
+      album = await Album.findOne({
+        $or: [
+          { id: rawId },
+          { name: new RegExp(`^${rawId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          { name: new RegExp(`^${cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        ]
+      }).lean();
     }
     if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
 
@@ -4003,11 +4070,19 @@ app.get('/api/artists/:name', async (req, res) => {
 // ──────────────────────────────────────────
 app.get('/api/tracks', async (req, res) => {
   try {
-    const raw = await Track.find({
+    const filter = {
       source: { $ne: 'SoundCloud' },
       album: { $ne: 'SoundCloud' },
       audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
-    }, { lyrics: 0 }).sort({ createdAt: -1 }).limit(1000).lean();
+    };
+    if (req.query.album) {
+      const albName = req.query.album.trim().replace(/^album-/i, '').replace(/[-_]/g, ' ');
+      filter.album = new RegExp(`^${albName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    }
+    if (req.query.artist) {
+      filter.artist = new RegExp(`^${req.query.artist.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    }
+    const raw = await Track.find(filter, { lyrics: 0 }).sort({ createdAt: -1 }).limit(1000).lean();
     const tracks = raw.map(t => ({
       ...t,
       id: String(t._id),
@@ -4170,6 +4245,10 @@ const createTrackHandler = async (req, res) => {
 
     // Auto-detect and sync to website album
     await syncTrackToAlbum(newTrack);
+
+    if (req.user?.id) {
+      await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
+    }
 
     res.json({ success: true, track: newTrack });
   } catch (e) {
@@ -5886,6 +5965,7 @@ app.post('/api/tracks/purge-soundcloud', adminAuth, async (req, res) => {
 // ──────────────────────────────────────────
 const jamRooms = {};
 const jamDisconnectTimeouts = new Map();
+const userDeviceSessions = new Map(); // Cross-device connect tracking: userId -> { activeSocketId, deviceType, deviceName, track, isPlaying, currentTime, updatedAt }
 
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
@@ -5903,6 +5983,42 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   // Push latest version manifest to newly connected client immediately
   socket.emit('app:update_manifest', APP_VERSIONS_DATA);
+
+  // Cross-Device Connect Playback Coordination (Requirement 15)
+  socket.on('device:playback_state', ({ isPlaying, track, currentTime, deviceType, deviceName, takeover }) => {
+    const uid = socket.userId;
+    if (!uid) return;
+
+    userDeviceSessions.set(uid, {
+      activeSocketId: socket.id,
+      deviceType: deviceType || 'web',
+      deviceName: deviceName || (deviceType === 'mobile' ? 'Mobile Phone' : 'Web Browser'),
+      track,
+      isPlaying: Boolean(isPlaying),
+      currentTime: Number(currentTime) || 0,
+      updatedAt: Date.now()
+    });
+
+    // Notify other devices of the same user
+    socket.to(`user:${uid}`).emit('device:remote_playing', {
+      activeSocketId: socket.id,
+      deviceType: deviceType || 'web',
+      deviceName: deviceName || (deviceType === 'mobile' ? 'Mobile Phone' : 'Web Browser'),
+      track,
+      isPlaying: Boolean(isPlaying),
+      currentTime: Number(currentTime) || 0,
+      takeover: Boolean(takeover)
+    });
+  });
+
+  socket.on('device:request_state', () => {
+    const uid = socket.userId;
+    if (!uid) return;
+    const session = userDeviceSessions.get(uid);
+    if (session && session.activeSocketId !== socket.id) {
+      socket.emit('device:remote_playing', session);
+    }
+  });
 
   if (socket.userId) {
     const uidStr = socket.userId;
@@ -6110,24 +6226,76 @@ io.on('connection', (socket) => {
         const newTId = String(currentTrack?._id || currentTrack?.id || '');
         if (curTId !== newTId || JSON.stringify(currentTrack) !== JSON.stringify(room.currentTrack)) {
           trackChanged = true;
+          // If track changed and at start, reset currentTime to 0 so guests never jump 20s forward
+          if (currentTime === undefined || Number(currentTime) <= 2) {
+            currentTime = 0;
+          }
         }
         room.currentTrack = currentTrack;
       }
-      if (currentTime !== undefined) room.currentTime = currentTime;
+      if (currentTime !== undefined) room.currentTime = Number(currentTime) || 0;
       room.updatedAt = Date.now();
 
-      // Broadcast play state to other participants
-      socket.to(roomCode).emit('jam:on_play_state_changed', {
-        isPlaying: room.isPlaying,
-        currentTrack: room.currentTrack,
-        currentTime: room.currentTime,
-        updatedAt: room.updatedAt,
-        initiatorId: initiatorId || socket.id
-      });
+      if (isPlaying === false) {
+        // Host or listener paused: broadcast immediately to ALL in room so everybody pauses at once
+        io.to(roomCode).emit('jam:on_play_state_changed', {
+          isPlaying: false,
+          currentTrack: room.currentTrack,
+          currentTime: room.currentTime,
+          updatedAt: room.updatedAt,
+          initiatorId: initiatorId || socket.id
+        });
+      } else {
+        // Broadcast play/seek state to other participants
+        socket.to(roomCode).emit('jam:on_play_state_changed', {
+          isPlaying: room.isPlaying,
+          currentTrack: room.currentTrack,
+          currentTime: room.currentTime,
+          updatedAt: room.updatedAt,
+          initiatorId: initiatorId || socket.id
+        });
+      }
 
       if (trackChanged) {
         io.to(roomCode).emit('jam:room_updated', room);
       }
+    }
+  });
+
+  // Jam: Live SYNC AUDIO request (zero-drift & no restarting to 0:00)
+  socket.on('jam:request_sync', ({ roomCode }) => {
+    const room = jamRooms[roomCode];
+    if (!room) return;
+    if (room.hostId && room.hostId !== socket.id) {
+      // Ask host device directly for exact current playback timestamp
+      io.to(room.hostId).emit('jam:get_host_time', { requesterSocketId: socket.id, roomCode });
+    } else {
+      let liveTime = Number(room.currentTime) || 0;
+      if (room.isPlaying && room.updatedAt) {
+        const elapsed = (Date.now() - room.updatedAt) / 1000;
+        if (elapsed > 0 && elapsed < 3600) liveTime += elapsed;
+      }
+      socket.emit('jam:sync_play_state', {
+        isPlaying: Boolean(room.isPlaying),
+        currentTrack: room.currentTrack,
+        currentTime: liveTime,
+        updatedAt: room.updatedAt || Date.now(),
+        queue: room.queue || [],
+        initiatorId: 'server'
+      });
+    }
+  });
+
+  // Host reports its exact playback timestamp to requester
+  socket.on('jam:report_host_time', ({ requesterSocketId, isPlaying, currentTrack, currentTime }) => {
+    if (requesterSocketId) {
+      io.to(requesterSocketId).emit('jam:sync_play_state', {
+        isPlaying: Boolean(isPlaying),
+        currentTrack: currentTrack,
+        currentTime: Number(currentTime) || 0,
+        updatedAt: Date.now(),
+        initiatorId: socket.id
+      });
     }
   });
 

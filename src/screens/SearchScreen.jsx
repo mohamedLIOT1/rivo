@@ -129,11 +129,28 @@ export default function SearchScreen({
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [safeTracks, safeAlbums]);
 
+  const normalizeFuzzy = (str) => {
+    if (!str || typeof str !== 'string') return '';
+    return str
+      .toLowerCase()
+      .replace(/[أإآ]/g, 'ا')
+      .replace(/ة/g, 'ه')
+      .replace(/ى/g, 'ي')
+      .replace(/[\u064B-\u065F\u0670]/g, '')
+      .replace(/[-_.\s/\\,:+()~`'"!?#@*&^%$[\]{}|<>]+/g, '')
+      .trim();
+  };
+  const fuzzyQuery = normalizeFuzzy(cleanQuery);
+
   // Matching Artists (searches canonical name and all known aliases)
   const matchedArtists = (filterType === 'people' || filterType === 'albums' || filterType === 'songs') ? [] : (
     cleanQuery ? allArtists.filter(a => {
       if (a.name.toLowerCase().includes(cleanQuery)) return true;
-      return (a.aliases || []).some(alias => alias.toLowerCase().includes(cleanQuery));
+      if (fuzzyQuery && normalizeFuzzy(a.name).includes(fuzzyQuery)) return true;
+      return (a.aliases || []).some(alias => 
+        alias.toLowerCase().includes(cleanQuery) || 
+        (fuzzyQuery && normalizeFuzzy(alias).includes(fuzzyQuery))
+      );
     }) : (filterType === 'artists' ? allArtists : [])
   );
 
@@ -141,8 +158,8 @@ export default function SearchScreen({
   const matchedAlbums = (filterType === 'people' || filterType === 'artists' || filterType === 'songs') ? [] : safeAlbums.filter(a => {
     if (filterType === 'albums' && !cleanQuery) return true;
     if (!cleanQuery) return false;
-    const nameMatch = a.name && a.name.toLowerCase().includes(cleanQuery);
-    const artistMatch = a.artist && a.artist.toLowerCase().includes(cleanQuery);
+    const nameMatch = (a.name && a.name.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(a.name).includes(fuzzyQuery));
+    const artistMatch = (a.artist && a.artist.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(a.artist).includes(fuzzyQuery));
     return nameMatch || artistMatch;
   });
 
@@ -150,11 +167,13 @@ export default function SearchScreen({
   const localFiltered = (filterType === 'people' || filterType === 'artists' || filterType === 'albums') ? [] : safeTracks.filter((t) => {
     if (!cleanQuery) return false;
     if (!isMusicTrack(t.title, t.artist)) return false;
-    const titleMatch = t.title && t.title.toLowerCase().includes(cleanQuery);
+    const titleMatch = (t.title && t.title.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(t.title).includes(fuzzyQuery));
     const trackArtists = getTrackArtists(t.artist, t.title).map(a => a.toLowerCase());
-    const artistMatch = (t.artist && t.artist.toLowerCase().includes(cleanQuery)) || trackArtists.some(a => a.includes(cleanQuery));
+    const artistMatch = (t.artist && t.artist.toLowerCase().includes(cleanQuery)) || 
+      (fuzzyQuery && normalizeFuzzy(t.artist).includes(fuzzyQuery)) ||
+      trackArtists.some(a => a.includes(cleanQuery) || (fuzzyQuery && normalizeFuzzy(a).includes(fuzzyQuery)));
     const genreMatch = t.genre && t.genre.toLowerCase().includes(cleanQuery);
-    const albumMatch = t.album && t.album.toLowerCase().includes(cleanQuery);
+    const albumMatch = (t.album && t.album.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(t.album).includes(fuzzyQuery));
 
     if (isPopSearch) {
       const popKeywords = ['pop', 'بوب', 'عربي', 'arabic', 'عمرو', 'تامر', 'سعد', 'حماقي', 'شيرين', 'دياب', 'حسني'];

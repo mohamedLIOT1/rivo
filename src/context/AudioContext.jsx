@@ -893,6 +893,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
       });
     }
 
+    if (!isRemote && socketRef.current) {
+      socketRef.current.emit('device:playback_state', {
+        isPlaying: nextPlaying,
+        track: currentTrackRef.current,
+        currentTime: currentTimeRef.current || 0,
+        deviceType: 'web',
+        deviceName: 'Web Browser'
+      });
+    }
+
     const audio = audioRef.current;
     if (audio) {
       if (nextPlaying) {
@@ -1173,6 +1183,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
         currentTrack: trackToPlay,
         isPlaying: true,
         currentTime: 0
+      });
+    }
+
+    if (!isRemote && socketRef.current) {
+      socketRef.current.emit('device:playback_state', {
+        isPlaying: true,
+        track: trackToPlay,
+        currentTime: 0,
+        deviceType: 'web',
+        deviceName: 'Web Browser'
       });
     }
 
@@ -1937,7 +1957,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
     let targetTime = Number(syncTime) || 0;
     if (syncPlaying && updatedAt) {
       const elapsed = (Date.now() - updatedAt) / 1000;
-      if (elapsed > 0 && elapsed < 3600) {
+      if (targetTime <= 2 && elapsed > 2) {
+        targetTime = Math.min(2, targetTime);
+      } else if (elapsed > 0 && elapsed < 3600) {
         targetTime += elapsed;
       }
     }
@@ -1955,6 +1977,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       if (syncPlaying !== undefined) {
         setIsPlaying(syncPlaying);
+        if (!syncPlaying && audioRef.current) {
+          audioRef.current.pause();
+        }
       }
     } else {
       // Same track: sync drift if > 1.5s
@@ -1988,6 +2013,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (socket !== undefined) {
       if (socketRef.current && socketRef.current !== socket) {
         socketRef.current.off('jam:advance_host_queue');
+        socketRef.current.off('jam:get_host_time');
+        socketRef.current.off('device:remote_playing');
       }
       socketRef.current = socket;
       if (socket) {
@@ -1995,6 +2022,30 @@ export function AudioProvider({ children, tracks, setTracks }) {
         socket.on('jam:advance_host_queue', () => {
           if (playNextTrackRef.current) {
             playNextTrackRef.current();
+          }
+        });
+
+        socket.off('jam:get_host_time');
+        socket.on('jam:get_host_time', ({ requesterSocketId }) => {
+          if (jamSessionRef.current?.isHost) {
+            socket.emit('jam:report_host_time', {
+              roomCode: jamSessionRef.current.code,
+              currentTime: currentTimeRef.current || 0,
+              isPlaying: isPlayingRef.current,
+              currentTrack: currentTrackRef.current,
+              requesterSocketId
+            });
+          }
+        });
+
+        // Cross-Device Connect Sync (Requirement 15)
+        socket.off('device:remote_playing');
+        socket.on('device:remote_playing', (remoteSession) => {
+          if (remoteSession && isPlayingRef.current) {
+            if (audioRef.current) {
+              audioRef.current.pause();
+            }
+            setIsPlaying(false);
           }
         });
       }
