@@ -376,6 +376,8 @@ export default function UserDetailModal({
             onOpenFullPlayer={onOpenFullPlayer}
             bottomOffset={Platform.OS === 'ios' ? 24 : 12}
           />
+        )}
+
         {/* Playlist Tracks Full View Modal */}
         <AlbumDetailModal
           visible={Boolean(selectedPlaylistModal)}
