@@ -10,6 +10,7 @@ import {
   Image,
   Alert,
   Clipboard,
+  useWindowDimensions,
 } from 'react-native';
 import {
   X,
@@ -61,6 +62,9 @@ export default function JamRoomModal({ visible, onClose }) {
   const [justAddedId, setJustAddedId] = useState(null);
   const [shuffleSeed, setShuffleSeed] = useState(0);
   const [selectedUser, setSelectedUser] = useState(null);
+
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height && width >= 540;
 
   // Modal visibility handled by <Modal visible={visible}>
 
@@ -173,10 +177,342 @@ export default function JamRoomModal({ visible, onClose }) {
         (jamSession.hostId && socket?.id && jamSession.hostId === socket.id))
   );
 
+  const renderBanner = () => (
+    <View style={styles.codeCard}>
+      <Text style={styles.codeSubtitle}>ACTIVE JAM ROOM CODE</Text>
+      <Text style={styles.codeText}>{jamSession.code || jamSession.roomCode || 'LIVE'}</Text>
+      <Text style={styles.codeDesc}>
+        Share this code with friends to synchronize listening.
+      </Text>
+
+      <View style={styles.codeBtnRow}>
+        <TouchableOpacity
+          style={styles.copyBtn}
+          onPress={handleCopyCode}
+          activeOpacity={0.8}
+        >
+          {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} color="#ffffff" />}
+          <Text style={styles.copyBtnText}>{copied ? 'COPIED!' : 'COPY CODE'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.syncBtn}
+          onPress={handleTuneIn}
+          activeOpacity={0.8}
+        >
+          <Headphones size={14} color="#082621" />
+          <Text style={styles.syncBtnText}>SYNC AUDIO</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderCurrentTrack = () => (
+    currentTrack ? (
+      <View style={styles.syncedTrackCard}>
+        <Image
+          source={{
+            uri:
+              currentTrack.coverUrl ||
+              currentTrack.cover ||
+              'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
+          }}
+          style={styles.syncedTrackCover}
+        />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={styles.syncStatusRow}>
+            <Text style={styles.syncStatusText}>
+              {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+            </Text>
+            <View
+              style={[
+                styles.statusPulseDot,
+                { backgroundColor: isPlaying ? colors.mint : '#f59e0b' },
+              ]}
+            />
+          </View>
+          <Text style={styles.syncedTrackTitle} numberOfLines={1}>
+            {currentTrack.title}
+          </Text>
+          <Text style={styles.syncedTrackArtist} numberOfLines={1}>
+            {currentTrack.artist}
+          </Text>
+        </View>
+      </View>
+    ) : null
+  );
+
+  const renderMembers = () => (
+    <View style={styles.membersCard}>
+      <View style={styles.membersHeader}>
+        <Users size={14} color={colors.mint} />
+        <Text style={styles.membersTitle}>
+          LISTENERS IN ROOM ({jamSession.members?.length || 1})
+        </Text>
+      </View>
+
+      <View style={styles.membersList}>
+        {(jamSession.members || []).map((m) => {
+          const mId = m.id || m._id || m.socketId;
+          return (
+            <View key={mId} style={styles.memberItem}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                onPress={() => setSelectedUser(m)}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={{
+                    uri:
+                      m.avatar ||
+                      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+                  }}
+                  style={styles.memberAvatar}
+                />
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {m.name || 'Listener'}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.memberRight}>
+                {m.isHost && (
+                  <View style={styles.hostBadge}>
+                    <Crown size={10} color="#082621" strokeWidth={3} />
+                    <Text style={styles.hostBadgeText}>HOST</Text>
+                  </View>
+                )}
+
+                {isCurrentUserHost && !m.isHost && (
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <TouchableOpacity
+                      style={styles.makeHostBtn}
+                      onPress={() => {
+                        Alert.alert(
+                          'Transfer Host',
+                          `Make ${m.name} the host of this Jam?`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Make Host',
+                              onPress: () => transferJamHost(m),
+                            },
+                          ]
+                        );
+                      }}
+                    >
+                      <Crown size={10} color="#082621" />
+                      <Text style={styles.makeHostText}>MAKE HOST</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.kickBtn}
+                      onPress={() => {
+                        Alert.alert(
+                          'Disconnect Listener',
+                          `Disconnect ${m.name} from this Jam?`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Disconnect',
+                              style: 'destructive',
+                              onPress: () => kickJamMember(m),
+                            },
+                          ]
+                        );
+                      }}
+                    >
+                      <UserMinus size={12} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const renderLeaveBtn = () => (
+    <TouchableOpacity style={styles.leaveBtn} onPress={leaveJam} activeOpacity={0.8}>
+      <Text style={styles.leaveBtnText}>LEAVE JAM ROOM</Text>
+    </TouchableOpacity>
+  );
+
+  const renderQueue = () => (
+    <View style={styles.queueCard}>
+      <View style={styles.queueHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Music size={15} color={colors.mint} />
+          <Text style={styles.queueTitle}>
+            JAM QUEUE ({jamSession.queue?.length || 0})
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.addSongToggleBtn}
+          onPress={() => setIsSearchOpen((p) => !p)}
+          activeOpacity={0.8}
+        >
+          <Plus size={13} color="#082621" />
+          <Text style={styles.addSongToggleText}>
+            {isSearchOpen ? 'CLOSE' : 'ADD SONG'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Add Song Drawer */}
+      {isSearchOpen && (
+        <View style={styles.searchDrawer}>
+          <View style={styles.searchBox}>
+            <Search size={14} color="#9ca3af" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search songs to queue..."
+              placeholderTextColor="#6b7280"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCorrect={false}
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={13} color="#9ca3af" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          <View style={styles.recsHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Sparkles size={11} color={colors.mint} />
+              <Text style={styles.recsHeaderTitle}>
+                {searchQuery.trim() ? `RESULTS (${filteredTracks.length})` : 'YOUR FAVORITES & DISCOVERIES'}
+              </Text>
+            </View>
+            {!searchQuery.trim() && (
+              <TouchableOpacity
+                style={styles.recsShuffleBtn}
+                onPress={() => setShuffleSeed((s) => s + 1)}
+                activeOpacity={0.8}
+              >
+                <Shuffle size={11} color="#17a398" />
+                <Text style={styles.recsShuffleBtnText}>SHUFFLE</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ScrollView
+            nestedScrollEnabled={true}
+            style={styles.searchResultsList}
+            contentContainerStyle={{ gap: 6, paddingBottom: 6 }}
+            showsVerticalScrollIndicator={true}
+          >
+            {filteredTracks.map((track) => {
+              const tId = track._id || track.id;
+              const isQueued = justAddedId === tId;
+              return (
+                <View key={tId} style={styles.searchResultItem}>
+                  <Image
+                    source={{
+                      uri:
+                        track.cover ||
+                        'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                    }}
+                    style={styles.resultCover}
+                  />
+                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                    <Text style={styles.resultTitle} numberOfLines={1}>
+                      {track.title}
+                    </Text>
+                    <Text style={styles.resultArtist} numberOfLines={1}>
+                      {track.artist}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.queueAddBtn,
+                      isQueued && { backgroundColor: colors.mint },
+                    ]}
+                    onPress={() => handleAddTrack(track)}
+                    activeOpacity={0.8}
+                  >
+                    {isQueued ? (
+                      <Check size={11} color="#082621" />
+                    ) : (
+                      <Plus size={11} color="#082621" />
+                    )}
+                    <Text style={styles.queueAddBtnText}>
+                      {isQueued ? 'QUEUED' : 'QUEUE'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Shared Queue List Items */}
+      {Array.isArray(jamSession.queue) && jamSession.queue.length > 0 ? (
+        <View style={styles.queueList}>
+          {jamSession.queue.map((qTrack, idx) => {
+            const qId = qTrack._id || qTrack.id || idx;
+            return (
+              <View key={`${qId}-${idx}`} style={styles.queueItem}>
+                <Text style={styles.queueIndex}>{idx + 1}</Text>
+                <Image
+                  source={{
+                    uri:
+                      qTrack.cover ||
+                      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                  }}
+                  style={styles.queueCover}
+                />
+                <View style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
+                  <Text style={styles.queueTrackTitle} numberOfLines={1}>
+                    {qTrack.title}
+                  </Text>
+                  <Text style={styles.queueTrackArtist} numberOfLines={1}>
+                    {qTrack.artist}
+                  </Text>
+                </View>
+                <View style={styles.queueActionsRow}>
+                  <TouchableOpacity
+                    disabled={idx === 0}
+                    onPress={() => handleReorder(idx, idx - 1)}
+                    style={[styles.reorderBtn, idx === 0 && { opacity: 0.2 }]}
+                  >
+                    <ChevronUp size={14} color="#ffffff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    disabled={idx === jamSession.queue.length - 1}
+                    onPress={() => handleReorder(idx, idx + 1)}
+                    style={[
+                      styles.reorderBtn,
+                      idx === jamSession.queue.length - 1 && { opacity: 0.2 },
+                    ]}
+                  >
+                    <ChevronDown size={14} color="#ffffff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => removeFromJamQueue(idx, qId)}
+                    style={styles.removeQueueBtn}
+                  >
+                    <Trash2 size={13} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : (
+        <Text style={styles.emptyQueueText}>JAM QUEUE IS CURRENTLY EMPTY.</Text>
+      )}
+    </View>
+  );
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.sheetOuter}>
+      <View style={[styles.overlay, isLandscape && { justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={[styles.sheetOuter, isLandscape && { width: '94%', maxWidth: 960, height: '94%', maxHeight: '94%' }]}>
           <View style={styles.hardShadow} />
           <View style={styles.sheet}>
             {/* Header */}
@@ -205,334 +541,27 @@ export default function JamRoomModal({ visible, onClose }) {
             >
               {jamSession ? (
                 /* ── Active Jam Room View ── */
-                <View style={styles.activeContainer}>
-                  {/* Banner Card */}
-                  <View style={styles.codeCard}>
-                    <Text style={styles.codeSubtitle}>ACTIVE JAM ROOM CODE</Text>
-                    <Text style={styles.codeText}>{jamSession.code || jamSession.roomCode || 'LIVE'}</Text>
-                    <Text style={styles.codeDesc}>
-                      Share this code with friends to synchronize listening.
-                    </Text>
-
-                    <View style={styles.codeBtnRow}>
-                      <TouchableOpacity
-                        style={styles.copyBtn}
-                        onPress={handleCopyCode}
-                        activeOpacity={0.8}
-                      >
-                        {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} color="#ffffff" />}
-                        <Text style={styles.copyBtnText}>{copied ? 'COPIED!' : 'COPY CODE'}</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.syncBtn}
-                        onPress={handleTuneIn}
-                        activeOpacity={0.8}
-                      >
-                        <Headphones size={14} color="#082621" />
-                        <Text style={styles.syncBtnText}>SYNC AUDIO</Text>
-                      </TouchableOpacity>
+                isLandscape ? (
+                  <View style={styles.landscapeGrid}>
+                    <View style={styles.landscapeCol}>
+                      {renderBanner()}
+                      {renderCurrentTrack()}
+                      {renderMembers()}
+                      {renderLeaveBtn()}
+                    </View>
+                    <View style={styles.landscapeCol}>
+                      {renderQueue()}
                     </View>
                   </View>
-
-                  {/* Currently Synced Track */}
-                  {currentTrack && (
-                    <View style={styles.syncedTrackCard}>
-                      <Image
-                        source={{
-                          uri:
-                            currentTrack.coverUrl ||
-                            currentTrack.cover ||
-                            'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
-                        }}
-                        style={styles.syncedTrackCover}
-                      />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <View style={styles.syncStatusRow}>
-                          <Text style={styles.syncStatusText}>
-                            {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
-                          </Text>
-                          <View
-                            style={[
-                              styles.statusPulseDot,
-                              { backgroundColor: isPlaying ? colors.mint : '#f59e0b' },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.syncedTrackTitle} numberOfLines={1}>
-                          {currentTrack.title}
-                        </Text>
-                        <Text style={styles.syncedTrackArtist} numberOfLines={1}>
-                          {currentTrack.artist}
-                        </Text>
-                      </View>
-                    </View>
-                  )}
-
-                  {/* ── Linked Shared Queue ── */}
-                  <View style={styles.queueCard}>
-                    <View style={styles.queueHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Music size={15} color={colors.mint} />
-                        <Text style={styles.queueTitle}>
-                          JAM QUEUE ({jamSession.queue?.length || 0})
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.addSongToggleBtn}
-                        onPress={() => setIsSearchOpen((p) => !p)}
-                        activeOpacity={0.8}
-                      >
-                        <Plus size={13} color="#082621" />
-                        <Text style={styles.addSongToggleText}>
-                          {isSearchOpen ? 'CLOSE' : 'ADD SONG'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Add Song Drawer */}
-                    {isSearchOpen && (
-                      <View style={styles.searchDrawer}>
-                        <View style={styles.searchBox}>
-                          <Search size={14} color="#9ca3af" />
-                          <TextInput
-                            style={styles.searchInput}
-                            placeholder="Search songs to queue..."
-                            placeholderTextColor="#6b7280"
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                            autoCorrect={false}
-                          />
-                          {searchQuery ? (
-                            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                              <X size={13} color="#9ca3af" />
-                            </TouchableOpacity>
-                          ) : null}
-                        </View>
-
-                        <View style={styles.recsHeaderRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Sparkles size={11} color={colors.mint} />
-                            <Text style={styles.recsHeaderTitle}>
-                              {searchQuery.trim() ? `RESULTS (${filteredTracks.length})` : 'YOUR FAVORITES & DISCOVERIES'}
-                            </Text>
-                          </View>
-                          {!searchQuery.trim() && (
-                            <TouchableOpacity
-                              style={styles.recsShuffleBtn}
-                              onPress={() => setShuffleSeed((s) => s + 1)}
-                              activeOpacity={0.8}
-                            >
-                              <Shuffle size={11} color="#17a398" />
-                              <Text style={styles.recsShuffleBtnText}>SHUFFLE</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-
-                        <ScrollView
-                          nestedScrollEnabled={true}
-                          style={styles.searchResultsList}
-                          contentContainerStyle={{ gap: 6, paddingBottom: 6 }}
-                          showsVerticalScrollIndicator={true}
-                        >
-                          {filteredTracks.map((track) => {
-                            const tId = track._id || track.id;
-                            const isQueued = justAddedId === tId;
-                            return (
-                              <View key={tId} style={styles.searchResultItem}>
-                                <Image
-                                  source={{
-                                    uri:
-                                      track.cover ||
-                                      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
-                                  }}
-                                  style={styles.resultCover}
-                                />
-                                <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                                  <Text style={styles.resultTitle} numberOfLines={1}>
-                                    {track.title}
-                                  </Text>
-                                  <Text style={styles.resultArtist} numberOfLines={1}>
-                                    {track.artist}
-                                  </Text>
-                                </View>
-                                <TouchableOpacity
-                                  style={[
-                                    styles.queueAddBtn,
-                                    isQueued && { backgroundColor: colors.mint },
-                                  ]}
-                                  onPress={() => handleAddTrack(track)}
-                                  activeOpacity={0.8}
-                                >
-                                  {isQueued ? (
-                                    <Check size={11} color="#082621" />
-                                  ) : (
-                                    <Plus size={11} color="#082621" />
-                                  )}
-                                  <Text style={styles.queueAddBtnText}>
-                                    {isQueued ? 'QUEUED' : 'QUEUE'}
-                                  </Text>
-                                </TouchableOpacity>
-                              </View>
-                            );
-                          })}
-                        </ScrollView>
-                      </View>
-                    )}
-
-                    {/* Shared Queue List Items */}
-                    {Array.isArray(jamSession.queue) && jamSession.queue.length > 0 ? (
-                      <View style={styles.queueList}>
-                        {jamSession.queue.map((qTrack, idx) => {
-                          const qId = qTrack._id || qTrack.id || idx;
-                          return (
-                            <View key={`${qId}-${idx}`} style={styles.queueItem}>
-                              <Text style={styles.queueIndex}>{idx + 1}</Text>
-                              <Image
-                                source={{
-                                  uri:
-                                    qTrack.cover ||
-                                    'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
-                                }}
-                                style={styles.queueCover}
-                              />
-                              <View style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
-                                <Text style={styles.queueTrackTitle} numberOfLines={1}>
-                                  {qTrack.title}
-                                </Text>
-                                <Text style={styles.queueTrackArtist} numberOfLines={1}>
-                                  {qTrack.artist}
-                                </Text>
-                              </View>
-                              <View style={styles.queueActionsRow}>
-                                <TouchableOpacity
-                                  disabled={idx === 0}
-                                  onPress={() => handleReorder(idx, idx - 1)}
-                                  style={[styles.reorderBtn, idx === 0 && { opacity: 0.2 }]}
-                                >
-                                  <ChevronUp size={14} color="#ffffff" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  disabled={idx === jamSession.queue.length - 1}
-                                  onPress={() => handleReorder(idx, idx + 1)}
-                                  style={[
-                                    styles.reorderBtn,
-                                    idx === jamSession.queue.length - 1 && { opacity: 0.2 },
-                                  ]}
-                                >
-                                  <ChevronDown size={14} color="#ffffff" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => removeFromJamQueue(idx, qId)}
-                                  style={styles.removeQueueBtn}
-                                >
-                                  <Trash2 size={13} color="#ef4444" />
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    ) : (
-                      <Text style={styles.emptyQueueText}>JAM QUEUE IS CURRENTLY EMPTY.</Text>
-                    )}
+                ) : (
+                  <View style={styles.activeContainer}>
+                    {renderBanner()}
+                    {renderCurrentTrack()}
+                    {renderQueue()}
+                    {renderMembers()}
+                    {renderLeaveBtn()}
                   </View>
-
-                  {/* ── Active Members ── */}
-                  <View style={styles.membersCard}>
-                    <View style={styles.membersHeader}>
-                      <Users size={14} color={colors.mint} />
-                      <Text style={styles.membersTitle}>
-                        LISTENERS IN ROOM ({jamSession.members?.length || 1})
-                      </Text>
-                    </View>
-
-                    <View style={styles.membersList}>
-                      {(jamSession.members || []).map((m) => {
-                        const mId = m.id || m._id || m.socketId;
-                        return (
-                          <View key={mId} style={styles.memberItem}>
-                            <TouchableOpacity
-                              style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-                              onPress={() => setSelectedUser(m)}
-                              activeOpacity={0.7}
-                            >
-                              <Image
-                                source={{
-                                  uri:
-                                    m.avatar ||
-                                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-                                }}
-                                style={styles.memberAvatar}
-                              />
-                              <Text style={styles.memberName} numberOfLines={1}>
-                                {m.name || 'Listener'}
-                              </Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.memberRight}>
-                              {m.isHost && (
-                                <View style={styles.hostBadge}>
-                                  <Crown size={10} color="#082621" strokeWidth={3} />
-                                  <Text style={styles.hostBadgeText}>HOST</Text>
-                                </View>
-                              )}
-
-                              {isCurrentUserHost && !m.isHost && (
-                                <View style={{ flexDirection: 'row', gap: 6 }}>
-                                  <TouchableOpacity
-                                    style={styles.makeHostBtn}
-                                    onPress={() => {
-                                      Alert.alert(
-                                        'Transfer Host',
-                                        `Make ${m.name} the host of this Jam?`,
-                                        [
-                                          { text: 'Cancel', style: 'cancel' },
-                                          {
-                                            text: 'Make Host',
-                                            onPress: () => transferJamHost(m),
-                                          },
-                                        ]
-                                      );
-                                    }}
-                                  >
-                                    <Crown size={10} color="#082621" />
-                                    <Text style={styles.makeHostText}>MAKE HOST</Text>
-                                  </TouchableOpacity>
-
-                                  <TouchableOpacity
-                                    style={styles.kickBtn}
-                                    onPress={() => {
-                                      Alert.alert(
-                                        'Disconnect Listener',
-                                        `Disconnect ${m.name} from this Jam?`,
-                                        [
-                                          { text: 'Cancel', style: 'cancel' },
-                                          {
-                                            text: 'Disconnect',
-                                            style: 'destructive',
-                                            onPress: () => kickJamMember(m),
-                                          },
-                                        ]
-                                      );
-                                    }}
-                                  >
-                                    <UserMinus size={12} color="#ef4444" />
-                                  </TouchableOpacity>
-                                </View>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Leave Jam Button */}
-                  <TouchableOpacity style={styles.leaveBtn} onPress={leaveJam} activeOpacity={0.8}>
-                    <Text style={styles.leaveBtnText}>LEAVE JAM ROOM</Text>
-                  </TouchableOpacity>
-                </View>
+                )
               ) : (
                 /* ── Inactive View: Host or Join ── */
                 <View style={styles.inactiveContainer}>
@@ -769,6 +798,16 @@ const styles = StyleSheet.create({
   activeContainer: {
     gap: 12,
     paddingTop: 6,
+  },
+  landscapeGrid: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+    width: '100%',
+  },
+  landscapeCol: {
+    flex: 1,
+    gap: 12,
   },
   codeCard: {
     backgroundColor: '#18181b',

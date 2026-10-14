@@ -88,10 +88,6 @@ export const SocketProvider = ({ children }) => {
       }
     });
 
-    s.on('jam:room_updated', (data) => {
-      setJamSession(data);
-    });
-
     s.on('jam_updated', (data) => {
       setJamSession(data);
     });
