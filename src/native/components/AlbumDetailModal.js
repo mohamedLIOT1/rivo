@@ -64,13 +64,18 @@ export default function AlbumDetailModal({
       return album.tracks;
     }
     const albName = (album.name || '').trim().toLowerCase();
+    const cleanAlbName = albName.replace(/^album-/, '').replace(/[-_\s]+/g, ' ').trim();
     const trackIds = Array.isArray(album.trackIds) ? album.trackIds.map(String) : [];
 
     return (allTracks || []).filter((t) => {
       if (!t) return false;
       const tAlb = (t.album || '').trim().toLowerCase();
+      const cleanTAlb = tAlb.replace(/[-_\s]+/g, ' ').trim();
       const tId = String(t.id || t._id || '');
-      return (albName && tAlb === albName) || (trackIds.length > 0 && trackIds.includes(tId));
+      return (
+        (albName && (tAlb === albName || cleanTAlb === cleanAlbName)) ||
+        (trackIds.length > 0 && trackIds.includes(tId))
+      );
     });
   }, [album, allTracks]);
 
@@ -87,14 +92,18 @@ export default function AlbumDetailModal({
     let isMounted = true;
     const albId = album._id || album.id;
     const cleanId = albId ? String(albId).replace(/^album-/, '') : '';
+    const queryName = album.name || cleanId || albId || '';
     const targetUrl = (albId && String(albId).length === 24)
       ? `${API_BASE_URL}/api/albums/${albId}`
       : (cleanId && cleanId.length === 24)
         ? `${API_BASE_URL}/api/albums/${cleanId}`
-        : `${API_BASE_URL}/api/tracks?album=${encodeURIComponent(album.name || '')}`;
+        : `${API_BASE_URL}/api/albums/${encodeURIComponent(cleanId || queryName)}`;
 
     fetch(targetUrl)
-      .then((r) => (r.ok ? r.json() : null))
+      .then((r) => {
+        if (r && r.ok) return r.json();
+        return fetch(`${API_BASE_URL}/api/tracks?album=${encodeURIComponent(queryName)}`).then(res => res.ok ? res.json() : null);
+      })
       .then((d) => {
         if (!isMounted || !d) return;
         const list = d.tracks || (Array.isArray(d) ? d : []);

@@ -12,6 +12,7 @@ import { useToast } from './ToastContext';
 import { useUser } from './UserContext';
 import { parseLrcLyrics } from '../../utils/lrcParser';
 import { getSmartTasteAndMoodTracks } from '../utils/tasteAlgorithm';
+import { isQuranContent } from '../../utils/quranUtils';
 
 const AudioContext = createContext();
 const AudioProgressContext = createContext();
@@ -104,6 +105,7 @@ export const AudioProvider = ({ children }) => {
 
   const jamSyncRef = useRef({ socket: null, jamSession: null });
   const [jamSession, setJamSessionState] = useState(null);
+  const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
     if (socket !== undefined) {
@@ -126,15 +128,13 @@ export const AudioProvider = ({ children }) => {
           }
         });
 
-        // Cross-device connect sync (Requirement 15)
+        // Cross-device connect sync (Item 4: Non-intrusive status notification)
         socket.off('device:remote_playing');
         socket.on('device:remote_playing', (remoteSession) => {
-          if (remoteSession && isPlayingRef.current) {
-            if (soundRef.current) {
-              soundRef.current.pauseAsync().catch(() => {});
-            }
-            isPlayingRef.current = false;
-            setIsPlaying(false);
+          if (remoteSession && remoteSession.track) {
+            setRemoteDevicePlayback(remoteSession);
+          } else {
+            setRemoteDevicePlayback(null);
           }
         });
       }
@@ -149,7 +149,7 @@ export const AudioProvider = ({ children }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       const session = jamSyncRef.current.jamSession;
-      if (!session || !session.isPlaying || !soundRef.current || isSeekingRef.current) return;
+      if (!session || !session.isPlaying || !isPlayingRef.current || !soundRef.current || isSeekingRef.current) return;
 
       let expectedTime = Number(session.currentTime) || 0;
       if (session.updatedAt) {
@@ -896,7 +896,53 @@ export const AudioProvider = ({ children }) => {
       q = downloadedTracks.length > 0 ? downloadedTracks : [];
       if (q.length > 0) setQueue(q);
     }
-    if (!q || q.length === 0) return;
+
+    const cur = currentTrackRef.current;
+    const isCurQuran = Boolean(cur && isQuranContent(cur));
+
+    const triggerAutoQueue = async () => {
+      try {
+        if (cur) {
+          const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              currentTrack: cur,
+              seedTracks: [cur],
+              limit: 6,
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            let tracks = Array.isArray(data.tracks) ? data.tracks : [];
+            tracks = tracks.filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
+            if (tracks.length > 0) {
+              const newQ = [...(queueRef.current || []), ...tracks];
+              setQueue(newQ);
+              playTrack(tracks[0], newQ);
+              return;
+            }
+          }
+        }
+      } catch {}
+
+      // Fallback: local library pool filtered strictly by Quran/Music isolation
+      const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0 ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : queueRef.current || []))
+        .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
+      if (pool.length > 0) {
+        const remaining = pool.filter(t => String(t._id || t.id) !== currentId);
+        const candidates = remaining.length > 0 ? remaining : pool;
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        const newQ = [...(queueRef.current || []), pick];
+        setQueue(newQ);
+        playTrack(pick, newQ);
+      }
+    };
+
+    if (!q || q.length === 0) {
+      if (cur) triggerAutoQueue();
+      return;
+    }
 
     const currentId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
     const currentTitle = String(currentTrackRef.current?.title || '').trim().toLowerCase();
@@ -960,8 +1006,11 @@ export const AudioProvider = ({ children }) => {
       playTrack(nextTrack, q);
     } else if (i >= 0 && i < q.length - 1) {
       playTrack(q[i + 1], q);
-    } else if (q.length > 0) {
+    } else if (repeatModeRef.current === 'all' && q.length > 1) {
       playTrack(q[0], q);
+    } else {
+      // Reached the end of the queue! Autoplay next songs obeying strict Quran/Music boundary!
+      triggerAutoQueue();
     }
   };
 
@@ -1099,11 +1148,23 @@ export const AudioProvider = ({ children }) => {
             await soundRef.current.playAsync().catch(() => {});
           }
           setIsPlaying(true);
+          isPlayingRef.current = true;
+          if (jamSyncRef.current.jamSession) {
+            jamSyncRef.current.jamSession.isPlaying = true;
+            jamSyncRef.current.jamSession.currentTime = targetTime;
+            jamSyncRef.current.jamSession.updatedAt = Date.now();
+          }
         } else {
           if (soundRef.current) {
             await soundRef.current.pauseAsync().catch(() => {});
           }
           setIsPlaying(false);
+          isPlayingRef.current = false;
+          if (jamSyncRef.current.jamSession) {
+            jamSyncRef.current.jamSession.isPlaying = false;
+            jamSyncRef.current.jamSession.currentTime = targetTime;
+            jamSyncRef.current.jamSession.updatedAt = Date.now();
+          }
         }
       }
     }
@@ -1120,7 +1181,8 @@ export const AudioProvider = ({ children }) => {
     autoDownloadFinished, toggleAutoDownloadFinished,
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
     jamSession, setJamSync,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync]);
+    remoteDevicePlayback,
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback]);
 
   return (
     <AudioContext.Provider value={controls}>

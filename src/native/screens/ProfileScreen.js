@@ -10,8 +10,12 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
+  TextInput,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import {
   User,
   Disc,
@@ -31,6 +35,10 @@ import {
   ArrowLeft,
   ChevronRight,
   UserPlus,
+  Camera,
+  Edit2,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -51,9 +59,33 @@ export default function ProfileScreen({
   onSelectPlaylist,
   onOpenFullPlayer,
 }) {
-  const { currentUser, logout, playlists = [], likedTrackIds = [], tracks: userTracks = [], token } = useUser();
+  const {
+    currentUser,
+    logout,
+    playlists = [],
+    likedTrackIds = [],
+    tracks: userTracks = [],
+    token,
+    updateProfile,
+    togglePlaylistVisibility,
+  } = useUser();
   const { downloadedTracks = [], playPlaylist } = useAudioPlayer();
   const { isDark } = useTheme();
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState(currentUser?.name || '');
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [bioInput, setBioInput] = useState(currentUser?.bio || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [avatarUrlInput, setAvatarUrlInput] = useState('');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [togglingPlaylistId, setTogglingPlaylistId] = useState(null);
+
+  useEffect(() => {
+    setNameInput(currentUser?.name || '');
+    setBioInput(currentUser?.bio || '');
+  }, [currentUser]);
 
   const [discordStatus, setDiscordStatus] = useState(null);
 
@@ -176,6 +208,95 @@ export default function ProfileScreen({
       }
     } catch {}
     setFollowLoading(false);
+  };
+
+  const handleSaveName = async () => {
+    if (!nameInput.trim() || isSavingProfile) return;
+    setIsSavingProfile(true);
+    try {
+      if (updateProfile) {
+        await updateProfile({ name: nameInput.trim() });
+      }
+      setIsEditingName(false);
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to update name');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleSaveBio = async () => {
+    if (isSavingProfile) return;
+    setIsSavingProfile(true);
+    try {
+      if (updateProfile) {
+        await updateProfile({ bio: bioInput.trim() });
+      }
+      setIsEditingBio(false);
+    } catch (e) {
+      Alert.alert('Error', e.message || 'Failed to update bio');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handlePickAvatarFile = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled) return;
+      const asset = res.assets ? res.assets[0] : res;
+      if (asset?.uri) {
+        setIsUploadingAvatar(true);
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        const mime = asset.mimeType || 'image/jpeg';
+        const dataUri = `data:${mime};base64,${base64}`;
+        if (updateProfile) {
+          await updateProfile({ avatar: dataUri });
+        }
+        setIsAvatarModalOpen(false);
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to pick image file: ' + (err.message || ''));
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleSaveAvatarUrl = async () => {
+    if (!avatarUrlInput.trim() || isUploadingAvatar) return;
+    setIsUploadingAvatar(true);
+    try {
+      if (updateProfile) {
+        await updateProfile({ avatar: avatarUrlInput.trim() });
+      }
+      setIsAvatarModalOpen(false);
+      setAvatarUrlInput('');
+    } catch (err) {
+      Alert.alert('Error', 'Failed to update avatar: ' + (err.message || ''));
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const handleTogglePlaylistPublic = async (pl) => {
+    if (!pl) return;
+    const plId = pl._id || pl.id;
+    if (!plId) return;
+    setTogglingPlaylistId(String(plId));
+    try {
+      if (togglePlaylistVisibility) {
+        await togglePlaylistVisibility(plId);
+      }
+    } catch (err) {
+      console.warn('toggle visibility error:', err);
+    } finally {
+      setTogglingPlaylistId(null);
+    }
   };
 
   const userIdStr = currentUser?._id || currentUser?.id || '';
@@ -522,19 +643,75 @@ export default function ProfileScreen({
                 </Text>
               </View>
             )}
+            {currentUser && (
+              <TouchableOpacity
+                style={styles.avatarCameraBtn}
+                onPress={() => setIsAvatarModalOpen(true)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Camera size={13} color="#0b1110" strokeWidth={2.5} />
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.profileInfo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={[styles.userName, !isDark && styles.userNameLight]} numberOfLines={1}>
-                {currentUser?.name || 'Guest Listener'}
-              </Text>
-              {currentUser && (
-                <View style={styles.verifiedBadge}>
-                  <Check size={10} color="#0b1110" strokeWidth={3} />
-                </View>
-              )}
-            </View>
+            {isEditingName ? (
+              <View style={styles.nameEditRow}>
+                <TextInput
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  style={[styles.nameInput, !isDark && styles.nameInputLight]}
+                  autoFocus
+                  selectTextOnFocus
+                  placeholder="Enter name"
+                  placeholderTextColor="#94a3b8"
+                />
+                <TouchableOpacity
+                  style={styles.nameSaveBtn}
+                  onPress={handleSaveName}
+                  disabled={isSavingProfile}
+                >
+                  {isSavingProfile ? (
+                    <ActivityIndicator size="small" color="#0b1110" />
+                  ) : (
+                    <Check size={13} color="#0b1110" strokeWidth={3} />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.nameCancelBtn, !isDark && styles.nameCancelBtnLight]}
+                  onPress={() => {
+                    setNameInput(currentUser?.name || '');
+                    setIsEditingName(false);
+                  }}
+                >
+                  <X size={13} color={isDark ? '#cbd5e1' : '#0b1110'} strokeWidth={2.5} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={[styles.userName, !isDark && styles.userNameLight]} numberOfLines={1}>
+                  {currentUser?.name || 'Guest Listener'}
+                </Text>
+                {currentUser && (
+                  <View style={styles.verifiedBadge}>
+                    <Check size={10} color="#0b1110" strokeWidth={3} />
+                  </View>
+                )}
+                {currentUser && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setNameInput(currentUser?.name || '');
+                      setIsEditingName(true);
+                    }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 2 }}
+                  >
+                    <Edit2 size={13} color="#17a398" strokeWidth={2.2} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
 
             <Text style={styles.userEmail} numberOfLines={1}>
               {currentUser?.email || 'Sign in to sync your playlists & Discord presence'}
@@ -583,6 +760,71 @@ export default function ProfileScreen({
             <Text style={styles.statLabel}>LIKED SONGS</Text>
           </View>
         </View>
+
+        {/* Cyber-brutalist Bio Card matching Web & Images 1 & 2 */}
+        {currentUser && (
+          <View style={[styles.bioCard, !isDark && styles.bioCardLight]}>
+            <View style={styles.bioHeaderRow}>
+              <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight]}>// BIO & ABOUT:</Text>
+              {!isEditingBio && (
+                <TouchableOpacity
+                  style={styles.bioEditBtn}
+                  onPress={() => {
+                    setBioInput(currentUser?.bio || '');
+                    setIsEditingBio(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Edit2 size={11} color="#17a398" strokeWidth={2.2} />
+                  <Text style={styles.bioEditBtnText}>Edit Bio</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {isEditingBio ? (
+              <View style={{ marginTop: 6, gap: 8 }}>
+                <TextInput
+                  value={bioInput}
+                  onChangeText={setBioInput}
+                  placeholder="Write a bio about yourself..."
+                  placeholderTextColor="#94a3b8"
+                  multiline
+                  numberOfLines={3}
+                  style={[styles.bioInput, !isDark && styles.bioInputLight]}
+                  autoFocus
+                />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.bioSaveBtn}
+                    onPress={handleSaveBio}
+                    disabled={isSavingProfile}
+                    activeOpacity={0.8}
+                  >
+                    {isSavingProfile ? (
+                      <ActivityIndicator size="small" color="#0b1110" />
+                    ) : (
+                      <Text style={styles.bioSaveBtnText}>SAVE BIO</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.bioCancelBtn, !isDark && styles.bioCancelBtnLight]}
+                    onPress={() => {
+                      setBioInput(currentUser?.bio || '');
+                      setIsEditingBio(false);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.bioCancelBtnText, !isDark && styles.bioCancelBtnTextLight]}>CANCEL</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <Text style={[styles.bioContent, !isDark && styles.bioContentLight]}>
+                {currentUser?.bio || 'No bio written yet. Tap "Edit Bio" to add one.'}
+              </Text>
+            )}
+          </View>
+        )}
       </View>
 
       {/* ── GUEST SIGN IN BANNER ── */}
@@ -654,36 +896,78 @@ export default function ProfileScreen({
       {/* ── USER PLAYLISTS SUMMARY ── */}
       {playlists.length > 0 && (
         <View style={{ marginTop: 20 }}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>YOUR PLAYLISTS ({playlists.length})</Text>
+          <View style={styles.playlistSectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Disc size={16} color="#17a398" strokeWidth={2.5} />
+              <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>
+                YOUR PLAYLISTS ({playlists.length})
+              </Text>
+            </View>
+            <View style={[styles.privacyBadge, !isDark && styles.privacyBadgeLight]}>
+              <Text style={[styles.privacyBadgeText, !isDark && styles.privacyBadgeTextLight]}>
+                TAP EYE FOR PUBLIC / PRIVATE
+              </Text>
+            </View>
           </View>
-          {playlists.map((pl) => (
-            <TouchableOpacity
-              key={pl._id || pl.id}
-              style={[styles.playlistRow, !isDark && styles.playlistRowLight]}
-              onPress={() => setSelectedPlaylistModal(pl)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.playlistThumb}>
-                {pl.cover ? (
-                  <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg} />
-                ) : (
-                  <Disc size={20} color="#17a398" />
-                )}
-              </View>
-              <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight]} numberOfLines={1}>
-                  {pl.name}
-                </Text>
-                <Text style={styles.playlistRowCount}>
-                  {(pl.tracks || pl.trackIds || []).length} SONGS
-                </Text>
-              </View>
-              <View style={styles.playlistPlayBtn}>
-                <Play size={12} color="#0b1110" fill="#0b1110" />
-              </View>
-            </TouchableOpacity>
-          ))}
+          {playlists.map((pl) => {
+            const isPublic = pl.isPublic !== false;
+            const plId = String(pl._id || pl.id);
+            const isToggling = togglingPlaylistId === plId;
+
+            return (
+              <TouchableOpacity
+                key={plId}
+                style={[styles.playlistRow, !isDark && styles.playlistRowLight]}
+                onPress={() => setSelectedPlaylistModal(pl)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.playlistThumb}>
+                  {pl.cover ? (
+                    <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg} />
+                  ) : (
+                    <Disc size={20} color="#17a398" />
+                  )}
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight]} numberOfLines={1}>
+                    {pl.name}
+                  </Text>
+                  <Text style={styles.playlistRowCount}>
+                    {(pl.tracks || pl.trackIds || []).length} SONGS • {isPublic ? 'PUBLIC' : 'PRIVATE'}
+                  </Text>
+                </View>
+
+                {/* Eye privacy toggle button */}
+                <TouchableOpacity
+                  style={[styles.playlistEyeBtn, isPublic ? styles.playlistEyeBtnPublic : styles.playlistEyeBtnPrivate]}
+                  onPress={(e) => {
+                    handleTogglePlaylistPublic(pl);
+                  }}
+                  disabled={isToggling}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  {isToggling ? (
+                    <ActivityIndicator size="small" color={isPublic ? '#17a398' : '#94a3b8'} />
+                  ) : isPublic ? (
+                    <Eye size={15} color="#17a398" strokeWidth={2.4} />
+                  ) : (
+                    <EyeOff size={15} color="#94a3b8" strokeWidth={2.4} />
+                  )}
+                </TouchableOpacity>
+
+                {/* Play button */}
+                <TouchableOpacity
+                  style={styles.playlistPlayBtn}
+                  onPress={() => {
+                    if (playPlaylist) playPlaylist(pl);
+                    else setSelectedPlaylistModal(pl);
+                  }}
+                >
+                  <Play size={12} color="#0b1110" fill="#0b1110" />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       )}
 
@@ -727,6 +1011,70 @@ export default function ProfileScreen({
 
       {/* SOCIAL FOLLOWERS / FOLLOWING MODAL */}
       {renderSocialModal()}
+
+      {/* Avatar Change Modal */}
+      <Modal
+        visible={isAvatarModalOpen}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setIsAvatarModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.socialModalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsAvatarModalOpen(false)}
+        >
+          <View style={styles.socialModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.socialModalHeader}>
+              <Text style={styles.socialModalTitle}>Change Profile Photo</Text>
+              <TouchableOpacity onPress={() => setIsAvatarModalOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={18} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16, gap: 14 }}>
+              <TouchableOpacity
+                style={styles.avatarOptionBtn}
+                onPress={handlePickAvatarFile}
+                disabled={isUploadingAvatar}
+                activeOpacity={0.8}
+              >
+                {isUploadingAvatar ? (
+                  <ActivityIndicator size="small" color="#0b1110" />
+                ) : (
+                  <Camera size={16} color="#0b1110" strokeWidth={2.5} />
+                )}
+                <Text style={styles.avatarOptionBtnText}>
+                  {isUploadingAvatar ? 'Uploading Image...' : 'Choose from Device Library'}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={{ alignItems: 'center', marginVertical: 4 }}>
+                <Text style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>— OR ENTER DIRECT URL —</Text>
+              </View>
+
+              <TextInput
+                value={avatarUrlInput}
+                onChangeText={setAvatarUrlInput}
+                placeholder="https://example.com/avatar.jpg"
+                placeholderTextColor="#64748b"
+                style={[styles.nameInput, { width: '100%', height: 42, color: '#f8fafc' }]}
+                autoCapitalize="none"
+              />
+
+              <TouchableOpacity
+                style={[styles.avatarOptionBtn, { backgroundColor: '#17a398' }]}
+                onPress={handleSaveAvatarUrl}
+                disabled={isUploadingAvatar || !avatarUrlInput.trim()}
+                activeOpacity={0.8}
+              >
+                <Check size={16} color="#0b1110" strokeWidth={2.8} />
+                <Text style={styles.avatarOptionBtnText}>Set Photo URL</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Playlist Tracks Full View Modal */}
       <AlbumDetailModal
@@ -1397,5 +1745,202 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     marginTop: 4,
+  },
+  avatarCameraBtn: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: '#17a398',
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+  },
+  nameEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  nameInput: {
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff',
+    minWidth: 120,
+    maxWidth: 180,
+  },
+  nameInputLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+    color: '#0b1110',
+  },
+  nameSaveBtn: {
+    padding: 6,
+    backgroundColor: '#17a398',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0b1110',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nameCancelBtn: {
+    padding: 6,
+    backgroundColor: '#1e2926',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#263330',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nameCancelBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#cbd5e1',
+  },
+  bioHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  bioEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: 'auto',
+  },
+  bioEditBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+    color: '#17a398',
+  },
+  bioInput: {
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 12,
+    color: '#f8fafc',
+    textAlignVertical: 'top',
+    minHeight: 60,
+  },
+  bioInputLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+    color: '#0b1110',
+  },
+  bioSaveBtn: {
+    backgroundColor: '#17a398',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bioSaveBtnText: {
+    color: '#0b1110',
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+  },
+  bioCancelBtn: {
+    backgroundColor: '#1e2926',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#263330',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bioCancelBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#cbd5e1',
+  },
+  bioCancelBtnText: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+  },
+  bioCancelBtnTextLight: {
+    color: '#0b1110',
+  },
+  playlistSectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  privacyBadge: {
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: '#263330',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  privacyBadgeLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#cbd5e1',
+  },
+  privacyBadgeText: {
+    color: '#94a3b8',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    fontWeight: '800',
+  },
+  privacyBadgeTextLight: {
+    color: '#0b1110',
+  },
+  playlistEyeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  playlistEyeBtnPublic: {
+    backgroundColor: 'rgba(23, 163, 152, 0.15)',
+    borderColor: '#17a398',
+  },
+  playlistEyeBtnPrivate: {
+    backgroundColor: 'rgba(148, 163, 184, 0.15)',
+    borderColor: '#475569',
+  },
+  avatarOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#17a398',
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  avatarOptionBtnText: {
+    color: '#0b1110',
+    fontSize: 12.5,
+    fontWeight: '900',
   },
 });

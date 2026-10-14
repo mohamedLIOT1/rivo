@@ -76,9 +76,20 @@ export const SocketProvider = ({ children }) => {
     });
 
     s.on('jam:on_play_state_changed', (data) => {
-      if (data?.initiatorId !== s.id && data?.currentTrack && syncRemotePlayStateRef.current) {
+      setJamSession(prev => prev ? ({
+        ...prev,
+        isPlaying: Boolean(data?.isPlaying),
+        currentTime: data?.currentTime !== undefined ? Number(data.currentTime) : prev.currentTime,
+        currentTrack: data?.currentTrack || prev.currentTrack,
+        updatedAt: data?.updatedAt || Date.now(),
+      }) : null);
+      if (data?.initiatorId !== s.id && syncRemotePlayStateRef.current) {
         syncRemotePlayStateRef.current(data);
       }
+    });
+
+    s.on('jam:room_updated', (data) => {
+      setJamSession(data);
     });
 
     s.on('jam_updated', (data) => {

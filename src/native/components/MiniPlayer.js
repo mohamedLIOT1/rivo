@@ -7,7 +7,7 @@ import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
-  const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, remoteDevicePlayback } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
@@ -16,23 +16,57 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
     setImageError(false);
   }, [currentTrack?._id, currentTrack?.id]);
 
-  if (!currentTrack) return null;
+  const formatTime = (secs) => {
+    const s = Math.max(0, Math.floor(Number(secs) || 0));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
+  };
 
-  const trackId = String(currentTrack._id || currentTrack.id || '');
+  if (!currentTrack && !remoteDevicePlayback?.track) return null;
+
+  const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const rawCover = currentTrack.coverUrl || currentTrack.cover || '';
+  const rawCover = currentTrack?.coverUrl || currentTrack?.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 
   const dockBottom = bottomOffset !== undefined ? bottomOffset : (Platform.OS === 'ios' ? 70 : 56);
 
   return (
     <View style={[styles.outerDock, { bottom: dockBottom }]}>
-      <TouchableOpacity
-        style={styles.container}
-        onPress={onOpenFullPlayer}
-        activeOpacity={0.9}
-      >
+      {/* Remote Connect Device Notification Banner */}
+      {remoteDevicePlayback?.track && (
+        <TouchableOpacity
+          style={styles.connectBanner}
+          onPress={() => {
+            if (remoteDevicePlayback.track && playTrack) {
+              playTrack(remoteDevicePlayback.track, null, false, remoteDevicePlayback.currentTime || 0);
+            }
+          }}
+          activeOpacity={0.85}
+        >
+          <View style={styles.connectPulseDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.connectTitle} numberOfLines={1}>
+              PLAYING ON {String(remoteDevicePlayback.deviceName || 'OTHER DEVICE').toUpperCase()}
+            </Text>
+            <Text style={styles.connectSub} numberOfLines={1}>
+              {remoteDevicePlayback.track.title || 'Playing'} • {formatTime(remoteDevicePlayback.currentTime)}
+            </Text>
+          </View>
+          <View style={styles.connectSwitchBtn}>
+            <Text style={styles.connectSwitchBtnText}>PLAY HERE</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {currentTrack && (
+        <TouchableOpacity
+          style={styles.container}
+          onPress={onOpenFullPlayer}
+          activeOpacity={0.9}
+        >
         {/* Top Progress Line */}
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
@@ -98,8 +132,9 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
           </View>
         </View>
       </TouchableOpacity>
-    </View>
-  );
+    )}
+  </View>
+);
 }
 
 const styles = StyleSheet.create({
@@ -192,5 +227,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#17a398',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  connectBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#0e1614',
+    borderWidth: 1,
+    borderColor: '#17a398',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  connectPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#17a398',
+  },
+  connectTitle: {
+    color: '#17a398',
+    fontSize: 9.5,
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  connectSub: {
+    color: '#e2e8f0',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  connectSwitchBtn: {
+    backgroundColor: '#17a398',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  connectSwitchBtnText: {
+    color: '#0b1110',
+    fontSize: 9.5,
+    fontWeight: '900',
+    fontFamily: 'monospace',
   },
 });
