@@ -290,25 +290,33 @@ export default function FullPlayerModal({
 
   useEffect(() => {
     setSyncOffset(0);
-    setLocalLyrics(null);
-    setIsLyricsVerified(false);
-    setLyricsVerifiedBy(null);
     setTranslatedLyrics(null);
     setShowTranslation(false);
 
     if (!isOpen || !currentTrack) return;
 
-    // 1. If track already has embedded or loaded lyrics (LRC string or array), parse and preserve
+    // Check if the current track already carries verified status
+    const alreadyVerified = Boolean(
+      currentTrack.isVerified || 
+      currentTrack.lyricsVerified || 
+      currentTrack.isVerifiedLyrics || 
+      currentTrack.isLyricsVerified
+    );
+    setIsLyricsVerified(alreadyVerified);
+    setLyricsVerifiedBy(currentTrack.verifiedBy || currentTrack.lyricsVerifiedBy || null);
+
+    // If track already has embedded or loaded lyrics, parse and render them immediately
     if (currentTrack.lyrics) {
       const parsed = parseLrcLyrics(currentTrack.lyrics);
       if (parsed.length > 0) {
         setLocalLyrics(parsed);
         currentTrack.lyrics = parsed;
-        return;
       }
+    } else {
+      setLocalLyrics(null);
     }
 
-    // 2. If track is local import or downloaded, do not generate AI lyrics
+    // If track is local import or downloaded, do not generate AI lyrics
     if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
       setLocalLyrics([]);
       return;
@@ -320,9 +328,8 @@ export default function FullPlayerModal({
     const tId = currentTrack.id || currentTrack._id;
     if (!qTitle) return;
 
-    // Debounce lyrics fetch so rapid skips do not trigger parallel AI generation
+    // Always fetch server for verified / custom lyrics so verification status is 100% persisted
     const timer = setTimeout(() => {
-      // First check server for manually saved or cached lyrics
       fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${encodeURIComponent(tId || '')}&title=${encodeURIComponent(qTitle || '')}&artist=${encodeURIComponent(qArtist || '')}`)
         .then(r => r.json())
         .then(d => {
@@ -330,9 +337,14 @@ export default function FullPlayerModal({
           if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
             const parsed = parseLrcLyrics(d.lyrics);
             setLocalLyrics(parsed);
-            setIsLyricsVerified(Boolean(d.isVerified));
+            const ver = Boolean(d.isVerified);
+            setIsLyricsVerified(ver);
             setLyricsVerifiedBy(d.verifiedBy || null);
             currentTrack.lyrics = parsed;
+            currentTrack.isVerified = ver;
+            currentTrack.lyricsVerified = ver;
+            currentTrack.isVerifiedLyrics = ver;
+            currentTrack.lyricsVerifiedBy = d.verifiedBy || null;
           } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
             if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded || isCancelled) {
               return;
@@ -388,9 +400,14 @@ export default function FullPlayerModal({
       if (matches && Array.isArray(data.lyrics)) {
         const parsedSocket = parseLrcLyrics(data.lyrics);
         setLocalLyrics(parsedSocket);
-        setIsLyricsVerified(Boolean(data.isVerified));
+        const ver = Boolean(data.isVerified);
+        setIsLyricsVerified(ver);
         setLyricsVerifiedBy(data.verifiedBy || null);
         currentTrack.lyrics = parsedSocket;
+        currentTrack.isVerified = ver;
+        currentTrack.lyricsVerified = ver;
+        currentTrack.isVerifiedLyrics = ver;
+        currentTrack.lyricsVerifiedBy = data.verifiedBy || null;
       }
     };
     s.on('lyrics:updated', onLyricsUpdated);
@@ -569,11 +586,21 @@ export default function FullPlayerModal({
 
       if (markVerified) {
         currentTrack.lyrics = parsed;
+        currentTrack.isVerified = true;
+        currentTrack.lyricsVerified = true;
+        currentTrack.isVerifiedLyrics = true;
+        currentTrack.isLyricsVerified = true;
+        currentTrack.lyricsVerifiedBy = currentUser?.username || 'Admin';
         setLocalLyrics(parsed);
         setIsLyricsVerified(true);
         setLyricsVerifiedBy(currentUser?.username || 'Admin');
       } else {
         // If unverified, it removed override, let's reset or fetch dynamic scraper
+        currentTrack.isVerified = false;
+        currentTrack.lyricsVerified = false;
+        currentTrack.isVerifiedLyrics = false;
+        currentTrack.isLyricsVerified = false;
+        currentTrack.lyricsVerifiedBy = null;
         setIsLyricsVerified(false);
         setLyricsVerifiedBy(null);
         handleGenerateLyrics();
