@@ -1065,35 +1065,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.5',
-  releaseNotes: "Mobile profile web-matching redesign (edit name & bio, change avatar, playlist privacy toggle), Lege-Cy empty albums fix (Plan-B & 191-181), Jam pause sync & freeze resolution, cross-device playback presence display, and AI smart autoplay with strict Quran/music separation.",
+  version: '1.6.6',
+  releaseNotes: "Instant cross-device playback pause synchronization (Spotify Connect), live position counter, immediate Jam host transfer on app close/kill, rock-solid Jam pause sync, and enhanced tablet landscape layout.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.5',
+      version: '1.6.6',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Mobile profile redesign, Jam pause sync, Spotify Connect device presence, strict Quran/music separation.'
+      notes: 'Cross-device playback pause sync, Jam host transfer on exit, responsive landscape UI.'
     },
     android: {
-      version: '1.6.5',
-      build: 34,
+      version: '1.6.6',
+      build: 35,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.5.apk',
-      directFile: 'Rivo-v1.6.5.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.6.apk',
+      directFile: 'Rivo-v1.6.6.apk',
       mandatory: false,
-      notes: 'Profile screen redesign (edit bio & name, change avatar, playlist privacy toggle), fixed empty albums (Plan-B, 191-181), Jam pause sync & anti-kick keepalive, cross-device playback presence, AI autoplay with Quran isolation.'
+      notes: 'Real-time cross-device playback pause sync, live minute/second counter, immediate Jam host transfer on exit/kill, fixed Jam pause sync on guest devices, responsive tablet landscape Jam UI.'
     },
     ios: {
-      version: '1.6.5',
-      build: 34,
+      version: '1.6.6',
+      build: 35,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.5.ipa',
-      directFile: 'Rivo-v1.6.5.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.6.ipa',
+      directFile: 'Rivo-v1.6.6.ipa',
       mandatory: false,
-      notes: 'Profile screen redesign (edit bio & name, change avatar, playlist privacy toggle), fixed empty albums (Plan-B, 191-181), Jam pause sync & anti-kick keepalive, cross-device playback presence, AI autoplay with Quran isolation.'
+      notes: 'Real-time cross-device playback pause sync, live minute/second counter, immediate Jam host transfer on exit/kill, fixed Jam pause sync on guest devices, responsive tablet landscape Jam UI.'
     }
   }
 };
@@ -1105,6 +1105,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.6.apk',
   '/downloads/Rivo-v1.6.5.apk',
   '/downloads/Rivo-v1.6.4.apk',
   '/downloads/Rivo-v1.6.3.apk',
@@ -1118,6 +1119,7 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.apk');
   const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.apk');
   const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.apk');
   const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.apk');
@@ -1126,6 +1128,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV166Path)) {
+    return res.download(localV166Path, 'Rivo-v1.6.6.apk');
+  }
   if (fs.existsSync(localV165Path)) {
     return res.download(localV165Path, 'Rivo-v1.6.5.apk');
   }
@@ -1187,6 +1192,7 @@ app.get([
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.6.ipa',
   '/downloads/Rivo-v1.6.5.ipa',
   '/downloads/Rivo-v1.6.4.ipa',
   '/downloads/Rivo-v1.6.3.ipa',
@@ -1199,6 +1205,7 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.ipa');
   const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.ipa');
   const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.ipa');
   const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.ipa');
@@ -1207,6 +1214,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV166Path)) {
+    return res.download(localV166Path, 'Rivo-v1.6.6.ipa');
+  }
   if (fs.existsSync(localV165Path)) {
     return res.download(localV165Path, 'Rivo-v1.6.5.ipa');
   }
@@ -6085,7 +6095,8 @@ io.on('connection', (socket) => {
       track,
       isPlaying: Boolean(isPlaying),
       currentTime: Number(currentTime) || 0,
-      takeover: Boolean(takeover)
+      takeover: Boolean(takeover),
+      updatedAt: Date.now()
     });
   });
 
@@ -6544,8 +6555,10 @@ io.on('connection', (socket) => {
           const randomIdx = Math.floor(Math.random() * room.members.length);
           room.members.forEach((m, idx) => { m.isHost = (idx === randomIdx); });
           room.hostId = room.members[randomIdx].socketId;
+          room.hostUserId = room.members[randomIdx].id || room.members[randomIdx]._id || null;
         }
         io.to(roomCode).emit('jam:room_updated', room);
+        io.to(roomCode).emit('jam_updated', room);
       }
     }
   });
@@ -6601,6 +6614,24 @@ io.on('connection', (socket) => {
       const member = room.members.find(m => m.socketId === socket.id);
       if (member) {
         member.isDisconnected = true;
+
+        // If the host closed the app or was killed from RAM: immediately transfer host to an active connected guest!
+        if (room.hostId === socket.id || member.isHost) {
+          const activeGuests = room.members.filter(m => !m.isDisconnected && m.socketId !== socket.id);
+          if (activeGuests.length > 0) {
+            const randomIdx = Math.floor(Math.random() * activeGuests.length);
+            const newHost = activeGuests[randomIdx];
+            room.hostId = newHost.socketId;
+            room.hostUserId = newHost.id || newHost._id || null;
+            room.members.forEach(m => {
+              m.isHost = (m.socketId === newHost.socketId);
+            });
+            console.log(`[Jam] Host disconnected. Transferred host immediately to ${newHost.name} in room ${code}`);
+            io.to(code).emit('jam:room_updated', room);
+            io.to(code).emit('jam_updated', room);
+          }
+        }
+
         const key = `${code}:${member.id || socket.id}`;
         
         // Clear any existing timer
@@ -6625,9 +6656,10 @@ io.on('connection', (socket) => {
             if (currentRoom.hostId === socket.id || !currentRoom.members.some(m => m.socketId === currentRoom.hostId)) {
               const activeMembers = currentRoom.members.filter(m => !m.isDisconnected);
               const targetList = activeMembers.length > 0 ? activeMembers : currentRoom.members;
-              const newHost = targetList[0];
+              const newHost = targetList[Math.floor(Math.random() * targetList.length)];
               currentRoom.members.forEach(m => { m.isHost = (m.socketId === newHost.socketId); });
               currentRoom.hostId = newHost.socketId;
+              currentRoom.hostUserId = newHost.id || newHost._id || null;
             }
             io.to(code).emit('jam:room_updated', currentRoom);
             io.to(code).emit('jam_updated', currentRoom);

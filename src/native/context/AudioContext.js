@@ -128,11 +128,20 @@ export const AudioProvider = ({ children }) => {
           }
         });
 
-        // Cross-device connect sync (Item 4: Non-intrusive status notification)
+        // Cross-device connect sync (Spotify Connect: Auto-pause this device if other device plays)
         socket.off('device:remote_playing');
-        socket.on('device:remote_playing', (remoteSession) => {
+        socket.on('device:remote_playing', async (remoteSession) => {
           if (remoteSession && remoteSession.track) {
             setRemoteDevicePlayback(remoteSession);
+            // If the other device is playing and THIS mobile device is currently playing: PAUSE THIS DEVICE!
+            if (remoteSession.isPlaying && isPlayingRef.current) {
+              if (soundRef.current) {
+                await soundRef.current.pauseAsync().catch(() => {});
+              }
+              setIsPlaying(false);
+              isPlayingRef.current = false;
+              updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, false, currentTrackRef.current);
+            }
           } else {
             setRemoteDevicePlayback(null);
           }
@@ -351,6 +360,20 @@ export const AudioProvider = ({ children }) => {
               duration: newDuration,
             }
           );
+        }
+      }
+
+      // Periodically sync live playback time with other devices (Spotify Connect)
+      if (isPlayingRef.current && Math.abs(newCurrentTime - (playbackStatusRef.current._lastDeviceSync || 0)) >= 2) {
+        playbackStatusRef.current._lastDeviceSync = newCurrentTime;
+        if (jamSyncRef.current?.socket && currentTrackRef.current) {
+          jamSyncRef.current.socket.emit('device:playback_state', {
+            isPlaying: true,
+            track: currentTrackRef.current,
+            currentTime: newCurrentTime,
+            deviceType: 'mobile',
+            deviceName: Platform.OS === 'ios' ? 'iPhone' : 'Android'
+          });
         }
       }
     }
@@ -1129,43 +1152,51 @@ export const AudioProvider = ({ children }) => {
     const cur = currentTrackRef.current;
     const isDifferentTrack = syncTrack && String(syncTrack.id || syncTrack._id) !== String(cur?.id || cur?._id);
 
+    // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
+    if (syncPlaying === false) {
+      if (soundRef.current) {
+        await soundRef.current.pauseAsync().catch(() => {});
+      }
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      if (isDifferentTrack) {
+        await playTrack(syncTrack, null, false, targetTime, true);
+        if (soundRef.current) {
+          await soundRef.current.pauseAsync().catch(() => {});
+        }
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+      } else if (targetTime !== undefined && soundRef.current) {
+        await soundRef.current.setPositionAsync(Math.max(0, targetTime * 1000)).catch(() => {});
+        setProgress(p => ({ ...p, currentTime: Math.max(0, targetTime) }));
+      }
+      if (jamSyncRef.current.jamSession) {
+        jamSyncRef.current.jamSession.isPlaying = false;
+        jamSyncRef.current.jamSession.currentTime = targetTime;
+        jamSyncRef.current.jamSession.updatedAt = Date.now();
+      }
+      const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+      updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, cur);
+      return;
+    }
+
     if (isDifferentTrack) {
       await playTrack(syncTrack, null, false, targetTime, true);
-      if (syncPlaying !== undefined && !syncPlaying && soundRef.current) {
-        await soundRef.current.pauseAsync().catch(() => {});
-        setIsPlaying(false);
-      }
     } else {
-      // Same track: sync drift if > 1.5s
+      // Same track while playing: sync drift if > 1.5s
       const localCur = playbackStatusRef.current?.currentTime || 0;
       if (targetTime !== undefined && Math.abs(targetTime - localCur) > 1.5) {
         seekTo(targetTime, true);
       }
-      // Sync play/pause
-      if (syncPlaying !== undefined) {
-        if (syncPlaying) {
-          if (soundRef.current) {
-            await soundRef.current.playAsync().catch(() => {});
-          }
-          setIsPlaying(true);
-          isPlayingRef.current = true;
-          if (jamSyncRef.current.jamSession) {
-            jamSyncRef.current.jamSession.isPlaying = true;
-            jamSyncRef.current.jamSession.currentTime = targetTime;
-            jamSyncRef.current.jamSession.updatedAt = Date.now();
-          }
-        } else {
-          if (soundRef.current) {
-            await soundRef.current.pauseAsync().catch(() => {});
-          }
-          setIsPlaying(false);
-          isPlayingRef.current = false;
-          if (jamSyncRef.current.jamSession) {
-            jamSyncRef.current.jamSession.isPlaying = false;
-            jamSyncRef.current.jamSession.currentTime = targetTime;
-            jamSyncRef.current.jamSession.updatedAt = Date.now();
-          }
-        }
+      if (soundRef.current) {
+        await soundRef.current.playAsync().catch(() => {});
+      }
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      if (jamSyncRef.current.jamSession) {
+        jamSyncRef.current.jamSession.isPlaying = true;
+        jamSyncRef.current.jamSession.currentTime = targetTime;
+        jamSyncRef.current.jamSession.updatedAt = Date.now();
       }
     }
   }, [playTrack, seekTo]);

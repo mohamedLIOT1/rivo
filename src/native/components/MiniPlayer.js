@@ -23,6 +23,28 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
     return `${m}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
+  const [remoteLiveTime, setRemoteLiveTime] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!remoteDevicePlayback) {
+      setRemoteLiveTime(0);
+      return;
+    }
+    const calc = () => {
+      let base = Number(remoteDevicePlayback.currentTime) || 0;
+      if (remoteDevicePlayback.isPlaying && remoteDevicePlayback.updatedAt) {
+        const elapsed = (Date.now() - Number(remoteDevicePlayback.updatedAt)) / 1000;
+        if (elapsed > 0 && elapsed < 3600) base += elapsed;
+      }
+      setRemoteLiveTime(Math.floor(base));
+    };
+    calc();
+    if (remoteDevicePlayback.isPlaying) {
+      const timer = setInterval(calc, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [remoteDevicePlayback?.currentTime, remoteDevicePlayback?.updatedAt, remoteDevicePlayback?.isPlaying]);
+
   if (!currentTrack && !remoteDevicePlayback?.track) return null;
 
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
@@ -41,7 +63,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
           style={styles.connectBanner}
           onPress={() => {
             if (remoteDevicePlayback.track && playTrack) {
-              playTrack(remoteDevicePlayback.track, null, false, remoteDevicePlayback.currentTime || 0);
+              playTrack(remoteDevicePlayback.track, null, false, remoteLiveTime || remoteDevicePlayback.currentTime || 0);
             }
           }}
           activeOpacity={0.85}
@@ -52,7 +74,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               PLAYING ON {String(remoteDevicePlayback.deviceName || 'OTHER DEVICE').toUpperCase()}
             </Text>
             <Text style={styles.connectSub} numberOfLines={1}>
-              {remoteDevicePlayback.track.title || 'Playing'} • {formatTime(remoteDevicePlayback.currentTime)}
+              {remoteDevicePlayback.track.title || 'Playing'} • {formatTime(remoteLiveTime || remoteDevicePlayback.currentTime)}
             </Text>
           </View>
           <View style={styles.connectSwitchBtn}>

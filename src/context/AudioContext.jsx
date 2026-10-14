@@ -418,6 +418,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setCurrentTime(audio.currentTime);
           currentTimeRef.current = audio.currentTime;
 
+          // Periodically sync live playback time with other devices (Spotify Connect) every 2.5s
+          if (isPlayingRef.current && (!audio._lastDeviceSync || now - audio._lastDeviceSync >= 2500)) {
+            audio._lastDeviceSync = now;
+            if (socketRef.current && currentTrackRef.current) {
+              socketRef.current.emit('device:playback_state', {
+                isPlaying: true,
+                track: currentTrackRef.current,
+                currentTime: Math.floor(audio.currentTime),
+                deviceType: 'web',
+                deviceName: 'Web Browser'
+              });
+            }
+          }
+
           // Always accurately sync authentic duration from the audio stream itself!
           if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
             const rounded = Math.round(audio.duration);
@@ -1968,6 +1982,37 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const cur = currentTrackRef.current;
     const isDifferentTrack = syncTrack && String(syncTrack.id || syncTrack._id) !== String(cur?.id || cur?._id);
 
+    // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
+    if (syncPlaying === false) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setIsPlaying(false);
+      isPlayingRef.current = false;
+      window.__RIVO_USER_PAUSED = true;
+      if (typeof document !== 'undefined') {
+        document.querySelectorAll('audio, video').forEach(el => {
+          try { el.pause(); } catch(e){}
+        });
+      }
+      if (isDifferentTrack) {
+        await playTrack(syncTrack, null, true /* isRemote */);
+        if (audioRef.current) audioRef.current.pause();
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+      } else if (targetTime !== undefined && audioRef.current) {
+        audioRef.current.currentTime = Math.max(0, targetTime);
+        setCurrentTime(Math.max(0, targetTime));
+        currentTimeRef.current = Math.max(0, targetTime);
+      }
+      if (jamSessionRef.current) {
+        jamSessionRef.current.isPlaying = false;
+        jamSessionRef.current.currentTime = targetTime;
+        jamSessionRef.current.updatedAt = Date.now();
+      }
+      return;
+    }
+
     if (isDifferentTrack) {
       resumeAudioContext();
       await playTrack(syncTrack, null, true /* isRemote */);
@@ -1976,36 +2021,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
           seekTo(targetTime, true /* isRemote */);
         }, 350);
       }
-      if (syncPlaying !== undefined) {
-        setIsPlaying(syncPlaying);
-        if (!syncPlaying && audioRef.current) {
-          audioRef.current.pause();
-        }
-      }
+      setIsPlaying(true);
+      isPlayingRef.current = true;
     } else {
       // Same track: sync drift if > 1.5s
       if (targetTime !== undefined && Math.abs(targetTime - currentTimeRef.current) > 1.5) {
         seekTo(targetTime, true /* isRemote */);
       }
-      // Sync play/pause
-      if (syncPlaying !== undefined) {
-        setIsPlaying(syncPlaying);
-        if (audioRef.current) {
-          if (syncPlaying) {
-            resumeAudioContext();
-            audioRef.current.play().catch(() => {});
-          } else {
-            audioRef.current.pause();
-          }
-        }
-        if (!syncPlaying) {
-          window.__RIVO_USER_PAUSED = true;
-          if (typeof document !== 'undefined') {
-            document.querySelectorAll('audio, video').forEach(el => {
-              try { el.pause(); } catch(e){}
-            });
-          }
-        }
+      if (audioRef.current) {
+        resumeAudioContext();
+        audioRef.current.play().catch(() => {});
+      }
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      if (jamSessionRef.current) {
+        jamSessionRef.current.isPlaying = true;
+        jamSessionRef.current.currentTime = targetTime;
+        jamSessionRef.current.updatedAt = Date.now();
       }
     }
   }, [playTrack, seekTo]);
@@ -2039,11 +2071,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
         });
 
-        // Cross-Device Connect Sync (Item 4: Non-intrusive status notification)
+        // Cross-Device Connect Sync (Spotify Connect: Auto-pause web if other device is playing)
         socket.off('device:remote_playing');
         socket.on('device:remote_playing', (remoteSession) => {
           if (remoteSession && remoteSession.track) {
             setRemoteDevicePlayback(remoteSession);
+            // If the other device is playing and THIS web browser is playing: PAUSE THIS WEB BROWSER!
+            if (remoteSession.isPlaying && isPlayingRef.current) {
+              if (audioRef.current) {
+                audioRef.current.pause();
+              }
+              setIsPlaying(false);
+              isPlayingRef.current = false;
+              window.__RIVO_USER_PAUSED = true;
+            }
           } else {
             setRemoteDevicePlayback(null);
           }
