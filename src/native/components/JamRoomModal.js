@@ -174,7 +174,8 @@ export default function JamRoomModal({ visible, onClose }) {
   const isCurrentUserHost = Boolean(
     jamSession &&
       ((jamSession.hostUserId && myId && String(jamSession.hostUserId) === myId) ||
-        (jamSession.hostId && socket?.id && jamSession.hostId === socket.id))
+        (jamSession.hostId && socket?.id && jamSession.hostId === socket.id) ||
+        (jamSession.members || []).some(m => (m.socketId === socket?.id || (myId && String(m.id || m._id) === myId)) && m.isHost))
   );
 
   const renderBanner = () => (
