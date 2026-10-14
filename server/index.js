@@ -1162,30 +1162,31 @@ app.get([
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.0.ipa',
   '/downloads/Rivo-v1.5.9.ipa',
   '/downloads/Rivo-v1.5.8.ipa',
   '/downloads/Rivo-v1.5.7.ipa',
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
-  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.ipa');
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
+  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
   if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.5.9.ipa');
+    return res.download(localVersionedPath, 'Rivo-v1.6.0.ipa');
   }
   if (fs.existsSync(localOldVersionedPath)) {
-    return res.download(localOldVersionedPath, 'Rivo-v1.5.8.ipa');
+    return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.5.9.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.6.0.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.9', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.0', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1211,7 +1212,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.9/Rivo-v1.5.9.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.0/Rivo-v1.6.0.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients

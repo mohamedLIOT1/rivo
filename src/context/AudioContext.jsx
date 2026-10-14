@@ -289,6 +289,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const lastLoadedStreamUrlRef = useRef(null);
   const isTransitionTriggeredRef = useRef(false);
   const isSeamlessYtHandoffRef   = useRef(false);
+  const isFetchingAiShuffleRef   = useRef(false);
   const watchdogRef       = useRef(null);
   const playNextTrackRef  = useRef(null);
   const playPrevTrackRef  = useRef(null);
@@ -1210,7 +1211,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, [setTracks]);
 
   const fetchSmartShuffleTracks = useCallback(async (seedTrack, currentList = []) => {
-    if (!seedTrack) return;
+    if (!seedTrack || isFetchingAiShuffleRef.current) return [];
+    isFetchingAiShuffleRef.current = true;
     try {
       let followed = [];
       try {
@@ -1225,7 +1227,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           currentTrack: seedTrack,
           seedTracks: currentList.slice(0, 5),
           followedArtists: followed,
-          limit: 6
+          limit: 8
         })
       });
       const data = await res.json();
@@ -1235,15 +1237,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
           isAiSuggestion: true,
           isSmartShuffle: true
         }));
+        let freshTracks = [];
         setCurrentQueue(prev => {
           const existingIds = new Set(prev.map(t => String(t.id || t._id)));
-          const fresh = markedTracks.filter(t => !existingIds.has(String(t.id || t._id)));
-          return [...prev, ...fresh];
+          freshTracks = markedTracks.filter(t => !existingIds.has(String(t.id || t._id)));
+          const updated = [...prev, ...freshTracks];
+          currentQueueRef.current = updated;
+          return updated;
         });
+        return freshTracks;
       }
     } catch (err) {
       console.warn('[Smart Shuffle] fetch error:', err);
+    } finally {
+      isFetchingAiShuffleRef.current = false;
     }
+    return [];
   }, []);
 
   const addToQueue = useCallback((trackOrTracks, playNext = false) => {
@@ -1403,6 +1412,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       if (nextMode === 'shuffle') {
         unshuffledQueueRef.current = [...curList];
+        if (curList.length <= 3 && curTrack) {
+          fetchSmartShuffleTracks(curTrack, curList);
+        }
         if (curList.length > 1) {
           const played = curList.slice(0, Math.max(0, curIdx + 1));
           let upcoming = curList.slice(Math.max(0, curIdx + 1));
@@ -1566,25 +1578,65 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } else if (isShuffleRef.current) {
       // In shuffle mode, currentQueue is ALREADY shuffled in place!
       // Simply take the next item in the queue so what was displayed under Up Next plays!
-      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id);
+      const cur = currentTrackRef.current;
+      const curId = String(cur?.id || cur?._id);
       let idx = currentQueueIndexRef.current;
       if (idx < 0 || idx >= activeList.length || String(activeList[idx]?.id || activeList[idx]?._id) !== curId) {
         idx = activeList.findIndex(t => String(t.id || t._id) === curId);
       }
       let nextIdx = idx + 1;
+
+      // Proactively fetch AI tracks when nearing the end of the queue or if queue is small
+      if ((nextIdx >= activeList.length - 2 || activeList.length <= 3) && cur) {
+        fetchSmartShuffleTracks(cur, activeList);
+      }
+
       if (nextIdx >= activeList.length) {
-        if (repeatModeRef.current === 'all' || isRepeatRef.current) {
-          nextIdx = 0;
-          const reshuffled = shuffleArray(activeList);
-          currentQueueRef.current = reshuffled;
-          setCurrentQueue(reshuffled);
-          currentQueueIndexRef.current = 0;
-          setCurrentQueueIndex(0);
-          playTrack(reshuffled[0], reshuffled, false, 0);
-          return;
-        } else {
-          return;
-        }
+        // Queue reached the end! Instead of repeating the same 1 or 2 songs:
+        // Use AI recommendations to continue playback seamlessly!
+        (async () => {
+          try {
+            const fresh = await fetchSmartShuffleTracks(cur, activeList);
+            if (fresh && fresh.length > 0) {
+              const updatedQueue = [...currentQueueRef.current];
+              const newIdx = activeList.length;
+              currentQueueIndexRef.current = newIdx;
+              setCurrentQueueIndex(newIdx);
+              playTrack(fresh[0], updatedQueue, false, newIdx);
+              return;
+            }
+          } catch (e) {
+            console.warn('[AI Shuffle Flow Error]', e);
+          }
+
+          // Fallback: pick matching tracks from tracksRef that aren't yet in activeList
+          const remainingPool = tracksRef.current.filter(t => 
+            !activeList.some(a => String(a.id || a._id) === String(t.id || t._id)) &&
+            (isCurQuran ? isQuranContent(t) : !isQuranContent(t))
+          );
+          if (remainingPool.length > 0) {
+            const randomPick = remainingPool[Math.floor(Math.random() * remainingPool.length)];
+            const updatedQueue = [...activeList, randomPick];
+            currentQueueRef.current = updatedQueue;
+            setCurrentQueue(updatedQueue);
+            const newIdx = activeList.length;
+            currentQueueIndexRef.current = newIdx;
+            setCurrentQueueIndex(newIdx);
+            playTrack(randomPick, updatedQueue, false, newIdx);
+            return;
+          }
+
+          // If entire library is exhausted and repeat is on:
+          if (repeatModeRef.current === 'all' || isRepeatRef.current) {
+            const reshuffled = shuffleArray(activeList);
+            currentQueueRef.current = reshuffled;
+            setCurrentQueue(reshuffled);
+            currentQueueIndexRef.current = 0;
+            setCurrentQueueIndex(0);
+            playTrack(reshuffled[0], reshuffled, false, 0);
+          }
+        })();
+        return;
       }
       currentQueueIndexRef.current = nextIdx;
       setCurrentQueueIndex(nextIdx);
