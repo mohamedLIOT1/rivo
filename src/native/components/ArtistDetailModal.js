@@ -31,6 +31,7 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { matchesArtist } from '../../utils/artistUtils.jsx';
+import MiniPlayer from './MiniPlayer';
 
 const { width } = Dimensions.get('window');
 const ALBUM_CARD_WIDTH = (width - 48) / 2;
@@ -43,6 +44,7 @@ export default function ArtistDetailModal({
   allAlbums = [],
   onSelectAlbum,
   onTrackAction,
+  onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, addToQueue, downloadedTracks = [], downloadTrack } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
@@ -326,8 +328,16 @@ export default function ArtistDetailModal({
             })}
           </View>
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: currentTrack ? 120 : 60 }} />
         </ScrollView>
+
+        {/* Floating Mini Player matching home screen experience */}
+        {currentTrack && (
+          <MiniPlayer
+            onOpenFullPlayer={onOpenFullPlayer}
+            bottomOffset={Platform.OS === 'ios' ? 24 : 12}
+          />
+        )}
       </View>
     </Modal>
   );

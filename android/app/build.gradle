@@ -115,8 +115,8 @@ android {
         applicationId 'com.rivo.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 25
-        versionName "1.5.7"
+        versionCode 28
+        versionName "1.6.0"
     }
     signingConfigs {
         debug {

@@ -23,24 +23,25 @@ function getGitHubToken() {
 async function publish() {
   const token = await getGitHubToken();
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
-  const version = pkg.version || '1.5.8';
+  const version = pkg.version || '1.6.0';
   const tag = `v${version}`;
   const releaseName = `Rivo v${version}`;
   const releaseBody = `## Rivo v${version} Update
 
 ### What's Changed
-- **Album Detail Modal:** Clicking any album card now opens an authentic brutalist album modal with full tracklist, Play All, and Shuffle, rather than auto-playing.
-- **Jam Room Hooks Fix:** Resolved React hook order violation that previously crashed the app when tapping the Jam room button.
-- **Search Artists & Albums:** Added native Artists and Albums discovery sections with dedicated category filter pills (ALL, SONGS, ARTISTS, ALBUMS).
-- **Stream Audio Resilience:** Updated audio stream resolver to prevent player buffering stalls and prioritize proxy streaming.
-- **Android App Icon Sync:** Updated all Android mipmap launcher icons and background colors to perfectly match the iPhone Rivo emblem.
-- **Website Playlist Cover Upload:** Fixed playlist cover photo updates with direct multipart uploads and image fallback resilience.
+- **Android Launcher Icon Safe Zone:** Centered adaptive icon within the standard safe zone (66%) across all mipmap densities (mdpi to xxxhdpi) to eliminate OS cropping.
+- **Clean Launch Splash Screen:** Removed splash screen bottle cap graphic, launching seamlessly into the brutalist dark background matching iOS.
+- **Auto Sign-in / Register Modal:** Prompt authentication immediately on launch for unauthenticated users, matching the iOS flow.
+- **Modals MiniPlayer & Continuous Playback:** Mounted the bottom MiniPlayer within Album and Artist detail views and resolved the audio focus collision that previously caused ExoPlayer to halt songs.
+- **People & Listeners Search:** Added listener search with avatar, followers count, public crate count, and direct profile view modal on both iOS and Android.
+- **Playlist Public / Private Toggle:** Added instant visibility switching directly from the playlist hero card, edit modal, and collection grid.
+- **Queue Playlist Control:** Added dedicated QUEUE button to set or append playlist crates directly into the playback queue.
 `;
 
   const rootFiles = fs.readdirSync(path.resolve(__dirname, '..'));
   const apkFileName = rootFiles.find(f => f.endsWith('.apk') && f.includes(version)) ||
-                     rootFiles.find(f => f.endsWith('.apk') && f.includes('1.5.')) ||
-                     rootFiles.find(f => f.endsWith('.apk'));
+                     rootFiles.find(f => f.endsWith('.apk') && f.includes('1.6.')) ||
+                     rootFiles.find(f => f.endsWith('.apk') && !f.includes('1.2.'));
   const apkPath = apkFileName ? path.resolve(__dirname, '..', apkFileName) : null;
   const apkBytes = apkPath && fs.existsSync(apkPath) ? fs.readFileSync(apkPath) : null;
   if (apkBytes) {

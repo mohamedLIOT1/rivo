@@ -253,10 +253,10 @@ export const AudioProvider = ({ children }) => {
   const onPlaybackStatusUpdate = (status) => {
     if (!status.isLoaded) return;
     if (!isSeekingRef.current && !status.isBuffering) {
-      if (isPlaying !== status.isPlaying) {
+      if (isPlayingRef.current !== status.isPlaying) {
         setIsPlaying(status.isPlaying);
         const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
-        updateMediaNotification(status.isPlaying, repeatMode, isShuffle, isLikedTrack, currentTrackRef.current);
+        updateMediaNotification(status.isPlaying, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
       }
     }
 
@@ -268,7 +268,7 @@ export const AudioProvider = ({ children }) => {
       setProgress({ currentTime: newCurrentTime, duration: newDuration });
     }
 
-    if (status.didJustFinish) {
+    if (status.didJustFinish && ((status.positionMillis || 0) > 1000 || (status.durationMillis || 0) > 1000)) {
       const finishedTrack = currentTrackRef.current;
       if (finishedTrack && !isOfflineRef.current && autoDownloadFinishedRef.current) {
         const fId = String(finishedTrack._id || finishedTrack.id || '');
@@ -285,7 +285,7 @@ export const AudioProvider = ({ children }) => {
         }
       }
 
-      if (repeatMode === 'one') {
+      if (repeatModeRef.current === 'one') {
         if (soundRef.current) soundRef.current.replayAsync().catch(() => {});
       } else {
         if (playNextTrackRef.current) playNextTrackRef.current();
@@ -597,15 +597,7 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
-      const soundSource = uri.startsWith('file://')
-        ? { uri }
-        : {
-            uri,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
-              'Accept': '*/*',
-            },
-          };
+      const soundSource = { uri };
 
       const initialPosMs = Math.round(safeTargetSec * 1000);
       const { sound } = await Audio.Sound.createAsync(
