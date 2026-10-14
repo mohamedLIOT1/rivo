@@ -9,11 +9,22 @@ const SocketContext = createContext();
 
 export const SocketProvider = ({ children }) => {
   const { currentUser, token } = useUser();
-  const { syncRemotePlayState } = useAudioPlayer();
+  const { syncRemotePlayState, setJamSync } = useAudioPlayer();
+  const syncRemotePlayStateRef = useRef(syncRemotePlayState);
+  useEffect(() => {
+    syncRemotePlayStateRef.current = syncRemotePlayState;
+  }, [syncRemotePlayState]);
+
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [jamSession, setJamSession] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
+
+  useEffect(() => {
+    if (setJamSync) {
+      setJamSync({ socket, jamSession });
+    }
+  }, [socket, jamSession, setJamSync]);
 
   useEffect(() => {
     const s = io(API_BASE_URL, {
@@ -39,35 +50,30 @@ export const SocketProvider = ({ children }) => {
       setIsConnected(false);
     });
 
-    // Listen to real Jam Room server events
+    // Listen to real Jam Room server events with automatic synchronization
     s.on('jam:room_updated', (data) => {
       setJamSession(data);
-      if (data?.currentTrack && syncRemotePlayState) {
-        const myId = String(currentUser?._id || currentUser?.id || '');
-        const isHost = Boolean(
-          (data.hostUserId && myId && String(data.hostUserId) === myId) ||
-          (data.hostId && s?.id && data.hostId === s.id)
-        );
-        if (!isHost) {
-          syncRemotePlayState({
-            isPlaying: data.isPlaying,
-            currentTrack: data.currentTrack,
-            currentTime: data.currentTime,
-            updatedAt: data.updatedAt,
-          });
-        }
+      if (data?.currentTrack && syncRemotePlayStateRef.current) {
+        // Do not self-sync if this device was the initiator
+        if (data.initiatorId && data.initiatorId === s.id) return;
+        syncRemotePlayStateRef.current({
+          isPlaying: data.isPlaying,
+          currentTrack: data.currentTrack,
+          currentTime: data.currentTime,
+          updatedAt: data.updatedAt,
+        });
       }
     });
 
     s.on('jam:sync_play_state', (data) => {
-      if (data?.currentTrack && syncRemotePlayState) {
-        syncRemotePlayState(data);
+      if (data?.currentTrack && syncRemotePlayStateRef.current) {
+        syncRemotePlayStateRef.current(data);
       }
     });
 
     s.on('jam:on_play_state_changed', (data) => {
-      if (data?.initiatorId !== s.id && data?.currentTrack && syncRemotePlayState) {
-        syncRemotePlayState(data);
+      if (data?.initiatorId !== s.id && data?.currentTrack && syncRemotePlayStateRef.current) {
+        syncRemotePlayStateRef.current(data);
       }
     });
 

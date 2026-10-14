@@ -1,0 +1,134 @@
+/**
+ * Rivo Native Smart Taste & Mood Engine
+ * Dynamically curates 10-track batches aligned with:
+ * 1. Followed Artists (+60 pts)
+ * 2. Liked Songs (+50 pts)
+ * 3. Artists from Liked Songs (+40 pts)
+ * 4. Time-of-Day Listening Mood (+30 pts)
+ * 5. Track Popularity/Play count (+15 pts)
+ * 6. Dynamic micro-jitter (+0-12 pts)
+ */
+
+export function getCurrentTimeMood() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) {
+    return {
+      id: 'morning',
+      label: 'Morning Fresh • صباح ونشاط',
+      keywords: ['acoustic', 'indie', 'morning', 'fresh', 'light', 'روقان', 'صباح', 'هادي', 'فيروز'],
+      energy: 'fresh',
+    };
+  } else if (hour >= 12 && hour < 17) {
+    return {
+      id: 'afternoon',
+      label: 'Afternoon Flow • روقان وتركيز',
+      keywords: ['chill', 'lofi', 'focus', 'flow', 'smooth', 'موسيقى', 'تركيز', 'عصر', 'رايق'],
+      energy: 'chill',
+    };
+  } else if (hour >= 17 && hour < 23) {
+    return {
+      id: 'evening',
+      label: 'Evening Hype • سهرة وحماس',
+      keywords: ['rap', 'trap', 'drill', 'hype', 'party', 'حماس', 'راب', 'سهرة', 'مهرجان', 'طاقة', 'ويجز', 'مروان'],
+      energy: 'hype',
+    };
+  } else {
+    return {
+      id: 'night',
+      label: 'Night Melancholy • روقان الليل وسفر',
+      keywords: ['slowed', 'night', 'deep', 'sad', 'melancholy', 'chill', 'ليل', 'سفر', 'هادية', 'حزين', 'روما', 'دواير'],
+      energy: 'deep',
+    };
+  }
+}
+
+export function getSmartTasteAndMoodTracks({
+  allTracks = [],
+  currentUser = null,
+  followedArtists = [],
+  likedTrackIds = [],
+  excludeTrackIds = new Set(),
+  limit = 10,
+}) {
+  if (!Array.isArray(allTracks) || allTracks.length === 0) return [];
+
+  const mood = getCurrentTimeMood();
+  const followedSet = new Set(
+    (followedArtists || []).map(a => String(a).toLowerCase().trim())
+  );
+  if (currentUser?.following && Array.isArray(currentUser.following)) {
+    currentUser.following.forEach(f => {
+      const name = typeof f === 'string' ? f : f?.name || f?.username;
+      if (name) followedSet.add(name.toLowerCase().trim());
+    });
+  }
+
+  const likedSet = new Set((likedTrackIds || []).map(id => String(id)));
+
+  // Extract artists from liked tracks
+  const likedArtistSet = new Set();
+  allTracks.forEach(t => {
+    const id = String(t._id || t.id);
+    if (likedSet.has(id) && t.artist) {
+      likedArtistSet.add(t.artist.toLowerCase().trim());
+    }
+  });
+
+  // Exclude already queued / played tracks if possible
+  let candidates = allTracks.filter(t => {
+    const id = String(t._id || t.id);
+    return !excludeTrackIds.has(id);
+  });
+
+  if (candidates.length < limit) {
+    candidates = allTracks;
+  }
+
+  const scored = candidates.map(track => {
+    let score = 0;
+    const tArtist = (track.artist || '').toLowerCase().trim();
+    const tTitle = (track.title || '').toLowerCase().trim();
+    const tGenre = (track.genre || '').toLowerCase().trim();
+    const tText = `${tTitle} ${tArtist} ${tGenre}`;
+
+    // 1. Followed Artist match (+60 pts)
+    for (const followed of followedSet) {
+      if (followed && tArtist.includes(followed)) {
+        score += 60;
+        break;
+      }
+    }
+
+    // 2. Liked song match (+50 pts)
+    const tId = String(track._id || track.id);
+    if (likedSet.has(tId)) {
+      score += 50;
+    }
+
+    // 3. Artist taste similarity from liked songs (+40 pts)
+    if (likedArtistSet.has(tArtist)) {
+      score += 40;
+    }
+
+    // 4. Time-of-day mood keywords match (+30 pts)
+    for (const kw of mood.keywords) {
+      if (tText.includes(kw)) {
+        score += 30;
+        break;
+      }
+    }
+
+    // 5. Popularity / play count bonus (up to +15 pts)
+    const plays = Number(track.plays || track.playCount || 0);
+    score += Math.min(15, Math.log10(plays + 1) * 4);
+
+    // 6. Dynamic micro-jitter for organic variety (+0 to 12 pts)
+    score += Math.random() * 12;
+
+    return { track, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, limit).map(s => s.track);
+}

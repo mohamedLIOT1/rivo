@@ -46,6 +46,7 @@ export default function JamRoomModal({ visible, onClose }) {
     reorderJamQueue,
     transferJamHost,
     kickJamMember,
+    syncJamPlayState,
   } = useSocket();
 
   const { currentUser, tracks = [] } = useUser();
@@ -104,6 +105,11 @@ export default function JamRoomModal({ visible, onClose }) {
     const code = `JAM-${randomNum}`;
     joinJam(code);
     showToast(`Created Jam Room ${code}`, 'success');
+    if (currentTrack) {
+      setTimeout(() => {
+        syncJamPlayState?.(isPlaying, currentTrack, 0);
+      }, 500);
+    }
   };
 
   const handleJoin = () => {

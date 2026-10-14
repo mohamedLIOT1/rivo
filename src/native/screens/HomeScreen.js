@@ -22,6 +22,7 @@ import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
+import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 
 const { width } = Dimensions.get('window');
 const ALBUM_CARD_WIDTH = (width - 34) / 2;
@@ -106,6 +107,26 @@ export default function HomeScreen({
     return 'Good evening';
   };
 
+  const currentMood = getCurrentTimeMood();
+
+  const handlePlaySmartCassette = useCallback(() => {
+    const pool = displayTracks.length > 0 ? displayTracks : (userTracks || []);
+    const smart10 = getSmartTasteAndMoodTracks({
+      allTracks: pool,
+      currentUser,
+      followedArtists: currentUser?.following || [],
+      likedTrackIds,
+      limit: 10,
+    });
+
+    if (smart10.length > 0) {
+      const tagged = smart10.map(t => ({ ...t, isSmartMoodQueue: true }));
+      playTrack(tagged[0], tagged);
+    } else if (displayTracks.length > 0) {
+      playTrack(displayTracks[0], displayTracks.slice(0, 10));
+    }
+  }, [displayTracks, userTracks, currentUser, likedTrackIds, playTrack]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -129,7 +150,7 @@ export default function HomeScreen({
         <View style={styles.labPill}>
           <View style={[styles.pulseDot, isOffline && { backgroundColor: '#f59e0b' }]} />
           <Text style={styles.labPillText}>
-            {isOffline ? '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION' : '🎵 UNLIMITED HI-FI STREAMING • CAIRO MUSIC LAB'}
+            {isOffline ? '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION' : `🎵 ${currentMood.label.toUpperCase()}`}
           </Text>
         </View>
 
@@ -151,15 +172,11 @@ export default function HomeScreen({
         <View style={styles.heroBtnRow}>
           <TouchableOpacity
             style={styles.playTopChartsBtn}
-            onPress={() => {
-              if (displayTracks.length > 0) {
-                playTrack(displayTracks[0], displayTracks);
-              }
-            }}
+            onPress={handlePlaySmartCassette}
             activeOpacity={0.85}
           >
             <Play size={14} color="#0b1110" fill="#0b1110" />
-            <Text style={styles.playTopChartsBtnText}>PLAY TOP CHARTS</Text>
+            <Text style={styles.playTopChartsBtnText}>PLAY TOP CHARTS (10)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
