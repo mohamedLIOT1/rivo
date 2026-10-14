@@ -33,6 +33,8 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
+import MiniPlayer from './MiniPlayer';
+
 const { width } = Dimensions.get('window');
 
 export default function AlbumDetailModal({
@@ -42,6 +44,7 @@ export default function AlbumDetailModal({
   allTracks = [],
   onTrackAction,
   onSelectArtist,
+  onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, isPlaying, addToQueue, downloadedTracks = [], downloadTrack } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
@@ -345,8 +348,16 @@ export default function AlbumDetailModal({
             );
           })}
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: currentTrack ? 120 : 60 }} />
         </ScrollView>
+
+        {/* Floating Mini Player matching home screen experience */}
+        {currentTrack && (
+          <MiniPlayer
+            onOpenFullPlayer={onOpenFullPlayer}
+            bottomOffset={Platform.OS === 'ios' ? 24 : 12}
+          />
+        )}
       </View>
     </Modal>
   );

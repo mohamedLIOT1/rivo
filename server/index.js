@@ -1065,12 +1065,12 @@ app.post('/api/auth/login', async (req, res) => {
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.5.9',
-  releaseNotes: 'Retro cassette album detail view, authentic artist profile view with discography, web playlist cover uploads, and stability fixes.',
+  version: '1.6.0',
+  releaseNotes: 'Android adaptive icon safe zone fix, clean splash launch without logo, auto auth modal on launch, mini player in album/artist modals & audio playback fix, people & listeners search, playlist public/private control & queue playlist button.',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.5.9',
+      version: '1.6.0',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1078,22 +1078,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Discord Rich Presence, background media keys, smooth UI.'
     },
     android: {
-      version: '1.5.9',
-      build: 27,
+      version: '1.6.0',
+      build: 28,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.5.9.apk',
-      directFile: 'Rivo-v1.5.9.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.0.apk',
+      directFile: 'Rivo-v1.6.0.apk',
       mandatory: false,
-      notes: 'Retro cassette album detail view, authentic artist profile view with discography, web playlist cover uploads, and stability fixes.'
+      notes: 'Android adaptive icon safe zone fix, clean splash launch, auth modal on launch, mini player in modals, ExoPlayer audio fix, people search, playlist public/private control & queue playlist button.'
     },
     ios: {
-      version: '1.5.9',
-      build: 27,
+      version: '1.6.0',
+      build: 28,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.5.9.ipa',
-      directFile: 'Rivo-v1.5.9.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.0.ipa',
+      directFile: 'Rivo-v1.6.0.ipa',
       mandatory: false,
-      notes: 'Retro cassette album detail view, authentic artist profile view with discography, web playlist cover uploads, and stability fixes.'
+      notes: 'Clean splash launch, auth modal on launch, mini player in modals, people search, playlist public/private control & queue playlist button.'
     }
   }
 };
@@ -1105,6 +1105,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.0.apk',
   '/downloads/Rivo-v1.5.9.apk',
   '/downloads/Rivo-v1.5.8.apk',
   '/downloads/Rivo-v1.5.7.apk',
@@ -1112,24 +1113,24 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
-  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.8.apk');
+  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
+  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
   if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.5.9.apk');
+    return res.download(localVersionedPath, 'Rivo-v1.6.0.apk');
   }
   if (fs.existsSync(localOldVersionedPath)) {
-    return res.download(localOldVersionedPath, 'Rivo-v1.5.8.apk');
+    return res.download(localOldVersionedPath, 'Rivo-v1.5.9.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.5.9.apk');
+    return res.download(localApkPath, 'Rivo-v1.6.0.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.5.9', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.0', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1155,7 +1156,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.5.9/Rivo-v1.5.9.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.0/Rivo-v1.6.0.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)

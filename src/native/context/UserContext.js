@@ -26,6 +26,7 @@ const normalizePlaylists = (rawList) => {
 export const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [token, setToken] = useState(null);
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
   const [tracks, setTracks] = useState(INITIAL_TRACKS);
   const [playlists, setPlaylists] = useState([]);
   const [albums, setAlbums] = useState(INITIAL_ALBUMS || []);
@@ -82,7 +83,9 @@ export const UserProvider = ({ children }) => {
         setLikedTrackIds(userObj.likedTrackIds || []);
         syncUserData(storedToken);
       }
-    } catch {}
+    } catch {} finally {
+      setIsAuthLoaded(true);
+    }
   };
 
   const fetchPublicTracks = async () => {
@@ -329,6 +332,29 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const togglePlaylistVisibility = async (playlistId) => {
+    if (!token) return { success: false, error: 'Not authenticated' };
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/toggle-visibility`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({ success: false }));
+      if (res.ok && data.success) {
+        setPlaylists(prev => prev.map(p => {
+          if (String(p.id || p._id) === String(playlistId)) {
+            return { ...p, isPublic: data.isPublic };
+          }
+          return p;
+        }));
+        await syncUserData();
+      }
+      return data;
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
   const deletePlaylist = async (playlistId) => {
     if (!token) return;
     const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}`, {
@@ -343,6 +369,7 @@ export const UserProvider = ({ children }) => {
       value={{
         currentUser,
         token,
+        isAuthLoaded,
         tracks,
         playlists,
         albums,
@@ -357,6 +384,7 @@ export const UserProvider = ({ children }) => {
         createPlaylist,
         updatePlaylist,
         uploadPlaylistCover,
+        togglePlaylistVisibility,
         addToPlaylist,
         removeTrackFromPlaylist,
         deletePlaylist,

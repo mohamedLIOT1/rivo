@@ -29,6 +29,7 @@ const ALBUM_CARD_WIDTH = (width - 34) / 2;
 export default function HomeScreen({
   onOpenAddSong,
   onTrackAction,
+  onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
@@ -357,6 +358,7 @@ export default function HomeScreen({
         onClose={() => setSelectedAlbum(null)}
         allTracks={userTracks}
         onTrackAction={onTrackAction}
+        onOpenFullPlayer={onOpenFullPlayer}
         onSelectArtist={(artistName) => {
           setSelectedAlbum(null);
           setSelectedArtist({ name: artistName });
@@ -368,6 +370,7 @@ export default function HomeScreen({
         onClose={() => setSelectedArtist(null)}
         allTracks={userTracks}
         allAlbums={albums}
+        onOpenFullPlayer={onOpenFullPlayer}
         onSelectAlbum={(alb) => {
           setSelectedArtist(null);
           setSelectedAlbum(alb);

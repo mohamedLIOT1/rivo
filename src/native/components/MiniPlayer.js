@@ -6,7 +6,7 @@ import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
-export default function MiniPlayer({ onOpenFullPlayer }) {
+export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
@@ -24,8 +24,10 @@ export default function MiniPlayer({ onOpenFullPlayer }) {
   const rawCover = currentTrack.coverUrl || currentTrack.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 
+  const dockBottom = bottomOffset !== undefined ? bottomOffset : (Platform.OS === 'ios' ? 70 : 56);
+
   return (
-    <View style={styles.outerDock}>
+    <View style={[styles.outerDock, { bottom: dockBottom }]}>
       <TouchableOpacity
         style={styles.container}
         onPress={onOpenFullPlayer}

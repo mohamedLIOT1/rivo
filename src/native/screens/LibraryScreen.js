@@ -28,6 +28,9 @@ import {
   X,
   Image as ImageIcon,
   FolderPlus,
+  Globe,
+  Lock,
+  ListPlus,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -47,8 +50,24 @@ export default function LibraryScreen({
   onNavigateOffline,
   onTrackAction,
 }) {
-  const { playTrack, playPlaylist, tracks: audioTracks, downloadedTracks = [], handleDownloadTrack } = useAudioPlayer();
-  const { currentUser, playlists, likedTrackIds, tracks: userTracks, updatePlaylist, uploadPlaylistCover } = useUser();
+  const {
+    playTrack,
+    playPlaylist,
+    tracks: audioTracks,
+    downloadedTracks = [],
+    handleDownloadTrack,
+    addMultipleToQueue,
+    setQueue,
+  } = useAudioPlayer();
+  const {
+    currentUser,
+    playlists,
+    likedTrackIds,
+    tracks: userTracks,
+    updatePlaylist,
+    uploadPlaylistCover,
+    togglePlaylistVisibility,
+  } = useUser();
   const { showToast } = useToast();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
@@ -62,7 +81,9 @@ export default function LibraryScreen({
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editCover, setEditCover] = useState('');
+  const [editIsPublic, setEditIsPublic] = useState(true);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
 
   useEffect(() => {
@@ -213,7 +234,42 @@ export default function LibraryScreen({
     setEditName(pl.name || '');
     setEditDesc(pl.description || '');
     setEditCover(pl.cover || '');
+    setEditIsPublic(pl.isPublic !== false);
     setIsEditModalOpen(true);
+  };
+
+  const handleToggleCurrentPlaylistVisibility = async () => {
+    if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
+    const plId = String(selectedView.id || selectedView._id);
+    setIsTogglingVisibility(true);
+    try {
+      const res = await togglePlaylistVisibility(plId);
+      if (res && res.success) {
+        const nextIsPublic = res.isPublic;
+        setSelectedView(prev => (prev && String(prev.id || prev._id) === plId ? { ...prev, isPublic: nextIsPublic } : prev));
+        showToast(nextIsPublic ? 'Playlist is now Public' : 'Playlist is now Private', 'success');
+      } else {
+        showToast(res?.error || 'Failed to update visibility', 'error');
+      }
+    } catch (e) {
+      showToast('Error updating visibility', 'error');
+    } finally {
+      setIsTogglingVisibility(false);
+    }
+  };
+
+  const handleSetPlaylistAsQueue = () => {
+    if (!activePlaylistTracks || activePlaylistTracks.length === 0) {
+      showToast('No tracks in playlist to queue', 'warning');
+      return;
+    }
+    if (typeof setQueue === 'function') {
+      setQueue(activePlaylistTracks);
+      showToast(`Set crate as active queue (${activePlaylistTracks.length} tracks)`, 'success');
+    } else if (typeof addMultipleToQueue === 'function') {
+      addMultipleToQueue(activePlaylistTracks);
+      showToast(`Added ${activePlaylistTracks.length} tracks to queue`, 'success');
+    }
   };
 
   const handlePickCoverFile = async () => {
@@ -253,7 +309,12 @@ export default function LibraryScreen({
         name: editName.trim(),
         description: editDesc.trim(),
         cover: finalCover,
+        isPublic: editIsPublic,
       });
+
+      if (editIsPublic !== (selectedView.isPublic !== false)) {
+        await togglePlaylistVisibility(plId);
+      }
 
       if (updateRes && updateRes.success) {
         setSelectedView(prev => ({
@@ -261,6 +322,7 @@ export default function LibraryScreen({
           name: editName.trim(),
           description: editDesc.trim(),
           cover: finalCover,
+          isPublic: editIsPublic,
         }));
         setCoverFailed(false);
         showToast('Playlist updated successfully!', 'success');
@@ -269,7 +331,7 @@ export default function LibraryScreen({
         showToast(updateRes?.error || 'Failed to update playlist', 'error');
       }
     } catch (err) {
-      showToast('Failed to update playlist: ' + err.message, 'error');
+      showToast('Failed to save changes', 'error');
     } finally {
       setIsSavingEdit(false);
     }
@@ -388,8 +450,34 @@ export default function LibraryScreen({
                   ) : null}
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
+                      <TouchableOpacity
+                        style={[
+                          styles.visibilityHeroPill,
+                          selectedView.isPublic !== false ? styles.visibilityHeroPillPublic : styles.visibilityHeroPillPrivate
+                        ]}
+                        onPress={handleToggleCurrentPlaylistVisibility}
+                        disabled={isTogglingVisibility}
+                        activeOpacity={0.7}
+                      >
+                        {isTogglingVisibility ? (
+                          <ActivityIndicator size="small" color={selectedView.isPublic !== false ? '#17a398' : '#9ca3af'} />
+                        ) : selectedView.isPublic !== false ? (
+                          <>
+                            <Globe size={11} color="#17a398" />
+                            <Text style={[styles.visibilityHeroPillText, { color: '#17a398' }]}>PUBLIC</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={11} color="#9ca3af" />
+                            <Text style={[styles.visibilityHeroPillText, { color: '#9ca3af' }]}>PRIVATE</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
                     <TouchableOpacity
                       style={styles.editHeroPill}
                       onPress={() => openEditPlaylist(selectedView)}
@@ -416,6 +504,14 @@ export default function LibraryScreen({
                       onPress={() => handlePlayPlaylist(selectedView, true)}
                     >
                       <Shuffle size={14} color={colors.paper} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.queueHeroBtn}
+                      onPress={handleSetPlaylistAsQueue}
+                      activeOpacity={0.8}
+                    >
+                      <ListPlus size={13} color="#17a398" />
+                      <Text style={styles.queueHeroBtnText}>QUEUE</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.downloadHeroBtn, isDownloadingAll && { opacity: 0.7 }]}
@@ -552,9 +648,24 @@ export default function LibraryScreen({
                     <Text style={styles.playlistCardName} numberOfLines={1}>
                       {playlist.name}
                     </Text>
-                    <Text style={styles.playlistCardCount}>
-                      {(playlist.tracks || playlist.trackIds || []).length} TRACKS
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                      <Text style={styles.playlistCardCount}>
+                        {(playlist.tracks || playlist.trackIds || []).length} TRACKS
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        {playlist.isPublic !== false ? (
+                          <>
+                            <Globe size={10} color="#17a398" />
+                            <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }}>PUB</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={10} color="#9ca3af" />
+                            <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }}>PRIV</Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -670,6 +781,49 @@ export default function LibraryScreen({
                   style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
                   autoCapitalize="none"
                 />
+              </View>
+
+              {/* Visibility toggle in modal */}
+              <View style={{ marginTop: 14 }}>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>PLAYLIST VISIBILITY</Text>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: 12,
+                    borderRadius: 8,
+                    borderWidth: 1.5,
+                    borderColor: editIsPublic ? '#17a398' : '#374151',
+                    backgroundColor: editIsPublic ? 'rgba(23,163,152,0.12)' : 'rgba(55,65,81,0.2)',
+                  }}
+                  onPress={() => setEditIsPublic(!editIsPublic)}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    {editIsPublic ? (
+                      <Globe size={18} color="#17a398" />
+                    ) : (
+                      <Lock size={18} color="#9ca3af" />
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '900', color: editIsPublic ? '#17a398' : '#e2e8f0', fontSize: 13, fontFamily: 'monospace' }}>
+                        {editIsPublic ? 'PUBLIC PLAYLIST' : 'PRIVATE PLAYLIST'}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
+                        {editIsPublic ? 'Visible to other listeners & appears in search' : 'Only visible to you in your library'}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11, borderWidth: 2,
+                    borderColor: editIsPublic ? '#17a398' : '#6b7280',
+                    backgroundColor: editIsPublic ? '#17a398' : 'transparent',
+                    alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    {editIsPublic && <Check size={14} color="#0b1110" strokeWidth={3} />}
+                  </View>
+                </TouchableOpacity>
               </View>
             </ScrollView>
 
@@ -941,7 +1095,9 @@ const styles = StyleSheet.create({
   },
   likedBtnRow: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 8,
   },
   playHeroBtn: {
@@ -1022,6 +1178,45 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 10,
     color: colors.mint,
+  },
+  visibilityHeroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 6,
+    borderWidth: 1.5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  visibilityHeroPillPublic: {
+    backgroundColor: 'rgba(23,163,152,0.15)',
+    borderColor: '#17a398',
+  },
+  visibilityHeroPillPrivate: {
+    backgroundColor: 'rgba(107,114,128,0.15)',
+    borderColor: '#4b5563',
+  },
+  visibilityHeroPillText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+  },
+  queueHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0a1714',
+    borderWidth: 1.5,
+    borderColor: '#17a398',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  queueHeroBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#17a398',
   },
   downloadHeroBtn: {
     flexDirection: 'row',

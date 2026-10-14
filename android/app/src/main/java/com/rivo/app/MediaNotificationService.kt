@@ -95,42 +95,11 @@ class MediaNotificationService : Service() {
     }
 
     private fun requestAudioFocus() {
-        try {
-            val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-            audioManager = am
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val audioAttributes = AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                    .setAudioAttributes(audioAttributes)
-                    .setAcceptsDelayedFocusGain(true)
-                    .setOnAudioFocusChangeListener { /* maintain focus */ }
-                    .build()
-                audioFocusRequest = focusRequest
-                am.requestAudioFocus(focusRequest)
-            } else {
-                @Suppress("DEPRECATION")
-                am.requestAudioFocus(
-                    { _ -> },
-                    AudioManager.STREAM_MUSIC,
-                    AudioManager.AUDIOFOCUS_GAIN
-                )
-            }
-        } catch (_: Throwable) {}
+        // Handled directly by Expo-AV ExoPlayer engine to prevent internal audio focus collisions
     }
 
     private fun abandonAudioFocus() {
-        try {
-            val am = audioManager ?: return
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
-            } else {
-                @Suppress("DEPRECATION")
-                am.abandonAudioFocus(null)
-            }
-        } catch (_: Throwable) {}
+        // Handled directly by Expo-AV ExoPlayer engine
     }
 
     private fun acquireWakeLock() {

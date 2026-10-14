@@ -18,6 +18,9 @@ import {
   Music,
   Users,
   Layers,
+  ArrowRight,
+  ShieldCheck,
+  User,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -29,6 +32,7 @@ import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import AlbumDetailModal from '../components/AlbumDetailModal';
 import ArtistDetailModal from '../components/ArtistDetailModal';
+import UserDetailModal from '../components/UserDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { splitArtists } from '../../utils/artistUtils.jsx';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -50,7 +54,7 @@ const DISPENSARY_GENRES = [
   { id: 'ambient', label: 'NIGHT AMBIENT', color: '#6366f1', tag: 'FOCUS DEEP' },
 ];
 
-export default function SearchScreen({ onTrackAction }) {
+export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer }) {
   const { playTrack, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { tracks: userTracks, albums: userAlbums = [] } = useUser();
   const { appMode } = useConnectivity();
@@ -58,12 +62,16 @@ export default function SearchScreen({ onTrackAction }) {
 
   const [query, setQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums'
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [remoteResults, setRemoteResults] = useState([]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const [userResults, setUserResults] = useState([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
   const searchTimeoutRef = useRef(null);
+  const userSearchTimeoutRef = useRef(null);
 
   const isOffline = appMode === 'offline';
   const allTracks = isOffline
@@ -99,6 +107,45 @@ export default function SearchScreen({ onTrackAction }) {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
   }, [query, isOffline]);
+
+  // Live query for people & listeners
+  useEffect(() => {
+    if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
+
+    const trimmed = query.trim();
+    if (isOffline) {
+      setUserResults([]);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    if (!trimmed && activeFilter !== 'people') {
+      setUserResults([]);
+      setIsSearchingUsers(false);
+      return;
+    }
+
+    setIsSearchingUsers(true);
+    userSearchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const url = trimmed
+          ? `${API_BASE_URL}/api/users/search?q=${encodeURIComponent(trimmed)}`
+          : `${API_BASE_URL}/api/users/search`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.users)) {
+            setUserResults(data.users);
+          }
+        }
+      } catch {}
+      setIsSearchingUsers(false);
+    }, 400);
+
+    return () => {
+      if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
+    };
+  }, [query, activeFilter, isOffline]);
 
   // Matching songs
   const filteredTracks = useMemo(() => {
@@ -315,6 +362,17 @@ export default function SearchScreen({ onTrackAction }) {
                 ALBUMS ({matchingAlbums.length})
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'people' && styles.filterPillActive]}
+              onPress={() => setActiveFilter('people')}
+              activeOpacity={0.8}
+            >
+              <Users size={12} color={activeFilter === 'people' ? '#082621' : '#9ca3af'} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterPillText, activeFilter === 'people' && styles.filterPillTextActive]}>
+                PEOPLE ({userResults.length})
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         )}
       </View>
@@ -441,6 +499,87 @@ export default function SearchScreen({ onTrackAction }) {
           </View>
         )}
 
+        {/* ── PEOPLE & LISTENERS SECTION ── */}
+        {(activeFilter === 'people' || (hasSearch && activeFilter === 'all' && (userResults.length > 0 || isSearchingUsers))) && (
+          <View style={styles.peopleSection}>
+            <View style={styles.sectionTitleRow}>
+              <Users size={16} color="#06b6d4" strokeWidth={2.4} />
+              <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+                PEOPLE & LISTENERS
+              </Text>
+              <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
+                <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
+              </View>
+              {isSearchingUsers && (
+                <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 6 }} />
+              )}
+            </View>
+
+            {userResults.length === 0 && !isSearchingUsers ? (
+              activeFilter === 'people' && (
+                <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
+                  <Users size={36} color="#06b6d4" />
+                  <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No listeners found.</Text>
+                  <Text style={styles.emptySub}>Try searching with a different user name.</Text>
+                </View>
+              )
+            ) : (
+              <ScrollView
+                horizontal={activeFilter === 'all'}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={activeFilter === 'all' ? styles.peopleScrollRow : styles.peopleVerticalList}
+              >
+                {userResults.map((u) => {
+                  const initial = (u.name || 'U').charAt(0).toUpperCase();
+                  return (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[
+                        activeFilter === 'all' ? styles.personCardHorizontal : styles.personCardVertical,
+                        !isDark && styles.personCardLight,
+                      ]}
+                      onPress={() => setSelectedUser(u)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.personAvatarWrap}>
+                        {u.avatar ? (
+                          <Image
+                            source={{ uri: normalizeCoverUri(u.avatar) }}
+                            style={styles.personAvatar}
+                          />
+                        ) : (
+                          <View style={styles.personAvatarFallback}>
+                            <Text style={styles.personAvatarInitial}>{initial}</Text>
+                          </View>
+                        )}
+                        {u.isVerified && (
+                          <View style={styles.personVerifiedBadge}>
+                            <ShieldCheck size={10} color="#082621" />
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.personInfo}>
+                        <Text style={[styles.personName, !isDark && styles.personNameLight]} numberOfLines={1}>
+                          {u.name}
+                        </Text>
+                        <Text style={styles.personSub} numberOfLines={1}>
+                          {u.followersCount || 0} followers • {(u.publicPlaylists || []).length} crates
+                        </Text>
+                      </View>
+
+                      <View style={styles.personActionBtn}>
+                        <Text style={styles.personActionText}>View</Text>
+                        <ArrowRight size={11} color="#06b6d4" />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        )}
+
         {/* ── SONGS SECTION ── */}
         {hasSearch && (activeFilter === 'all' || activeFilter === 'songs') && (
           <View style={styles.resultsSection}>
@@ -498,6 +637,16 @@ export default function SearchScreen({ onTrackAction }) {
           setSelectedAlbum(alb);
         }}
         onTrackAction={onTrackAction}
+      />
+
+      {/* User Details Modal */}
+      <UserDetailModal
+        visible={Boolean(selectedUser)}
+        user={selectedUser}
+        userId={selectedUser?.id}
+        onClose={() => setSelectedUser(null)}
+        onOpenChat={onOpenChat}
+        onOpenFullPlayer={onOpenFullPlayer}
       />
     </View>
   );
@@ -823,5 +972,120 @@ const styles = StyleSheet.create({
   },
   tracksList: {
     gap: 8,
+  },
+  peopleSection: {
+    marginBottom: 20,
+  },
+  peopleScrollRow: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  peopleVerticalList: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  personCardHorizontal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d1815',
+    borderWidth: 2,
+    borderColor: '#172722',
+    borderRadius: 12,
+    padding: 10,
+    width: 220,
+    gap: 10,
+  },
+  personCardVertical: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d1815',
+    borderWidth: 2,
+    borderColor: '#172722',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+  },
+  personCardLight: {
+    backgroundColor: '#f6f2e8',
+    borderColor: '#0b1110',
+  },
+  personAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  personAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1f3630',
+  },
+  personAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#17a398',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#082621',
+  },
+  personAvatarInitial: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#082621',
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+  },
+  personVerifiedBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    width: 15,
+    height: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  personInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  personName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#ffffff',
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+    letterSpacing: 0.2,
+  },
+  personNameLight: {
+    color: '#082621',
+  },
+  personSub: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  personActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(6,182,212,0.12)',
+    borderWidth: 1,
+    borderColor: '#06b6d4',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  personActionText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#06b6d4',
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -331,18 +331,19 @@ function NativeAppShell() {
   const [chatTargetUser, setChatTargetUser] = useState(null);
 
   const { currentTrack } = useAudioPlayer();
-  const { currentUser } = useUser();
+  const { currentUser, isAuthLoaded } = useUser();
   const { isDark, toggleTheme } = useTheme();
 
-  // First launch auto-intro for guests
+  // Launch login / register prompt for unauthenticated users, exactly matching the iOS IPA
+  const hasPromptedAuthOnLaunchRef = useRef(false);
   useEffect(() => {
-    AsyncStorage.getItem('@rivo_intro_seen_v15').then((seen) => {
-      if (!seen && !currentUser) {
+    if (isAuthLoaded && !hasPromptedAuthOnLaunchRef.current) {
+      hasPromptedAuthOnLaunchRef.current = true;
+      if (!currentUser) {
         setIsIntroAuthOpen(true);
-        AsyncStorage.setItem('@rivo_intro_seen_v15', 'true').catch(() => {});
       }
-    }).catch(() => {});
-  }, [currentUser]);
+    }
+  }, [isAuthLoaded, currentUser]);
 
   const handleTabPress = (tabId) => {
     if (tabId === 'chat') {
@@ -355,7 +356,16 @@ function NativeAppShell() {
   const renderActiveScreen = () => {
     switch (activeTab) {
       case 'search':
-        return <SearchScreen onTrackAction={(track) => setActionTrack(track)} />;
+        return (
+          <SearchScreen
+            onTrackAction={(track) => setActionTrack(track)}
+            onOpenChat={(target) => {
+              if (target) setChatTargetUser(target);
+              setIsChatOpen(true);
+            }}
+            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+          />
+        );
       case 'library':
         return (
           <LibraryScreen
@@ -390,6 +400,7 @@ function NativeAppShell() {
           <HomeScreen
             onOpenAddSong={() => setIsAddSongOpen(true)}
             onTrackAction={(track) => setActionTrack(track)}
+            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
           />
         );
     }
