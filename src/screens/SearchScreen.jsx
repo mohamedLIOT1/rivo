@@ -239,7 +239,7 @@ export default function SearchScreen({
       } finally {
         setIsSearchingUsers(false);
       }
-    }, 350);
+    }, 150);
 
     return () => {
       if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
@@ -672,6 +672,71 @@ export default function SearchScreen({
                 </div>
               )}
 
+              {/* ── ALL FILTER: MATCHED PEOPLE PREVIEW (Prioritized at top) ── */}
+              {filterType === 'all' && userResults.length > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <Users size={14} className="text-[#17a398]" />
+                      <p className={`text-xs font-mono font-black uppercase tracking-wider ${
+                        isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                      }`}>
+                        People & Listeners ({userResults.length})
+                      </p>
+                    </div>
+                    {userResults.length > 3 && (
+                      <button
+                        onClick={() => setFilterType('people')}
+                        className="text-xs font-mono font-black text-[#17a398] hover:underline cursor-pointer"
+                      >
+                        View All ({userResults.length}) →
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {userResults.slice(0, 3).map((u) => (
+                      <div
+                        key={`all-user-${u.id || u._id}`}
+                        onClick={() => onViewProfile && onViewProfile(u.id || u._id)}
+                        className={`p-3 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-0.5 brutal-shadow-sm group ${
+                          isDark 
+                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
+                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                          <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="font-display font-black text-sm">{u.name?.[0]?.toUpperCase() || 'U'}</span>
+                            )}
+                          </div>
+                          <div className="truncate flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 font-display font-black text-xs truncate">
+                              <span className="truncate group-hover:text-[#17a398] transition-colors">{u.name}</span>
+                              <VerifiedBadge userOrName={u} size={12} />
+                            </div>
+                            <span className="text-[10px] font-mono text-zinc-400 truncate block">
+                              {u.followersCount || 0} followers
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewProfile && onViewProfile(u.id || u._id);
+                          }}
+                          className="px-2 py-0.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-[11px] rounded-md brutal-border brutal-btn shrink-0"
+                        >
+                          View →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* ── ALL FILTER: MATCHED ARTISTS PREVIEW ── */}
               {filterType === 'all' && matchedArtists.length > 0 && (
                 <div className="mb-6">
@@ -801,70 +866,6 @@ export default function SearchScreen({
                 </div>
               )}
 
-              {/* ── ALL FILTER: MATCHED PEOPLE PREVIEW ── */}
-              {filterType === 'all' && userResults.length > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <div className="flex items-center gap-2">
-                      <Users size={14} className="text-[#17a398]" />
-                      <p className={`text-xs font-mono font-black uppercase tracking-wider ${
-                        isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                      }`}>
-                        People & Listeners ({userResults.length})
-                      </p>
-                    </div>
-                    {userResults.length > 3 && (
-                      <button
-                        onClick={() => setFilterType('people')}
-                        className="text-xs font-mono font-black text-[#17a398] hover:underline cursor-pointer"
-                      >
-                        View All ({userResults.length}) →
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                    {userResults.slice(0, 3).map((u) => (
-                      <div
-                        key={`all-user-${u.id || u._id}`}
-                        onClick={() => onViewProfile && onViewProfile(u.id || u._id)}
-                        className={`p-3 rounded-xl brutal-border flex items-center justify-between cursor-pointer transition hover:translate-x-0.5 brutal-shadow-sm group ${
-                          isDark 
-                            ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b] text-white' 
-                            : 'bg-[#ede5d3] border-black hover:bg-white text-[#0b1110]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                          <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
-                            {u.avatar ? (
-                              <img src={u.avatar} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="font-display font-black text-sm">{u.name?.[0]?.toUpperCase() || 'U'}</span>
-                            )}
-                          </div>
-                          <div className="truncate flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 font-display font-black text-xs truncate">
-                              <span className="truncate group-hover:text-[#17a398] transition-colors">{u.name}</span>
-                              <VerifiedBadge userOrName={u} size={12} />
-                            </div>
-                            <span className="text-[10px] font-mono text-zinc-400 truncate block">
-                              {u.followersCount || 0} followers
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onViewProfile && onViewProfile(u.id || u._id);
-                          }}
-                          className="px-2 py-0.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-[11px] rounded-md brutal-border brutal-btn shrink-0"
-                        >
-                          View →
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* ── SONG RESULTS (For ALL & SONGS filters) ── */}
               {(filterType === 'all' || filterType === 'songs') && (

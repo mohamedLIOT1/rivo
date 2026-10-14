@@ -33,6 +33,7 @@ import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import MiniPlayer from './MiniPlayer';
+import AlbumDetailModal from './AlbumDetailModal';
 
 const { width } = Dimensions.get('window');
 
@@ -42,6 +43,7 @@ export default function UserDetailModal({
   userId,
   onClose,
   onOpenChat,
+  onOpenJam,
   onOpenFullPlayer,
 }) {
   const { token, currentUser } = useUser();
@@ -55,6 +57,7 @@ export default function UserDetailModal({
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);
   const [playlists, setPlaylists] = useState([]);
   const [activity, setActivity] = useState(null);
+  const [selectedPlaylistModal, setSelectedPlaylistModal] = useState(null);
 
   const targetId = String(userId || user?.id || user?._id || '');
 
@@ -242,8 +245,30 @@ export default function UserDetailModal({
                     <Text style={styles.chatBtnText}>MESSAGE</Text>
                   </TouchableOpacity>
                 )}
+
+                {onOpenJam && (
+                  <TouchableOpacity
+                    style={styles.jamBtn}
+                    onPress={() => {
+                      onClose();
+                      onOpenJam(currentProfile);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Radio size={14} color="#0b1110" strokeWidth={2.5} />
+                    <Text style={styles.jamBtnText}>JAM</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
+          </View>
+
+          {/* Cyber-brutalist Bio Card matching Web & Images 1 & 2 */}
+          <View style={[styles.bioCard, !isDark && styles.bioCardLight]}>
+            <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight]}>// BIO & ABOUT:</Text>
+            <Text style={[styles.bioContent, !isDark && styles.bioContentLight]}>
+              {currentProfile.bio || 'No bio written yet.'}
+            </Text>
           </View>
 
           {/* Real-time Listening Activity */}
@@ -316,12 +341,7 @@ export default function UserDetailModal({
                       key={pl.id || pl._id || idx}
                       style={styles.playlistRow}
                       onPress={() => {
-                        if (Array.isArray(pl.tracks) && pl.tracks.length > 0) {
-                          playTrack(pl.tracks[0], pl.tracks);
-                          showToast(`Playing "${pl.name}"`, 'success');
-                        } else {
-                          showToast(`Opening "${pl.name}"`, 'info');
-                        }
+                        setSelectedPlaylistModal(pl);
                       }}
                       activeOpacity={0.8}
                     >
@@ -356,7 +376,22 @@ export default function UserDetailModal({
             onOpenFullPlayer={onOpenFullPlayer}
             bottomOffset={Platform.OS === 'ios' ? 24 : 12}
           />
-        )}
+        {/* Playlist Tracks Full View Modal */}
+        <AlbumDetailModal
+          visible={Boolean(selectedPlaylistModal)}
+          album={selectedPlaylistModal ? {
+            id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+            name: selectedPlaylistModal.name,
+            artist: currentProfile.name || 'Listener',
+            cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
+            tracks: selectedPlaylistModal.tracks || [],
+            trackIds: selectedPlaylistModal.trackIds || [],
+            isPlaylist: true,
+          } : null}
+          onClose={() => setSelectedPlaylistModal(null)}
+          allTracks={[]}
+          onOpenFullPlayer={onOpenFullPlayer}
+        />
       </View>
     </Modal>
   );
@@ -574,6 +609,61 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#26c4b7',
     letterSpacing: 0.5,
+  },
+  jamBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f59e0b',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    borderRadius: 8,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  jamBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#0b1110',
+    letterSpacing: 0.5,
+  },
+  bioCard: {
+    backgroundColor: '#141d1b',
+    borderWidth: 2,
+    borderColor: '#000000',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0 },
+      android: { elevation: 3 },
+    }),
+  },
+  bioCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#000000',
+  },
+  bioHeader: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9ca3af',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  bioHeaderLight: {
+    color: '#4b5563',
+  },
+  bioContent: {
+    fontSize: 13,
+    color: '#fdfbf7',
+    lineHeight: 18,
+  },
+  bioContentLight: {
+    color: '#0b1110',
   },
   sectionContainer: {
     backgroundColor: '#141d1b',

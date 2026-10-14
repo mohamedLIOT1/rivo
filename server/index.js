@@ -1064,36 +1064,38 @@ app.post('/api/auth/login', async (req, res) => {
 // ──────────────────────────────────────────
 // App Versions & Updates Manifest
 // ──────────────────────────────────────────
+// App Versions & Updates Manifest
+// ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.1',
-  releaseNotes: 'Jam real-time auto-synchronization across all devices, 10-track taste & mood cassette rotation algorithm, high-speed CDN downloads, embedded desktop icon & WebView2 fix.',
+  version: '1.6.2',
+  releaseNotes: 'Fixed people search speed & lag, instant user profile playlist viewer, unified brutalist mobile profile, fixed 0-track albums, Jam host pause sync, exact notification time tracking on Android/iOS, and chat notifications across iOS, Android and Desktop (.exe).',
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.1',
+      version: '1.6.2',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Embedded official icon, self-contained launcher, zero missing DLL errors.'
+      notes: 'Native Windows system tray balloon notifications, embedded icon, zero missing DLL errors.'
     },
     android: {
-      version: '1.6.1',
-      build: 30,
+      version: '1.6.2',
+      build: 31,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.1.apk',
-      directFile: 'Rivo-v1.6.1.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.2.apk',
+      directFile: 'Rivo-v1.6.2.apk',
       mandatory: false,
-      notes: 'Automatic Jam playback sync, 10-track taste and mood algorithm, ultra-fast download streaming.'
+      notes: 'Instant people search, fixed profile playlists, Jam host pause sync, accurate notification time and artwork.'
     },
     ios: {
-      version: '1.6.1',
-      build: 30,
+      version: '1.6.2',
+      build: 31,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.1.ipa',
-      directFile: 'Rivo-v1.6.1.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.2.ipa',
+      directFile: 'Rivo-v1.6.2.ipa',
       mandatory: false,
-      notes: 'Automatic Jam playback sync, 10-track taste and mood algorithm, smooth audio handoff.'
+      notes: 'Native iOS chat banner notifications, accurate lockscreen elapsed time, fixed artwork display, Jam pause sync.'
     }
   }
 };
@@ -1105,6 +1107,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.2.apk',
   '/downloads/Rivo-v1.6.1.apk',
   '/downloads/Rivo-v1.6.0.apk',
   '/downloads/Rivo-v1.5.9.apk',
@@ -1114,10 +1117,14 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.apk');
   const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.apk');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV162Path)) {
+    return res.download(localV162Path, 'Rivo-v1.6.2.apk');
+  }
   if (fs.existsSync(localV161Path)) {
     return res.download(localV161Path, 'Rivo-v1.6.1.apk');
   }
@@ -1128,14 +1135,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.apk');
   }
   if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.6.0.apk');
+    return res.download(localApkPath, 'Rivo-v1.6.2.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.0', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.2', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1161,12 +1168,13 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.0/Rivo-v1.6.0.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.2/Rivo-v1.6.2.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.6.2.ipa',
   '/downloads/Rivo-v1.6.1.ipa',
   '/downloads/Rivo-v1.6.0.ipa',
   '/downloads/Rivo-v1.5.9.ipa',
@@ -1175,10 +1183,14 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.ipa');
   const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.ipa');
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV162Path)) {
+    return res.download(localV162Path, 'Rivo-v1.6.2.ipa');
+  }
   if (fs.existsSync(localV161Path)) {
     return res.download(localV161Path, 'Rivo-v1.6.1.ipa');
   }
@@ -1189,14 +1201,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.6.0.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.6.2.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.0', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.2', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1222,7 +1234,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.0/Rivo-v1.6.0.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.2/Rivo-v1.6.2.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -1443,12 +1455,43 @@ app.get('/api/users/:id/profile', optionalAuth, async (req, res) => {
 
     const currentUserId = req.user?.id ? String(req.user.id) : '';
     const isFollowing = currentUserId ? (target.followers || []).map(String).includes(currentUserId) : false;
-    const publicPlaylists = (target.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs).map(p => ({
-      ...p,
-      ownerId: String(target._id),
-      ownerName: target.name,
-      trackCount: (p.trackIds || []).length
-    }));
+    const rawPublicPlaylists = (target.playlists || []).filter(p => p.isPublic !== false && !p.isLikedSongs);
+
+    // Collect all trackIds from public playlists to fetch details
+    const allTrackIds = [];
+    rawPublicPlaylists.forEach(p => {
+      (p.trackIds || []).forEach(tid => {
+        if (tid && !allTrackIds.includes(String(tid))) allTrackIds.push(String(tid));
+      });
+    });
+
+    let trackMap = new Map();
+    if (allTrackIds.length > 0) {
+      const validObjIds = allTrackIds.filter(id => mongoose.isValidObjectId(id));
+      const dbTracks = await Track.find({
+        $or: [
+          ...(validObjIds.length > 0 ? [{ _id: { $in: validObjIds } }] : []),
+          { id: { $in: allTrackIds } }
+        ]
+      }).lean();
+      dbTracks.forEach(t => {
+        const tId = String(t._id || t.id);
+        const formatted = { id: tId, _id: tId, ...t };
+        trackMap.set(tId, formatted);
+        if (t.id) trackMap.set(String(t.id), formatted);
+      });
+    }
+
+    const publicPlaylists = rawPublicPlaylists.map(p => {
+      const pTracks = (p.trackIds || []).map(tid => trackMap.get(String(tid))).filter(Boolean);
+      return {
+        ...p,
+        ownerId: String(target._id),
+        ownerName: target.name,
+        trackCount: (p.trackIds || []).length,
+        tracks: pTracks
+      };
+    });
 
     res.json({
       success: true,
@@ -3421,12 +3464,33 @@ app.all('/api/albums/auto-fix', async (req, res) => {
 
 app.get('/api/albums/:id', async (req, res) => {
   try {
-    const album = await Album.findOne({ $or: [{ id: req.params.id }, { _id: req.params.id }] }).lean();
+    const rawId = req.params.id;
+    let album = null;
+    if (mongoose.isValidObjectId(rawId)) {
+      album = await Album.findById(rawId).lean();
+    }
+    if (!album) {
+      album = await Album.findOne({ $or: [{ id: rawId }, { name: rawId }] }).lean();
+    }
     if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
-    const tracks = await Track.find({ _id: { $in: album.trackIds } }).lean();
+
+    const trackIds = Array.isArray(album.trackIds) ? album.trackIds : [];
+    const validObjectIds = trackIds.filter(id => mongoose.isValidObjectId(id));
+
+    const orConditions = [];
+    if (validObjectIds.length > 0) orConditions.push({ _id: { $in: validObjectIds } });
+    if (trackIds.length > 0) orConditions.push({ id: { $in: trackIds } });
+    if (album.name && album.name.trim()) {
+      orConditions.push({ album: new RegExp(`^${album.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+    }
+
+    const tracks = orConditions.length > 0
+      ? await Track.find({ $or: orConditions }).lean()
+      : [];
+
     const formattedTracks = tracks.map(t => ({
-      id: String(t._id),
-      _id: String(t._id),
+      id: String(t._id || t.id),
+      _id: String(t._id || t.id),
       ...t
     }));
     res.json({ success: true, album, tracks: formattedTracks });

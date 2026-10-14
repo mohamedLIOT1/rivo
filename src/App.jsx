@@ -1214,53 +1214,76 @@ function AppContent() {
     });
 
     s.on('chat:message', (msg) => {
-      const myId = String(currentUser?.id || currentUser?._id || '');
-      if (myId && String(msg.recipient) === myId) {
-        const isOpenWithSender = isChatOpenRef.current && String(chatTargetUserRef.current?.id || chatTargetUserRef.current?._id) === String(msg.sender);
-        if (isOpenWithSender) {
-          // If chat is actively open with sender on this device, mark as read immediately
-          s.emit('chat:mark_read', { senderId: msg.sender });
+      const cur = currentUserRef.current || currentUser;
+      const myId = String(cur?.id || cur?._id || '');
+      const recipientId = String(msg.recipient?._id || msg.recipient || '');
+      const senderId = String(msg.sender?._id || msg.sender || '');
+      if (senderId && senderId === myId) return;
+      if (recipientId && myId && recipientId !== myId) return;
+
+      const isOpenWithSender = isChatOpenRef.current && String(chatTargetUserRef.current?.id || chatTargetUserRef.current?._id) === senderId;
+      if (isOpenWithSender) {
+        // If chat is actively open with sender on this device, mark as read immediately
+        s.emit('chat:mark_read', { senderId });
+      } else {
+        setUnreadChatCount(prev => prev + 1);
+
+        const senderName = msg.senderName || 'Someone';
+        const preview = msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment'));
+
+        if (msg.jamInvite?.roomCode) {
+          showToast({
+            type: 'jam',
+            title: `📻 Jam Session • ${senderName}`,
+            body: `Invited you to a live Jam Session! Tap to join (${msg.jamInvite.roomCode})`,
+            roomCode: msg.jamInvite.roomCode,
+            sender: { id: senderId, name: senderName, avatar: msg.senderAvatar }
+          });
         } else {
-          setUnreadChatCount(prev => prev + 1);
+          showToast({
+            type: 'chat',
+            title: `💬 ${senderName}`,
+            body: preview,
+            sender: { id: senderId, name: senderName, avatar: msg.senderAvatar }
+          });
+        }
 
-          const senderName = msg.senderName || 'Someone';
-          const preview = msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment'));
+        // Native Android & iOS Mobile Phone Push Notification Bridge
+        if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
+          try {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'SHOW_CHAT_NOTIFICATION',
+              options: {
+                senderId: senderId,
+                senderName,
+                message: preview,
+                isJam: Boolean(msg.jamInvite?.roomCode),
+                roomCode: msg.jamInvite?.roomCode,
+              }
+            }));
+          } catch (e) {}
+        }
 
-          if (msg.jamInvite?.roomCode) {
-            showToast({
-              type: 'jam',
-              title: `📻 Jam Session • ${senderName}`,
-              body: `Invited you to a live Jam Session! Tap to join (${msg.jamInvite.roomCode})`,
-              roomCode: msg.jamInvite.roomCode,
-              sender: { id: msg.sender, name: senderName, avatar: msg.senderAvatar }
-            });
-          } else {
-            showToast({
-              type: 'chat',
-              title: `💬 ${senderName}`,
-              body: preview,
-              sender: { id: msg.sender, name: senderName, avatar: msg.senderAvatar }
-            });
+        // Windows Desktop Native App Tray Notification Bridge (.exe)
+        if (typeof window !== 'undefined' && window.chrome?.webview?.postMessage) {
+          try {
+            window.chrome.webview.postMessage(JSON.stringify({
+              action: 'CHAT_NOTIFICATION',
+              senderName,
+              message: preview,
+              isJam: Boolean(msg.jamInvite?.roomCode),
+              roomCode: msg.jamInvite?.roomCode,
+            }));
+          } catch (e) {}
+        }
+
+        // Browser Desktop Push Notification
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          if (Notification.permission === 'default') {
+            Notification.requestPermission();
           }
-
-          // Native Android & Mobile Phone Push Notification Bridge
-          if (typeof window !== 'undefined' && window.ReactNativeWebView && typeof window.ReactNativeWebView.postMessage === 'function') {
-            try {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'SHOW_CHAT_NOTIFICATION',
-                options: {
-                  senderId: msg.sender,
-                  senderName,
-                  message: preview,
-                  isJam: Boolean(msg.jamInvite?.roomCode),
-                  roomCode: msg.jamInvite?.roomCode,
-                }
-              }));
-            } catch (e) {}
-          }
-
-          // Browser Desktop Push Notification
-          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        }
+        if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               const isJam = Boolean(msg.jamInvite?.roomCode);
               const tag = isJam ? `rivo-jam-${msg.jamInvite.roomCode}` : `rivo-chat-${msg.sender}`;
@@ -1286,8 +1309,7 @@ function AppContent() {
             }
           }
         }
-      }
-    });
+      });
 
     // Cross-Device Notification Dismissal Sync
     // If the message is read/seen on phone or another screen, immediately close this device's notification!

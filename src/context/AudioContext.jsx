@@ -1962,7 +1962,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         seekTo(targetTime, true /* isRemote */);
       }
       // Sync play/pause
-      if (syncPlaying !== undefined && syncPlaying !== isPlayingRef.current) {
+      if (syncPlaying !== undefined) {
         setIsPlaying(syncPlaying);
         if (audioRef.current) {
           if (syncPlaying) {
@@ -1970,6 +1970,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
             audioRef.current.play().catch(() => {});
           } else {
             audioRef.current.pause();
+          }
+        }
+        if (!syncPlaying) {
+          window.__RIVO_USER_PAUSED = true;
+          if (typeof document !== 'undefined') {
+            document.querySelectorAll('audio, video').forEach(el => {
+              try { el.pause(); } catch(e){}
+            });
           }
         }
       }

@@ -9,6 +9,10 @@ const SocketContext = createContext();
 
 export const SocketProvider = ({ children }) => {
   const { currentUser, token } = useUser();
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
   const { syncRemotePlayState, setJamSync } = useAudioPlayer();
   const syncRemotePlayStateRef = useRef(syncRemotePlayState);
   useEffect(() => {
@@ -94,10 +98,14 @@ export const SocketProvider = ({ children }) => {
     });
 
     s.on('chat:message', (msg) => {
-      const myId = String(currentUser?._id || currentUser?.id || '');
-      if (myId && String(msg.recipient) === myId) {
+      const cur = currentUserRef.current || currentUser;
+      const myId = String(cur?._id || cur?.id || '');
+      const recipientId = String(msg.recipient?._id || msg.recipient || '');
+      const senderId = String(msg.sender?._id || msg.sender || '');
+      if (senderId && senderId === myId) return;
+      if (!recipientId || (myId && recipientId === myId)) {
         showChatNotification({
-          senderId: msg.sender,
+          senderId: senderId,
           senderName: msg.senderName || 'Friend',
           message: msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment')),
           isJam: Boolean(msg.jamInvite?.roomCode),

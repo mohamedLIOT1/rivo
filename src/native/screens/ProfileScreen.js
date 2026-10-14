@@ -38,6 +38,7 @@ import { useTheme } from '../context/ThemeContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
+import AlbumDetailModal from '../components/AlbumDetailModal';
 
 const { width } = Dimensions.get('window');
 
@@ -48,8 +49,9 @@ export default function ProfileScreen({
   onOpenJam,
   onOpenChat,
   onSelectPlaylist,
+  onOpenFullPlayer,
 }) {
-  const { currentUser, logout, playlists = [], likedTrackIds = [] } = useUser();
+  const { currentUser, logout, playlists = [], likedTrackIds = [], tracks: userTracks = [] } = useUser();
   const { downloadedTracks = [], playPlaylist } = useAudioPlayer();
   const { isDark } = useTheme();
 
@@ -68,6 +70,7 @@ export default function ProfileScreen({
   const [viewingProfile, setViewingProfile] = useState(null);
   const [viewingLoading, setViewingLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [selectedPlaylistModal, setSelectedPlaylistModal] = useState(null);
 
   const [socialModal, setSocialModal] = useState({
     isOpen: false,
@@ -375,8 +378,31 @@ export default function ProfileScreen({
                 <MessageSquare size={14} color="#17a398" strokeWidth={2.4} />
                 <Text style={styles.actionMsgBtnText}>MESSAGE</Text>
               </TouchableOpacity>
+
+              {onOpenJam && (
+                <TouchableOpacity
+                  style={styles.actionJamBtn}
+                  onPress={() => onOpenJam({
+                    id: viewingProfile.id || viewingProfile._id,
+                    name: viewingProfile.name,
+                    avatar: viewingProfile.avatar
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <Radio size={14} color="#0b1110" strokeWidth={2.4} />
+                  <Text style={styles.actionJamBtnText}>JAM</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
+
+          {/* Cyber-brutalist Bio Card matching Web & Images 1 & 2 */}
+          <View style={[styles.bioCard, !isDark && styles.bioCardLight]}>
+            <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight]}>// BIO & ABOUT:</Text>
+            <Text style={[styles.bioContent, !isDark && styles.bioContentLight]}>
+              {viewingProfile.bio || 'No bio written yet.'}
+            </Text>
+          </View>
         </View>
 
         {/* Public Playlists Section */}
@@ -400,9 +426,7 @@ export default function ProfileScreen({
                 key={crate._id || crate.id || String(idx)}
                 style={styles.crateItemCard}
                 onPress={() => {
-                  if (crate.trackIds?.length > 0 && playPlaylist) {
-                    playPlaylist(crate.tracks || crate.trackIds || []);
-                  }
+                  setSelectedPlaylistModal(crate);
                 }}
                 activeOpacity={0.8}
               >
@@ -427,6 +451,23 @@ export default function ProfileScreen({
 
         {/* Social Modal within viewingProfile */}
         {renderSocialModal()}
+
+        {/* Playlist Full View Modal */}
+        <AlbumDetailModal
+          visible={Boolean(selectedPlaylistModal)}
+          album={selectedPlaylistModal ? {
+            id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+            name: selectedPlaylistModal.name,
+            artist: viewingProfile.name || 'Listener',
+            cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
+            tracks: selectedPlaylistModal.tracks || [],
+            trackIds: selectedPlaylistModal.trackIds || [],
+            isPlaylist: true,
+          } : null}
+          onClose={() => setSelectedPlaylistModal(null)}
+          allTracks={userTracks || []}
+          onOpenFullPlayer={onOpenFullPlayer}
+        />
       </ScrollView>
     );
   }
@@ -580,7 +621,7 @@ export default function ProfileScreen({
             <TouchableOpacity
               key={pl._id || pl.id}
               style={[styles.playlistRow, !isDark && styles.playlistRowLight]}
-              onPress={() => onSelectPlaylist && onSelectPlaylist(pl)}
+              onPress={() => setSelectedPlaylistModal(pl)}
               activeOpacity={0.85}
             >
               <View style={styles.playlistThumb}>
@@ -646,6 +687,23 @@ export default function ProfileScreen({
 
       {/* SOCIAL FOLLOWERS / FOLLOWING MODAL */}
       {renderSocialModal()}
+
+      {/* Playlist Tracks Full View Modal */}
+      <AlbumDetailModal
+        visible={Boolean(selectedPlaylistModal)}
+        album={selectedPlaylistModal ? {
+          id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+          name: selectedPlaylistModal.name,
+          artist: selectedPlaylistModal.ownerName || currentUser?.name || 'Listener',
+          cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
+          tracks: selectedPlaylistModal.tracks || [],
+          trackIds: selectedPlaylistModal.trackIds || [],
+          isPlaylist: true,
+        } : null}
+        onClose={() => setSelectedPlaylistModal(null)}
+        allTracks={userTracks || []}
+        onOpenFullPlayer={onOpenFullPlayer}
+      />
     </ScrollView>
   );
 }
@@ -1185,6 +1243,56 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 11,
     fontFamily: 'monospace',
+  },
+  actionJamBtn: {
+    flex: 1,
+    height: 42,
+    backgroundColor: '#f59e0b',
+    borderWidth: 1,
+    borderColor: '#000000',
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  actionJamBtnText: {
+    color: '#0b1110',
+    fontWeight: '900',
+    fontSize: 11,
+    fontFamily: 'monospace',
+  },
+  bioCard: {
+    backgroundColor: '#0e1614',
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 12,
+  },
+  bioCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#cbd5e1',
+  },
+  bioHeader: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  bioHeaderLight: {
+    color: '#64748b',
+  },
+  bioContent: {
+    fontSize: 12.5,
+    color: '#e2e8f0',
+    lineHeight: 18,
+  },
+  bioContentLight: {
+    color: '#0b1110',
   },
   crateItemCard: {
     flexDirection: 'row',

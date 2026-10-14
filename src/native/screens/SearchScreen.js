@@ -70,6 +70,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [visibleSongLimit, setVisibleSongLimit] = useState(25);
   const searchTimeoutRef = useRef(null);
   const userSearchTimeoutRef = useRef(null);
 
@@ -78,12 +79,16 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
     ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
     : ((Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (Array.isArray(audioTracks) ? audioTracks : []));
 
+  useEffect(() => {
+    setVisibleSongLimit(25);
+  }, [query, activeFilter]);
+
   // Live query to server /api/search when connected
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
     const trimmed = query.trim();
-    if (trimmed.length < 2 || isOffline) {
+    if (trimmed.length < 2 || isOffline || activeFilter === 'people') {
       setRemoteResults([]);
       setIsSearchingRemote(false);
       return;
@@ -106,9 +111,9 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
-  }, [query, isOffline]);
+  }, [query, isOffline, activeFilter]);
 
-  // Live query for people & listeners
+  // Live query for people & listeners (fast 150ms debounce)
   useEffect(() => {
     if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
 
@@ -140,7 +145,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
         }
       } catch {}
       setIsSearchingUsers(false);
-    }, 400);
+    }, 150);
 
     return () => {
       if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
@@ -410,6 +415,87 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
           </View>
         )}
 
+        {/* ── PEOPLE & LISTENERS SECTION (Top priority for people queries) ── */}
+        {(activeFilter === 'people' || (hasSearch && activeFilter === 'all' && (userResults.length > 0 || isSearchingUsers))) && (
+          <View style={styles.peopleSection}>
+            <View style={styles.sectionTitleRow}>
+              <Users size={16} color="#06b6d4" strokeWidth={2.4} />
+              <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+                PEOPLE & LISTENERS
+              </Text>
+              <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
+                <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
+              </View>
+              {isSearchingUsers && (
+                <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 6 }} />
+              )}
+            </View>
+
+            {userResults.length === 0 && !isSearchingUsers ? (
+              activeFilter === 'people' && (
+                <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
+                  <Users size={36} color="#06b6d4" />
+                  <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No listeners found.</Text>
+                  <Text style={styles.emptySub}>Try searching with a different user name.</Text>
+                </View>
+              )
+            ) : (
+              <ScrollView
+                horizontal={activeFilter === 'all'}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={activeFilter === 'all' ? styles.peopleScrollRow : styles.peopleVerticalList}
+              >
+                {userResults.map((u) => {
+                  const initial = (u.name || 'U').charAt(0).toUpperCase();
+                  return (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[
+                        activeFilter === 'all' ? styles.personCardHorizontal : styles.personCardVertical,
+                        !isDark && styles.personCardLight,
+                      ]}
+                      onPress={() => setSelectedUser(u)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={styles.personAvatarWrap}>
+                        {u.avatar ? (
+                          <Image
+                            source={{ uri: normalizeCoverUri(u.avatar) }}
+                            style={styles.personAvatar}
+                          />
+                        ) : (
+                          <View style={styles.personAvatarFallback}>
+                            <Text style={styles.personAvatarInitial}>{initial}</Text>
+                          </View>
+                        )}
+                        {u.isVerified && (
+                          <View style={styles.personVerifiedBadge}>
+                            <ShieldCheck size={10} color="#082621" />
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.personInfo}>
+                        <Text style={[styles.personName, !isDark && styles.personNameLight]} numberOfLines={1}>
+                          {u.name}
+                        </Text>
+                        <Text style={styles.personSub} numberOfLines={1}>
+                          {u.followersCount || 0} followers • {(u.publicPlaylists || []).length} crates
+                        </Text>
+                      </View>
+
+                      <View style={styles.personActionBtn}>
+                        <Text style={styles.personActionText}>View</Text>
+                        <ArrowRight size={11} color="#06b6d4" />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        )}
+
         {/* ── ARTISTS SECTION (Matching Images) ── */}
         {hasSearch && (activeFilter === 'all' || activeFilter === 'artists') && matchingArtists.length > 0 && (
           <View style={styles.artistsSection}>
@@ -499,87 +585,6 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
           </View>
         )}
 
-        {/* ── PEOPLE & LISTENERS SECTION ── */}
-        {(activeFilter === 'people' || (hasSearch && activeFilter === 'all' && (userResults.length > 0 || isSearchingUsers))) && (
-          <View style={styles.peopleSection}>
-            <View style={styles.sectionTitleRow}>
-              <Users size={16} color="#06b6d4" strokeWidth={2.4} />
-              <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-                PEOPLE & LISTENERS
-              </Text>
-              <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
-                <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
-              </View>
-              {isSearchingUsers && (
-                <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 6 }} />
-              )}
-            </View>
-
-            {userResults.length === 0 && !isSearchingUsers ? (
-              activeFilter === 'people' && (
-                <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
-                  <Users size={36} color="#06b6d4" />
-                  <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No listeners found.</Text>
-                  <Text style={styles.emptySub}>Try searching with a different user name.</Text>
-                </View>
-              )
-            ) : (
-              <ScrollView
-                horizontal={activeFilter === 'all'}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={activeFilter === 'all' ? styles.peopleScrollRow : styles.peopleVerticalList}
-              >
-                {userResults.map((u) => {
-                  const initial = (u.name || 'U').charAt(0).toUpperCase();
-                  return (
-                    <TouchableOpacity
-                      key={u.id}
-                      style={[
-                        activeFilter === 'all' ? styles.personCardHorizontal : styles.personCardVertical,
-                        !isDark && styles.personCardLight,
-                      ]}
-                      onPress={() => setSelectedUser(u)}
-                      activeOpacity={0.85}
-                    >
-                      <View style={styles.personAvatarWrap}>
-                        {u.avatar ? (
-                          <Image
-                            source={{ uri: normalizeCoverUri(u.avatar) }}
-                            style={styles.personAvatar}
-                          />
-                        ) : (
-                          <View style={styles.personAvatarFallback}>
-                            <Text style={styles.personAvatarInitial}>{initial}</Text>
-                          </View>
-                        )}
-                        {u.isVerified && (
-                          <View style={styles.personVerifiedBadge}>
-                            <ShieldCheck size={10} color="#082621" />
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.personInfo}>
-                        <Text style={[styles.personName, !isDark && styles.personNameLight]} numberOfLines={1}>
-                          {u.name}
-                        </Text>
-                        <Text style={styles.personSub} numberOfLines={1}>
-                          {u.followersCount || 0} followers • {(u.publicPlaylists || []).length} crates
-                        </Text>
-                      </View>
-
-                      <View style={styles.personActionBtn}>
-                        <Text style={styles.personActionText}>View</Text>
-                        <ArrowRight size={11} color="#06b6d4" />
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        )}
-
         {/* ── SONGS SECTION ── */}
         {hasSearch && (activeFilter === 'all' || activeFilter === 'songs') && (
           <View style={styles.resultsSection}>
@@ -597,7 +602,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
               </View>
             ) : (
               <View style={styles.tracksList}>
-                {filteredTracks.map((track, index) => (
+                {filteredTracks.slice(0, visibleSongLimit).map((track, index) => (
                   <SongItem
                     key={track._id || track.id || index}
                     track={track}
@@ -606,6 +611,18 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
                     onMorePress={() => onTrackAction && onTrackAction(track)}
                   />
                 ))}
+
+                {filteredTracks.length > visibleSongLimit && (
+                  <TouchableOpacity
+                    style={[styles.loadMoreBtn, !isDark && styles.loadMoreBtnLight]}
+                    onPress={() => setVisibleSongLimit((prev) => prev + 25)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.loadMoreText}>
+                      SHOW MORE ({filteredTracks.length - visibleSongLimit} MORE TRACKS)
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
           </View>
@@ -1087,5 +1104,28 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#06b6d4',
     fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+  },
+  loadMoreBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#17a398',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  loadMoreBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  loadMoreText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#17a398',
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+    letterSpacing: 0.5,
   },
 });

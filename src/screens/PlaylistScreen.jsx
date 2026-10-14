@@ -203,6 +203,9 @@ export default function PlaylistScreen({
   // Preserve EXACT track order as stored in playlist.trackIds, or strictly filter liked tracks for Liked Songs
   const playlistTracks = useMemo(() => {
     if (!isLikedPlaylist) {
+      if (Array.isArray(playlist.tracks) && playlist.tracks.length > 0) {
+        return playlist.tracks.map(t => trackMap.get(String(t.id || t._id)) || t);
+      }
       return playlistTrackIds.map(id => trackMap.get(id)).filter(Boolean);
     }
     const likedSet = new Set([
