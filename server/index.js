@@ -1067,35 +1067,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.8',
-  releaseNotes: "Fixed browser initialization crash, strict cross-device pause, rock-solid Jam pause sync across devices, guest queue isolation, 10-song queue cap with auto smart renewal, and profile playlist playback.",
+  version: '1.6.9',
+  releaseNotes: "Streamlined Jam interface (removed in-modal controls, controlling playback natively from the music player page), enhanced Jam host sync, rock-solid pause freeze across all devices.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.8',
+      version: '1.6.9',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Browser crash fix, Spotify Connect strict pause, Jam sync fixes, queue cap to 10 songs.'
+      notes: 'Jam control directly from music player, seamless multi-device sync.'
     },
     android: {
-      version: '1.6.8',
-      build: 37,
+      version: '1.6.9',
+      build: 38,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.8.apk',
-      directFile: 'Rivo-v1.6.8.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.9.apk',
+      directFile: 'Rivo-v1.6.9.apk',
       mandatory: false,
-      notes: 'Jam guest isolation, host pause freeze across devices, queue capped to 10 tracks, profile playlists playback.'
+      notes: 'Clean Jam modal interface, playback control from the main music player screen.'
     },
     ios: {
-      version: '1.6.8',
-      build: 37,
+      version: '1.6.9',
+      build: 38,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.8.ipa',
-      directFile: 'Rivo-v1.6.8.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.9.ipa',
+      directFile: 'Rivo-v1.6.9.ipa',
       mandatory: false,
-      notes: 'Jam host pause freeze on iOS IPA, guest track isolation, queue capped to 10 songs.'
+      notes: 'Clean Jam modal interface, playback control from the main music player screen.'
     }
   }
 };
@@ -1107,6 +1107,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.9.apk',
   '/downloads/Rivo-v1.6.8.apk',
   '/downloads/Rivo-v1.6.7.apk',
   '/downloads/Rivo-v1.6.6.apk',
@@ -1123,6 +1124,7 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV169Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.9.apk');
   const localV168Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.8.apk');
   const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.apk');
   const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.apk');
@@ -1134,6 +1136,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV169Path)) {
+    return res.download(localV169Path, 'Rivo-v1.6.9.apk');
+  }
   if (fs.existsSync(localV168Path)) {
     return res.download(localV168Path, 'Rivo-v1.6.8.apk');
   }
@@ -6303,12 +6308,12 @@ io.on('connection', (socket) => {
   // Jam: Host creates or joins room
   socket.on('jam:join_room', ({ roomCode, user }) => {
     if (!roomCode) return;
-    socket.join(roomCode);
+    const uId = user?.id || user?._id || socket.userId || null;
     if (!jamRooms[roomCode]) {
       jamRooms[roomCode] = {
         code: roomCode,
         hostId: socket.id,
-        hostUserId: user?.id || null,
+        hostUserId: uId,
         currentTrack: null,
         isPlaying: false,
         currentTime: 0,
@@ -6321,18 +6326,18 @@ io.on('connection', (socket) => {
     const room = jamRooms[roomCode];
 
     // Clear any disconnect grace timer for this user in this room
-    const disconnectKey = `${roomCode}:${user?.id || socket.id}`;
+    const disconnectKey = `${roomCode}:${uId || socket.id}`;
     if (jamDisconnectTimeouts.has(disconnectKey)) {
       clearTimeout(jamDisconnectTimeouts.get(disconnectKey));
       jamDisconnectTimeouts.delete(disconnectKey);
     }
 
     // Check if this user was already host or in room
-    const existingMember = room.members.find(m => (user?.id && (m.id === user.id || m._id === user.id)) || m.socketId === socket.id);
-    const wasHost = existingMember ? Boolean(existingMember.isHost) : Boolean(room.hostUserId && user?.id && room.hostUserId === user.id);
+    const existingMember = room.members.find(m => (uId && (m.id === uId || m._id === uId)) || m.socketId === socket.id);
+    const wasHost = existingMember ? Boolean(existingMember.isHost) : Boolean(room.hostUserId && uId && String(room.hostUserId) === String(uId));
 
     // Filter out old instance of this user/socket
-    room.members = room.members.filter(m => m.socketId !== socket.id && (!user?.id || (m.id !== user.id && m._id !== user.id)));
+    room.members = room.members.filter(m => m.socketId !== socket.id && (!uId || (m.id !== uId && m._id !== uId)));
 
     const hasActiveHost = room.members.some(m => m.isHost && !m.isDisconnected);
     const isFirstMember = room.members.length === 0;
@@ -6340,7 +6345,7 @@ io.on('connection', (socket) => {
 
     if (isHost) {
       room.hostId = socket.id;
-      room.hostUserId = user?.id || null;
+      room.hostUserId = uId;
       room.members.forEach(m => { m.isHost = false; });
     }
 

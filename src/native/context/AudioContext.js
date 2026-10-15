@@ -163,18 +163,22 @@ export const AudioProvider = ({ children }) => {
       jamSyncRef.current.jamSession = newJamSession;
       setJamSessionState(newJamSession);
     }
+    if (isHost !== undefined) {
+      jamSyncRef.current.isHost = Boolean(isHost);
+    }
   }, []);
 
   const isJamHost = useCallback(() => {
+    if (jamSyncRef.current?.isHost) return true;
     const session = jamSyncRef.current?.jamSession;
     const sock = jamSyncRef.current?.socket;
     if (!session || !sock) return false;
     const myId = String(currentUser?._id || currentUser?.id || sock.id);
     if (session.hostId && session.hostId === sock.id) return true;
-    if (session.hostUserId && String(session.hostUserId) === myId) return true;
+    if (session.hostUserId && (String(session.hostUserId) === myId || (currentUser?._id && String(session.hostUserId) === String(currentUser._id)) || (currentUser?.id && String(session.hostUserId) === String(currentUser.id)))) return true;
     if (Array.isArray(session.members)) {
       return session.members.some(m =>
-        (m.socketId === sock.id || (myId && String(m.id || m._id) === myId)) && m.isHost
+        (m.socketId === sock.id || (myId && String(m.id || m._id) === myId) || (currentUser?._id && String(m.id || m._id) === String(currentUser._id)) || (currentUser?.id && String(m.id || m._id) === String(currentUser.id))) && m.isHost
       );
     }
     return false;
@@ -1000,10 +1004,7 @@ export const AudioProvider = ({ children }) => {
           jamSyncRef.current.socket.emit('jam:next_track', { roomCode });
           return;
         }
-        const myId = jamSyncRef.current.socket.id;
-        const isHost = jamSyncRef.current.jamSession.hostId === myId ||
-          jamSyncRef.current.jamSession.members?.find(m => m.socketId === myId)?.isHost;
-        if (!isHost) {
+        if (!isJamHost()) {
           jamSyncRef.current.socket.emit('jam:next_track', { roomCode });
           return;
         }
