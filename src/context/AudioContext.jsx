@@ -111,6 +111,16 @@ async function doResolvePlayableAudioStream(track, signal = null) {
     };
   }
 
+  // 2b. Direct server-uploaded audio files
+  if (track.source === 'Upload' || (targetUrl && (targetUrl.startsWith('/uploads/') || targetUrl.includes('/uploads/')))) {
+    const fullUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : (targetUrl.startsWith('http') ? targetUrl : `${API_BASE_URL}/${targetUrl}`);
+    return {
+      url: fullUrl,
+      duration: sanitizeDuration(track.duration, 210),
+      cover: track.cover || track.coverUrl
+    };
+  }
+
   // 3. Native mobile device client-side stream resolution (Instant, zero-proxy)
   if (typeof window !== 'undefined' && typeof window.RIVO_RESOLVE_STREAM === 'function') {
     try {
@@ -959,7 +969,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isUserPauseActionRef.current = !nextPlaying;
     setIsPlaying(nextPlaying);
 
-    if (!isRemote && jamSessionRef.current && socketRef.current) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
       const curUser = currentUserRef.current;
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
@@ -1243,7 +1253,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     onTrackStarted(trackToPlay);
 
     // Broadcast track play event to Jam room if active and local action
-    if (!isRemote && jamSessionRef.current && socketRef.current) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
       const curUser = currentUserRef.current;
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
@@ -1998,10 +2008,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       } catch {}
     }
 
-    if (!isRemote && jamSessionRef.current && socketRef.current) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
       if (seekTimeoutRef.current) clearTimeout(seekTimeoutRef.current);
       seekTimeoutRef.current = setTimeout(() => {
-        if (jamSessionRef.current && socketRef.current) {
+        if (jamSessionRef.current && socketRef.current && isJamHost()) {
           const curUser = currentUserRef.current;
           socketRef.current.emit('jam:sync_play_state', {
             roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
@@ -2058,7 +2068,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     const cur = currentTrackRef.current;
-    const isDifferentTrack = syncTrack && String(syncTrack.id || syncTrack._id) !== String(cur?.id || cur?._id);
+    const isDifferentTrack = syncTrack && String(syncTrack.id || syncTrack._id) !== String(lastLoadedIdRef.current || cur?.id || cur?._id);
 
     // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
     if (syncPlaying === false) {

@@ -31,6 +31,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
   const [album, setAlbum]   = useState('');
   const [genre, setGenre]   = useState('Pop');
   const [audioFile, setAudioFile] = useState(null);
+  const [audioDuration, setAudioDuration] = useState(210);
   const [coverFile, setCoverFile] = useState(null);
   const [coverPreview, setCoverPreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -184,6 +185,21 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setAudioFile(file);
+    try {
+      const audioObj = new Audio();
+      const objectUrl = URL.createObjectURL(file);
+      audioObj.src = objectUrl;
+      audioObj.onloadedmetadata = () => {
+        if (audioObj.duration && !isNaN(audioObj.duration) && isFinite(audioObj.duration) && audioObj.duration > 0) {
+          setAudioDuration(Math.round(audioObj.duration));
+        }
+        URL.revokeObjectURL(objectUrl);
+      };
+      audioObj.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+      };
+    } catch {}
+
     if (!title) {
       const name = file.name.replace(/\.[^/.]+$/, '');
       const parts = name.split(' - ');
@@ -216,6 +232,7 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
       formData.append('artist', artist.trim());
       formData.append('album', album.trim() || 'Single');
       formData.append('genre', genre);
+      formData.append('duration', String(audioDuration || 210));
       formData.append('audio', audioFile);
       if (coverFile) formData.append('cover', coverFile);
       formData.append('lyrics', JSON.stringify(lyrics));

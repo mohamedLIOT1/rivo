@@ -1,8 +1,8 @@
 // Centralized Application Version
-export const APP_VERSION = '1.7.4';
-export const BUILD_NUMBER = '43';
+export const APP_VERSION = '1.7.5';
+export const BUILD_NUMBER = '44';
 export const FULL_VERSION = `v${APP_VERSION} (Build ${BUILD_NUMBER})`;
-export const BUILD_DATE = '2026-10-15';
+export const BUILD_DATE = '2026-10-16';
 
 export default {
   version: APP_VERSION,

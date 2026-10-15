@@ -1068,12 +1068,12 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.7.4',
-  releaseNotes: "Rock-solid Jam Room synchronization: instant Play/Pause control from MiniPlayer and FullPlayer across Web, iOS, Android, and Desktop, eliminating host desync and playback freezes.",
+  version: '1.7.5',
+  releaseNotes: "Complete Jam Room synchronization: instant Host-authoritative Play/Pause and track switching across all devices (Android, iOS, Web, Desktop), eliminating desync and track mismatch.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.4',
+      version: '1.7.5',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1081,22 +1081,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Rock-solid Jam Room synchronization and media controls from all player views.'
     },
     android: {
-      version: '1.7.4',
-      build: 43,
+      version: '1.7.5',
+      build: 44,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.4.apk',
-      directFile: 'Rivo-v1.7.4.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.5.apk',
+      directFile: 'Rivo-v1.7.5.apk',
       mandatory: false,
-      notes: 'Rock-solid Jam Room synchronization and instant Play/Pause control across all screens.'
+      notes: 'Rock-solid Jam Room synchronization: instant Host Play/Pause and track change sync.'
     },
     ios: {
-      version: '1.7.4',
-      build: 43,
+      version: '1.7.5',
+      build: 44,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.4.ipa',
-      directFile: 'Rivo-v1.7.4.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.5.ipa',
+      directFile: 'Rivo-v1.7.5.ipa',
       mandatory: false,
-      notes: 'Rock-solid Jam Room synchronization and instant Play/Pause control across all screens.'
+      notes: 'Rock-solid Jam Room synchronization: instant Host Play/Pause and track change sync.'
     }
   }
 };
@@ -1108,6 +1108,8 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.5.apk',
+  '/downloads/Rivo-v1.7.5.ipa',
   '/downloads/Rivo-v1.7.4.apk',
   '/downloads/Rivo-v1.7.4.ipa',
   '/downloads/Rivo-v1.7.3.apk',
@@ -1136,9 +1138,13 @@ app.get([
   if (fs.existsSync(targetPath)) {
     return res.download(targetPath, requestedFile);
   }
-  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.apk');
+  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.5.apk');
   if (fs.existsSync(defaultLatest)) {
-    return res.download(defaultLatest, 'Rivo-v1.7.4.apk');
+    return res.download(defaultLatest, 'Rivo-v1.7.5.apk');
+  }
+  const fallback174 = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.apk');
+  if (fs.existsSync(fallback174)) {
+    return res.download(fallback174, 'Rivo-v1.7.4.apk');
   }
   const fallbackApk = path.join(__dirname, '../public/downloads/Rivo.apk');
   if (fs.existsSync(fallbackApk)) {
@@ -1149,11 +1155,11 @@ app.get([
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.4', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.5', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'Rivo-Server'
+          'User-Agent': 'Rivo-Download-Proxy'
         }
       });
       const apkAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.apk'));
@@ -1175,12 +1181,14 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.4/Rivo-v1.7.4.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.5/Rivo-v1.7.5.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.7.5.ipa',
+  '/downloads/Rivo-v1.7.4.ipa',
   '/downloads/Rivo-v1.6.7.ipa',
   '/downloads/Rivo-v1.6.6.ipa',
   '/downloads/Rivo-v1.6.5.ipa',
@@ -1195,6 +1203,7 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV175Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.5.ipa');
   const localV174Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.ipa');
   const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.ipa');
   const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.ipa');
@@ -1206,6 +1215,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV175Path)) {
+    return res.download(localV175Path, 'Rivo-v1.7.5.ipa');
+  }
   if (fs.existsSync(localV174Path)) {
     return res.download(localV174Path, 'Rivo-v1.7.4.ipa');
   }
@@ -1237,14 +1249,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.7.4.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.7.5.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.4', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.5', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1266,11 +1278,11 @@ app.get([
         return streamRes.data.pipe(res);
       }
     } catch (e) {
-      console.error('Error proxying GitHub release IPA asset:', e.message);
+      console.error('Error proxying GitHub release IPA:', e.message);
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.4/Rivo-v1.7.4.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.5/Rivo-v1.7.5.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
@@ -4295,9 +4307,9 @@ const upload = multer({
   fileFilter
 });
 
-app.post('/api/tracks/upload', auth, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+app.post('/api/tracks/upload', optionalAuth, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
   try {
-    const { title, artist, album, genre, lyrics } = req.body;
+    const { title, artist, album, genre, lyrics, duration } = req.body;
     if (!title || !artist) return res.status(400).json({ error: 'Title and artist are required' });
 
     let audioUrl = '';
@@ -4317,13 +4329,15 @@ app.post('/api/tracks/upload', auth, upload.fields([{ name: 'audio', maxCount: 1
       try { parsedLyrics = typeof lyrics === 'string' ? JSON.parse(lyrics) : lyrics; } catch {}
     }
 
+    const parsedDuration = Number(duration) > 0 ? Math.round(Number(duration)) : 210;
+
     const newTrack = await new Track({
       title: title.trim(),
       artist: artist.trim(),
       album: (album || '').trim() || 'Single',
       cover: coverUrl,
       audioUrl,
-      duration: 210,
+      duration: parsedDuration,
       genre: genre || 'Pop',
       source: 'Upload',
       addedBy: req.user ? req.user.id : 'user',
@@ -4332,6 +4346,10 @@ app.post('/api/tracks/upload', auth, upload.fields([{ name: 'audio', maxCount: 1
 
     // Auto-detect and sync to website album
     await syncTrackToAlbum(newTrack);
+
+    if (req.user?.id) {
+      await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
+    }
 
     res.json({ success: true, track: newTrack });
   } catch (err) {
@@ -4974,6 +4992,15 @@ async function extractDirectStreamUrl(videoId) {
 }
 
 async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '') {
+  // If rawUrl points to an uploaded file or local audio, return immediately without YouTube searching
+  if (rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/'))) {
+    const cleanUpload = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
+    const retObj = new String(cleanUpload);
+    retObj.url = cleanUpload;
+    retObj.duration = 210;
+    return retObj;
+  }
+
   let videoId = null;
   const candidates = [rawUrl];
   for (const cand of candidates) {
@@ -4992,7 +5019,11 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
       if (videoId && (title || artist)) {
         Track.updateOne(
-          { $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }] },
+          {
+            $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }],
+            source: { $ne: 'Upload' },
+            audioUrl: { $not: /^\/?uploads\// }
+          },
           { $set: { audioUrl: `https://www.youtube.com/watch?v=${videoId}` } }
         ).catch(() => {});
       }
@@ -5115,9 +5146,22 @@ const handleTrackStream = async (req, res) => {
     const title = req.query.title || track?.title || '';
     const artist = req.query.artist || track?.artist || '';
 
-    // Direct MP3/M4A non-YouTube stream
-    if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be') && (rawUrl.endsWith('.mp3') || rawUrl.endsWith('.m4a'))) {
-      return res.json({ success: true, url: rawUrl });
+    // 1. Direct local upload stream or track marked as Upload
+    if (rawUrl && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/')) || track?.source === 'Upload' || (track?.audioUrl && (track.audioUrl.startsWith('/uploads/') || track.audioUrl.includes('/uploads/')))) {
+      const uPath = (rawUrl && rawUrl.includes('/uploads/')) ? rawUrl : (track?.audioUrl || rawUrl);
+      const cleanPath = uPath.startsWith('/') ? uPath : `/${uPath}`;
+      return res.json({
+        success: true,
+        url: cleanPath,
+        directUrl: cleanPath,
+        duration: track?.duration || 210,
+        cover: track?.cover || ''
+      });
+    }
+
+    // 2. Direct MP3/M4A non-YouTube stream
+    if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be') && !rawUrl.includes('soundcloud.com')) {
+      return res.json({ success: true, url: rawUrl, directUrl: rawUrl, duration: track?.duration || 210, cover: track?.cover || '' });
     }
 
     const streamTarget = rawUrl || id || '';
@@ -6036,6 +6080,18 @@ const resolveStreamHandler = async (req, res) => {
   try {
     const { url, title, artist, id, trackId } = req.query;
 
+    // Direct uploaded audio file check (Instant zero-proxy playback)
+    if (url && typeof url === 'string' && (url.startsWith('/uploads/') || url.includes('/uploads/'))) {
+      const cleanPath = url.startsWith('/') ? url : `/${url}`;
+      return res.json({
+        success: true,
+        url: cleanPath,
+        directUrl: cleanPath,
+        duration: 210,
+        isYouTube: false
+      });
+    }
+
     // 0. Instant YouTube audio resolution from candidate fields
     const cand = [url, id, trackId, req.params?.id];
     for (const c of cand) {
@@ -6071,6 +6127,18 @@ const resolveStreamHandler = async (req, res) => {
       try {
         const dbTrack = await Track.findById(targetDbId).lean();
         if (dbTrack) {
+          // Direct uploaded track from DB
+          if (dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
+            const cleanPath = dbTrack.audioUrl ? (dbTrack.audioUrl.startsWith('/') ? dbTrack.audioUrl : `/${dbTrack.audioUrl}`) : '';
+            return res.json({
+              success: true,
+              url: cleanPath,
+              directUrl: cleanPath,
+              duration: dbTrack.duration || 210,
+              cover: dbTrack.cover,
+              isYouTube: false
+            });
+          }
           if (dbTrack.audioUrl && (dbTrack.audioUrl.endsWith('.mp3') || dbTrack.audioUrl.endsWith('.m4a')) && !dbTrack.audioUrl.includes('youtube') && !dbTrack.audioUrl.includes('soundcloud')) {
             return res.json({
               success: true,
@@ -6416,7 +6484,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Jam: Host & participants sync play state (track, play/pause, seek) from MiniPlayer, FullPlayer & Notifications
+  // Jam: Host syncs play state (track, play/pause, seek) across all listeners
   socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId }) => {
     const cleanCode = String(roomCode || '').trim().toUpperCase();
     const room = jamRooms[cleanCode] || jamRooms[roomCode];
@@ -6432,11 +6500,28 @@ io.on('connection', (socket) => {
       // Keep hostId/hostUserId fresh if host socket reconnected
       if (isHost && socket.id) {
         room.hostId = socket.id;
-        if (effUid) room.hostUserId = effUid;
+        if (effUid) room.hostUserId = String(effUid);
+        (room.members || []).forEach(m => {
+          m.isHost = (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid)));
+        });
       }
 
-      if (!isMember && !isHost) {
-        console.log(`[Jam] Non-member socket ${socket.id} attempted to sync play state in room ${cleanCode}. Ignored.`);
+      // Strict Host Authority: ONLY the room Host can control room playback & track selection
+      if (!isHost) {
+        console.log(`[Jam] Non-host socket ${socket.id} attempted to alter playback in room ${cleanCode}. Ignored.`);
+        let liveTime = Number(room.currentTime) || 0;
+        if (room.isPlaying && room.updatedAt) {
+          const elapsed = (Date.now() - room.updatedAt) / 1000;
+          if (elapsed > 0 && elapsed < 3600) liveTime += elapsed;
+        }
+        socket.emit('jam:sync_play_state', {
+          isPlaying: Boolean(room.isPlaying),
+          currentTrack: room.currentTrack,
+          currentTime: liveTime,
+          updatedAt: room.updatedAt || Date.now(),
+          queue: room.queue || [],
+          initiatorId: 'server'
+        });
         return;
       }
 
@@ -6452,10 +6537,18 @@ io.on('connection', (socket) => {
             currentTime = 0;
           }
         }
-        room.currentTrack = currentTrack;
+        // Sanitize track: strip host-internal local file paths so other devices resolve stream online
+        const cleanTrack = { ...currentTrack };
+        if (cleanTrack.localAudioUri && cleanTrack.localAudioUri.startsWith('file://')) delete cleanTrack.localAudioUri;
+        if (cleanTrack.nativeAudioUri && cleanTrack.nativeAudioUri.startsWith('file://')) delete cleanTrack.nativeAudioUri;
+        if (cleanTrack.audioUrl && cleanTrack.audioUrl.startsWith('file://')) delete cleanTrack.audioUrl;
+        cleanTrack.isDownloaded = false;
+        cleanTrack.downloaded = false;
+        room.currentTrack = cleanTrack;
       }
       if (currentTime !== undefined) room.currentTime = Number(currentTime) || 0;
       room.updatedAt = Date.now();
+      room.initiatorId = initiatorId || socket.id;
 
       const syncPayload = {
         isPlaying: Boolean(room.isPlaying),
@@ -6471,7 +6564,8 @@ io.on('connection', (socket) => {
         io.to(cleanCode).emit('jam:pause_all', {
           roomCode: cleanCode,
           currentTime: room.currentTime,
-          currentTrack: room.currentTrack
+          currentTrack: room.currentTrack,
+          initiatorId: initiatorId || socket.id
         });
         io.to(cleanCode).emit('jam:room_updated', room);
         io.to(cleanCode).emit('jam_updated', room);
@@ -6480,7 +6574,8 @@ io.on('connection', (socket) => {
           io.to(roomCode).emit('jam:pause_all', {
             roomCode: cleanCode,
             currentTime: room.currentTime,
-            currentTrack: room.currentTrack
+            currentTrack: room.currentTrack,
+            initiatorId: initiatorId || socket.id
           });
           io.to(roomCode).emit('jam:room_updated', room);
           io.to(roomCode).emit('jam_updated', room);
