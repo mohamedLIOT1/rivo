@@ -522,7 +522,7 @@ export const AudioProvider = ({ children }) => {
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
             }
-            if (jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+            if (jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
               const rCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
               if (rCode) {
                 jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -553,7 +553,7 @@ export const AudioProvider = ({ children }) => {
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
             }
-            if (jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+            if (jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
               const rCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
               if (rCode) {
                 jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -588,7 +588,7 @@ export const AudioProvider = ({ children }) => {
                 duration: curDur,
               });
               broadcastListeningActivity(cur, nextState, curPos);
-              if (jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+              if (jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
                 const rCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
                 if (rCode) {
                   jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -913,7 +913,7 @@ export const AudioProvider = ({ children }) => {
       isPlayingRef.current = true;
       setIsLoading(false);
 
-      if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+      if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
         const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
         if (roomCode) {
           jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -922,6 +922,7 @@ export const AudioProvider = ({ children }) => {
             currentTrack: track,
             currentTime: safeTargetSec,
             initiatorId: jamSyncRef.current.socket.id,
+            userId: currentUser?._id || currentUser?.id,
           });
         }
       }
@@ -1050,7 +1051,7 @@ export const AudioProvider = ({ children }) => {
       broadcastListeningActivity(currentTrackRef.current, true, curPos);
     }
 
-    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
       const roomCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
       if (roomCode) {
         jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -1102,7 +1103,7 @@ export const AudioProvider = ({ children }) => {
     }
     broadcastListeningActivity(currentTrackRef.current, wasPlaying, safeSecs);
 
-    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
       const roomCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
       if (roomCode) {
         jamSyncRef.current.socket.emit('jam:sync_play_state', {

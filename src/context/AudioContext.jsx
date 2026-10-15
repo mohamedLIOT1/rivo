@@ -959,12 +959,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isUserPauseActionRef.current = !nextPlaying;
     setIsPlaying(nextPlaying);
 
-    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
+    if (!isRemote && jamSessionRef.current && socketRef.current) {
+      const curUser = currentUserRef.current;
       socketRef.current.emit('jam:sync_play_state', {
-        roomCode: jamSessionRef.current.code,
+        roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
         isPlaying: nextPlaying,
         currentTrack: currentTrackRef.current,
-        currentTime: currentTimeRef.current
+        currentTime: currentTimeRef.current || 0,
+        initiatorId: socketRef.current.id,
+        userId: curUser ? (curUser.id || curUser._id) : undefined
       });
     }
 
@@ -982,17 +985,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (audio) {
       if (nextPlaying) {
         resumeAudioContext();
-        // If paused for more than 8 seconds or connection dropped by server while idle:
-        // Proactively refresh Range connection at exact current timestamp so user never experiences freeze/lag!
-        const pausedDuration = Date.now() - (lastPauseTimeRef.current || 0);
-        if (lastPauseTimeRef.current > 0 && pausedDuration > 8000 && audio.src) {
-          const cur = audio.currentTime || currentTimeRef.current || 0;
-          if (cur > 0) {
-            const s = audio.src;
-            audio.src = s;
-            audio.currentTime = cur;
-          }
-        }
         lastPauseTimeRef.current = 0;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
@@ -1250,13 +1242,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     onTrackStarted(trackToPlay);
 
-    // Broadcast track play event to Jam room if active and local action AND IS HOST!
-    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
+    // Broadcast track play event to Jam room if active and local action
+    if (!isRemote && jamSessionRef.current && socketRef.current) {
+      const curUser = currentUserRef.current;
       socketRef.current.emit('jam:sync_play_state', {
-        roomCode: jamSessionRef.current.code,
+        roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
         currentTrack: trackToPlay,
         isPlaying: true,
-        currentTime: 0
+        currentTime: 0,
+        initiatorId: socketRef.current.id,
+        userId: curUser ? (curUser.id || curUser._id) : undefined
       });
     }
 
@@ -2003,15 +1998,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
       } catch {}
     }
 
-    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
+    if (!isRemote && jamSessionRef.current && socketRef.current) {
       if (seekTimeoutRef.current) clearTimeout(seekTimeoutRef.current);
       seekTimeoutRef.current = setTimeout(() => {
-        if (jamSessionRef.current && socketRef.current && isJamHost()) {
+        if (jamSessionRef.current && socketRef.current) {
+          const curUser = currentUserRef.current;
           socketRef.current.emit('jam:sync_play_state', {
-            roomCode: jamSessionRef.current.code,
+            roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
             currentTime: s,
             isPlaying: isPlayingRef.current,
-            currentTrack: currentTrackRef.current
+            currentTrack: currentTrackRef.current,
+            initiatorId: socketRef.current.id,
+            userId: curUser ? (curUser.id || curUser._id) : undefined
           });
         }
       }, 150);
@@ -2088,8 +2086,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       if (jamSessionRef.current) {
         jamSessionRef.current.isPlaying = false;
+        if (syncTrack) jamSessionRef.current.currentTrack = syncTrack;
         jamSessionRef.current.currentTime = targetTime;
         jamSessionRef.current.updatedAt = Date.now();
+        setJamSessionState({ ...jamSessionRef.current });
       }
       return;
     }
@@ -2116,11 +2116,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       setIsPlaying(true);
       isPlayingRef.current = true;
-      if (jamSessionRef.current) {
-        jamSessionRef.current.isPlaying = true;
-        jamSessionRef.current.currentTime = targetTime;
-        jamSessionRef.current.updatedAt = Date.now();
-      }
+    }
+    if (jamSessionRef.current) {
+      jamSessionRef.current.isPlaying = true;
+      if (syncTrack) jamSessionRef.current.currentTrack = syncTrack;
+      jamSessionRef.current.currentTime = targetTime;
+      jamSessionRef.current.updatedAt = Date.now();
+      setJamSessionState({ ...jamSessionRef.current });
     }
   }, [playTrack, seekTo]);
 

@@ -1062,7 +1062,10 @@ function AppContent() {
     if (socket && !jamSession?.code) {
       socket.emit('jam:join_room', {
         roomCode: code,
-        user: userPayload
+        user: userPayload,
+        currentTrack: currentTrackRef.current || currentTrack,
+        isPlaying: isPlayingRef.current !== undefined ? isPlayingRef.current : isPlaying,
+        currentTime: currentTimeRef.current || currentTime || 0
       });
       showToast(`Jam Session active: ${code}`);
     }
@@ -1156,6 +1159,14 @@ function AppContent() {
     s.on('jam:room_updated', (room) => {
       setJamSession(room);
       setJamSync({ socket: s, jamSession: room });
+      if (room?.currentTrack && syncRemotePlayStateRef.current && room.initiatorId !== s.id) {
+        syncRemotePlayStateRef.current({
+          isPlaying: Boolean(room.isPlaying),
+          currentTrack: room.currentTrack,
+          currentTime: room.currentTime,
+          updatedAt: room.updatedAt
+        });
+      }
     });
 
     s.on('jam:promoted_to_host', () => {
@@ -2084,8 +2095,8 @@ function AppContent() {
         onStartJam={handleStartJam}
         onJoinJam={handleJoinJam}
         onLeaveJam={handleLeaveJam}
-        currentTrack={currentTrack}
-        isPlaying={isPlaying}
+        currentTrack={jamSession?.currentTrack || currentTrack}
+        isPlaying={jamSession ? Boolean(jamSession.isPlaying) : isPlaying}
         tracks={tracks}
         onAddToJamQueue={addToJamQueue}
         onRemoveFromJamQueue={removeFromJamQueue}
