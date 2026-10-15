@@ -1128,57 +1128,18 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
-  const localV170Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.0.apk');
-  const localV169Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.9.apk');
-  const localV168Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.8.apk');
-  const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.apk');
-  const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.apk');
-  const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.apk');
-  const localV164Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.4.apk');
-  const localV163Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.3.apk');
-  const localV162Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.2.apk');
-  const localV161Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.1.apk');
-  const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
-  const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
-  const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
-  if (fs.existsSync(localV170Path)) {
-    return res.download(localV170Path, 'Rivo-v1.7.0.apk');
+  const requestedFile = path.basename(req.path);
+  const targetPath = path.join(__dirname, '../public/downloads', requestedFile);
+  if (fs.existsSync(targetPath)) {
+    return res.download(targetPath, requestedFile);
   }
-  if (fs.existsSync(localV169Path)) {
-    return res.download(localV169Path, 'Rivo-v1.6.9.apk');
+  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.2.apk');
+  if (fs.existsSync(defaultLatest)) {
+    return res.download(defaultLatest, 'Rivo-v1.7.2.apk');
   }
-  if (fs.existsSync(localV168Path)) {
-    return res.download(localV168Path, 'Rivo-v1.6.8.apk');
-  }
-  if (fs.existsSync(localV167Path)) {
-    return res.download(localV167Path, 'Rivo-v1.6.7.apk');
-  }
-  if (fs.existsSync(localV166Path)) {
-    return res.download(localV166Path, 'Rivo-v1.6.6.apk');
-  }
-  if (fs.existsSync(localV165Path)) {
-    return res.download(localV165Path, 'Rivo-v1.6.5.apk');
-  }
-  if (fs.existsSync(localV164Path)) {
-    return res.download(localV164Path, 'Rivo-v1.6.4.apk');
-  }
-  if (fs.existsSync(localV163Path)) {
-    return res.download(localV163Path, 'Rivo-v1.6.3.apk');
-  }
-  if (fs.existsSync(localV162Path)) {
-    return res.download(localV162Path, 'Rivo-v1.6.2.apk');
-  }
-  if (fs.existsSync(localV161Path)) {
-    return res.download(localV161Path, 'Rivo-v1.6.1.apk');
-  }
-  if (fs.existsSync(localVersionedPath)) {
-    return res.download(localVersionedPath, 'Rivo-v1.6.0.apk');
-  }
-  if (fs.existsSync(localOldVersionedPath)) {
-    return res.download(localOldVersionedPath, 'Rivo-v1.5.9.apk');
-  }
-  if (fs.existsSync(localApkPath)) {
-    return res.download(localApkPath, 'Rivo-v1.6.7.apk');
+  const fallbackApk = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(fallbackApk)) {
+    return res.download(fallbackApk, 'Rivo.apk');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
