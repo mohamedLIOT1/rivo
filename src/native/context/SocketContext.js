@@ -109,6 +109,7 @@ export const SocketProvider = ({ children }) => {
 
     s.on('jam:sync_play_state', (data) => {
       if (data?.currentTrack && syncRemotePlayStateRef.current) {
+        if (data.initiatorId && data.initiatorId === s.id) return;
         syncRemotePlayStateRef.current(data);
       }
     });

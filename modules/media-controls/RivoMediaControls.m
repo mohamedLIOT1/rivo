@@ -571,11 +571,15 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                 nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(240.0);
             }
 
-            double currentTime = [options[@"currentTime"] doubleValue];
-            if (currentTime > 10000.0) {
-                currentTime = round(currentTime / 1000.0);
+            if (options[@"currentTime"] != nil && ![options[@"currentTime"] isKindOfClass:[NSNull class]]) {
+                double currentTime = [options[@"currentTime"] doubleValue];
+                if (currentTime > 10000.0) {
+                    currentTime = round(currentTime / 1000.0);
+                }
+                if (currentTime >= 0) {
+                    nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime);
+                }
             }
-            nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime >= 0 ? currentTime : 0.0);
 
             NSString *coverUrl = options[@"coverUrl"];
             if (coverUrl && [coverUrl length] > 0) {

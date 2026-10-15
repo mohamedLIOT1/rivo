@@ -1170,6 +1170,7 @@ function AppContent() {
     });
 
     s.on('jam:sync_play_state', (data) => {
+      if (data?.initiatorId && data.initiatorId === s.id) return;
       setSelectedPlaylist(null);
       syncRemotePlayState(data);
     });
@@ -1192,6 +1193,7 @@ function AppContent() {
     });
 
     s.on('jam:on_play_state_changed', (data) => {
+      if (data?.initiatorId && data.initiatorId === s.id) return;
       setSelectedPlaylist(null);
       syncRemotePlayState(data);
     });

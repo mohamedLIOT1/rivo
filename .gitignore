@@ -19,3 +19,5 @@ uploads/audio-cache/
 *.pdb
 *.tar.gz
 temp_artifacts_*/
+desktop-app/bin/
+desktop-app/obj/

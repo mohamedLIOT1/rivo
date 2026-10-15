@@ -362,7 +362,7 @@ public partial class Form1 : Form
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            string currentVersion = "1.7.1";
+            string currentVersion = "1.7.3";
             string remoteVersion = "";
             string downloadUrl = "https://rivo-m.duckdns.org/downloads/Rivo.exe";
             string notes = "";
