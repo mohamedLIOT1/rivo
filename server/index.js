@@ -1136,9 +1136,9 @@ app.get([
   if (fs.existsSync(targetPath)) {
     return res.download(targetPath, requestedFile);
   }
-  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.3.apk');
+  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.apk');
   if (fs.existsSync(defaultLatest)) {
-    return res.download(defaultLatest, 'Rivo-v1.7.3.apk');
+    return res.download(defaultLatest, 'Rivo-v1.7.4.apk');
   }
   const fallbackApk = path.join(__dirname, '../public/downloads/Rivo.apk');
   if (fs.existsSync(fallbackApk)) {
@@ -1149,7 +1149,7 @@ app.get([
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.7', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.4', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1175,7 +1175,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.7/Rivo-v1.6.7.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.4/Rivo-v1.7.4.apk');
 });
 
 // Direct downloads redirect / proxy for release IPAs (iOS)
@@ -1195,6 +1195,7 @@ app.get([
   '/downloads/Rivo-v1.5.6.ipa',
   '/downloads/Rivo-v1.5.4.ipa'
 ], async (req, res) => {
+  const localV174Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.ipa');
   const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.ipa');
   const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.ipa');
   const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.ipa');
@@ -1205,6 +1206,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.ipa');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.ipa');
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
+  if (fs.existsSync(localV174Path)) {
+    return res.download(localV174Path, 'Rivo-v1.7.4.ipa');
+  }
   if (fs.existsSync(localV167Path)) {
     return res.download(localV167Path, 'Rivo-v1.6.7.ipa');
   }
@@ -1233,14 +1237,14 @@ app.get([
     return res.download(localOldVersionedPath, 'Rivo-v1.5.9.ipa');
   }
   if (fs.existsSync(localIpaPath)) {
-    return res.download(localIpaPath, 'Rivo-v1.6.7.ipa');
+    return res.download(localIpaPath, 'Rivo-v1.7.4.ipa');
   }
 
   // If server has GitHub Token configured, proxy release stream directly
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.6.7', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.4', {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -1266,7 +1270,7 @@ app.get([
     }
   }
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.6.7/Rivo-v1.6.7.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.4/Rivo-v1.7.4.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients
