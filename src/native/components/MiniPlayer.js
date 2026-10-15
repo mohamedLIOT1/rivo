@@ -7,7 +7,7 @@ import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
-  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, remoteDevicePlayback } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
@@ -16,36 +16,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
     setImageError(false);
   }, [currentTrack?._id, currentTrack?.id]);
 
-  const formatTime = (secs) => {
-    const s = Math.max(0, Math.floor(Number(secs) || 0));
-    const m = Math.floor(s / 60);
-    const rem = s % 60;
-    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
-  };
-
-  const [remoteLiveTime, setRemoteLiveTime] = React.useState(0);
-
-  React.useEffect(() => {
-    if (!remoteDevicePlayback) {
-      setRemoteLiveTime(0);
-      return;
-    }
-    const calc = () => {
-      let base = Number(remoteDevicePlayback.currentTime) || 0;
-      if (remoteDevicePlayback.isPlaying && remoteDevicePlayback.updatedAt) {
-        const elapsed = (Date.now() - Number(remoteDevicePlayback.updatedAt)) / 1000;
-        if (elapsed > 0 && elapsed < 3600) base += elapsed;
-      }
-      setRemoteLiveTime(Math.floor(base));
-    };
-    calc();
-    if (remoteDevicePlayback.isPlaying) {
-      const timer = setInterval(calc, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [remoteDevicePlayback?.currentTime, remoteDevicePlayback?.updatedAt, remoteDevicePlayback?.isPlaying]);
-
-  if (!currentTrack && !remoteDevicePlayback?.track) return null;
+  if (!currentTrack) return null;
 
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
@@ -57,31 +28,6 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
   return (
     <View style={[styles.outerDock, { bottom: dockBottom }]}>
-      {/* Remote Connect Device Notification Banner */}
-      {remoteDevicePlayback?.track && (
-        <TouchableOpacity
-          style={styles.connectBanner}
-          onPress={() => {
-            if (remoteDevicePlayback.track && playTrack) {
-              playTrack(remoteDevicePlayback.track, null, false, remoteLiveTime || remoteDevicePlayback.currentTime || 0);
-            }
-          }}
-          activeOpacity={0.85}
-        >
-          <View style={styles.connectPulseDot} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.connectTitle} numberOfLines={1}>
-              PLAYING ON {String(remoteDevicePlayback.deviceName || 'OTHER DEVICE').toUpperCase()}
-            </Text>
-            <Text style={styles.connectSub} numberOfLines={1}>
-              {remoteDevicePlayback.track.title || 'Playing'} • {formatTime(remoteLiveTime || remoteDevicePlayback.currentTime)}
-            </Text>
-          </View>
-          <View style={styles.connectSwitchBtn}>
-            <Text style={styles.connectSwitchBtnText}>PLAY HERE</Text>
-          </View>
-        </TouchableOpacity>
-      )}
 
       {currentTrack && (
         <TouchableOpacity

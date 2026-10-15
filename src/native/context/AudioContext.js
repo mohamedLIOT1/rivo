@@ -130,6 +130,16 @@ export const AudioProvider = ({ children }) => {
         });
 
         // Cross-device connect sync (Spotify Connect: Auto-pause this device if other device plays)
+        socket.off('device:force_pause');
+        socket.on('device:force_pause', async () => {
+          if (soundRef.current) {
+            await soundRef.current.pauseAsync().catch(() => {});
+          }
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, false, currentTrackRef.current);
+        });
+
         socket.off('device:remote_playing');
         socket.on('device:remote_playing', async (remoteSession) => {
           if (remoteSession && remoteSession.track) {
@@ -154,6 +164,21 @@ export const AudioProvider = ({ children }) => {
       setJamSessionState(newJamSession);
     }
   }, []);
+
+  const isJamHost = useCallback(() => {
+    const session = jamSyncRef.current?.jamSession;
+    const sock = jamSyncRef.current?.socket;
+    if (!session || !sock) return false;
+    const myId = String(currentUser?._id || currentUser?.id || sock.id);
+    if (session.hostId && session.hostId === sock.id) return true;
+    if (session.hostUserId && String(session.hostUserId) === myId) return true;
+    if (Array.isArray(session.members)) {
+      return session.members.some(m =>
+        (m.socketId === sock.id || (myId && String(m.id || m._id) === myId)) && m.isHost
+      );
+    }
+    return false;
+  }, [currentUser]);
 
   // Automatic periodic drift correction for Jam sessions (every 3 seconds)
   useEffect(() => {
@@ -645,7 +670,13 @@ export const AudioProvider = ({ children }) => {
       setIsLoading(true);
 
       setCurrentTrack(track);
-      if (Array.isArray(trackList) && trackList.length > 0) setQueue(trackList);
+      if (Array.isArray(trackList) && trackList.length > 0) {
+        const tId = String(track._id || track.id);
+        const idx = trackList.findIndex(t => String(t._id || t.id) === tId);
+        const startIdx = idx >= 0 ? idx : 0;
+        const capped = trackList.slice(startIdx, startIdx + 10);
+        setQueue(capped.length > 0 ? capped : [track]);
+      }
 
       if (soundRef.current) {
         const s = soundRef.current;
@@ -774,7 +805,7 @@ export const AudioProvider = ({ children }) => {
       isPlayingRef.current = true;
       setIsLoading(false);
 
-      if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
+      if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
         const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
         if (roomCode) {
           jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -855,8 +886,9 @@ export const AudioProvider = ({ children }) => {
     }
     const safeIndex = Math.max(0, Math.min(startIndex, list.length - 1));
     const targetTrack = list[safeIndex];
-    setQueue(list);
-    return playTrack(targetTrack, list);
+    const cappedList = list.slice(safeIndex, safeIndex + 10);
+    setQueue(cappedList);
+    return playTrack(targetTrack, cappedList);
   };
 
   const togglePlay = async (isRemote = false) => {
@@ -894,7 +926,7 @@ export const AudioProvider = ({ children }) => {
       broadcastListeningActivity(currentTrackRef.current, true, curPos);
     }
 
-    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
+    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
       const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
       if (roomCode) {
         jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -945,7 +977,7 @@ export const AudioProvider = ({ children }) => {
     }
     broadcastListeningActivity(currentTrackRef.current, wasPlaying, safeSecs);
 
-    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
+    if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
       const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
       if (roomCode) {
         jamSyncRef.current.socket.emit('jam:sync_play_state', {
@@ -990,39 +1022,50 @@ export const AudioProvider = ({ children }) => {
     const triggerAutoQueue = async () => {
       try {
         if (cur) {
-          const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              currentTrack: cur,
-              seedTracks: [cur],
-              limit: 6,
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            let tracks = Array.isArray(data.tracks) ? data.tracks : [];
-            tracks = tracks.filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
-            if (tracks.length > 0) {
-              const newQ = [...(queueRef.current || []), ...tracks];
-              setQueue(newQ);
-              playTrack(tracks[0], newQ);
-              return;
-            }
-          }
+          playedSmartSongIdsRef.current.add(String(cur._id || cur.id));
         }
-      } catch {}
+        (queueRef.current || []).forEach(t => playedSmartSongIdsRef.current.add(String(t._id || t.id)));
 
-      // Fallback: local library pool filtered strictly by Quran/Music isolation
+        const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0 ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : queueRef.current || []))
+          .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
+
+        let next10 = getSmartTasteAndMoodTracks({
+          allTracks: pool,
+          currentUser,
+          followedArtists: currentUser?.following || [],
+          likedTrackIds,
+          excludeTrackIds: playedSmartSongIdsRef.current,
+          limit: 10,
+        });
+
+        if (!next10 || next10.length === 0) {
+          playedSmartSongIdsRef.current = new Set(cur ? [String(cur._id || cur.id)] : []);
+          next10 = getSmartTasteAndMoodTracks({
+            allTracks: pool,
+            currentUser,
+            followedArtists: currentUser?.following || [],
+            likedTrackIds,
+            excludeTrackIds: playedSmartSongIdsRef.current,
+            limit: 10,
+          });
+        }
+
+        if (next10 && next10.length > 0) {
+          setQueue(next10);
+          playTrack(next10[0], next10);
+          return;
+        }
+      } catch (err) {}
+
+      // Fallback: pick matching tracks from pool
       const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0 ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : queueRef.current || []))
         .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
       if (pool.length > 0) {
         const remaining = pool.filter(t => String(t._id || t.id) !== currentId);
         const candidates = remaining.length > 0 ? remaining : pool;
-        const pick = candidates[Math.floor(Math.random() * candidates.length)];
-        const newQ = [...(queueRef.current || []), pick];
-        setQueue(newQ);
-        playTrack(pick, newQ);
+        const fresh10 = candidates.slice(0, 10);
+        setQueue(fresh10);
+        playTrack(fresh10[0], fresh10);
       }
     };
 
@@ -1220,24 +1263,17 @@ export const AudioProvider = ({ children }) => {
     // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
     if (syncPlaying === false) {
       shouldBePlayingRef.current = false;
-      if (soundRef.current) {
-        await soundRef.current.pauseAsync().catch(() => {});
-      }
       setIsPlaying(false);
       isPlayingRef.current = false;
+      if (soundRef.current) {
+        try {
+          await soundRef.current.pauseAsync();
+        } catch {}
+      }
       if (isDifferentTrack) {
-        await playTrack(syncTrack, null, false, targetTime, true, false, false);
-        if (soundRef.current) {
-          await soundRef.current.pauseAsync().catch(() => {});
-        }
-        setIsPlaying(false);
-        isPlayingRef.current = false;
-      } else if (targetTime !== undefined && soundRef.current) {
-        const localCur = playbackStatusRef.current?.currentTime || 0;
-        if (Math.abs(targetTime - localCur) > 3) {
-          await soundRef.current.setPositionAsync(Math.max(0, targetTime * 1000)).catch(() => {});
-          await soundRef.current.pauseAsync().catch(() => {});
-        }
+        setCurrentTrack(syncTrack);
+      }
+      if (targetTime !== undefined) {
         setProgress(p => ({ ...p, currentTime: Math.max(0, targetTime) }));
       }
       if (jamSyncRef.current.jamSession) {

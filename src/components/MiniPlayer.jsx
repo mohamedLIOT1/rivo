@@ -46,66 +46,8 @@ export default function MiniPlayer({
   };
 
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
-  const remotePlayback = audio?.remoteDevicePlayback;
-  const [remoteLiveTime, setRemoteLiveTime] = useState(0);
 
-  useEffect(() => {
-    if (!remotePlayback) {
-      setRemoteLiveTime(0);
-      return;
-    }
-    const calc = () => {
-      let base = Number(remotePlayback.currentTime) || 0;
-      if (remotePlayback.isPlaying && remotePlayback.updatedAt) {
-        const elapsed = (Date.now() - Number(remotePlayback.updatedAt)) / 1000;
-        if (elapsed > 0 && elapsed < 3600) base += elapsed;
-      }
-      setRemoteLiveTime(Math.floor(base));
-    };
-    calc();
-    if (remotePlayback.isPlaying) {
-      const timer = setInterval(calc, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [remotePlayback?.currentTime, remotePlayback?.updatedAt, remotePlayback?.isPlaying]);
-
-  if (!currentTrack) {
-    if (!remotePlayback?.track) return null;
-    return (
-      <div 
-        onClick={() => {
-          if (remotePlayback.track && audio?.playTrack) {
-            audio.playTrack(remotePlayback.track, null, false, remoteLiveTime || remotePlayback.currentTime || 0);
-          }
-        }}
-        className={`fixed bottom-4 md:bottom-6 inset-x-4 max-w-md mx-auto z-50 flex items-center justify-between gap-3 px-4 py-2.5 border-2 shadow-2xl cursor-pointer transition-all ${
-          isDark 
-            ? 'bg-[#0f172a] border-[#17a398] text-white shadow-emerald-950/60' 
-            : 'bg-[#f0fdfa] border-[#0f766e] text-zinc-900 shadow-teal-900/20'
-        } rounded-xl`}
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="relative flex h-3 w-3 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#17a398] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#17a398]"></span>
-          </span>
-          <div className="min-w-0">
-            <p className="text-[10px] font-black tracking-wider uppercase text-[#17a398] truncate">
-              PLAYING ON {String(remotePlayback.deviceName || 'OTHER DEVICE').toUpperCase()}
-            </p>
-            <p className="text-xs font-bold truncate">
-              {remotePlayback.track.title} • {formatTime(remoteLiveTime || remotePlayback.currentTime)}
-            </p>
-          </div>
-        </div>
-        <button 
-          className="shrink-0 px-3 py-1.5 text-[11px] font-black uppercase tracking-wider bg-[#17a398] text-black rounded-lg hover:brightness-110 active:scale-95 transition-all"
-        >
-          PLAY HERE
-        </button>
-      </div>
-    );
-  }
+  if (!currentTrack) return null;
 
   const isQuran = isQuranContent(currentTrack);
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
@@ -233,42 +175,6 @@ export default function MiniPlayer({
 
   return (
     <>
-      {/* Remote Connect Device Notification Banner */}
-      {remotePlayback?.track && (
-        <div 
-          onClick={() => {
-            if (remotePlayback.track && audio?.playTrack) {
-              audio.playTrack(remotePlayback.track, null, false, remoteLiveTime || remotePlayback.currentTime || 0);
-            }
-          }}
-          className={`fixed bottom-[68px] md:bottom-[calc(var(--player-height)+8px)] inset-x-3 md:inset-x-auto md:right-4 max-w-sm z-50 flex items-center justify-between gap-3 px-3.5 py-2 border-2 shadow-xl cursor-pointer transition-all ${
-            isDark 
-              ? 'bg-[#0f172a] border-[#17a398] text-white shadow-emerald-950/50' 
-              : 'bg-[#f0fdfa] border-[#0f766e] text-zinc-900 shadow-teal-900/15'
-          } rounded-xl`}
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#17a398] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#17a398]"></span>
-            </span>
-            <div className="min-w-0">
-              <p className="text-[9px] font-black tracking-wider uppercase text-[#17a398] truncate">
-                PLAYING ON {String(remotePlayback.deviceName || 'OTHER DEVICE').toUpperCase()}
-              </p>
-              <p className="text-xs font-bold truncate">
-                {remotePlayback.track.title} • {formatTime(remoteLiveTime || remotePlayback.currentTime)}
-              </p>
-            </div>
-          </div>
-          <button 
-            className="shrink-0 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider bg-[#17a398] text-black rounded hover:brightness-110 active:scale-95 transition-all"
-          >
-            PLAY HERE
-          </button>
-        </div>
-      )}
-
       {/* ── PERSISTENT CASSETTE DECK PLAYER (Bottom Bar) ── */}
       <footer 
         className={`fixed bottom-[58px] md:bottom-0 inset-x-0 brutal-border-thick border-x-0 border-b-0 px-3 py-1.5 md:p-3.5 z-40 brutal-shadow-lg select-none h-[62px] md:h-[var(--player-height)] transition-colors ${

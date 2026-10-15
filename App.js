@@ -390,6 +390,7 @@ function NativeAppShell() {
               setIsChatOpen(true);
             }}
             onSelectPlaylist={() => setActiveTab('library')}
+            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
           />
         );
       case 'stats':

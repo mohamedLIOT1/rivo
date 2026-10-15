@@ -327,6 +327,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { durationRef.current    = duration;     }, [duration]);
   useEffect(() => { jamSessionRef.current   = jamSession;  }, [jamSession]);
 
+  const isJamHost = useCallback(() => {
+    const session = jamSessionRef.current;
+    const sock = socketRef.current;
+    if (!session || !sock) return false;
+    const mySockId = sock.id;
+    const cur = currentUserRef.current;
+    const myUserId = cur ? String(cur.id || cur._id) : '';
+    if (session.hostId && session.hostId === mySockId) return true;
+    if (session.hostUserId && myUserId && String(session.hostUserId) === myUserId) return true;
+    if (Array.isArray(session.members)) {
+      return session.members.some(m =>
+        (m.socketId === mySockId || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost
+      );
+    }
+    return false;
+  }, []);
+
   // Broadcast live listening activity to server for Friend Activity & Discord Rich Presence
   useEffect(() => {
     if (!currentTrack) return;
@@ -899,7 +916,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isUserPauseActionRef.current = !nextPlaying;
     setIsPlaying(nextPlaying);
 
-    if (!isRemote && jamSessionRef.current && socketRef.current) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code,
         isPlaying: nextPlaying,
@@ -1110,16 +1127,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     let resolvedQueue = currentQueueRef.current;
     if (newQueue?.length > 0) {
       const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-      if (sanitized.length > 0) {
-        resolvedQueue = sanitized;
-        currentQueueRef.current = sanitized;
-        setCurrentQueue(sanitized);
-      } else {
-        const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        resolvedQueue = pool.length > 0 ? pool.slice(0, 30) : [trackToPlay];
-        currentQueueRef.current = resolvedQueue;
-        setCurrentQueue(resolvedQueue);
-      }
+      const pool = sanitized.length > 0 ? sanitized : tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+      const targetId = String(trackToPlay.id || trackToPlay._id || '');
+      const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
+      const startIdx = foundIdx >= 0 ? foundIdx : 0;
+      resolvedQueue = pool.slice(startIdx, startIdx + 10);
+      if (resolvedQueue.length === 0) resolvedQueue = [trackToPlay];
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
     }
 
     if (isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue) {
@@ -1131,7 +1146,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const targetId = String(trackToPlay.id || trackToPlay._id || '');
       const isTrackInCurQ = curQ.some(t => String(t.id || t._id) === targetId);
 
-      // If playing remotely or if track is absent from current queue, build relevant contextual queue (not 680 songs!)
+      // If playing remotely or if track is absent from current queue, build relevant contextual queue (max 10 songs!)
       if (!isTrackInCurQ) {
         const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
         let contextual = [];
@@ -1144,19 +1159,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (contextual.length <= 1) {
           const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
           if (foundIdx >= 0) {
-            contextual = pool.slice(Math.max(0, foundIdx), Math.min(pool.length, foundIdx + 30));
+            contextual = pool.slice(Math.max(0, foundIdx), Math.min(pool.length, foundIdx + 10));
           } else {
-            contextual = [trackToPlay, ...pool.slice(0, 25)];
+            contextual = [trackToPlay, ...pool.slice(0, 9)];
           }
         }
-        resolvedQueue = contextual.length > 0 ? contextual : [trackToPlay];
+        resolvedQueue = contextual.length > 0 ? contextual.slice(0, 10) : [trackToPlay];
+        currentQueueRef.current = resolvedQueue;
         setCurrentQueue(resolvedQueue);
       } else {
         // Check if current queue is strictly composed of the same type
         const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
         if (!curQMatchesType) {
           const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-          resolvedQueue = pool.length > 0 ? pool.slice(0, 30) : [trackToPlay];
+          resolvedQueue = pool.length > 0 ? pool.slice(0, 10) : [trackToPlay];
           setCurrentQueue(resolvedQueue);
         }
       }
@@ -1191,8 +1207,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     onTrackStarted(trackToPlay);
 
-    // Broadcast track play event to Jam room if active and local action
-    if (!isRemote && jamSessionRef.current && socketRef.current) {
+    // Broadcast track play event to Jam room if active and local action AND IS HOST!
+    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code,
         currentTrack: trackToPlay,
@@ -1307,16 +1323,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (!trackOrTracks) return;
     const tracksToAdd = Array.isArray(trackOrTracks) ? trackOrTracks.filter(Boolean) : [trackOrTracks];
     if (tracksToAdd.length === 0) return;
-
-    // If currently in a Jam session, sync added track(s) directly to the Jam Shared Queue!
-    if (jamSessionRef.current && socketRef.current) {
-      socketRef.current.emit('jam:add_to_queue', {
-        roomCode: jamSessionRef.current.code,
-        tracks: tracksToAdd,
-        playNext
-      });
-      return;
-    }
 
     if (!currentTrackRef.current) {
       playTrack(tracksToAdd[0], tracksToAdd, false, 0);
@@ -1795,20 +1801,51 @@ export function AudioProvider({ children, tracks, setTracks }) {
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
         playTrack(activeList[nextIdx], activeList, false, nextIdx);
-      } else {
-        let targetList = activeList;
-        let nextIdx = (idx + 1) % targetList.length;
-        if (targetList.length <= 1 && tracksRef.current && tracksRef.current.length > 1) {
-          const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-          if (pool.length > 1) {
-            targetList = pool;
-            const curIdxInPool = pool.findIndex(t => String(t.id || t._id) === curId);
-            nextIdx = (curIdxInPool + 1) % pool.length;
-          }
+      } else if (idx >= activeList.length - 1) {
+        // Queue of 10 tracks finished! Exclude played songs and fetch 10 BRAND NEW tracks matching current taste & Quran boundary!
+        activeList.forEach(t => playedSmartSongIdsRef.current.add(String(t.id || t._id)));
+        let followed = [];
+        try {
+          const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+          if (raw) followed = JSON.parse(raw);
+        } catch {}
+
+        const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+        let next10 = getSmartTasteAndMoodTracks({
+          allTracks: pool,
+          currentUser: currentUserRef.current,
+          followedArtists: followed,
+          likedTrackIds: likedTrackIds || [],
+          excludeTrackIds: playedSmartSongIdsRef.current,
+          limit: 10,
+        });
+
+        if (!next10 || next10.length === 0) {
+          playedSmartSongIdsRef.current = new Set(curId ? [curId] : []);
+          next10 = getSmartTasteAndMoodTracks({
+            allTracks: pool,
+            currentUser: currentUserRef.current,
+            followedArtists: followed,
+            likedTrackIds: likedTrackIds || [],
+            excludeTrackIds: playedSmartSongIdsRef.current,
+            limit: 10,
+          });
         }
+
+        if (next10 && next10.length > 0) {
+          currentQueueRef.current = next10;
+          setCurrentQueue(next10);
+          currentQueueIndexRef.current = 0;
+          setCurrentQueueIndex(0);
+          playTrack(next10[0], next10, false, 0);
+          setIsPlaying(true);
+          return;
+        }
+      } else {
+        const nextIdx = idx + 1;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
-        playTrack(targetList[nextIdx], targetList, false, nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx);
       }
     }
     // Force playing state so song starts automatically
@@ -1923,10 +1960,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       } catch {}
     }
 
-    if (!isRemote && jamSessionRef.current && socketRef.current) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
       if (seekTimeoutRef.current) clearTimeout(seekTimeoutRef.current);
       seekTimeoutRef.current = setTimeout(() => {
-        if (jamSessionRef.current && socketRef.current) {
+        if (jamSessionRef.current && socketRef.current && isJamHost()) {
           socketRef.current.emit('jam:sync_play_state', {
             roomCode: jamSessionRef.current.code,
             currentTime: s,
@@ -1984,24 +2021,25 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
     if (syncPlaying === false) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
+      window.__RIVO_USER_PAUSED = true;
       setIsPlaying(false);
       isPlayingRef.current = false;
-      window.__RIVO_USER_PAUSED = true;
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch(e){}
+      }
       if (typeof document !== 'undefined') {
         document.querySelectorAll('audio, video').forEach(el => {
           try { el.pause(); } catch(e){}
         });
       }
       if (isDifferentTrack) {
-        await playTrack(syncTrack, null, true /* isRemote */);
-        if (audioRef.current) audioRef.current.pause();
-        setIsPlaying(false);
-        isPlayingRef.current = false;
-      } else if (targetTime !== undefined && audioRef.current) {
-        audioRef.current.currentTime = Math.max(0, targetTime);
+        setCurrentTrack(syncTrack);
+        currentTrackRef.current = syncTrack;
+      }
+      if (targetTime !== undefined) {
+        if (audioRef.current && Math.abs(audioRef.current.currentTime - targetTime) > 2) {
+          try { audioRef.current.currentTime = Math.max(0, targetTime); } catch(e){}
+        }
         setCurrentTime(Math.max(0, targetTime));
         currentTimeRef.current = Math.max(0, targetTime);
       }
@@ -2072,6 +2110,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
         });
 
         // Cross-Device Connect Sync (Spotify Connect: Auto-pause web if other device is playing)
+        socket.off('device:force_pause');
+        socket.on('device:force_pause', () => {
+          if (audioRef.current) {
+            try { audioRef.current.pause(); } catch(e){}
+          }
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          window.__RIVO_USER_PAUSED = true;
+        });
+
         socket.off('device:remote_playing');
         socket.on('device:remote_playing', (remoteSession) => {
           if (remoteSession && remoteSession.track) {

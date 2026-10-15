@@ -47,6 +47,7 @@ import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
 import AlbumDetailModal from '../components/AlbumDetailModal';
+import { INITIAL_TRACKS } from '../data/initialTracks';
 
 const { width } = Dimensions.get('window');
 
@@ -603,7 +604,7 @@ export default function ProfileScreen({
             isPlaylist: true,
           } : null}
           onClose={() => setSelectedPlaylistModal(null)}
-          allTracks={userTracks || []}
+          allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
           onOpenFullPlayer={onOpenFullPlayer}
         />
       </ScrollView>
@@ -1089,7 +1090,7 @@ export default function ProfileScreen({
           isPlaylist: true,
         } : null}
         onClose={() => setSelectedPlaylistModal(null)}
-        allTracks={userTracks || []}
+        allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
         onOpenFullPlayer={onOpenFullPlayer}
       />
     </ScrollView>
