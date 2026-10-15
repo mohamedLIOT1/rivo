@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { AppState } from 'react-native';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -347,6 +348,16 @@ export const AudioProvider = ({ children }) => {
       }
     }, 18000);
     return () => clearInterval(timer);
+  }, [broadcastListeningActivity]);
+
+  // Clean up Discord Rich Presence / activity when mobile app is paused or put to background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active' && !isPlayingRef.current) {
+        broadcastListeningActivity(null, false, 0);
+      }
+    });
+    return () => sub.remove();
   }, [broadcastListeningActivity]);
 
   const refreshDownloadedTracks = async () => {

@@ -123,6 +123,7 @@ async function connectDB() {
   try { 
     await mongoose.connect(MONGO_URI); 
     console.log('✅ DB Connected'); 
+    await User.updateMany({}, { $set: { 'currentListening.isPlaying': false } }).catch(() => {});
     purgeSoundCloudData();
   } catch (err) { 
     console.error('DB connect error:', err.message);
@@ -1067,35 +1068,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.7.0',
-  releaseNotes: "Critical fix for isHost reference error, seamless Jam playback control from main music player screen, rock-solid sync.",
+  version: '1.7.1',
+  releaseNotes: "Complete Jam Room cross-device sync & host consistency fix, immediate Discord Rich Presence auto-disconnect on pause & app closure.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.0',
+      version: '1.7.1',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Jam control directly from music player, stability fixes.'
+      notes: 'Rock-solid Jam synchronization and instant Discord Rich Presence sync.'
     },
     android: {
-      version: '1.7.0',
-      build: 39,
+      version: '1.7.1',
+      build: 40,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.0.apk',
-      directFile: 'Rivo-v1.7.0.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.1.apk',
+      directFile: 'Rivo-v1.7.1.apk',
       mandatory: false,
-      notes: 'Fixed isHost startup crash, clean Jam interface, playback control from main music player.'
+      notes: 'Fixed Jam room sync across devices, immediate host consistency, instant Discord Rich Presence cleanup.'
     },
     ios: {
-      version: '1.7.0',
-      build: 39,
+      version: '1.7.1',
+      build: 40,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.0.ipa',
-      directFile: 'Rivo-v1.7.0.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.1.ipa',
+      directFile: 'Rivo-v1.7.1.ipa',
       mandatory: false,
-      notes: 'Fixed isHost startup crash on iOS, clean Jam interface, playback control from main music player.'
+      notes: 'Fixed Jam room sync across devices, immediate host consistency, instant Discord Rich Presence cleanup.'
     }
   }
 };
@@ -1107,6 +1108,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.1.apk',
   '/downloads/Rivo-v1.7.0.apk',
   '/downloads/Rivo-v1.6.9.apk',
   '/downloads/Rivo-v1.6.8.apk',
@@ -6313,10 +6315,14 @@ io.on('connection', (socket) => {
   // Jam: Host creates or joins room
   socket.on('jam:join_room', ({ roomCode, user }) => {
     if (!roomCode) return;
+    const cleanCode = String(roomCode).trim().toUpperCase();
+    socket.join(cleanCode);
+
     const uId = user?.id || user?._id || socket.userId || null;
-    if (!jamRooms[roomCode]) {
-      jamRooms[roomCode] = {
-        code: roomCode,
+    const isNewRoom = !jamRooms[cleanCode];
+    if (isNewRoom) {
+      jamRooms[cleanCode] = {
+        code: cleanCode,
         hostId: socket.id,
         hostUserId: uId,
         currentTrack: null,
@@ -6328,25 +6334,25 @@ io.on('connection', (socket) => {
       };
     }
 
-    const room = jamRooms[roomCode];
+    const room = jamRooms[cleanCode];
 
     // Clear any disconnect grace timer for this user in this room
-    const disconnectKey = `${roomCode}:${uId || socket.id}`;
+    const disconnectKey = `${cleanCode}:${uId || socket.id}`;
     if (jamDisconnectTimeouts.has(disconnectKey)) {
       clearTimeout(jamDisconnectTimeouts.get(disconnectKey));
       jamDisconnectTimeouts.delete(disconnectKey);
     }
 
-    // Check if this user was already host or in room
-    const existingMember = room.members.find(m => (uId && (m.id === uId || m._id === uId)) || m.socketId === socket.id);
-    const wasHost = existingMember ? Boolean(existingMember.isHost) : Boolean(room.hostUserId && uId && String(room.hostUserId) === String(uId));
+    // Determine host role:
+    // If it's a new room, creator is host.
+    // If the room already exists, only the established host (by userId or socketId) is host.
+    // A guest joining an existing room NEVER steals host!
+    const wasHost = (room.hostUserId && uId && String(room.hostUserId) === String(uId)) ||
+                    (room.hostId && room.hostId === socket.id);
+    const isHost = isNewRoom ? true : Boolean(wasHost || (room.members.length === 0 && !room.hostId));
 
     // Filter out old instance of this user/socket
-    room.members = room.members.filter(m => m.socketId !== socket.id && (!uId || (m.id !== uId && m._id !== uId)));
-
-    const hasActiveHost = room.members.some(m => m.isHost && !m.isDisconnected);
-    const isFirstMember = room.members.length === 0;
-    const isHost = wasHost || isFirstMember || !hasActiveHost || room.hostId === socket.id;
+    room.members = (room.members || []).filter(m => m.socketId !== socket.id && (!uId || (m.id !== uId && m._id !== uId)));
 
     if (isHost) {
       room.hostId = socket.id;
@@ -6356,6 +6362,10 @@ io.on('connection', (socket) => {
 
     const member = {
       ...user,
+      id: uId || user?.id || user?._id || socket.id,
+      _id: uId || user?.id || user?._id || socket.id,
+      name: user?.name || 'Listener',
+      avatar: user?.avatar || '',
       socketId: socket.id,
       isHost,
       isDisconnected: false
@@ -6363,9 +6373,11 @@ io.on('connection', (socket) => {
 
     room.members.push(member);
 
-    // Broadcast full room state to everyone and directly to this socket
-    io.to(roomCode).emit('jam:room_updated', room);
+    // Broadcast full room state to everyone in room and directly to this socket
+    io.to(cleanCode).emit('jam:room_updated', room);
+    io.to(cleanCode).emit('jam_updated', room);
     socket.emit('jam:room_updated', room);
+    socket.emit('jam_updated', room);
 
     // If a track is already set/playing, send immediate sync state to the new joiner
     if (room.currentTrack) {
@@ -6682,8 +6694,13 @@ io.on('connection', (socket) => {
         isFullyOffline = true;
       }
 
-      if (isFullyOffline) {
-        // When user has closed all tabs/connections: mark offline and stop live playing
+      const activeDevSession = userDeviceSessions.get(uidStr);
+      const isPlaybackDeviceDisconnect = activeDevSession && activeDevSession.activeSocketId === socket.id;
+
+      if (isFullyOffline || isPlaybackDeviceDisconnect) {
+        userDeviceSessions.delete(uidStr);
+
+        // When user has closed all tabs/connections or closed the device playing: stop live playing
         try {
           await User.findByIdAndUpdate(uidStr, {
             $set: {
@@ -6694,19 +6711,21 @@ io.on('connection', (socket) => {
         } catch (e) {}
 
         // Broadcast immediately to all connected clients
-        io.emit('user:status', {
-          userId: uidStr,
-          isOnline: false,
-          isLive: false
-        });
+        if (isFullyOffline) {
+          io.emit('user:status', {
+            userId: uidStr,
+            isOnline: false,
+            isLive: false
+          });
+        }
         io.emit('activity:updated', {
           userId: uidStr,
-          isOnline: false,
+          isOnline: !isFullyOffline,
           isLive: false,
           currentListening: { isPlaying: false }
         });
 
-        // Clean up Discord activity session
+        // Clean up Discord activity session IMMEDIATELY
         try { await discordActivity.disconnectUserSession(uidStr); } catch (e) {}
       }
     }
