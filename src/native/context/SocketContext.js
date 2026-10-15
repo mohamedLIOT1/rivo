@@ -34,11 +34,12 @@ export const SocketProvider = ({ children }) => {
   }, [jamSession]);
   const [chatMessages, setChatMessages] = useState([]);
 
+  const myUserId = currentUser?._id ? String(currentUser._id) : (currentUser?.id ? String(currentUser.id) : null);
   const isCurrentUserHost = Boolean(
     jamSession && socket &&
       ((jamSession.hostId === socket.id) ||
-        (jamSession.hostUserId && currentUserRef.current && (String(jamSession.hostUserId) === String(currentUserRef.current._id) || String(jamSession.hostUserId) === String(currentUserRef.current.id))) ||
-        (jamSession.members || []).some(m => (m.socketId === socket.id || (currentUserRef.current && (String(m.id || m._id) === String(currentUserRef.current._id) || String(m.id || m._id) === String(currentUserRef.current.id)))) && m.isHost))
+        (jamSession.hostUserId && myUserId && String(jamSession.hostUserId) === myUserId) ||
+        (jamSession.members || []).some(m => (m.socketId === socket.id || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost))
   );
 
   useEffect(() => {
@@ -302,8 +303,9 @@ export const SocketProvider = ({ children }) => {
   };
 
   const syncJamPlayState = (isPlaying, currentTrack, currentTime) => {
-    const code = jamSession?.code || jamSession?.roomCode;
-    if (socket && isConnected && code && jamSession) {
+    const rawCode = jamSession?.code || jamSession?.roomCode;
+    if (socket && isConnected && rawCode && jamSession) {
+      const cleanCode = String(rawCode).trim().toUpperCase();
       const cur = currentUserRef.current || currentUser;
       const myId = String(cur?._id || cur?.id || socket.id);
       const isHost = (jamSession.hostId === socket.id) ||
@@ -312,11 +314,12 @@ export const SocketProvider = ({ children }) => {
       if (!isHost) return;
 
       socket.emit('jam:sync_play_state', {
-        roomCode: code,
+        roomCode: cleanCode,
         isPlaying: Boolean(isPlaying),
         currentTrack,
         currentTime: Number(currentTime || 0),
         initiatorId: socket.id,
+        userId: myId,
       });
     }
   };

@@ -1068,35 +1068,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.7.1',
-  releaseNotes: "Complete Jam Room cross-device sync & host consistency fix, immediate Discord Rich Presence auto-disconnect on pause & app closure.",
+  version: '1.7.2',
+  releaseNotes: "Fixed playlist playback & Liked Songs from Profile, fixed lock screen/notification Play button interruption, and resolved Jam pause desync across iOS and Android.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.1',
+      version: '1.7.2',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Rock-solid Jam synchronization and instant Discord Rich Presence sync.'
+      notes: 'Rock-solid playlist playback, unified Jam synchronization and media controls.'
     },
     android: {
-      version: '1.7.1',
-      build: 40,
+      version: '1.7.2',
+      build: 41,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.1.apk',
-      directFile: 'Rivo-v1.7.1.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.2.apk',
+      directFile: 'Rivo-v1.7.2.apk',
       mandatory: false,
-      notes: 'Fixed Jam room sync across devices, immediate host consistency, instant Discord Rich Presence cleanup.'
+      notes: 'Fixed Profile playlist playback, lock screen media action resume, and cross-device Jam pause sync.'
     },
     ios: {
-      version: '1.7.1',
-      build: 40,
+      version: '1.7.2',
+      build: 41,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.1.ipa',
-      directFile: 'Rivo-v1.7.1.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.2.ipa',
+      directFile: 'Rivo-v1.7.2.ipa',
       mandatory: false,
-      notes: 'Fixed Jam room sync across devices, immediate host consistency, instant Discord Rich Presence cleanup.'
+      notes: 'Fixed Profile playlist playback, lock screen media action resume, and cross-device Jam pause sync.'
     }
   }
 };
@@ -1108,6 +1108,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.2.apk',
   '/downloads/Rivo-v1.7.1.apk',
   '/downloads/Rivo-v1.7.0.apk',
   '/downloads/Rivo-v1.6.9.apk',
@@ -3203,27 +3204,61 @@ app.get('/api/playlists/:id', async (req, res) => {
     const plId = String(req.params.id || '');
     if (!plId) return res.status(400).json({ error: 'Playlist ID is required' });
 
+    let authUserId = null;
+    try {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const decoded = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+        authUserId = decoded?.id;
+      }
+    } catch {}
+
+    const isObjId = mongoose.isValidObjectId(plId);
     const owner = await User.findOne({
       $or: [
         { 'playlists.id': plId },
-        { 'playlists._id': mongoose.isValidObjectId(plId) ? plId : null }
+        ...(isObjId ? [{ 'playlists._id': new mongoose.Types.ObjectId(plId) }] : []),
+        ...(authUserId ? [{ _id: new mongoose.Types.ObjectId(authUserId) }] : [])
       ]
-    }).select('name avatar playlists');
+    }).select('name avatar playlists likedTrackIds');
 
     if (!owner) {
       return res.status(404).json({ error: 'Playlist not found' });
     }
 
-    const pl = (owner.playlists || []).find(p => String(p.id || p._id) === plId);
-    if (!pl) return res.status(404).json({ error: 'Playlist not found' });
+    const isLikedReq = plId.toLowerCase().includes('liked');
+    const pl = (owner.playlists || []).find(p =>
+      String(p.id) === plId ||
+      String(p._id) === plId ||
+      (isLikedReq && (p.isLikedSongs || p.name === 'Liked Songs'))
+    );
+
+    if (!pl && !(isLikedReq && owner.likedTrackIds)) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const isLiked = Boolean(
+      isLikedReq ||
+      pl?.isLikedSongs ||
+      pl?.name === 'Liked Songs' ||
+      String(pl?.id || '').startsWith('liked')
+    );
+
+    let rawList = [];
+    if (isLiked) {
+      rawList = owner.likedTrackIds || [];
+    } else if (pl) {
+      rawList = (Array.isArray(pl.tracks) && pl.tracks.length > 0)
+        ? pl.tracks
+        : (Array.isArray(pl.trackIds) ? pl.trackIds : []);
+    }
 
     let orderedTracks = [];
-    const rawList = Array.isArray(pl.tracks) && pl.tracks.length > 0 ? pl.tracks : (Array.isArray(pl.trackIds) ? pl.trackIds : []);
     if (rawList.length > 0 && typeof rawList[0] === 'object' && rawList[0].title) {
       orderedTracks = rawList;
     } else {
       const rawIds = rawList.map(item => (item && typeof item === 'object') ? String(item._id || item.id) : String(item)).filter(Boolean);
-      const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+      const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id)).map(id => new mongoose.Types.ObjectId(id));
 
       let populatedTracks = [];
       if (validObjectIds.length > 0) {
@@ -3237,21 +3272,26 @@ app.get('/api/playlists/:id', async (req, res) => {
         populatedTracks = await Track.find({ id: { $in: rawIds } }).lean();
       }
 
-      const trackMap = new Map(populatedTracks.map(t => [String(t._id || t.id), t]));
+      const trackMap = new Map();
+      populatedTracks.forEach(t => {
+        if (t._id) trackMap.set(String(t._id), t);
+        if (t.id) trackMap.set(String(t.id), t);
+      });
       orderedTracks = rawIds.map(id => trackMap.get(id)).filter(Boolean);
     }
 
     res.json({
       success: true,
       playlist: {
-        id: pl.id || pl._id,
-        _id: pl._id || pl.id,
-        name: pl.name,
-        cover: pl.cover || (orderedTracks[0]?.coverUrl || orderedTracks[0]?.cover || ''),
+        id: pl?.id || (isLiked ? 'liked' : (pl?._id || plId)),
+        _id: pl?._id || pl?.id || plId,
+        name: pl?.name || (isLiked ? 'Liked Songs' : 'Playlist'),
+        cover: pl?.cover || (orderedTracks[0]?.coverUrl || orderedTracks[0]?.cover || ''),
         ownerName: owner.name,
         ownerAvatar: owner.avatar,
-        isPublic: pl.isPublic !== false,
-        isQuran: Boolean(pl.isQuran),
+        isPublic: pl ? pl.isPublic !== false : true,
+        isQuran: Boolean(pl?.isQuran),
+        isLikedSongs: isLiked,
         trackIds: orderedTracks.map(t => String(t._id || t.id)),
         tracks: orderedTracks,
       }
@@ -6400,16 +6440,18 @@ io.on('connection', (socket) => {
   });
 
   // Jam: Host syncs play state (track, play/pause, seek) - strictly restricted to Host
-  socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId }) => {
-    const room = jamRooms[roomCode];
+  socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId }) => {
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room) {
       // ROOT ENFORCEMENT: ONLY the active Host can change or pause the Jam room!
+      const effUid = socket.userId || userId;
       const isHost = (room.hostId === socket.id) ||
-        (room.hostUserId && socket.userId && String(room.hostUserId) === String(socket.userId)) ||
-        (room.members || []).some(m => (m.socketId === socket.id || (socket.userId && String(m.id || m._id) === String(socket.userId))) && m.isHost);
+        (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+        (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
 
       if (!isHost) {
-        console.log(`[Jam] Non-host socket ${socket.id} attempted to sync play state in room ${roomCode}. Ignored.`);
+        console.log(`[Jam] Non-host socket ${socket.id} attempted to sync play state in room ${cleanCode}. Ignored.`);
         return;
       }
 
@@ -6432,44 +6474,62 @@ io.on('connection', (socket) => {
 
       if (isPlaying === false) {
         room.isPlaying = false;
-        // Host paused: broadcast immediately to ALL in room so everybody pauses at once
-        io.to(roomCode).emit('jam:on_play_state_changed', {
+        const pausePayload = {
           isPlaying: false,
           currentTrack: room.currentTrack,
           currentTime: room.currentTime,
           updatedAt: room.updatedAt,
           initiatorId: initiatorId || socket.id
-        });
-        io.to(roomCode).emit('jam:pause_all', {
-          roomCode,
+        };
+        // Host paused: broadcast immediately to ALL in room so everybody pauses at once
+        io.to(cleanCode).emit('jam:on_play_state_changed', pausePayload);
+        io.to(cleanCode).emit('jam:pause_all', {
+          roomCode: cleanCode,
           currentTime: room.currentTime,
           currentTrack: room.currentTrack
         });
-        io.to(roomCode).emit('jam:room_updated', room);
-        io.to(roomCode).emit('jam_updated', room);
+        io.to(cleanCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam_updated', room);
+        if (roomCode && roomCode !== cleanCode) {
+          io.to(roomCode).emit('jam:on_play_state_changed', pausePayload);
+          io.to(roomCode).emit('jam:pause_all', {
+            roomCode: cleanCode,
+            currentTime: room.currentTime,
+            currentTrack: room.currentTrack
+          });
+          io.to(roomCode).emit('jam:room_updated', room);
+          io.to(roomCode).emit('jam_updated', room);
+        }
       } else {
         room.isPlaying = true;
-        // Broadcast play/seek state to other participants
-        socket.to(roomCode).emit('jam:on_play_state_changed', {
+        const playPayload = {
           isPlaying: room.isPlaying,
           currentTrack: room.currentTrack,
           currentTime: room.currentTime,
           updatedAt: room.updatedAt,
           initiatorId: initiatorId || socket.id
-        });
-        io.to(roomCode).emit('jam:room_updated', room);
-        io.to(roomCode).emit('jam_updated', room);
+        };
+        // Broadcast play/seek state to other participants
+        socket.to(cleanCode).emit('jam:on_play_state_changed', playPayload);
+        io.to(cleanCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam_updated', room);
+        if (roomCode && roomCode !== cleanCode) {
+          socket.to(roomCode).emit('jam:on_play_state_changed', playPayload);
+          io.to(roomCode).emit('jam:room_updated', room);
+          io.to(roomCode).emit('jam_updated', room);
+        }
       }
     }
   });
 
   // Jam: Live SYNC AUDIO request (zero-drift & no restarting to 0:00)
   socket.on('jam:request_sync', ({ roomCode }) => {
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (!room) return;
     if (room.hostId && room.hostId !== socket.id) {
       // Ask host device directly for exact current playback timestamp
-      io.to(room.hostId).emit('jam:get_host_time', { requesterSocketId: socket.id, roomCode });
+      io.to(room.hostId).emit('jam:get_host_time', { requesterSocketId: socket.id, roomCode: cleanCode });
     } else {
       let liveTime = Number(room.currentTime) || 0;
       if (room.isPlaying && room.updatedAt) {
@@ -6501,8 +6561,9 @@ io.on('connection', (socket) => {
   });
 
   // Jam: Add song(s) or playlist to Linked Shared Queue
-  socket.on('jam:add_to_queue', ({ roomCode, track, tracks, playNext }) => {
-    const room = jamRooms[roomCode];
+  socket.on('jam:add_to_queue', ({ roomCode, track, tracks, playNext, userId }) => {
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room) {
       let rawList = [];
       if (Array.isArray(tracks)) {
@@ -6516,16 +6577,21 @@ io.on('connection', (socket) => {
       const validList = rawList.filter(Boolean);
       if (validList.length === 0) return;
 
+      const effUid = socket.userId || userId;
+      const isHost = (room.hostId === socket.id) ||
+        (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+        (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+
       let remainingTracks = [...validList];
-      // If nothing is playing currently in room, immediately play the first track
-      if (!room.currentTrack) {
+      // Only host can initiate autoplay if room has no track playing
+      if (!room.currentTrack && isHost) {
         const firstTrack = remainingTracks.shift();
         room.currentTrack = firstTrack;
         room.isPlaying = true;
         room.currentTime = 0;
         room.updatedAt = Date.now();
 
-        io.to(roomCode).emit('jam:on_play_state_changed', {
+        io.to(cleanCode).emit('jam:on_play_state_changed', {
           isPlaying: true,
           currentTrack: firstTrack,
           currentTime: 0,
@@ -6552,40 +6618,46 @@ io.on('connection', (socket) => {
         }
       }
 
-      io.to(roomCode).emit('jam:room_updated', room);
+      io.to(cleanCode).emit('jam:room_updated', room);
+      io.to(cleanCode).emit('jam_updated', room);
     }
   });
 
   // Jam: Remove song from Linked Shared Queue
   socket.on('jam:remove_from_queue', ({ roomCode, trackIndex, trackId }) => {
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room && room.queue) {
       if (typeof trackIndex === 'number' && trackIndex >= 0 && trackIndex < room.queue.length) {
         room.queue.splice(trackIndex, 1);
       } else if (trackId) {
         room.queue = room.queue.filter(t => String(t.id || t._id) !== String(trackId));
       }
-      io.to(roomCode).emit('jam:room_updated', room);
+      io.to(cleanCode).emit('jam:room_updated', room);
+      io.to(cleanCode).emit('jam_updated', room);
     }
   });
 
   // Jam: Reorder Shared Queue (Item 2)
   socket.on('jam:reorder_queue', ({ roomCode, fromIndex, toIndex }) => {
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room && Array.isArray(room.queue)) {
       if (typeof fromIndex === 'number' && typeof toIndex === 'number' &&
           fromIndex >= 0 && fromIndex < room.queue.length &&
           toIndex >= 0 && toIndex < room.queue.length) {
         const [moved] = room.queue.splice(fromIndex, 1);
         room.queue.splice(toIndex, 0, moved);
-        io.to(roomCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam_updated', room);
       }
     }
   });
 
   // Jam: Transfer Host to Another Participant (Item 3)
   socket.on('jam:transfer_host', ({ roomCode, targetSocketId, targetUserId }) => {
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (!room) return;
     if (room.hostId !== socket.id) return; // Only current host can transfer
 
@@ -6593,18 +6665,23 @@ io.on('connection', (socket) => {
     if (!target) return;
 
     room.hostId = target.socketId;
+    room.hostUserId = target.id || target._id || null;
     room.members = room.members.map(m => ({
       ...m,
       isHost: m.socketId === target.socketId
     }));
 
-    io.to(roomCode).emit('jam:room_updated', room);
-    io.to(target.socketId).emit('jam:promoted_to_host', { roomCode });
+    io.to(cleanCode).emit('jam:room_updated', room);
+    io.to(cleanCode).emit('jam_updated', room);
+    io.to(cleanCode).emit('jam:host_changed', { hostId: room.hostId, hostUserId: room.hostUserId, hostName: target.name });
+    io.to(target.socketId).emit('jam:you_are_host', { roomCode: cleanCode });
+    io.to(target.socketId).emit('jam:promoted_to_host', { roomCode: cleanCode });
   });
 
   // Jam: Skip / Play Next Track from Linked Queue
   socket.on('jam:next_track', ({ roomCode }) => {
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room) {
       if (room.queue && room.queue.length > 0) {
         const nextTrack = room.queue.shift();
@@ -6613,18 +6690,19 @@ io.on('connection', (socket) => {
         room.isPlaying = true;
         room.updatedAt = Date.now();
 
-        io.to(roomCode).emit('jam:on_play_state_changed', {
+        io.to(cleanCode).emit('jam:on_play_state_changed', {
           isPlaying: true,
           currentTrack: nextTrack,
           currentTime: 0,
           updatedAt: room.updatedAt,
           initiatorId: socket.id
         });
-        io.to(roomCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam_updated', room);
       } else {
         // Shared jam queue is empty: ask host to advance from host's local queue seamlessly
         if (room.hostId) {
-          io.to(room.hostId).emit('jam:advance_host_queue', { roomCode });
+          io.to(room.hostId).emit('jam:advance_host_queue', { roomCode: cleanCode });
         }
       }
     }
@@ -6632,7 +6710,8 @@ io.on('connection', (socket) => {
 
   // Jam: Host kicks a participant
   socket.on('jam:kick_member', ({ roomCode, memberSocketId, memberId }) => {
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (!room) return;
     if (room.hostId !== socket.id) return; // Only host can kick
 
@@ -6644,36 +6723,46 @@ io.on('connection', (socket) => {
 
     // Notify kicked member
     io.to(target.socketId).emit('jam:kicked', {
-      roomCode,
+      roomCode: cleanCode,
       reason: 'You were removed from the Jam room by the host.'
     });
 
     const targetSocket = io.sockets.sockets.get(target.socketId);
     if (targetSocket) {
-      targetSocket.leave(roomCode);
+      targetSocket.leave(cleanCode);
+      if (roomCode) targetSocket.leave(roomCode);
     }
 
-    io.to(roomCode).emit('jam:room_updated', room);
+    io.to(cleanCode).emit('jam:room_updated', room);
+    io.to(cleanCode).emit('jam_updated', room);
   });
 
   // Jam: Leave room
   socket.on('jam:leave_room', ({ roomCode }) => {
-    socket.leave(roomCode);
-    const room = jamRooms[roomCode];
+    const cleanCode = String(roomCode || '').trim().toUpperCase();
+    socket.leave(cleanCode);
+    if (roomCode) socket.leave(roomCode);
+    const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room) {
       room.members = room.members.filter(m => m.socketId !== socket.id);
       if (room.members.length === 0) {
-        delete jamRooms[roomCode];
+        delete jamRooms[cleanCode];
+        if (roomCode) delete jamRooms[roomCode];
       } else {
         // If host left, pick a random remaining member to become the new host
         if (room.hostId === socket.id || !room.members.some(m => m.socketId === room.hostId)) {
           const randomIdx = Math.floor(Math.random() * room.members.length);
+          const newHost = room.members[randomIdx];
           room.members.forEach((m, idx) => { m.isHost = (idx === randomIdx); });
-          room.hostId = room.members[randomIdx].socketId;
-          room.hostUserId = room.members[randomIdx].id || room.members[randomIdx]._id || null;
+          room.hostId = newHost.socketId;
+          room.hostUserId = newHost.id || newHost._id || null;
+          io.to(cleanCode).emit('jam:host_changed', { hostId: room.hostId, hostUserId: room.hostUserId, hostName: newHost.name });
+          if (newHost.socketId) {
+            io.to(newHost.socketId).emit('jam:you_are_host', { roomCode: cleanCode });
+          }
         }
-        io.to(roomCode).emit('jam:room_updated', room);
-        io.to(roomCode).emit('jam_updated', room);
+        io.to(cleanCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam_updated', room);
       }
     }
   });

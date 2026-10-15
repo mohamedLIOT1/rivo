@@ -113,7 +113,9 @@ export default function AlbumDetailModal({
     const tryFetch = async () => {
       try {
         if (isPl && (albId || cleanId)) {
-          const res = await fetch(`${API_BASE_URL}/api/playlists/${albId || cleanId}`);
+          const res = await fetch(`${API_BASE_URL}/api/playlists/${albId || cleanId}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+          });
           if (res.ok) {
             const d = await res.json();
             const list = d.playlist?.tracks || d.tracks || [];
