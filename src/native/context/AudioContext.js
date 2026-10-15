@@ -108,7 +108,7 @@ export const AudioProvider = ({ children }) => {
   const [jamSession, setJamSessionState] = useState(null);
   const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
 
-  const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
+  const setJamSync = useCallback(({ socket, jamSession: newJamSession, isHost }) => {
     if (socket !== undefined) {
       if (jamSyncRef.current.socket && jamSyncRef.current.socket !== socket) {
         jamSyncRef.current.socket.off('jam:get_host_time');

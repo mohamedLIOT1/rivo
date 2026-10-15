@@ -1067,35 +1067,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.9',
-  releaseNotes: "Streamlined Jam interface (removed in-modal controls, controlling playback natively from the music player page), enhanced Jam host sync, rock-solid pause freeze across all devices.",
+  version: '1.7.0',
+  releaseNotes: "Critical fix for isHost reference error, seamless Jam playback control from main music player screen, rock-solid sync.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.9',
+      version: '1.7.0',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Jam control directly from music player, seamless multi-device sync.'
+      notes: 'Jam control directly from music player, stability fixes.'
     },
     android: {
-      version: '1.6.9',
-      build: 38,
+      version: '1.7.0',
+      build: 39,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.9.apk',
-      directFile: 'Rivo-v1.6.9.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.0.apk',
+      directFile: 'Rivo-v1.7.0.apk',
       mandatory: false,
-      notes: 'Clean Jam modal interface, playback control from the main music player screen.'
+      notes: 'Fixed isHost startup crash, clean Jam interface, playback control from main music player.'
     },
     ios: {
-      version: '1.6.9',
-      build: 38,
+      version: '1.7.0',
+      build: 39,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.9.ipa',
-      directFile: 'Rivo-v1.6.9.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.0.ipa',
+      directFile: 'Rivo-v1.7.0.ipa',
       mandatory: false,
-      notes: 'Clean Jam modal interface, playback control from the main music player screen.'
+      notes: 'Fixed isHost startup crash on iOS, clean Jam interface, playback control from main music player.'
     }
   }
 };
@@ -1107,6 +1107,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.0.apk',
   '/downloads/Rivo-v1.6.9.apk',
   '/downloads/Rivo-v1.6.8.apk',
   '/downloads/Rivo-v1.6.7.apk',
@@ -1124,6 +1125,7 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV170Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.0.apk');
   const localV169Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.9.apk');
   const localV168Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.8.apk');
   const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.apk');
@@ -1136,6 +1138,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV170Path)) {
+    return res.download(localV170Path, 'Rivo-v1.7.0.apk');
+  }
   if (fs.existsSync(localV169Path)) {
     return res.download(localV169Path, 'Rivo-v1.6.9.apk');
   }
