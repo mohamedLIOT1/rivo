@@ -14,11 +14,15 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
-  const { syncRemotePlayState, setJamSync } = useAudioPlayer();
+  const { syncRemotePlayState, setJamSync, playNextTrack } = useAudioPlayer();
   const syncRemotePlayStateRef = useRef(syncRemotePlayState);
   useEffect(() => {
     syncRemotePlayStateRef.current = syncRemotePlayState;
   }, [syncRemotePlayState]);
+  const playNextTrackRef = useRef(playNextTrack);
+  useEffect(() => {
+    playNextTrackRef.current = playNextTrack;
+  }, [playNextTrack]);
 
   const { showToast } = useToast();
   const [socket, setSocket] = useState(null);
@@ -30,11 +34,18 @@ export const SocketProvider = ({ children }) => {
   }, [jamSession]);
   const [chatMessages, setChatMessages] = useState([]);
 
+  const isCurrentUserHost = Boolean(
+    jamSession && socket &&
+      ((jamSession.hostId === socket.id) ||
+        (jamSession.hostUserId && currentUserRef.current && (String(jamSession.hostUserId) === String(currentUserRef.current._id) || String(jamSession.hostUserId) === String(currentUserRef.current.id))) ||
+        (jamSession.members || []).some(m => (m.socketId === socket.id || (currentUserRef.current && (String(m.id || m._id) === String(currentUserRef.current._id) || String(m.id || m._id) === String(currentUserRef.current.id)))) && m.isHost))
+  );
+
   useEffect(() => {
     if (setJamSync) {
-      setJamSync({ socket, jamSession });
+      setJamSync({ socket, jamSession, isHost: isCurrentUserHost });
     }
-  }, [socket, jamSession, setJamSync]);
+  }, [socket, jamSession, isCurrentUserHost, setJamSync]);
 
   useEffect(() => {
     const s = io(API_BASE_URL, {
@@ -123,6 +134,12 @@ export const SocketProvider = ({ children }) => {
           currentTime: data?.currentTime,
           updatedAt: Date.now(),
         });
+      }
+    });
+
+    s.on('jam:advance_host_queue', () => {
+      if (isCurrentUserHost && playNextTrackRef.current) {
+        playNextTrackRef.current();
       }
     });
 

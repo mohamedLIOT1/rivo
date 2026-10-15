@@ -157,14 +157,6 @@ export default function JamRoomModal({
                     <h4 className={`font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{currentTrack.title}</h4>
                     <p className={`text-[10px] truncate font-medium ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{currentTrack.artist}</p>
                   </div>
-                  <button
-                    onClick={handleTuneIn}
-                    className="brutal-btn px-2.5 py-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-black font-mono font-black text-[10px] uppercase brutal-border rounded-lg flex items-center gap-1 shrink-0 cursor-pointer"
-                    title="Force sync audio"
-                  >
-                    <Headphones size={12} />
-                    <span>SYNC</span>
-                  </button>
                 </div>
               )}
 
