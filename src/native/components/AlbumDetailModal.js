@@ -34,6 +34,7 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { API_BASE_URL } from '../config';
+import { INITIAL_TRACKS } from '../data/initialTracks';
 
 import MiniPlayer from './MiniPlayer';
 
@@ -64,7 +65,7 @@ export default function AlbumDetailModal({
       return album.tracks;
     }
 
-    const pool = (allTracks && allTracks.length > 0) ? allTracks : (contextTracks && contextTracks.length > 0 ? contextTracks : []);
+    const pool = (allTracks && allTracks.length > 0) ? allTracks : (contextTracks && contextTracks.length > 0 ? contextTracks : (INITIAL_TRACKS || []));
     const rawIds = [
       ...(Array.isArray(album.trackIds) ? album.trackIds : []),
       ...(Array.isArray(album.tracks) ? album.tracks : []),

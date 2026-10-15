@@ -63,8 +63,10 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, '../dist'), {
   maxAge: '1d',
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'no-cache');
+    if (filePath.endsWith('.html') || filePath.endsWith('sw.js')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     } else if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff2?|ico)$/)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     }
@@ -1065,35 +1067,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.6.7',
-  releaseNotes: "Fixed mobile profile playlists and songs playback, immediate Jam host transfer on app close/kill, rock-solid Jam pause sync across all devices (including iOS IPA), and album/playlist routing.",
+  version: '1.6.8',
+  releaseNotes: "Fixed browser initialization crash, strict cross-device pause, rock-solid Jam pause sync across devices, guest queue isolation, 10-song queue cap with auto smart renewal, and profile playlist playback.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.6.7',
+      version: '1.6.8',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Profile playlist fixes, Jam host transfer on exit, rock-solid Jam pause sync.'
+      notes: 'Browser crash fix, Spotify Connect strict pause, Jam sync fixes, queue cap to 10 songs.'
     },
     android: {
-      version: '1.6.7',
-      build: 36,
+      version: '1.6.8',
+      build: 37,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.6.7.apk',
-      directFile: 'Rivo-v1.6.7.apk',
+      downloadUrl: '/downloads/Rivo-v1.6.8.apk',
+      directFile: 'Rivo-v1.6.8.apk',
       mandatory: false,
-      notes: 'Profile playlist and tracks playback fix, immediate Jam host transfer on exit/kill, complete Jam pause sync across devices.'
+      notes: 'Jam guest isolation, host pause freeze across devices, queue capped to 10 tracks, profile playlists playback.'
     },
     ios: {
-      version: '1.6.7',
-      build: 36,
+      version: '1.6.8',
+      build: 37,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.6.7.ipa',
-      directFile: 'Rivo-v1.6.7.ipa',
+      downloadUrl: '/downloads/Rivo-v1.6.8.ipa',
+      directFile: 'Rivo-v1.6.8.ipa',
       mandatory: false,
-      notes: 'Profile playlist and tracks playback fix, immediate Jam host transfer on exit/kill, fixed AVPlayer pause sync on iOS IPA.'
+      notes: 'Jam host pause freeze on iOS IPA, guest track isolation, queue capped to 10 songs.'
     }
   }
 };
@@ -1105,6 +1107,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.6.8.apk',
   '/downloads/Rivo-v1.6.7.apk',
   '/downloads/Rivo-v1.6.6.apk',
   '/downloads/Rivo-v1.6.5.apk',
@@ -1120,6 +1123,7 @@ app.get([
   '/downloads/Rivo-v1.5.5.apk',
   '/downloads/app-release.apk'
 ], async (req, res) => {
+  const localV168Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.8.apk');
   const localV167Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.7.apk');
   const localV166Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.6.apk');
   const localV165Path = path.join(__dirname, '../public/downloads/Rivo-v1.6.5.apk');
@@ -1130,6 +1134,9 @@ app.get([
   const localVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.6.0.apk');
   const localOldVersionedPath = path.join(__dirname, '../public/downloads/Rivo-v1.5.9.apk');
   const localApkPath = path.join(__dirname, '../public/downloads/Rivo.apk');
+  if (fs.existsSync(localV168Path)) {
+    return res.download(localV168Path, 'Rivo-v1.6.8.apk');
+  }
   if (fs.existsSync(localV167Path)) {
     return res.download(localV167Path, 'Rivo-v1.6.7.apk');
   }
@@ -3198,23 +3205,29 @@ app.get('/api/playlists/:id', async (req, res) => {
     const pl = (owner.playlists || []).find(p => String(p.id || p._id) === plId);
     if (!pl) return res.status(404).json({ error: 'Playlist not found' });
 
-    const rawIds = (pl.trackIds || pl.tracks || []).map(String).filter(Boolean);
-    const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+    let orderedTracks = [];
+    const rawList = Array.isArray(pl.tracks) && pl.tracks.length > 0 ? pl.tracks : (Array.isArray(pl.trackIds) ? pl.trackIds : []);
+    if (rawList.length > 0 && typeof rawList[0] === 'object' && rawList[0].title) {
+      orderedTracks = rawList;
+    } else {
+      const rawIds = rawList.map(item => (item && typeof item === 'object') ? String(item._id || item.id) : String(item)).filter(Boolean);
+      const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
 
-    let populatedTracks = [];
-    if (validObjectIds.length > 0) {
-      populatedTracks = await Track.find({
-        $or: [
-          { _id: { $in: validObjectIds } },
-          { id: { $in: rawIds } }
-        ]
-      }).lean();
-    } else if (rawIds.length > 0) {
-      populatedTracks = await Track.find({ id: { $in: rawIds } }).lean();
+      let populatedTracks = [];
+      if (validObjectIds.length > 0) {
+        populatedTracks = await Track.find({
+          $or: [
+            { _id: { $in: validObjectIds } },
+            { id: { $in: rawIds } }
+          ]
+        }).lean();
+      } else if (rawIds.length > 0) {
+        populatedTracks = await Track.find({ id: { $in: rawIds } }).lean();
+      }
+
+      const trackMap = new Map(populatedTracks.map(t => [String(t._id || t.id), t]));
+      orderedTracks = rawIds.map(id => trackMap.get(id)).filter(Boolean);
     }
-
-    const trackMap = new Map(populatedTracks.map(t => [String(t._id || t.id), t]));
-    const orderedTracks = rawIds.map(id => trackMap.get(id)).filter(Boolean);
 
     res.json({
       success: true,
@@ -3227,7 +3240,7 @@ app.get('/api/playlists/:id', async (req, res) => {
         ownerAvatar: owner.avatar,
         isPublic: pl.isPublic !== false,
         isQuran: Boolean(pl.isQuran),
-        trackIds: rawIds,
+        trackIds: orderedTracks.map(t => String(t._id || t.id)),
         tracks: orderedTracks,
       }
     });
@@ -6139,10 +6152,15 @@ io.on('connection', (socket) => {
   // Push latest version manifest to newly connected client immediately
   socket.emit('app:update_manifest', APP_VERSIONS_DATA);
 
-  // Cross-Device Connect Playback Coordination (Requirement 15)
+  // Cross-Device Connect Playback Coordination (Mutual Auto-Pause)
   socket.on('device:playback_state', ({ isPlaying, track, currentTime, deviceType, deviceName, takeover }) => {
-    const uid = socket.userId;
+    const uid = socket.userId || (socket.user && (socket.user._id || socket.user.id));
     if (!uid) return;
+
+    if (isPlaying) {
+      // Mutual exclusion: when this device plays, immediately pause all other devices of this user!
+      socket.to(`user:${uid}`).emit('device:force_pause');
+    }
 
     userDeviceSessions.set(uid, {
       activeSocketId: socket.id,
@@ -6151,18 +6169,6 @@ io.on('connection', (socket) => {
       track,
       isPlaying: Boolean(isPlaying),
       currentTime: Number(currentTime) || 0,
-      updatedAt: Date.now()
-    });
-
-    // Notify other devices of the same user
-    socket.to(`user:${uid}`).emit('device:remote_playing', {
-      activeSocketId: socket.id,
-      deviceType: deviceType || 'web',
-      deviceName: deviceName || (deviceType === 'mobile' ? 'Mobile Phone' : 'Web Browser'),
-      track,
-      isPlaying: Boolean(isPlaying),
-      currentTime: Number(currentTime) || 0,
-      takeover: Boolean(takeover),
       updatedAt: Date.now()
     });
   });
@@ -6371,10 +6377,20 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Jam: Any participant syncs play state (track, play/pause, seek)
+  // Jam: Host syncs play state (track, play/pause, seek) - strictly restricted to Host
   socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId }) => {
     const room = jamRooms[roomCode];
     if (room) {
+      // ROOT ENFORCEMENT: ONLY the active Host can change or pause the Jam room!
+      const isHost = (room.hostId === socket.id) ||
+        (room.hostUserId && socket.userId && String(room.hostUserId) === String(socket.userId)) ||
+        (room.members || []).some(m => (m.socketId === socket.id || (socket.userId && String(m.id || m._id) === String(socket.userId))) && m.isHost);
+
+      if (!isHost) {
+        console.log(`[Jam] Non-host socket ${socket.id} attempted to sync play state in room ${roomCode}. Ignored.`);
+        return;
+      }
+
       let trackChanged = false;
       if (isPlaying !== undefined) room.isPlaying = isPlaying;
       if (currentTrack !== undefined) {
@@ -6393,7 +6409,8 @@ io.on('connection', (socket) => {
       room.updatedAt = Date.now();
 
       if (isPlaying === false) {
-        // Host or listener paused: broadcast immediately to ALL in room so everybody pauses at once
+        room.isPlaying = false;
+        // Host paused: broadcast immediately to ALL in room so everybody pauses at once
         io.to(roomCode).emit('jam:on_play_state_changed', {
           isPlaying: false,
           currentTrack: room.currentTrack,
@@ -6409,6 +6426,7 @@ io.on('connection', (socket) => {
         io.to(roomCode).emit('jam:room_updated', room);
         io.to(roomCode).emit('jam_updated', room);
       } else {
+        room.isPlaying = true;
         // Broadcast play/seek state to other participants
         socket.to(roomCode).emit('jam:on_play_state_changed', {
           isPlaying: room.isPlaying,
@@ -6506,6 +6524,9 @@ io.on('connection', (socket) => {
           room.queue.unshift(...formatted);
         } else {
           room.queue.push(...formatted);
+        }
+        if (room.queue.length > 10) {
+          room.queue = room.queue.slice(0, 10);
         }
       }
 

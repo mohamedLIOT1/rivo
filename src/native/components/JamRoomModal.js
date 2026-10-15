@@ -29,6 +29,10 @@ import {
   Search,
   Shuffle,
   Sparkles,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react-native';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
@@ -52,7 +56,7 @@ export default function JamRoomModal({ visible, onClose }) {
   } = useSocket();
 
   const { currentUser, tracks = [] } = useUser();
-  const { currentTrack, isPlaying, playTrack, syncRemotePlayState, likedTrackIds = [] } = useAudioPlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlay, playNextTrack, playPrevTrack, syncRemotePlayState, likedTrackIds = [] } = useAudioPlayer();
   const { showToast } = useToast();
 
   const [inputCode, setInputCode] = useState('');
@@ -64,7 +68,7 @@ export default function JamRoomModal({ visible, onClose }) {
   const [selectedUser, setSelectedUser] = useState(null);
 
   const { width, height } = useWindowDimensions();
-  const isLandscape = width > height && width >= 540;
+  const isLandscape = (width > height && width >= 480) || width >= 650;
 
   // Modal visibility handled by <Modal visible={visible}>
 
@@ -211,33 +215,87 @@ export default function JamRoomModal({ visible, onClose }) {
   const renderCurrentTrack = () => (
     currentTrack ? (
       <View style={styles.syncedTrackCard}>
-        <Image
-          source={{
-            uri:
-              currentTrack.coverUrl ||
-              currentTrack.cover ||
-              'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
-          }}
-          style={styles.syncedTrackCover}
-        />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={styles.syncStatusRow}>
-            <Text style={styles.syncStatusText}>
-              {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%' }}>
+          <Image
+            source={{
+              uri:
+                currentTrack.coverUrl ||
+                currentTrack.cover ||
+                'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
+            }}
+            style={styles.syncedTrackCover}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.syncStatusRow}>
+              <Text style={styles.syncStatusText}>
+                {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+              </Text>
+              <View
+                style={[
+                  styles.statusPulseDot,
+                  { backgroundColor: isPlaying ? colors.mint : '#f59e0b' },
+                ]}
+              />
+            </View>
+            <Text style={styles.syncedTrackTitle} numberOfLines={1}>
+              {currentTrack.title}
             </Text>
-            <View
-              style={[
-                styles.statusPulseDot,
-                { backgroundColor: isPlaying ? colors.mint : '#f59e0b' },
-              ]}
-            />
+            <Text style={styles.syncedTrackArtist} numberOfLines={1}>
+              {currentTrack.artist}
+            </Text>
           </View>
-          <Text style={styles.syncedTrackTitle} numberOfLines={1}>
-            {currentTrack.title}
-          </Text>
-          <Text style={styles.syncedTrackArtist} numberOfLines={1}>
-            {currentTrack.artist}
-          </Text>
+        </View>
+
+        {/* Live Controls & Sync Row */}
+        <View style={styles.syncedControlsRow}>
+          <View style={styles.controlsLeft}>
+            {isCurrentUserHost ? (
+              <View style={styles.hostControls}>
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={playPrevTrack}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <SkipBack size={16} color="#ffffff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.playPauseBtn}
+                  onPress={() => togglePlay()}
+                  activeOpacity={0.8}
+                >
+                  {isPlaying ? (
+                    <Pause size={16} color="#082621" fill="#082621" />
+                  ) : (
+                    <Play size={16} color="#082621" fill="#082621" />
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={playNextTrack}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <SkipForward size={16} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.listenerBadge}>
+                <Text style={styles.listenerBadgeText}>HOST CONTROLS PLAYBACK</Text>
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.quickSyncBtn}
+            onPress={handleTuneIn}
+            activeOpacity={0.8}
+          >
+            <Headphones size={13} color="#082621" />
+            <Text style={styles.quickSyncBtnText}>SYNC</Text>
+          </TouchableOpacity>
         </View>
       </View>
     ) : null
@@ -877,16 +935,74 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#082621',
   },
-  // Synced Track Card
   syncedTrackCard: {
     backgroundColor: '#18181b',
     borderWidth: 1.5,
     borderColor: '#27272a',
     borderRadius: 12,
-    padding: 10,
+    padding: 12,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  syncedControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#27272a',
+    width: '100%',
+  },
+  controlsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hostControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  controlBtn: {
+    padding: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playPauseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#17a398',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listenerBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  listenerBadgeText: {
+    fontSize: 9,
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+    color: '#9ca3af',
+  },
+  quickSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#17a398',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  quickSyncBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#082621',
   },
   syncedTrackCover: {
     width: 44,

@@ -126,6 +126,13 @@ export const SocketProvider = ({ children }) => {
       }
     });
 
+    // Cross-Device Mutual Exclusion: Force pause this mobile device when other device starts playing
+    s.on('device:force_pause', () => {
+      if (syncRemotePlayStateRef.current) {
+        syncRemotePlayStateRef.current({ isPlaying: false });
+      }
+    });
+
     s.on('jam:you_are_host', ({ roomCode }) => {
       const cur = currentUserRef.current;
       const myId = String(cur?._id || cur?.id || s.id);
@@ -279,7 +286,14 @@ export const SocketProvider = ({ children }) => {
 
   const syncJamPlayState = (isPlaying, currentTrack, currentTime) => {
     const code = jamSession?.code || jamSession?.roomCode;
-    if (socket && isConnected && code) {
+    if (socket && isConnected && code && jamSession) {
+      const cur = currentUserRef.current || currentUser;
+      const myId = String(cur?._id || cur?.id || socket.id);
+      const isHost = (jamSession.hostId === socket.id) ||
+        (jamSession.hostUserId && String(jamSession.hostUserId) === myId) ||
+        (jamSession.members || []).some(m => (m.socketId === socket.id || (myId && String(m.id || m._id) === myId)) && m.isHost);
+      if (!isHost) return;
+
       socket.emit('jam:sync_play_state', {
         roomCode: code,
         isPlaying: Boolean(isPlaying),
