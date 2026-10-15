@@ -1068,35 +1068,35 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.7.3',
-  releaseNotes: "Fixed lock screen / notification progress reset to 0:00, unified Jam Host Play/Resume synchronization across iOS, Android, and web with controls on Notification, Full Player, and MiniPlayer.",
+  version: '1.7.4',
+  releaseNotes: "Rock-solid Jam Room synchronization: instant Play/Pause control from MiniPlayer and FullPlayer across Web, iOS, Android, and Desktop, eliminating host desync and playback freezes.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.3',
+      version: '1.7.4',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Rock-solid playlist playback, unified Jam synchronization and media controls.'
+      notes: 'Rock-solid Jam Room synchronization and media controls from all player views.'
     },
     android: {
-      version: '1.7.3',
-      build: 42,
+      version: '1.7.4',
+      build: 43,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.3.apk',
-      directFile: 'Rivo-v1.7.3.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.4.apk',
+      directFile: 'Rivo-v1.7.4.apk',
       mandatory: false,
-      notes: 'Fixed lock screen progress reset to 0:00, full Jam Host play & resume sync across all controllers.'
+      notes: 'Rock-solid Jam Room synchronization and instant Play/Pause control across all screens.'
     },
     ios: {
-      version: '1.7.3',
-      build: 42,
+      version: '1.7.4',
+      build: 43,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.3.ipa',
-      directFile: 'Rivo-v1.7.3.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.4.ipa',
+      directFile: 'Rivo-v1.7.4.ipa',
       mandatory: false,
-      notes: 'Fixed lock screen progress reset to 0:00, full Jam Host play & resume sync across all controllers.'
+      notes: 'Rock-solid Jam Room synchronization and instant Play/Pause control across all screens.'
     }
   }
 };
@@ -1108,6 +1108,8 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.4.apk',
+  '/downloads/Rivo-v1.7.4.ipa',
   '/downloads/Rivo-v1.7.3.apk',
   '/downloads/Rivo-v1.7.2.apk',
   '/downloads/Rivo-v1.7.1.apk',
@@ -6315,7 +6317,7 @@ io.on('connection', (socket) => {
   });
 
   // Jam: Host creates or joins room
-  socket.on('jam:join_room', ({ roomCode, user }) => {
+  socket.on('jam:join_room', ({ roomCode, user, currentTrack, isPlaying, currentTime }) => {
     if (!roomCode) return;
     const cleanCode = String(roomCode).trim().toUpperCase();
     socket.join(cleanCode);
@@ -6327,9 +6329,9 @@ io.on('connection', (socket) => {
         code: cleanCode,
         hostId: socket.id,
         hostUserId: uId,
-        currentTrack: null,
-        isPlaying: false,
-        currentTime: 0,
+        currentTrack: currentTrack || null,
+        isPlaying: Boolean(isPlaying),
+        currentTime: Number(currentTime) || 0,
         updatedAt: Date.now(),
         queue: [],
         members: []
@@ -6360,6 +6362,12 @@ io.on('connection', (socket) => {
       room.hostId = socket.id;
       room.hostUserId = uId;
       room.members.forEach(m => { m.isHost = false; });
+      if (currentTrack && (!room.currentTrack || isNewRoom)) {
+        room.currentTrack = currentTrack;
+        room.isPlaying = Boolean(isPlaying);
+        room.currentTime = Number(currentTime) || 0;
+        room.updatedAt = Date.now();
+      }
     }
 
     const member = {
@@ -6398,33 +6406,44 @@ io.on('connection', (socket) => {
         queue: room.queue || [],
         initiatorId: 'server'
       });
+    } else if (room.hostId && room.hostId !== socket.id) {
+      // If room has no track yet, query host directly for exact state
+      io.to(room.hostId).emit('jam:get_host_time', { requesterSocketId: socket.id, roomCode: cleanCode });
     }
   });
 
-  // Jam: Host syncs play state (track, play/pause, seek) - strictly restricted to Host
+  // Jam: Host & participants sync play state (track, play/pause, seek) from MiniPlayer, FullPlayer & Notifications
   socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId }) => {
     const cleanCode = String(roomCode || '').trim().toUpperCase();
     const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (room) {
-      // ROOT ENFORCEMENT: ONLY the active Host can change or pause the Jam room!
       const effUid = socket.userId || userId;
+      const isMember = (room.members || []).some(m => 
+        m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))
+      );
       const isHost = (room.hostId === socket.id) ||
         (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
         (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
 
-      if (!isHost) {
-        console.log(`[Jam] Non-host socket ${socket.id} attempted to sync play state in room ${cleanCode}. Ignored.`);
+      // Keep hostId/hostUserId fresh if host socket reconnected
+      if (isHost && socket.id) {
+        room.hostId = socket.id;
+        if (effUid) room.hostUserId = effUid;
+      }
+
+      if (!isMember && !isHost) {
+        console.log(`[Jam] Non-member socket ${socket.id} attempted to sync play state in room ${cleanCode}. Ignored.`);
         return;
       }
 
       let trackChanged = false;
-      if (isPlaying !== undefined) room.isPlaying = isPlaying;
-      if (currentTrack !== undefined) {
+      if (isPlaying !== undefined) room.isPlaying = Boolean(isPlaying);
+      if (currentTrack !== undefined && currentTrack !== null) {
         const curTId = String(room.currentTrack?._id || room.currentTrack?.id || '');
         const newTId = String(currentTrack?._id || currentTrack?.id || '');
         if (curTId !== newTId || JSON.stringify(currentTrack) !== JSON.stringify(room.currentTrack)) {
           trackChanged = true;
-          // If track changed and at start, reset currentTime to 0 so guests never jump 20s forward
+          // If track changed, reset to start timestamp unless explicitly seeking
           if (currentTime === undefined || Number(currentTime) <= 2) {
             currentTime = 0;
           }
@@ -6434,17 +6453,17 @@ io.on('connection', (socket) => {
       if (currentTime !== undefined) room.currentTime = Number(currentTime) || 0;
       room.updatedAt = Date.now();
 
-      if (isPlaying === false) {
-        room.isPlaying = false;
-        const pausePayload = {
-          isPlaying: false,
-          currentTrack: room.currentTrack,
-          currentTime: room.currentTime,
-          updatedAt: room.updatedAt,
-          initiatorId: initiatorId || socket.id
-        };
-        // Host paused: broadcast immediately to ALL in room so everybody pauses at once
-        io.to(cleanCode).emit('jam:on_play_state_changed', pausePayload);
+      const syncPayload = {
+        isPlaying: Boolean(room.isPlaying),
+        currentTrack: room.currentTrack,
+        currentTime: room.currentTime,
+        updatedAt: room.updatedAt,
+        initiatorId: initiatorId || socket.id
+      };
+
+      if (room.isPlaying === false) {
+        // Broadcast pause immediately to ALL in room so everybody pauses at once
+        io.to(cleanCode).emit('jam:on_play_state_changed', syncPayload);
         io.to(cleanCode).emit('jam:pause_all', {
           roomCode: cleanCode,
           currentTime: room.currentTime,
@@ -6453,7 +6472,7 @@ io.on('connection', (socket) => {
         io.to(cleanCode).emit('jam:room_updated', room);
         io.to(cleanCode).emit('jam_updated', room);
         if (roomCode && roomCode !== cleanCode) {
-          io.to(roomCode).emit('jam:on_play_state_changed', pausePayload);
+          io.to(roomCode).emit('jam:on_play_state_changed', syncPayload);
           io.to(roomCode).emit('jam:pause_all', {
             roomCode: cleanCode,
             currentTime: room.currentTime,
@@ -6463,20 +6482,12 @@ io.on('connection', (socket) => {
           io.to(roomCode).emit('jam_updated', room);
         }
       } else {
-        room.isPlaying = true;
-        const playPayload = {
-          isPlaying: room.isPlaying,
-          currentTrack: room.currentTrack,
-          currentTime: room.currentTime,
-          updatedAt: room.updatedAt,
-          initiatorId: initiatorId || socket.id
-        };
         // Broadcast play/seek state to all room participants
-        io.to(cleanCode).emit('jam:on_play_state_changed', playPayload);
+        io.to(cleanCode).emit('jam:on_play_state_changed', syncPayload);
         io.to(cleanCode).emit('jam:room_updated', room);
         io.to(cleanCode).emit('jam_updated', room);
         if (roomCode && roomCode !== cleanCode) {
-          io.to(roomCode).emit('jam:on_play_state_changed', playPayload);
+          io.to(roomCode).emit('jam:on_play_state_changed', syncPayload);
           io.to(roomCode).emit('jam:room_updated', room);
           io.to(roomCode).emit('jam_updated', room);
         }
@@ -6489,23 +6500,25 @@ io.on('connection', (socket) => {
     const cleanCode = String(roomCode || '').trim().toUpperCase();
     const room = jamRooms[cleanCode] || jamRooms[roomCode];
     if (!room) return;
+
+    // 1. Immediately return calculated server time so requester never hangs
+    let liveTime = Number(room.currentTime) || 0;
+    if (room.isPlaying && room.updatedAt) {
+      const elapsed = (Date.now() - room.updatedAt) / 1000;
+      if (elapsed > 0 && elapsed < 3600) liveTime += elapsed;
+    }
+    socket.emit('jam:sync_play_state', {
+      isPlaying: Boolean(room.isPlaying),
+      currentTrack: room.currentTrack,
+      currentTime: liveTime,
+      updatedAt: room.updatedAt || Date.now(),
+      queue: room.queue || [],
+      initiatorId: 'server'
+    });
+
+    // 2. If host is connected and different socket, optionally ask host for exact sub-second time
     if (room.hostId && room.hostId !== socket.id) {
-      // Ask host device directly for exact current playback timestamp
       io.to(room.hostId).emit('jam:get_host_time', { requesterSocketId: socket.id, roomCode: cleanCode });
-    } else {
-      let liveTime = Number(room.currentTime) || 0;
-      if (room.isPlaying && room.updatedAt) {
-        const elapsed = (Date.now() - room.updatedAt) / 1000;
-        if (elapsed > 0 && elapsed < 3600) liveTime += elapsed;
-      }
-      socket.emit('jam:sync_play_state', {
-        isPlaying: Boolean(room.isPlaying),
-        currentTrack: room.currentTrack,
-        currentTime: liveTime,
-        updatedAt: room.updatedAt || Date.now(),
-        queue: room.queue || [],
-        initiatorId: 'server'
-      });
     }
   });
 
@@ -6789,32 +6802,6 @@ io.on('connection', (socket) => {
 
       if (member || isHostDisconnect) {
         if (member) member.isDisconnected = true;
-
-        // If the host closed the app or was killed from RAM: immediately transfer host to an active connected guest!
-        if (isHostDisconnect) {
-          const otherMembers = room.members.filter(m => m.socketId !== socket.id && (!socket.userId || String(m.id || m._id) !== String(socket.userId)));
-          const activeGuests = otherMembers.filter(m => !m.isDisconnected);
-          const targetPool = activeGuests.length > 0 ? activeGuests : otherMembers;
-
-          if (targetPool.length > 0) {
-            const randomIdx = Math.floor(Math.random() * targetPool.length);
-            const newHost = targetPool[randomIdx];
-            newHost.isHost = true;
-            newHost.isDisconnected = false;
-            room.hostId = newHost.socketId;
-            room.hostUserId = newHost.id || newHost._id || null;
-            room.members.forEach(m => {
-              m.isHost = (m.socketId === newHost.socketId);
-            });
-            console.log(`[Jam] Host closed app/RAM killed. Transferred host immediately to ${newHost.name} in room ${code}`);
-            io.to(code).emit('jam:room_updated', room);
-            io.to(code).emit('jam_updated', room);
-            io.to(code).emit('jam:host_changed', { hostId: room.hostId, hostUserId: room.hostUserId, hostName: newHost.name });
-            if (newHost.socketId) {
-              io.to(newHost.socketId).emit('jam:you_are_host', { roomCode: code });
-            }
-          }
-        }
 
         const key = `${code}:${member?.id || socket.userId || socket.id}`;
         

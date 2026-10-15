@@ -48,10 +48,12 @@ export default function JamRoomModal({
 
   const handleTuneIn = () => {
     resumeAudioContext();
+    const activeTrack = jamSession?.currentTrack || currentTrack;
+    if (activeTrack && onPlayTrack) {
+      onPlayTrack(activeTrack, null, true);
+    }
     if (jamSession && socket) {
       socket.emit('jam:request_sync', { roomCode: jamSession.code });
-    } else if (currentTrack && onPlayTrack) {
-      onPlayTrack(currentTrack);
     }
   };
 
@@ -142,23 +144,29 @@ export default function JamRoomModal({
               </div>
 
               {/* Currently Synced Track */}
-              {currentTrack && (
-                <div className={`flex items-center gap-2.5 p-2.5 brutal-border rounded-xl ${
-                  isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
-                }`}>
-                  <img src={currentTrack.cover} alt={currentTrack.title} className="w-10 h-10 brutal-border object-cover bg-white shrink-0 rounded-lg" />
-                  <div className="truncate flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[9px] font-mono font-black uppercase text-[#17a398]">
-                        {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
-                      </span>
-                      <span className={`w-1.5 h-1.5 rounded-full ${isPlaying ? 'bg-[#17a398] animate-pulse' : 'bg-amber-400'}`} />
+              {(() => {
+                const activeTrack = jamSession?.currentTrack || currentTrack;
+                const activePlaying = jamSession ? Boolean(jamSession.isPlaying) : isPlaying;
+                if (!activeTrack) return null;
+
+                return (
+                  <div className={`flex items-center gap-2.5 p-2.5 brutal-border rounded-xl ${
+                    isDark ? 'bg-zinc-900 border-zinc-800 text-white' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+                  }`}>
+                    <img src={activeTrack.cover || activeTrack.coverUrl || '/favicon.ico'} alt={activeTrack.title} className="w-10 h-10 brutal-border object-cover bg-white shrink-0 rounded-lg" />
+                    <div className="truncate flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-mono font-black uppercase text-[#17a398]">
+                          {activePlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+                        </span>
+                        <span className={`w-1.5 h-1.5 rounded-full ${activePlaying ? 'bg-[#17a398] animate-pulse' : 'bg-amber-400'}`} />
+                      </div>
+                      <h4 className={`font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{activeTrack.title}</h4>
+                      <p className={`text-[10px] truncate font-medium ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{activeTrack.artist}</p>
                     </div>
-                    <h4 className={`font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{currentTrack.title}</h4>
-                    <p className={`text-[10px] truncate font-medium ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{currentTrack.artist}</p>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Active Members */}
               <div>
