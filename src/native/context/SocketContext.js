@@ -94,9 +94,10 @@ export const SocketProvider = ({ children }) => {
 
     // Listen to real Jam Room server events with automatic synchronization
     s.on('jam:room_updated', (data) => {
+      const isFirstJoin = !jamSessionRef.current;
       setJamSession(data);
-      if (data?.currentTrack && syncRemotePlayStateRef.current) {
-        // Do not self-sync if this device was the initiator
+      // Only auto-trigger initial track sync if this is the first join into room
+      if (isFirstJoin && data?.currentTrack && syncRemotePlayStateRef.current) {
         if (data.initiatorId && data.initiatorId === s.id) return;
         syncRemotePlayStateRef.current({
           isPlaying: data.isPlaying,
@@ -129,7 +130,7 @@ export const SocketProvider = ({ children }) => {
 
     s.on('jam:pause_all', (data) => {
       setJamSession(prev => prev ? ({ ...prev, isPlaying: false, updatedAt: Date.now() }) : null);
-      if (syncRemotePlayStateRef.current) {
+      if (data?.initiatorId !== s.id && syncRemotePlayStateRef.current) {
         syncRemotePlayStateRef.current({
           isPlaying: false,
           currentTrack: data?.currentTrack,

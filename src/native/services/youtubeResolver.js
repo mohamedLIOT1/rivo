@@ -118,6 +118,18 @@ export const resolveAudioStream = async (track) => {
     }
   } catch {}
 
+  // 1c. Direct local upload audio stream
+  if (
+    track.source === 'Upload' ||
+    rawUrl.startsWith('/uploads/') ||
+    rawUrl.includes('/uploads/')
+  ) {
+    const fullUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : (rawUrl.startsWith('http') ? rawUrl : `${API_BASE_URL}/${rawUrl}`);
+    if (trackId) streamCache.set(trackId, fullUrl);
+    if (track.duration && trackId) streamDurationCache.set(trackId, track.duration);
+    return fullUrl;
+  }
+
   // 2. Direct MP3/M4A/AAC stream URL (non-YouTube)
   if (
     rawUrl.startsWith('http') &&

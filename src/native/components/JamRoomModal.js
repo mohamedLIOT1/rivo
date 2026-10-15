@@ -208,14 +208,16 @@ export default function JamRoomModal({ visible, onClose }) {
     </View>
   );
 
-  const renderCurrentTrack = () => (
-    currentTrack ? (
+  const renderCurrentTrack = () => {
+    const activeTrack = jamSession?.currentTrack || currentTrack;
+    const isRoomPlaying = jamSession?.isPlaying !== undefined ? jamSession.isPlaying : isPlaying;
+    return activeTrack ? (
       <View style={styles.syncedTrackCard}>
         <Image
           source={{
             uri:
-              currentTrack.coverUrl ||
-              currentTrack.cover ||
+              activeTrack.coverUrl ||
+              activeTrack.cover ||
               'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
           }}
           style={styles.syncedTrackCover}
@@ -223,25 +225,25 @@ export default function JamRoomModal({ visible, onClose }) {
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.syncStatusRow}>
             <Text style={styles.syncStatusText}>
-              {isPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+              {isRoomPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
             </Text>
             <View
               style={[
                 styles.statusPulseDot,
-                { backgroundColor: isPlaying ? colors.mint : '#f59e0b' },
+                { backgroundColor: isRoomPlaying ? colors.mint : '#f59e0b' },
               ]}
             />
           </View>
           <Text style={styles.syncedTrackTitle} numberOfLines={1}>
-            {currentTrack.title}
+            {activeTrack.title}
           </Text>
           <Text style={styles.syncedTrackArtist} numberOfLines={1}>
-            {currentTrack.artist}
+            {activeTrack.artist}
           </Text>
         </View>
       </View>
-    ) : null
-  );
+    ) : null;
+  };
 
   const renderMembers = () => (
     <View style={styles.membersCard}>
