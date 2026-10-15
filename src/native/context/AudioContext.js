@@ -133,12 +133,19 @@ export const AudioProvider = ({ children }) => {
         // Cross-device connect sync (Spotify Connect: Auto-pause this device if other device plays)
         socket.off('device:force_pause');
         socket.on('device:force_pause', async () => {
+          shouldBePlayingRef.current = false;
           if (soundRef.current) {
             await soundRef.current.pauseAsync().catch(() => {});
           }
           setIsPlaying(false);
           isPlayingRef.current = false;
-          updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, false, currentTrackRef.current);
+          const curPos = playbackStatusRef.current?.currentTime || 0;
+          const curDur = playbackStatusRef.current?.duration || Number(currentTrackRef.current?.duration || 240);
+          updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, false, {
+            ...(currentTrackRef.current || {}),
+            currentTime: curPos,
+            duration: curDur,
+          });
         });
 
         socket.off('device:remote_playing');
@@ -147,12 +154,19 @@ export const AudioProvider = ({ children }) => {
             setRemoteDevicePlayback(remoteSession);
             // If the other device is playing and THIS mobile device is currently playing: PAUSE THIS DEVICE!
             if (remoteSession.isPlaying && isPlayingRef.current) {
+              shouldBePlayingRef.current = false;
               if (soundRef.current) {
                 await soundRef.current.pauseAsync().catch(() => {});
               }
               setIsPlaying(false);
               isPlayingRef.current = false;
-              updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, false, currentTrackRef.current);
+              const curPos = playbackStatusRef.current?.currentTime || 0;
+              const curDur = playbackStatusRef.current?.duration || Number(currentTrackRef.current?.duration || 240);
+              updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, false, {
+                ...(currentTrackRef.current || {}),
+                currentTime: curPos,
+                duration: curDur,
+              });
             }
           } else {
             setRemoteDevicePlayback(null);
@@ -292,11 +306,19 @@ export const AudioProvider = ({ children }) => {
         clearInterval(sleepTimerRef.current);
         sleepTimerRef.current = null;
         setSleepTimerRemaining(null);
+        shouldBePlayingRef.current = false;
+        isPlayingRef.current = false;
+        setIsPlaying(false);
         if (soundRef.current) {
           soundRef.current.pauseAsync().catch(() => {});
-          setIsPlaying(false);
-          updateMediaNotification(false, repeatMode !== 'off', isShuffle, currentTrackRef.current);
         }
+        const curPos = playbackStatusRef.current?.currentTime || 0;
+        const curDur = playbackStatusRef.current?.duration || Number(currentTrackRef.current?.duration || 240);
+        updateMediaNotification(false, repeatMode !== 'off', isShuffle, {
+          ...(currentTrackRef.current || {}),
+          currentTime: curPos,
+          duration: curDur,
+        });
         showToast('Playback stopped by sleep timer', 'info');
       }
     }, 1000);
@@ -386,7 +408,13 @@ export const AudioProvider = ({ children }) => {
         isPlayingRef.current = status.isPlaying;
         shouldBePlayingRef.current = status.isPlaying;
         const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
-        updateMediaNotification(status.isPlaying, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
+        const curSec = Math.floor((status.positionMillis || 0) / 1000);
+        const durSec = Math.floor((status.durationMillis || 0) / 1000);
+        updateMediaNotification(status.isPlaying, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+          ...(currentTrackRef.current || {}),
+          currentTime: curSec,
+          duration: durSec || Number(currentTrackRef.current?.duration || 240),
+        });
       }
     }
 
@@ -483,8 +511,14 @@ export const AudioProvider = ({ children }) => {
             setIsPlaying(true);
             if (soundRef.current) {
               await soundRef.current.playAsync().catch(() => {});
-              updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
-              broadcastListeningActivity(currentTrackRef.current, true, playbackStatusRef.current?.currentTime || 0);
+              const curPos = playbackStatusRef.current?.currentTime || 0;
+              const curDur = playbackStatusRef.current?.duration || Number(cur?.duration || 240);
+              updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+                ...(cur || {}),
+                currentTime: curPos,
+                duration: curDur,
+              });
+              broadcastListeningActivity(cur, true, curPos);
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
             }
@@ -494,7 +528,7 @@ export const AudioProvider = ({ children }) => {
                 jamSyncRef.current.socket.emit('jam:sync_play_state', {
                   roomCode: rCode,
                   isPlaying: true,
-                  currentTrack: currentTrackRef.current,
+                  currentTrack: cur,
                   currentTime: playbackStatusRef.current?.currentTime || 0,
                   initiatorId: jamSyncRef.current.socket.id,
                   userId: currentUser?._id || currentUser?.id,
@@ -508,8 +542,14 @@ export const AudioProvider = ({ children }) => {
             setIsPlaying(false);
             if (soundRef.current) {
               await soundRef.current.pauseAsync().catch(() => {});
-              updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
-              broadcastListeningActivity(currentTrackRef.current, false, playbackStatusRef.current?.currentTime || 0);
+              const curPos = playbackStatusRef.current?.currentTime || 0;
+              const curDur = playbackStatusRef.current?.duration || Number(cur?.duration || 240);
+              updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+                ...(cur || {}),
+                currentTime: curPos,
+                duration: curDur,
+              });
+              broadcastListeningActivity(cur, false, curPos);
             } else if (togglePlayRef.current) {
               togglePlayRef.current();
             }
@@ -519,7 +559,7 @@ export const AudioProvider = ({ children }) => {
                 jamSyncRef.current.socket.emit('jam:sync_play_state', {
                   roomCode: rCode,
                   isPlaying: false,
-                  currentTrack: currentTrackRef.current,
+                  currentTrack: cur,
                   currentTime: playbackStatusRef.current?.currentTime || 0,
                   initiatorId: jamSyncRef.current.socket.id,
                   userId: currentUser?._id || currentUser?.id,
@@ -540,8 +580,27 @@ export const AudioProvider = ({ children }) => {
               } else {
                 await soundRef.current.pauseAsync().catch(() => {});
               }
-              updateMediaNotification(nextState, repeatModeRef.current, isShuffleRef.current, isLikedTrack, currentTrackRef.current);
-              broadcastListeningActivity(currentTrackRef.current, nextState, playbackStatusRef.current?.currentTime || 0);
+              const curPos = playbackStatusRef.current?.currentTime || 0;
+              const curDur = playbackStatusRef.current?.duration || Number(cur?.duration || 240);
+              updateMediaNotification(nextState, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+                ...(cur || {}),
+                currentTime: curPos,
+                duration: curDur,
+              });
+              broadcastListeningActivity(cur, nextState, curPos);
+              if (jamSyncRef.current.jamSession && jamSyncRef.current.socket && isJamHost()) {
+                const rCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
+                if (rCode) {
+                  jamSyncRef.current.socket.emit('jam:sync_play_state', {
+                    roomCode: rCode,
+                    isPlaying: nextState,
+                    currentTrack: cur,
+                    currentTime: curPos,
+                    initiatorId: jamSyncRef.current.socket.id,
+                    userId: currentUser?._id || currentUser?.id,
+                  });
+                }
+              }
             }
             break;
           case 'next':
@@ -1346,12 +1405,20 @@ export const AudioProvider = ({ children }) => {
         jamSyncRef.current.jamSession.updatedAt = Date.now();
       }
       const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
-      updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, cur);
+      updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+        ...(cur || {}),
+        currentTime: targetTime !== undefined ? targetTime : (playbackStatusRef.current?.currentTime || 0),
+        duration: playbackStatusRef.current?.duration || Number(cur?.duration || 240)
+      });
       return;
     }
 
-    if (isDifferentTrack) {
-      await playTrack(syncTrack, null, false, targetTime, true);
+    shouldBePlayingRef.current = true;
+    isPlayingRef.current = true;
+    setIsPlaying(true);
+
+    if (isDifferentTrack || !soundRef.current) {
+      await playTrack(syncTrack || cur, null, false, targetTime, true);
     } else {
       // Same track while playing: sync drift if > 1.5s
       const localCur = playbackStatusRef.current?.currentTime || 0;
@@ -1361,15 +1428,20 @@ export const AudioProvider = ({ children }) => {
       if (soundRef.current) {
         await soundRef.current.playAsync().catch(() => {});
       }
-      setIsPlaying(true);
-      isPlayingRef.current = true;
       if (jamSyncRef.current.jamSession) {
         jamSyncRef.current.jamSession.isPlaying = true;
         jamSyncRef.current.jamSession.currentTime = targetTime;
         jamSyncRef.current.jamSession.updatedAt = Date.now();
       }
+      const trackToUse = syncTrack || cur;
+      const isLikedTrack = trackToUse ? likedTrackIds.some(id => String(id) === String(trackToUse._id || trackToUse.id)) : false;
+      updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+        ...(trackToUse || {}),
+        currentTime: targetTime !== undefined ? targetTime : (playbackStatusRef.current?.currentTime || 0),
+        duration: playbackStatusRef.current?.duration || Number(trackToUse?.duration || 240)
+      });
     }
-  }, [playTrack, seekTo]);
+  }, [playTrack, seekTo, likedTrackIds]);
 
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress,

@@ -2094,9 +2094,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       return;
     }
 
-    if (isDifferentTrack) {
+    window.__RIVO_USER_PAUSED = false;
+    if (isDifferentTrack || !audioRef.current?.src) {
       resumeAudioContext();
-      await playTrack(syncTrack, null, true /* isRemote */);
+      await playTrack(syncTrack || cur, null, true /* isRemote */);
       if (targetTime > 0) {
         setTimeout(() => {
           seekTo(targetTime, true /* isRemote */);

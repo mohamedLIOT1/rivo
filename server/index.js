@@ -1068,12 +1068,12 @@ app.post('/api/auth/login', async (req, res) => {
 /// App Versions & Updates Manifest
 // ──────────────────────────────────────────
 const APP_VERSIONS_DATA = {
-  version: '1.7.2',
-  releaseNotes: "Fixed playlist playback & Liked Songs from Profile, fixed lock screen/notification Play button interruption, and resolved Jam pause desync across iOS and Android.",
+  version: '1.7.3',
+  releaseNotes: "Fixed lock screen / notification progress reset to 0:00, unified Jam Host Play/Resume synchronization across iOS, Android, and web with controls on Notification, Full Player, and MiniPlayer.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.2',
+      version: '1.7.3',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -1081,22 +1081,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Rock-solid playlist playback, unified Jam synchronization and media controls.'
     },
     android: {
-      version: '1.7.2',
-      build: 41,
+      version: '1.7.3',
+      build: 42,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.2.apk',
-      directFile: 'Rivo-v1.7.2.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.3.apk',
+      directFile: 'Rivo-v1.7.3.apk',
       mandatory: false,
-      notes: 'Fixed Profile playlist playback, lock screen media action resume, and cross-device Jam pause sync.'
+      notes: 'Fixed lock screen progress reset to 0:00, full Jam Host play & resume sync across all controllers.'
     },
     ios: {
-      version: '1.7.2',
-      build: 41,
+      version: '1.7.3',
+      build: 42,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.2.ipa',
-      directFile: 'Rivo-v1.7.2.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.3.ipa',
+      directFile: 'Rivo-v1.7.3.ipa',
       mandatory: false,
-      notes: 'Fixed Profile playlist playback, lock screen media action resume, and cross-device Jam pause sync.'
+      notes: 'Fixed lock screen progress reset to 0:00, full Jam Host play & resume sync across all controllers.'
     }
   }
 };
@@ -1108,6 +1108,7 @@ app.get('/api/app/version', (req, res) => {
 // Direct downloads redirect / proxy for release APKs
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.3.apk',
   '/downloads/Rivo-v1.7.2.apk',
   '/downloads/Rivo-v1.7.1.apk',
   '/downloads/Rivo-v1.7.0.apk',
@@ -1133,9 +1134,9 @@ app.get([
   if (fs.existsSync(targetPath)) {
     return res.download(targetPath, requestedFile);
   }
-  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.2.apk');
+  const defaultLatest = path.join(__dirname, '../public/downloads/Rivo-v1.7.3.apk');
   if (fs.existsSync(defaultLatest)) {
-    return res.download(defaultLatest, 'Rivo-v1.7.2.apk');
+    return res.download(defaultLatest, 'Rivo-v1.7.3.apk');
   }
   const fallbackApk = path.join(__dirname, '../public/downloads/Rivo.apk');
   if (fs.existsSync(fallbackApk)) {
@@ -6470,12 +6471,12 @@ io.on('connection', (socket) => {
           updatedAt: room.updatedAt,
           initiatorId: initiatorId || socket.id
         };
-        // Broadcast play/seek state to other participants
-        socket.to(cleanCode).emit('jam:on_play_state_changed', playPayload);
+        // Broadcast play/seek state to all room participants
+        io.to(cleanCode).emit('jam:on_play_state_changed', playPayload);
         io.to(cleanCode).emit('jam:room_updated', room);
         io.to(cleanCode).emit('jam_updated', room);
         if (roomCode && roomCode !== cleanCode) {
-          socket.to(roomCode).emit('jam:on_play_state_changed', playPayload);
+          io.to(roomCode).emit('jam:on_play_state_changed', playPayload);
           io.to(roomCode).emit('jam:room_updated', room);
           io.to(roomCode).emit('jam_updated', room);
         }
