@@ -395,6 +395,36 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return () => clearInterval(interval);
   }, [isPlaying, currentTrack?.id || currentTrack?._id]);
 
+  // Clean up Discord / friend activity when browser tab or desktop window closes
+  useEffect(() => {
+    const handleUnload = () => {
+      if (isPlayingRef.current) {
+        if (socketRef.current) {
+          socketRef.current.emit('activity:listening', { track: null, isPlaying: false, currentTime: 0 });
+          socketRef.current.emit('device:playback_state', { isPlaying: false, track: null, currentTime: 0 });
+        }
+        if (typeof window !== 'undefined' && window.chrome?.webview?.postMessage) {
+          try {
+            window.chrome.webview.postMessage(JSON.stringify({ action: 'PAUSE' }));
+          } catch (e) {}
+        }
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        if (token && navigator.sendBeacon) {
+          const payload = JSON.stringify({ track: null, isPlaying: false, currentTime: 0 });
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon(`${API_BASE_URL}/api/users/listening-activity`, blob);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+    };
+  }, []);
+
   // ── Regular HTML Audio element (for uploaded tracks) ──
   const audioRef = useRef(null);
   const secondaryAudioRef = useRef(null);
@@ -838,6 +868,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
           liked: isLiked,
         }
       }));
+
+      // Windows Desktop Native App Tray & Discord RPC Bridge (.exe)
+      if (typeof window !== 'undefined' && window.chrome?.webview?.postMessage) {
+        window.chrome.webview.postMessage(JSON.stringify({
+          action: isPlaying ? 'PLAY' : 'PAUSE',
+          title: currentTrack.title || 'Rivo',
+          artist: currentTrack.artist || 'Rivo Music',
+          album: currentTrack.album || 'Rivo',
+          artwork: coverSrc,
+          currentTime: safeTime,
+          duration: safeDuration
+        }));
+      }
     } catch (e) {}
   }, [currentTrack, isPlaying, repeatMode, isShuffle, likedTrackIds, duration]);
 

@@ -49,6 +49,10 @@ async function disconnectUserSession(userId) {
   }
   const session = activeUserBots.get(userId);
   if (session) {
+    activeUserBots.delete(userId);
+    session.isPlaying = false;
+    session.currentTrack = null;
+    session.status = 'disconnected';
     try {
       if (session.client) {
         try {
@@ -58,18 +62,14 @@ async function disconnectUserSession(userId) {
         } catch (e) {}
         if (session.client.user) {
           try {
-            await session.client.user.setPresence({ activities: [] });
-          } catch (e) {}
-          try {
-            await session.client.user.setActivity(null);
+            await session.client.user.setPresence({ activities: [], status: 'online' }).catch(() => {});
           } catch (e) {}
         }
-        // Give Discord Gateway 400ms to register clear presence before tearing down client
-        await new Promise(r => setTimeout(r, 400));
+        // Give Discord Gateway 200ms to register clear presence before tearing down client
+        await new Promise(r => setTimeout(r, 200));
         session.client.destroy();
       }
     } catch (e) {}
-    activeUserBots.delete(userId);
   }
 }
 
@@ -140,34 +140,9 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
     return;
   }
 
-  // If stopped or paused:
+  // If stopped or paused: IMMEDIATELY clear Discord Rich Presence and destroy session!
   if (!isPlaying || !track) {
-    const session = activeUserBots.get(uidStr);
-    if (session) {
-      session.isPlaying = false;
-      session.lastStartTs = null;
-      if (session.client) {
-        try {
-          if (session.client.settings && typeof session.client.settings.setCustomStatus === 'function') {
-            session.client.settings.setCustomStatus(null).catch(() => {});
-          }
-        } catch (e) {}
-        if (session.client.user) {
-          try {
-            session.client.user.setActivity(null);
-          } catch (e) {}
-          try {
-            session.client.user.setPresence({ activities: [] });
-          } catch (e) {}
-        }
-      }
-    }
-    // Schedule clean disconnect after 5 minutes of inactivity to conserve RAM
-    if (!userIdleTimers.has(uidStr)) {
-      userIdleTimers.set(uidStr, setTimeout(() => {
-        disconnectUserSession(uidStr);
-      }, 5 * 60 * 1000));
-    }
+    await disconnectUserSession(uidStr);
     return;
   }
 
