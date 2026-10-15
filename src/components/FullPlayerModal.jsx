@@ -542,7 +542,7 @@ export default function FullPlayerModal({
   };
 
   const handleSaveManualLyrics = async () => {
-    if (!currentTrack || !isAdmin) return;
+    if (!currentTrack) return;
     setIsSavingManualLyrics(true);
     try {
       const lines = manualText
@@ -568,7 +568,7 @@ export default function FullPlayerModal({
 
       const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
 
-      await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
+      const res = await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -583,6 +583,15 @@ export default function FullPlayerModal({
           isVerified: markVerified
         })
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.error || 'Failed to save lyrics');
+        setIsSavingManualLyrics(false);
+        return;
+      }
+
+      showToast(markVerified ? 'Lyrics verified & saved!' : 'Lyrics saved successfully!');
 
       if (markVerified) {
         currentTrack.lyrics = parsed;
@@ -611,6 +620,7 @@ export default function FullPlayerModal({
       setIsManualEditOpen(false);
     } catch (e) {
       console.warn('Save manual lyrics error:', e);
+      showToast('Network error while saving lyrics');
     }
     setIsSavingManualLyrics(false);
   };
@@ -995,86 +1005,6 @@ export default function FullPlayerModal({
           </div>
         </div>
       )}
-
-      {/* Manual Edit Lyrics Modal Overlay */}
-      {isManualEditOpen && (
-        <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className={`${isDark ? 'bg-[#121212] border-2 border-zinc-700 text-white' : 'bg-[#fdfbf7] brutal-border-thick text-[#0b1110]'} brutal-shadow-lg max-w-lg w-full p-6 text-left relative rounded-2xl`}>
-            <div className={`flex items-center justify-between pb-3 border-b-2 ${isDark ? 'border-zinc-800' : 'border-[#0b1110]'} mb-4`}>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-                <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Admin Lyrics Editor</h3>
-              </div>
-              <button 
-                onClick={() => setIsManualEditOpen(false)} 
-                className={`brutal-btn p-1.5 rounded-lg ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] brutal-border text-[#0b1110]'}`}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p className={`text-xs mb-2 font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Format timestamps like <code className={`px-1 py-0.5 rounded font-mono ${isDark ? 'bg-zinc-800 text-[#26c4b7] border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-[#082621]'}`}>[0:15]</code> before each line for automated karaoke sync.
-            </p>
-
-            <textarea
-              rows={9}
-              value={manualText}
-              onChange={(e) => setManualText(e.target.value)}
-              placeholder="[0:00] First Line&#10;[0:12] Second Line..."
-              className={`w-full p-3 text-xs font-mono rounded-xl focus:outline-none mb-3 resize-none leading-relaxed ${
-                isDark 
-                  ? 'bg-zinc-900 border border-zinc-700 text-white focus:border-[#17a398]' 
-                  : 'bg-[#ede5d3] brutal-border text-[#0b1110] focus:bg-white'
-              }`}
-            />
-
-            {/* Admin Verification Checkbox */}
-            <label className={`flex items-start gap-2.5 p-3 rounded-xl mb-4 cursor-pointer border ${
-              isDark ? 'bg-zinc-900/80 border-zinc-700' : 'bg-[#ede5d3]/50 border-black/20'
-            }`}>
-              <input
-                type="checkbox"
-                checked={markVerified}
-                onChange={(e) => setMarkVerified(e.target.checked)}
-                className="mt-0.5 accent-[#17a398] w-4 h-4 rounded cursor-pointer shrink-0"
-              />
-              <div className="flex flex-col text-left">
-                <span className={`text-xs font-mono font-bold flex items-center gap-1 ${markVerified ? 'text-[#17a398]' : (isDark ? 'text-zinc-400' : 'text-zinc-600')}`}>
-                  <CheckCircle2 size={13} />
-                  {markVerified ? 'Verify & Lock Lyrics (Official)' : 'Not Verified (Will remove manual override)'}
-                </span>
-                <span className={`text-[10px] mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                  {markVerified 
-                    ? 'Verified lyrics are locked with a verified badge across the website.' 
-                    : 'If not verified, the manual override will be cleared and the player will continue using the normal lyrics scraper.'}
-                </span>
-              </div>
-            </label>
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleSaveManualLyrics}
-                disabled={isSavingManualLyrics}
-                className="brutal-btn flex-1 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer rounded-xl"
-              >
-                {isSavingManualLyrics ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                <span>SAVE LYRICS</span>
-              </button>
-              <button
-                onClick={() => setIsManualEditOpen(false)}
-                className={`brutal-btn px-5 py-2.5 font-mono text-xs font-black uppercase rounded-xl cursor-pointer ${
-                  isDark 
-                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700' 
-                    : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] brutal-border brutal-shadow-sm'
-                }`}
-              >
-                CANCEL
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -1382,6 +1312,8 @@ export default function FullPlayerModal({
     </div>
   );
 
+  if (!isOpen || !currentTrack) return null;
+
   return (
     <div 
       className={`fixed inset-0 z-[300] transition-all duration-300 flex flex-col overflow-hidden select-none font-sans ${
@@ -1389,7 +1321,7 @@ export default function FullPlayerModal({
       }`}
     >
       {/* ── Dynamic Ambient Cover Art Background ── */}
-      {currentTrack.cover ? (
+      {currentTrack?.cover ? (
         <div className="absolute inset-0 overflow-hidden pointer-events-none transition-all duration-1000">
           <img 
             src={currentTrack.cover} 
@@ -2404,6 +2336,86 @@ export default function FullPlayerModal({
                   <span>Delete Song Permanently</span>
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Edit Lyrics Modal Overlay */}
+      {isManualEditOpen && (
+        <div className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`${isDark ? 'bg-[#121212] border-2 border-zinc-700 text-white' : 'bg-[#fdfbf7] brutal-border-thick text-[#0b1110]'} brutal-shadow-lg max-w-lg w-full p-6 text-left relative rounded-2xl`}>
+            <div className={`flex items-center justify-between pb-3 border-b-2 ${isDark ? 'border-zinc-800' : 'border-[#0b1110]'} mb-4`}>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-[#17a398] brutal-border" />
+                <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Admin Lyrics Editor</h3>
+              </div>
+              <button 
+                onClick={() => setIsManualEditOpen(false)} 
+                className={`brutal-btn p-1.5 rounded-lg ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-[#ede5d3] brutal-border text-[#0b1110]'}`}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className={`text-xs mb-2 font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              Format timestamps like <code className={`px-1 py-0.5 rounded font-mono ${isDark ? 'bg-zinc-800 text-[#26c4b7] border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-[#082621]'}`}>[0:15]</code> before each line for automated karaoke sync.
+            </p>
+
+            <textarea
+              rows={9}
+              value={manualText}
+              onChange={(e) => setManualText(e.target.value)}
+              placeholder="[0:00] First Line&#10;[0:12] Second Line..."
+              className={`w-full p-3 text-xs font-mono rounded-xl focus:outline-none mb-3 resize-none leading-relaxed ${
+                isDark 
+                  ? 'bg-zinc-900 border border-zinc-700 text-white focus:border-[#17a398]' 
+                  : 'bg-[#ede5d3] brutal-border text-[#0b1110] focus:bg-white'
+              }`}
+            />
+
+            {/* Admin Verification Checkbox */}
+            <label className={`flex items-start gap-2.5 p-3 rounded-xl mb-4 cursor-pointer border ${
+              isDark ? 'bg-zinc-900/80 border-zinc-700' : 'bg-[#ede5d3]/50 border-black/20'
+            }`}>
+              <input
+                type="checkbox"
+                checked={markVerified}
+                onChange={(e) => setMarkVerified(e.target.checked)}
+                className="mt-0.5 accent-[#17a398] w-4 h-4 rounded cursor-pointer shrink-0"
+              />
+              <div className="flex flex-col text-left">
+                <span className={`text-xs font-mono font-bold flex items-center gap-1 ${markVerified ? 'text-[#17a398]' : (isDark ? 'text-zinc-400' : 'text-zinc-600')}`}>
+                  <CheckCircle2 size={13} />
+                  {markVerified ? 'Verify & Lock Lyrics (Official)' : 'Not Verified (Will remove manual override)'}
+                </span>
+                <span className={`text-[10px] mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                  {markVerified 
+                    ? 'Verified lyrics are locked with a verified badge across the website.' 
+                    : 'If not verified, the manual override will be cleared and the player will continue using the normal lyrics scraper.'}
+                </span>
+              </div>
+            </label>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleSaveManualLyrics}
+                disabled={isSavingManualLyrics}
+                className="brutal-btn flex-1 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer rounded-xl"
+              >
+                {isSavingManualLyrics ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                <span>SAVE LYRICS</span>
+              </button>
+              <button
+                onClick={() => setIsManualEditOpen(false)}
+                className={`brutal-btn px-5 py-2.5 font-mono text-xs font-black uppercase rounded-xl cursor-pointer ${
+                  isDark 
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700' 
+                    : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] brutal-border brutal-shadow-sm'
+                }`}
+              >
+                CANCEL
+              </button>
             </div>
           </div>
         </div>

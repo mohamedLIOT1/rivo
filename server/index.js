@@ -5552,7 +5552,7 @@ app.get('/api/tracks/download', async (req, res) => {
 });
 
 
-app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
+app.post('/api/tracks/update-lyrics', optionalAuth, async (req, res) => {
   try {
     const { trackId, title, artist, audioUrl, lyrics, isVerified } = req.body;
     const isAdmin = isAdminUser(req.user);
@@ -5571,6 +5571,15 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
         if (mongoose.isValidObjectId(trackId)) {
           await Track.updateOne({ _id: trackId }, { $set: { lyrics: [], isVerified: false, isVerifiedLyrics: false } }).catch(() => {});
         }
+      }
+      if (title && artist) {
+        await Track.updateOne(
+          { 
+            title: { $regex: new RegExp(`^${escapeRegex(title)}$`, 'i') },
+            artist: { $regex: new RegExp(`^${escapeRegex(artist)}$`, 'i') }
+          },
+          { $set: { lyrics: [], isVerified: false, isVerifiedLyrics: false } }
+        ).catch(() => {});
       }
       io.emit('lyrics:updated', {
         trackKey,
@@ -5628,22 +5637,28 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
         },
         { upsert: true }
       ).catch(() => {});
+    }
 
-      // 3. Update Track collection as well with lyrics and isVerified!
-      if (mongoose.isValidObjectId(trackId)) {
-        await Track.updateOne(
-          { _id: trackId },
-          { 
-            $set: { 
-              lyrics,
-              isVerified: isVer,
-              isVerifiedLyrics: isVer,
-              verifiedBy: isVer ? userName : '',
-              verifiedAt: isVer ? new Date() : null
-            } 
-          }
-        ).catch(() => {});
-      }
+    // 3. Update Track collection as well with lyrics and isVerified!
+    const trackUpdate = {
+      lyrics,
+      isVerified: isVer,
+      isVerifiedLyrics: isVer,
+      verifiedBy: isVer ? userName : '',
+      verifiedAt: isVer ? new Date() : null
+    };
+
+    if (trackId && mongoose.isValidObjectId(trackId)) {
+      await Track.updateOne({ _id: trackId }, { $set: trackUpdate }).catch(() => {});
+    }
+    if (title && artist) {
+      await Track.updateOne(
+        { 
+          title: { $regex: new RegExp(`^${escapeRegex(title)}$`, 'i') },
+          artist: { $regex: new RegExp(`^${escapeRegex(artist)}$`, 'i') }
+        },
+        { $set: trackUpdate }
+      ).catch(() => {});
     }
 
     // 4. Real-time broadcast to all connected clients & Jam sessions
@@ -5658,7 +5673,7 @@ app.post('/api/tracks/update-lyrics', auth, async (req, res) => {
     });
 
     console.log(`[Lyrics] Verified lyrics saved for "${title}" by "${artist}" by ${userName}`);
-    res.json({ success: true, trackKey, isVerified: isVer });
+    res.json({ success: true, trackKey, isVerified: isVer, message: 'Lyrics saved successfully' });
   } catch (e) {
     console.error('Update lyrics error:', e.message);
     res.status(500).json({ error: e.message });
