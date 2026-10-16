@@ -158,11 +158,11 @@ export default function JamRoomModal({
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={`text-[11px] font-bold ${isHostOnly ? 'text-amber-400' : 'text-[#17a398]'}`}>
-                            {isHostOnly ? 'قفل التحكم للهوست فقط' : 'التحكم التشاركي متاح للجميع'}
+                            {isHostOnly ? 'Host-Only Control Locked' : 'Collaborative Control Active'}
                           </span>
                         </div>
                         <p className={`text-[10px] truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                          {isHostOnly ? 'الأعضاء يستمعون فقط، ولا يمكنهم تغيير الأغنية' : 'أي عضو في الغرفة يمكنه تشغيل وتغيير الأغاني'}
+                          {isHostOnly ? 'Members can listen only; only host can change tracks' : 'Any member in this room can play, pause & change tracks'}
                         </p>
                       </div>
                     </div>
@@ -178,7 +178,7 @@ export default function JamRoomModal({
                           isHostOnly ? 'bg-amber-400 hover:bg-amber-500 text-black' : 'bg-[#17a398] hover:bg-[#26c4b7] text-black'
                         }`}
                       >
-                        {isHostOnly ? 'إتاحة للجميع' : 'قفل للهوست'}
+                        {isHostOnly ? 'Unlock for All' : 'Lock to Host'}
                       </button>
                     )}
                   </div>

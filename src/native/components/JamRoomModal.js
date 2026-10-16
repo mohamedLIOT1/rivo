@@ -218,13 +218,13 @@ export default function JamRoomModal({ visible, onClose }) {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
             <Radio size={13} color={isHostOnly ? '#f59e0b' : colors.mint} />
             <Text style={[styles.controlModeTitle, isHostOnly && { color: '#f59e0b' }]}>
-              {isHostOnly ? 'قفل التحكم للهوست فقط' : 'التحكم التشاركي متاح للجميع'}
+              {isHostOnly ? 'Host-Only Control Locked' : 'Collaborative Control Active'}
             </Text>
           </View>
           <Text style={styles.controlModeDesc}>
             {isHostOnly
-              ? 'الأعضاء يستمعون فقط ولا يمكنهم تغيير الأغنية'
-              : 'جميع الأعضاء في الجام يمكنهم تشغيل وتغيير الأغاني'}
+              ? 'Members can listen only; only host can change tracks'
+              : 'Any member in this room can play, pause & change tracks'}
           </Text>
         </View>
 
@@ -240,7 +240,7 @@ export default function JamRoomModal({ visible, onClose }) {
             activeOpacity={0.8}
           >
             <Text style={[styles.toggleControlBtnText, isHostOnly && { color: '#000000' }]}>
-              {isHostOnly ? 'إتاحة للجميع' : 'قفل للهوست'}
+              {isHostOnly ? 'Unlock for All' : 'Lock to Host'}
             </Text>
           </TouchableOpacity>
         )}
