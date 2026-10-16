@@ -1083,9 +1083,9 @@ function AppContent() {
         hostId: socket?.id || 'host',
         hostUserId: userPayload.id,
         hostOnlyControl: false,
-        currentTrack: currentTrackRef.current || currentTrack,
-        isPlaying: isPlayingRef.current !== undefined ? isPlayingRef.current : isPlaying,
-        currentTime: currentTimeRef.current || currentTime || 0,
+        currentTrack: currentTrack || null,
+        isPlaying: Boolean(isPlaying),
+        currentTime: Number(currentTime) || 0,
         updatedAt: Date.now(),
         queue: [],
         members: [{
@@ -1105,9 +1105,9 @@ function AppContent() {
       socket.emit('jam:join_room', {
         roomCode: code,
         user: userPayload,
-        currentTrack: currentTrackRef.current || currentTrack,
-        isPlaying: isPlayingRef.current !== undefined ? isPlayingRef.current : isPlaying,
-        currentTime: currentTimeRef.current || currentTime || 0
+        currentTrack: currentTrack || null,
+        isPlaying: Boolean(isPlaying),
+        currentTime: Number(currentTime) || 0
       });
       showToast(`Jam Session active: ${code}`);
     } else {
