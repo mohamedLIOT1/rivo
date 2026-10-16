@@ -423,7 +423,7 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                         {activeUser.name || 'Friend'}
                       </Text>
                       <Text style={[styles.activeUserStatus, isOtherTyping && { color: '#17a398', fontWeight: '800' }]}>
-                        {isOtherTyping ? 'يكتب الآن...' : 'DIRECT MESSAGE'}
+                        {isOtherTyping ? 'typing...' : 'DIRECT MESSAGE'}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -613,7 +613,7 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                             <View style={styles.typingDot} />
                             <View style={[styles.typingDot, { opacity: 0.7 }]} />
                             <View style={[styles.typingDot, { opacity: 0.4 }]} />
-                            <Text style={styles.typingIndicatorText}>{activeUser.name || 'المستخدم'} يكتب الآن...</Text>
+                            <Text style={styles.typingIndicatorText}>{activeUser.name || 'Friend'} is typing...</Text>
                           </View>
                         </View>
                       ) : null

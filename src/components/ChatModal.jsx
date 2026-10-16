@@ -360,7 +360,7 @@ export default function ChatModal({
                   {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
                 </div>
                 <span className={`text-[10px] font-mono block mt-0.5 ${isOtherTyping ? 'text-emerald-400 font-bold animate-pulse' : 'text-zinc-400'}`}>
-                  {isOtherTyping ? 'يكتب الآن... (typing...)' : (activeUser ? 'Direct Chat • View Profile' : 'Messages & Friends')}
+                  {isOtherTyping ? 'typing...' : (activeUser ? 'Direct Chat • View Profile' : 'Messages & Friends')}
                 </span>
               </div>
             </div>
@@ -574,7 +574,7 @@ export default function ChatModal({
                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <span>{activeUser.name} يكتب الآن...</span>
+                  <span>{activeUser.name} is typing...</span>
                 </div>
               )}
               <div ref={messagesEndRef} />

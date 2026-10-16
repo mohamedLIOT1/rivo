@@ -50,11 +50,21 @@ export default function AlbumDetailModal({
   onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadPlaylist } = useAudioPlayer();
-  const { token, syncUserData, likedTrackIds = [], toggleLikeTrack, tracks: contextTracks = [] } = useUser();
+  const { token, syncUserData, playlists = [], likedTrackIds = [], toggleLikeTrack, tracks: contextTracks = [] } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    if (!album) return;
+    const targetId = String(album._id || album.id || '');
+    const already = (playlists || []).some(p =>
+      String(p.id || p._id) === targetId ||
+      String(p.sourcePlaylistId) === targetId
+    );
+    setIsSaved(already);
+  }, [album, playlists]);
 
   const [remoteTracks, setRemoteTracks] = useState([]);
 
@@ -202,10 +212,16 @@ export default function AlbumDetailModal({
 
   const handleToggleSave = async () => {
     if (!album) return;
+    if (!token) {
+      showToast('Please sign in to save playlists', 'info');
+      return;
+    }
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
     try {
       const albId = album._id || album.id;
+      const isPl = Boolean(album.isPlaylist || !album.isAlbum);
+      const plTracks = (album.tracks || []).map(t => t._id || t.id || t).filter(Boolean);
       const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(albId)}/save`, {
         method: 'POST',
         headers: {
@@ -216,15 +232,29 @@ export default function AlbumDetailModal({
           name: album.name || album.title,
           cover: album.cover || album.coverUrl,
           artist: album.artist,
-          isAlbum: true,
+          isAlbum: !isPl,
+          playlist: {
+            id: String(albId),
+            _id: String(albId),
+            name: album.name || album.title,
+            cover: album.cover || album.coverUrl,
+            description: album.description || (album.artist ? `By ${album.artist}` : 'Saved playlist'),
+            trackIds: plTracks.length > 0 ? plTracks : (album.trackIds || []),
+            isPublic: true,
+            isAlbum: !isPl,
+          }
         }),
       });
       if (res.ok) {
-        showToast(nextSaved ? 'Saved album to your library!' : 'Removed from saved albums', 'success');
+        showToast(nextSaved ? (isPl ? 'Saved playlist to your library!' : 'Saved album to your library!') : 'Removed from library', 'success');
         if (syncUserData) await syncUserData();
+      } else {
+        setIsSaved(!nextSaved);
+        showToast('Failed to save to library', 'error');
       }
     } catch {
-      showToast('Failed to update album in library', 'error');
+      setIsSaved(!nextSaved);
+      showToast('Failed to update library', 'error');
     }
   };
 

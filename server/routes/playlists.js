@@ -472,10 +472,12 @@ router.post('/:id/save', auth, async (req, res) => {
     );
 
     if (existingIndex >= 0) {
+      currentUser.playlists.splice(existingIndex, 1);
+      currentUser.markModified('playlists');
+      await currentUser.save();
       return res.json({
         success: true,
-        alreadySaved: true,
-        playlist: currentUser.playlists[existingIndex],
+        removed: true,
         playlists: currentUser.playlists
       });
     }

@@ -43,6 +43,7 @@ import {
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTheme } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
@@ -72,6 +73,7 @@ export default function ProfileScreen({
   } = useUser();
   const { downloadedTracks = [], playPlaylist } = useAudioPlayer();
   const { isDark } = useTheme();
+  const { showToast } = useToast();
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(currentUser?.name || '');
@@ -288,13 +290,16 @@ export default function ProfileScreen({
     if (!pl) return;
     const plId = pl._id || pl.id;
     if (!plId) return;
+    const currentIsPublic = pl.isPublic !== false;
     setTogglingPlaylistId(String(plId));
     try {
       if (togglePlaylistVisibility) {
         await togglePlaylistVisibility(plId);
+        showToast(!currentIsPublic ? 'Playlist is now Public 🌍' : 'Playlist is now Private 🔒', 'info');
       }
     } catch (err) {
       console.warn('toggle visibility error:', err);
+      showToast('Failed to change playlist visibility', 'error');
     } finally {
       setTogglingPlaylistId(null);
     }
@@ -916,36 +921,39 @@ export default function ProfileScreen({
             const isToggling = togglingPlaylistId === plId;
 
             return (
-              <TouchableOpacity
+              <View
                 key={plId}
                 style={[styles.playlistRow, !isDark && styles.playlistRowLight]}
-                onPress={() => setSelectedPlaylistModal(pl)}
-                activeOpacity={0.85}
               >
-                <View style={styles.playlistThumb}>
-                  {pl.cover ? (
-                    <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg} />
-                  ) : (
-                    <Disc size={20} color="#17a398" />
-                  )}
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight]} numberOfLines={1}>
-                    {pl.name}
-                  </Text>
-                  <Text style={styles.playlistRowCount}>
-                    {(pl.tracks || pl.trackIds || []).length} SONGS • {isPublic ? 'PUBLIC' : 'PRIVATE'}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+                  onPress={() => setSelectedPlaylistModal(pl)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.playlistThumb}>
+                    {pl.cover ? (
+                      <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg} />
+                    ) : (
+                      <Disc size={20} color="#17a398" />
+                    )}
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight]} numberOfLines={1}>
+                      {pl.name}
+                    </Text>
+                    <Text style={styles.playlistRowCount}>
+                      {(pl.tracks || pl.trackIds || []).length} SONGS • {isPublic ? 'PUBLIC' : 'PRIVATE'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
 
                 {/* Eye privacy toggle button */}
                 <TouchableOpacity
                   style={[styles.playlistEyeBtn, isPublic ? styles.playlistEyeBtnPublic : styles.playlistEyeBtnPrivate]}
-                  onPress={(e) => {
-                    handleTogglePlaylistPublic(pl);
-                  }}
+                  onPress={() => handleTogglePlaylistPublic(pl)}
                   disabled={isToggling}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  activeOpacity={0.7}
                 >
                   {isToggling ? (
                     <ActivityIndicator size="small" color={isPublic ? '#17a398' : '#94a3b8'} />
@@ -963,10 +971,12 @@ export default function ProfileScreen({
                     if (playPlaylist) playPlaylist(pl);
                     else setSelectedPlaylistModal(pl);
                   }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.7}
                 >
                   <Play size={12} color="#0b1110" fill="#0b1110" />
                 </TouchableOpacity>
-              </TouchableOpacity>
+              </View>
             );
           })}
         </View>

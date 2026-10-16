@@ -33,6 +33,9 @@ import {
   Globe,
   Lock,
   ListPlus,
+  Search,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -63,13 +66,15 @@ export default function LibraryScreen({
   } = useAudioPlayer();
   const {
     currentUser,
-    playlists,
-    likedTrackIds,
-    tracks: userTracks,
+    playlists = [],
+    likedTrackIds = [],
+    tracks: userTracks = [],
     updatePlaylist,
     uploadPlaylistCover,
     togglePlaylistVisibility,
     syncUserData,
+    addToPlaylist,
+    token,
   } = useUser();
   const { showToast } = useToast();
   const { appMode } = useConnectivity();
@@ -89,6 +94,10 @@ export default function LibraryScreen({
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
   const [coverFailed, setCoverFailed] = useState(false);
+  const [songSearchQuery, setSongSearchQuery] = useState('');
+  const [aiRecommendations, setAiRecommendations] = useState([]);
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [justAddedSongId, setJustAddedSongId] = useState(null);
 
   // Hardware Back button returns to library main view instead of closing app
   useEffect(() => {
@@ -182,7 +191,9 @@ export default function LibraryScreen({
   // Real tracks list for currently selected playlist
   const activePlaylistTracks = useMemo(() => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return [];
-    const rawItems = selectedView.tracks || selectedView.trackIds || [];
+    const plId = String(selectedView.id || selectedView._id || '');
+    const currentPl = (playlists || []).find(p => String(p.id || p._id) === plId) || selectedView;
+    const rawItems = currentPl.tracks || currentPl.trackIds || [];
     return rawItems.map(item => {
       const idStr = String(typeof item === 'object' ? (item._id || item.id) : item);
       const found = trackPoolMap.get(idStr);
@@ -190,7 +201,78 @@ export default function LibraryScreen({
       if (typeof item === 'object' && item.title) return item;
       return null;
     }).filter(Boolean);
-  }, [selectedView, trackPoolMap]);
+  }, [selectedView, playlists, trackPoolMap]);
+
+  // AI & Smart recommendations for filling the playlist
+  const fetchAiRecommendations = async () => {
+    if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
+    setIsLoadingAi(true);
+    try {
+      const plId = String(selectedView.id || selectedView._id || '');
+      const currentPl = (playlists || []).find(p => String(p.id || p._id) === plId) || selectedView;
+      const tIds = (currentPl.tracks || currentPl.trackIds || []).map(t => typeof t === 'object' ? (t._id || t.id) : t);
+      const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          playlistId: plId,
+          trackIds: tIds,
+          name: currentPl.name,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+          setAiRecommendations(data.recommendations);
+          setIsLoadingAi(false);
+          return;
+        }
+      }
+    } catch {}
+
+    // Fallback: smart recommendations mix from library tracks not yet in this playlist
+    const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
+    const allAvailable = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
+    const candidates = allAvailable.filter(t => !existingIds.has(String(t._id || t.id)));
+    const shuffled = [...candidates].sort(() => 0.5 - Math.random()).slice(0, 12);
+    setAiRecommendations(shuffled);
+    setIsLoadingAi(false);
+  };
+
+  useEffect(() => {
+    if (selectedView && selectedView !== 'liked') {
+      fetchAiRecommendations();
+    } else {
+      setAiRecommendations([]);
+      setSongSearchQuery('');
+    }
+  }, [selectedView]);
+
+  const handleQuickAddTrack = async (track) => {
+    if (!selectedView || selectedView === 'liked' || !track) return;
+    const plId = String(selectedView.id || selectedView._id || '');
+    const tId = String(track._id || track.id);
+    setJustAddedSongId(tId);
+    if (addToPlaylist) {
+      await addToPlaylist(plId, tId);
+    }
+    showToast(`Added "${track.title}" to crate! ✨`, 'success');
+    setAiRecommendations(prev => prev.filter(r => String(r._id || r.id) !== tId));
+    setTimeout(() => setJustAddedSongId(null), 1200);
+  };
+
+  const searchResultsForAdd = useMemo(() => {
+    if (!songSearchQuery.trim()) return [];
+    const q = songSearchQuery.toLowerCase().trim();
+    const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
+    const pool = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
+    return pool
+      .filter(t => !existingIds.has(String(t._id || t.id)) && (
+        (t.title && t.title.toLowerCase().includes(q)) ||
+        (t.artist && t.artist.toLowerCase().includes(q))
+      ))
+      .slice(0, 15);
+  }, [songSearchQuery, activePlaylistTracks, userTracks, audioTracks]);
 
   const handlePlayLiked = (shuffle = false) => {
     if (!likedTracks || likedTracks.length === 0) return;
@@ -577,10 +659,12 @@ export default function LibraryScreen({
                 <Text style={[styles.emptyTitle, { marginTop: 12 }]}>Loading playlist tracks...</Text>
               </View>
             ) : activePlaylistTracks.length === 0 ? (
-              <View style={styles.emptyCard}>
+              <View style={[styles.emptyCard, { paddingVertical: 24 }]}>
                 <Disc size={36} color={colors.mint} />
-                <Text style={styles.emptyTitle}>No tracks in this crate yet</Text>
-                <Text style={styles.emptySub}>Add songs from Home or Search to fill this crate.</Text>
+                <Text style={styles.emptyTitle}>This crate is empty</Text>
+                <Text style={styles.emptySub}>
+                  Search below or pick from AI recommendations to add songs instantly!
+                </Text>
               </View>
             ) : (
               <View style={styles.tracksList}>
@@ -601,6 +685,101 @@ export default function LibraryScreen({
                 ))}
               </View>
             )}
+
+            {/* Search & AI Recommendations for adding songs into this playlist */}
+            <View style={styles.playlistAddSection}>
+              <View style={styles.playlistAddHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                  <Sparkles size={14} color="#17a398" strokeWidth={2.5} />
+                  <Text style={styles.playlistAddTitle} numberOfLines={1}>
+                    {songSearchQuery.trim()
+                      ? `SEARCH RESULTS (${searchResultsForAdd.length})`
+                      : `AI RECOMMENDATIONS FOR "${selectedView.name}"`}
+                  </Text>
+                </View>
+                {!songSearchQuery.trim() && (
+                  <TouchableOpacity
+                    style={styles.refreshAiBtn}
+                    onPress={fetchAiRecommendations}
+                    disabled={isLoadingAi}
+                    activeOpacity={0.7}
+                  >
+                    {isLoadingAi ? (
+                      <ActivityIndicator size="small" color="#17a398" />
+                    ) : (
+                      <>
+                        <RefreshCw size={11} color="#17a398" />
+                        <Text style={styles.refreshAiText}>REFRESH</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.searchAddInputRow}>
+                <Search size={14} color="#6b7280" />
+                <TextInput
+                  style={styles.searchAddInput}
+                  placeholder="Search songs to add to this crate..."
+                  placeholderTextColor="#6b7280"
+                  value={songSearchQuery}
+                  onChangeText={setSongSearchQuery}
+                  autoCorrect={false}
+                />
+                {songSearchQuery.trim() ? (
+                  <TouchableOpacity onPress={() => setSongSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <X size={14} color="#9ca3af" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Tracks List: Search Results or AI Recommendations */}
+              {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).map((recTrack) => {
+                const recId = String(recTrack._id || recTrack.id);
+                const isJustAdded = justAddedSongId === recId;
+                return (
+                  <View key={recId} style={styles.recItemRow}>
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+                      onPress={() => playTrack && playTrack(recTrack)}
+                      activeOpacity={0.7}
+                    >
+                      <Image
+                        source={{ uri: normalizeCoverUri(recTrack.cover || recTrack.coverUrl) }}
+                        style={styles.recItemCover}
+                      />
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.recItemTitle} numberOfLines={1}>
+                          {recTrack.title}
+                        </Text>
+                        <Text style={styles.recItemArtist} numberOfLines={1}>
+                          {recTrack.artist || 'Unknown Artist'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.quickAddBtn, isJustAdded && styles.quickAddBtnDone]}
+                      onPress={() => handleQuickAddTrack(recTrack)}
+                      disabled={isJustAdded}
+                      activeOpacity={0.8}
+                    >
+                      {isJustAdded ? (
+                        <>
+                          <Check size={12} color="#082621" strokeWidth={3} />
+                          <Text style={styles.quickAddBtnTextDone}>ADDED</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={12} color="#082621" strokeWidth={3} />
+                          <Text style={styles.quickAddBtnText}>ADD</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
           </View>
         ) : (
           /* Main Library Overview */
@@ -1409,5 +1588,109 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 11,
     color: colors.ink,
+  },
+  playlistAddSection: {
+    marginTop: 20,
+    backgroundColor: '#0d1815',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#1f2f2b',
+    padding: 14,
+    marginBottom: 40,
+  },
+  playlistAddHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  playlistAddTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  refreshAiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(23, 163, 152, 0.12)',
+  },
+  refreshAiText: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#17a398',
+  },
+  searchAddInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#070f0e',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#263330',
+    paddingHorizontal: 10,
+    height: 38,
+    marginBottom: 12,
+    gap: 8,
+  },
+  searchAddInput: {
+    flex: 1,
+    color: '#ffffff',
+    fontSize: 12,
+    paddingVertical: 0,
+  },
+  recItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  recItemCover: {
+    width: 38,
+    height: 38,
+    borderRadius: 6,
+    backgroundColor: '#1b2a26',
+  },
+  recItemTitle: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recItemArtist: {
+    color: '#9ca3af',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  quickAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#17a398',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  quickAddBtnDone: {
+    backgroundColor: '#10b981',
+  },
+  quickAddBtnText: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#082621',
+  },
+  quickAddBtnTextDone: {
+    fontFamily: 'monospace',
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#082621',
   },
 });

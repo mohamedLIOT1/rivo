@@ -25,6 +25,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useSocket } from '../context/SocketContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import UserDetailModal from './UserDetailModal';
 
 export default function FriendActivityModal({ visible, onClose }) {
   const { token, currentUser } = useUser();
@@ -34,6 +35,7 @@ export default function FriendActivityModal({ visible, onClose }) {
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
 
   const fetchActivities = async () => {
     setIsLoading(true);
@@ -143,48 +145,55 @@ export default function FriendActivityModal({ visible, onClose }) {
 
     return (
       <View style={styles.friendCard}>
-        {/* Avatar */}
-        <View style={styles.avatarWrap}>
-          {item.avatar ? (
-            <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Text style={styles.avatarLetter}>
-                {item.name ? item.name[0].toUpperCase() : 'U'}
-              </Text>
-            </View>
-          )}
-          {item.isOnline && <View style={styles.onlineDot} />}
-        </View>
-
-        {/* Info */}
-        <View style={styles.infoCol}>
-          <View style={styles.nameRow}>
-            <Text style={styles.friendName} numberOfLines={1}>
-              {item.name || 'Anonymous Listener'}
-            </Text>
-            {isLive && (
-              <View style={styles.liveBadge}>
-                <Radio size={10} color="#0b1110" strokeWidth={3} />
-                <Text style={styles.liveBadgeText}>LIVE</Text>
+        {/* Avatar and name clickable to open profile */}
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+          onPress={() => setSelectedUser(item)}
+          activeOpacity={0.7}
+        >
+          {/* Avatar */}
+          <View style={styles.avatarWrap}>
+            {item.avatar ? (
+              <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} />
+            ) : (
+              <View style={styles.avatarFallback}>
+                <Text style={styles.avatarLetter}>
+                  {item.name ? item.name[0].toUpperCase() : 'U'}
+                </Text>
               </View>
             )}
+            {item.isOnline && <View style={styles.onlineDot} />}
           </View>
 
-          {listening ? (
-            <View style={styles.trackInfoRow}>
-              <Disc size={12} color="#17a398" strokeWidth={2.4} />
-              <Text style={styles.trackTitle} numberOfLines={1}>
-                {listening.title || 'Playing song'}
-                {listening.artist ? ` • ${listening.artist}` : ''}
+          {/* Info */}
+          <View style={styles.infoCol}>
+            <View style={styles.nameRow}>
+              <Text style={styles.friendName} numberOfLines={1}>
+                {item.name || 'Anonymous Listener'}
               </Text>
+              {isLive && (
+                <View style={styles.liveBadge}>
+                  <Radio size={10} color="#0b1110" strokeWidth={3} />
+                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                </View>
+              )}
             </View>
-          ) : (
-            <Text style={styles.idleText}>
-              {item.isOnline ? 'Online • Browsing crates' : 'Offline'}
-            </Text>
-          )}
-        </View>
+
+            {listening ? (
+              <View style={styles.trackInfoRow}>
+                <Disc size={12} color="#17a398" strokeWidth={2.4} />
+                <Text style={styles.trackTitle} numberOfLines={1}>
+                  {listening.title || 'Playing song'}
+                  {listening.artist ? ` • ${listening.artist}` : ''}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.idleText}>
+                {item.isOnline ? 'Online • Browsing crates' : 'Offline'}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
 
         {/* 1-Tap Play Action */}
         {listening && (
@@ -273,6 +282,13 @@ export default function FriendActivityModal({ visible, onClose }) {
           )}
         </View>
       </View>
+
+      <UserDetailModal
+        visible={Boolean(selectedUser)}
+        user={selectedUser}
+        userId={selectedUser?.id || selectedUser?._id}
+        onClose={() => setSelectedUser(null)}
+      />
     </Modal>
   );
 }
