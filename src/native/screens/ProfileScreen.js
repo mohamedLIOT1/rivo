@@ -288,14 +288,17 @@ export default function ProfileScreen({
 
   const handleTogglePlaylistPublic = async (pl) => {
     if (!pl) return;
-    const plId = pl._id || pl.id;
+    const plId = pl.id || pl._id;
     if (!plId) return;
-    const currentIsPublic = pl.isPublic !== false;
     setTogglingPlaylistId(String(plId));
     try {
       if (togglePlaylistVisibility) {
-        await togglePlaylistVisibility(plId);
-        showToast(!currentIsPublic ? 'Playlist is now Public 🌍' : 'Playlist is now Private 🔒', 'info');
+        const res = await togglePlaylistVisibility(plId);
+        if (res && res.success) {
+          showToast(res.isPublic ? 'Playlist is now Public 🌍' : 'Playlist is now Private 🔒', 'info');
+        } else {
+          showToast(res?.error || 'Failed to change playlist visibility', 'error');
+        }
       }
     } catch (err) {
       console.warn('toggle visibility error:', err);
@@ -916,9 +919,10 @@ export default function ProfileScreen({
             </View>
           </View>
           {playlists.map((pl) => {
-            const isPublic = pl.isPublic !== false;
-            const plId = String(pl._id || pl.id);
-            const isToggling = togglingPlaylistId === plId;
+            const plId = String(pl.id || pl._id);
+            const livePl = playlists.find(p => String(p.id) === plId || String(p._id) === plId) || pl;
+            const isPublic = livePl.isPublic !== false;
+            const isToggling = togglingPlaylistId === plId || togglingPlaylistId === String(pl._id) || togglingPlaylistId === String(pl.id);
 
             return (
               <View

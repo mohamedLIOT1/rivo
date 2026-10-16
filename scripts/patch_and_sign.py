@@ -8,6 +8,7 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERMESC = os.path.join(BASE_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
+ZIPALIGN = r"C:\Users\mohamed\AppData\Local\Android\Sdk\build-tools\34.0.0\zipalign.exe"
 APKSIGNER = r"C:\Users\mohamed\AppData\Local\Android\Sdk\build-tools\34.0.0\apksigner.bat"
 KEYSTORE = os.path.join(BASE_DIR, 'android', 'app', 'debug.keystore')
 
@@ -30,9 +31,11 @@ def patch_ios():
     print(f"Compiled Hermes bundle ({len(hermes_bytes)} bytes)")
 
     src_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.5.ipa')
-    out_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.7.ipa')
+    out_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.9.ipa')
+    legacy_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.8.ipa')
     generic_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.ipa')
-    dist_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.7.7.ipa')
+    dist_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.7.9.ipa')
+    dist_legacy_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.7.8.ipa')
     dist_gen_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.ipa')
 
     temp_ipa = out_ipa + '.tmp'
@@ -45,14 +48,14 @@ def patch_ios():
                     zout.writestr(item, hermes_bytes)
                 elif filename == 'Payload/Rivo.app/Info.plist':
                     plist_obj = plistlib.loads(zin.read(filename))
-                    plist_obj['CFBundleShortVersionString'] = '1.7.7'
-                    plist_obj['CFBundleVersion'] = '46'
+                    plist_obj['CFBundleShortVersionString'] = '1.7.9'
+                    plist_obj['CFBundleVersion'] = '48'
                     zout.writestr(item, plistlib.dumps(plist_obj, fmt=plistlib.FMT_BINARY))
                 elif filename == 'Payload/Rivo.app/EXConstants.bundle/app.config':
                     cfg = json.loads(zin.read(filename).decode('utf-8'))
-                    cfg['version'] = '1.7.7'
+                    cfg['version'] = '1.7.9'
                     if 'ios' in cfg:
-                        cfg['ios']['buildNumber'] = '46'
+                        cfg['ios']['buildNumber'] = '48'
                     zout.writestr(item, json.dumps(cfg).encode('utf-8'))
                 else:
                     zout.writestr(item, zin.read(filename))
@@ -61,7 +64,9 @@ def patch_ios():
         os.remove(out_ipa)
     os.rename(temp_ipa, out_ipa)
     shutil.copyfile(out_ipa, generic_ipa)
+    shutil.copyfile(out_ipa, legacy_ipa)
     shutil.copyfile(out_ipa, dist_ipa)
+    shutil.copyfile(out_ipa, dist_legacy_ipa)
     shutil.copyfile(out_ipa, dist_gen_ipa)
     print(f"iOS IPA ready ({os.path.getsize(out_ipa)} bytes)")
     return True
@@ -76,9 +81,11 @@ def patch_android():
         bundle_bytes = f.read()
 
     base_apk = os.path.join(BASE_DIR, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.7.apk')
+    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.9.apk')
+    legacy_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.8.apk')
     generic_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.apk')
-    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.7.7.apk')
+    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.7.9.apk')
+    dist_legacy_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.7.8.apk')
     dist_gen_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.apk')
 
     temp_apk = out_apk + '.unsigned.apk'
@@ -93,11 +100,23 @@ def patch_android():
                 else:
                     zout.writestr(item, zin.read(item.filename))
 
-    print("2. Re-signing APK with apksigner (v1 & v2 schemes)...")
+    aligned_apk = out_apk + '.aligned.apk'
+    print("2. Running zipalign (4-byte alignment & 4K page-alignment)...")
+    if os.path.exists(aligned_apk):
+        os.remove(aligned_apk)
+    zipalign_cmd = [ZIPALIGN, '-f', '-p', '4', temp_apk, aligned_apk]
+    zipalign_res = subprocess.run(zipalign_cmd, capture_output=True, text=True)
+    if zipalign_res.returncode != 0:
+        print(f"zipalign failed: {zipalign_res.stderr}")
+        return False
+    if os.path.exists(temp_apk):
+        os.remove(temp_apk)
+
+    print("3. Re-signing APK with apksigner (v1, v2 & v3 schemes)...")
     if os.path.exists(out_apk):
         os.remove(out_apk)
-    shutil.copyfile(temp_apk, out_apk)
-    os.remove(temp_apk)
+    shutil.copyfile(aligned_apk, out_apk)
+    os.remove(aligned_apk)
 
     sign_cmd = [
         APKSIGNER, 'sign',
@@ -118,8 +137,17 @@ def patch_android():
         print(f"Verification failed: {verify_res.stderr} / {verify_res.stdout}")
         return False
 
+    align_verify_cmd = [ZIPALIGN, '-c', '-v', '4', out_apk]
+    align_verify_res = subprocess.run(align_verify_cmd, capture_output=True, text=True)
+    if 'Verification succesful' not in align_verify_res.stdout:
+        print(f"Zipalign verification failed!")
+        return False
+    print("Zipalign verification successful!")
+
     shutil.copyfile(out_apk, generic_apk)
+    shutil.copyfile(out_apk, legacy_apk)
     shutil.copyfile(out_apk, dist_apk)
+    shutil.copyfile(out_apk, dist_legacy_apk)
     shutil.copyfile(out_apk, dist_gen_apk)
     print(f"Android APK signed and verified ({os.path.getsize(out_apk)} bytes)")
     return True

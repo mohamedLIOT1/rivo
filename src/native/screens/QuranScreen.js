@@ -19,6 +19,7 @@ import SongItem from '../ui/SongItem';
 import {
   isQuranContent,
   getQuranReciterName,
+  cleanQuranTrackTitle,
   normalizeArabicText,
   FAMOUS_RECITERS,
 } from '../../utils/quranUtils';
@@ -41,9 +42,35 @@ export default function QuranScreen({ onTrackAction }) {
     ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
     : ((Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (audioTracks || []));
 
-  // Filter strictly Quranic tracks
+  // Filter strictly Quranic tracks with robust deduplication
   const quranTracks = useMemo(() => {
-    return (allTracks || []).filter(isQuranContent);
+    const raw = (allTracks || []).filter(isQuranContent);
+    const seenAudio = new Set();
+    const seenMeta = new Set();
+    const deduped = [];
+    for (const t of raw) {
+      const reciter = getQuranReciterName(t);
+      const cleanTitle = cleanQuranTrackTitle(t.title || '');
+      const metaKey = `${normalizeArabicText(reciter)}:::${normalizeArabicText(cleanTitle)}`;
+      
+      let audioKey = null;
+      if (t.audioUrl && typeof t.audioUrl === 'string' && t.audioUrl.length > 10) {
+        const ytMatch = t.audioUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || t.audioUrl.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+        audioKey = ytMatch ? `yt:${ytMatch[1]}` : `url:${t.audioUrl.trim().toLowerCase()}`;
+      }
+
+      if (audioKey && seenAudio.has(audioKey)) {
+        continue;
+      }
+      if (metaKey && seenMeta.has(metaKey)) {
+        continue;
+      }
+
+      if (audioKey) seenAudio.add(audioKey);
+      if (metaKey) seenMeta.add(metaKey);
+      deduped.push(t);
+    }
+    return deduped;
   }, [allTracks]);
 
   // Reciters extracted from quran tracks sorted by available recitation count

@@ -285,9 +285,10 @@ export default function AdminScreen() {
 
   // Delete Album
   const handleDeleteAlbum = (album) => {
+    const albumDisplayName = album.name || album.title || 'Untitled Album';
     Alert.alert(
       'DELETE ALBUM',
-      `Permanently delete album "${album.title}"?`,
+      `Permanently delete album "${albumDisplayName}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -301,7 +302,7 @@ export default function AdminScreen() {
                 headers: { Authorization: `Bearer ${token}` },
               });
               if (res.ok) {
-                showToast(`Deleted album "${album.title}"`, 'info');
+                showToast(`Deleted album "${albumDisplayName}"`, 'info');
                 fetchAlbums();
               }
             } catch {
@@ -367,7 +368,7 @@ export default function AdminScreen() {
     const q = albumQuery.toLowerCase().trim();
     return albums.filter(
       (a) =>
-        (a?.title && a.title.toLowerCase().includes(q)) ||
+        ((a?.name || a?.title) && (a?.name || a?.title).toLowerCase().includes(q)) ||
         (a?.artist && a.artist.toLowerCase().includes(q))
     );
   }, [albums, albumQuery]);
@@ -681,7 +682,12 @@ export default function AdminScreen() {
               <View style={styles.itemsList}>
                 {filteredAlbums.map((album) => {
                   const aId = album._id || album.id;
-                  const trackCount = Array.isArray(album.tracks) ? album.tracks.length : 0;
+                  const trackCount = Array.isArray(album.tracks) && album.tracks.length > 0
+                    ? album.tracks.length
+                    : (Array.isArray(album.trackIds) && album.trackIds.length > 0
+                      ? album.trackIds.length
+                      : (album.trackCount || album.songsCount || 0));
+                  const albumDisplayName = album.name || album.title || 'Untitled Album';
                   return (
                     <View key={aId} style={styles.itemRow}>
                       <Image
@@ -694,7 +700,7 @@ export default function AdminScreen() {
                       />
                       <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
                         <Text style={styles.itemMainTitle} numberOfLines={1}>
-                          {album.title}
+                          {albumDisplayName}
                         </Text>
                         <Text style={styles.itemSubtitle} numberOfLines={1}>
                           {album.artist || 'Various'} • {trackCount} SONGS
@@ -738,13 +744,18 @@ export default function AdminScreen() {
               <View style={styles.itemsList}>
                 {filteredArtists.map((artist, idx) => {
                   const arId = artist._id || artist.id || idx;
+                  const artistImage =
+                    artist.image ||
+                    artist.avatar ||
+                    artist.cover ||
+                    'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100';
+                  const artistAlbumsCount = artist.albumCount ?? (artist.albums || []).length;
+                  const artistSongsCount = artist.trackCount ?? (artist.tracks || []).length;
                   return (
                     <View key={arId} style={styles.itemRow}>
                       <Image
                         source={{
-                          uri:
-                            artist.image ||
-                            'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100',
+                          uri: artistImage,
                         }}
                         style={styles.userAvatar}
                       />
@@ -753,7 +764,7 @@ export default function AdminScreen() {
                           {artist.name}
                         </Text>
                         <Text style={styles.itemSubtitle} numberOfLines={1}>
-                          {(artist.albums || []).length} ALBUMS • {(artist.tracks || []).length} SONGS
+                          {artistAlbumsCount} ALBUMS • {artistSongsCount} SONGS
                         </Text>
                       </View>
                     </View>

@@ -45,6 +45,7 @@ import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { isQuranContent } from '../../utils/quranUtils';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 
@@ -203,6 +204,16 @@ export default function LibraryScreen({
     }).filter(Boolean);
   }, [selectedView, playlists, trackPoolMap]);
 
+  // Detect whether current open playlist is a Quran playlist
+  const isSelectedPlQuran = useMemo(() => {
+    if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return false;
+    return Boolean(
+      selectedView.isQuran ||
+      isQuranContent(selectedView) ||
+      (activePlaylistTracks && activePlaylistTracks.length > 0 && activePlaylistTracks.some(isQuranContent))
+    );
+  }, [selectedView, activePlaylistTracks]);
+
   // AI & Smart recommendations for filling the playlist
   const fetchAiRecommendations = async () => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
@@ -218,22 +229,34 @@ export default function LibraryScreen({
           playlistId: plId,
           trackIds: tIds,
           name: currentPl.name,
+          isQuran: isSelectedPlQuran,
         }),
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
-          setAiRecommendations(data.recommendations);
-          setIsLoadingAi(false);
-          return;
+        const rawRecs = data.recommendations || data.tracks || [];
+        if (data.success && Array.isArray(rawRecs) && rawRecs.length > 0) {
+          const filteredRecs = rawRecs.filter(t => {
+            const isQ = isQuranContent(t);
+            return isSelectedPlQuran ? isQ : !isQ;
+          });
+          if (filteredRecs.length > 0) {
+            setAiRecommendations(filteredRecs);
+            setIsLoadingAi(false);
+            return;
+          }
         }
       }
     } catch {}
 
-    // Fallback: smart recommendations mix from library tracks not yet in this playlist
+    // Fallback: smart recommendations mix strictly matching playlist category (Music vs Quran)
     const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
     const allAvailable = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
-    const candidates = allAvailable.filter(t => !existingIds.has(String(t._id || t.id)));
+    const candidates = allAvailable.filter(t => {
+      if (existingIds.has(String(t._id || t.id))) return false;
+      const isQ = isQuranContent(t);
+      return isSelectedPlQuran ? isQ : !isQ;
+    });
     const shuffled = [...candidates].sort(() => 0.5 - Math.random()).slice(0, 12);
     setAiRecommendations(shuffled);
     setIsLoadingAi(false);
@@ -267,12 +290,17 @@ export default function LibraryScreen({
     const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
     const pool = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
     return pool
-      .filter(t => !existingIds.has(String(t._id || t.id)) && (
-        (t.title && t.title.toLowerCase().includes(q)) ||
-        (t.artist && t.artist.toLowerCase().includes(q))
-      ))
+      .filter(t => {
+        if (existingIds.has(String(t._id || t.id))) return false;
+        const isQ = isQuranContent(t);
+        if (isSelectedPlQuran ? !isQ : isQ) return false;
+        return (
+          (t.title && t.title.toLowerCase().includes(q)) ||
+          (t.artist && t.artist.toLowerCase().includes(q))
+        );
+      })
       .slice(0, 15);
-  }, [songSearchQuery, activePlaylistTracks, userTracks, audioTracks]);
+  }, [songSearchQuery, activePlaylistTracks, userTracks, audioTracks, isSelectedPlQuran]);
 
   const handlePlayLiked = (shuffle = false) => {
     if (!likedTracks || likedTracks.length === 0) return;

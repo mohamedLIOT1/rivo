@@ -18,7 +18,18 @@ const {
 router.get('/', async (req, res) => {
   try {
     const albums = await Album.find().sort({ updatedAt: -1 }).lean();
-    res.json({ success: true, albums });
+    const formatted = albums.map(a => {
+      const trackCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      return {
+        ...a,
+        title: a.title || a.name || 'Untitled Album',
+        name: a.name || a.title || 'Untitled Album',
+        trackCount,
+        songsCount: trackCount,
+        tracks: a.tracks || []
+      };
+    });
+    res.json({ success: true, albums: formatted });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -289,28 +300,35 @@ const importAlbumHandler = async (req, res) => {
     }
 
     if (mongoose.connection.readyState === 1 && tracksToInsert.length > 0) {
-      try {
-        const inserted = await Track.insertMany(tracksToInsert, { ordered: false });
-        for (const t of inserted) {
-          const tid = String(t._id);
+      const trulyNewTracks = [];
+      for (const t of tracksToInsert) {
+        let existing = null;
+        if (t.audioUrl && t.audioUrl.length > 10) {
+          existing = await Track.findOne({ audioUrl: t.audioUrl }).lean();
+        }
+        if (!existing && t.title && t.artist) {
+          existing = await Track.findOne({
+            title: new RegExp(`^${escapeRegex(t.title)}$`, 'i'),
+            artist: new RegExp(`^${escapeRegex(t.artist)}$`, 'i')
+          }).lean();
+        }
+        if (existing) {
+          const tid = String(existing._id);
           trackIds.push(tid);
           createdTracks.push({
             id: tid,
             _id: tid,
-            title: t.title,
-            artist: t.artist,
-            album: t.album,
-            cover: t.cover,
-            audioUrl: t.audioUrl,
-            duration: t.duration,
-            genre: t.genre,
-            source: t.source,
-            isQuran: t.isQuran
+            ...existing
           });
+        } else {
+          trulyNewTracks.push(t);
         }
-      } catch (insertErr) {
-        if (insertErr.insertedDocs && insertErr.insertedDocs.length > 0) {
-          for (const t of insertErr.insertedDocs) {
+      }
+
+      if (trulyNewTracks.length > 0) {
+        try {
+          const inserted = await Track.insertMany(trulyNewTracks, { ordered: false });
+          for (const t of inserted) {
             const tid = String(t._id);
             trackIds.push(tid);
             createdTracks.push({
@@ -326,6 +344,26 @@ const importAlbumHandler = async (req, res) => {
               source: t.source,
               isQuran: t.isQuran
             });
+          }
+        } catch (insertErr) {
+          if (insertErr.insertedDocs && insertErr.insertedDocs.length > 0) {
+            for (const t of insertErr.insertedDocs) {
+              const tid = String(t._id);
+              trackIds.push(tid);
+              createdTracks.push({
+                id: tid,
+                _id: tid,
+                title: t.title,
+                artist: t.artist,
+                album: t.album,
+                cover: t.cover,
+                audioUrl: t.audioUrl,
+                duration: t.duration,
+                genre: t.genre,
+                source: t.source,
+                isQuran: t.isQuran
+              });
+            }
           }
         }
       }

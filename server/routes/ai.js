@@ -8,35 +8,80 @@ try {
     GoogleGenerativeAI = require('../../node_modules/@google/generative-ai').GoogleGenerativeAI;
   } catch (err) {}
 }
-const { auth, adminAuth } = require('../middleware/auth');
+const { auth, adminAuth, optionalAuth } = require('../middleware/auth');
 const { Track, SongLyrics } = require('../models');
 
 const genAI = (process.env.GEMINI_API_KEY && GoogleGenerativeAI) ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
-// أ. Smart Mood Playlist (بدلاً من الـ hardcoded rules)
-router.post('/recommendations', auth, async (req, res) => {
+const QURAN_REGEX = /(سورة|سوره|قرآن|قران|المصحف|مصحف|تلاوة|تلاوه|ترتيل|تجويد|المنشاوي|عبد\s*الباسط|الحصري|البناء|الطبلاوي|العفاسي|ماهر\s*المعيقلي|السديس|الشريم|ياسر\s*الدوسري|مشاري\s*العفاسي|أحمد\s*العجمي|سعد\s*الغامدي|\bsurah\b|\bquran\b|\bkoran\b|\brecitation\b|\btajweed\b|\btartil\b|\bmushaf\b)/i;
+
+const isQuranTrack = (t) => {
+  if (!t) return false;
+  if (t.isQuran === true || t.category === 'quran' || t.genre === 'Quran') return true;
+  const str = `${t.title || ''} ${t.artist || ''} ${t.album || ''}`;
+  return QURAN_REGEX.test(str);
+};
+
+// أ. Smart Recommendations for Playlists and Moods
+router.post('/recommendations', optionalAuth, async (req, res) => {
   try {
-    const { mood, timeOfDay, recentTracks = [], availableTracks = [] } = req.body;
-    if (!process.env.GEMINI_API_KEY || !genAI) {
-      // Fallback to old logic if no API key
-      return res.json({ success: false, error: 'AI not configured' });
+    const { mood, timeOfDay, recentTracks = [], availableTracks = [], isQuran = false, name = '', trackIds = [] } = req.body;
+    const isPlQuran = Boolean(isQuran || QURAN_REGEX.test(name));
+    let pool = availableTracks;
+    if (!pool || pool.length === 0) {
+      if (isPlQuran) {
+        pool = await Track.find({
+          $or: [
+            { isQuran: true },
+            { category: 'quran' },
+            { genre: 'Quran' },
+            { title: /سورة|سوره|قرآن|قران/i }
+          ]
+        }).limit(150).lean();
+      } else {
+        pool = await Track.find({
+          isQuran: { $ne: true },
+          category: { $ne: 'quran' },
+          genre: { $ne: 'Quran' }
+        }).limit(150).lean();
+      }
     }
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const trackList = (availableTracks || []).slice(0, 50).map(t => `"${t.title}" by ${t.artist}`).join(', ');
-    const prompt = `You are a music curator. Given these available tracks: ${trackList}
-User mood: ${mood || 'neutral'}, Time of day: ${timeOfDay || 'evening'}, Recently played: ${(recentTracks || []).slice(0,5).join(', ')}.
+    const excludedIds = new Set((trackIds || []).map(String));
+    const filteredPool = pool.filter(t => {
+      if (excludedIds.has(String(t._id || t.id))) return false;
+      const q = isQuranTrack(t);
+      return isPlQuran ? q : !q;
+    });
+
+    let finalRecs = [];
+    if (process.env.GEMINI_API_KEY && genAI) {
+      try {
+        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+        const trackList = filteredPool.slice(0, 50).map(t => `"${t.title}" by ${t.artist}`).join(', ');
+        const prompt = `You are a music and recitation curator. Given these available tracks: ${trackList}
+Context: ${isPlQuran ? 'Quran Recitations' : 'Music Playlist'}, Name: "${name || 'My Playlist'}", User mood: ${mood || 'neutral'}, Time of day: ${timeOfDay || 'evening'}, Recently played: ${(recentTracks || []).slice(0,5).join(', ')}.
 Select the 10 best matching tracks from the available list. Return ONLY a JSON array of track titles exactly as written. No explanation.`;
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    const suggested = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-    const matched = availableTracks.filter(t =>
-      suggested.some(s => s.toLowerCase().includes(t.title.toLowerCase().slice(0, 10)))
-    );
-    res.json({ success: true, tracks: matched.slice(0, 10) });
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        const suggested = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+        const matched = filteredPool.filter(t =>
+          suggested.some(s => s.toLowerCase().includes(t.title.toLowerCase().slice(0, 10)))
+        );
+        if (matched.length > 0) finalRecs = matched.slice(0, 10);
+      } catch (geminiErr) {
+        console.warn('[AI Recommendations Gemini]', geminiErr.message);
+      }
+    }
+
+    if (finalRecs.length === 0) {
+      finalRecs = [...filteredPool].sort(() => 0.5 - Math.random()).slice(0, 10);
+    }
+
+    res.json({ success: true, recommendations: finalRecs, tracks: finalRecs });
   } catch (e) {
     console.warn('[AI Recommendations]', e.message);
-    res.json({ success: false, tracks: [] });
+    res.json({ success: true, recommendations: [], tracks: [] });
   }
 });
 

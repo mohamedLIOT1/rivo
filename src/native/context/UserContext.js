@@ -335,13 +335,30 @@ export const UserProvider = ({ children }) => {
   const togglePlaylistVisibility = async (playlistId) => {
     if (!token) return { success: false, error: 'Not authenticated' };
     const pIdStr = String(playlistId);
+    let nextState = true;
+
     // Optimistic update so UI toggles instantly without lag
     setPlaylists(prev => prev.map(p => {
-      if (String(p.id || p._id) === pIdStr) {
-        return { ...p, isPublic: p.isPublic === false ? true : false };
+      if (String(p.id) === pIdStr || String(p._id) === pIdStr) {
+        nextState = p.isPublic === false ? true : false;
+        return { ...p, isPublic: nextState };
       }
       return p;
     }));
+
+    setCurrentUser(prevUser => {
+      if (!prevUser || !Array.isArray(prevUser.playlists)) return prevUser;
+      return {
+        ...prevUser,
+        playlists: prevUser.playlists.map(p => {
+          if (String(p.id) === pIdStr || String(p._id) === pIdStr) {
+            return { ...p, isPublic: nextState };
+          }
+          return p;
+        })
+      };
+    });
+
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/toggle-visibility`, {
         method: 'POST',
@@ -350,12 +367,25 @@ export const UserProvider = ({ children }) => {
       const data = await res.json().catch(() => ({ success: false }));
       if (res.ok && data.success) {
         setPlaylists(prev => prev.map(p => {
-          if (String(p.id || p._id) === pIdStr) {
+          if (String(p.id) === pIdStr || String(p._id) === pIdStr) {
             return { ...p, isPublic: data.isPublic };
           }
           return p;
         }));
+        setCurrentUser(prevUser => {
+          if (!prevUser || !Array.isArray(prevUser.playlists)) return prevUser;
+          return {
+            ...prevUser,
+            playlists: prevUser.playlists.map(p => {
+              if (String(p.id) === pIdStr || String(p._id) === pIdStr) {
+                return { ...p, isPublic: data.isPublic };
+              }
+              return p;
+            })
+          };
+        });
         await syncUserData();
+        return { success: true, isPublic: data.isPublic };
       }
       return data;
     } catch (err) {

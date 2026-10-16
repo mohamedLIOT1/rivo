@@ -13,6 +13,14 @@ router.get('/', async (req, res) => {
   try {
     const allTracks = await Track.find({}, 'artist album cover plays').lean();
     const allAlbums = await Album.find().lean();
+    const allArtistDocs = await Artist.find().lean();
+
+    const artistDocMap = {};
+    for (const doc of allArtistDocs) {
+      if (doc.name) {
+        artistDocMap[doc.name.toLowerCase().trim()] = doc;
+      }
+    }
 
     const artistMap = {};
     for (const t of allTracks) {
@@ -20,19 +28,31 @@ router.get('/', async (req, res) => {
       const canonical = getCanonicalArtistName(t.artist);
       const key = canonical.toLowerCase();
       if (!artistMap[key]) {
+        const doc = artistDocMap[key];
+        const initialImg = doc?.cover || doc?.avatar || t.cover || '';
         artistMap[key] = {
           id: key,
-          name: canonical,
-          avatar: t.cover,
+          name: doc?.name || canonical,
+          avatar: initialImg,
+          image: initialImg,
+          cover: initialImg,
           trackCount: 0,
+          songsCount: 0,
           albumCount: 0,
           totalPlays: 0,
-          albums: []
+          albums: [],
+          tracks: [],
+          isVerified: Boolean(doc?.isVerified)
         };
       }
       artistMap[key].trackCount++;
+      artistMap[key].songsCount++;
       artistMap[key].totalPlays += (Number(t.plays) || 0);
-      if (!artistMap[key].avatar && t.cover) artistMap[key].avatar = t.cover;
+      if (!artistMap[key].avatar && t.cover) {
+        artistMap[key].avatar = t.cover;
+        artistMap[key].image = t.cover;
+        artistMap[key].cover = t.cover;
+      }
     }
 
     for (const a of allAlbums) {
@@ -42,6 +62,29 @@ router.get('/', async (req, res) => {
       if (artistMap[key]) {
         artistMap[key].albumCount++;
         artistMap[key].albums.push(a);
+      }
+    }
+
+    // Also include any custom artists from Artist collection that have no tracks yet
+    for (const doc of allArtistDocs) {
+      if (!doc.name) continue;
+      const key = doc.name.toLowerCase().trim();
+      if (!artistMap[key]) {
+        const initialImg = doc.cover || doc.avatar || '';
+        artistMap[key] = {
+          id: key,
+          name: doc.name,
+          avatar: initialImg,
+          image: initialImg,
+          cover: initialImg,
+          trackCount: 0,
+          songsCount: 0,
+          albumCount: 0,
+          totalPlays: 0,
+          albums: [],
+          tracks: [],
+          isVerified: Boolean(doc.isVerified)
+        };
       }
     }
 

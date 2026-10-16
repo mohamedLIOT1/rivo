@@ -143,10 +143,31 @@ export const resolveAudioStream = async (track) => {
     return rawUrl;
   }
 
-  // 3. Server-side Stream Resolution via Proxy (Primary - handles yt-dlp warm worker & proxying)
+  // 3. Server-side Stream Resolution via Proxy (Primary - handles yt-dlp warm worker, uploads & proxying)
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    // 3a. Resolve stream via /api/tracks/resolve-stream (matches authentic upload tracks & web logic)
+    try {
+      const resolveRes = await fetch(
+        `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}`,
+        { signal: controller.signal }
+      );
+      if (resolveRes.ok) {
+        const d = await resolveRes.json();
+        if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
+          let cand = d.url;
+          if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+          clearTimeout(timeoutId);
+          if (trackId) streamCache.set(trackId, cand);
+          if (d.duration && trackId) streamDurationCache.set(trackId, d.duration);
+          return cand;
+        }
+      }
+    } catch {}
+
+    // 3b. Stream endpoint fallback
     const serverStreamRes = await fetch(
       `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
       { signal: controller.signal }

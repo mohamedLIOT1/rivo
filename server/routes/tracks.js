@@ -633,6 +633,31 @@ const handleTrackStream = async (req, res) => {
       return res.json({ success: true, url: rawUrl, directUrl: rawUrl, duration: track?.duration || 210, cover: track?.cover || '' });
     }
 
+    // Check if title and artist match an authentic uploaded track in local DB (e.g. 3alsamet v2)
+    if (title) {
+      try {
+        const localUploaded = await Track.findOne({
+          title: new RegExp(`^${escapeRegex(title)}$`, 'i'),
+          ...(artist ? { artist: new RegExp(`^${escapeRegex(artist)}$`, 'i') } : {}),
+          $or: [
+            { source: 'Upload' },
+            { audioUrl: /^\/?uploads\//i }
+          ]
+        }).lean();
+        if (localUploaded && localUploaded.audioUrl) {
+          const cleanPath = localUploaded.audioUrl.startsWith('/') ? localUploaded.audioUrl : `/${localUploaded.audioUrl}`;
+          return res.json({
+            success: true,
+            url: cleanPath,
+            directUrl: cleanPath,
+            duration: localUploaded.duration || 210,
+            cover: localUploaded.cover || track?.cover || '',
+            isYouTube: false
+          });
+        }
+      } catch {}
+    }
+
     const streamTarget = rawUrl || id || '';
     const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist);
     if (streamUrl) {

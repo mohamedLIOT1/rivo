@@ -88,12 +88,12 @@ app.use((req, res, next) => {
 
 // App Version Manifest
 const APP_VERSIONS_DATA = {
-  version: '1.7.7',
-  releaseNotes: "v1.7.7: Modular micro-architected backend, OWASP Top-10 security patch, tablet landscape orientation, real-time analytics portal, chat profile links & typing indicators, collaborative Jam control.",
+  version: '1.7.9',
+  releaseNotes: "v1.7.9: Fixed Admin console albums track counts and artist avatars/songs count, resolved duplicate Quran recitations and counts, improved album management and performance.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.7',
+      version: '1.7.9',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -101,22 +101,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Full Jam sync and player controls.'
     },
     android: {
-      version: '1.7.7',
-      build: 46,
+      version: '1.7.9',
+      build: 48,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.7.apk',
-      directFile: 'Rivo-v1.7.7.apk',
+      downloadUrl: '/downloads/Rivo-v1.7.9.apk',
+      directFile: 'Rivo-v1.7.9.apk',
       mandatory: false,
-      notes: 'Fast Jam play/pause synchronization, tablet landscape mode, and collaborative controls.'
+      notes: 'Admin console albums & artists fixes, accurate Quran recitations without duplicates, performance enhancements.'
     },
     ios: {
-      version: '1.7.7',
-      build: 46,
+      version: '1.7.9',
+      build: 48,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.7.ipa',
-      directFile: 'Rivo-v1.7.7.ipa',
+      downloadUrl: '/downloads/Rivo-v1.7.9.ipa',
+      directFile: 'Rivo-v1.7.9.ipa',
       mandatory: false,
-      notes: 'Fast Jam play/pause synchronization, tablet landscape mode, and collaborative controls.'
+      notes: 'Admin console albums & artists fixes, accurate Quran recitations without duplicates, performance enhancements.'
     }
   }
 };
@@ -128,6 +128,7 @@ app.get('/api/app/version', (req, res) => {
 // Download routes for APK/IPA releases
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.7.8.apk',
   '/downloads/Rivo-v1.7.7.apk',
   '/downloads/Rivo-v1.7.6.apk',
   '/downloads/Rivo-v1.7.5.apk',

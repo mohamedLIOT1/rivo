@@ -373,11 +373,11 @@ router.post('/:id/toggle-visibility', auth, async (req, res) => {
   try {
     let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
-    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    let pl = u.playlists.find(p => String(p.id) === String(req.params.id) || String(p._id) === String(req.params.id));
     if (!pl && isAdminUser(req.user)) {
       u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
       if (u) {
-        pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+        pl = u.playlists.find(p => String(p.id) === String(req.params.id) || String(p._id) === String(req.params.id));
       }
     }
     if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });

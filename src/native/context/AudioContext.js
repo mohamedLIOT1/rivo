@@ -840,7 +840,7 @@ export const AudioProvider = ({ children }) => {
       }
 
       // Direct check on physical storage by trackId (detects local files on device even if not yet in state)
-      if (!uri || !uri.startsWith('file://')) {
+      if ((!uri || !uri.startsWith('file://')) && !isUploadedTrack) {
         const directMp3 = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.mp3`;
         const directM4a = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.m4a`;
         try {

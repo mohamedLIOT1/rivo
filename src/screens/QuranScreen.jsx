@@ -34,10 +34,36 @@ export default function QuranScreen({
     setVisibleLimit(40);
   }, [searchQuery, activeTab]);
 
-  // Strictly filter only Quranic tracks & playlists
+  // Strictly filter only Quranic tracks & playlists with robust deduplication
   const quranTracks = useMemo(() => {
-    return (tracks || []).filter(isQuranContent);
-  }, [tracks]);
+    const raw = (tracks || []).filter(isQuranContent);
+    const seenAudio = new Set();
+    const seenMeta = new Set();
+    const deduped = [];
+    for (const t of raw) {
+      const reciter = getQuranReciterName(t, playlists);
+      const cleanTitle = cleanQuranTrackTitle(t.title || '');
+      const metaKey = `${normalizeArabicText(reciter)}:::${normalizeArabicText(cleanTitle)}`;
+      
+      let audioKey = null;
+      if (t.audioUrl && typeof t.audioUrl === 'string' && t.audioUrl.length > 10) {
+        const ytMatch = t.audioUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || t.audioUrl.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+        audioKey = ytMatch ? `yt:${ytMatch[1]}` : `url:${t.audioUrl.trim().toLowerCase()}`;
+      }
+
+      if (audioKey && seenAudio.has(audioKey)) {
+        continue;
+      }
+      if (metaKey && seenMeta.has(metaKey)) {
+        continue;
+      }
+
+      if (audioKey) seenAudio.add(audioKey);
+      if (metaKey) seenMeta.add(metaKey);
+      deduped.push(t);
+    }
+    return deduped;
+  }, [tracks, playlists]);
 
   const quranPlaylists = useMemo(() => {
     return (playlists || []).filter(isQuranContent);
