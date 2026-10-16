@@ -51,6 +51,22 @@ const getStoredToken = () => {
   }
 };
 
+const isNewerVersion = (remote, current) => {
+  try {
+    const r = (remote || '').replace(/[^0-9.]/g, '').split('.').map(Number);
+    const c = (current || '').replace(/[^0-9.]/g, '').split('.').map(Number);
+    for (let i = 0; i < Math.max(r.length, c.length); i++) {
+      const rv = r[i] || 0;
+      const cv = c[i] || 0;
+      if (rv > cv) return true;
+      if (rv < cv) return false;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 function AppContent() {
   const {
     currentUser, login, logout,
@@ -166,6 +182,7 @@ function AppContent() {
   const [chatTargetUser,      setChatTargetUser]      = useState(null);
   const [unreadChatCount,     setUnreadChatCount]     = useState(0);
   const [socket,              setSocket]              = useState(null);
+  const [updateNotification,  setUpdateNotification]  = useState(null);
 
   // Sync refs for popstate and background handling
   const isChatOpenRef = useRef(isChatOpen);
@@ -862,7 +879,7 @@ function AppContent() {
     });
   }, [navigateTo]);
 
-  const goToScreen = useCallback((screen) => {
+  const goToScreen = useCallback((screen, params = {}) => {
     if (screen === 'liked' || screen === 'playlist:liked') {
       handleSelectPlaylistView(getLikedSongsPlaylist());
       return;
@@ -877,10 +894,10 @@ function AppContent() {
       if (pl) {
         handleSelectPlaylistView(pl);
       } else {
-        navigateTo('playlist', { id: plId });
+        navigateTo('playlist', { id: plId, ...params });
       }
     } else {
-      navigateTo(screen);
+      navigateTo(screen, params);
     }
   }, [handleSelectPlaylistView, getLikedSongsPlaylist, navigateTo]);
 
@@ -1059,7 +1076,32 @@ function AppContent() {
       ? { id: currentUser.id || currentUser._id, name: currentUser.name, avatar: currentUser.avatar }
       : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
 
-    if (socket && !jamSession?.code) {
+    // Optimistically set initial room state so modal renders immediately
+    if (!jamSession?.code) {
+      const initialRoom = {
+        code,
+        hostId: socket?.id || 'host',
+        hostUserId: userPayload.id,
+        hostOnlyControl: false,
+        currentTrack: currentTrackRef.current || currentTrack,
+        isPlaying: isPlayingRef.current !== undefined ? isPlayingRef.current : isPlaying,
+        currentTime: currentTimeRef.current || currentTime || 0,
+        updatedAt: Date.now(),
+        queue: [],
+        members: [{
+          ...userPayload,
+          socketId: socket?.id || 'host',
+          isHost: true
+        }]
+      };
+      setJamSession(initialRoom);
+      setJamSync({ socket, jamSession: initialRoom });
+    }
+
+    if (socket) {
+      if (!socket.connected) {
+        socket.connect();
+      }
       socket.emit('jam:join_room', {
         roomCode: code,
         user: userPayload,
@@ -1068,7 +1110,10 @@ function AppContent() {
         currentTime: currentTimeRef.current || currentTime || 0
       });
       showToast(`Jam Session active: ${code}`);
+    } else {
+      showToast(`Jam Session created: ${code}`);
     }
+
     if (openModal) {
       handleOpenJam();
     }
@@ -1102,12 +1147,18 @@ function AppContent() {
       : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
 
     if (socket) {
+      if (!socket.connected) {
+        socket.connect();
+      }
       socket.emit('jam:join_room', {
         roomCode: cleanCode,
         user: userPayload
       });
       handleOpenJam();
       showToast(`Joined Jam: ${cleanCode}`);
+    } else {
+      handleOpenJam();
+      showToast(`Connecting to Jam: ${cleanCode}...`);
     }
   };
 
@@ -1371,8 +1422,48 @@ function AppContent() {
       }
     });
 
-    return () => s.disconnect();
-  }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState]);
+    // App Updates Detection & Real-time Notification
+      const checkUpdates = async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/app/version`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const rVer = data?.version;
+          if (rVer && isNewerVersion(rVer, APP_VERSION)) {
+            setUpdateNotification({
+              version: rVer,
+              releaseNotes: data?.releaseNotes || 'New improvements and bug fixes.',
+              platforms: data?.platforms
+            });
+          }
+        } catch {}
+      };
+      checkUpdates();
+
+      s.on('app:update_manifest', (data) => {
+        const rVer = data?.version;
+        if (rVer && isNewerVersion(rVer, APP_VERSION)) {
+          setUpdateNotification({
+            version: rVer,
+            releaseNotes: data?.releaseNotes || 'New improvements and bug fixes.',
+            platforms: data?.platforms
+          });
+        }
+      });
+
+      s.on('app:update_available', (data) => {
+        const rVer = data?.version;
+        if (rVer && isNewerVersion(rVer, APP_VERSION)) {
+          setUpdateNotification({
+            version: rVer,
+            releaseNotes: data?.releaseNotes || 'New improvements and bug fixes.',
+            platforms: data?.platforms
+          });
+        }
+      });
+
+      return () => s.disconnect();
+    }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState]);
 
   useEffect(() => {
     if (socket) {
@@ -1508,6 +1599,42 @@ function AppContent() {
   return (
     <DownloadProvider tracks={tracks} setTracks={setTracks} showToast={showToast}>
       <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
+
+      {/* ── UPDATE AVAILABLE NOTIFICATION BANNER ── */}
+      {updateNotification && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] max-w-lg w-[94%] bg-[#17a398] text-[#0b1110] brutal-border brutal-shadow p-2.5 sm:p-3 rounded-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#0b1110] shrink-0 animate-ping" />
+            <div className="truncate">
+              <div className="font-display font-black text-xs sm:text-sm leading-none flex items-center gap-1.5">
+                <span>يتوفر تحديث جديد</span>
+                <span className="bg-[#0b1110] text-[#17a398] px-1.5 py-0.2 rounded font-mono text-[10px]">v{updateNotification.version}</span>
+              </div>
+              <div className="text-[10px] font-mono opacity-85 truncate mt-0.5">
+                {updateNotification.releaseNotes}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => {
+                goToScreen('download');
+                setUpdateNotification(null);
+              }}
+              className="px-2.5 sm:px-3 py-1 bg-[#0b1110] text-[#fdfbf7] brutal-border rounded text-[11px] font-bold hover:bg-zinc-800 transition shadow-sm"
+            >
+              تحميل التحديث
+            </button>
+            <button
+              onClick={() => setUpdateNotification(null)}
+              className="p-1 hover:bg-black/10 rounded transition text-[#0b1110]"
+              title="إغلاق"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── TOP APOTHECARY NAV BAR (Rivo Design) ── */}
       <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
@@ -2168,6 +2295,16 @@ function AppContent() {
           playTrack(track);
         }}
         globalTheme={globalTheme}
+        onViewProfile={(user) => {
+          setIsChatOpen(false);
+          const uId = user?.id || user?._id || (typeof user === 'string' ? user : null);
+          if (uId) {
+            setViewingProfileUserId(uId);
+            navigateTo('profile', { userId: uId });
+          } else {
+            navigateTo('profile');
+          }
+        }}
       />
 
       <ShortcutsModal

@@ -41,6 +41,7 @@ export const AudioProvider = ({ children }) => {
   const playedSmartSongIdsRef = useRef(new Set());
   const shouldBePlayingRef = useRef(false);
   const loadedTrackIdRef = useRef(null);
+  const isLoadingRef = useRef(false);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -187,14 +188,15 @@ export const AudioProvider = ({ children }) => {
   const isJamHost = useCallback(() => {
     if (jamSyncRef.current?.isHost) return true;
     const session = jamSyncRef.current?.jamSession;
+    if (!session) return false;
+    if (session.isHost) return true;
     const sock = jamSyncRef.current?.socket;
-    if (!session || !sock) return false;
-    const myId = currentUser?._id ? String(currentUser._id) : (currentUser?.id ? String(currentUser.id) : sock.id);
-    if (session.hostId && session.hostId === sock.id) return true;
+    const myId = currentUser?._id ? String(currentUser._id) : (currentUser?.id ? String(currentUser.id) : (sock?.id || ''));
+    if (sock?.id && session.hostId && session.hostId === sock.id) return true;
     if (session.hostUserId && (String(session.hostUserId) === myId || (currentUser?._id && String(session.hostUserId) === String(currentUser._id)) || (currentUser?.id && String(session.hostUserId) === String(currentUser.id)))) return true;
     if (Array.isArray(session.members)) {
       return session.members.some(m =>
-        (m.socketId === sock.id || (myId && String(m.id || m._id) === myId) || (currentUser?._id && String(m.id || m._id) === String(currentUser._id)) || (currentUser?.id && String(m.id || m._id) === String(currentUser.id))) && m.isHost
+        ((sock?.id && m.socketId === sock.id) || (myId && String(m.id || m._id) === myId) || (currentUser?._id && String(m.id || m._id) === String(currentUser._id)) || (currentUser?.id && String(m.id || m._id) === String(currentUser.id))) && m.isHost
       );
     }
     return false;
@@ -394,7 +396,7 @@ export const AudioProvider = ({ children }) => {
     if (!status.isLoaded) return;
 
     // Hard safeguard: If playback should be paused, immediately kill any rogue playing state
-    if (!shouldBePlayingRef.current) {
+    if (!shouldBePlayingRef.current && !isLoadingRef.current) {
       if (status.isPlaying && soundRef.current) {
         soundRef.current.pauseAsync().catch(() => {});
       }
@@ -407,7 +409,9 @@ export const AudioProvider = ({ children }) => {
       if (isPlayingRef.current !== status.isPlaying) {
         setIsPlaying(status.isPlaying);
         isPlayingRef.current = status.isPlaying;
-        shouldBePlayingRef.current = status.isPlaying;
+        if (!isLoadingRef.current) {
+          shouldBePlayingRef.current = status.isPlaying;
+        }
         const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
         const curSec = Math.floor((status.positionMillis || 0) / 1000);
         const durSec = Math.floor((status.durationMillis || 0) / 1000);
@@ -741,8 +745,10 @@ export const AudioProvider = ({ children }) => {
     };
   }, [currentTrack?._id, currentTrack?.id, currentTrack?.title, isOffline]);
 
-  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0, isRemote = false, isSmartMood = false, autoPlay = true) => {
+  const playTrack = async (track, trackList = [], isRetry = false, targetTime = 0, isRemoteParam = false, isSmartMood = false, autoPlay = true) => {
+    const isRemote = isRemoteParam === true;
     if (!track) return;
+    isLoadingRef.current = true;
     if (autoPlay) {
       shouldBePlayingRef.current = true;
     }
@@ -815,14 +821,23 @@ export const AudioProvider = ({ children }) => {
       const cleanTitle = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
       const cleanArtist = (track.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
 
+      const isUploadedTrack = track.source === 'Upload' || (track.audioUrl && (track.audioUrl.startsWith('/uploads/') || track.audioUrl.includes('/uploads/')));
+
       const local = (downloadedTracks || []).find(t => {
         if (trackId && String(t._id || t.id) === trackId) return true;
+        if (isUploadedTrack) return false; // For uploaded tracks, only accept exact trackId match
         const tTitle = (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
         const tArtist = (t.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
         return cleanTitle && tTitle && cleanTitle === tTitle && (!cleanArtist || !tArtist || cleanArtist === tArtist);
       });
 
       let uri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || track.nativeAudioUri || track.localAudioUri;
+
+      // Authentic uploaded audio file handling
+      if (!uri && isUploadedTrack && track.audioUrl) {
+        const rawAudio = track.audioUrl;
+        uri = rawAudio.startsWith('/') ? `${API_BASE_URL}${rawAudio}` : (rawAudio.startsWith('http') ? rawAudio : `${API_BASE_URL}/${rawAudio}`);
+      }
 
       // Direct check on physical storage by trackId (detects local files on device even if not yet in state)
       if (!uri || !uri.startsWith('file://')) {
@@ -872,6 +887,7 @@ export const AudioProvider = ({ children }) => {
 
       if (!uri) {
         if (isOffline) {
+          isLoadingRef.current = false;
           setIsLoading(false);
           showToast(`"${track.title || 'Track'}" is not cached offline`, 'warning');
           return;
@@ -916,6 +932,7 @@ export const AudioProvider = ({ children }) => {
         await sound.pauseAsync().catch(() => {});
         setIsPlaying(false);
         isPlayingRef.current = false;
+        isLoadingRef.current = false;
         setIsLoading(false);
         return;
       }
@@ -927,6 +944,7 @@ export const AudioProvider = ({ children }) => {
         await sound.setPositionAsync(Math.round(compensatedTargetSec * 1000)).catch(() => {});
       }
 
+      isLoadingRef.current = false;
       setIsPlaying(true);
       isPlayingRef.current = true;
       setIsLoading(false);
@@ -967,6 +985,7 @@ export const AudioProvider = ({ children }) => {
       } catch {}
       broadcastListeningActivity(track, true, 0);
     } catch (err) {
+      isLoadingRef.current = false;
       setIsLoading(false);
       if (!isRetry && !isOffline) {
         return playTrack(track, trackList, true, targetTime, isRemote);
@@ -1034,7 +1053,8 @@ export const AudioProvider = ({ children }) => {
     return playTrack(targetTrack, cappedList);
   };
 
-  const togglePlay = async (isRemote = false) => {
+  const togglePlay = async (isRemoteParam = false) => {
+    const isRemote = isRemoteParam === true;
     if (isLoading || isResolvingRef.current) return;
     if (!soundRef.current) {
       if (currentTrackRef.current) return playTrack(currentTrackRef.current, queueRef.current);
@@ -1092,7 +1112,8 @@ export const AudioProvider = ({ children }) => {
     }
   };
 
-  const seekTo = async (secs, isRemote = false) => {
+  const seekTo = async (secs, isRemoteParam = false) => {
+    const isRemote = isRemoteParam === true;
     if (!soundRef.current) return;
     const safeSecs = Math.max(0, Number(secs) || 0);
     const wasPlaying = isPlayingRef.current;

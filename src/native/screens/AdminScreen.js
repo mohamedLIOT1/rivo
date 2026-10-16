@@ -25,6 +25,10 @@ import {
   Lock,
   Globe,
   CheckCircle2,
+  Radio,
+  BarChart2,
+  Send,
+  Sparkles,
 } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -39,7 +43,7 @@ export default function AdminScreen() {
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.email?.includes('admin');
 
-  // Active tab: 'tracks' | 'accounts' | 'albums' | 'artists' | 'playlists'
+  // Active tab: 'tracks' | 'accounts' | 'albums' | 'artists' | 'playlists' | 'analytics'
   const [activeTab, setActiveTab] = useState('tracks');
 
   // Search queries per tab
@@ -61,6 +65,12 @@ export default function AdminScreen() {
   const [playlistQuery, setPlaylistQuery] = useState('');
   const [adminPlaylists, setAdminPlaylists] = useState([]);
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
+
+  // Analytics & Broadcast State
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
   const [deletingId, setDeletingId] = useState(null);
 
@@ -142,11 +152,56 @@ export default function AdminScreen() {
     }
   };
 
+  // 6. Fetch Analytics
+  const fetchAnalytics = async () => {
+    if (!token) return;
+    try {
+      setIsLoadingAnalytics(true);
+      const res = await fetch(`${API_BASE_URL}/api/admin/analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.success) setAnalyticsData(d.data);
+      }
+    } catch {
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  };
+
+  const handleBroadcast = async () => {
+    const msg = broadcastMsg.trim();
+    if (!msg || isSendingBroadcast) return;
+    setIsSendingBroadcast(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: msg, type: 'info' }),
+      });
+      if (res.ok) {
+        setBroadcastMsg('');
+        showToast('تم إرسال الإشعار اللحظي لجميع المستخدمين المتصلين!', 'success');
+      } else {
+        showToast('فشل إرسال الإشعار', 'error');
+      }
+    } catch {
+      showToast('خطأ في إرسال الإشعار', 'error');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'accounts') fetchUsers();
     else if (activeTab === 'albums') fetchAlbums();
     else if (activeTab === 'artists') fetchArtists();
     else if (activeTab === 'playlists') fetchPlaylists();
+    else if (activeTab === 'analytics') fetchAnalytics();
   }, [activeTab]);
 
   const handleRefreshCurrent = () => {
@@ -155,6 +210,7 @@ export default function AdminScreen() {
     else if (activeTab === 'albums') fetchAlbums();
     else if (activeTab === 'artists') fetchArtists();
     else if (activeTab === 'playlists') fetchPlaylists();
+    else if (activeTab === 'analytics') fetchAnalytics();
   };
 
   // Delete Track
@@ -340,6 +396,7 @@ export default function AdminScreen() {
     { id: 'albums', label: 'ALBUMS', count: albums.length, icon: Disc },
     { id: 'artists', label: 'ARTISTS', count: artists.length, icon: UserCheck },
     { id: 'playlists', label: 'PLAYLISTS', count: adminPlaylists.length, icon: ListMusic },
+    { id: 'analytics', label: 'ANALYTICS', count: null, icon: BarChart2 },
   ];
 
   return (
@@ -774,6 +831,112 @@ export default function AdminScreen() {
             )}
           </View>
         )}
+
+        {/* ═══════════ ANALYTICS & BROADCAST TAB ═══════════ */}
+        {activeTab === 'analytics' && (
+          <View style={styles.analyticsContainer}>
+            {/* Global Broadcast Box */}
+            <View style={styles.broadcastCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Radio size={16} color={colors.mint} />
+                <Text style={styles.broadcastTitle}>BROADCAST LIVE ANNOUNCEMENT</Text>
+              </View>
+              <Text style={styles.broadcastDesc}>
+                Send an instant push message that appears in real-time on all active user screens.
+              </Text>
+              <View style={styles.broadcastInputRow}>
+                <TextInput
+                  style={styles.broadcastInput}
+                  placeholder="Type your system announcement message..."
+                  placeholderTextColor="#6b7280"
+                  value={broadcastMsg}
+                  onChangeText={setBroadcastMsg}
+                />
+                <TouchableOpacity
+                  style={[styles.broadcastBtn, (!broadcastMsg.trim() || isSendingBroadcast) && { opacity: 0.5 }]}
+                  onPress={handleBroadcast}
+                  disabled={!broadcastMsg.trim() || isSendingBroadcast}
+                  activeOpacity={0.8}
+                >
+                  {isSendingBroadcast ? (
+                    <ActivityIndicator size="small" color="#082621" />
+                  ) : (
+                    <>
+                      <Send size={13} color="#082621" />
+                      <Text style={styles.broadcastBtnText}>SEND</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* KPI Metrics */}
+            {isLoadingAnalytics ? (
+              <ActivityIndicator size="large" color={colors.mint} style={{ marginTop: 24 }} />
+            ) : analyticsData ? (
+              <View>
+                <View style={styles.kpiGrid}>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel}>TOTAL USERS</Text>
+                    <Text style={styles.kpiValue}>{analyticsData.totalUsers || 0}</Text>
+                  </View>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel}>NEW THIS WEEK</Text>
+                    <Text style={styles.kpiValue}>{analyticsData.newUsersWeek || 0}</Text>
+                  </View>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel}>NEW THIS MONTH</Text>
+                    <Text style={styles.kpiValue}>{analyticsData.newUsersMonth || 0}</Text>
+                  </View>
+                  <View style={styles.kpiCard}>
+                    <Text style={styles.kpiLabel}>TOTAL TRACKS</Text>
+                    <Text style={styles.kpiValue}>{analyticsData.totalTracks || 0}</Text>
+                  </View>
+                  <View style={[styles.kpiCard, { borderColor: '#10b981' }]}>
+                    <Text style={styles.kpiLabel}>ONLINE NOW</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.statusPulseDot, { backgroundColor: '#10b981' }]} />
+                      <Text style={[styles.kpiValue, { color: '#10b981' }]}>{analyticsData.onlineNow || 0}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Top Listeners Leaderboard */}
+                <View style={styles.leaderboardCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                    <Sparkles size={16} color={colors.mint} />
+                    <Text style={styles.leaderboardTitle}>TOP LISTENERS LEADERBOARD</Text>
+                  </View>
+
+                  {(analyticsData.topListeners || []).map((u, i) => {
+                    const totalHours = Math.round((u.totalListeningSeconds || 0) / 3600);
+                    const totalMins = Math.round(((u.totalListeningSeconds || 0) % 3600) / 60);
+                    return (
+                      <View key={u._id || i} style={styles.leaderboardRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <Text style={styles.rankNum}>#{i + 1}</Text>
+                          <Image
+                            source={{ uri: u.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100' }}
+                            style={styles.leaderboardAvatar}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.leaderboardName} numberOfLines={1}>{u.name}</Text>
+                            <Text style={styles.leaderboardSub}>{u.email}</Text>
+                          </View>
+                        </View>
+                        <Text style={styles.listeningTimeText}>
+                          {totalHours}h {totalMins}m
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.emptyNotice}>No analytics data available.</Text>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -1066,5 +1229,143 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.mint,
     letterSpacing: 0.5,
+  },
+  analyticsContainer: {
+    paddingBottom: 24,
+  },
+  broadcastCard: {
+    backgroundColor: '#182320',
+    borderWidth: 1.5,
+    borderColor: '#263d38',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  broadcastTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  broadcastDesc: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginBottom: 10,
+    lineHeight: 15,
+  },
+  broadcastInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  broadcastInput: {
+    flex: 1,
+    backgroundColor: '#111917',
+    borderWidth: 1,
+    borderColor: '#263d38',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#ffffff',
+    fontSize: 12,
+  },
+  broadcastBtn: {
+    backgroundColor: colors.mint,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  broadcastBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: '#082621',
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  kpiCard: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    backgroundColor: '#182320',
+    borderWidth: 1.5,
+    borderColor: '#263d38',
+    borderRadius: 12,
+    padding: 12,
+  },
+  kpiLabel: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 9,
+    color: '#94a3b8',
+    marginBottom: 4,
+  },
+  kpiValue: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 20,
+    color: colors.mint,
+  },
+  statusPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  leaderboardCard: {
+    backgroundColor: '#182320',
+    borderWidth: 1.5,
+    borderColor: '#263d38',
+    borderRadius: 14,
+    padding: 14,
+  },
+  leaderboardTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  leaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#111917',
+    borderWidth: 1,
+    borderColor: '#263d38',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 6,
+  },
+  rankNum: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: colors.mint,
+    width: 24,
+  },
+  leaderboardAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  leaderboardName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  leaderboardSub: {
+    fontSize: 10,
+    color: '#64748b',
+  },
+  listeningTimeText: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 11,
+    color: colors.mint,
   },
 });

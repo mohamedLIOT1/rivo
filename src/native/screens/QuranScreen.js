@@ -19,6 +19,7 @@ import SongItem from '../ui/SongItem';
 import {
   isQuranContent,
   getQuranReciterName,
+  normalizeArabicText,
   FAMOUS_RECITERS,
 } from '../../utils/quranUtils';
 
@@ -45,35 +46,46 @@ export default function QuranScreen({ onTrackAction }) {
     return (allTracks || []).filter(isQuranContent);
   }, [allTracks]);
 
-  // Reciters extracted from quran tracks
+  // Reciters extracted from quran tracks sorted by available recitation count
   const recitersList = useMemo(() => {
     const map = new Map();
     quranTracks.forEach((t) => {
       const name = getQuranReciterName(t);
-      if (!map.has(name)) {
-        map.set(name, { name, count: 0, cover: t.coverUrl || t.cover });
+      if (name && name !== 'قارئ غير معروف') {
+        if (!map.has(name)) {
+          map.set(name, { name, count: 0, cover: t.coverUrl || t.cover });
+        }
+        map.get(name).count += 1;
       }
-      map.get(name).count += 1;
     });
-    return Array.from(map.values());
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [quranTracks]);
 
-  // Filtered tracks
+  // Filtered tracks with Arabic normalization
   const displayedTracks = useMemo(() => {
     let result = quranTracks;
     if (selectedReciter) {
-      result = result.filter(
-        (t) => getQuranReciterName(t).toLowerCase() === selectedReciter.toLowerCase()
-      );
+      const normSelected = normalizeArabicText(selectedReciter);
+      const famousItem = FAMOUS_RECITERS.find(r => normalizeArabicText(r.name) === normSelected);
+      const aliases = famousItem ? famousItem.aliases.map(normalizeArabicText) : [normSelected];
+
+      result = result.filter((t) => {
+        const rName = getQuranReciterName(t);
+        const normR = normalizeArabicText(rName);
+        if (normR === normSelected || normR.includes(normSelected) || normSelected.includes(normR)) {
+          return true;
+        }
+        const textToSearch = normalizeArabicText(`${t.title || ''} ${t.artist || ''} ${t.album || ''} ${rName}`);
+        return aliases.some(a => a.length >= 3 && textToSearch.includes(a));
+      });
     }
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (t) =>
-          t.title?.toLowerCase().includes(q) ||
-          t.artist?.toLowerCase().includes(q) ||
-          getQuranReciterName(t).toLowerCase().includes(q)
-      );
+      const normQ = normalizeArabicText(searchQuery.trim());
+      result = result.filter((t) => {
+        const rName = getQuranReciterName(t);
+        const trackText = normalizeArabicText(`${t.title || ''} ${t.artist || ''} ${t.album || ''} ${rName}`);
+        return trackText.includes(normQ);
+      });
     }
     return result;
   }, [quranTracks, selectedReciter, searchQuery]);
@@ -132,29 +144,51 @@ export default function QuranScreen({ onTrackAction }) {
                 selectedReciter === null && styles.reciterPillTextActive,
               ]}
             >
-              الكل (ALL)
+              الكل ({quranTracks.length})
             </Text>
           </TouchableOpacity>
 
-          {FAMOUS_RECITERS.slice(0, 8).map((r) => {
-            const active = selectedReciter === r.name;
-            return (
-              <TouchableOpacity
-                key={r.name}
-                style={[styles.reciterPill, active && styles.reciterPillActive]}
-                onPress={() => setSelectedReciter(active ? null : r.name)}
-              >
-                <Text
-                  style={[
-                    styles.reciterPillText,
-                    active && styles.reciterPillTextActive,
-                  ]}
+          {recitersList.length > 0 ? (
+            recitersList.slice(0, 18).map((r) => {
+              const active = selectedReciter === r.name;
+              return (
+                <TouchableOpacity
+                  key={r.name}
+                  style={[styles.reciterPill, active && styles.reciterPillActive]}
+                  onPress={() => setSelectedReciter(active ? null : r.name)}
                 >
-                  {r.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.reciterPillText,
+                      active && styles.reciterPillTextActive,
+                    ]}
+                  >
+                    {r.name} ({r.count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            FAMOUS_RECITERS.slice(0, 8).map((r) => {
+              const active = selectedReciter === r.name;
+              return (
+                <TouchableOpacity
+                  key={r.name}
+                  style={[styles.reciterPill, active && styles.reciterPillActive]}
+                  onPress={() => setSelectedReciter(active ? null : r.name)}
+                >
+                  <Text
+                    style={[
+                      styles.reciterPillText,
+                      active && styles.reciterPillTextActive,
+                    ]}
+                  >
+                    {r.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </ScrollView>
       </View>
 

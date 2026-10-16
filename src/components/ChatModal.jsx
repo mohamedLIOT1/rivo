@@ -20,7 +20,8 @@ export default function ChatModal({
   onStartJamWithUser,
   onJoinJam,
   onPlayTrack,
-  globalTheme = 'dark'
+  globalTheme = 'dark',
+  onViewProfile
 }) {
   const isDark = globalTheme === 'dark' || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
   const [activeUser, setActiveUser] = useState(targetUser || null);
@@ -28,7 +29,10 @@ export default function ChatModal({
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
   const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const myTypingTimeoutRef = useRef(null);
 
   // Conversations Hub state
   const [conversations, setConversations] = useState([]);
@@ -190,11 +194,28 @@ export default function ChatModal({
       }
     };
 
+    const handleTyping = (data) => {
+      const activeId = String(activeUser?.id || activeUser?._id || '');
+      if (String(data?.senderId) === activeId) {
+        setIsOtherTyping(Boolean(data?.isTyping));
+        if (data?.isTyping) {
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsOtherTyping(false);
+          }, 3500);
+        }
+      }
+    };
+
     socket.on('chat:message', handleMessage);
     socket.on('chat:seen', handleSeen);
+    socket.on('chat:typing', handleTyping);
     return () => {
       socket.off('chat:message', handleMessage);
       socket.off('chat:seen', handleSeen);
+      socket.off('chat:typing', handleTyping);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
     };
   }, [socket, activeUser?.id, activeUser?._id, currentUser?.id, currentUser?._id]);
 
@@ -305,33 +326,43 @@ export default function ChatModal({
               </button>
             ) : null}
 
-            {/* Profile Avatar */}
-            {activeUser?.avatar ? (
-              <img 
-                src={activeUser.avatar} 
-                alt={activeUser.name} 
-                className="w-8 h-8 rounded-lg object-cover brutal-border shrink-0 shadow-sm" 
-              />
-            ) : activeUser ? (
-              <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0">
-                {activeUser.name?.[0]?.toUpperCase() || 'U'}
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0">
-                <MessageSquare size={16} />
-              </div>
-            )}
+            {/* Clickable Profile Avatar & Name */}
+            <div
+              onClick={() => {
+                if (onViewProfile && activeUser) {
+                  onViewProfile(activeUser);
+                }
+              }}
+              className="flex items-center gap-2.5 truncate cursor-pointer hover:opacity-85 transition group"
+              title={activeUser ? "View User Profile" : undefined}
+            >
+              {activeUser?.avatar ? (
+                <img 
+                  src={activeUser.avatar} 
+                  alt={activeUser.name} 
+                  className="w-8 h-8 rounded-lg object-cover brutal-border shrink-0 shadow-sm group-hover:scale-105 transition-transform" 
+                />
+              ) : activeUser ? (
+                <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0 group-hover:scale-105 transition-transform">
+                  {activeUser.name?.[0]?.toUpperCase() || 'U'}
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0">
+                  <MessageSquare size={16} />
+                </div>
+              )}
 
-            <div className="truncate">
-              <div className="flex items-center gap-1.5 truncate">
-                <h3 className="font-display font-bold text-sm leading-none text-white truncate">
-                  {activeUser ? activeUser.name : 'Chat'}
-                </h3>
-                {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
+              <div className="truncate">
+                <div className="flex items-center gap-1.5 truncate">
+                  <h3 className="font-display font-bold text-sm leading-none text-white truncate group-hover:text-[#17a398] transition-colors">
+                    {activeUser ? activeUser.name : 'Chat'}
+                  </h3>
+                  {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
+                </div>
+                <span className={`text-[10px] font-mono block mt-0.5 ${isOtherTyping ? 'text-emerald-400 font-bold animate-pulse' : 'text-zinc-400'}`}>
+                  {isOtherTyping ? 'يكتب الآن... (typing...)' : (activeUser ? 'Direct Chat • View Profile' : 'Messages & Friends')}
+                </span>
               </div>
-              <span className="text-[10px] text-zinc-400 font-mono block mt-0.5">
-                {activeUser ? 'Direct Chat' : 'Messages & Friends'}
-              </span>
             </div>
           </div>
 
@@ -536,6 +567,16 @@ export default function ChatModal({
                   );
                 })
               )}
+              {isOtherTyping && (
+                <div className="flex items-center gap-2 p-2 px-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold w-fit animate-pulse">
+                  <div className="flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span>{activeUser.name} يكتب الآن...</span>
+                </div>
+              )}
               <div ref={messagesEndRef} />
             </div>
 
@@ -547,7 +588,18 @@ export default function ChatModal({
                 <input
                   type="text"
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInputText(val);
+                    if (socket && activeUser) {
+                      const recipientId = activeUser.id || activeUser._id;
+                      socket.emit('chat:typing', { recipientId, isTyping: val.length > 0 });
+                      if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
+                      myTypingTimeoutRef.current = setTimeout(() => {
+                        socket.emit('chat:typing', { recipientId, isTyping: false });
+                      }, 2500);
+                    }
+                  }}
                   placeholder={`Type a message for ${activeUser.name}...`}
                   className={`flex-1 text-xs font-bold px-3 py-2.5 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
                     isDark 

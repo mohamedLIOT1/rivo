@@ -3,7 +3,7 @@ import {
   ShieldCheck, Users, Music2, FileText, CheckCircle2, XCircle, Search, 
   Trash2, Edit, RefreshCw, Loader2, UserCheck, Check, ArrowLeft, Disc,
   Calendar, Mail, ShieldAlert, Sparkles, ExternalLink, ListMusic, Eye,
-  Lock, Globe, Play, Plus
+  Lock, Globe, Play, Plus, BarChart2, Radio, Send
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { isUserAdmin } from '../utils/adminUtils';
@@ -68,6 +68,44 @@ export default function AdminScreen({
   // Lyrics State
   const [lyricsFilterQuery, setLyricsFilterQuery] = useState('');
   const [lyricsTypeFilter, setLyricsTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
+
+  // Analytics & Broadcast State
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'analytics') return;
+    setIsLoadingAnalytics(true);
+    const tk = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+    fetch(`${API_BASE_URL}/api/admin/analytics`, {
+      headers: { Authorization: `Bearer ${tk}` }
+    })
+      .then(r => r.json())
+      .then(d => { if (d.success) setAnalyticsData(d.data); })
+      .catch(e => console.warn('Analytics fetch error:', e))
+      .finally(() => setIsLoadingAnalytics(false));
+  }, [activeTab]);
+
+  const handleBroadcast = async () => {
+    if (!broadcastMsg.trim() || isSendingBroadcast) return;
+    setIsSendingBroadcast(true);
+    try {
+      const tk = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      await fetch(`${API_BASE_URL}/api/admin/broadcast`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
+        body: JSON.stringify({ message: broadcastMsg, type: 'info' })
+      });
+      setBroadcastMsg('');
+      alert('Message broadcasted to all online users!');
+    } catch (err) {
+      alert('Failed to broadcast message');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
 
   const [statusMessage, setStatusMessage] = useState(null);
   const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
@@ -452,6 +490,18 @@ export default function AdminScreen({
         >
           <FileText size={14} />
           <span>Lyrics Hub</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('analytics')}
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            activeTab === 'analytics'
+              ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+              : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
+          }`}
+        >
+          <BarChart2 size={14} />
+          <span>Analytics & Broadcast</span>
         </button>
       </div>
 
@@ -1186,6 +1236,119 @@ export default function AdminScreen({
               );
             }))}
           </div>
+        </div>
+      )}
+
+      {/* ── TAB 7: ANALYTICS & BROADCAST ── */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          {/* Global Broadcast Box */}
+          <div className={`p-5 rounded-2xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+            <h3 className="font-mono font-black text-sm uppercase flex items-center gap-2 mb-2">
+              <Radio size={16} className="text-[#17a398]" />
+              Broadcast Live Announcement to Online Users
+            </h3>
+            <p className={`text-xs font-sans mb-3 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              Send an instant push message that appears in real-time on all active user screens.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={broadcastMsg}
+                onChange={(e) => setBroadcastMsg(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleBroadcast()}
+                placeholder="Type your system announcement message..."
+                className={`flex-1 px-4 py-2.5 rounded-xl brutal-border font-sans text-xs outline-none ${
+                  isDark ? 'bg-[#111917] text-white border-zinc-700' : 'bg-white text-black border-black'
+                }`}
+              />
+              <button
+                onClick={handleBroadcast}
+                disabled={isSendingBroadcast || !broadcastMsg.trim()}
+                className="px-5 py-2.5 rounded-xl bg-[#17a398] text-[#0b1110] font-mono font-black text-xs uppercase tracking-wider brutal-border hover:opacity-90 disabled:opacity-50 cursor-pointer flex items-center gap-2"
+              >
+                {isSendingBroadcast ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                <span>Broadcast</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Analytics KPI Metrics */}
+          {isLoadingAnalytics ? (
+            <div className="py-12 flex justify-center items-center">
+              <Loader2 size={24} className="animate-spin text-[#17a398]" />
+            </div>
+          ) : analyticsData ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className={`p-4 rounded-xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">Total Users</p>
+                  <p className="text-xl sm:text-2xl font-mono font-black text-[#17a398]">{analyticsData.totalUsers || 0}</p>
+                </div>
+                <div className={`p-4 rounded-xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">New This Week</p>
+                  <p className="text-xl sm:text-2xl font-mono font-black text-[#17a398]">{analyticsData.newUsersWeek || 0}</p>
+                </div>
+                <div className={`p-4 rounded-xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">New This Month</p>
+                  <p className="text-xl sm:text-2xl font-mono font-black text-[#17a398]">{analyticsData.newUsersMonth || 0}</p>
+                </div>
+                <div className={`p-4 rounded-xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">Total Tracks</p>
+                  <p className="text-xl sm:text-2xl font-mono font-black text-[#17a398]">{analyticsData.totalTracks || 0}</p>
+                </div>
+                <div className={`p-4 rounded-xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">Online Now</p>
+                  <p className="text-xl sm:text-2xl font-mono font-black text-emerald-400 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    {analyticsData.onlineNow || 0}
+                  </p>
+                </div>
+              </div>
+
+              {/* Top Listeners Leaderboard */}
+              <div className={`p-5 rounded-2xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
+                <h3 className="font-mono font-black text-sm uppercase flex items-center gap-2 mb-3">
+                  <Sparkles size={16} className="text-[#17a398]" />
+                  Top Listeners Leaderboard
+                </h3>
+                <div className="space-y-2">
+                  {(analyticsData.topListeners || []).map((u, i) => {
+                    const totalHours = Math.round((u.totalListeningSeconds || 0) / 3600);
+                    const totalMins = Math.round(((u.totalListeningSeconds || 0) % 3600) / 60);
+                    return (
+                      <div
+                        key={u._id || i}
+                        className={`flex items-center justify-between p-3 rounded-xl brutal-border ${
+                          isDark ? 'bg-[#111917]' : 'bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="w-6 text-center font-mono font-black text-xs text-[#17a398]">#{i + 1}</span>
+                          <img
+                            src={u.avatar || 'https://ui-avatars.com/api/?name=U'}
+                            alt={u.name}
+                            className="w-8 h-8 rounded-full brutal-border object-cover"
+                          />
+                          <div>
+                            <p className="font-mono font-bold text-xs flex items-center gap-1">
+                              {u.name}
+                              {u.isVerified && <VerifiedBadge size={12} />}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="font-mono font-bold text-xs text-[#17a398]">
+                          {totalHours}h {totalMins}m listened
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-center font-mono text-xs text-zinc-400 py-6">No analytics available yet.</p>
+          )}
         </div>
       )}
 

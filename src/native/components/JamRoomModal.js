@@ -208,6 +208,46 @@ export default function JamRoomModal({ visible, onClose }) {
     </View>
   );
 
+  const renderControlModeBanner = () => {
+    const isHostOnly = Boolean(jamSession?.hostOnlyControl);
+    const roomCode = jamSession?.code || jamSession?.roomCode;
+
+    return (
+      <View style={styles.controlModeBanner}>
+        <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <Radio size={13} color={isHostOnly ? '#f59e0b' : colors.mint} />
+            <Text style={[styles.controlModeTitle, isHostOnly && { color: '#f59e0b' }]}>
+              {isHostOnly ? 'قفل التحكم للهوست فقط' : 'التحكم التشاركي متاح للجميع'}
+            </Text>
+          </View>
+          <Text style={styles.controlModeDesc}>
+            {isHostOnly
+              ? 'الأعضاء يستمعون فقط ولا يمكنهم تغيير الأغنية'
+              : 'جميع الأعضاء في الجام يمكنهم تشغيل وتغيير الأغاني'}
+          </Text>
+        </View>
+
+        {isCurrentUserHost && (
+          <TouchableOpacity
+            style={[styles.toggleControlBtn, isHostOnly ? styles.toggleControlBtnActive : null]}
+            onPress={() => {
+              const nextMode = !isHostOnly;
+              if (socket && roomCode) {
+                socket.emit('jam:set_control_mode', { roomCode, hostOnlyControl: nextMode });
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.toggleControlBtnText, isHostOnly && { color: '#000000' }]}>
+              {isHostOnly ? 'إتاحة للجميع' : 'قفل للهوست'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   const renderCurrentTrack = () => {
     const activeTrack = jamSession?.currentTrack || currentTrack;
     const isRoomPlaying = jamSession?.isPlaying !== undefined ? jamSession.isPlaying : isPlaying;
@@ -548,6 +588,7 @@ export default function JamRoomModal({ visible, onClose }) {
                   <View style={styles.landscapeGrid}>
                     <View style={styles.landscapeCol}>
                       {renderBanner()}
+                      {renderControlModeBanner()}
                       {renderCurrentTrack()}
                       {renderMembers()}
                       {renderLeaveBtn()}
@@ -559,6 +600,7 @@ export default function JamRoomModal({ visible, onClose }) {
                 ) : (
                   <View style={styles.activeContainer}>
                     {renderBanner()}
+                    {renderControlModeBanner()}
                     {renderCurrentTrack()}
                     {renderQueue()}
                     {renderMembers()}
@@ -1198,5 +1240,44 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 12,
     color: '#ef4444',
+  },
+  controlModeBanner: {
+    backgroundColor: '#1b2a26',
+    borderWidth: 1.5,
+    borderColor: '#263d38',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'between',
+  },
+  controlModeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.mint,
+  },
+  controlModeDesc: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  toggleControlBtn: {
+    backgroundColor: colors.mint,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  toggleControlBtnActive: {
+    backgroundColor: '#f59e0b',
+  },
+  toggleControlBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#082621',
   },
 });

@@ -304,7 +304,6 @@ export default function QuranScreen({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {/* Number or Equalizer */}
                       <div className={`w-7 text-center font-mono text-xs font-bold shrink-0 ${
                         active 
                           ? 'text-[#041d1a]' 

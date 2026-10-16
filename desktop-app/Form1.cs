@@ -185,6 +185,32 @@ public partial class Form1 : Form
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
             _webView.CoreWebView2.DownloadStarting += OnDownloadStarting;
 
+            // Strict Domain Lockdown & Popup Sandbox
+            _webView.CoreWebView2.NavigationStarting += (s, args) =>
+            {
+                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri))
+                {
+                    bool isAllowed = uri.Host.EndsWith("duckdns.org", StringComparison.OrdinalIgnoreCase) ||
+                                     uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                                     uri.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase);
+
+                    if (!isAllowed)
+                    {
+                        args.Cancel = true;
+                        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(args.Uri) { UseShellExecute = true }); } catch { }
+                    }
+                }
+            };
+
+            _webView.CoreWebView2.NewWindowRequested += (s, args) =>
+            {
+                args.Handled = true;
+                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) && (uri.Scheme == "http" || uri.Scheme == "https"))
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(args.Uri) { UseShellExecute = true }); } catch { }
+                }
+            };
+
             // Injected script to flag RIVO_DESKTOP and sync audio playback with Discord RPC natively
             string syncScript = @"
                 (function() {
@@ -362,7 +388,7 @@ public partial class Form1 : Form
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            string currentVersion = "1.7.5";
+            string currentVersion = "1.7.6";
             string remoteVersion = "";
             string downloadUrl = "https://rivo-m.duckdns.org/downloads/Rivo.exe";
             string notes = "";

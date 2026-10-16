@@ -143,6 +143,48 @@ export default function JamRoomModal({
                 </div>
               </div>
 
+              {/* Host Control Mode Banner */}
+              {(() => {
+                const myMember = (jamSession.members || []).find(m => m.socketId === socket?.id || (currentUser?.id && (m.id === currentUser.id || m._id === currentUser.id)));
+                const isCurrentUserHost = Boolean(myMember?.isHost || jamSession.hostId === socket?.id || (currentUser?.id && jamSession.hostUserId && String(jamSession.hostUserId) === String(currentUser.id)));
+                const isHostOnly = Boolean(jamSession.hostOnlyControl);
+
+                return (
+                  <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
+                    isDark ? 'bg-zinc-900/80 border-zinc-800 text-white' : 'bg-[#f4eee0] border-black/20 text-[#0b1110]'
+                  }`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Radio size={15} className={isHostOnly ? 'text-amber-400 shrink-0' : 'text-[#17a398] shrink-0'} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-bold ${isHostOnly ? 'text-amber-400' : 'text-[#17a398]'}`}>
+                            {isHostOnly ? 'قفل التحكم للهوست فقط' : 'التحكم التشاركي متاح للجميع'}
+                          </span>
+                        </div>
+                        <p className={`text-[10px] truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                          {isHostOnly ? 'الأعضاء يستمعون فقط، ولا يمكنهم تغيير الأغنية' : 'أي عضو في الغرفة يمكنه تشغيل وتغيير الأغاني'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isCurrentUserHost && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextMode = !isHostOnly;
+                          socket?.emit('jam:set_control_mode', { roomCode: jamSession.code, hostOnlyControl: nextMode });
+                        }}
+                        className={`px-2.5 py-1 text-[10px] font-mono font-black uppercase rounded-lg brutal-border cursor-pointer shrink-0 transition-colors ${
+                          isHostOnly ? 'bg-amber-400 hover:bg-amber-500 text-black' : 'bg-[#17a398] hover:bg-[#26c4b7] text-black'
+                        }`}
+                      >
+                        {isHostOnly ? 'إتاحة للجميع' : 'قفل للهوست'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Currently Synced Track */}
               {(() => {
                 const activeTrack = jamSession?.currentTrack || currentTrack;

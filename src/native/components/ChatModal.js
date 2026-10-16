@@ -20,7 +20,7 @@ import { useToast } from '../context/ToastContext';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
-export default function ChatModal({ visible, onClose, initialTargetUser = null, onOpenJam = null }) {
+export default function ChatModal({ visible, onClose, initialTargetUser = null, onOpenJam = null, onViewProfile = null }) {
   const { socket, jamSession, joinJam } = useSocket();
   const { currentUser, token } = useUser();
   const { showToast } = useToast();
@@ -35,8 +35,11 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
   const [loadingHub, setLoadingHub] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
 
   const flatListRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
+  const myTypingTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (initialTargetUser) {
@@ -165,19 +168,53 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
       }
     };
 
+    const onTyping = (data) => {
+      const activeUserId = String(activeUser?._id || activeUser?.id || '');
+      if (String(data?.senderId) === activeUserId) {
+        setIsOtherTyping(Boolean(data?.isTyping));
+        if (data?.isTyping) {
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+          typingTimeoutRef.current = setTimeout(() => {
+            setIsOtherTyping(false);
+          }, 3500);
+        }
+      }
+    };
+
     socket.on('chat:message', onIncomingMessage);
     socket.on('chat:seen', onSeen);
+    socket.on('chat:typing', onTyping);
 
     return () => {
       socket.off('chat:message', onIncomingMessage);
       socket.off('chat:seen', onSeen);
+      socket.off('chat:typing', onTyping);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
     };
   }, [socket, visible, activeUser, currentUser]);
+
+  const handleInputChange = (val) => {
+    setInputText(val);
+    const activeUserId = activeUser?._id || activeUser?.id;
+    if (socket && activeUserId) {
+      socket.emit('chat:typing', { recipientId: activeUserId, isTyping: true });
+      if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
+      myTypingTimeoutRef.current = setTimeout(() => {
+        socket.emit('chat:typing', { recipientId: activeUserId, isTyping: false });
+      }, 2500);
+    }
+  };
 
   const handleSend = async () => {
     const text = inputText.trim();
     const activeUserId = activeUser?._id || activeUser?.id;
     if (!text || !activeUserId || isSending) return;
+
+    if (socket && activeUserId) {
+      socket.emit('chat:typing', { recipientId: activeUserId, isTyping: false });
+    }
+    if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
 
     setIsSending(true);
     setInputText('');
@@ -358,25 +395,38 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                     <ArrowLeft size={18} color="#17a398" strokeWidth={2.5} />
                   </TouchableOpacity>
 
-                  <View style={styles.activeAvatarWrap}>
-                    {activeUser.avatar ? (
-                      <Image
-                        source={{ uri: normalizeCoverUri(activeUser.avatar) }}
-                        style={styles.activeAvatar}
-                      />
-                    ) : (
-                      <Text style={styles.activeAvatarLetter}>
-                        {activeUser.name ? activeUser.name[0].toUpperCase() : 'U'}
-                      </Text>
-                    )}
-                  </View>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0, marginRight: 8 }}
+                    onPress={() => {
+                      if (onViewProfile) {
+                        onViewProfile(activeUser);
+                        onClose();
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.activeAvatarWrap}>
+                      {activeUser.avatar ? (
+                        <Image
+                          source={{ uri: normalizeCoverUri(activeUser.avatar) }}
+                          style={styles.activeAvatar}
+                        />
+                      ) : (
+                        <Text style={styles.activeAvatarLetter}>
+                          {activeUser.name ? activeUser.name[0].toUpperCase() : 'U'}
+                        </Text>
+                      )}
+                    </View>
 
-                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                    <Text style={styles.activeUserName} numberOfLines={1}>
-                      {activeUser.name || 'Friend'}
-                    </Text>
-                    <Text style={styles.activeUserStatus}>DIRECT MESSAGE</Text>
-                  </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.activeUserName} numberOfLines={1}>
+                        {activeUser.name || 'Friend'}
+                      </Text>
+                      <Text style={[styles.activeUserStatus, isOtherTyping && { color: '#17a398', fontWeight: '800' }]}>
+                        {isOtherTyping ? 'يكتب الآن...' : 'DIRECT MESSAGE'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.headerJamInviteBtn}
@@ -556,6 +606,18 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                     contentContainerStyle={{ paddingVertical: 12 }}
                     showsVerticalScrollIndicator={false}
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+                    ListFooterComponent={
+                      isOtherTyping ? (
+                        <View style={styles.typingIndicatorRow}>
+                          <View style={styles.typingBubble}>
+                            <View style={styles.typingDot} />
+                            <View style={[styles.typingDot, { opacity: 0.7 }]} />
+                            <View style={[styles.typingDot, { opacity: 0.4 }]} />
+                            <Text style={styles.typingIndicatorText}>{activeUser.name || 'المستخدم'} يكتب الآن...</Text>
+                          </View>
+                        </View>
+                      ) : null
+                    }
                     ListEmptyComponent={
                       <View style={styles.emptyBox}>
                         <Text style={styles.emptyText}>
@@ -581,7 +643,7 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                     placeholder={`Message ${activeUser.name}...`}
                     placeholderTextColor="#64748b"
                     value={inputText}
-                    onChangeText={setInputText}
+                    onChangeText={handleInputChange}
                     onSubmitEditing={handleSend}
                   />
                   <TouchableOpacity
@@ -998,5 +1060,33 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 10,
     color: '#082621',
+  },
+  typingIndicatorRow: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1b2a26',
+    borderWidth: 1,
+    borderColor: '#263d38',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#17a398',
+  },
+  typingIndicatorText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginLeft: 4,
+    fontWeight: '600',
   },
 });

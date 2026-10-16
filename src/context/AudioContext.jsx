@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { initAudioEngine, setEqualizerBands, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
+import { initAudioEngine, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
 import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicAnalysis';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { isQuranContent } from '../utils/quranUtils';
@@ -261,13 +261,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return {};
   });
 
-  // Equalizer State
-  const [eqEnabled, setEqEnabled] = useState(true);
-  const [eqPreset, setEqPreset] = useState('Bass Booster');
-  const [eqBands, setEqBands] = useState({
-    '60Hz': 7, '230Hz': 5, '910Hz': 0, '3.6kHz': -2, '14kHz': 1
-  });
-
   const [jamSession, setJamSessionState] = useState(null);
   const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
 
@@ -340,15 +333,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const isJamHost = useCallback(() => {
     const session = jamSessionRef.current;
     const sock = socketRef.current;
-    if (!session || !sock) return false;
-    const mySockId = sock.id;
+    if (!session) return false;
+    if (session.isHost) return true;
+    const mySockId = sock?.id;
     const cur = currentUserRef.current;
     const myUserId = cur ? String(cur.id || cur._id) : '';
-    if (session.hostId && session.hostId === mySockId) return true;
+    if (session.hostId && mySockId && session.hostId === mySockId) return true;
     if (session.hostUserId && myUserId && String(session.hostUserId) === myUserId) return true;
     if (Array.isArray(session.members)) {
       return session.members.some(m =>
-        (m.socketId === mySockId || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost
+        ((mySockId && m.socketId === mySockId) || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost
       );
     }
     return false;
@@ -637,9 +631,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     } catch (e) {}
   }, []);
-
-  // EQ sync
-  useEffect(() => { setEqualizerBands(eqBands, eqEnabled); }, [eqBands, eqEnabled]);
 
   const setVolume = (val) => {
     volumeRef.current = val;
@@ -962,7 +953,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, [isPlaying]);
 
   // ── Synchronous Direct Play/Pause to satisfy Mobile Autoplay & User Gesture ──
-  const togglePlay = useCallback((isRemote = false) => {
+  const togglePlay = useCallback((isRemoteParam = false) => {
+    const isRemote = isRemoteParam === true;
     if (!currentTrackRef.current) return;
     resumeAudioContext();
     const nextPlaying = !isPlayingRef.current;
@@ -1994,7 +1986,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return () => clearTimeout(timer);
   }, [currentTrack?.id || currentTrack?._id, isPlaying]);
 
-  const seekTo = useCallback((seconds, isRemote = false) => {
+  const seekTo = useCallback((seconds, isRemoteParam = false) => {
+    const isRemote = isRemoteParam === true;
     if (isNaN(seconds)) return;
     isTransitionTriggeredRef.current = false;
     const s = Math.max(0, seconds);
@@ -2224,17 +2217,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, []);
 
-  const applyEqPreset = (name) => {
-    setEqPreset(name);
-    let b = { '60Hz': 0, '230Hz': 0, '910Hz': 0, '3.6kHz': 0, '14kHz': 0 };
-    if (name === 'Bass Booster')   b = { '60Hz': 7,  '230Hz': 5,  '910Hz': 0,  '3.6kHz': -2, '14kHz': 1 };
-    if (name === 'Vocal Booster')  b = { '60Hz': -2, '230Hz': 1,  '910Hz': 6,  '3.6kHz': 5,  '14kHz': 2 };
-    if (name === 'Electronic')     b = { '60Hz': 5,  '230Hz': 4,  '910Hz': 1,  '3.6kHz': 4,  '14kHz': 6 };
-    if (name === 'Rock')           b = { '60Hz': 6,  '230Hz': 3,  '910Hz': -1, '3.6kHz': 3,  '14kHz': 5 };
-    if (name === 'Acoustic')       b = { '60Hz': 3,  '230Hz': 1,  '910Hz': 2,  '3.6kHz': 4,  '14kHz': 3 };
-    setEqBands(b);
-  };
-
   // ── Start DJ Mode: enable mix + set default transitions for all track pairs ──
   const startDjMode = useCallback((trackList = null) => {
     const list = trackList || tracksRef.current;
@@ -2336,10 +2318,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     activeTransitions, setActiveTransitions,
     previewDjTransition,
     startDjMode, stopDjMode,
-    eqEnabled, setEqEnabled,
-    eqPreset, setEqPreset,
-    eqBands, setEqBands,
-    applyEqPreset,
     togglePlay, playTrack,
     playNextTrack, playPrevTrack,
     addToQueue, removeFromQueue,

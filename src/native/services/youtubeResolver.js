@@ -173,7 +173,8 @@ export const resolveAudioStream = async (track) => {
              (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
 
   // If no direct ytId, search YouTube client-side directly (<300ms)
-  if (!ytId && (cleanTitle || cleanArtist || rawTitle)) {
+  const isUploadTrack = track.source === 'Upload' || (rawUrl && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/')));
+  if (!isUploadTrack && !ytId && (cleanTitle || cleanArtist || rawTitle)) {
     try {
       const searchRes = await searchYouTubeClientSide(`${cleanArtist || rawArtist} ${cleanTitle || rawTitle}`.trim());
       if (searchRes?.videoId) {

@@ -1,6 +1,6 @@
 {
   "name": "rivo",
-  "version": "1.7.5",
+  "version": "1.7.7",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",
+    "@google/generative-ai": "^0.24.1",
     "@react-native-async-storage/async-storage": "1.23.1",
     "@react-native-community/netinfo": "11.3.1",
     "axios": "^1.7.2",

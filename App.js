@@ -71,6 +71,7 @@ import SettingsModal from './src/native/components/SettingsModal';
 import JamRoomModal from './src/native/components/JamRoomModal';
 import FriendActivityModal from './src/native/components/FriendActivityModal';
 import IntroAuthModal from './src/native/components/IntroAuthModal';
+import UserDetailModal from './src/native/components/UserDetailModal';
 
 const TABS = [
   { id: 'home', label: 'Home', icon: Home },
@@ -331,6 +332,7 @@ function NativeAppShell() {
   const [isIntroAuthOpen, setIsIntroAuthOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [chatTargetUser, setChatTargetUser] = useState(null);
+  const [viewingUser, setViewingUser] = useState(null);
 
   const { currentTrack } = useAudioPlayer();
   const { currentUser, isAuthLoaded } = useUser();
@@ -716,6 +718,33 @@ function NativeAppShell() {
           setIsChatOpen(false);
           setIsJamOpen(true);
         }}
+        onViewProfile={(target) => {
+          setIsChatOpen(false);
+          const myId = currentUser?._id || currentUser?.id;
+          const targetId = target?._id || target?.id;
+          if (targetId && myId && String(targetId) === String(myId)) {
+            setActiveTab('profile');
+          } else {
+            setViewingUser(target);
+          }
+        }}
+      />
+
+      <UserDetailModal
+        visible={Boolean(viewingUser)}
+        user={viewingUser}
+        userId={viewingUser?._id || viewingUser?.id}
+        onClose={() => setViewingUser(null)}
+        onOpenChat={(target) => {
+          setViewingUser(null);
+          setChatTargetUser(target);
+          setIsChatOpen(true);
+        }}
+        onOpenJam={() => {
+          setViewingUser(null);
+          setIsJamOpen(true);
+        }}
+        onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
       />
 
       <SettingsModal

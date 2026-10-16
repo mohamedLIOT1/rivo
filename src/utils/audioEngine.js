@@ -1,16 +1,9 @@
 /**
- * Spotify-Grade Web Audio API Engine & Real DSP Equalizer Node Cascade
- * Includes Pre-Amp Gain, Master DynamicsCompressor, and DJ Transition DSP
+ * Spotify-Grade Web Audio API Engine & DJ Transition DSP
  */
 
 let audioCtx = null;
-let sourceNode = null;
-let preAmpGainNode = null;
-let masterCompressorNode = null;
 let masterGainNode = null;
-let djFilterNode = null;
-let djCrossfadeGainNode = null;
-let filters = {};
 let isInitialized = false;
 
 // ── Global gesture listener: auto-resume AudioContext on first user interaction ──
@@ -26,15 +19,6 @@ function setupGestureResumeListener() {
   events.forEach(evt => document.addEventListener(evt, resumeOnGesture, { passive: true }));
 }
 
-// Frequency band definitions matching standard Graphic Equalizer
-const BANDS = [
-  { name: '60Hz', type: 'lowshelf', frequency: 60 },
-  { name: '230Hz', type: 'peaking', frequency: 230, Q: 1 },
-  { name: '910Hz', type: 'peaking', frequency: 910, Q: 1 },
-  { name: '3.6kHz', type: 'peaking', frequency: 3600, Q: 1 },
-  { name: '14kHz', type: 'highshelf', frequency: 14000 }
-];
-
 /**
  * Initialize Web Audio API pipeline attached to HTMLAudioElement
  * @param {HTMLAudioElement} audioElement 
@@ -47,19 +31,10 @@ export function initAudioEngine(audioElement) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
-      
-      // Create DJ Filter Node (Low-pass / High-pass sweep)
-      djFilterNode = audioCtx.createBiquadFilter();
-      djFilterNode.type = 'allpass'; // transparent by default
-      djFilterNode.frequency.value = 20000;
 
       // Master Gain Node
       masterGainNode = audioCtx.createGain();
       masterGainNode.gain.value = 1.0;
-
-      // DJ Crossfade Gain Node
-      djCrossfadeGainNode = audioCtx.createGain();
-      djCrossfadeGainNode.gain.value = 1.0;
     }
   } catch (err) {
     console.warn('[AudioEngine] Web Audio API init notice:', err.message);
@@ -173,26 +148,6 @@ export function calculateDjFilterParams(progress, filterType) {
   }
 
   return { type: 'allpass', frequency: 20000, Q: 1 };
-}
-
-/**
- * Apply equalizer gain values (in dB) across frequency bands
- */
-export function setEqualizerBands(bandGains, enabled = true) {
-  if (!isInitialized || !filters || !audioCtx) return;
-  resumeAudioContext();
-
-  Object.keys(filters).forEach(bandName => {
-    const filter = filters[bandName];
-    if (filter) {
-      const dbGain = enabled && bandGains && typeof bandGains[bandName] === 'number'
-        ? bandGains[bandName]
-        : 0;
-      const now = audioCtx.currentTime;
-      filter.gain.cancelScheduledValues(now);
-      filter.gain.setTargetAtTime(dbGain, now, 0.05);
-    }
-  });
 }
 
 /**
