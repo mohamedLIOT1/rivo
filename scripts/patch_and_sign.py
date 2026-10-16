@@ -97,6 +97,17 @@ def patch_android():
                     continue  # Strip old signatures before re-signing
                 elif item.filename == 'assets/index.android.bundle':
                     zout.writestr(item, bundle_bytes)
+                elif item.filename == 'AndroidManifest.xml':
+                    manifest_bytes = bytearray(zin.read(item.filename))
+                    old_str = '1.7.8'.encode('utf-16le')
+                    new_str = '1.7.9'.encode('utf-16le')
+                    if old_str in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_str, new_str)
+                    old_code = b'\x08\x00\x00\x10\x2f\x00\x00\x00'  # versionCode 47
+                    new_code = b'\x08\x00\x00\x10\x30\x00\x00\x00'  # versionCode 48
+                    if old_code in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_code, new_code)
+                    zout.writestr(item, manifest_bytes)
                 else:
                     zout.writestr(item, zin.read(item.filename))
 

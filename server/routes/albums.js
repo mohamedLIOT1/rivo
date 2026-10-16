@@ -169,7 +169,16 @@ router.get('/:id', async (req, res) => {
       _id: String(t._id || t.id),
       ...t
     }));
-    res.json({ success: true, album, tracks: formattedTracks });
+    const formattedAlbum = {
+      ...album,
+      title: album.title || album.name || 'Untitled Album',
+      name: album.name || album.title || 'Untitled Album',
+      trackCount: formattedTracks.length,
+      songsCount: formattedTracks.length,
+      tracks: formattedTracks,
+      trackIds: album.trackIds && album.trackIds.length > 0 ? album.trackIds : formattedTracks.map(t => t.id)
+    };
+    res.json({ success: true, album: formattedAlbum, tracks: formattedTracks });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

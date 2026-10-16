@@ -10,17 +10,17 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def run_ssh(cmd):
     full_cmd = ["ssh", "-i", KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", HOST, cmd]
     print(f"[SSH] {cmd}", flush=True)
-    res = subprocess.run(full_cmd, capture_output=True, text=True)
+    res = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if res.returncode != 0:
         print(f"Error: {res.stderr}", flush=True)
     else:
-        print(f"Output: {res.stdout.strip()}", flush=True)
+        print(f"Output: {(res.stdout or '').strip()}", flush=True)
     return res
 
 def upload_file(local_path, remote_path):
     cmd = ["scp", "-i", KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", local_path, f"{HOST}:{remote_path}"]
     print(f"[SCP] {os.path.basename(local_path)} -> {remote_path}", flush=True)
-    res = subprocess.run(cmd, capture_output=True, text=True)
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
     if res.returncode != 0:
         print(f"SCP Error: {res.stderr}", flush=True)
         return False

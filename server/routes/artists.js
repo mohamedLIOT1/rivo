@@ -5,13 +5,14 @@ const { adminAuth } = require('../middleware/auth');
 const {
   getCanonicalArtistName,
   getArtistAliases,
+  detectQuranReciter,
   escapeRegex
 } = require('../utils/helpers');
 
 // Get all artists with track & album counts
 router.get('/', async (req, res) => {
   try {
-    const allTracks = await Track.find({}, 'artist album cover plays').lean();
+    const allTracks = await Track.find({}, 'artist album title cover plays').lean();
     const allAlbums = await Album.find().lean();
     const allArtistDocs = await Artist.find().lean();
 
@@ -24,8 +25,10 @@ router.get('/', async (req, res) => {
 
     const artistMap = {};
     for (const t of allTracks) {
-      if (!t.artist) continue;
-      const canonical = getCanonicalArtistName(t.artist);
+      if (!t.artist && !t.title) continue;
+      const quranReciter = detectQuranReciter(t.title, t.artist, t.album);
+      const canonical = quranReciter || getCanonicalArtistName(t.artist);
+      if (!canonical) continue;
       const key = canonical.toLowerCase();
       if (!artistMap[key]) {
         const doc = artistDocMap[key];
@@ -56,8 +59,10 @@ router.get('/', async (req, res) => {
     }
 
     for (const a of allAlbums) {
-      if (!a.artist) continue;
-      const canonical = getCanonicalArtistName(a.artist);
+      if (!a.artist && !a.name) continue;
+      const quranReciter = detectQuranReciter(a.name, a.artist);
+      const canonical = quranReciter || getCanonicalArtistName(a.artist);
+      if (!canonical) continue;
       const key = canonical.toLowerCase();
       if (artistMap[key]) {
         artistMap[key].albumCount++;

@@ -878,10 +878,10 @@ export default function AdminScreen({
                       />
                     </div>
                     <h3 className="font-display font-black text-sm truncate">
-                      {album.name}
+                      {album.name || album.title || 'Untitled Album'}
                     </h3>
                     <p className={`text-xs font-mono truncate mb-2 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                      {album.artist}
+                      {album.artist || 'Various'} • {album.trackCount ?? (album.trackIds || []).length ?? (album.tracks || []).length ?? 0} {Boolean(album.isQuran || isQuranContent(album)) ? 'surahs' : 'songs'}
                     </p>
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-3">
                       <span>{album.genre || 'Album'}</span>
@@ -961,7 +961,7 @@ export default function AdminScreen({
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <img
-                      src={artist.avatar || artist.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200'}
+                      src={artist.image || artist.avatar || artist.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200'}
                       alt={artist.name}
                       className="w-12 h-12 rounded-full brutal-border object-cover bg-black/10 shrink-0"
                     />
