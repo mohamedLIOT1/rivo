@@ -1422,45 +1422,7 @@ function AppContent() {
       }
     });
 
-    // App Updates Detection & Real-time Notification
-      const checkUpdates = async () => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/app/version`);
-          if (!res.ok) return;
-          const data = await res.json();
-          const rVer = data?.version;
-          if (rVer && isNewerVersion(rVer, APP_VERSION)) {
-            setUpdateNotification({
-              version: rVer,
-              releaseNotes: data?.releaseNotes || 'New improvements and bug fixes.',
-              platforms: data?.platforms
-            });
-          }
-        } catch {}
-      };
-      checkUpdates();
 
-      s.on('app:update_manifest', (data) => {
-        const rVer = data?.version;
-        if (rVer && isNewerVersion(rVer, APP_VERSION)) {
-          setUpdateNotification({
-            version: rVer,
-            releaseNotes: data?.releaseNotes || 'New improvements and bug fixes.',
-            platforms: data?.platforms
-          });
-        }
-      });
-
-      s.on('app:update_available', (data) => {
-        const rVer = data?.version;
-        if (rVer && isNewerVersion(rVer, APP_VERSION)) {
-          setUpdateNotification({
-            version: rVer,
-            releaseNotes: data?.releaseNotes || 'New improvements and bug fixes.',
-            platforms: data?.platforms
-          });
-        }
-      });
 
       return () => s.disconnect();
     }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState]);
@@ -1600,41 +1562,6 @@ function AppContent() {
     <DownloadProvider tracks={tracks} setTracks={setTracks} showToast={showToast}>
       <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
 
-      {/* ── UPDATE AVAILABLE NOTIFICATION BANNER ── */}
-      {updateNotification && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] max-w-lg w-[94%] bg-[#17a398] text-[#0b1110] brutal-border brutal-shadow p-2.5 sm:p-3 rounded-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#0b1110] shrink-0 animate-ping" />
-            <div className="truncate">
-              <div className="font-display font-black text-xs sm:text-sm leading-none flex items-center gap-1.5">
-                <span>يتوفر تحديث جديد</span>
-                <span className="bg-[#0b1110] text-[#17a398] px-1.5 py-0.2 rounded font-mono text-[10px]">v{updateNotification.version}</span>
-              </div>
-              <div className="text-[10px] font-mono opacity-85 truncate mt-0.5">
-                {updateNotification.releaseNotes}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => {
-                goToScreen('download');
-                setUpdateNotification(null);
-              }}
-              className="px-2.5 sm:px-3 py-1 bg-[#0b1110] text-[#fdfbf7] brutal-border rounded text-[11px] font-bold hover:bg-zinc-800 transition shadow-sm"
-            >
-              تحميل التحديث
-            </button>
-            <button
-              onClick={() => setUpdateNotification(null)}
-              className="p-1 hover:bg-black/10 rounded transition text-[#0b1110]"
-              title="إغلاق"
-            >
-              <X size={15} />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── TOP APOTHECARY NAV BAR (Rivo Design) ── */}
       <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">

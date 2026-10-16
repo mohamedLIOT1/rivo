@@ -9,6 +9,7 @@ import {
   BackHandler,
   Platform,
   AppState,
+  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { RefreshCw, WifiOff, AlertTriangle, Download } from 'lucide-react-native';
@@ -959,6 +960,16 @@ export default function OnlineWebView() {
         allowsBackForwardNavigationGestures={false}
         scrollEnabled={true}
         onShouldStartLoadWithRequest={(request) => {
+          if (request.url && (
+            request.url.includes('/downloads/') ||
+            request.url.endsWith('.apk') ||
+            request.url.endsWith('.ipa') ||
+            request.url.endsWith('.exe') ||
+            request.url.endsWith('.zip')
+          )) {
+            Linking.openURL(request.url).catch(() => {});
+            return false;
+          }
           if (request.url && request.url.includes('/api/tracks/download')) {
             try {
               const urlObj = new URL(request.url);

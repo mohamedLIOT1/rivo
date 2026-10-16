@@ -12,6 +12,7 @@ import {
   PermissionsAndroid,
   Linking,
   AppState,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -178,7 +179,16 @@ function MainAppShell() {
       setDownloadProgress(0);
 
       const downloadUrl = updateInfo.downloadUrl;
-      const targetUri = `${FileSystem.documentDirectory}Rivo-v${updateInfo.remoteVersion}.apk`;
+      // Use cacheDirectory to match FileProvider <cache-path name="internal_cache" path="." />
+      const targetUri = `${FileSystem.cacheDirectory}Rivo-v${updateInfo.remoteVersion}.apk`;
+
+      // Clean up previous downloaded installer if exists
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(targetUri);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(targetUri, { idempotent: true });
+        }
+      } catch (e) {}
 
       const downloadResumable = FileSystem.createDownloadResumable(
         downloadUrl,
@@ -199,15 +209,38 @@ function MainAppShell() {
         setDownloadProgress(1);
         try {
           await installApk(result.uri);
+          setIsUpdateModalOpen(false);
         } catch (e) {
-          Linking.openURL(downloadUrl);
+          console.warn('installApk error:', e);
+          const msg = e?.message || 'Could not launch package installer.';
+          setDownloadError(msg);
+          if (e?.code === 'PERMISSION_REQUIRED') {
+            Alert.alert(
+              'Permission Required',
+              'Please allow Rivo to install apps from this source in the settings page that just opened, then tap update again.'
+            );
+          } else {
+            Alert.alert(
+              'Installation Error',
+              `${msg}\n\nWould you like to open the download in your browser?`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Browser', onPress: () => Linking.openURL(downloadUrl) }
+              ]
+            );
+          }
         }
       }
     } catch (err) {
       setDownloadError(err.message || 'Download error');
-      if (updateInfo?.downloadUrl) {
-        Linking.openURL(updateInfo.downloadUrl);
-      }
+      Alert.alert(
+        'Download Failed',
+        `${err.message || 'Error downloading update.'}\n\nWould you like to download via browser?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Browser', onPress: () => updateInfo?.downloadUrl && Linking.openURL(updateInfo.downloadUrl) }
+        ]
+      );
     } finally {
       setIsDownloadingUpdate(false);
     }

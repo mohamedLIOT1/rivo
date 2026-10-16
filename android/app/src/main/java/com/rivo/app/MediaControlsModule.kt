@@ -212,6 +212,18 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
                 return
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(settingsIntent)
+                    promise.reject("PERMISSION_REQUIRED", "Please allow Rivo to install unknown apps from settings, then click update again.")
+                    return
+                }
+            }
+
             val uri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
                 context,
                 "com.rivo.app.fileprovider",

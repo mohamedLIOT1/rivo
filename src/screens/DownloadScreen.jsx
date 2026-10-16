@@ -46,7 +46,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       badge: 'NATIVE DESKTOP',
       version: `v${APP_VERSION}`,
       fileType: '.EXE',
-      fileSize: '52 MB',
+      fileSize: '112 MB',
       icon: Monitor,
       downloadUrl: '/downloads/Rivo.exe',
       directName: 'Rivo.exe',
