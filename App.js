@@ -960,6 +960,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 8,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   bottomBarLight: {
     backgroundColor: '#ede5d3',
@@ -967,6 +970,7 @@ const styles = StyleSheet.create({
   },
   tabBtn: {
     flex: 1,
+    maxWidth: 120,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',

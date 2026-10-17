@@ -8,7 +8,7 @@ import {
   RefreshControl,
   Platform,
   Image,
-  Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import { Play, Plus, Disc } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -23,15 +23,19 @@ import { isQuranContent } from '../../utils/quranUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
-
-const { width } = Dimensions.get('window');
-const ALBUM_CARD_WIDTH = (width - 34) / 2;
+import { deduplicateTrackList } from '../services/downloadManager';
 
 export default function HomeScreen({
   onOpenAddSong,
   onTrackAction,
   onOpenFullPlayer,
 }) {
+  const { width } = useWindowDimensions();
+  const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
+  const albumGap = 10;
+  const albumPadding = 24;
+  const albumCardWidth = Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
+
   const { playTrack, currentTrack, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
@@ -46,10 +50,10 @@ export default function HomeScreen({
   // Filter music only (strictly exclude Quran from main music home) & apply smart popularity sorting
   const displayTracks = useMemo(() => {
     if (isOffline || activeFilter === 'downloaded') {
-      const safeDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).filter((t) => !isQuranContent(t));
+      const safeDownloaded = deduplicateTrackList((Array.isArray(downloadedTracks) ? downloadedTracks : []).filter((t) => !isQuranContent(t)));
       return sortTracksByPopularity(safeDownloaded);
     }
-    const list = (userTracks || []).filter((t) => !isQuranContent(t));
+    const list = deduplicateTrackList((userTracks || []).filter((t) => !isQuranContent(t)));
     return sortTracksByPopularity(list);
   }, [userTracks, activeFilter, downloadedTracks, isOffline]);
 
@@ -142,27 +146,27 @@ export default function HomeScreen({
           HERO BANNER (MUSIC STREAMING LAB)
           Matching exact website layout
           ───────────────────────────────────────── */}
-      <View style={styles.heroCard}>
+      <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
         {/* Subtle Background Watermark */}
-        <Text style={styles.watermark}>RIVO</Text>
+        <Text style={[styles.watermark, !isDark && styles.watermarkLight]}>RIVO</Text>
 
         {/* Top Pill Badge */}
-        <View style={styles.labPill}>
+        <View style={[styles.labPill, !isDark && styles.labPillLight]}>
           <View style={[styles.pulseDot, isOffline && { backgroundColor: '#f59e0b' }]} />
-          <Text style={styles.labPillText}>
+          <Text style={[styles.labPillText, !isDark && styles.labPillTextLight]}>
             {isOffline ? '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION' : `🎵 ${currentMood.label.toUpperCase()}`}
           </Text>
         </View>
 
         {/* Heading */}
-        <Text style={styles.greetingTitle}>
+        <Text style={[styles.greetingTitle, !isDark && styles.greetingTitleLight]}>
           {getGreeting()},{' '}
           <Text style={{ color: '#17a398' }}>
             {currentUser?.name ? currentUser.name.split(' ')[0] : 'Listener'}.
           </Text>
         </Text>
 
-        <Text style={styles.heroSubtitle}>
+        <Text style={[styles.heroSubtitle, !isDark && styles.heroSubtitleLight]}>
           {isOffline
             ? 'Playing your downloaded songs directly from local storage. 100% offline, zero data usage.'
             : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.'}
@@ -216,7 +220,7 @@ export default function HomeScreen({
               return (
                 <TouchableOpacity
                   key={alb.id || alb._id || alb.name || String(index)}
-                  style={[styles.albumCard, !isDark && styles.albumCardLight]}
+                  style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
                   onPress={() => setSelectedAlbum(alb)}
                   activeOpacity={0.85}
                 >
@@ -406,6 +410,9 @@ const styles = StyleSheet.create({
   content: {
     padding: 12,
     paddingBottom: 110,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroCard: {
     backgroundColor: '#082621',
@@ -417,6 +424,15 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
+  heroCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   watermark: {
     position: 'absolute',
     right: -10,
@@ -426,6 +442,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     opacity: 0.05,
     letterSpacing: -4,
+  },
+  watermarkLight: {
+    color: '#000000',
+    opacity: 0.03,
   },
   labPill: {
     flexDirection: 'row',
@@ -437,6 +457,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginBottom: 10,
     gap: 5,
+  },
+  labPillLight: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   pulseDot: {
     width: 6,
@@ -450,6 +475,9 @@ const styles = StyleSheet.create({
     color: '#0b1110',
     letterSpacing: 0.2,
   },
+  labPillTextLight: {
+    color: '#0f172a',
+  },
   greetingTitle: {
     fontSize: 22,
     fontWeight: '900',
@@ -457,12 +485,19 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     marginBottom: 6,
   },
+  greetingTitleLight: {
+    color: '#0b1110',
+  },
   heroSubtitle: {
     fontSize: 11.5,
     color: '#a7f3d0',
     lineHeight: 16,
     opacity: 0.85,
     marginBottom: 14,
+  },
+  heroSubtitleLight: {
+    color: '#475569',
+    opacity: 1,
   },
   heroBtnRow: {
     flexDirection: 'row',
@@ -548,7 +583,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   albumCard: {
-    width: ALBUM_CARD_WIDTH,
     backgroundColor: '#141d1b',
     borderWidth: 1.5,
     borderColor: '#263330',

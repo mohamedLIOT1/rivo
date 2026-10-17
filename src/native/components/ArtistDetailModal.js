@@ -381,6 +381,9 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
+    maxWidth: 760,
+    width: '100%',
+    alignSelf: 'center',
   },
   backBtn: {
     flexDirection: 'row',
@@ -406,6 +409,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    maxWidth: 760,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroSection: {
     alignItems: 'center',

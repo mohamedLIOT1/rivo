@@ -59,10 +59,14 @@ export default function AlbumDetailModal({
   useEffect(() => {
     if (!album) return;
     const targetId = String(album._id || album.id || '');
-    const already = (playlists || []).some(p =>
-      String(p.id || p._id) === targetId ||
-      String(p.sourcePlaylistId) === targetId
-    );
+    const altTargetId = String(album.id || album._id || '');
+    const already = (playlists || []).some(p => {
+      const pId = String(p.id || '');
+      const pObjId = String(p._id || '');
+      const pSrcId = String(p.sourcePlaylistId || '');
+      return (targetId && (pId === targetId || pObjId === targetId || pSrcId === targetId)) ||
+             (altTargetId && (pId === altTargetId || pObjId === altTargetId || pSrcId === altTargetId));
+    });
     setIsSaved(already);
   }, [album, playlists]);
 
@@ -219,9 +223,11 @@ export default function AlbumDetailModal({
     const nextSaved = !isSaved;
     setIsSaved(nextSaved);
     try {
-      const albId = album._id || album.id;
+      const albId = String(album._id || album.id || album.name || '');
       const isPl = Boolean(album.isPlaylist || !album.isAlbum);
-      const plTracks = (album.tracks || []).map(t => t._id || t.id || t).filter(Boolean);
+      const plTracks = (effectiveAlbumTracks && effectiveAlbumTracks.length > 0 ? effectiveAlbumTracks : (album.tracks || []))
+        .map(t => (t && typeof t === 'object') ? String(t._id || t.id) : String(t))
+        .filter(Boolean);
       const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(albId)}/save`, {
         method: 'POST',
         headers: {
@@ -229,16 +235,17 @@ export default function AlbumDetailModal({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: album.name || album.title,
-          cover: album.cover || album.coverUrl,
-          artist: album.artist,
+          action: nextSaved ? 'save' : 'unsave',
+          name: albumTitle,
+          cover: coverUri,
+          artist: albumArtist,
           isAlbum: !isPl,
+          tracks: plTracks,
           playlist: {
             id: String(albId),
-            _id: String(albId),
-            name: album.name || album.title,
-            cover: album.cover || album.coverUrl,
-            description: album.description || (album.artist ? `By ${album.artist}` : 'Saved playlist'),
+            name: albumTitle,
+            cover: coverUri,
+            description: album.description || (albumArtist ? `By ${albumArtist}` : 'Saved playlist'),
             trackIds: plTracks.length > 0 ? plTracks : (album.trackIds || []),
             isPublic: true,
             isAlbum: !isPl,
@@ -246,7 +253,10 @@ export default function AlbumDetailModal({
         }),
       });
       if (res.ok) {
-        showToast(nextSaved ? (isPl ? 'Saved playlist to your library!' : 'Saved album to your library!') : 'Removed from library', 'success');
+        const data = await res.json().catch(() => ({}));
+        const finalSaved = data.saved !== undefined ? data.saved : nextSaved;
+        setIsSaved(finalSaved);
+        showToast(finalSaved ? (isPl ? 'Saved playlist to your library!' : 'Saved album to your library!') : 'Removed from library', 'success');
         if (syncUserData) await syncUserData();
       } else {
         setIsSaved(!nextSaved);
@@ -537,6 +547,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
   },
   backBtn: {
     flexDirection: 'row',
@@ -576,6 +589,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    width: '100%',
+    maxWidth: 760,
+    alignSelf: 'center',
   },
   heroCard: {
     backgroundColor: '#141d1b',

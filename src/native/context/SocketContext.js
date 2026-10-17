@@ -14,7 +14,7 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
-  const { syncRemotePlayState, setJamSync, playNextTrack } = useAudioPlayer();
+  const { syncRemotePlayState, setJamSync, playNextTrack, playPrevTrack } = useAudioPlayer();
   const syncRemotePlayStateRef = useRef(syncRemotePlayState);
   useEffect(() => {
     syncRemotePlayStateRef.current = syncRemotePlayState;
@@ -23,6 +23,10 @@ export const SocketProvider = ({ children }) => {
   useEffect(() => {
     playNextTrackRef.current = playNextTrack;
   }, [playNextTrack]);
+  const playPrevTrackRef = useRef(playPrevTrack);
+  useEffect(() => {
+    playPrevTrackRef.current = playPrevTrack;
+  }, [playPrevTrack]);
 
   const { showToast } = useToast();
   const [socket, setSocket] = useState(null);
@@ -41,6 +45,10 @@ export const SocketProvider = ({ children }) => {
         (jamSession.hostUserId && myUserId && String(jamSession.hostUserId) === myUserId) ||
         (jamSession.members || []).some(m => (m.socketId === socket.id || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost))
   );
+  const isCurrentUserHostRef = useRef(isCurrentUserHost);
+  useEffect(() => {
+    isCurrentUserHostRef.current = isCurrentUserHost;
+  }, [isCurrentUserHost]);
 
   useEffect(() => {
     if (setJamSync) {
@@ -109,7 +117,7 @@ export const SocketProvider = ({ children }) => {
     });
 
     s.on('jam:sync_play_state', (data) => {
-      if (data?.currentTrack && syncRemotePlayStateRef.current) {
+      if (data && syncRemotePlayStateRef.current) {
         if (data.initiatorId && data.initiatorId === s.id) return;
         syncRemotePlayStateRef.current(data);
       }
@@ -123,9 +131,6 @@ export const SocketProvider = ({ children }) => {
         currentTrack: data?.currentTrack || prev.currentTrack,
         updatedAt: data?.updatedAt || Date.now(),
       }) : null);
-      if (data?.initiatorId !== s.id && syncRemotePlayStateRef.current) {
-        syncRemotePlayStateRef.current(data);
-      }
     });
 
     s.on('jam:pause_all', (data) => {
@@ -141,8 +146,14 @@ export const SocketProvider = ({ children }) => {
     });
 
     s.on('jam:advance_host_queue', () => {
-      if (isCurrentUserHost && playNextTrackRef.current) {
+      if (isCurrentUserHostRef.current && playNextTrackRef.current) {
         playNextTrackRef.current();
+      }
+    });
+
+    s.on('jam:prev_track', () => {
+      if (isCurrentUserHostRef.current && playPrevTrackRef.current) {
+        playPrevTrackRef.current(true);
       }
     });
 
@@ -313,7 +324,8 @@ export const SocketProvider = ({ children }) => {
       const isHost = (jamSession.hostId === socket.id) ||
         (jamSession.hostUserId && String(jamSession.hostUserId) === myId) ||
         (jamSession.members || []).some(m => (m.socketId === socket.id || (myId && String(m.id || m._id) === myId)) && m.isHost);
-      if (!isHost) return;
+      const canControl = isHost || !jamSession.hostOnlyControl;
+      if (!canControl) return;
 
       socket.emit('jam:sync_play_state', {
         roomCode: cleanCode,

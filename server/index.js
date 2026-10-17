@@ -88,12 +88,12 @@ app.use((req, res, next) => {
 
 // App Version Manifest
 const APP_VERSIONS_DATA = {
-  version: '1.7.9',
-  releaseNotes: "v1.7.9: Fixed Admin console albums track counts and artist avatars/songs count, resolved duplicate Quran recitations and counts, improved album management and performance.",
+  version: '1.8.3',
+  releaseNotes: "v1.8.3: Fix Jam room sync loop & ping-pong rubber-banding, eliminate pause and seek latency with optimistic dispatch, fix track mismatch and atomic stream cancellation, and optimize playback performance on low-end devices.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.7.9',
+      version: '1.8.3',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -101,22 +101,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Full Jam sync and player controls.'
     },
     android: {
-      version: '1.7.9',
-      build: 48,
+      version: '1.8.3',
+      build: 52,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.7.9.apk',
-      directFile: 'Rivo-v1.7.9.apk',
+      downloadUrl: '/downloads/Rivo-v1.8.3.apk',
+      directFile: 'Rivo-v1.8.3.apk',
       mandatory: false,
-      notes: 'Admin console albums & artists fixes, accurate Quran recitations without duplicates, performance enhancements.'
+      notes: 'Jam sync loop fix, zero-latency pause & seek, atomic audio cancellation, and low-end device performance optimizations.'
     },
     ios: {
-      version: '1.7.9',
-      build: 48,
+      version: '1.8.3',
+      build: 52,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.7.9.ipa',
-      directFile: 'Rivo-v1.7.9.ipa',
+      downloadUrl: '/downloads/Rivo-v1.8.3.ipa',
+      directFile: 'Rivo-v1.8.3.ipa',
       mandatory: false,
-      notes: 'Admin console albums & artists fixes, accurate Quran recitations without duplicates, performance enhancements.'
+      notes: 'Jam sync loop fix, zero-latency pause & seek, atomic audio cancellation, and low-end device performance optimizations.'
     }
   }
 };
@@ -128,6 +128,11 @@ app.get('/api/app/version', (req, res) => {
 // Download routes for APK/IPA releases
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.8.3.apk',
+  '/downloads/Rivo-v1.8.2.apk',
+  '/downloads/Rivo-v1.8.1.apk',
+  '/downloads/Rivo-v1.8.0.apk',
+  '/downloads/Rivo-v1.7.9.apk',
   '/downloads/Rivo-v1.7.8.apk',
   '/downloads/Rivo-v1.7.7.apk',
   '/downloads/Rivo-v1.7.6.apk',
@@ -138,6 +143,24 @@ app.get([
   const requestedFile = path.basename(req.path);
   const targetPath = path.join(__dirname, '../public/downloads', requestedFile);
   if (fs.existsSync(targetPath)) return res.download(targetPath, requestedFile);
+
+  const default183 = path.join(__dirname, '../public/downloads/Rivo-v1.8.3.apk');
+  if (fs.existsSync(default183)) return res.download(default183, 'Rivo-v1.8.3.apk');
+
+  const default182 = path.join(__dirname, '../public/downloads/Rivo-v1.8.2.apk');
+  if (fs.existsSync(default182)) return res.download(default182, 'Rivo-v1.8.2.apk');
+
+  const default181 = path.join(__dirname, '../public/downloads/Rivo-v1.8.1.apk');
+  if (fs.existsSync(default181)) return res.download(default181, 'Rivo-v1.8.1.apk');
+
+  const default180 = path.join(__dirname, '../public/downloads/Rivo-v1.8.0.apk');
+  if (fs.existsSync(default180)) return res.download(default180, 'Rivo-v1.8.0.apk');
+
+  const default179 = path.join(__dirname, '../public/downloads/Rivo-v1.7.9.apk');
+  if (fs.existsSync(default179)) return res.download(default179, 'Rivo-v1.7.9.apk');
+
+  const default178 = path.join(__dirname, '../public/downloads/Rivo-v1.7.8.apk');
+  if (fs.existsSync(default178)) return res.download(default178, 'Rivo-v1.7.8.apk');
 
   const default177 = path.join(__dirname, '../public/downloads/Rivo-v1.7.7.apk');
   if (fs.existsSync(default177)) return res.download(default177, 'Rivo-v1.7.7.apk');
@@ -157,7 +180,7 @@ app.get([
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.7.7', {
+      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.8.3', {
         headers: { 'Authorization': `Bearer ${ghToken}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Rivo-Server' }
       });
       const apkAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.apk'));
@@ -172,16 +195,40 @@ app.get([
       }
     } catch (e) {}
   }
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.7/Rivo-v1.7.7.apk');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.8.3/Rivo-v1.8.3.apk');
 });
 
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.8.3.ipa',
+  '/downloads/Rivo-v1.8.2.ipa',
+  '/downloads/Rivo-v1.8.1.ipa',
+  '/downloads/Rivo-v1.8.0.ipa',
+  '/downloads/Rivo-v1.7.9.ipa',
+  '/downloads/Rivo-v1.7.8.ipa',
   '/downloads/Rivo-v1.7.7.ipa',
   '/downloads/Rivo-v1.7.6.ipa',
   '/downloads/Rivo-v1.7.5.ipa',
   '/downloads/Rivo-v1.7.4.ipa'
 ], async (req, res) => {
+  const localV183Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.3.ipa');
+  if (fs.existsSync(localV183Path)) return res.download(localV183Path, 'Rivo-v1.8.3.ipa');
+
+  const localV182Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.2.ipa');
+  if (fs.existsSync(localV182Path)) return res.download(localV182Path, 'Rivo-v1.8.2.ipa');
+
+  const localV181Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.1.ipa');
+  if (fs.existsSync(localV181Path)) return res.download(localV181Path, 'Rivo-v1.8.1.ipa');
+
+  const localV180Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.0.ipa');
+  if (fs.existsSync(localV180Path)) return res.download(localV180Path, 'Rivo-v1.8.0.ipa');
+
+  const localV179Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.9.ipa');
+  if (fs.existsSync(localV179Path)) return res.download(localV179Path, 'Rivo-v1.7.9.ipa');
+
+  const localV178Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.8.ipa');
+  if (fs.existsSync(localV178Path)) return res.download(localV178Path, 'Rivo-v1.7.8.ipa');
+
   const localV177Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.7.ipa');
   if (fs.existsSync(localV177Path)) return res.download(localV177Path, 'Rivo-v1.7.7.ipa');
 
@@ -197,7 +244,7 @@ app.get([
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
   if (fs.existsSync(localIpaPath)) return res.download(localIpaPath, 'Rivo.ipa');
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.7.7/Rivo-v1.7.7.ipa');
+  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.8.3/Rivo-v1.8.3.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients (Admin Only)

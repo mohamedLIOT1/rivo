@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  useWindowDimensions,
   Alert,
   ActivityIndicator,
   Modal,
@@ -46,6 +47,7 @@ import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isQuranContent } from '../../utils/quranUtils';
+import { deduplicateTrackList } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 
@@ -56,6 +58,11 @@ export default function LibraryScreen({
   onNavigateOffline,
   onTrackAction,
 }) {
+  const { width } = useWindowDimensions();
+  const effectiveWidth = Math.min(width, 840);
+  const numCols = width >= 1024 ? 4 : width >= 768 ? 3 : 2;
+  const cardWidth = Math.floor((effectiveWidth - 28 - (numCols - 1) * 10) / numCols);
+
   const {
     playTrack,
     playPlaylist,
@@ -147,9 +154,9 @@ export default function LibraryScreen({
 
   // Liked tracks
   const likedTracks = useMemo(() => {
-    return (allTracks || []).filter((t) =>
+    return deduplicateTrackList((allTracks || []).filter((t) =>
       safeLikedIds.includes(String(t?._id || t?.id))
-    );
+    ));
   }, [allTracks, safeLikedIds]);
 
   // Fetch tracks for currently selected playlist if they aren't in trackPoolMap
@@ -477,17 +484,17 @@ export default function LibraryScreen({
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, !isDark && styles.headerLight]}>
         {selectedView ? (
           <View style={styles.detailHeaderRow}>
             <TouchableOpacity onPress={() => setSelectedView(null)} style={styles.backBtn}>
               <ArrowLeft size={18} color={colors.ink} />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={styles.headerTitle} numberOfLines={1}>
+              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
                 {selectedView === 'liked' ? 'LIKED RECORDINGS' : selectedView.name}
               </Text>
-              <Text style={styles.headerSub}>
+              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>
                 PLAYLIST •{' '}
                 {selectedView === 'liked'
                   ? `${likedTracks.length} SONGS`
@@ -498,8 +505,8 @@ export default function LibraryScreen({
         ) : (
           <View style={styles.headerMainRow}>
             <View>
-              <Text style={styles.headerTitle}>YOUR LIBRARY</Text>
-              <Text style={styles.headerSub}>PLAYLISTS & DOWNLOADS</Text>
+              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]}>YOUR LIBRARY</Text>
+              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>PLAYLISTS & DOWNLOADS</Text>
             </View>
             <TouchableOpacity style={styles.newPlaylistBtn} onPress={onOpenCreatePlaylist}>
               <Plus size={16} color={colors.ink} strokeWidth={3} />
@@ -526,14 +533,14 @@ export default function LibraryScreen({
           <View>
             <View style={styles.likedHeroCard}>
               <View style={styles.hardShadow} />
-              <View style={styles.likedHero}>
+              <View style={[styles.likedHero, !isDark && styles.likedHeroLight]}>
                 <View style={styles.heartBigBox}>
                   <Heart size={32} color={colors.rust} fill={colors.rust} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="FAVORITES" bg={colors.ink} textColor={colors.mint} />
-                  <Text style={styles.likedHeroTitle}>LIKED SONGS</Text>
-                  <Text style={styles.likedHeroSub}>{likedTracks.length} songs preserved</Text>
+                  <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+                  <Text style={[styles.likedHeroTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
+                  <Text style={[styles.likedHeroSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} songs preserved</Text>
                   <View style={styles.likedBtnRow}>
                     <TouchableOpacity
                       style={styles.playHeroBtn}
@@ -554,10 +561,10 @@ export default function LibraryScreen({
             </View>
 
             {likedTracks.length === 0 ? (
-              <View style={styles.emptyCard}>
+              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
                 <Heart size={36} color={colors.rust} />
-                <Text style={styles.emptyTitle}>No liked recordings yet</Text>
-                <Text style={styles.emptySub}>Tap the heart icon on any tape to archive it here.</Text>
+                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No liked recordings yet</Text>
+                <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>Tap the heart icon on any tape to archive it here.</Text>
               </View>
             ) : (
               <View style={styles.tracksList}>
@@ -577,7 +584,7 @@ export default function LibraryScreen({
           <View>
             <View style={styles.playlistHeroCard}>
               <View style={styles.hardShadow} />
-              <View style={styles.playlistHero}>
+              <View style={[styles.playlistHero, !isDark && styles.playlistHeroLight]}>
                 <View style={styles.playlistBigBox}>
                   <View style={StyleSheet.absoluteFillObject}>
                     <Disc size={32} color={colors.mint} style={{ alignSelf: 'center', marginTop: 12 }} />
@@ -600,7 +607,7 @@ export default function LibraryScreen({
                 <View style={{ flex: 1, marginLeft: 12 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <CassetteTag label="CRATE PLAYLIST" bg={colors.ink} textColor={colors.tealLight} />
+                      <CassetteTag label="CRATE PLAYLIST" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
                       <TouchableOpacity
                         style={[
                           styles.visibilityHeroPill,
@@ -635,8 +642,8 @@ export default function LibraryScreen({
                       <Text style={styles.editHeroPillText}>EDIT</Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.playlistHeroTitle}>{selectedView.name}</Text>
-                  <Text style={styles.playlistHeroSub}>
+                  <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }]}>{selectedView.name}</Text>
+                  <Text style={[styles.playlistHeroSub, !isDark && { color: '#57534e' }]}>
                     {(selectedView.tracks || selectedView.trackIds || activePlaylistTracks || []).length} recordings compiled
                   </Text>
                   <View style={styles.likedBtnRow}>
@@ -682,15 +689,15 @@ export default function LibraryScreen({
             </View>
 
             {isLoadingTracks && activePlaylistTracks.length === 0 ? (
-              <View style={[styles.emptyCard, { paddingVertical: 40 }]}>
+              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 40 }]}>
                 <ActivityIndicator size="large" color="#17a398" />
-                <Text style={[styles.emptyTitle, { marginTop: 12 }]}>Loading playlist tracks...</Text>
+                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, { marginTop: 12 }]}>Loading playlist tracks...</Text>
               </View>
             ) : activePlaylistTracks.length === 0 ? (
-              <View style={[styles.emptyCard, { paddingVertical: 24 }]}>
+              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 24 }]}>
                 <Disc size={36} color={colors.mint} />
-                <Text style={styles.emptyTitle}>This crate is empty</Text>
-                <Text style={styles.emptySub}>
+                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>This crate is empty</Text>
+                <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
                   Search below or pick from AI recommendations to add songs instantly!
                 </Text>
               </View>
@@ -819,14 +826,14 @@ export default function LibraryScreen({
               onPress={() => setSelectedView('liked')}
             >
               <View style={styles.cardShadow} />
-              <View style={styles.likedBanner}>
+              <View style={[styles.likedBanner, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}>
                 <View style={styles.likedBannerIcon}>
                   <Heart size={28} color={colors.rust} fill={colors.rust} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="FAVORITES" bg={colors.ink} textColor={colors.mint} />
-                  <Text style={styles.likedBannerTitle}>LIKED SONGS</Text>
-                  <Text style={styles.likedBannerSub}>{likedTracks.length} SONGS SAVED</Text>
+                  <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+                  <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
+                  <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} SONGS SAVED</Text>
                 </View>
                 <View style={styles.cardArrowPill}>
                   <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -841,14 +848,14 @@ export default function LibraryScreen({
               onPress={onNavigateOffline}
             >
               <View style={styles.cardShadow} />
-              <View style={[styles.likedBanner, { backgroundColor: '#162e2a' }]}>
+              <View style={[styles.likedBanner, !isDark ? { backgroundColor: '#ede5d3', borderColor: '#0b1110' } : { backgroundColor: '#162e2a' }]}>
                 <View style={[styles.likedBannerIcon, { backgroundColor: colors.teal }]}>
                   <Download size={24} color={colors.ink} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="OFFLINE STORAGE" bg={colors.ink} textColor={colors.tealLight} />
-                  <Text style={styles.likedBannerTitle}>OFFLINE VAULT</Text>
-                  <Text style={styles.likedBannerSub}>PLAY ANYWHERE WITHOUT WI-FI</Text>
+                  <CassetteTag label="OFFLINE STORAGE" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+                  <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>OFFLINE VAULT</Text>
+                  <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>PLAY ANYWHERE WITHOUT WI-FI</Text>
                 </View>
                 <View style={styles.cardArrowPill}>
                   <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -857,16 +864,16 @@ export default function LibraryScreen({
             </TouchableOpacity>
 
             {/* User Playlists */}
-            <View style={styles.cratesHeader}>
-              <Text style={styles.cratesTitle}>YOUR PLAYLISTS ({playlists.length})</Text>
-              <CassetteTag label="COLLECTION" bg={colors.ink} textColor={colors.mint} />
+            <View style={[styles.cratesHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
+              <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }]}>YOUR PLAYLISTS ({playlists.length})</Text>
+              <CassetteTag label="COLLECTION" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
             </View>
 
             {playlists.length === 0 ? (
-              <View style={styles.emptyCard}>
+              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
                 <FolderHeart size={36} color={colors.teal} />
-                <Text style={styles.emptyTitle}>No playlists created yet</Text>
-                <Text style={styles.emptySub}>
+                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No playlists created yet</Text>
+                <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
                   Create custom playlists to organize your favorite songs.
                 </Text>
               </View>
@@ -875,7 +882,7 @@ export default function LibraryScreen({
                 {playlists.map((playlist) => (
                   <TouchableOpacity
                     key={playlist._id || playlist.id}
-                    style={styles.playlistGridCard}
+                    style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth }]}
                     activeOpacity={0.85}
                     onPress={() => setSelectedView(playlist)}
                   >
@@ -890,11 +897,11 @@ export default function LibraryScreen({
                         <Disc size={28} color={colors.mint} />
                       )}
                     </View>
-                    <Text style={styles.playlistCardName} numberOfLines={1}>
+                    <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
                       {playlist.name}
                     </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-                      <Text style={styles.playlistCardCount}>
+                      <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }]}>
                         {(playlist.tracks || playlist.trackIds || []).length} TRACKS
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
@@ -1116,6 +1123,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.ink,
     paddingHorizontal: 14,
     paddingVertical: 14,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  headerLight: {
+    backgroundColor: '#ede5d3',
+    borderBottomColor: '#0b1110',
   },
   headerMainRow: {
     flexDirection: 'row',
@@ -1167,6 +1181,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 14,
     paddingBottom: 110,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
   },
   cardOuter: {
     position: 'relative',
@@ -1245,6 +1262,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 10,
   },
+  emptyCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+  },
   emptyTitle: {
     fontFamily: 'monospace',
     fontWeight: '800',
@@ -1270,6 +1291,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 8,
     padding: 10,
+  },
+  playlistGridCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
   },
   playlistCoverBox: {
     width: '100%',
@@ -1315,6 +1340,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 10,
     padding: 14,
+  },
+  likedHeroLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
   },
   heartBigBox: {
     width: 60,
@@ -1381,6 +1410,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 10,
     padding: 14,
+  },
+  playlistHeroLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
   },
   playlistBigBox: {
     width: 60,

@@ -18,6 +18,7 @@ uploads/audio-cache/
 *.exe
 *.pdb
 *.tar.gz
+*.idsig
 temp_artifacts_*/
 desktop-app/bin/
 desktop-app/obj/

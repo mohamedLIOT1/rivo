@@ -174,20 +174,24 @@ router.get('/:id', async (req, res) => {
       }
     } catch {}
 
+    const isLikedReq = plId.toLowerCase().includes('liked');
     const isObjId = mongoose.isValidObjectId(plId);
-    const owner = await User.findOne({
-      $or: [
-        { 'playlists.id': plId },
-        ...(isObjId ? [{ 'playlists._id': new mongoose.Types.ObjectId(plId) }] : []),
-        ...(authUserId ? [{ _id: new mongoose.Types.ObjectId(authUserId) }] : [])
-      ]
-    }).select('name avatar playlists likedTrackIds');
+    let owner;
+    if (isLikedReq) {
+      owner = await User.findById(authUserId || plId).select('name avatar playlists likedTrackIds');
+    } else {
+      owner = await User.findOne({
+        $or: [
+          { 'playlists.id': plId },
+          ...(isObjId ? [{ 'playlists._id': new mongoose.Types.ObjectId(plId) }] : [])
+        ]
+      }).select('name avatar playlists likedTrackIds');
+    }
 
     if (!owner) {
       return res.status(404).json({ error: 'Playlist not found' });
     }
 
-    const isLikedReq = plId.toLowerCase().includes('liked');
     const pl = (owner.playlists || []).find(p =>
       String(p.id) === plId ||
       String(p._id) === plId ||
@@ -326,7 +330,11 @@ const removeTrackHandler = async (req, res) => {
 
     let pl = u.playlists.find(p => String(p.id || p._id) === playlistId);
     if (!pl && isAdminUser(req.user)) {
-      u = await User.findOne({ $or: [{ 'playlists.id': playlistId }, { 'playlists._id': playlistId }] });
+      const isPlObjId = mongoose.isValidObjectId(playlistId);
+      u = await User.findOne(isPlObjId
+        ? { $or: [{ 'playlists.id': playlistId }, { 'playlists._id': new mongoose.Types.ObjectId(playlistId) }] }
+        : { 'playlists.id': playlistId }
+      );
       if (u) {
         pl = u.playlists.find(p => String(p.id || p._id) === playlistId);
       }
@@ -350,7 +358,11 @@ router.post('/:id/update', auth, async (req, res) => {
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
     let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
     if (!pl && isAdminUser(req.user)) {
-      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+      const isReqObjId = mongoose.isValidObjectId(req.params.id);
+      u = await User.findOne(isReqObjId
+        ? { $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': new mongoose.Types.ObjectId(req.params.id) }] }
+        : { 'playlists.id': req.params.id }
+      );
       if (u) {
         pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
       }
@@ -375,7 +387,11 @@ router.post('/:id/toggle-visibility', auth, async (req, res) => {
     if (!u) return res.status(404).json({ success: false, error: 'User not found' });
     let pl = u.playlists.find(p => String(p.id) === String(req.params.id) || String(p._id) === String(req.params.id));
     if (!pl && isAdminUser(req.user)) {
-      u = await User.findOne({ $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': req.params.id }] });
+      const isReqObjId = mongoose.isValidObjectId(req.params.id);
+      u = await User.findOne(isReqObjId
+        ? { $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': new mongoose.Types.ObjectId(req.params.id) }] }
+        : { 'playlists.id': req.params.id }
+      );
       if (u) {
         pl = u.playlists.find(p => String(p.id) === String(req.params.id) || String(p._id) === String(req.params.id));
       }
@@ -397,12 +413,24 @@ router.delete('/:id', auth, async (req, res) => {
     let u = await User.findById(req.user.id);
     if (!u) return res.status(404).json({ error: 'User not found' });
     const initialLen = u.playlists.length;
-    u.playlists = u.playlists.filter(p => String(p.id) !== targetId && String(p._id) !== targetId);
+    u.playlists = u.playlists.filter(p =>
+      String(p.id) !== targetId &&
+      String(p._id) !== targetId &&
+      String(p.sourcePlaylistId || '') !== targetId
+    );
     if (u.playlists.length === initialLen) {
       if (isAdminUser(req.user)) {
-        const owner = await User.findOne({ $or: [{ 'playlists.id': targetId }, { 'playlists._id': targetId }] });
+        const isTargetObjId = mongoose.isValidObjectId(targetId);
+        const owner = await User.findOne(isTargetObjId
+          ? { $or: [{ 'playlists.id': targetId }, { 'playlists._id': new mongoose.Types.ObjectId(targetId) }] }
+          : { 'playlists.id': targetId }
+        );
         if (owner) {
-          owner.playlists = owner.playlists.filter(p => String(p.id) !== targetId && String(p._id) !== targetId);
+          owner.playlists = owner.playlists.filter(p =>
+            String(p.id) !== targetId &&
+            String(p._id) !== targetId &&
+            String(p.sourcePlaylistId || '') !== targetId
+          );
           owner.markModified('playlists');
           await owner.save();
           return res.json({ success: true });
@@ -422,12 +450,15 @@ router.delete('/:id', auth, async (req, res) => {
 router.post('/:id/save', auth, async (req, res) => {
   try {
     const targetId = String(req.params.id);
+    const { action, playlist: bodyPlaylist, tracks: bodyTracks } = req.body || {};
     const currentUser = await User.findById(req.user.id);
     if (!currentUser) return res.status(404).json({ error: 'User not found' });
 
-    let sourceOwner = await User.findOne({
-      $or: [{ 'playlists.id': targetId }, { 'playlists._id': targetId }]
-    }).select('_id name avatar playlists').lean();
+    const isTargetObjId = mongoose.isValidObjectId(targetId);
+    let sourceOwner = await User.findOne(isTargetObjId
+      ? { $or: [{ 'playlists.id': targetId }, { 'playlists._id': new mongoose.Types.ObjectId(targetId) }] }
+      : { 'playlists.id': targetId }
+    ).select('_id name avatar playlists').lean();
 
     let sourcePlaylist = sourceOwner?.playlists?.find(p => String(p.id || p._id) === targetId);
 
@@ -436,10 +467,10 @@ router.post('/:id/save', auth, async (req, res) => {
       const album = await Album.findOne({
         $or: [
           { id: targetId },
-          { _id: mongoose.isValidObjectId(targetId) ? targetId : undefined },
+          ...(isTargetObjId ? [{ _id: new mongoose.Types.ObjectId(targetId) }] : []),
           { name: new RegExp(`^${targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
           { name: new RegExp(`^${cleanTargetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-        ].filter(Boolean)
+        ]
       }).lean();
       if (album) {
         sourcePlaylist = {
@@ -454,48 +485,108 @@ router.post('/:id/save', auth, async (req, res) => {
       }
     }
 
-    if (!sourcePlaylist && req.body?.playlist) {
-      sourcePlaylist = req.body.playlist;
+    if (!sourcePlaylist && bodyPlaylist) {
+      const altId = String(bodyPlaylist.id || bodyPlaylist._id || '');
+      if (altId && altId !== targetId) {
+        const isAltObjId = mongoose.isValidObjectId(altId);
+        const altOwner = await User.findOne(isAltObjId
+          ? { $or: [{ 'playlists.id': altId }, { 'playlists._id': new mongoose.Types.ObjectId(altId) }] }
+          : { 'playlists.id': altId }
+        ).select('_id name avatar playlists').lean();
+        if (altOwner) {
+          sourceOwner = altOwner;
+          sourcePlaylist = altOwner.playlists?.find(p => String(p.id || p._id) === altId);
+        }
+      }
+      if (!sourcePlaylist) {
+        sourcePlaylist = bodyPlaylist;
+      }
     }
 
     if (!sourcePlaylist) {
       return res.status(404).json({ error: 'Playlist not found' });
     }
 
-    if (sourcePlaylist.isPublic === false && String(sourceOwner?._id) !== String(currentUser._id)) {
+    if (sourcePlaylist.isPublic === false && sourceOwner?._id && String(sourceOwner._id) !== String(currentUser._id)) {
       return res.status(403).json({ error: 'Cannot save a private playlist' });
     }
 
     const existingIndex = (currentUser.playlists || []).findIndex(p =>
-      String(p.sourcePlaylistId) === targetId ||
-      String(p.id) === targetId
+      String(p.sourcePlaylistId || '') === targetId ||
+      String(p.id || '') === targetId ||
+      (isTargetObjId && String(p._id || '') === targetId) ||
+      (bodyPlaylist?.id && String(p.sourcePlaylistId || '') === String(bodyPlaylist.id)) ||
+      (bodyPlaylist?._id && String(p.sourcePlaylistId || '') === String(bodyPlaylist._id))
     );
 
-    if (existingIndex >= 0) {
-      currentUser.playlists.splice(existingIndex, 1);
-      currentUser.markModified('playlists');
-      await currentUser.save();
+    // Support explicit action: 'save' vs 'unsave'
+    if (action === 'unsave') {
+      if (existingIndex >= 0) {
+        currentUser.playlists.splice(existingIndex, 1);
+        currentUser.markModified('playlists');
+        await currentUser.save();
+      }
       return res.json({
         success: true,
         removed: true,
+        saved: false,
         playlists: currentUser.playlists
       });
     }
 
+    if (action === 'save') {
+      if (existingIndex >= 0) {
+        return res.json({
+          success: true,
+          alreadySaved: true,
+          saved: true,
+          playlist: currentUser.playlists[existingIndex],
+          playlists: currentUser.playlists
+        });
+      }
+    } else {
+      // Toggle behavior if no explicit action
+      if (existingIndex >= 0) {
+        currentUser.playlists.splice(existingIndex, 1);
+        currentUser.markModified('playlists');
+        await currentUser.save();
+        return res.json({
+          success: true,
+          removed: true,
+          saved: false,
+          playlists: currentUser.playlists
+        });
+      }
+    }
+
+    // Determine track IDs
+    let trackIds = [];
+    if (Array.isArray(bodyTracks) && bodyTracks.length > 0) {
+      trackIds = bodyTracks.map(t => (t && typeof t === 'object') ? String(t._id || t.id) : String(t)).filter(Boolean);
+    } else if (Array.isArray(sourcePlaylist.trackIds) && sourcePlaylist.trackIds.length > 0) {
+      trackIds = sourcePlaylist.trackIds.map(t => (t && typeof t === 'object') ? String(t._id || t.id) : String(t)).filter(Boolean);
+    } else if (Array.isArray(sourcePlaylist.tracks) && sourcePlaylist.tracks.length > 0) {
+      trackIds = sourcePlaylist.tracks.map(t => (t && typeof t === 'object') ? String(t._id || t.id) : String(t)).filter(Boolean);
+    } else if (bodyPlaylist && Array.isArray(bodyPlaylist.trackIds) && bodyPlaylist.trackIds.length > 0) {
+      trackIds = bodyPlaylist.trackIds.map(t => (t && typeof t === 'object') ? String(t._id || t.id) : String(t)).filter(Boolean);
+    } else if (bodyPlaylist && Array.isArray(bodyPlaylist.tracks) && bodyPlaylist.tracks.length > 0) {
+      trackIds = bodyPlaylist.tracks.map(t => (t && typeof t === 'object') ? String(t._id || t.id) : String(t)).filter(Boolean);
+    }
+
+    const resolvedOwnerName = sourceOwner?.name || req.body?.artist || bodyPlaylist?.ownerName || bodyPlaylist?.artist || 'Listener';
     const newId = `pl-saved-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const savedPlaylist = {
       id: newId,
-      _id: newId,
-      name: sourcePlaylist.name,
-      cover: sourcePlaylist.cover || '',
-      description: sourcePlaylist.description || (sourceOwner?.name ? `Saved from ${sourceOwner.name}` : 'Saved playlist'),
-      trackIds: [...(sourcePlaylist.trackIds || [])],
+      name: sourcePlaylist.name || bodyPlaylist?.name || 'Saved Playlist',
+      cover: sourcePlaylist.cover || bodyPlaylist?.cover || '',
+      description: sourcePlaylist.description || (resolvedOwnerName ? `Saved from ${resolvedOwnerName}` : 'Saved playlist'),
+      trackIds: Array.from(new Set(trackIds)),
       isPublic: false,
       isLikedSongs: false,
-      isQuran: Boolean(sourcePlaylist.isQuran),
+      isQuran: Boolean(sourcePlaylist.isQuran || bodyPlaylist?.isQuran),
       sourcePlaylistId: targetId,
-      sourceOwnerName: sourceOwner?.name || '',
-      sourceOwnerId: sourceOwner?._id ? String(sourceOwner._id) : '',
+      sourceOwnerName: resolvedOwnerName,
+      sourceOwnerId: sourceOwner?._id ? String(sourceOwner._id) : (bodyPlaylist?.ownerId ? String(bodyPlaylist.ownerId) : ''),
       createdAt: new Date()
     };
 
@@ -505,6 +596,7 @@ router.post('/:id/save', auth, async (req, res) => {
 
     res.json({
       success: true,
+      saved: true,
       playlist: savedPlaylist,
       playlists: currentUser.playlists
     });
@@ -520,11 +612,12 @@ router.post('/:id/unsave', auth, async (req, res) => {
     const currentUser = await User.findById(req.user.id);
     if (!currentUser) return res.status(404).json({ error: 'User not found' });
 
+    const isTargetObjId = mongoose.isValidObjectId(targetId);
     const initialLen = currentUser.playlists.length;
     currentUser.playlists = currentUser.playlists.filter(p =>
-      String(p.sourcePlaylistId) !== targetId &&
-      String(p.id) !== targetId &&
-      String(p._id) !== targetId
+      String(p.sourcePlaylistId || '') !== targetId &&
+      String(p.id || '') !== targetId &&
+      (!isTargetObjId || String(p._id || '') !== targetId)
     );
     currentUser.markModified('playlists');
     await currentUser.save();
@@ -532,6 +625,7 @@ router.post('/:id/unsave', auth, async (req, res) => {
     res.json({
       success: true,
       removed: currentUser.playlists.length < initialLen,
+      saved: false,
       playlists: currentUser.playlists
     });
   } catch (e) {
@@ -557,7 +651,11 @@ router.post('/:id/upload-cover', auth, (req, res, next) => {
     let pl = u ? u.playlists.find(p => String(p.id || p._id) === targetId) : null;
 
     if (!pl) {
-      const anyUser = await User.findOne({ $or: [{ 'playlists.id': targetId }, { 'playlists._id': targetId }] });
+      const isTargetObjId = mongoose.isValidObjectId(targetId);
+      const anyUser = await User.findOne(isTargetObjId
+        ? { $or: [{ 'playlists.id': targetId }, { 'playlists._id': new mongoose.Types.ObjectId(targetId) }] }
+        : { 'playlists.id': targetId }
+      );
       if (anyUser) {
         u = anyUser;
         pl = u.playlists.find(p => String(p.id || p._id) === targetId);

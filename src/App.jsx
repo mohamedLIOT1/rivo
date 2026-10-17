@@ -1257,7 +1257,9 @@ function AppContent() {
     s.on('jam:on_play_state_changed', (data) => {
       if (data?.initiatorId && data.initiatorId === s.id) return;
       setSelectedPlaylist(null);
-      syncRemotePlayState(data);
+      if (data?.isPlaying === false) {
+        syncRemotePlayState(data);
+      }
     });
 
     s.on('jam:invite_received', (data) => {

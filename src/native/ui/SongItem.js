@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, ActivityIndicator, Pla
 import { Play, Pause, Heart, MoreVertical, Disc } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
@@ -14,6 +15,7 @@ export default React.memo(function SongItem({
   isCurrent: propIsCurrent,
   isLiked: propIsLiked
 }) {
+  const { isDark = true } = useTheme?.() || {};
   const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
@@ -30,14 +32,25 @@ export default React.memo(function SongItem({
     ? propIsLiked
     : (Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false);
   const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
-  const isDownloaded = safeDownloaded.some(t => String(t._id || t.id) === trackId) || Boolean(track?.isDownloaded || track?.localAudioUri);
+  const isDownloaded = safeDownloaded.some(t => {
+    if (trackId && String(t._id || t.id) === trackId) return true;
+    const tTitle = (t.title || '').trim().toLowerCase();
+    const tArtist = (t.artist || '').trim().toLowerCase();
+    const curTitle = (track.title || '').trim().toLowerCase();
+    const curArtist = (track.artist || '').trim().toLowerCase();
+    return Boolean(curTitle && tTitle && curTitle === tTitle && (!curArtist || !tArtist || curArtist === tArtist));
+  });
 
   const rawCover = track.coverUrl || track.cover || track.coverImage || '';
   const coverSourceUri = imageError ? normalizeCoverUri(null, track) : normalizeCoverUri(rawCover, track);
 
   return (
     <TouchableOpacity
-      style={[styles.container, isCurrent && styles.activeContainer]}
+      style={[
+        styles.container,
+        !isDark && styles.containerLight,
+        isCurrent && (isDark ? styles.activeContainer : styles.activeContainerLight)
+      ]}
       onPress={() => {
         if (isCurrent) togglePlay();
         else if (onPlay) onPlay(track);
@@ -46,9 +59,9 @@ export default React.memo(function SongItem({
       activeOpacity={0.8}
     >
       {/* Cover Image */}
-      <View style={styles.coverBox}>
-        <View style={styles.coverPlaceholder}>
-          <Disc size={20} color="#1c332e" strokeWidth={1.8} />
+      <View style={[styles.coverBox, !isDark && styles.coverBoxLight]}>
+        <View style={[styles.coverPlaceholder, !isDark && styles.coverPlaceholderLight]}>
+          <Disc size={20} color={!isDark ? '#94a3b8' : '#1c332e'} strokeWidth={1.8} />
         </View>
         <Image
           source={{ uri: coverSourceUri }}
@@ -61,16 +74,16 @@ export default React.memo(function SongItem({
 
       {/* Title & Artist */}
       <View style={styles.info}>
-        <Text style={[styles.title, isCurrent && styles.activeTitle]} numberOfLines={1}>
+        <Text style={[styles.title, !isDark && styles.titleLight, isCurrent && styles.activeTitle]} numberOfLines={1}>
           {track.title || 'Untitled'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <Text style={styles.artist} numberOfLines={1}>
+          <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
             {track.artist || 'Unknown Artist'}
           </Text>
           {isDownloaded && (
-            <View style={styles.localBadge}>
-              <Text style={styles.localBadgeText}>OFFLINE</Text>
+            <View style={[styles.localBadge, !isDark && styles.localBadgeLight]}>
+              <Text style={[styles.localBadgeText, !isDark && styles.localBadgeTextLight]}>OFFLINE</Text>
             </View>
           )}
         </View>
@@ -86,7 +99,7 @@ export default React.memo(function SongItem({
         >
           <Heart
             size={16}
-            color={isLiked ? colors.crimson : '#94a3b8'}
+            color={isLiked ? colors.crimson : (!isDark ? '#64748b' : '#94a3b8')}
             fill={isLiked ? colors.crimson : 'transparent'}
           />
         </TouchableOpacity>
@@ -98,7 +111,7 @@ export default React.memo(function SongItem({
             style={styles.iconBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <MoreVertical size={16} color="#94a3b8" />
+            <MoreVertical size={16} color={!isDark ? '#64748b' : '#94a3b8'} />
           </TouchableOpacity>
         )}
 
@@ -137,9 +150,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: 8,
   },
+  containerLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
   activeContainer: {
     borderColor: '#17a398',
     backgroundColor: '#1a2623',
+  },
+  activeContainerLight: {
+    borderColor: '#17a398',
+    backgroundColor: '#f0fdf9',
   },
   coverBox: {
     width: 44,
@@ -149,11 +175,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#0b1110',
     position: 'relative',
   },
+  coverBoxLight: {
+    backgroundColor: '#f1f5f9',
+  },
   coverPlaceholder: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#0f1c19',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  coverPlaceholderLight: {
+    backgroundColor: '#f8fafc',
   },
   cover: {
     width: '100%',
@@ -169,6 +201,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#ffffff',
   },
+  titleLight: {
+    color: '#0b1110',
+  },
   activeTitle: {
     color: '#26c4b7',
   },
@@ -176,6 +211,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#94a3b8',
+  },
+  artistLight: {
+    color: '#64748b',
   },
   localBadge: {
     backgroundColor: '#0b1110',
@@ -185,11 +223,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#17a398',
   },
+  localBadgeLight: {
+    backgroundColor: '#f0fdf9',
+    borderColor: '#17a398',
+  },
   localBadgeText: {
     fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontSize: 8,
     fontWeight: '900',
     color: '#26c4b7',
+  },
+  localBadgeTextLight: {
+    color: '#0d9488',
   },
   actions: {
     flexDirection: 'row',

@@ -23,12 +23,13 @@ import {
   importLocalAudioFiles,
   scanOfflineVault,
   getStorageLocationInfo,
+  deduplicateTrackList,
 } from '../services/downloadManager';
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 
 export default function OfflineScreen() {
-  const { playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue, removeDownloadedTrack: contextRemoveTrack, downloadedTracks = [] } = useAudioPlayer();
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const [offlineTracks, setOfflineTracks] = useState([]);
@@ -43,11 +44,17 @@ export default function OfflineScreen() {
     loadOffline();
   }, []);
 
+  useEffect(() => {
+    if (Array.isArray(downloadedTracks)) {
+      setOfflineTracks(deduplicateTrackList(downloadedTracks));
+    }
+  }, [downloadedTracks]);
+
   const loadOffline = async () => {
     setLoading(true);
     try {
       const list = await getDownloadedTracks();
-      setOfflineTracks(list);
+      setOfflineTracks(deduplicateTrackList(list));
 
       const info = await getStorageLocationInfo().catch(() => null);
       if (info) {
@@ -110,8 +117,14 @@ export default function OfflineScreen() {
           style: 'destructive',
           onPress: async () => {
             const id = track._id || track.id;
-            await removeDownloadedTrack(id);
-            setOfflineTracks((prev) => prev.filter((t) => (t._id || t.id) !== id));
+            const removeFn = contextRemoveTrack || removeDownloadedTrack;
+            await removeFn(track);
+            const targetKey = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+            setOfflineTracks((prev) => prev.filter((t) => {
+              if ((t._id || t.id) === id) return false;
+              if (targetKey && (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim() === targetKey) return false;
+              return true;
+            }));
             showToast('Track removed from storage', 'info');
           },
         },
@@ -166,12 +179,18 @@ export default function OfflineScreen() {
           onPress: async () => {
             try {
               setActionLoading(true);
+              const removeFn = contextRemoveTrack || removeDownloadedTrack;
               for (const t of sel) {
-                const id = t._id || t.id;
-                await removeDownloadedTrack(id);
+                await removeFn(t);
               }
               const selSet = new Set(sel.map((t) => String(t._id || t.id)));
-              setOfflineTracks((prev) => prev.filter((t) => !selSet.has(String(t._id || t.id))));
+              const selTitles = new Set(sel.map((t) => (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim()).filter(Boolean));
+              setOfflineTracks((prev) => prev.filter((t) => {
+                if (selSet.has(String(t._id || t.id))) return false;
+                const tit = (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+                if (tit && selTitles.has(tit)) return false;
+                return true;
+              }));
               setSelectedIds([]);
               setIsSelectMode(false);
               showToast(`Removed ${sel.length} song(s) from storage`, 'info');
@@ -213,25 +232,25 @@ export default function OfflineScreen() {
         {/* Offline Storage Status Card */}
         <View style={styles.heroOuter}>
           <View style={styles.heroShadow} />
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
             <View style={styles.topRow}>
-              <CassetteTag label="NO WI-FI REQUIRED" bg={colors.ink} textColor={colors.mint} />
+              <CassetteTag label="NO WI-FI REQUIRED" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
             </View>
 
-            <Text style={styles.heroTitle}>OFFLINE SONGS</Text>
-            <Text style={[styles.heroSub, { marginBottom: 12 }]}>
+            <Text style={[styles.heroTitle, !isDark && styles.heroTitleLight]}>OFFLINE SONGS</Text>
+            <Text style={[styles.heroSub, !isDark && styles.heroSubLight, { marginBottom: 12 }]}>
               Audio tracks saved on your device for zero-latency, offline listening.
             </Text>
 
             {/* Storage & Location Info Box */}
-            <View style={styles.vaultInfoBox}>
+            <View style={[styles.vaultInfoBox, !isDark && styles.vaultInfoBoxLight]}>
               <View style={styles.vaultInfoRow}>
                 <HardDrive size={13} color={colors.mint} />
-                <Text style={styles.vaultPathText} numberOfLines={1}>
+                <Text style={[styles.vaultPathText, !isDark && styles.vaultPathTextLight]} numberOfLines={1}>
                   {storageInfo?.folderLabel || 'Internal Storage'}
                 </Text>
               </View>
-              <Text style={styles.vaultSizeText}>
+              <Text style={[styles.vaultSizeText, !isDark && styles.vaultSizeTextLight]}>
                 {formatBytes(storageUsed)} • {(offlineTracks || []).length} SONGS
               </Text>
             </View>
@@ -283,16 +302,16 @@ export default function OfflineScreen() {
 
         {/* Offline Tracks List */}
         <View style={styles.listSection}>
-          <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>DOWNLOADED SONGS</Text>
-            <Text style={styles.listCount}>{(offlineTracks || []).length} SAVED</Text>
+          <View style={[styles.listHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
+            <Text style={[styles.listTitle, !isDark && styles.listTitleLight]}>DOWNLOADED SONGS</Text>
+            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>{(offlineTracks || []).length} SAVED</Text>
           </View>
 
           {(!offlineTracks || offlineTracks.length === 0) ? (
-            <View style={styles.emptyCard}>
+            <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
               <WifiOff size={40} color={colors.teal} />
-              <Text style={styles.emptyTitle}>No offline songs saved</Text>
-              <Text style={styles.emptySub}>
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>No offline songs saved</Text>
+              <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
                 Switch to online mode and tap the download icon on any song to save it for offline playback — no Wi-Fi needed.
               </Text>
               <View style={styles.goOnlineBanner}>
@@ -323,6 +342,7 @@ export default function OfflineScreen() {
                     }}
                     style={[
                       styles.trackCard,
+                      !isDark && styles.trackCardLight,
                       isSelected && {
                         borderColor: colors.mint,
                         backgroundColor: 'rgba(52,211,153,0.12)',
@@ -350,10 +370,10 @@ export default function OfflineScreen() {
                     </View>
 
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.trackTitle} numberOfLines={1}>
+                      <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight]} numberOfLines={1}>
                         {track?.title || 'Untitled'}
                       </Text>
-                      <Text style={styles.trackArtist} numberOfLines={1}>
+                      <Text style={[styles.trackArtist, !isDark && styles.trackArtistLight]} numberOfLines={1}>
                         {track?.artist || 'Unknown Artist'}
                       </Text>
                       <View style={styles.badgeRow}>
@@ -445,6 +465,9 @@ const styles = StyleSheet.create({
   content: {
     padding: 14,
     paddingBottom: 110,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroOuter: {
     marginBottom: 16,
@@ -466,6 +489,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
   },
+  heroCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -480,11 +507,17 @@ const styles = StyleSheet.create({
     color: colors.paper,
     marginBottom: 4,
   },
+  heroTitleLight: {
+    color: '#0b1110',
+  },
   heroSub: {
     fontSize: 11,
     color: colors.paperMuted,
     lineHeight: 15,
     marginBottom: 14,
+  },
+  heroSubLight: {
+    color: '#475569',
   },
   meterBox: {
     backgroundColor: colors.deepForest,
@@ -541,11 +574,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.tealLight,
   },
+  listTitleLight: {
+    color: '#0b1110',
+  },
   listCount: {
     fontFamily: 'monospace',
     fontWeight: '900',
     fontSize: 10,
     color: colors.paperMuted,
+  },
+  listCountLight: {
+    color: '#57534e',
   },
   emptyCard: {
     padding: 30,
@@ -556,6 +595,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 10,
   },
+  emptyCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+  },
   emptyTitle: {
     fontFamily: 'monospace',
     fontWeight: '800',
@@ -563,11 +606,17 @@ const styles = StyleSheet.create({
     color: colors.paper,
     marginTop: 10,
   },
+  emptyTitleLight: {
+    color: '#0b1110',
+  },
   emptySub: {
     fontSize: 11,
     color: colors.paperMuted,
     marginTop: 4,
     textAlign: 'center',
+  },
+  emptySubLight: {
+    color: '#57534e',
   },
   tracksList: {
     gap: 8,
@@ -580,6 +629,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 8,
     padding: 10,
+  },
+  trackCardLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
   },
   coverBox: {
     width: 46,
@@ -608,10 +661,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.paper,
   },
+  trackTitleLight: {
+    color: '#0b1110',
+  },
   trackArtist: {
     fontSize: 10,
     color: colors.paperMuted,
     marginTop: 2,
+  },
+  trackArtistLight: {
+    color: '#57534e',
   },
   badgeRow: {
     marginTop: 4,
@@ -677,6 +736,10 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 12,
   },
+  vaultInfoBoxLight: {
+    backgroundColor: '#f8fafc',
+    borderColor: '#e2e8f0',
+  },
   vaultInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -690,11 +753,17 @@ const styles = StyleSheet.create({
     color: colors.mint,
     flex: 1,
   },
+  vaultPathTextLight: {
+    color: '#0f766e',
+  },
   vaultSizeText: {
     fontFamily: 'monospace',
     fontSize: 9,
     fontWeight: '600',
     color: colors.paperMuted,
+  },
+  vaultSizeTextLight: {
+    color: '#64748b',
   },
   heroActionsRow: {
     flexDirection: 'row',

@@ -9,6 +9,7 @@ import {
   extractYouTubeId,
   getStreamFromCache,
   getStreamDurationFromCache,
+  clearStreamCache,
 } from './youtubeResolver';
 import { parseLrcLyrics } from '../../utils/lrcParser';
 import { API_BASE_URL } from '../config';
@@ -20,6 +21,54 @@ const sanitizeDuration = (val, fallback = 210) => {
   if (num > 10000) return Math.max(1, Math.round(num / 1000));
   if (num > 86400) return fallback;
   return Math.round(num);
+};
+
+export const getTrackDedupeKey = (t) => {
+  if (!t) return '';
+  const cleanTitle = String(t.title || '')
+    .toLowerCase()
+    .replace(/[/\\?%*:|"<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const cleanArtist = String(t.artist || '')
+    .toLowerCase()
+    .replace(/[/\\?%*:|"<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return `${cleanTitle}___${cleanArtist}`;
+};
+
+export const deduplicateTrackList = (list) => {
+  if (!Array.isArray(list)) return [];
+  const map = new Map();
+  for (const t of list) {
+    if (!t) continue;
+    const idKey = String(t._id || t.id || '');
+    const titleKey = getTrackDedupeKey(t);
+    const existingKey = map.has(idKey) ? idKey : (titleKey && map.has(titleKey) ? titleKey : null);
+    if (!existingKey) {
+      if (idKey) map.set(idKey, t);
+      if (titleKey) map.set(titleKey, t);
+    } else {
+      const existing = map.get(existingKey);
+      const hasLocalAudio = t.localAudioUri || t.nativeAudioUri;
+      const merged = {
+        ...existing,
+        ...t,
+        localAudioUri: t.localAudioUri || existing.localAudioUri,
+        nativeAudioUri: t.nativeAudioUri || existing.nativeAudioUri,
+        audioUrl: t.audioUrl || existing.audioUrl,
+        downloaded: Boolean(existing.downloaded || t.downloaded || hasLocalAudio),
+        isDownloaded: Boolean(existing.isDownloaded || t.isDownloaded || hasLocalAudio),
+        lyrics: (Array.isArray(t.lyrics) && t.lyrics.length > 0) ? t.lyrics : existing.lyrics,
+        coverUrl: t.coverUrl || existing.coverUrl,
+        cover: t.cover || existing.cover,
+      };
+      if (idKey) map.set(idKey, merged);
+      if (titleKey) map.set(titleKey, merged);
+    }
+  }
+  return Array.from(new Set(map.values())).filter(Boolean);
 };
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
@@ -113,6 +162,28 @@ const ensureDirs = async () => {
   }
 };
 
+const downloadChangeListeners = new Set();
+
+export const subscribeToDownloadedTracks = (listener) => {
+  if (typeof listener === 'function') {
+    downloadChangeListeners.add(listener);
+  }
+  return () => {
+    downloadChangeListeners.delete(listener);
+  };
+};
+
+export const notifyDownloadedTracksChanged = (tracks) => {
+  const cleanList = deduplicateTrackList(tracks || []);
+  for (const fn of downloadChangeListeners) {
+    try {
+      fn(cleanList);
+    } catch (e) {
+      console.warn('[downloadManager] Listener notification error:', e.message);
+    }
+  }
+};
+
 const saveToStorageAndManifest = async (list) => {
   try {
     const jsonStr = JSON.stringify(list || []);
@@ -126,6 +197,7 @@ const saveToStorageAndManifest = async (list) => {
   } catch (e) {
     console.warn('[downloadManager] saveToStorageAndManifest error:', e.message);
   }
+  notifyDownloadedTracksChanged(list);
 };
 
 export const reanchorDocumentUri = (uri) => {
@@ -190,11 +262,14 @@ export const getDownloadedTracks = async () => {
           const list = JSON.parse(raw);
           if (Array.isArray(list) && list.length > 0) {
             const existingIds = new Set(tracks.map(t => String(t._id || t.id)));
+            const existingKeys = new Set(tracks.map(getTrackDedupeKey));
             list.forEach(t => {
               const tid = String(t._id || t.id);
-              if (tid && !existingIds.has(tid)) {
+              const tKey = getTrackDedupeKey(t);
+              if (tid && !existingIds.has(tid) && (!tKey || !existingKeys.has(tKey))) {
                 tracks.push(t);
                 existingIds.add(tid);
+                if (tKey) existingKeys.add(tKey);
               }
             });
           }
@@ -243,7 +318,13 @@ export const getDownloadedTracks = async () => {
       const dirInfo = await FileSystem.getInfoAsync(TRACKS_DIR);
       if (dirInfo.exists) {
         const diskFiles = await FileSystem.readDirectoryAsync(TRACKS_DIR);
-        const trackMap = new Map(tracks.map(t => [String(t._id || t.id), t]));
+        const trackMap = new Map();
+        tracks.forEach(t => {
+          if (t._id) trackMap.set(String(t._id), t);
+          if (t.id) trackMap.set(String(t.id), t);
+          const k = getTrackDedupeKey(t);
+          if (k) trackMap.set(k, t);
+        });
         let modified = false;
 
         for (const file of diskFiles) {
@@ -255,7 +336,7 @@ export const getDownloadedTracks = async () => {
           const fInfo = await FileSystem.getInfoAsync(fileUri);
           if (!fInfo.exists || fInfo.size < 10000) continue;
 
-          const existing = trackMap.get(trackId);
+          let existing = trackMap.get(trackId);
           if (existing) {
             if (existing.localAudioUri !== fileUri || existing.nativeAudioUri !== fileUri) {
               existing.localAudioUri = fileUri;
@@ -266,50 +347,65 @@ export const getDownloadedTracks = async () => {
               modified = true;
             }
           } else {
-            // File is on device disk but missing from index (e.g. after APK update) -> auto recover with ID3 tags & lyrics!
-            const coverUri = `${COVERS_DIR}${trackId}.jpg`;
-            const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+            // Check if this audio file belongs to an existing track by ID3 tags or filename
             const id3Meta = await extractId3Metadata(fileUri, trackId);
             const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(file);
             const resolvedTitle = cleanMetadataString(id3Meta.title || fTitle || trackId, 'Offline Track');
             const resolvedArtist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
-            const resolvedAlbum = cleanMetadataString(id3Meta.album || 'Downloaded', 'Downloaded');
-            const finalCover = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
+            const normKey = getTrackDedupeKey({ title: resolvedTitle, artist: resolvedArtist });
+            existing = trackMap.get(normKey);
 
-            const recovered = {
-              id: trackId,
-              _id: trackId,
-              title: resolvedTitle,
-              artist: resolvedArtist,
-              album: resolvedAlbum,
-              source: 'Rivo',
-              signature: 'Rivo',
-              publisher: 'Rivo',
-              localAudioUri: fileUri,
-              nativeAudioUri: fileUri,
-              audioUrl: fileUri,
-              coverUrl: finalCover,
-              cover: finalCover,
-              lyrics: id3Meta.lyrics || null,
-              embeddedLyrics: id3Meta.lyrics || null,
-              isDownloaded: true,
-              downloaded: true,
-              downloadedAt: new Date().toISOString(),
-            };
-            tracks.push(recovered);
-            trackMap.set(trackId, recovered);
-            modified = true;
+            if (existing) {
+              existing.localAudioUri = fileUri;
+              existing.nativeAudioUri = fileUri;
+              existing.audioUrl = fileUri;
+              existing.downloaded = true;
+              existing.isDownloaded = true;
+              trackMap.set(trackId, existing);
+              modified = true;
+            } else {
+              // File is on device disk but missing from index -> auto recover
+              const coverUri = `${COVERS_DIR}${trackId}.jpg`;
+              const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
+              const resolvedAlbum = cleanMetadataString(id3Meta.album || 'Downloaded', 'Downloaded');
+              const finalCover = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
+
+              const recovered = {
+                id: trackId,
+                _id: trackId,
+                title: resolvedTitle,
+                artist: resolvedArtist,
+                album: resolvedAlbum,
+                source: 'Rivo',
+                signature: 'Rivo',
+                publisher: 'Rivo',
+                localAudioUri: fileUri,
+                nativeAudioUri: fileUri,
+                audioUrl: fileUri,
+                coverUrl: finalCover,
+                cover: finalCover,
+                lyrics: id3Meta.lyrics || null,
+                embeddedLyrics: id3Meta.lyrics || null,
+                isDownloaded: true,
+                downloaded: true,
+                downloadedAt: new Date().toISOString(),
+              };
+              tracks.push(recovered);
+              trackMap.set(trackId, recovered);
+              if (normKey) trackMap.set(normKey, recovered);
+              modified = true;
+            }
           }
         }
 
-        // Verify and filter invalid records
-        const verified = tracks.filter(t =>
+        // Verify, filter invalid records, and strictly deduplicate
+        const verified = deduplicateTrackList(tracks.filter(t =>
           t &&
           t.source !== 'SoundCloud' &&
           t.album !== 'SoundCloud' &&
           !String(t.audioUrl || '').includes('soundcloud.com') &&
           !String(t.id || t._id || '').startsWith('sc-')
-        );
+        ));
 
         if (modified || verified.length !== tracks.length) {
           tracks = verified;
@@ -320,7 +416,7 @@ export const getDownloadedTracks = async () => {
       console.warn('[downloadManager] disk reconciliation error:', diskErr.message);
     }
 
-    return tracks;
+    return deduplicateTrackList(tracks);
   } catch {
     return [];
   }
@@ -645,62 +741,121 @@ export const downloadTrack = async (track, onProgress) => {
         downloaded: true,
         downloadedAt: new Date().toISOString(),
       };
-      const updated = [record, ...existing.filter(t => String(t._id || t.id) !== trackId)];
-      await saveToStorageAndManifest(updated);
+      const dedupeKey = getTrackDedupeKey(record);
+      const updated = [record, ...existing.filter(t =>
+        String(t._id || t.id) !== trackId &&
+        (!dedupeKey || getTrackDedupeKey(t) !== dedupeKey)
+      )];
+      const cleaned = deduplicateTrackList(updated);
+      await saveToStorageAndManifest(cleaned);
       return record;
     }
   } catch {}
 
-  let resolvedDuration = null;
+  let resolvedDuration = track.duration || getStreamDurationFromCache(trackId) || null;
 
-  // Extract YouTube ID if present
+  // 1. Check for already-active stream that online playback resolved/uses
+  let activeStream = track.resolvedAudioUrl || getStreamFromCache(trackId);
+  const rawTrackAudio = track.audioUrl || track.url || '';
+  if (!activeStream && rawTrackAudio && typeof rawTrackAudio === 'string') {
+    if (rawTrackAudio.startsWith('/uploads/') || rawTrackAudio.startsWith('/api/')) {
+      activeStream = `${API_BASE_URL}${rawTrackAudio}`;
+    } else if (rawTrackAudio.startsWith('http') && !rawTrackAudio.includes('youtube.com') && !rawTrackAudio.includes('youtu.be')) {
+      activeStream = rawTrackAudio;
+    }
+  }
+
+  // Normalize relative activeStream path to absolute URL
+  if (activeStream && typeof activeStream === 'string' && activeStream.startsWith('/')) {
+    activeStream = `${API_BASE_URL}${activeStream}`;
+  }
+
+  // 2. If no active stream yet, resolve the stream using the exact same authentic resolver as online playback
+  if (!activeStream) {
+    try {
+      emitProgress(10);
+      activeStream = await resolveAudioStream(track);
+      if (activeStream && typeof activeStream === 'string' && activeStream.startsWith('/')) {
+        activeStream = `${API_BASE_URL}${activeStream}`;
+      }
+      const cachedDur = getStreamDurationFromCache(trackId);
+      if (cachedDur) resolvedDuration = cachedDur;
+    } catch (e) {
+      console.warn('[downloadManager] resolveAudioStream error:', e.message);
+    }
+  }
+
+  // Check if activeStream is an authentic direct audio file (upload / direct mp3)
+  const activeStreamIsDirectRemote = Boolean(
+    activeStream &&
+    typeof activeStream === 'string' &&
+    activeStream.startsWith('http') &&
+    !activeStream.includes('googlevideo.com') &&
+    !activeStream.includes('youtube.com') &&
+    !activeStream.includes('youtu.be')
+  );
+
+  // Gather candidate download URLs in order of priority
+  const rawCandidates = [];
+  let directGoogleStream = null;
+  let directGoogleContentLength = null;
+
+  // If activeStream was resolved:
+  if (activeStream && typeof activeStream === 'string' && activeStream.startsWith('http') && !activeStream.includes('youtube.com/watch') && !activeStream.includes('youtu.be/')) {
+    const ext = activeStream.includes('.m4a') ? 'm4a' : 'mp3';
+    rawCandidates.push({ url: activeStream, ext, source: 'active-online-stream' });
+    if (activeStream.includes('googlevideo.com')) {
+      directGoogleStream = activeStream;
+      const proxyStreamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(activeStream)}`;
+      rawCandidates.push({ url: proxyStreamUrl, ext: 'm4a', source: 'backend-stream-proxy' });
+    }
+  }
+
+  // Candidate 1: Direct remote audio URL (if already a clean remote audio file or upload)
+  const isDirectRemote = (u) => {
+    if (!u || typeof u !== 'string') return false;
+    const trimmed = u.trim();
+    if (trimmed.startsWith('/uploads/') || trimmed.startsWith('/api/')) return true;
+    return trimmed.startsWith('http') && !trimmed.includes('youtube.com') && !trimmed.includes('youtu.be') && !trimmed.includes('soundcloud.com');
+  };
+  const normalizeAudioUrl = (u) => (typeof u === 'string' && u.startsWith('/')) ? `${API_BASE_URL}${u}` : u;
+
+  if (isDirectRemote(track.audioUrl)) {
+    const directUrl = normalizeAudioUrl(track.audioUrl);
+    rawCandidates.push({ url: directUrl, ext: directUrl.includes('.m4a') ? 'm4a' : 'mp3', source: 'track-audioUrl' });
+  }
+  if (isDirectRemote(track.nativeAudioUri)) {
+    const directUrl = normalizeAudioUrl(track.nativeAudioUri);
+    rawCandidates.push({ url: directUrl, ext: directUrl.includes('.m4a') ? 'm4a' : 'mp3', source: 'track-nativeAudioUri' });
+  }
+
+  // Candidate 2: If NOT already an authentic direct stream, fallback to YouTube ID resolution
   const rawUrl = track.audioUrl || track.url || '';
-  let ytId = extractYouTubeId(rawUrl) ||
-             (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
+  let ytId = (!activeStreamIsDirectRemote) ? (
+    extractYouTubeId(rawUrl) || (track.source === 'YouTube' ? extractYouTubeId(trackId) : null)
+  ) : null;
 
-  // If no direct ytId, search YouTube directly on client (<300ms) to bypass slow backend yt-dlp
-  if (!ytId && (cleanTitle || cleanArtist)) {
+  if (!activeStream && !ytId && (cleanTitle || cleanArtist)) {
     try {
       const searchRes = await searchYouTubeClientSide(`${cleanArtist} ${cleanTitle}`.trim());
       if (searchRes?.videoId) {
         ytId = searchRes.videoId;
-        if (searchRes.duration) resolvedDuration = searchRes.duration;
+        if (searchRes.duration && !resolvedDuration) resolvedDuration = searchRes.duration;
       }
     } catch {}
   }
 
-  // Gather candidate download URLs in order of priority
-  const rawCandidates = [];
-
-  // Candidate 0: In-memory stream cache (Instant download if track was recently played or resolved)
-  const cachedStream = getStreamFromCache(trackId);
-  const cachedDur = getStreamDurationFromCache(trackId);
-  if (cachedDur) resolvedDuration = cachedDur;
-  if (cachedStream && typeof cachedStream === 'string' && cachedStream.startsWith('http') && !cachedStream.includes('youtube.com/watch') && !cachedStream.includes('youtu.be/')) {
-    rawCandidates.push({ url: cachedStream, ext: cachedStream.includes('.m4a') ? 'm4a' : 'mp3', source: 'cached-stream' });
-  }
-
-  // Candidate 1: Direct remote audio URL (if already a clean remote audio file)
-  const isDirectRemote = (u) => typeof u === 'string' && u.startsWith('http') && !u.includes('youtube.com') && !u.includes('youtu.be') && !u.includes('soundcloud.com');
-  if (isDirectRemote(track.audioUrl)) rawCandidates.push({ url: track.audioUrl, ext: track.audioUrl.includes('.m4a') ? 'm4a' : 'mp3', source: 'track-audioUrl' });
-  if (isDirectRemote(track.nativeAudioUri)) rawCandidates.push({ url: track.nativeAudioUri, ext: track.nativeAudioUri.includes('.m4a') ? 'm4a' : 'mp3', source: 'track-nativeAudioUri' });
-
-  // Candidate 2: Ultra-fast Direct Client-side YouTube Audio Stream Resolution (resolves official Googlevideo stream directly on device in <1s)
-  let directGoogleStream = null;
-  let directGoogleContentLength = null;
-  if (ytId) {
+  if (ytId && !directGoogleStream && !activeStreamIsDirectRemote) {
     try {
       emitProgress(12);
       const ytRes = await resolveClientSideYouTubeStream(ytId);
-      directGoogleStream = typeof ytRes === 'string' ? ytRes : ytRes?.url;
-      directGoogleContentLength = ytRes?.contentLength || null;
-      if (ytRes?.duration) resolvedDuration = ytRes.duration;
-
-      if (directGoogleStream && typeof directGoogleStream === 'string' && directGoogleStream.startsWith('http')) {
-        // High-speed direct stream from Google CDN edge directly to device storage
-        rawCandidates.push({ url: directGoogleStream, ext: 'm4a', source: 'direct-google-cdn' });
-        // Proxied URL fallback with Range header support in case of direct CDN blockage
-        const proxyStreamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(directGoogleStream)}`;
+      const resStream = typeof ytRes === 'string' ? ytRes : ytRes?.url;
+      if (resStream && typeof resStream === 'string' && resStream.startsWith('http')) {
+        directGoogleStream = resStream;
+        directGoogleContentLength = ytRes?.contentLength || null;
+        if (ytRes?.duration && !resolvedDuration) resolvedDuration = ytRes.duration;
+        rawCandidates.push({ url: resStream, ext: 'm4a', source: 'direct-google-cdn' });
+        const proxyStreamUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(resStream)}`;
         rawCandidates.push({ url: proxyStreamUrl, ext: 'm4a', source: 'backend-stream-proxy' });
       }
     } catch (e) {
@@ -734,7 +889,8 @@ export const downloadTrack = async (track, onProgress) => {
   let success = false;
 
   // ── TURBO TIER 0: High-Speed Parallel Range Download (2-5 MB/s, completes in 1-3 seconds) ──
-  if (directGoogleStream && directGoogleContentLength && directGoogleContentLength > 50000) {
+  // Only use Turbo Tier 0 if directGoogleStream is the authentic active stream, or if no authentic direct stream exists
+  if (!activeStreamIsDirectRemote && directGoogleStream && directGoogleContentLength && directGoogleContentLength > 50000) {
     try {
       emitProgress(15);
       const turboOk = await downloadViaParallelRanges(
@@ -957,32 +1113,94 @@ export const downloadTrack = async (track, onProgress) => {
   };
 
   const existing = await getDownloadedTracks();
-  const updated = [record, ...existing.filter(t => String(t._id || t.id) !== trackId)];
-  await saveToStorageAndManifest(updated);
+  const dedupeKey = getTrackDedupeKey(record);
+  const updated = [record, ...existing.filter(t =>
+    String(t._id || t.id) !== trackId &&
+    (!dedupeKey || getTrackDedupeKey(t) !== dedupeKey)
+  )];
+  const cleaned = deduplicateTrackList(updated);
+  await saveToStorageAndManifest(cleaned);
 
   if (onProgress) onProgress(100);
   return record;
 };
 
-export const removeDownloadedTrack = async (trackId) => {
-  const idStr = String(trackId);
-  const audioFileUriMp3 = `${TRACKS_DIR}${idStr}.mp3`;
-  const audioFileUriM4a = `${TRACKS_DIR}${idStr}.m4a`;
-  const coverFileUri = `${COVERS_DIR}${idStr}.jpg`;
-
-  await FileSystem.deleteAsync(audioFileUriMp3, { idempotent: true }).catch(() => {});
-  await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
-  await FileSystem.deleteAsync(coverFileUri, { idempotent: true }).catch(() => {});
-
-  if (PERSISTENT_DIR) {
-    await FileSystem.deleteAsync(`${PERSISTENT_DIR}${idStr}.mp3`, { idempotent: true }).catch(() => {});
-    await FileSystem.deleteAsync(`${PERSISTENT_DIR}${idStr}.m4a`, { idempotent: true }).catch(() => {});
-    await FileSystem.deleteAsync(`${PERSISTENT_DIR}${idStr}.jpg`, { idempotent: true }).catch(() => {});
-  }
+export const removeDownloadedTrack = async (trackOrId) => {
+  if (!trackOrId) return [];
+  const idStr = (typeof trackOrId === 'object' && trackOrId !== null)
+    ? String(trackOrId._id || trackOrId.id || '')
+    : String(trackOrId);
 
   const existing = await getDownloadedTracks();
-  const updated = existing.filter(t => String(t._id || t.id) !== idStr);
+  const target = (typeof trackOrId === 'object' && trackOrId !== null)
+    ? trackOrId
+    : existing.find(t => String(t._id || t.id) === idStr);
+
+  const targetKey = getTrackDedupeKey(target);
+
+  const toRemove = existing.filter(t => {
+    if (!t) return false;
+    const tid = String(t._id || t.id);
+    if (idStr && tid === idStr) return true;
+    if (targetKey && getTrackDedupeKey(t) === targetKey) return true;
+    return false;
+  });
+
+  const idsToDelete = new Set([idStr, ...toRemove.map(t => String(t._id || t.id)).filter(Boolean)]);
+
+  for (const tid of idsToDelete) {
+    clearStreamCache(tid);
+    await FileSystem.deleteAsync(`${TRACKS_DIR}${tid}.mp3`, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(`${TRACKS_DIR}${tid}.m4a`, { idempotent: true }).catch(() => {});
+    await FileSystem.deleteAsync(`${COVERS_DIR}${tid}.jpg`, { idempotent: true }).catch(() => {});
+    if (PERSISTENT_DIR) {
+      await FileSystem.deleteAsync(`${PERSISTENT_DIR}${tid}.mp3`, { idempotent: true }).catch(() => {});
+      await FileSystem.deleteAsync(`${PERSISTENT_DIR}${tid}.m4a`, { idempotent: true }).catch(() => {});
+      await FileSystem.deleteAsync(`${PERSISTENT_DIR}${tid}.jpg`, { idempotent: true }).catch(() => {});
+    }
+  }
+
+  // Also delete specific localAudioUri / nativeAudioUri if they point to file://
+  for (const t of toRemove) {
+    const uris = [t.localAudioUri, t.nativeAudioUri, t.audioUrl, t.coverUrl, t.cover];
+    for (const u of uris) {
+      if (u && typeof u === 'string' && u.startsWith('file://')) {
+        await FileSystem.deleteAsync(u, { idempotent: true }).catch(() => {});
+      }
+    }
+  }
+
+  const updated = existing.filter(t => {
+    if (!t) return false;
+    const tid = String(t._id || t.id);
+    if (idsToDelete.has(tid)) return false;
+    if (targetKey && getTrackDedupeKey(t) === targetKey) return false;
+    return true;
+  });
+
   await saveToStorageAndManifest(updated);
+
+  // Also purge removed items from legacy storage keys so they never resurrect
+  for (const legKey of LEGACY_STORAGE_KEYS) {
+    if (legKey === STORAGE_KEY) continue;
+    try {
+      const raw = await AsyncStorage.getItem(legKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const legFiltered = parsed.filter(t => {
+            if (!t) return false;
+            const tid = String(t._id || t.id);
+            if (idsToDelete.has(tid)) return false;
+            if (targetKey && getTrackDedupeKey(t) === targetKey) return false;
+            return true;
+          });
+          await AsyncStorage.setItem(legKey, JSON.stringify(legFiltered));
+        }
+      }
+    } catch {}
+  }
+
   return updated;
 };
 
@@ -1375,7 +1593,7 @@ export const importLocalAudioFiles = async () => {
     }
 
     if (newTracks.length > 0) {
-      const updated = [...newTracks, ...existing];
+      const updated = deduplicateTrackList([...newTracks, ...existing]);
       await saveToStorageAndManifest(updated);
       return { success: true, count: newTracks.length, tracks: updated };
     }
@@ -1392,6 +1610,7 @@ export const scanOfflineVault = async () => {
   const existing = await getDownloadedTracks();
   const existingUris = new Set(existing.map(t => t.localAudioUri || t.nativeAudioUri || t.audioUrl));
   const existingIds = new Set(existing.map(t => String(t._id || t.id)));
+  const existingKeys = new Set(existing.map(getTrackDedupeKey).filter(Boolean));
 
   let newlyFound = 0;
   const newTracks = [];
@@ -1413,6 +1632,9 @@ export const scanOfflineVault = async () => {
       const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
       const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
       const album = cleanMetadataString(id3Meta.album || 'Offline Vault', 'Offline Vault');
+      const dedupeKey = getTrackDedupeKey({ title, artist, id: baseId });
+      if (dedupeKey && existingKeys.has(dedupeKey)) continue;
+
       const coverUri = `${COVERS_DIR}${baseId}.jpg`;
       const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
       const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
@@ -1442,6 +1664,7 @@ export const scanOfflineVault = async () => {
       newTracks.push(newTrack);
       existingIds.add(baseId);
       existingUris.add(fileUri);
+      if (dedupeKey) existingKeys.add(dedupeKey);
       newlyFound++;
     }
   } catch (err) {
@@ -1470,6 +1693,9 @@ export const scanOfflineVault = async () => {
           const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
           const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
           const album = cleanMetadataString(id3Meta.album || 'Files App', 'Files App');
+          const dedupeKey = getTrackDedupeKey({ title, artist, id: `ios_${baseId}` });
+          if (dedupeKey && existingKeys.has(dedupeKey)) continue;
+
           const coverUri = `${COVERS_DIR}${baseId}.jpg`;
           const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
           const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
@@ -1499,6 +1725,7 @@ export const scanOfflineVault = async () => {
           newTracks.push(newTrack);
           existingIds.add(newTrack.id);
           existingUris.add(targetUri);
+          if (dedupeKey) existingKeys.add(dedupeKey);
           newlyFound++;
         }
       }
@@ -1531,6 +1758,9 @@ export const scanOfflineVault = async () => {
             const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
             const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
             const album = cleanMetadataString(id3Meta.album || 'Music Vault', 'Music Vault');
+            const dedupeKey = getTrackDedupeKey({ title, artist, id: baseId });
+            if (dedupeKey && existingKeys.has(dedupeKey)) continue;
+
             const coverUri = `${COVERS_DIR}${baseId}.jpg`;
             const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
             const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
@@ -1560,6 +1790,7 @@ export const scanOfflineVault = async () => {
             newTracks.push(newTrack);
             existingIds.add(baseId);
             existingUris.add(targetUri);
+            if (dedupeKey) existingKeys.add(dedupeKey);
             newlyFound++;
           }
         }
@@ -1570,7 +1801,7 @@ export const scanOfflineVault = async () => {
   }
 
   if (newTracks.length > 0) {
-    const updated = [...newTracks, ...existing];
+    const updated = deduplicateTrackList([...newTracks, ...existing]);
     await saveToStorageAndManifest(updated);
     return { newlyFound, tracks: updated };
   }
@@ -1616,4 +1847,36 @@ export const getStorageLocationInfo = async () => {
     totalCount: count,
     totalBytes: totalSize,
   };
+};
+
+export const updateDownloadedTrackLyrics = async (trackIdOrObj, lyrics) => {
+  if (!trackIdOrObj) return;
+  const idStr = (typeof trackIdOrObj === 'object' && trackIdOrObj !== null)
+    ? String(trackIdOrObj._id || trackIdOrObj.id || '')
+    : String(trackIdOrObj);
+  const targetKey = (typeof trackIdOrObj === 'object' && trackIdOrObj !== null)
+    ? getTrackDedupeKey(trackIdOrObj)
+    : '';
+
+  const existing = await getDownloadedTracks();
+  let found = false;
+  const updated = existing.map(t => {
+    if (!t) return t;
+    const tid = String(t._id || t.id);
+    const tKey = getTrackDedupeKey(t);
+    if ((idStr && tid === idStr) || (targetKey && tKey && tKey === targetKey)) {
+      found = true;
+      return {
+        ...t,
+        lyrics,
+        rawLyrics: typeof lyrics === 'string' ? lyrics : (t.rawLyrics || null)
+      };
+    }
+    return t;
+  });
+
+  if (found) {
+    const cleaned = deduplicateTrackList(updated);
+    await saveToStorageAndManifest(cleaned);
+  }
 };

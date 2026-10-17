@@ -14,6 +14,13 @@ export const getStreamDurationFromCache = (trackId) => {
   return streamDurationCache.get(String(trackId)) || null;
 };
 
+export const clearStreamCache = (trackId) => {
+  if (!trackId) return;
+  const idStr = String(trackId);
+  streamCache.delete(idStr);
+  streamDurationCache.delete(idStr);
+};
+
 let cachedVisitorData = '';
 let cachedVisitorTimestamp = 0;
 const VISITOR_CACHE_TTL = 3600 * 1000 * 12; // 12 hours

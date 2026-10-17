@@ -414,7 +414,22 @@ export async function saveTrackOffline(track, options = {}) {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      store.put(offlineTrack);
+      const allReq = store.getAll();
+      allReq.onsuccess = () => {
+        const items = allReq.result || [];
+        const normTitle = cleanTitle.toLowerCase();
+        const normArtist = cleanArtist.toLowerCase();
+        items.forEach(it => {
+          if (String(it.id) !== trackId) {
+            const itTitle = String(it.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+            const itArtist = String(it.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+            if (itTitle === normTitle && (!normArtist || !itArtist || itArtist === normArtist)) {
+              try { store.delete(it.id); } catch {}
+            }
+          }
+        });
+        store.put(offlineTrack);
+      };
       tx.oncomplete = () => resolve(offlineTrack);
       tx.onerror = (e) => reject(e.target.error);
     });
@@ -662,6 +677,29 @@ export async function isTrackSavedOffline(trackId, title = null, artist = null) 
   }
 }
 
+export function deduplicateOfflineTracks(list) {
+  if (!Array.isArray(list)) return [];
+  const map = new Map();
+  for (const t of list) {
+    if (!t) continue;
+    const idKey = String(t._id || t.id || '');
+    const cleanTitle = String(t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').replace(/\s+/g, ' ').trim();
+    const cleanArtist = String(t.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').replace(/\s+/g, ' ').trim();
+    const titleKey = (cleanTitle && cleanArtist) ? `${cleanTitle}___${cleanArtist}` : null;
+    const existingKey = map.has(idKey) ? idKey : (titleKey && map.has(titleKey) ? titleKey : null);
+    if (!existingKey) {
+      if (idKey) map.set(idKey, t);
+      if (titleKey) map.set(titleKey, t);
+    } else {
+      const existing = map.get(existingKey);
+      const merged = { ...existing, ...t, downloaded: true };
+      if (idKey) map.set(idKey, merged);
+      if (titleKey) map.set(titleKey, merged);
+    }
+  }
+  return Array.from(new Set(map.values())).filter(Boolean);
+}
+
 // Get all downloaded tracks with fresh Blob URLs
 export async function getOfflineTracks() {
   try {
@@ -710,7 +748,7 @@ export async function getOfflineTracks() {
 
           return { ...item, audioUrl, cover, downloaded: true };
         });
-        resolve(formatted);
+        resolve(deduplicateOfflineTracks(formatted));
       };
       req.onerror = () => resolve([]);
     });

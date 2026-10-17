@@ -100,6 +100,8 @@ export default function UserDetailModal({
   const displayName = currentProfile.name || 'Anonymous Listener';
   const initial = displayName.charAt(0).toUpperCase() || 'U';
   const avatarUrl = currentProfile.avatar;
+  const isBotProfile = Boolean(currentProfile?.isBot || currentProfile?.name === 'Rivo Bot' || currentProfile?.email === 'bot@rivo.app');
+  const resolvedBotAvatar = (isBotProfile && (!avatarUrl || avatarUrl.includes('unsplash'))) ? 'https://rivo-m.duckdns.org/public/assets/rivo-bot.png' : avatarUrl;
   const followersCount = currentProfile.followersCount !== undefined
     ? currentProfile.followersCount
     : (Array.isArray(currentProfile.followers) ? currentProfile.followers.length : 0);
@@ -158,7 +160,7 @@ export default function UserDetailModal({
           </TouchableOpacity>
 
           <View style={styles.badgePill}>
-            <Text style={styles.badgePillText}>COMMUNITY LISTENER PROFILE</Text>
+            <Text style={styles.badgePillText}>{isBotProfile ? 'SYSTEM BOT' : 'COMMUNITY LISTENER PROFILE'}</Text>
           </View>
         </View>
 
@@ -170,8 +172,8 @@ export default function UserDetailModal({
           {/* Hero Section */}
           <View style={styles.heroCard}>
             <View style={styles.avatarWrap}>
-              {avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={styles.avatarImg} resizeMode="cover" />
+              {resolvedBotAvatar ? (
+                <Image source={{ uri: resolvedBotAvatar }} style={styles.avatarImg} resizeMode="cover" />
               ) : (
                 <View style={styles.initialsBox}>
                   <Text style={styles.initialsText}>{initial}</Text>
@@ -181,9 +183,14 @@ export default function UserDetailModal({
 
             <View style={styles.nameRow}>
               <Text style={styles.userName}>{displayName}</Text>
-              {(currentProfile.isVerified || currentProfile.role === 'admin') && (
+              {(currentProfile.isVerified || currentProfile.role === 'admin' || isBotProfile) && (
                 <View style={styles.verifiedBadge}>
                   <ShieldCheck size={14} color="#17a398" strokeWidth={2.5} />
+                </View>
+              )}
+              {isBotProfile && (
+                <View style={{ backgroundColor: '#17a398', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginLeft: 4 }}>
+                  <Text style={{ fontFamily: 'monospace', fontWeight: '900', fontSize: 9, color: '#082621' }}>BOT</Text>
                 </View>
               )}
             </View>
@@ -213,24 +220,26 @@ export default function UserDetailModal({
             {/* Action Buttons: Follow & Chat */}
             {!isSelf && (
               <View style={styles.actionRow}>
-                <TouchableOpacity
-                  style={[styles.followBtn, isFollowing && styles.followBtnActive]}
-                  onPress={handleToggleFollow}
-                  disabled={isTogglingFollow}
-                  activeOpacity={0.85}
-                >
-                  {isFollowing ? (
-                    <>
-                      <UserCheck size={15} color="#0b1110" strokeWidth={2.5} />
-                      <Text style={styles.followBtnTextActive}>FOLLOWING</Text>
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus size={15} color="#0b1110" strokeWidth={2.5} />
-                      <Text style={styles.followBtnText}>FOLLOW LISTENER</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                {!isBotProfile && (
+                  <TouchableOpacity
+                    style={[styles.followBtn, isFollowing && styles.followBtnActive]}
+                    onPress={handleToggleFollow}
+                    disabled={isTogglingFollow}
+                    activeOpacity={0.85}
+                  >
+                    {isFollowing ? (
+                      <>
+                        <UserCheck size={15} color="#0b1110" strokeWidth={2.5} />
+                        <Text style={styles.followBtnTextActive}>FOLLOWING</Text>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={15} color="#0b1110" strokeWidth={2.5} />
+                        <Text style={styles.followBtnText}>FOLLOW LISTENER</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 {onOpenChat && (
                   <TouchableOpacity
@@ -246,7 +255,7 @@ export default function UserDetailModal({
                   </TouchableOpacity>
                 )}
 
-                {onOpenJam && (
+                {onOpenJam && !currentProfile.isBot && currentProfile.name !== 'Rivo Bot' && currentProfile.email !== 'bot@rivo.app' && (
                   <TouchableOpacity
                     style={styles.jamBtn}
                     onPress={() => {
@@ -383,6 +392,7 @@ export default function UserDetailModal({
           visible={Boolean(selectedPlaylistModal)}
           album={selectedPlaylistModal ? {
             id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+            _id: selectedPlaylistModal._id || selectedPlaylistModal.id,
             name: selectedPlaylistModal.name,
             artist: currentProfile.name || 'Listener',
             cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
@@ -391,7 +401,7 @@ export default function UserDetailModal({
             isPlaylist: true,
           } : null}
           onClose={() => setSelectedPlaylistModal(null)}
-          allTracks={[]}
+          allTracks={selectedPlaylistModal?.tracks || []}
           onOpenFullPlayer={onOpenFullPlayer}
         />
       </View>
@@ -416,6 +426,9 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.08)',
+    maxWidth: 720,
+    width: '100%',
+    alignSelf: 'center',
   },
   backBtn: {
     flexDirection: 'row',
@@ -455,6 +468,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    maxWidth: 720,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroCard: {
     backgroundColor: '#141d1b',

@@ -285,6 +285,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }, [repeatMode]);
   const socketRef         = useRef(null);
   const isRemoteActionRef = useRef(false);
+  const lastRemoteSeekRef = useRef(0);
   const seekTimeoutRef    = useRef(null);
   const seekListeningSyncTimeoutRef = useRef(null);
   const volumeRef         = useRef(0.8);
@@ -310,6 +311,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const streamAbortControllerRef = useRef(null);
   const lastPauseTimeRef  = useRef(0);
   const stallRecoveryTimerRef = useRef(null);
+  const errorAdvanceTimerRef = useRef(null);
   const isSmartMoodQueueRef = useRef(false);
   const playedSmartSongIdsRef = useRef(new Set());
   const currentUserRef = useRef(currentUser);
@@ -334,7 +336,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const session = jamSessionRef.current;
     const sock = socketRef.current;
     if (!session) return false;
-    if (session.isHost) return true;
     const mySockId = sock?.id;
     const cur = currentUserRef.current;
     const myUserId = cur ? String(cur.id || cur._id) : '';
@@ -347,6 +348,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     return false;
   }, []);
+
+  const canControlJam = useCallback(() => {
+    const session = jamSessionRef.current;
+    if (!session) return false;
+    if (!session.hostOnlyControl) return true;
+    return isJamHost();
+  }, [isJamHost]);
 
   // Broadcast live listening activity to server for Friend Activity & Discord Rich Presence
   useEffect(() => {
@@ -483,6 +491,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
             }
           }
 
+          // Periodically emit Jam Room sync every 3.5s when Jam room is active (HOST ONLY)
+          if (isPlayingRef.current && jamSessionRef.current && socketRef.current && isJamHost()) {
+            if (!audio._lastJamSync || now - audio._lastJamSync >= 3500) {
+              audio._lastJamSync = now;
+              const roomCode = String(jamSessionRef.current.code || jamSessionRef.current.roomCode || '').trim().toUpperCase();
+              if (roomCode) {
+                const curUser = currentUserRef.current;
+                socketRef.current.emit('jam:sync_play_state', {
+                  roomCode,
+                  isPlaying: true,
+                  currentTrack: currentTrackRef.current,
+                  currentTime: audio.currentTime,
+                  updatedAt: Date.now(),
+                  initiatorId: socketRef.current.id,
+                  userId: curUser ? (curUser.id || curUser._id) : undefined,
+                  isPeriodic: true,
+                });
+              }
+            }
+          }
+
           // Always accurately sync authentic duration from the audio stream itself!
           if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
             const rounded = Math.round(audio.duration);
@@ -527,6 +556,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     };
     const handleEnded = () => {
+      if (isChangingTrackRef.current) return;
       onTrackEnded(currentTrackRef.current);
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
@@ -578,7 +608,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
               resumeAudioContext();
               audio.play().catch(() => {});
             } else {
-              setTimeout(() => {
+              if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+              errorAdvanceTimerRef.current = setTimeout(() => {
+                if (isChangingTrackRef.current) return;
                 if (playNextTrackRef.current && isPlayingRef.current) {
                   playNextTrackRef.current();
                 }
@@ -586,7 +618,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
             }
           })
           .catch(() => {
-            setTimeout(() => {
+            if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+            errorAdvanceTimerRef.current = setTimeout(() => {
+              if (isChangingTrackRef.current) return;
               if (playNextTrackRef.current && isPlayingRef.current) {
                 playNextTrackRef.current();
               }
@@ -605,6 +639,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     return () => {
       if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
+      if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('durationchange', handleDurationChange);
@@ -673,6 +708,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
         return;
       }
 
+      // Unconditionally stop previous audio immediately when switching to a different song
+      if (audioRef.current && audioRef.current.src && newId && newId !== lastLoadedIdRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
+        } catch (e) {}
+      }
+
       lastLoadedIdRef.current = newId;
 
       // Ensure duration is set
@@ -687,7 +731,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (err.name === 'AbortError') return;
       }
 
-      if (isEffectCancelled || effectSeq !== playRequestSeqRef.current) return;
+      if (isEffectCancelled || effectSeq !== playRequestSeqRef.current || String(currentTrackRef.current?.id || currentTrackRef.current?._id) !== newId) return;
 
       if (!streamResult?.url) {
         console.warn('[AudioContext] Could not resolve audio stream for track:', currentTrack.title);
@@ -716,7 +760,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       // Re-verify that no newer request came in while resolving
-      if (effectSeq !== playRequestSeqRef.current) return;
+      if (effectSeq !== playRequestSeqRef.current || String(currentTrackRef.current?.id || currentTrackRef.current?._id) !== newId) return;
 
       if (lastLoadedStreamUrlRef.current !== playableUrl) {
         lastLoadedStreamUrlRef.current = playableUrl;
@@ -961,7 +1005,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isUserPauseActionRef.current = !nextPlaying;
     setIsPlaying(nextPlaying);
 
-    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && canControlJam()) {
       const curUser = currentUserRef.current;
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
@@ -1146,12 +1190,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     }
 
+    if (errorAdvanceTimerRef.current) {
+      clearTimeout(errorAdvanceTimerRef.current);
+      errorAdvanceTimerRef.current = null;
+    }
+
     isChangingTrackRef.current = true;
     if (!isSeamless) {
       // Immediately stop previous audio synchronously & reset progress to prevent overlap/lag
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.currentTime = 0;
+        audioRef.current.removeAttribute('src');
+        audioRef.current.load();
       }
       setCurrentTime(0);
       currentTimeRef.current = 0;
@@ -1163,15 +1213,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const isTargetQuran = isQuranContent(trackToPlay);
     let resolvedQueue = currentQueueRef.current;
     if (newQueue?.length > 0) {
-      const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-      const pool = sanitized.length > 0 ? sanitized : tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-      const targetId = String(trackToPlay.id || trackToPlay._id || '');
-      const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
-      const startIdx = foundIdx >= 0 ? foundIdx : 0;
-      resolvedQueue = pool.slice(startIdx, startIdx + 10);
-      if (resolvedQueue.length === 0) resolvedQueue = [trackToPlay];
-      currentQueueRef.current = resolvedQueue;
-      setCurrentQueue(resolvedQueue);
+      if (newQueue === currentQueueRef.current) {
+        resolvedQueue = currentQueueRef.current;
+      } else {
+        const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        const pool = sanitized.length > 0 ? sanitized : tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        const targetId = String(trackToPlay.id || trackToPlay._id || '');
+        const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
+        if (pool.length <= 50) {
+          resolvedQueue = pool;
+        } else {
+          const startIdx = foundIdx >= 0 ? Math.max(0, foundIdx - 2) : 0;
+          resolvedQueue = pool.slice(startIdx, startIdx + 20);
+        }
+        if (resolvedQueue.length === 0) resolvedQueue = [trackToPlay];
+        currentQueueRef.current = resolvedQueue;
+        setCurrentQueue(resolvedQueue);
+      }
     }
 
     if (isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue) {
@@ -1215,8 +1273,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     }
 
-    // If Shuffle mode is active, shuffle the upcoming queue so what displays matches playback 100%
-    if (isShuffleRef.current && resolvedQueue.length > 1) {
+    // If Shuffle mode is active, shuffle the upcoming queue ONLY when starting a fresh/different queue
+    const isNewQueueDifferent = Boolean(newQueue && (newQueue !== currentQueueRef.current || resolvedQueue.length !== currentQueueRef.current.length));
+    if (isShuffleRef.current && isNewQueueDifferent && resolvedQueue.length > 1) {
       unshuffledQueueRef.current = [...resolvedQueue];
       const targetId = String(trackToPlay.id || trackToPlay._id || '');
       const otherTracks = resolvedQueue.filter(t => String(t.id || t._id) !== targetId);
@@ -1226,26 +1285,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     // Set and track active queue index accurately (handles duplicate tracks in queue)
-    if (queueIndex !== null && queueIndex !== undefined && queueIndex >= 0) {
+    const targetId = String(trackToPlay.id || trackToPlay._id || '');
+    const foundIdx = resolvedQueue.findIndex(t => String(t.id || t._id) === targetId);
+    if (foundIdx >= 0) {
+      currentQueueIndexRef.current = foundIdx;
+      setCurrentQueueIndex(foundIdx);
+    } else if (queueIndex !== null && queueIndex !== undefined && queueIndex >= 0 && queueIndex < resolvedQueue.length) {
       currentQueueIndexRef.current = queueIndex;
       setCurrentQueueIndex(queueIndex);
     } else {
-      const targetId = String(trackToPlay.id || trackToPlay._id || '');
-      const existingIdx = currentQueueIndexRef.current;
-      if (existingIdx >= 0 && existingIdx < resolvedQueue.length && String(resolvedQueue[existingIdx]?.id || resolvedQueue[existingIdx]?._id) === targetId) {
-        // Keep existing currentQueueIndexRef as is
-      } else {
-        const foundIdx = resolvedQueue.findIndex(t => String(t.id || t._id) === targetId);
-        const safeIdx = foundIdx >= 0 ? foundIdx : 0;
-        currentQueueIndexRef.current = safeIdx;
-        setCurrentQueueIndex(safeIdx);
-      }
+      currentQueueIndexRef.current = 0;
+      setCurrentQueueIndex(0);
     }
 
     onTrackStarted(trackToPlay);
 
     // Broadcast track play event to Jam room if active and local action
-    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
+    if (!isRemote && jamSessionRef.current && socketRef.current && canControlJam()) {
       const curUser = currentUserRef.current;
       socketRef.current.emit('jam:sync_play_state', {
         roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
@@ -1896,13 +1952,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
     playNextTrackRef.current = playNextTrack;
   }, [playNextTrack]);
 
-  const playPrevTrack = useCallback(() => {
+  const playPrevTrack = useCallback((isFromRemoteJam = false) => {
     if ((currentTimeRef.current || 0) > 3) {
       if (seekToRef.current) seekToRef.current(0);
       return;
     }
     isTransitionTriggeredRef.current = false;
     isSeamlessYtHandoffRef.current = false;
+
+    if (!isFromRemoteJam && jamSessionRef.current && socketRef.current) {
+      const roomCode = jamSessionRef.current.code || jamSessionRef.current.roomCode;
+      if (roomCode) {
+        if (!canControlJam()) return;
+        socketRef.current.emit('jam:prev_track', { roomCode });
+        return;
+      }
+    }
 
     // 1. True Playback History: Pop and play previously played track (essential for Shuffle & skip navigation)
     if (historyStackRef.current.length > 0) {
@@ -2001,21 +2066,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
       } catch {}
     }
 
-    if (!isRemote && jamSessionRef.current && socketRef.current && isJamHost()) {
-      if (seekTimeoutRef.current) clearTimeout(seekTimeoutRef.current);
-      seekTimeoutRef.current = setTimeout(() => {
-        if (jamSessionRef.current && socketRef.current && isJamHost()) {
-          const curUser = currentUserRef.current;
-          socketRef.current.emit('jam:sync_play_state', {
-            roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
-            currentTime: s,
-            isPlaying: isPlayingRef.current,
-            currentTrack: currentTrackRef.current,
-            initiatorId: socketRef.current.id,
-            userId: curUser ? (curUser.id || curUser._id) : undefined
-          });
-        }
-      }, 150);
+    if (!isRemote && jamSessionRef.current && socketRef.current && canControlJam()) {
+      jamSessionRef.current.currentTime = s;
+      jamSessionRef.current.updatedAt = Date.now();
+      const curUser = currentUserRef.current;
+      socketRef.current.emit('jam:sync_play_state', {
+        roomCode: jamSessionRef.current.code || jamSessionRef.current.roomCode,
+        currentTime: s,
+        isPlaying: isPlayingRef.current,
+        currentTrack: currentTrackRef.current,
+        initiatorId: socketRef.current.id,
+        userId: curUser ? (curUser.id || curUser._id) : undefined
+      });
     }
 
     if (!isRemote) {
@@ -2049,13 +2111,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
     seekToRef.current = seekTo;
   }, [seekTo]);
 
-  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt }) => {
+  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt, serverTime }) => {
     let targetTime = Number(syncTime) || 0;
-    if (syncPlaying && updatedAt) {
-      const elapsed = (Date.now() - updatedAt) / 1000;
-      if (targetTime <= 2 && elapsed > 2) {
-        targetTime = Math.min(2, targetTime);
-      } else if (elapsed > 0 && elapsed < 3600) {
+    const refTimestamp = Number(updatedAt || serverTime || 0);
+    if (syncPlaying && refTimestamp > 0) {
+      const elapsed = Math.max(0, (Date.now() - refTimestamp) / 1000);
+      if (elapsed > 0 && elapsed < 3600) {
         targetTime += elapsed;
       }
     }
@@ -2081,9 +2142,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
         currentTrackRef.current = syncTrack;
       }
       if (targetTime !== undefined) {
-        if (audioRef.current && Math.abs(audioRef.current.currentTime - targetTime) > 2) {
-          try { audioRef.current.currentTime = Math.max(0, targetTime); } catch(e){}
-        }
         setCurrentTime(Math.max(0, targetTime));
         currentTimeRef.current = Math.max(0, targetTime);
       }
@@ -2100,17 +2158,32 @@ export function AudioProvider({ children, tracks, setTracks }) {
     window.__RIVO_USER_PAUSED = false;
     if (isDifferentTrack || !audioRef.current?.src) {
       resumeAudioContext();
+      const connectStartTime = Date.now();
       await playTrack(syncTrack || cur, null, true /* isRemote */);
-      if (targetTime > 0) {
+      const streamConnectElapsed = (Date.now() - connectStartTime) / 1000;
+      const finalSeekTarget = Math.max(0, targetTime + streamConnectElapsed);
+      if (finalSeekTarget > 0) {
         setTimeout(() => {
-          seekTo(targetTime, true /* isRemote */);
-        }, 350);
+          seekTo(finalSeekTarget, true /* isRemote */);
+        }, 150);
       }
       setIsPlaying(true);
       isPlayingRef.current = true;
     } else {
-      // Same track: sync drift if > 1.5s
-      if (targetTime !== undefined && Math.abs(targetTime - currentTimeRef.current) > 1.5) {
+      // Host is master playback source: never seek host audio to remote sync updates of the same track!
+      if (isJamHost()) {
+        if (audioRef.current && audioRef.current.paused) {
+          resumeAudioContext();
+          audioRef.current.play().catch(() => {});
+        }
+        return;
+      }
+
+      // Guest: sync drift only if severe drift > 3.2s and not sought recently (> 4.0s)
+      const localCur = audioRef.current?.currentTime || currentTimeRef.current || 0;
+      const nowTime = Date.now();
+      if (targetTime !== undefined && Math.abs(targetTime - localCur) > 3.2 && (nowTime - (lastRemoteSeekRef.current || 0) > 4000)) {
+        lastRemoteSeekRef.current = nowTime;
         seekTo(targetTime, true /* isRemote */);
       }
       if (audioRef.current) {
@@ -2127,12 +2200,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
       jamSessionRef.current.updatedAt = Date.now();
       setJamSessionState({ ...jamSessionRef.current });
     }
-  }, [playTrack, seekTo]);
+  }, [playTrack, seekTo, isJamHost]);
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession }) => {
     if (socket !== undefined) {
       if (socketRef.current && socketRef.current !== socket) {
         socketRef.current.off('jam:advance_host_queue');
+        socketRef.current.off('jam:prev_track');
         socketRef.current.off('jam:get_host_time');
         socketRef.current.off('device:remote_playing');
       }
@@ -2142,6 +2216,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
         socket.on('jam:advance_host_queue', () => {
           if (playNextTrackRef.current) {
             playNextTrackRef.current();
+          }
+        });
+
+        socket.off('jam:prev_track');
+        socket.on('jam:prev_track', () => {
+          if (playPrevTrackRef.current) {
+            playPrevTrackRef.current(true);
           }
         });
 

@@ -93,6 +93,7 @@ export default function ChatModal({
     const activeUserId = activeUser?.id || activeUser?._id;
     if (!isOpen || !activeUserId) return;
 
+    setMessages([]);
     const fetchHistory = async () => {
       setLoading(true);
       try {
@@ -153,8 +154,12 @@ export default function ChatModal({
     const handleMessage = (msg) => {
       const myId = String(currentUser?.id || currentUser?._id || '');
       const activeId = String(activeUser?.id || activeUser?._id || '');
+      const isBotMsg = Boolean(msg.isBot || msg.senderName === 'Rivo Bot');
+      const isTargetBot = Boolean(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || activeUser?.email === 'bot@rivo.app');
 
-      if (
+      if ((isBotMsg && !isTargetBot) || (!isBotMsg && isTargetBot)) {
+        // Do not display in wrong thread
+      } else if (
         (String(msg.sender) === activeId && String(msg.recipient) === myId) ||
         (String(msg.sender) === myId && String(msg.recipient) === activeId)
       ) {
@@ -244,11 +249,18 @@ export default function ChatModal({
       });
       const data = await res.json();
       if (data.success && data.message) {
-        setMessages((prev) => {
-          if (prev.some((m) => String(m._id) === String(data.message._id))) return prev;
-          return [...prev, data.message];
-        });
-        setTimeout(scrollToBottom, 100);
+        const activeId = String(activeUser.id || activeUser._id || '');
+        const msgRecipient = String(data.message.recipient || '');
+        const msgSender = String(data.message.sender || '');
+        if (msgRecipient === activeId || msgSender === activeId) {
+          setMessages((prev) => {
+            if (prev.some((m) => String(m._id) === String(data.message._id))) return prev;
+            return [...prev, data.message];
+          });
+          setTimeout(scrollToBottom, 100);
+        } else {
+          fetchConversations();
+        }
       }
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -358,6 +370,11 @@ export default function ChatModal({
                     {activeUser ? activeUser.name : 'Chat'}
                   </h3>
                   {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
+                  {(activeUser?.isBot || activeUser?.name === 'Rivo Bot') && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-[#17a398] text-[#082621]">
+                      [BOT]
+                    </span>
+                  )}
                 </div>
                 <span className={`text-[10px] font-mono block mt-0.5 ${isOtherTyping ? 'text-emerald-400 font-bold animate-pulse' : 'text-zinc-400'}`}>
                   {isOtherTyping ? 'typing...' : (activeUser ? 'Direct Chat • View Profile' : 'Messages & Friends')}
@@ -367,7 +384,7 @@ export default function ChatModal({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {activeUser && (
+            {activeUser && !(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || activeUser?.email === 'bot@rivo.app') && (
               <button
                 onClick={handleSendJamInvite}
                 className="px-2.5 py-1 rounded bg-[#f59e0b] text-[#0b1110] font-display font-black text-[11px] brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer"
@@ -469,7 +486,14 @@ export default function ChatModal({
                             ? 'border-black/20 text-[#082621]/80 font-bold' 
                             : isDark ? 'border-zinc-700 text-zinc-400' : 'border-dashed border-zinc-300 text-zinc-500'
                         }`}>
-                          <span>{isMe ? (currentUser?.name || 'You') : (activeUser.name || 'Friend')}</span>
+                          <span className="flex items-center gap-1">
+                            {isMe ? (currentUser?.name || 'You') : (activeUser?.name || 'Friend')}
+                            {!isMe && (activeUser?.isBot || activeUser?.name === 'Rivo Bot' || msg.isBot) && (
+                              <span className="px-1 py-0.5 rounded text-[8px] font-mono font-black bg-[#17a398] text-[#082621]">
+                                [BOT]
+                              </span>
+                            )}
+                          </span>
                           <span>{timeFormatted}</span>
                         </div>
 
@@ -722,6 +746,11 @@ export default function ChatModal({
                               <div className={`flex items-center gap-1.5 font-display font-black text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                                 <span>{other.name}</span>
                                 <VerifiedBadge userOrName={other} size={12} />
+                                {(other?.isBot || other?.name === 'Rivo Bot') && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-[#17a398] text-[#082621]">
+                                    [BOT]
+                                  </span>
+                                )}
                               </div>
                               <p className={`text-[11px] font-medium truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                                 {conv.lastMessage?.text || (conv.lastMessage?.track ? '🎵 Shared a track' : 'Started a conversation')}

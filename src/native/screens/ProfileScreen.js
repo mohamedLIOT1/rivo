@@ -410,7 +410,7 @@ export default function ProfileScreen({
               </Text>
             </View>
             <View style={styles.memberBadge}>
-              <Text style={styles.memberBadgeText}>MEMBER</Text>
+              <Text style={styles.memberBadgeText}>{(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'MEMBER'}</Text>
             </View>
           </View>
 
@@ -419,6 +419,12 @@ export default function ProfileScreen({
               {viewingProfile.avatar ? (
                 <Image
                   source={{ uri: normalizeCoverUri(viewingProfile.avatar) }}
+                  style={styles.avatarImg}
+                  resizeMode="cover"
+                />
+              ) : (viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? (
+                <Image
+                  source={{ uri: 'https://rivo-m.duckdns.org/public/assets/rivo-bot.png' }}
                   style={styles.avatarImg}
                   resizeMode="cover"
                 />
@@ -454,7 +460,7 @@ export default function ProfileScreen({
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                 <View style={styles.rolePill}>
-                  <Text style={styles.rolePillText}>LISTENER</Text>
+                  <Text style={styles.rolePillText}>{(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'LISTENER'}</Text>
                 </View>
                 <View style={styles.idPill}>
                   <Text style={styles.idPillText}>ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}</Text>
@@ -492,33 +498,36 @@ export default function ProfileScreen({
           {/* Follow / Unfollow and Message Buttons */}
           {!isMe && currentUser && (
             <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-              <TouchableOpacity
-                style={[styles.actionFollowBtn, viewingProfile.isFollowing && styles.actionFollowingBtn]}
-                onPress={handleToggleFollow}
-                disabled={followLoading}
-                activeOpacity={0.8}
-              >
-                {followLoading ? (
-                  <ActivityIndicator size="small" color="#0b1110" />
-                ) : viewingProfile.isFollowing ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Check size={14} color="#0b1110" strokeWidth={3} />
-                    <Text style={styles.actionFollowBtnText}>FOLLOWING</Text>
-                  </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <UserPlus size={14} color="#0b1110" strokeWidth={3} />
-                    <Text style={styles.actionFollowBtnText}>FOLLOW</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              {!(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') && (
+                <TouchableOpacity
+                  style={[styles.actionFollowBtn, viewingProfile.isFollowing && styles.actionFollowingBtn]}
+                  onPress={handleToggleFollow}
+                  disabled={followLoading}
+                  activeOpacity={0.8}
+                >
+                  {followLoading ? (
+                    <ActivityIndicator size="small" color="#0b1110" />
+                  ) : viewingProfile.isFollowing ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Check size={14} color="#0b1110" strokeWidth={3} />
+                      <Text style={styles.actionFollowBtnText}>FOLLOWING</Text>
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <UserPlus size={14} color="#0b1110" strokeWidth={3} />
+                      <Text style={styles.actionFollowBtnText}>FOLLOW</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={styles.actionMsgBtn}
                 onPress={() => onOpenChat && onOpenChat({
                   id: viewingProfile.id || viewingProfile._id,
                   name: viewingProfile.name,
-                  avatar: viewingProfile.avatar
+                  avatar: viewingProfile.avatar,
+                  isBot: Boolean(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app')
                 })}
                 activeOpacity={0.8}
               >
@@ -526,7 +535,7 @@ export default function ProfileScreen({
                 <Text style={styles.actionMsgBtnText}>MESSAGE</Text>
               </TouchableOpacity>
 
-              {onOpenJam && (
+              {onOpenJam && !(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') && (
                 <TouchableOpacity
                   style={styles.actionJamBtn}
                   onPress={() => onOpenJam({
@@ -1122,6 +1131,9 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 110,
+    maxWidth: 760,
+    width: '100%',
+    alignSelf: 'center',
   },
   heroCard: {
     backgroundColor: '#141d1b',

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import { INITIAL_TRACKS, INITIAL_ALBUMS } from '../data/initialTracks';
+import { deduplicateTrackList } from '../services/downloadManager';
 
 const UserContext = createContext();
 const TOKEN_KEY = '@rivo_auth_token_v2';
@@ -55,14 +56,14 @@ export const UserProvider = ({ children }) => {
       if (cachedTracks) {
         const parsed = JSON.parse(cachedTracks);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleaned = parsed.filter(t => 
+          const cleaned = deduplicateTrackList(parsed.filter(t => 
             t &&
             t.source !== 'SoundCloud' &&
             t.album !== 'SoundCloud' &&
             !String(t.audioUrl || '').includes('soundcloud.com') &&
             !String(t.audioUrl || '').includes('sndcdn.com') &&
             !String(t.id || t._id || '').startsWith('sc-')
-          );
+          ));
           setTracks(cleaned);
           if (cleaned.length !== parsed.length) {
             AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
@@ -97,14 +98,14 @@ export const UserProvider = ({ children }) => {
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data?.tracks) ? data.tracks : Array.isArray(data) ? data : [];
-        const cleaned = list.filter(t => 
+        const cleaned = deduplicateTrackList(list.filter(t => 
           t &&
           t.source !== 'SoundCloud' &&
           t.album !== 'SoundCloud' &&
           !String(t.audioUrl || '').includes('soundcloud.com') &&
           !String(t.audioUrl || '').includes('sndcdn.com') &&
           !String(t.id || t._id || '').startsWith('sc-')
-        );
+        ));
         if (cleaned.length > 0) {
           setTracks(cleaned);
           AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});

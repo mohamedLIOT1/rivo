@@ -6,7 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
+  useWindowDimensions,
   ActivityIndicator,
   Image,
   Platform,
@@ -37,9 +37,6 @@ import { isQuranContent } from '../../utils/quranUtils';
 import { splitArtists } from '../../utils/artistUtils.jsx';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
-const { width } = Dimensions.get('window');
-const ALBUM_CARD_WIDTH = (width - 38) / 2;
-
 const DISPENSARY_GENRES = [
   { id: 'rap', label: 'EGYPTIAN RAP', color: '#17a398', tag: 'TRAP / DRILL' },
   { id: 'indie', label: 'INDIE ARABIC', color: '#f59e0b', tag: 'ACOUSTIC' },
@@ -55,6 +52,15 @@ const DISPENSARY_GENRES = [
 ];
 
 export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer }) {
+  const { width } = useWindowDimensions();
+  const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
+  const albumGap = 10;
+  const albumPadding = 28;
+  const albumCardWidth = Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
+
+  const genreColumns = width >= 1024 ? 4 : width >= 600 ? 3 : 2;
+  const genreCardWidth = Math.floor((width - albumPadding - (genreColumns - 1) * albumGap) / genreColumns);
+
   const { playTrack, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { tracks: userTracks, albums: userAlbums = [] } = useUser();
   const { appMode } = useConnectivity();
@@ -301,20 +307,20 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
   const hasSearch = query.trim().length > 0 || Boolean(selectedGenre);
 
   return (
-    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
+    <View style={[styles.container, !isDark && styles.containerLight]}>
       {/* Header & Search Bar */}
-      <View style={styles.searchHeader}>
+      <View style={[styles.searchHeader, !isDark && styles.searchHeaderLight]}>
         <View style={styles.headerTitleRow}>
-          <Text style={styles.headerTitle}>EXPLORE & SEARCH</Text>
+          <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]}>EXPLORE & SEARCH</Text>
           <CassetteTag label={isOffline ? 'OFFLINE SONGS' : 'ONLINE'} bg={colors.ink} textColor={colors.mint} />
         </View>
 
-        <View style={styles.inputContainer}>
-          <SearchIcon size={18} color={colors.ink} style={styles.searchIcon} />
+        <View style={[styles.inputContainer, !isDark && styles.inputContainerLight]}>
+          <SearchIcon size={18} color={!isDark ? '#0b1110' : colors.ink} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, !isDark && { color: '#0b1110' }]}
             placeholder="Search songs, artists, albums..."
-            placeholderTextColor={colors.grayText}
+            placeholderTextColor={!isDark ? '#78716c' : colors.grayText}
             value={query}
             onChangeText={(txt) => {
               setQuery(txt);
@@ -348,55 +354,55 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
         {query.trim().length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterPillsScroll} contentContainerStyle={styles.filterPillsRow}>
             <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
+              style={[styles.filterPill, !isDark && styles.filterPillLight, activeFilter === 'all' && styles.filterPillActive]}
               onPress={() => setActiveFilter('all')}
               activeOpacity={0.8}
             >
-              <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'all' && styles.filterPillTextActive]}>
                 ALL
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'songs' && styles.filterPillActive]}
+              style={[styles.filterPill, !isDark && styles.filterPillLight, activeFilter === 'songs' && styles.filterPillActive]}
               onPress={() => setActiveFilter('songs')}
               activeOpacity={0.8}
             >
-              <Music size={12} color={activeFilter === 'songs' ? '#082621' : '#9ca3af'} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, activeFilter === 'songs' && styles.filterPillTextActive]}>
+              <Music size={12} color={activeFilter === 'songs' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'songs' && styles.filterPillTextActive]}>
                 SONGS ({filteredTracks.length})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'artists' && styles.filterPillActive]}
+              style={[styles.filterPill, !isDark && styles.filterPillLight, activeFilter === 'artists' && styles.filterPillActive]}
               onPress={() => setActiveFilter('artists')}
               activeOpacity={0.8}
             >
-              <Users size={12} color={activeFilter === 'artists' ? '#082621' : '#9ca3af'} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, activeFilter === 'artists' && styles.filterPillTextActive]}>
+              <Users size={12} color={activeFilter === 'artists' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'artists' && styles.filterPillTextActive]}>
                 ARTISTS ({matchingArtists.length})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'albums' && styles.filterPillActive]}
+              style={[styles.filterPill, !isDark && styles.filterPillLight, activeFilter === 'albums' && styles.filterPillActive]}
               onPress={() => setActiveFilter('albums')}
               activeOpacity={0.8}
             >
-              <Layers size={12} color={activeFilter === 'albums' ? '#082621' : '#9ca3af'} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, activeFilter === 'albums' && styles.filterPillTextActive]}>
+              <Layers size={12} color={activeFilter === 'albums' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'albums' && styles.filterPillTextActive]}>
                 ALBUMS ({matchingAlbums.length})
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'people' && styles.filterPillActive]}
+              style={[styles.filterPill, !isDark && styles.filterPillLight, activeFilter === 'people' && styles.filterPillActive]}
               onPress={() => setActiveFilter('people')}
               activeOpacity={0.8}
             >
-              <Users size={12} color={activeFilter === 'people' ? '#082621' : '#9ca3af'} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, activeFilter === 'people' && styles.filterPillTextActive]}>
+              <Users size={12} color={activeFilter === 'people' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'people' && styles.filterPillTextActive]}>
                 PEOPLE ({userResults.length})
               </Text>
             </TouchableOpacity>
@@ -420,7 +426,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
               {DISPENSARY_GENRES.map((g) => (
                 <TouchableOpacity
                   key={g.id}
-                  style={[styles.genreCard, { backgroundColor: g.color }]}
+                  style={[styles.genreCard, { backgroundColor: g.color, width: genreCardWidth }]}
                   activeOpacity={0.85}
                   onPress={() => setSelectedGenre(g.id)}
                 >
@@ -580,7 +586,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
                 return (
                   <TouchableOpacity
                     key={alb.id || alb.name || String(index)}
-                    style={[styles.albumCard, !isDark && styles.albumCardLight]}
+                    style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
                     onPress={() => setSelectedAlbum(alb)}
                     activeOpacity={0.85}
                   >
@@ -696,6 +702,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.ink,
   },
+  containerLight: {
+    backgroundColor: '#fdfbf7',
+  },
   searchHeader: {
     backgroundColor: colors.deepForest,
     borderBottomWidth: 2.5,
@@ -703,6 +712,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 10,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  searchHeaderLight: {
+    backgroundColor: '#ede5d3',
+    borderBottomColor: '#0b1110',
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -717,6 +733,9 @@ const styles = StyleSheet.create({
     color: colors.paper,
     letterSpacing: 0.5,
   },
+  headerTitleLight: {
+    color: '#0b1110',
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -726,6 +745,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 10,
     height: 44,
+  },
+  inputContainerLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
   },
   searchIcon: {
     marginRight: 8,
@@ -779,6 +802,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#1f332d',
   },
+  filterPillLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
   filterPillActive: {
     backgroundColor: '#17a398',
     borderColor: '#082621',
@@ -789,12 +816,18 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
   },
+  filterPillTextLight: {
+    color: '#0b1110',
+  },
   filterPillTextActive: {
     color: '#082621',
   },
   scrollContent: {
     padding: 14,
     paddingBottom: 120,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
   },
   genresSection: {
     marginBottom: 20,
@@ -837,7 +870,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   genreCard: {
-    width: (width - 38) / 2,
     height: 84,
     borderWidth: 2.5,
     borderColor: colors.ink,
@@ -927,7 +959,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   albumCard: {
-    width: ALBUM_CARD_WIDTH,
     backgroundColor: '#0d1815',
     borderWidth: 2,
     borderColor: '#172722',

@@ -29,6 +29,11 @@ import {
   Search,
   Shuffle,
   Sparkles,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Lock,
 } from 'lucide-react-native';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
@@ -52,7 +57,18 @@ export default function JamRoomModal({ visible, onClose }) {
   } = useSocket();
 
   const { currentUser, tracks = [] } = useUser();
-  const { currentTrack, isPlaying, playTrack, syncRemotePlayState, likedTrackIds = [] } = useAudioPlayer();
+  const {
+    currentTrack,
+    isPlaying,
+    playTrack,
+    syncRemotePlayState,
+    likedTrackIds = [],
+    togglePlay,
+    seekTo,
+    playNextTrack,
+    playPrevTrack,
+    progress,
+  } = useAudioPlayer();
   const { showToast } = useToast();
 
   const [inputCode, setInputCode] = useState('');
@@ -62,6 +78,14 @@ export default function JamRoomModal({ visible, onClose }) {
   const [justAddedId, setJustAddedId] = useState(null);
   const [shuffleSeed, setShuffleSeed] = useState(0);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
+
+  const formatTime = (secs) => {
+    const s = Math.floor(Math.max(0, Number(secs) || 0));
+    const m = Math.floor(s / 60);
+    const rem = s % 60;
+    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
+  };
 
   const { width, height } = useWindowDimensions();
   const isLandscape = (width > height && width >= 480) || width >= 650;
@@ -251,36 +275,108 @@ export default function JamRoomModal({ visible, onClose }) {
   const renderCurrentTrack = () => {
     const activeTrack = jamSession?.currentTrack || currentTrack;
     const isRoomPlaying = jamSession?.isPlaying !== undefined ? jamSession.isPlaying : isPlaying;
+    const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
+    const curTime = progress?.currentTime || jamSession?.currentTime || 0;
+    const durTime = progress?.duration || activeTrack?.duration || 240;
+    const progressPercent = durTime > 0 ? Math.min(100, Math.max(0, (curTime / durTime) * 100)) : 0;
+
     return activeTrack ? (
       <View style={styles.syncedTrackCard}>
-        <Image
-          source={{
-            uri:
-              activeTrack.coverUrl ||
-              activeTrack.cover ||
-              'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
-          }}
-          style={styles.syncedTrackCover}
-        />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={styles.syncStatusRow}>
-            <Text style={styles.syncStatusText}>
-              {isRoomPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+        <View style={styles.syncedTrackTopRow}>
+          <Image
+            source={{
+              uri:
+                activeTrack.coverUrl ||
+                activeTrack.cover ||
+                'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
+            }}
+            style={styles.syncedTrackCover}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.syncStatusRow}>
+              <Text style={styles.syncStatusText}>
+                {isRoomPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+              </Text>
+              <View
+                style={[
+                  styles.statusPulseDot,
+                  { backgroundColor: isRoomPlaying ? colors.mint : '#f59e0b' },
+                ]}
+              />
+            </View>
+            <Text style={styles.syncedTrackTitle} numberOfLines={1}>
+              {activeTrack.title}
             </Text>
-            <View
-              style={[
-                styles.statusPulseDot,
-                { backgroundColor: isRoomPlaying ? colors.mint : '#f59e0b' },
-              ]}
-            />
+            <Text style={styles.syncedTrackArtist} numberOfLines={1}>
+              {activeTrack.artist}
+            </Text>
           </View>
-          <Text style={styles.syncedTrackTitle} numberOfLines={1}>
-            {activeTrack.title}
-          </Text>
-          <Text style={styles.syncedTrackArtist} numberOfLines={1}>
-            {activeTrack.artist}
-          </Text>
         </View>
+
+        {/* Progress Scrubber */}
+        <View
+          style={styles.playerProgressContainer}
+          onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            disabled={!canControl}
+            onPress={(e) => {
+              if (!canControl || durTime <= 0 || progressBarWidth <= 0) return;
+              const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / progressBarWidth));
+              const targetSec = Math.round(ratio * durTime);
+              seekTo(targetSec);
+            }}
+            style={styles.progressBarBg}
+          >
+            <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
+          </TouchableOpacity>
+          <View style={styles.progressTimeRow}>
+            <Text style={styles.progressTimeText}>{formatTime(curTime)}</Text>
+            <Text style={styles.progressTimeText}>{formatTime(durTime)}</Text>
+          </View>
+        </View>
+
+        {/* Transport Controls (Skip Prev, Play/Pause, Skip Next) */}
+        <View style={styles.playerControlsRow}>
+          <TouchableOpacity
+            style={[styles.playerControlBtn, !canControl && { opacity: 0.35 }]}
+            disabled={!canControl}
+            onPress={playPrevTrack}
+            activeOpacity={0.7}
+          >
+            <SkipBack size={18} color="#ffffff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.playerPlayPauseBtn, !canControl && { opacity: 0.35 }]}
+            disabled={!canControl}
+            onPress={togglePlay}
+            activeOpacity={0.8}
+          >
+            {isRoomPlaying ? (
+              <Pause size={20} color="#082621" />
+            ) : (
+              <Play size={20} color="#082621" style={{ marginLeft: 2 }} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.playerControlBtn, !canControl && { opacity: 0.35 }]}
+            disabled={!canControl}
+            onPress={playNextTrack}
+            activeOpacity={0.7}
+          >
+            <SkipForward size={18} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+
+        {!canControl && (
+          <View style={styles.hostLockedNotice}>
+            <Lock size={11} color="#f59e0b" />
+            <Text style={styles.hostLockedNoticeText}>Host locked playback control</Text>
+          </View>
+        )}
       </View>
     ) : null;
   };
@@ -500,23 +596,35 @@ export default function JamRoomModal({ visible, onClose }) {
             const qId = qTrack._id || qTrack.id || idx;
             return (
               <View key={`${qId}-${idx}`} style={styles.queueItem}>
-                <Text style={styles.queueIndex}>{idx + 1}</Text>
-                <Image
-                  source={{
-                    uri:
-                      qTrack.cover ||
-                      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                <TouchableOpacity
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginRight: 6 }}
+                  onPress={() => {
+                    const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
+                    if (canControl) {
+                      playTrack(qTrack);
+                      showToast(`Playing "${qTrack.title}"`, 'info');
+                    }
                   }}
-                  style={styles.queueCover}
-                />
-                <View style={{ flex: 1, minWidth: 0, marginRight: 6 }}>
-                  <Text style={styles.queueTrackTitle} numberOfLines={1}>
-                    {qTrack.title}
-                  </Text>
-                  <Text style={styles.queueTrackArtist} numberOfLines={1}>
-                    {qTrack.artist}
-                  </Text>
-                </View>
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.queueIndex}>{idx + 1}</Text>
+                  <Image
+                    source={{
+                      uri:
+                        qTrack.cover ||
+                        'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                    }}
+                    style={styles.queueCover}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.queueTrackTitle} numberOfLines={1}>
+                      {qTrack.title}
+                    </Text>
+                    <Text style={styles.queueTrackArtist} numberOfLines={1}>
+                      {qTrack.artist}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
                 <View style={styles.queueActionsRow}>
                   <TouchableOpacity
                     disabled={idx === 0}
@@ -675,12 +783,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     padding: 10,
   },
   sheetOuter: {
     position: 'relative',
     height: '88%',
     maxHeight: '88%',
+    width: '100%',
+    maxWidth: 720,
+    alignSelf: 'center',
   },
   hardShadow: {
     position: 'absolute',
@@ -926,10 +1038,74 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#27272a',
     borderRadius: 12,
-    padding: 10,
+    padding: 12,
+    gap: 10,
+  },
+  syncedTrackTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  playerProgressContainer: {
+    width: '100%',
+    paddingTop: 4,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: '#27272a',
+    borderRadius: 3,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#17a398',
+    borderRadius: 3,
+  },
+  progressTimeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  progressTimeText: {
+    fontFamily: 'monospace',
+    fontSize: 9.5,
+    color: '#9ca3af',
+  },
+  playerControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 20,
+    paddingTop: 2,
+  },
+  playerControlBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#27272a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  playerPlayPauseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#17a398',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  hostLockedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingTop: 2,
+  },
+  hostLockedNoticeText: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: '#f59e0b',
   },
   syncedTrackCover: {
     width: 44,

@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndi
 import { Play, Pause, Heart, Disc } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
+  const { isDark = true } = useTheme?.() || {};
   const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
@@ -31,19 +33,19 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
       {currentTrack && (
         <TouchableOpacity
-          style={styles.container}
+          style={[styles.container, !isDark && styles.containerLight]}
           onPress={onOpenFullPlayer}
           activeOpacity={0.9}
         >
         {/* Top Progress Line */}
-        <View style={styles.progressTrack}>
+        <View style={[styles.progressTrack, !isDark && styles.progressTrackLight]}>
           <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
         </View>
 
         <View style={styles.contentRow}>
           {/* Cover Art */}
-          <View style={styles.coverFrame}>
-            <View style={styles.coverPlaceholder}>
+          <View style={[styles.coverFrame, !isDark && styles.coverFrameLight]}>
+            <View style={[styles.coverPlaceholder, !isDark && styles.coverPlaceholderLight]}>
               <Disc size={18} color="#17a398" strokeWidth={1.8} />
             </View>
             <Image
@@ -55,7 +57,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
           {/* Title & Artist */}
           <View style={styles.textColumn}>
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={[styles.title, !isDark && styles.titleLight]} numberOfLines={1}>
               {currentTrack.title || 'Untitled'}
             </Text>
             {isLoading ? (
@@ -63,7 +65,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
                 CONNECTING STREAM...
               </Text>
             ) : (
-              <Text style={styles.artist} numberOfLines={1}>
+              <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
                 {currentTrack.artist || 'Unknown Artist'}
               </Text>
             )}
@@ -78,7 +80,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
             >
               <Heart
                 size={18}
-                color={isLiked ? colors.crimson : '#94a3b8'}
+                color={isLiked ? colors.crimson : (!isDark ? '#64748b' : '#94a3b8')}
                 fill={isLiked ? colors.crimson : 'transparent'}
               />
             </TouchableOpacity>
@@ -111,6 +113,8 @@ const styles = StyleSheet.create({
     bottom: Platform.OS === 'ios' ? 70 : 56,
     left: 8,
     right: 8,
+    maxWidth: 680,
+    alignSelf: 'center',
     zIndex: 90,
   },
   container: {
@@ -125,10 +129,22 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  containerLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   progressTrack: {
     height: 2.5,
     backgroundColor: '#1e2928',
     width: '100%',
+  },
+  progressTrackLight: {
+    backgroundColor: '#e2e8f0',
   },
   progressFill: {
     height: '100%',
@@ -147,6 +163,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#0b1110',
   },
+  coverFrameLight: {
+    backgroundColor: '#f1f5f9',
+  },
   cover: {
     width: '100%',
     height: '100%',
@@ -156,6 +175,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#12211e',
+  },
+  coverPlaceholderLight: {
+    backgroundColor: '#f8fafc',
   },
   textColumn: {
     flex: 1,
@@ -167,11 +189,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#ffffff',
   },
+  titleLight: {
+    color: '#0b1110',
+  },
   artist: {
     fontSize: 10.5,
     color: '#94a3b8',
     fontWeight: '600',
     marginTop: 1,
+  },
+  artistLight: {
+    color: '#64748b',
   },
   connectingText: {
     fontSize: 9.5,

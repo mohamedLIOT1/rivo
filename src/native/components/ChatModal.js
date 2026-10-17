@@ -42,10 +42,18 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
   const myTypingTimeoutRef = useRef(null);
 
   useEffect(() => {
-    if (initialTargetUser) {
-      setActiveUser(initialTargetUser);
+    if (visible) {
+      if (initialTargetUser) {
+        setActiveUser(initialTargetUser);
+      } else {
+        setActiveUser(null);
+        fetchHubData();
+      }
+    } else {
+      setActiveUser(null);
+      setMessages([]);
     }
-  }, [initialTargetUser]);
+  }, [visible, initialTargetUser]);
 
   useEffect(() => {
     if (visible && !activeUser) {
@@ -91,11 +99,12 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
     const activeUserId = activeUser?._id || activeUser?.id;
     if (!visible || !activeUserId) return;
 
+    setMessages([]);
     fetchMessages(activeUserId);
     if (socket) {
       socket.emit('chat:mark_read', { senderId: activeUserId });
     }
-  }, [visible, activeUser, socket]);
+  }, [visible, activeUser?._id, activeUser?.id, socket]);
 
   const fetchMessages = async (userId) => {
     setLoadingMessages(true);
@@ -121,6 +130,18 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
     const onIncomingMessage = (msg) => {
       const activeUserId = String(activeUser?._id || activeUser?.id || '');
       const myId = String(currentUser?._id || currentUser?.id || '');
+
+      const isBotMsg = Boolean(msg.isBot || msg.senderName === 'Rivo Bot');
+      const isTargetBot = Boolean(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || activeUser?.email === 'bot@rivo.app');
+
+      if (isBotMsg && !isTargetBot) {
+        fetchHubData();
+        return;
+      }
+      if (!isBotMsg && isTargetBot) {
+        fetchHubData();
+        return;
+      }
 
       const isForActiveThread =
         (String(msg.sender) === activeUserId && String(msg.recipient) === myId) ||
@@ -245,13 +266,22 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.message) {
-          setMessages((prev) => {
-            const hasReal = prev.some((m) => String(m._id || m.id) === String(data.message._id));
-            if (hasReal) {
-              return prev.filter((m) => m._id !== tempMsg._id);
-            }
-            return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
-          });
+          const msgRecipient = String(data.message.recipient || '');
+          const msgSender = String(data.message.sender || '');
+          const isBelongsToThread = (msgRecipient === String(activeUserId)) || (msgSender === String(activeUserId));
+
+          if (!isBelongsToThread) {
+            setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id));
+            fetchHubData();
+          } else {
+            setMessages((prev) => {
+              const hasReal = prev.some((m) => String(m._id || m.id) === String(data.message._id));
+              if (hasReal) {
+                return prev.filter((m) => m._id !== tempMsg._id);
+              }
+              return prev.map((m) => (m._id === tempMsg._id ? data.message : m));
+            });
+          }
         }
       }
     } catch {}
@@ -326,6 +356,16 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
       <View style={[styles.msgRow, isMe ? styles.myMsgRow : styles.otherMsgRow]}>
         <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '88%' }}>
           <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+            {!isMe && (activeUser?.isBot || activeUser?.name === 'Rivo Bot' || item.isBot) && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <View style={styles.botBadge}>
+                  <Text style={styles.botBadgeText}>BOT</Text>
+                </View>
+                <Text style={{ fontSize: 10, color: '#17a398', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                  RIVO BOT
+                </Text>
+              </View>
+            )}
             {item.jamInvite?.roomCode ? (
               <View style={styles.jamInviteCard}>
                 <View style={styles.jamInviteHeader}>
@@ -419,23 +459,32 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                     </View>
 
                     <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={styles.activeUserName} numberOfLines={1}>
-                        {activeUser.name || 'Friend'}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Text style={styles.activeUserName} numberOfLines={1}>
+                          {activeUser.name || 'Friend'}
+                        </Text>
+                        {(activeUser?.isBot || activeUser?.name === 'Rivo Bot') && (
+                          <View style={styles.botBadge}>
+                            <Text style={styles.botBadgeText}>BOT</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={[styles.activeUserStatus, isOtherTyping && { color: '#17a398', fontWeight: '800' }]}>
-                        {isOtherTyping ? 'typing...' : 'DIRECT MESSAGE'}
+                        {isOtherTyping ? 'typing...' : (activeUser?.isBot || activeUser?.name === 'Rivo Bot' ? 'SYSTEM BOT' : 'DIRECT MESSAGE')}
                       </Text>
                     </View>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.headerJamInviteBtn}
-                    onPress={handleInviteToJam}
-                    activeOpacity={0.8}
-                  >
-                    <Radio size={12} color="#082621" />
-                    <Text style={styles.headerJamInviteText}>JAM</Text>
-                  </TouchableOpacity>
+                  {!(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || activeUser?.email === 'bot@rivo.app') && (
+                    <TouchableOpacity
+                      style={styles.headerJamInviteBtn}
+                      onPress={handleInviteToJam}
+                      activeOpacity={0.8}
+                    >
+                      <Radio size={12} color="#082621" />
+                      <Text style={styles.headerJamInviteText}>JAM</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : (
                 <View style={styles.hubHeaderRow}>
@@ -522,9 +571,16 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
                           )}
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.listUserName} numberOfLines={1}>
-                            {item.user?.name || 'Listener'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                            <Text style={styles.listUserName} numberOfLines={1}>
+                              {item.user?.name || 'Listener'}
+                            </Text>
+                            {(item.user?.isBot || item.user?.name === 'Rivo Bot') && (
+                              <View style={styles.botBadge}>
+                                <Text style={styles.botBadgeText}>BOT</Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={styles.listLastMsg} numberOfLines={1}>
                             {item.lastMessage?.text || 'Sent an attachment'}
                           </Text>
@@ -630,14 +686,16 @@ export default function ChatModal({ visible, onClose, initialTargetUser = null, 
 
                 {/* Input Bar */}
                 <View style={styles.inputBar}>
-                  <TouchableOpacity
-                    style={styles.inputJamBtn}
-                    onPress={handleInviteToJam}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Radio size={16} color="#17a398" />
-                  </TouchableOpacity>
+                  {!(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || activeUser?.email === 'bot@rivo.app') && (
+                    <TouchableOpacity
+                      style={styles.inputJamBtn}
+                      onPress={handleInviteToJam}
+                      activeOpacity={0.8}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Radio size={16} color="#17a398" />
+                    </TouchableOpacity>
+                  )}
                   <TextInput
                     style={styles.textInput}
                     placeholder={`Message ${activeUser.name}...`}
@@ -676,6 +734,8 @@ const styles = StyleSheet.create({
   keyboardWrap: {
     width: '100%',
     height: '90%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   sheetCard: {
     flex: 1,
@@ -1088,5 +1148,17 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     marginLeft: 4,
     fontWeight: '600',
+  },
+  botBadge: {
+    backgroundColor: '#17a398',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  botBadgeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#082621',
   },
 });

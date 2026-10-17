@@ -313,7 +313,7 @@ module.exports = function (io) {
     });
 
     // Jam: Sync play state
-    socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId }) => {
+    socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId, isPeriodic }) => {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
@@ -328,6 +328,12 @@ module.exports = function (io) {
           (room.members || []).forEach(m => {
             m.isHost = (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid)));
           });
+        }
+
+        // ONLY the Host may emit periodic playback time / clock synchronization!
+        // Non-host members are never allowed to push lagging periodic time updates into the room.
+        if (isPeriodic && !isHost) {
+          return;
         }
 
         if (!isHost && room.hostOnlyControl) {
@@ -355,6 +361,14 @@ module.exports = function (io) {
           if (cleanTrack.audioUrl && cleanTrack.audioUrl.startsWith('file://')) delete cleanTrack.audioUrl;
           cleanTrack.isDownloaded = false;
           cleanTrack.downloaded = false;
+
+          const oldId = room.currentTrack ? String(room.currentTrack._id || room.currentTrack.id || '') : '';
+          const newId = String(cleanTrack._id || cleanTrack.id || '');
+          if (room.currentTrack && oldId && newId && oldId !== newId) {
+            if (!room.history) room.history = [];
+            room.history.push(room.currentTrack);
+            if (room.history.length > 25) room.history.shift();
+          }
           room.currentTrack = cleanTrack;
         }
         if (currentTime !== undefined) room.currentTime = Number(currentTime) || 0;
@@ -366,6 +380,7 @@ module.exports = function (io) {
           currentTrack: room.currentTrack,
           currentTime: room.currentTime,
           updatedAt: room.updatedAt,
+          serverTime: Date.now(),
           initiatorId: initiatorId || socket.id
         };
 
@@ -376,6 +391,7 @@ module.exports = function (io) {
             roomCode: cleanCode,
             currentTime: room.currentTime,
             currentTrack: room.currentTrack,
+            serverTime: Date.now(),
             initiatorId: initiatorId || socket.id
           });
           io.to(cleanCode).emit('jam:room_updated', room);
@@ -421,6 +437,7 @@ module.exports = function (io) {
         currentTrack: room.currentTrack,
         currentTime: liveTime,
         updatedAt: room.updatedAt || Date.now(),
+        serverTime: Date.now(),
         queue: room.queue || [],
         initiatorId: 'server'
       });
@@ -437,6 +454,7 @@ module.exports = function (io) {
           currentTrack: currentTrack,
           currentTime: Number(currentTime) || 0,
           updatedAt: Date.now(),
+          serverTime: Date.now(),
           initiatorId: socket.id
         });
       }
@@ -459,8 +477,10 @@ module.exports = function (io) {
           (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
           (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
 
+        const canControl = isHost || !room.hostOnlyControl;
+
         let remainingTracks = [...validList];
-        if (!room.currentTrack && isHost) {
+        if (!room.currentTrack && canControl) {
           const firstTrack = remainingTracks.shift();
           room.currentTrack = firstTrack;
           room.isPlaying = true;
@@ -562,8 +582,20 @@ module.exports = function (io) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
+        const effUid = socket.userId;
+        const isHost = (room.hostId === socket.id) ||
+          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+        const canControl = isHost || !room.hostOnlyControl;
+        if (!canControl) return;
+
         if (room.queue && room.queue.length > 0) {
           const nextTrack = room.queue.shift();
+          if (room.currentTrack) {
+            if (!room.history) room.history = [];
+            room.history.push(room.currentTrack);
+            if (room.history.length > 25) room.history.shift();
+          }
           room.currentTrack = nextTrack;
           room.currentTime = 0;
           room.isPlaying = true;
@@ -584,6 +616,45 @@ module.exports = function (io) {
           if (room.hostId) {
             io.to(room.hostId).emit('jam:advance_host_queue', { roomCode: cleanCode });
           }
+        }
+      }
+    });
+
+    socket.on('jam:prev_track', ({ roomCode }) => {
+      const cleanCode = String(roomCode || '').trim().toUpperCase();
+      const room = jamRooms[cleanCode] || jamRooms[roomCode];
+      if (room) {
+        const effUid = socket.userId;
+        const isHost = (room.hostId === socket.id) ||
+          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+        const canControl = isHost || !room.hostOnlyControl;
+        if (!canControl) return;
+
+        if (room.history && room.history.length > 0) {
+          const prevTrack = room.history.pop();
+          if (room.currentTrack) {
+            if (!room.queue) room.queue = [];
+            room.queue.unshift(room.currentTrack);
+          }
+          room.currentTrack = prevTrack;
+          room.currentTime = 0;
+          room.isPlaying = true;
+          room.updatedAt = Date.now();
+
+          const payload = {
+            isPlaying: true,
+            currentTrack: prevTrack,
+            currentTime: 0,
+            updatedAt: room.updatedAt,
+            initiatorId: socket.id
+          };
+          io.to(cleanCode).emit('jam:on_play_state_changed', payload);
+          io.to(cleanCode).emit('jam:sync_play_state', payload);
+          io.to(cleanCode).emit('jam:room_updated', room);
+          io.to(cleanCode).emit('jam_updated', room);
+        } else if (room.hostId) {
+          io.to(room.hostId).emit('jam:prev_track', { roomCode: cleanCode });
         }
       }
     });

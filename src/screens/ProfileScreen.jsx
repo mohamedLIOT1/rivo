@@ -427,7 +427,9 @@ export default function ProfileScreen({
                 <div className={`w-20 h-20 sm:w-28 sm:h-28 md:w-36 md:h-36 rounded-2xl overflow-hidden brutal-border-thick brutal-shadow-sm shrink-0 flex items-center justify-center relative ${
                   isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-black'
                 }`}>
-                  {viewingProfile.avatar ? (
+                  {((viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') && (!viewingProfile.avatar || viewingProfile.avatar.includes('unsplash'))) ? (
+                    <img src="https://rivo-m.duckdns.org/public/assets/rivo-bot.png" alt={viewingProfile.name} className="w-full h-full object-cover" />
+                  ) : viewingProfile.avatar ? (
                     <img src={viewingProfile.avatar} alt={viewingProfile.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
@@ -446,7 +448,7 @@ export default function ProfileScreen({
                     </h2>
                     <VerifiedBadge userOrName={viewingProfile} size={15} />
                     <span className="text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded brutal-border">
-                      LISTENER
+                      {(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'LISTENER'}
                     </span>
                   </div>
                   <span className={`inline-block text-[9px] font-mono font-bold brutal-border px-1.5 py-0.2 rounded ${
@@ -475,7 +477,7 @@ export default function ProfileScreen({
                   </h2>
                   <VerifiedBadge userOrName={viewingProfile} size={20} />
                   <span className="text-[10px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-2 py-0.5 rounded brutal-border">
-                    LISTENER
+                    {(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'LISTENER'}
                   </span>
                 </div>
 
@@ -526,17 +528,19 @@ export default function ProfileScreen({
                 {/* Actions Bar (Follow, Chat, Jam) */}
                 {!isMe && (
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 my-2">
-                    <button
-                      onClick={handleToggleFollow}
-                      disabled={followLoading}
-                      className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
-                        viewingProfile.isFollowing
-                          ? isDark ? 'bg-zinc-800 text-white border-zinc-700' : 'bg-white text-[#0b1110]'
-                          : 'bg-[#17a398] text-[#0b1110]'
-                      }`}
-                    >
-                      {viewingProfile.isFollowing ? 'Following ✓' : '+ Follow'}
-                    </button>
+                    {!(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') && (
+                      <button
+                        onClick={handleToggleFollow}
+                        disabled={followLoading}
+                        className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer ${
+                          viewingProfile.isFollowing
+                            ? isDark ? 'bg-zinc-800 text-white border-zinc-700' : 'bg-white text-[#0b1110]'
+                            : 'bg-[#17a398] text-[#0b1110]'
+                        }`}
+                      >
+                        {viewingProfile.isFollowing ? 'Following ✓' : '+ Follow'}
+                      </button>
+                    )}
 
                     <button
                       onClick={() => onOpenChat && onOpenChat(viewingProfile)}
@@ -548,13 +552,15 @@ export default function ProfileScreen({
                       <span>Chat</span>
                     </button>
 
-                    <button
-                      onClick={() => onStartJamWithUser && onStartJamWithUser(viewingProfile)}
-                      className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#f59e0b] hover:bg-[#fbb739] text-[#0b1110] font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Radio size={13} className="animate-pulse" />
-                      <span>Jam</span>
-                    </button>
+                    {!(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') && (
+                      <button
+                        onClick={() => onStartJamWithUser && onStartJamWithUser(viewingProfile)}
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-[#f59e0b] hover:bg-[#fbb739] text-[#0b1110] font-display font-bold text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Radio size={13} className="animate-pulse" />
+                        <span>Jam</span>
+                      </button>
+                    )}
                   </div>
                 )}
 

@@ -69,11 +69,9 @@ export default function AdminScreen({
   const [lyricsFilterQuery, setLyricsFilterQuery] = useState('');
   const [lyricsTypeFilter, setLyricsTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
 
-  // Analytics & Broadcast State
+  // Analytics State
   const [analyticsData, setAnalyticsData] = useState(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
-  const [broadcastMsg, setBroadcastMsg] = useState('');
-  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
   useEffect(() => {
     if (activeTab !== 'analytics') return;
@@ -87,25 +85,6 @@ export default function AdminScreen({
       .catch(e => console.warn('Analytics fetch error:', e))
       .finally(() => setIsLoadingAnalytics(false));
   }, [activeTab]);
-
-  const handleBroadcast = async () => {
-    if (!broadcastMsg.trim() || isSendingBroadcast) return;
-    setIsSendingBroadcast(true);
-    try {
-      const tk = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-      await fetch(`${API_BASE_URL}/api/admin/broadcast`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
-        body: JSON.stringify({ message: broadcastMsg, type: 'info' })
-      });
-      setBroadcastMsg('');
-      alert('Message broadcasted to all online users!');
-    } catch (err) {
-      alert('Failed to broadcast message');
-    } finally {
-      setIsSendingBroadcast(false);
-    }
-  };
 
   const [statusMessage, setStatusMessage] = useState(null);
   const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
@@ -284,6 +263,32 @@ export default function AdminScreen({
       flashMessage('Playlist deleted successfully');
     } catch (err) {
       console.error('Delete playlist error:', err);
+    }
+  };
+
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const handleDeduplicateTracks = async () => {
+    if (!window.confirm('Scan database and permanently deduplicate tracks (merging play counts and updating user playlists)?')) return;
+    setIsDeduplicating(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tracks/deduplicate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        flashMessage(data.message || `Deduplication complete: Purged ${data.removedCount} duplicate tracks.`);
+        if (onTrackDeleted) onTrackDeleted();
+      } else {
+        flashMessage(data.error || 'Failed to deduplicate tracks');
+      }
+    } catch (err) {
+      flashMessage(err.message || 'Error executing deduplication');
+    } finally {
+      setIsDeduplicating(false);
     }
   };
 
@@ -501,7 +506,7 @@ export default function AdminScreen({
           }`}
         >
           <BarChart2 size={14} />
-          <span>Analytics & Broadcast</span>
+          <span>Analytics</span>
         </button>
       </div>
 
@@ -667,6 +672,17 @@ export default function AdminScreen({
                   }`}
                 >
                   Quran ({tracksQuranCount})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDeduplicateTracks}
+                  disabled={isDeduplicating}
+                  className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] brutal-shadow-sm flex items-center gap-1.5 disabled:opacity-50 ml-1"
+                  title="Scan and merge duplicate songs across database"
+                >
+                  <Sparkles size={13} className={isDeduplicating ? 'animate-spin' : ''} />
+                  <span>{isDeduplicating ? 'Deduplicating...' : 'Deduplicate Songs'}</span>
                 </button>
               </div>
 
@@ -1239,40 +1255,9 @@ export default function AdminScreen({
         </div>
       )}
 
-      {/* ── TAB 7: ANALYTICS & BROADCAST ── */}
+      {/* ── TAB 7: ANALYTICS ── */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
-          {/* Global Broadcast Box */}
-          <div className={`p-5 rounded-2xl brutal-border ${isDark ? 'bg-[#182320]' : 'bg-[#ede5d3]'}`}>
-            <h3 className="font-mono font-black text-sm uppercase flex items-center gap-2 mb-2">
-              <Radio size={16} className="text-[#17a398]" />
-              Broadcast Live Announcement to Online Users
-            </h3>
-            <p className={`text-xs font-sans mb-3 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Send an instant push message that appears in real-time on all active user screens.
-            </p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={broadcastMsg}
-                onChange={(e) => setBroadcastMsg(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleBroadcast()}
-                placeholder="Type your system announcement message..."
-                className={`flex-1 px-4 py-2.5 rounded-xl brutal-border font-sans text-xs outline-none ${
-                  isDark ? 'bg-[#111917] text-white border-zinc-700' : 'bg-white text-black border-black'
-                }`}
-              />
-              <button
-                onClick={handleBroadcast}
-                disabled={isSendingBroadcast || !broadcastMsg.trim()}
-                className="px-5 py-2.5 rounded-xl bg-[#17a398] text-[#0b1110] font-mono font-black text-xs uppercase tracking-wider brutal-border hover:opacity-90 disabled:opacity-50 cursor-pointer flex items-center gap-2"
-              >
-                {isSendingBroadcast ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                <span>Broadcast</span>
-              </button>
-            </div>
-          </div>
-
           {/* Analytics KPI Metrics */}
           {isLoadingAnalytics ? (
             <div className="py-12 flex justify-center items-center">

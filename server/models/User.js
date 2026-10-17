@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema({
   bio: { type: String, default: '' },
   role: { type: String, enum: ['admin', 'user'], default: 'user' },
   isAdmin: { type: Boolean, default: false },
+  isBot: { type: Boolean, default: false },
   isVerified: { type: Boolean, default: false },
   tokenInvalidBefore: { type: Date, default: null },
   likedTrackIds: [String],
@@ -23,7 +24,11 @@ const UserSchema = new mongoose.Schema({
     description: String,
     isQuran: { type: Boolean, default: false },
     isMix: { type: Boolean, default: false },
-    transitions: { type: Object, default: {} }
+    transitions: { type: Object, default: {} },
+    sourcePlaylistId: { type: String, default: '' },
+    sourceOwnerName: { type: String, default: '' },
+    sourceOwnerId: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now }
   }],
   currentListening: { type: Object, default: null },
   lastActiveAt: { type: Date, default: Date.now },

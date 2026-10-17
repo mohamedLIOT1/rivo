@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {
   ShieldCheck,
@@ -33,6 +34,7 @@ import {
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 
@@ -40,6 +42,7 @@ export default function AdminScreen() {
   const { currentUser, tracks = [], token, fetchPublicTracks } = useUser();
   const { playTrack } = useAudioPlayer();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.email?.includes('admin');
 
@@ -66,11 +69,9 @@ export default function AdminScreen() {
   const [adminPlaylists, setAdminPlaylists] = useState([]);
   const [isLoadingPlaylists, setIsLoadingPlaylists] = useState(false);
 
-  // Analytics & Broadcast State
+  // Analytics State
   const [analyticsData, setAnalyticsData] = useState(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
-  const [broadcastMsg, setBroadcastMsg] = useState('');
-  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
 
   const [deletingId, setDeletingId] = useState(null);
 
@@ -170,32 +171,6 @@ export default function AdminScreen() {
     }
   };
 
-  const handleBroadcast = async () => {
-    const msg = broadcastMsg.trim();
-    if (!msg || isSendingBroadcast) return;
-    setIsSendingBroadcast(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/broadcast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ message: msg, type: 'info' }),
-      });
-      if (res.ok) {
-        setBroadcastMsg('');
-        showToast('تم إرسال الإشعار اللحظي لجميع المستخدمين المتصلين!', 'success');
-      } else {
-        showToast('فشل إرسال الإشعار', 'error');
-      }
-    } catch {
-      showToast('خطأ في إرسال الإشعار', 'error');
-    } finally {
-      setIsSendingBroadcast(false);
-    }
-  };
-
   useEffect(() => {
     if (activeTab === 'accounts') fetchUsers();
     else if (activeTab === 'albums') fetchAlbums();
@@ -244,6 +219,44 @@ export default function AdminScreen() {
             }
           },
         },
+      ]
+    );
+  };
+
+  const [isDeduplicating, setIsDeduplicating] = useState(false);
+  const handleDeduplicateTracks = () => {
+    Alert.alert(
+      'DEDUPLICATE SONGS',
+      'Scan database and permanently purge duplicate tracks (merging play counts and updating all user playlists)?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deduplicate Now',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeduplicating(true);
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/tracks/deduplicate`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+                }
+              });
+              const data = await res.json();
+              if (data.success) {
+                showToast(data.message || `Deduplicated ${data.removedCount} tracks!`, 'success');
+                if (fetchPublicTracks) fetchPublicTracks();
+              } else {
+                showToast(data.error || 'Failed to deduplicate tracks', 'error');
+              }
+            } catch (err) {
+              showToast(err.message || 'Error executing deduplication', 'error');
+            } finally {
+              setIsDeduplicating(false);
+            }
+          }
+        }
       ]
     );
   };
@@ -401,15 +414,15 @@ export default function AdminScreen() {
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header */}
       <View style={styles.header}>
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <ShieldCheck size={18} color={isAdmin ? colors.mint : colors.rust} />
-            <Text style={styles.headerTitle}>ADMIN CONSOLE</Text>
+            <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]}>ADMIN CONSOLE</Text>
           </View>
-          <Text style={styles.headerSub}>CONTENT & COMMUNITY MANAGEMENT</Text>
+          <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>CONTENT & COMMUNITY MANAGEMENT</Text>
         </View>
 
         <TouchableOpacity
@@ -492,6 +505,25 @@ export default function AdminScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+
+              <TouchableOpacity
+                style={styles.dedupeBtn}
+                onPress={handleDeduplicateTracks}
+                disabled={isDeduplicating}
+                activeOpacity={0.8}
+              >
+                {isDeduplicating ? (
+                  <ActivityIndicator size="small" color="#082621" />
+                ) : (
+                  <>
+                    <Sparkles size={11} color="#082621" strokeWidth={2.5} />
+                    <Text style={styles.dedupeBtnText}>DEDUPLICATE</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ marginBottom: 10 }}>
               <Text style={styles.resultsCountText}>
                 SHOWING {filteredTracks.length} OF {tracks.length}
               </Text>
@@ -843,44 +875,9 @@ export default function AdminScreen() {
           </View>
         )}
 
-        {/* ═══════════ ANALYTICS & BROADCAST TAB ═══════════ */}
+        {/* ═══════════ ANALYTICS TAB ═══════════ */}
         {activeTab === 'analytics' && (
           <View style={styles.analyticsContainer}>
-            {/* Global Broadcast Box */}
-            <View style={styles.broadcastCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Radio size={16} color={colors.mint} />
-                <Text style={styles.broadcastTitle}>BROADCAST LIVE ANNOUNCEMENT</Text>
-              </View>
-              <Text style={styles.broadcastDesc}>
-                Send an instant push message that appears in real-time on all active user screens.
-              </Text>
-              <View style={styles.broadcastInputRow}>
-                <TextInput
-                  style={styles.broadcastInput}
-                  placeholder="Type your system announcement message..."
-                  placeholderTextColor="#6b7280"
-                  value={broadcastMsg}
-                  onChangeText={setBroadcastMsg}
-                />
-                <TouchableOpacity
-                  style={[styles.broadcastBtn, (!broadcastMsg.trim() || isSendingBroadcast) && { opacity: 0.5 }]}
-                  onPress={handleBroadcast}
-                  disabled={!broadcastMsg.trim() || isSendingBroadcast}
-                  activeOpacity={0.8}
-                >
-                  {isSendingBroadcast ? (
-                    <ActivityIndicator size="small" color="#082621" />
-                  ) : (
-                    <>
-                      <Send size={13} color="#082621" />
-                      <Text style={styles.broadcastBtnText}>SEND</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-
             {/* KPI Metrics */}
             {isLoadingAnalytics ? (
               <ActivityIndicator size="large" color={colors.mint} style={{ marginTop: 24 }} />
@@ -959,6 +956,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0b1110',
     padding: 14,
     paddingBottom: 90,
+    maxWidth: 840,
+    width: '100%',
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -1110,6 +1110,24 @@ const styles = StyleSheet.create({
   filterPillTextActive: {
     color: '#082621',
   },
+  dedupeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f59e0b',
+    borderWidth: 1,
+    borderColor: '#d97706',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginLeft: 'auto',
+  },
+  dedupeBtnText: {
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+    fontWeight: '900',
+    fontSize: 9,
+    color: '#082621',
+  },
   resultsCountText: {
     fontFamily: 'monospace',
     fontWeight: 'bold',
@@ -1243,57 +1261,6 @@ const styles = StyleSheet.create({
   },
   analyticsContainer: {
     paddingBottom: 24,
-  },
-  broadcastCard: {
-    backgroundColor: '#182320',
-    borderWidth: 1.5,
-    borderColor: '#263d38',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-  },
-  broadcastTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 12,
-    color: '#ffffff',
-  },
-  broadcastDesc: {
-    fontSize: 11,
-    color: '#94a3b8',
-    marginBottom: 10,
-    lineHeight: 15,
-  },
-  broadcastInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  broadcastInput: {
-    flex: 1,
-    backgroundColor: '#111917',
-    borderWidth: 1,
-    borderColor: '#263d38',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#ffffff',
-    fontSize: 12,
-  },
-  broadcastBtn: {
-    backgroundColor: colors.mint,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  broadcastBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: '#082621',
   },
   kpiGrid: {
     flexDirection: 'row',
