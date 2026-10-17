@@ -38,12 +38,10 @@ export const SocketProvider = ({ children }) => {
   }, [jamSession]);
   const [chatMessages, setChatMessages] = useState([]);
 
-  const myUserId = currentUser?._id ? String(currentUser._id) : (currentUser?.id ? String(currentUser.id) : null);
   const isCurrentUserHost = Boolean(
     jamSession && socket &&
       ((jamSession.hostId === socket.id) ||
-        (jamSession.hostUserId && myUserId && String(jamSession.hostUserId) === myUserId) ||
-        (jamSession.members || []).some(m => (m.socketId === socket.id || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost))
+        (jamSession.members || []).some(m => m.socketId === socket.id && m.isHost))
   );
   const isCurrentUserHostRef = useRef(isCurrentUserHost);
   useEffect(() => {

@@ -114,6 +114,7 @@ export const AudioProvider = ({ children }) => {
   isOfflineRef.current = isOffline;
   const [queue, setQueueState] = useState([]);
   const [progress, setProgress] = useState({ currentTime: 0, duration: 0 });
+  const progressRef = useRef({ currentTime: 0, duration: 0 });
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
 
@@ -125,21 +126,16 @@ export const AudioProvider = ({ children }) => {
     const session = jamSyncRef.current?.jamSession;
     if (!session) return false;
     const sock = jamSyncRef.current?.socket;
-    const myId = currentUser?._id ? String(currentUser._id) : (currentUser?.id ? String(currentUser.id) : '');
     const sockId = sock?.id;
+    if (!sockId) return false;
 
-    if (sockId && session.hostId && session.hostId === sockId) return true;
-    if (session.hostUserId && myId && String(session.hostUserId) === myId) return true;
+    if (session.hostId && session.hostId === sockId) return true;
     if (Array.isArray(session.members)) {
-      const me = session.members.find(m =>
-        (sockId && m.socketId === sockId) ||
-        (myId && String(m.id || m._id) === myId)
-      );
+      const me = session.members.find(m => m.socketId === sockId);
       if (me && me.isHost) return true;
     }
-    if (jamSyncRef.current?.isHost === true) return true;
     return false;
-  }, [currentUser]);
+  }, []);
 
   const canControlJam = useCallback(() => {
     const session = jamSyncRef.current?.jamSession;
@@ -519,6 +515,7 @@ export const AudioProvider = ({ children }) => {
 
     if (playbackStatusRef.current.currentTime !== newCurrentTime) {
       playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: newCurrentTime, duration: newDuration };
+      progressRef.current = { currentTime: newCurrentTime, duration: newDuration };
       setProgress({ currentTime: newCurrentTime, duration: newDuration });
 
       // Periodically sync elapsed playback time with lockscreen / drawer notification
@@ -542,7 +539,8 @@ export const AudioProvider = ({ children }) => {
       }
 
       // Periodically sync live playback time with other devices (Spotify Connect)
-      if (isPlayingRef.current && Math.abs(newCurrentTime - (playbackStatusRef.current._lastDeviceSync || 0)) >= 2) {
+      // Strictly skip if currently inside an active Jam room
+      if (isPlayingRef.current && !jamSyncRef.current?.jamSession && Math.abs(newCurrentTime - (playbackStatusRef.current._lastDeviceSync || 0)) >= 3) {
         playbackStatusRef.current._lastDeviceSync = newCurrentTime;
         if (jamSyncRef.current?.socket && currentTrackRef.current) {
           jamSyncRef.current.socket.emit('device:playback_state', {
@@ -596,7 +594,15 @@ export const AudioProvider = ({ children }) => {
       if (repeatModeRef.current === 'one') {
         if (soundRef.current) soundRef.current.replayAsync().catch(() => {});
       } else {
-        if (playNextTrackRef.current) playNextTrackRef.current();
+        // In Jam Session: ONLY the Host auto-advances when track finishes!
+        // Listeners wait for the host's sync to prevent multiple queue pops / skips.
+        if (jamSyncRef.current?.jamSession) {
+          if (isJamHost() && playNextTrackRef.current) {
+            playNextTrackRef.current();
+          }
+        } else {
+          if (playNextTrackRef.current) playNextTrackRef.current();
+        }
       }
     }
   };
@@ -648,6 +654,8 @@ export const AudioProvider = ({ children }) => {
                   currentTime: playbackStatusRef.current?.currentTime || 0,
                   initiatorId: jamSyncRef.current.socket.id,
                   userId: currentUser?._id || currentUser?.id,
+                  isUserAction: true,
+                  userAction: 'play',
                 });
               }
             }
@@ -679,6 +687,8 @@ export const AudioProvider = ({ children }) => {
                   currentTime: playbackStatusRef.current?.currentTime || 0,
                   initiatorId: jamSyncRef.current.socket.id,
                   userId: currentUser?._id || currentUser?.id,
+                  isUserAction: true,
+                  userAction: 'pause',
                 });
               }
             }
@@ -714,6 +724,8 @@ export const AudioProvider = ({ children }) => {
                     currentTime: curPos,
                     initiatorId: jamSyncRef.current.socket.id,
                     userId: currentUser?._id || currentUser?.id,
+                    isUserAction: true,
+                    userAction: nextState ? 'play' : 'pause',
                   });
                 }
               }
@@ -920,6 +932,8 @@ export const AudioProvider = ({ children }) => {
             currentTime: safeTargetSec,
             initiatorId: jamSyncRef.current.socket.id,
             userId: currentUser?._id || currentUser?.id,
+            isUserAction: true,
+            userAction: 'play_track',
           });
         }
       }
@@ -944,7 +958,7 @@ export const AudioProvider = ({ children }) => {
         if (isUploadedTrack) return false; // For uploaded tracks, only accept exact trackId match
         const tTitle = (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
         const tArtist = (t.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-        return cleanTitle && tTitle && cleanTitle === tTitle && (!cleanArtist || !tArtist || cleanArtist === tArtist);
+        return cleanTitle && cleanArtist && tTitle && tArtist && cleanTitle === tTitle && cleanArtist === tArtist;
       });
 
       let uri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || track.nativeAudioUri || track.localAudioUri;
@@ -953,6 +967,16 @@ export const AudioProvider = ({ children }) => {
       if (!uri && isUploadedTrack && track.audioUrl) {
         const rawAudio = track.audioUrl;
         uri = rawAudio.startsWith('/') ? `${API_BASE_URL}${rawAudio}` : (rawAudio.startsWith('http') ? rawAudio : `${API_BASE_URL}/${rawAudio}`);
+      }
+
+      // Pre-resolved audio URL (e.g. broadcast from Jam host or cached HTTP audio stream)
+      if (!isOffline) {
+        if (!uri && track.resolvedAudioUrl && (track.resolvedAudioUrl.startsWith('http://') || track.resolvedAudioUrl.startsWith('https://'))) {
+          uri = track.resolvedAudioUrl;
+        }
+        if (!uri && track.audioUrl && (track.audioUrl.startsWith('http://') || track.audioUrl.startsWith('https://')) && !track.audioUrl.includes('youtube.com/watch') && !track.audioUrl.includes('youtu.be/')) {
+          uri = track.audioUrl;
+        }
       }
 
       // Direct check on physical storage by trackId (detects local files on device even if not yet in state)
@@ -1023,6 +1047,9 @@ export const AudioProvider = ({ children }) => {
       if (uri.startsWith('/')) uri = `${API_BASE_URL}${uri}`;
 
       track = { ...track, resolvedAudioUrl: uri };
+      if (uri.startsWith('http')) {
+        track.audioUrl = uri;
+      }
       if (playRequestSeqRef.current !== requestSeq || String(currentTrackRef.current?._id || currentTrackRef.current?.id) !== trackId) {
         return;
       }
@@ -1098,7 +1125,7 @@ export const AudioProvider = ({ children }) => {
       isPlayingRef.current = true;
       setIsLoading(false);
 
-      if (!isRemote && jamSyncRef.current.socket) {
+      if (!isRemote && jamSyncRef.current.socket && !jamSyncRef.current.jamSession) {
         jamSyncRef.current.socket.emit('device:playback_state', {
           isPlaying: true,
           track,
@@ -1106,6 +1133,23 @@ export const AudioProvider = ({ children }) => {
           deviceType: 'mobile',
           deviceName: Platform.OS === 'ios' ? 'iPhone' : 'Android'
         });
+      }
+
+      // Re-broadcast resolved audio URL to Jam room so guests play the identical audio stream
+      if (!isRemote && jamSyncRef.current.socket && jamSyncRef.current.jamSession && canControlJam()) {
+        const roomCode = String(jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode || '').trim().toUpperCase();
+        if (roomCode && uri && uri.startsWith('http')) {
+          jamSyncRef.current.socket.emit('jam:sync_play_state', {
+            roomCode,
+            isPlaying: true,
+            currentTrack: { ...track, audioUrl: uri, resolvedAudioUrl: uri },
+            currentTime: safeTargetSec,
+            initiatorId: jamSyncRef.current.socket.id,
+            userId: currentUser?._id || currentUser?.id,
+            isUserAction: true,
+            userAction: 'track_resolved'
+          });
+        }
       }
 
       try {
@@ -1190,7 +1234,10 @@ export const AudioProvider = ({ children }) => {
 
   const togglePlay = async (isRemoteParam = false) => {
     const isRemote = isRemoteParam === true;
-    if (isLoading || isResolvingRef.current) return;
+    if (isResolvingRef.current) return;
+    const nextPlaying = !isPlayingRef.current;
+    if (isLoading && nextPlaying) return;
+
     if (!soundRef.current) {
       if (jamSyncRef.current.jamSession?.currentTrack) {
         return playTrack(jamSyncRef.current.jamSession.currentTrack, queueRef.current);
@@ -1200,7 +1247,6 @@ export const AudioProvider = ({ children }) => {
       return;
     }
     const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
-    const nextPlaying = !isPlayingRef.current;
     shouldBePlayingRef.current = nextPlaying;
     isPlayingRef.current = nextPlaying;
     setIsPlaying(nextPlaying);
@@ -1221,11 +1267,13 @@ export const AudioProvider = ({ children }) => {
           currentTime: curPos,
           initiatorId: jamSyncRef.current.socket.id,
           userId: currentUser?._id || currentUser?.id,
+          isUserAction: true,
+          userAction: nextPlaying ? 'play' : 'pause',
         });
       }
     }
 
-    if (!isRemote && jamSyncRef.current.socket) {
+    if (!isRemote && jamSyncRef.current.socket && !jamSyncRef.current.jamSession) {
       jamSyncRef.current.socket.emit('device:playback_state', {
         isPlaying: nextPlaying,
         track: currentTrackRef.current,
@@ -1263,6 +1311,7 @@ export const AudioProvider = ({ children }) => {
     const safeSecs = Math.max(0, Number(secs) || 0);
     const wasPlaying = isPlayingRef.current;
     isSeekingRef.current = true;
+    progressRef.current = { ...progressRef.current, currentTime: safeSecs };
     setProgress(p => ({ ...p, currentTime: safeSecs }));
     if (playbackStatusRef.current) {
       playbackStatusRef.current.currentTime = safeSecs;
@@ -1281,6 +1330,8 @@ export const AudioProvider = ({ children }) => {
           currentTime: safeSecs,
           initiatorId: jamSyncRef.current.socket.id,
           userId: currentUser?._id || currentUser?.id,
+          isSeek: true,
+          userAction: 'seek',
         });
       }
     }
@@ -1588,7 +1639,7 @@ export const AudioProvider = ({ children }) => {
     } catch (e) {}
   }, []);
 
-  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt, serverTime }) => {
+  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt, serverTime, isPeriodic, isSeek, userAction }) => {
     let targetTime = Number(syncTime) || 0;
     const refTimestamp = Number(updatedAt || serverTime || 0);
     if (syncPlaying && refTimestamp > 0) {
@@ -1602,9 +1653,30 @@ export const AudioProvider = ({ children }) => {
     const curLoadedId = loadedTrackIdRef.current;
     const syncTrackId = syncTrack ? String(syncTrack._id || syncTrack.id) : null;
     const isDifferentTrack = Boolean(syncTrackId && (!curLoadedId || syncTrackId !== curLoadedId));
+    const nowTime = Date.now();
+
+    // ⚡ EXPLICIT USER SEEK: Both Host and Guests MUST seek immediately (zero deadband, zero cooldown)
+    if (isSeek || userAction === 'seek') {
+      lastRemoteSeekRef.current = nowTime;
+      if (jamSyncRef.current.jamSession) {
+        jamSyncRef.current.jamSession.currentTime = targetTime;
+        jamSyncRef.current.jamSession.updatedAt = Date.now();
+        if (syncPlaying !== undefined) jamSyncRef.current.jamSession.isPlaying = Boolean(syncPlaying);
+        if (syncTrack) jamSyncRef.current.jamSession.currentTrack = syncTrack;
+        setJamSessionState({ ...jamSyncRef.current.jamSession });
+      }
+      progressRef.current = { ...progressRef.current, currentTime: targetTime };
+      setProgress(p => ({ ...p, currentTime: targetTime }));
+      if (syncPlaying !== undefined) {
+        shouldBePlayingRef.current = Boolean(syncPlaying);
+        isPlayingRef.current = Boolean(syncPlaying);
+        setIsPlaying(Boolean(syncPlaying));
+      }
+      await seekTo(targetTime, true /* isRemote */);
+      return;
+    }
 
     // Debounce duplicate socket emissions occurring within 350ms for same track and position
-    const nowTime = Date.now();
     if (!isDifferentTrack && Math.abs(targetTime - (lastSyncPayloadRef.current.time || 0)) < 0.5 && (nowTime - (lastSyncPayloadRef.current.timestamp || 0) < 350)) {
       return;
     }
@@ -1624,6 +1696,7 @@ export const AudioProvider = ({ children }) => {
         setCurrentTrack(syncTrack);
       }
       if (targetTime !== undefined) {
+        progressRef.current = { ...progressRef.current, currentTime: Math.max(0, targetTime) };
         setProgress(p => ({ ...p, currentTime: Math.max(0, targetTime) }));
       }
       if (jamSyncRef.current.jamSession) {
@@ -1650,9 +1723,9 @@ export const AudioProvider = ({ children }) => {
     setIsPlaying(true);
 
     if (isDifferentTrack || !soundRef.current) {
-      await playTrack(syncTrack || cur, null, true /* isRemote */, targetTime, true);
+      await playTrack(syncTrack || cur, null, false /* isRetry */, targetTime, true /* isRemote */);
     } else {
-      // Host is master playback source: never seek host audio to remote sync updates of the same track!
+      // Host is master playback source: ignore periodic time sync updates of the same track!
       if (isJamHost()) {
         if (soundRef.current && !isPlayingRef.current) {
           await soundRef.current.playAsync().catch(() => {});
@@ -1660,9 +1733,9 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
-      // Guest: sync drift only if severe drift > 3.2s and not sought recently (> 4.0s)
+      // Guest: sync drift only if severe drift > 3.5s and not sought recently (> 4.5s)
       const localCur = playbackStatusRef.current?.currentTime || 0;
-      if (targetTime !== undefined && Math.abs(targetTime - localCur) > 3.2 && (nowTime - (lastRemoteSeekRef.current || 0) > 4000)) {
+      if (targetTime !== undefined && Math.abs(targetTime - localCur) > 3.5 && (nowTime - (lastRemoteSeekRef.current || 0) > 4500)) {
         lastRemoteSeekRef.current = nowTime;
         seekTo(targetTime, true);
       }
@@ -1689,7 +1762,7 @@ export const AudioProvider = ({ children }) => {
   }, [playTrack, seekTo, likedTrackIds, isJamHost]);
 
   const controls = useMemo(() => ({
-    currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress,
+    currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress: progressRef.current,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
     playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
@@ -1701,7 +1774,7 @@ export const AudioProvider = ({ children }) => {
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
     jamSession, setJamSync,
     remoteDevicePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, progress, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack]);
 
   return (
     <AudioContext.Provider value={controls}>

@@ -255,11 +255,10 @@ module.exports = function (io) {
         jamDisconnectTimeouts.delete(disconnectKey);
       }
 
-      const wasHost = (room.hostUserId && uId && String(room.hostUserId) === String(uId)) ||
-                      (room.hostId && room.hostId === socket.id);
-      const isHost = isNewRoom ? true : Boolean(wasHost || (room.members.length === 0 && !room.hostId));
+      const wasHostReconnecting = !room.hostId && room.hostUserId && uId && String(room.hostUserId) === String(uId);
+      const isHost = isNewRoom ? true : Boolean(room.hostId === socket.id || wasHostReconnecting || (room.members.length === 0 && !room.hostId));
 
-      room.members = (room.members || []).filter(m => m.socketId !== socket.id && (!uId || (m.id !== uId && m._id !== uId)));
+      room.members = (room.members || []).filter(m => m.socketId !== socket.id);
 
       if (isHost) {
         room.hostId = socket.id;
@@ -313,22 +312,12 @@ module.exports = function (io) {
     });
 
     // Jam: Sync play state
-    socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId, isPeriodic }) => {
+    socket.on('jam:sync_play_state', ({ roomCode, isPlaying, currentTrack, currentTime, initiatorId, userId, isPeriodic, isSeek, userAction }) => {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
-        const effUid = socket.userId || userId;
         const isHost = (room.hostId === socket.id) ||
-          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
-          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
-
-        if (isHost && socket.id) {
-          room.hostId = socket.id;
-          if (effUid) room.hostUserId = String(effUid);
-          (room.members || []).forEach(m => {
-            m.isHost = (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid)));
-          });
-        }
+          (room.members || []).some(m => m.socketId === socket.id && m.isHost);
 
         // ONLY the Host may emit periodic playback time / clock synchronization!
         // Non-host members are never allowed to push lagging periodic time updates into the room.
@@ -381,7 +370,10 @@ module.exports = function (io) {
           currentTime: room.currentTime,
           updatedAt: room.updatedAt,
           serverTime: Date.now(),
-          initiatorId: initiatorId || socket.id
+          initiatorId: initiatorId || socket.id,
+          isPeriodic: Boolean(isPeriodic),
+          isSeek: Boolean(isSeek),
+          userAction: userAction || (isSeek ? 'seek' : (isPlaying === false ? 'pause' : 'play'))
         };
 
         if (room.isPlaying === false) {
@@ -582,12 +574,17 @@ module.exports = function (io) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
-        const effUid = socket.userId;
         const isHost = (room.hostId === socket.id) ||
-          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
-          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+          (room.members || []).some(m => m.socketId === socket.id && m.isHost);
         const canControl = isHost || !room.hostOnlyControl;
         if (!canControl) return;
+
+        // Debounce rapid next_track calls within 1.2s to prevent multiple clients skipping queue simultaneously
+        const now = Date.now();
+        if (room._lastNextTrackTime && (now - room._lastNextTrackTime < 1200)) {
+          return;
+        }
+        room._lastNextTrackTime = now;
 
         if (room.queue && room.queue.length > 0) {
           const nextTrack = room.queue.shift();
@@ -624,10 +621,8 @@ module.exports = function (io) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
-        const effUid = socket.userId;
         const isHost = (room.hostId === socket.id) ||
-          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
-          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+          (room.members || []).some(m => m.socketId === socket.id && m.isHost);
         const canControl = isHost || !room.hostOnlyControl;
         if (!canControl) return;
 

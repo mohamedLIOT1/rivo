@@ -614,7 +614,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     { backgroundColor: deckBg, borderColor: isItemPlaying ? colors.mint : deckBorder },
                     isItemPlaying && { backgroundColor: isDark ? '#14201c' : '#e6f4f1' }
                   ]}
-                  onPress={() => playTrack(item, queue, false, index)}
+                  onPress={() => playTrack(item, queue)}
                   activeOpacity={0.8}
                 >
                   <Image source={{ uri: itemCover }} style={styles.queueThumb} />

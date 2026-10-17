@@ -37,7 +37,7 @@ import {
 } from 'lucide-react-native';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
-import { useAudioPlayer } from '../context/AudioContext';
+import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import UserDetailModal from './UserDetailModal';
@@ -67,8 +67,8 @@ export default function JamRoomModal({ visible, onClose }) {
     seekTo,
     playNextTrack,
     playPrevTrack,
-    progress,
   } = useAudioPlayer();
+  const progress = useAudioProgress();
   const { showToast } = useToast();
 
   const [inputCode, setInputCode] = useState('');

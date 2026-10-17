@@ -78,7 +78,7 @@ export async function resolvePlayableAudioStream(track, signal = null) {
 async function doResolvePlayableAudioStream(track, signal = null) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
-  let targetUrl = track.audioUrl || '';
+  let targetUrl = track.resolvedAudioUrl || track.audioUrl || '';
 
   // 1. Prioritize offline storage / IndexedDB
   try {
@@ -116,6 +116,15 @@ async function doResolvePlayableAudioStream(track, signal = null) {
     const fullUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : (targetUrl.startsWith('http') ? targetUrl : `${API_BASE_URL}/${targetUrl}`);
     return {
       url: fullUrl,
+      duration: sanitizeDuration(track.duration, 210),
+      cover: track.cover || track.coverUrl
+    };
+  }
+
+  // 2c. Direct HTTP audio stream URL (e.g. from Jam host or pre-resolved stream)
+  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.includes('youtube.com/watch') && !targetUrl.includes('youtu.be/')) {
+    return {
+      url: targetUrl,
       duration: sanitizeDuration(track.duration, 210),
       cover: track.cover || track.coverUrl
     };
@@ -337,14 +346,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const sock = socketRef.current;
     if (!session) return false;
     const mySockId = sock?.id;
-    const cur = currentUserRef.current;
-    const myUserId = cur ? String(cur.id || cur._id) : '';
-    if (session.hostId && mySockId && session.hostId === mySockId) return true;
-    if (session.hostUserId && myUserId && String(session.hostUserId) === myUserId) return true;
+    if (!mySockId) return false;
+    if (session.hostId && session.hostId === mySockId) return true;
     if (Array.isArray(session.members)) {
-      return session.members.some(m =>
-        ((mySockId && m.socketId === mySockId) || (myUserId && String(m.id || m._id) === myUserId)) && m.isHost
-      );
+      return session.members.some(m => m.socketId === mySockId && m.isHost);
     }
     return false;
   }, []);
@@ -561,8 +566,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => {});
-      } else if (playNextTrackRef.current) {
-        playNextTrackRef.current();
+      } else {
+        // In Jam Session: ONLY the Host auto-advances when track finishes!
+        if (jamSessionRef.current) {
+          if (isJamHost() && playNextTrackRef.current) {
+            playNextTrackRef.current();
+          }
+        } else if (playNextTrackRef.current) {
+          playNextTrackRef.current();
+        }
       }
     };
     const handlePlaying = () => {
@@ -1013,11 +1025,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
         currentTrack: currentTrackRef.current,
         currentTime: currentTimeRef.current || 0,
         initiatorId: socketRef.current.id,
-        userId: curUser ? (curUser.id || curUser._id) : undefined
+        userId: curUser ? (curUser.id || curUser._id) : undefined,
+        isUserAction: true,
+        userAction: nextPlaying ? 'play' : 'pause',
       });
     }
 
-    if (!isRemote && socketRef.current) {
+    if (!isRemote && socketRef.current && !jamSessionRef.current) {
       socketRef.current.emit('device:playback_state', {
         isPlaying: nextPlaying,
         track: currentTrackRef.current,
@@ -2076,7 +2090,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isPlaying: isPlayingRef.current,
         currentTrack: currentTrackRef.current,
         initiatorId: socketRef.current.id,
-        userId: curUser ? (curUser.id || curUser._id) : undefined
+        userId: curUser ? (curUser.id || curUser._id) : undefined,
+        isSeek: true,
+        userAction: 'seek',
       });
     }
 
@@ -2111,7 +2127,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     seekToRef.current = seekTo;
   }, [seekTo]);
 
-  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt, serverTime }) => {
+  const syncRemotePlayState = useCallback(async ({ isPlaying: syncPlaying, currentTrack: syncTrack, currentTime: syncTime, updatedAt, serverTime, isPeriodic, isSeek, userAction }) => {
     let targetTime = Number(syncTime) || 0;
     const refTimestamp = Number(updatedAt || serverTime || 0);
     if (syncPlaying && refTimestamp > 0) {
@@ -2123,6 +2139,27 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     const cur = currentTrackRef.current;
     const isDifferentTrack = syncTrack && String(syncTrack.id || syncTrack._id) !== String(lastLoadedIdRef.current || cur?.id || cur?._id);
+    const nowTime = Date.now();
+
+    // ⚡ EXPLICIT USER SEEK: Both Host and Guests MUST seek immediately (zero deadband, zero cooldown)
+    if (isSeek || userAction === 'seek') {
+      lastRemoteSeekRef.current = nowTime;
+      if (jamSessionRef.current) {
+        jamSessionRef.current.currentTime = targetTime;
+        jamSessionRef.current.updatedAt = Date.now();
+        if (syncPlaying !== undefined) jamSessionRef.current.isPlaying = Boolean(syncPlaying);
+        if (syncTrack) jamSessionRef.current.currentTrack = syncTrack;
+        setJamSessionState({ ...jamSessionRef.current });
+      }
+      setCurrentTime(targetTime);
+      currentTimeRef.current = targetTime;
+      if (syncPlaying !== undefined) {
+        isPlayingRef.current = Boolean(syncPlaying);
+        setIsPlaying(Boolean(syncPlaying));
+      }
+      seekTo(targetTime, true /* isRemote */);
+      return;
+    }
 
     // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
     if (syncPlaying === false) {
@@ -2170,7 +2207,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setIsPlaying(true);
       isPlayingRef.current = true;
     } else {
-      // Host is master playback source: never seek host audio to remote sync updates of the same track!
+      // Host is master playback source: ignore periodic time sync updates of the same track!
       if (isJamHost()) {
         if (audioRef.current && audioRef.current.paused) {
           resumeAudioContext();
@@ -2179,10 +2216,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         return;
       }
 
-      // Guest: sync drift only if severe drift > 3.2s and not sought recently (> 4.0s)
+      // Guest: sync drift only if severe drift > 3.5s and not sought recently (> 4.5s)
       const localCur = audioRef.current?.currentTime || currentTimeRef.current || 0;
-      const nowTime = Date.now();
-      if (targetTime !== undefined && Math.abs(targetTime - localCur) > 3.2 && (nowTime - (lastRemoteSeekRef.current || 0) > 4000)) {
+      if (targetTime !== undefined && Math.abs(targetTime - localCur) > 3.5 && (nowTime - (lastRemoteSeekRef.current || 0) > 4500)) {
         lastRemoteSeekRef.current = nowTime;
         seekTo(targetTime, true /* isRemote */);
       }
