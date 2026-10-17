@@ -36,21 +36,32 @@ export function getCleanQueries(title = '', artist = '') {
     .replace(/(?:ft\.?|feat\.?|featuring)\s+.*$/i, '')
     .trim();
 
-  const primaryTitle = cleanTitle.includes(' - ')
-    ? cleanTitle.split(' - ')[0].trim()
-    : cleanTitle;
-
   const cleanArtist = (artist || '')
     .split(/[-–—|/•,]/)[0]
     .replace(/\(.*?\)|\[.*?\]/g, '')
     .trim();
 
+  let primaryTitle = cleanTitle;
+  if (cleanTitle.includes(' - ')) {
+    const parts = cleanTitle.split(' - ');
+    const firstPart = parts[0].trim();
+    const rest = parts.slice(1).join(' - ').trim();
+    // Do NOT split by ' - ' if remaining title matches artist or if length under 3
+    if (cleanArtist && firstPart.toLowerCase() === cleanArtist.toLowerCase() && rest.length >= 3) {
+      primaryTitle = rest; // "Wegz - عفاريت الأسفلت" -> "عفاريت الأسفلت"
+    } else if (cleanArtist && rest.toLowerCase() === cleanArtist.toLowerCase() && firstPart.length >= 3) {
+      primaryTitle = firstPart;
+    } else if (firstPart.length < 3) {
+      primaryTitle = cleanTitle; // keep full title
+    } else {
+      primaryTitle = cleanTitle; // keep full title
+    }
+  }
+
   const queries = [];
   if (cleanArtist && primaryTitle) queries.push(`${cleanArtist} ${primaryTitle}`);
+  if (cleanArtist && cleanTitle && cleanTitle !== primaryTitle) queries.push(`${cleanArtist} ${cleanTitle}`);
   if (primaryTitle) queries.push(primaryTitle);
-  if (cleanArtist && cleanTitle && !queries.includes(`${cleanArtist} ${cleanTitle}`)) {
-    queries.push(`${cleanArtist} ${cleanTitle}`);
-  }
   if (artist && title && !queries.includes(`${artist} ${title}`)) {
     queries.push(`${artist} ${title}`);
   }
@@ -100,7 +111,7 @@ export const resolveAudioStream = async (track) => {
   const rawArtist = (track.artist || '').trim();
   const { cleanTitle, cleanArtist } = getCleanQueries(rawTitle, rawArtist);
 
-  // 1b. Check if track is saved in offline storage by clean title + artist
+  // 1b. Check if track is saved in offline storage by exact track ID OR exact clean title AND artist
   try {
     const { getDownloadedTracks } = require('./downloadManager');
     const dls = await getDownloadedTracks();
@@ -112,7 +123,8 @@ export const resolveAudioStream = async (track) => {
         const dArtist = (d.artist || '').toLowerCase().trim();
         const cTitle = (cleanTitle || rawTitle).toLowerCase().trim();
         const cArtist = (cleanArtist || rawArtist).toLowerCase().trim();
-        return (cTitle && dTitle === cTitle) && (!cArtist || !dArtist || dArtist === cArtist);
+        // Exact title AND artist match required. Never fallback to loose title-only match.
+        return Boolean(cTitle && cArtist && dTitle && dArtist && dTitle === cTitle && dArtist === cArtist);
       });
       const dlUri = found?.localAudioUri || found?.nativeAudioUri;
       if (dlUri && dlUri.startsWith('file://')) {
@@ -150,6 +162,8 @@ export const resolveAudioStream = async (track) => {
     return rawUrl;
   }
 
+  const targetDuration = Number(track.duration) || null;
+
   // 3. Server-side Stream Resolution via Proxy (Primary - handles yt-dlp warm worker, uploads & proxying)
   try {
     const controller = new AbortController();
@@ -157,8 +171,9 @@ export const resolveAudioStream = async (track) => {
 
     // 3a. Resolve stream via /api/tracks/resolve-stream (matches authentic upload tracks & web logic)
     try {
+      const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
       const resolveRes = await fetch(
-        `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}`,
+        `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}`,
         { signal: controller.signal }
       );
       if (resolveRes.ok) {
@@ -168,15 +183,20 @@ export const resolveAudioStream = async (track) => {
           if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
           clearTimeout(timeoutId);
           if (trackId) streamCache.set(trackId, cand);
-          if (d.duration && trackId) streamDurationCache.set(trackId, d.duration);
+          if (d.duration && trackId) {
+            if (!targetDuration || Math.abs(d.duration - targetDuration) <= 60) {
+              streamDurationCache.set(trackId, d.duration);
+            }
+          }
           return cand;
         }
       }
     } catch {}
 
     // 3b. Stream endpoint fallback
+    const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
     const serverStreamRes = await fetch(
-      `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}`,
+      `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}`,
       { signal: controller.signal }
     );
     clearTimeout(timeoutId);
@@ -188,7 +208,11 @@ export const resolveAudioStream = async (track) => {
           streamUrl = `${API_BASE_URL}${streamUrl}`;
         }
         if (trackId) streamCache.set(trackId, streamUrl);
-        if (data?.duration && trackId) streamDurationCache.set(trackId, data.duration);
+        if (data?.duration && trackId) {
+          if (!targetDuration || Math.abs(data.duration - targetDuration) <= 60) {
+            streamDurationCache.set(trackId, data.duration);
+          }
+        }
         return streamUrl;
       }
     }
@@ -204,11 +228,17 @@ export const resolveAudioStream = async (track) => {
   const isUploadTrack = track.source === 'Upload' || (rawUrl && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/')));
   if (!isUploadTrack && !ytId && (cleanTitle || cleanArtist || rawTitle)) {
     try {
-      const searchRes = await searchYouTubeClientSide(`${cleanArtist || rawArtist} ${cleanTitle || rawTitle}`.trim());
+      const searchRes = await searchYouTubeClientSide({
+        artist: cleanArtist || rawArtist,
+        title: cleanTitle || rawTitle,
+        targetDuration
+      });
       if (searchRes?.videoId) {
         ytId = searchRes.videoId;
         if (searchRes.duration && trackId) {
-          streamDurationCache.set(trackId, searchRes.duration);
+          if (!targetDuration || Math.abs(searchRes.duration - targetDuration) <= 60) {
+            streamDurationCache.set(trackId, searchRes.duration);
+          }
         }
       }
     } catch (e) {}
@@ -221,7 +251,11 @@ export const resolveAudioStream = async (track) => {
       if (directStream) {
         if (trackId) {
           streamCache.set(trackId, directStream);
-          if (directResult?.duration) streamDurationCache.set(trackId, directResult.duration);
+          if (directResult?.duration) {
+            if (!targetDuration || Math.abs(directResult.duration - targetDuration) <= 60) {
+              streamDurationCache.set(trackId, directResult.duration);
+            }
+          }
         }
         return directStream;
       }
@@ -236,66 +270,189 @@ export const resolveAudioStream = async (track) => {
   return null;
 };
 
+export function calculateTitleSimilarity(targetTitle = '', candTitle = '', targetArtist = '') {
+  const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  const a = String(targetArtist || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  if (!t || !c) return 0;
+  if (c === t || (t.length >= 4 && c.includes(t))) return 1.0;
+
+  const tTokens = t.split(/\s+/).filter(w => w.length > 1);
+  const cTokens = c.split(/\s+/).filter(w => w.length > 1);
+  if (tTokens.length === 0) return 0;
+
+  let matched = 0;
+  for (const tok of tTokens) {
+    if (cTokens.includes(tok) || c.includes(tok)) matched++;
+  }
+  let score = matched / tTokens.length;
+  if (a && (c.includes(a) || cTokens.includes(a))) {
+    score = Math.min(1.0, score + 0.2);
+  }
+  return score;
+}
+
 /**
  * Ultra-fast client-side YouTube search via Innertube API (<300ms).
  * Returns { videoId, duration, title, channel } with exact duration parsed from lengthText.
+ * Enforces strict duration filter (diff <= 15s-25s) and title/channel scoring.
  */
-export const searchYouTubeClientSide = async (query) => {
-  if (!query || typeof query !== 'string') return null;
-  try {
-    const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-    const res = await fetch(`https://www.youtube.com/youtubei/v1/search?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'WEB',
-            clientVersion: '2.20231201.00.00',
-            hl: 'en',
-            gl: 'US'
-          }
-        },
-        query: `${query} music`
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const d = await res.json();
-    const contents = d?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-    const candidates = contents
-      .map(c => c.videoRenderer)
-      .filter(v => v && v.videoId);
+export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {}) => {
+  let query = '';
+  let targetDuration = null;
+  let artist = '';
+  let title = '';
 
-    // Prefer standard single tracks (< 12 minutes) over long DJ mixes or 1-hour loops
-    const v = candidates.find(item => {
-      const durText = item.lengthText?.simpleText || item.lengthText?.runs?.[0]?.text || '';
-      const parts = durText.split(':');
-      if (parts.length > 2) return false; // Contains hours
-      const mins = parseInt(parts[0], 10);
-      return !isNaN(mins) && mins < 12;
-    }) || candidates[0];
-
-    if (v) {
-      const videoId = v.videoId;
-      const durText = v.lengthText?.simpleText || v.lengthText?.runs?.[0]?.text || '';
-      let durSec = 0;
-      if (durText) {
-        const parts = durText.split(':').map(p => parseInt(p, 10));
-        if (parts.length === 2) durSec = parts[0] * 60 + parts[1];
-        else if (parts.length === 3) durSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
-      }
-      return {
-        videoId,
-        duration: durSec || null,
-        title: v.title?.runs?.[0]?.text || '',
-        channel: v.ownerText?.runs?.[0]?.text || ''
-      };
+  if (queryOrOptions && typeof queryOrOptions === 'object') {
+    query = queryOrOptions.query || '';
+    targetDuration = Number(queryOrOptions.targetDuration || queryOrOptions.duration) || null;
+    artist = queryOrOptions.artist || '';
+    title = queryOrOptions.title || '';
+  } else if (typeof queryOrOptions === 'string') {
+    query = queryOrOptions.trim();
+    if (typeof maybeOptions === 'number') {
+      targetDuration = maybeOptions;
+    } else if (maybeOptions && typeof maybeOptions === 'object') {
+      targetDuration = Number(maybeOptions.targetDuration || maybeOptions.duration) || null;
+      artist = maybeOptions.artist || '';
+      title = maybeOptions.title || '';
     }
-  } catch (e) {}
+  }
+
+  if (!artist && !title && query && query.includes(' - ')) {
+    const parts = query.split(' - ');
+    artist = parts[0].trim();
+    title = parts.slice(1).join(' - ').trim();
+  }
+
+  const cleanArt = String(artist || '').replace(/["']/g, ' ').trim();
+  const cleanTit = String(title || '').replace(/["']/g, ' ').trim();
+
+  // Search queries according to strict guidelines:
+  // Primary: "${cleanArtist}" "${cleanTitle}"
+  // Secondary: "${cleanTitle}" ${cleanArtist} official audio
+  const searchQueries = [];
+  if (cleanArt && cleanTit) {
+    searchQueries.push(`"${cleanArt}" "${cleanTit}"`);
+    searchQueries.push(`"${cleanTit}" ${cleanArt} official audio`);
+  } else if (query) {
+    const cleanQ = query.replace(/\s+music$/i, '').trim();
+    searchQueries.push(cleanQ);
+    searchQueries.push(`${cleanQ} official audio`);
+  }
+
+  if (searchQueries.length === 0) return null;
+
+  const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
+  const parseSec = (renderer) => {
+    const durText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text || '';
+    if (!durText) return 0;
+    const parts = durText.split(':').map(p => parseInt(p, 10));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return parts[0] * 60 + parts[1];
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  };
+
+  const normArtist = cleanArt.toLowerCase();
+  const normTitle = cleanTit.toLowerCase();
+
+  for (const q of searchQueries) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch(`https://www.youtube.com/youtubei/v1/search?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB',
+              clientVersion: '2.20231201.00.00',
+              hl: 'en',
+              gl: 'US'
+            }
+          },
+          query: q
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+
+      const d = await res.json();
+      const contents = d?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+      const candidates = contents
+        .map(c => c.videoRenderer)
+        .filter(v => v && v.videoId);
+
+      if (candidates.length === 0) continue;
+
+      let scoredCandidates = candidates.map(item => {
+        const vidId = item.videoId;
+        const durSec = parseSec(item);
+        const candTitle = (item.title?.runs?.[0]?.text || '').toLowerCase();
+        const candChannel = (item.ownerText?.runs?.[0]?.text || '').toLowerCase();
+
+        let score = 0;
+        let durationDiff = targetDuration && durSec > 0 ? Math.abs(durSec - targetDuration) : null;
+        const similarity = calculateTitleSimilarity(cleanTit, candTitle, cleanArt);
+
+        if (durationDiff !== null) {
+          if (durationDiff <= 5) score += 60;
+          else if (durationDiff <= 15) score += 40;
+          else if (durationDiff <= 25) score += 10;
+          else score -= 200; // Over 25s difference rejected
+        }
+
+        score += Math.round(similarity * 50);
+
+        if (normTitle && candTitle.includes(normTitle)) score += 40;
+        if (normArtist && (candTitle.includes(normArtist) || candChannel.includes(normArtist))) score += 30;
+
+        if (candChannel.includes('topic') || candChannel.includes('official') || candChannel.includes('vevo')) score += 30;
+        if (candTitle.includes('official audio') || candTitle.includes('official lyric') || candTitle.includes('official video')) score += 20;
+
+        if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 100;
+        if (!normTitle.includes('live') && candTitle.includes('live') && !normTitle.includes('حفلة')) score -= 50;
+        if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 100;
+
+        return {
+          videoId: vidId,
+          duration: durSec || null,
+          title: item.title?.runs?.[0]?.text || '',
+          channel: item.ownerText?.runs?.[0]?.text || '',
+          score,
+          durationDiff,
+          similarity
+        };
+      });
+
+      // Strict duration & title filter:
+      // If targetDuration exists, candidate duration difference MUST be within 15 seconds (max 25s allowed with high similarity).
+      // If difference > 25 seconds or title similarity is low, REJECT the candidate.
+      scoredCandidates = scoredCandidates.filter(c => {
+        if (targetDuration && c.durationDiff !== null) {
+          if (c.durationDiff > 25) return false;
+          if (c.durationDiff > 15 && c.similarity < 0.5) return false;
+        }
+        if (cleanTit && c.similarity < 0.25) return false;
+        return true;
+      });
+
+      if (scoredCandidates.length > 0) {
+        scoredCandidates.sort((a, b) => b.score - a.score);
+        const best = scoredCandidates[0];
+        return {
+          videoId: best.videoId,
+          duration: best.duration || targetDuration || null,
+          title: best.title,
+          channel: best.channel
+        };
+      }
+    } catch (e) {}
+  }
+
   return null;
 };
 

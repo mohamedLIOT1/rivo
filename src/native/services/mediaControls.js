@@ -154,3 +154,30 @@ export const installApk = async (filePath) => {
   return RivoMediaControls.installApk(filePath);
 };
 
+export const getInitialChatSenderId = async () => {
+  if (!RivoMediaControls || !RivoMediaControls.getInitialChatSenderId) return null;
+  try {
+    return await RivoMediaControls.getInitialChatSenderId();
+  } catch (e) {
+    return null;
+  }
+};
+
+export const subscribeToChatNotification = (callback) => {
+  if (!RivoMediaControls) return () => {};
+  try {
+    const emitter = Platform.OS === 'ios'
+      ? new NativeEventEmitter(RivoMediaControls)
+      : DeviceEventEmitter;
+
+    const subscription = emitter.addListener('onOpenChatFromNotification', (data) => {
+      if (callback) callback(data);
+    });
+    return () => {
+      subscription.remove();
+    };
+  } catch (e) {
+    return () => {};
+  }
+};
+

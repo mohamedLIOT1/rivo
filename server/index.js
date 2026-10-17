@@ -88,12 +88,12 @@ app.use((req, res, next) => {
 
 // App Version Manifest
 const APP_VERSIONS_DATA = {
-  version: '1.8.3',
-  releaseNotes: "v1.8.3: Fix Jam room sync loop & ping-pong rubber-banding, eliminate pause and seek latency with optimistic dispatch, fix track mismatch and atomic stream cancellation, and optimize playback performance on low-end devices.",
+  version: '1.8.5',
+  releaseNotes: "v1.8.5: Audio loading freeze & skip race conditions fixed, YouTube search accuracy & confidence filtering, Jam 25s grace period & double elapsed time fix, live collaborative queue delegation, and Android system notification direct chat navigation.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.8.3',
+      version: '1.8.5',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -101,22 +101,22 @@ const APP_VERSIONS_DATA = {
       notes: 'Full Jam sync and player controls.'
     },
     android: {
-      version: '1.8.3',
-      build: 52,
+      version: '1.8.5',
+      build: 54,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.8.3.apk',
-      directFile: 'Rivo-v1.8.3.apk',
+      downloadUrl: '/downloads/Rivo-v1.8.5.apk',
+      directFile: 'Rivo-v1.8.5.apk',
       mandatory: false,
-      notes: 'Jam sync loop fix, zero-latency pause & seek, atomic audio cancellation, and low-end device performance optimizations.'
+      notes: 'Audio loading freeze & skip race conditions fixed, YouTube search accuracy & confidence filtering, Jam 25s grace period & double elapsed time fix, live collaborative queue delegation, and Android system notification direct chat navigation.'
     },
     ios: {
-      version: '1.8.3',
-      build: 52,
+      version: '1.8.5',
+      build: 54,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.8.3.ipa',
-      directFile: 'Rivo-v1.8.3.ipa',
+      downloadUrl: '/downloads/Rivo-v1.8.5.ipa',
+      directFile: 'Rivo-v1.8.5.ipa',
       mandatory: false,
-      notes: 'Jam sync loop fix, zero-latency pause & seek, atomic audio cancellation, and low-end device performance optimizations.'
+      notes: 'Audio loading freeze & skip race conditions fixed, YouTube search accuracy & confidence filtering, Jam 25s grace period & double elapsed time fix, live collaborative queue delegation, and Android system notification direct chat navigation.'
     }
   }
 };
@@ -128,6 +128,8 @@ app.get('/api/app/version', (req, res) => {
 // Download routes for APK/IPA releases
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.8.5.apk',
+  '/downloads/Rivo-v1.8.4.apk',
   '/downloads/Rivo-v1.8.3.apk',
   '/downloads/Rivo-v1.8.2.apk',
   '/downloads/Rivo-v1.8.1.apk',
@@ -200,6 +202,8 @@ app.get([
 
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.8.5.ipa',
+  '/downloads/Rivo-v1.8.4.ipa',
   '/downloads/Rivo-v1.8.3.ipa',
   '/downloads/Rivo-v1.8.2.ipa',
   '/downloads/Rivo-v1.8.1.ipa',

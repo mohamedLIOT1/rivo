@@ -29,7 +29,7 @@ def upload_file(local_path, remote_path):
     return True
 
 def main():
-    print("=== Deploying v1.8.3 to Production Server ===")
+    print("=== Deploying v1.8.5 to Production Server ===")
     
     # 1. Upload server files
     server_files = [
@@ -40,6 +40,7 @@ def main():
         ("server/routes/playlists.js", f"{REMOTE_DIR}/server/routes/playlists.js"),
         ("server/routes/chat.js", f"{REMOTE_DIR}/server/routes/chat.js"),
         ("server/routes/ai.js", f"{REMOTE_DIR}/server/routes/ai.js"),
+        ("server/utils/helpers.js", f"{REMOTE_DIR}/server/utils/helpers.js"),
         ("server/sockets/index.js", f"{REMOTE_DIR}/server/sockets/index.js"),
         ("server/index.js", f"{REMOTE_DIR}/server/index.js"),
     ]
@@ -50,8 +51,8 @@ def main():
 
     # 2. Upload APK & IPA downloads and bot assets
     download_files = [
-        ("public/downloads/Rivo-v1.8.3.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v1.8.3.apk"),
-        ("public/downloads/Rivo-v1.8.3.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v1.8.3.ipa"),
+        ("public/downloads/Rivo-v1.8.5.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v1.8.5.apk"),
+        ("public/downloads/Rivo-v1.8.5.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v1.8.5.ipa"),
         ("public/assets/rivo-bot.png", f"{REMOTE_DIR}/public/assets/rivo-bot.png"),
         ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
     ]
@@ -62,18 +63,18 @@ def main():
 
     print("Replicating binary releases on remote server...")
     run_ssh(
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.3.apk {REMOTE_DIR}/public/downloads/Rivo.apk && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.3.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.5.apk {REMOTE_DIR}/public/downloads/Rivo.apk && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.5.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa && "
         f"mkdir -p {REMOTE_DIR}/dist/downloads && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.3.apk {REMOTE_DIR}/dist/downloads/Rivo-v1.8.3.apk && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.3.apk {REMOTE_DIR}/dist/downloads/Rivo.apk && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.3.ipa {REMOTE_DIR}/dist/downloads/Rivo-v1.8.3.ipa && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.3.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa"
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.5.apk {REMOTE_DIR}/dist/downloads/Rivo-v1.8.5.apk && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.5.apk {REMOTE_DIR}/dist/downloads/Rivo.apk && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.5.ipa {REMOTE_DIR}/dist/downloads/Rivo-v1.8.5.ipa && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.8.5.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa"
     )
 
     # 3. Create dist archive and upload (excluding heavy downloads directory)
     dist_dir = os.path.join(BASE_DIR, 'dist')
-    tar_path = os.path.join(BASE_DIR, 'dist_v183.tar.gz')
+    tar_path = os.path.join(BASE_DIR, 'dist_v185.tar.gz')
     print("Archiving web dist (excluding downloads)...", flush=True)
     import tarfile
 
@@ -86,8 +87,8 @@ def main():
         tar.add(dist_dir, arcname="dist", filter=filter_downloads)
 
     print(f"Uploading dist archive ({os.path.getsize(tar_path)} bytes)...")
-    upload_file(tar_path, f"{REMOTE_DIR}/dist_v183.tar.gz")
-    run_ssh(f"cd {REMOTE_DIR} && tar -xzf dist_v183.tar.gz && rm dist_v183.tar.gz")
+    upload_file(tar_path, f"{REMOTE_DIR}/dist_v185.tar.gz")
+    run_ssh(f"cd {REMOTE_DIR} && tar -xzf dist_v185.tar.gz && rm dist_v185.tar.gz")
     if os.path.exists(tar_path):
         os.remove(tar_path)
 

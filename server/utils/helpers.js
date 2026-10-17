@@ -376,32 +376,228 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 const ytSearchCache = new Map();
 let ytQuotaExceededUntil = 0;
 
-async function searchYouTubeId(query) {
-  if (!query || !query.trim()) return null;
-  const q = query.trim();
-  const cacheKey = q.toLowerCase();
+function calculateTitleSimilarity(targetTitle = '', candTitle = '', targetArtist = '') {
+  const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  const a = String(targetArtist || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  if (!t || !c) return 0;
+  if (c === t || (t.length >= 4 && c.includes(t))) return 1.0;
+
+  const tTokens = t.split(/\s+/).filter(w => w.length > 1);
+  const cTokens = c.split(/\s+/).filter(w => w.length > 1);
+  if (tTokens.length === 0) return 0;
+
+  let matched = 0;
+  for (const tok of tTokens) {
+    if (cTokens.includes(tok) || c.includes(tok)) matched++;
+  }
+  let score = matched / tTokens.length;
+  if (a && (c.includes(a) || cTokens.includes(a))) {
+    score = Math.min(1.0, score + 0.2);
+  }
+  return score;
+}
+
+async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
+  let query = '';
+  let targetDuration = null;
+  let artist = '';
+  let title = '';
+
+  if (queryOrOptions && typeof queryOrOptions === 'object') {
+    query = queryOrOptions.query || '';
+    targetDuration = Number(queryOrOptions.targetDuration || queryOrOptions.duration) || null;
+    artist = queryOrOptions.artist || '';
+    title = queryOrOptions.title || '';
+  } else if (typeof queryOrOptions === 'string') {
+    query = queryOrOptions.trim();
+    if (typeof maybeOptions === 'number') {
+      targetDuration = maybeOptions;
+    } else if (maybeOptions && typeof maybeOptions === 'object') {
+      targetDuration = Number(maybeOptions.targetDuration || maybeOptions.duration) || null;
+      artist = maybeOptions.artist || '';
+      title = maybeOptions.title || '';
+    }
+  }
+
+  if (!artist && !title && query && query.includes(' - ')) {
+    const parts = query.split(' - ');
+    artist = parts[0].trim();
+    title = parts.slice(1).join(' - ').trim();
+  }
+
+  const cleanArt = String(artist || '').replace(/["']/g, ' ').trim();
+  const cleanTit = String(title || '').replace(/["']/g, ' ').trim();
+
+  const searchQueries = [];
+  if (cleanArt && cleanTit) {
+    searchQueries.push(`"${cleanArt}" "${cleanTit}"`);
+    searchQueries.push(`"${cleanTit}" ${cleanArt} official audio`);
+  } else if (query) {
+    const cleanQ = query.replace(/\s+music$/i, '').trim();
+    searchQueries.push(cleanQ);
+    searchQueries.push(`${cleanQ} official audio`);
+  }
+
+  if (searchQueries.length === 0) return null;
+
+  const cacheKey = `${searchQueries[0]}_${targetDuration || ''}`.toLowerCase();
   if (ytSearchCache.has(cacheKey)) {
     return ytSearchCache.get(cacheKey);
   }
 
+  const parseSec = (renderer) => {
+    const durText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text || '';
+    if (!durText) return 0;
+    const parts = durText.split(':').map(p => parseInt(p, 10));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return parts[0] * 60 + parts[1];
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  };
+
+  const normArtist = cleanArt.toLowerCase();
+  const normTitle = cleanTit.toLowerCase();
+  let hadInnertubeCandidates = false;
+
+  // 1. Ultra-fast Innertube search with dual query & strict duration filtering
+  for (const finalQuery of searchQueries) {
+    try {
+      const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+      const itRes = await axios.post(`https://www.youtube.com/youtubei/v1/search?key=${key}`, {
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20231201.00.00',
+            hl: 'en',
+            gl: 'US'
+          }
+        },
+        query: finalQuery
+      }, { timeout: 3500 });
+
+      const contents = itRes.data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+      const candidates = contents.map(c => c.videoRenderer).filter(v => v && v.videoId);
+
+      if (candidates.length > 0) {
+        hadInnertubeCandidates = true;
+        let scoredCandidates = candidates.map(item => {
+          const vidId = item.videoId;
+          const durSec = parseSec(item);
+          const candTitle = (item.title?.runs?.[0]?.text || '').toLowerCase();
+          const candChannel = (item.ownerText?.runs?.[0]?.text || '').toLowerCase();
+
+          let score = 0;
+          let durationDiff = targetDuration && durSec > 0 ? Math.abs(durSec - targetDuration) : null;
+          const similarity = calculateTitleSimilarity(cleanTit, candTitle, cleanArt);
+
+          if (durationDiff !== null) {
+            if (durationDiff <= 5) score += 60;
+            else if (durationDiff <= 15) score += 40;
+            else if (durationDiff <= 25) score += 10;
+            else score -= 200; // Over 25s difference rejected
+          }
+
+          score += Math.round(similarity * 50);
+
+          if (normTitle && candTitle.includes(normTitle)) score += 40;
+          if (normArtist && (candTitle.includes(normArtist) || candChannel.includes(normArtist))) score += 30;
+
+          if (candChannel.includes('topic') || candChannel.includes('official') || candChannel.includes('vevo')) score += 30;
+          if (candTitle.includes('official audio') || candTitle.includes('official lyric') || candTitle.includes('official video')) score += 20;
+
+          if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 100;
+          if (!normTitle.includes('live') && candTitle.includes('live') && !normTitle.includes('حفلة')) score -= 50;
+          if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 100;
+
+          // Calculate match confidence (0.0 to 1.0)
+          let confidence = similarity * 0.6;
+          if (durationDiff !== null) {
+            if (durationDiff <= 5) confidence += 0.4;
+            else if (durationDiff <= 15) confidence += 0.35;
+            else if (durationDiff <= 25) confidence += 0.15;
+          } else if (similarity >= 0.7) {
+            confidence += 0.3;
+          }
+
+          return {
+            videoId: vidId,
+            duration: durSec || null,
+            title: candTitle,
+            channel: candChannel,
+            score,
+            durationDiff,
+            similarity,
+            confidence: Math.min(1.0, confidence)
+          };
+        });
+
+        // Strict duration & title filter:
+        // Enforce candidate duration difference MUST be within 15 seconds (max 25s allowed with high similarity).
+        // If difference > 25 seconds or title similarity is low, REJECT the candidate.
+        scoredCandidates = scoredCandidates.filter(c => {
+          if (targetDuration && c.durationDiff !== null) {
+            if (c.durationDiff > 25) return false;
+            if (c.durationDiff > 15 && c.similarity < 0.5) return false;
+          }
+          if (cleanTit && c.similarity < 0.25) return false;
+          return true;
+        });
+
+        if (scoredCandidates.length > 0) {
+          scoredCandidates.sort((a, b) => b.score - a.score);
+          const best = scoredCandidates[0];
+          if (best && best.videoId) {
+            if (ytSearchCache.size > 5000) ytSearchCache.clear();
+            const resObj = new String(best.videoId);
+            resObj.confidence = best.confidence;
+            resObj.durationDiff = best.durationDiff;
+            ytSearchCache.set(cacheKey, resObj);
+            return resObj;
+          }
+        }
+      }
+    } catch (err) {}
+  }
+
+  // If Innertube searched and returned video candidates, but none matched the catalog duration (diff <= 15-25s),
+  // NEVER fall back to blind scrapers or unverified API results!
+  if (targetDuration && hadInnertubeCandidates) {
+    return null;
+  }
+
+  const finalQuery = searchQueries[0];
+
+  // 2. Fallback: YouTube Data API v3
   const apiKey = process.env.YOUTUBE_API_KEY || 'AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs';
   if (apiKey && Date.now() > ytQuotaExceededUntil) {
     try {
       const res = await axios.get('https://www.googleapis.com/youtube/v3/search', {
         params: {
-          part: 'id',
-          q,
+          part: 'snippet',
+          q: finalQuery,
           type: 'video',
-          maxResults: 1,
+          maxResults: 5,
           key: apiKey
         },
-        timeout: 2500
+        timeout: 3000
       });
-      const videoId = res.data?.items?.[0]?.id?.videoId;
-      if (videoId && videoId.length === 11) {
-        if (ytSearchCache.size > 5000) ytSearchCache.clear();
-        ytSearchCache.set(cacheKey, videoId);
-        return videoId;
+      const items = res.data?.items || [];
+      if (items.length > 0) {
+        let bestId = items[0]?.id?.videoId;
+        const normArtist = (artist || '').toLowerCase();
+        const normTitle = (title || '').toLowerCase();
+        for (const it of items) {
+          const t = (it.snippet?.title || '').toLowerCase();
+          if (normTitle && t.includes(normTitle)) {
+            bestId = it.id?.videoId;
+            break;
+          }
+        }
+        if (bestId && bestId.length === 11) {
+          if (ytSearchCache.size > 5000) ytSearchCache.clear();
+          ytSearchCache.set(cacheKey, bestId);
+          return bestId;
+        }
       }
     } catch (err) {
       const errMsg = err?.response?.data?.error?.message || err.message;
@@ -411,8 +607,9 @@ async function searchYouTubeId(query) {
     }
   }
 
+  // 3. Fallback: Scraping results
   try {
-    const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, {
+    const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(finalQuery)}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9'
@@ -428,10 +625,11 @@ async function searchYouTubeId(query) {
     }
   } catch (err) {}
 
+  // 4. Fallback: yt-dlp
   try {
     const bin = getYtDlpBin();
     const cookiesPath = path.join(__dirname, '../../cookies.txt');
-    const ytdlpArgs = ['--no-check-certificates', '--get-id', `ytsearch1:${q}`];
+    const ytdlpArgs = ['--no-check-certificates', '--get-id', `ytsearch1:${finalQuery}`];
     if (fs.existsSync(cookiesPath)) {
       ytdlpArgs.splice(1, 0, '--cookies', cookiesPath);
     }
@@ -1181,12 +1379,14 @@ async function extractDirectStreamUrl(videoId) {
   });
 }
 
-async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '') {
+async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '', options = {}) {
+  const targetDuration = Number(options?.duration || options?.targetDuration) || null;
+  const defaultDur = targetDuration && targetDuration > 0 ? targetDuration : 209;
   if (rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/'))) {
     const cleanUpload = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
     const retObj = new String(cleanUpload);
     retObj.url = cleanUpload;
-    retObj.duration = 210;
+    retObj.duration = defaultDur;
     return retObj;
   }
 
@@ -1205,8 +1405,10 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId && (title || artist)) {
     try {
-      videoId = await searchYouTubeId(`${artist || ''} ${title || ''}`.trim());
-      if (videoId && (title || artist)) {
+      videoId = await searchYouTubeId({ artist, title, targetDuration });
+      const confidence = Number(videoId?.confidence) || 0;
+      // STOP permanently writing unverified audioUrl to MongoDB on runtime searches unless strict duration and title verification passes with >= 85% match confidence
+      if (videoId && (title || artist) && confidence >= 0.85) {
         Track.updateOne(
           {
             $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }],
@@ -1235,13 +1437,13 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
     const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
     retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
-    retObj.duration = 210;
+    retObj.duration = defaultDur;
     return retObj;
   }
   if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
     const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
     retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
-    retObj.duration = 210;
+    retObj.duration = defaultDur;
     return retObj;
   }
 
@@ -1250,7 +1452,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     queueBackgroundAudioCache(videoId, cachedM4a, true);
     const retObj = new String(cachedStream.url);
     retObj.url = cachedStream.url;
-    retObj.duration = 210;
+    retObj.duration = defaultDur;
     return retObj;
   }
 
@@ -1260,7 +1462,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       if (url) {
         const retObj = new String(url);
         retObj.url = url;
-        retObj.duration = 210;
+        retObj.duration = defaultDur;
         return retObj;
       }
     } catch (e) {}
@@ -1306,7 +1508,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     if (resolvedUrl) {
       const retObj = new String(resolvedUrl);
       retObj.url = resolvedUrl;
-      retObj.duration = 210;
+      retObj.duration = defaultDur;
       return retObj;
     }
     return null;

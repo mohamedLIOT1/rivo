@@ -837,10 +837,19 @@ export const downloadTrack = async (track, onProgress) => {
 
   if (!activeStream && !ytId && (cleanTitle || cleanArtist)) {
     try {
-      const searchRes = await searchYouTubeClientSide(`${cleanArtist} ${cleanTitle}`.trim());
+      const searchRes = await searchYouTubeClientSide({
+        artist: cleanArtist,
+        title: cleanTitle,
+        targetDuration: resolvedDuration || Number(track.duration) || null
+      });
       if (searchRes?.videoId) {
         ytId = searchRes.videoId;
-        if (searchRes.duration && !resolvedDuration) resolvedDuration = searchRes.duration;
+        if (searchRes.duration && !resolvedDuration) {
+          const catDur = Number(track.duration) || null;
+          if (!catDur || Math.abs(searchRes.duration - catDur) <= 60) {
+            resolvedDuration = searchRes.duration;
+          }
+        }
       }
     } catch {}
   }

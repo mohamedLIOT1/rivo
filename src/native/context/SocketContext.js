@@ -38,10 +38,12 @@ export const SocketProvider = ({ children }) => {
   }, [jamSession]);
   const [chatMessages, setChatMessages] = useState([]);
 
+  const myId = String(currentUser?._id || currentUser?.id || '');
   const isCurrentUserHost = Boolean(
-    jamSession && socket &&
-      ((jamSession.hostId === socket.id) ||
-        (jamSession.members || []).some(m => m.socketId === socket.id && m.isHost))
+    jamSession &&
+      ((jamSession.hostUserId && myId && String(jamSession.hostUserId) === myId) ||
+        (socket && jamSession.hostId === socket.id) ||
+        (jamSession.members || []).some(m => (socket && m.socketId === socket.id) || (myId && String(m.id || m._id) === myId && m.isHost)))
   );
   const isCurrentUserHostRef = useRef(isCurrentUserHost);
   useEffect(() => {
@@ -115,9 +117,34 @@ export const SocketProvider = ({ children }) => {
     });
 
     s.on('jam:sync_play_state', (data) => {
-      if (data && syncRemotePlayStateRef.current) {
-        if (data.initiatorId && data.initiatorId === s.id) return;
-        syncRemotePlayStateRef.current(data);
+      if (data) {
+        setJamSession(prev => {
+          if (prev) {
+            return {
+              ...prev,
+              isPlaying: data.isPlaying !== undefined ? Boolean(data.isPlaying) : prev.isPlaying,
+              currentTime: data.currentTime !== undefined ? Number(data.currentTime) : prev.currentTime,
+              currentTrack: data.currentTrack || prev.currentTrack,
+              updatedAt: data.updatedAt || Date.now(),
+            };
+          }
+          if (data.roomCode) {
+            return {
+              code: data.roomCode,
+              isPlaying: Boolean(data.isPlaying),
+              currentTime: Number(data.currentTime) || 0,
+              currentTrack: data.currentTrack,
+              updatedAt: data.updatedAt || Date.now(),
+              members: []
+            };
+          }
+          return null;
+        });
+
+        if (syncRemotePlayStateRef.current) {
+          if (data.initiatorId && data.initiatorId === s.id) return;
+          syncRemotePlayStateRef.current(data);
+        }
       }
     });
 
@@ -145,7 +172,7 @@ export const SocketProvider = ({ children }) => {
 
     s.on('jam:advance_host_queue', () => {
       if (isCurrentUserHostRef.current && playNextTrackRef.current) {
-        playNextTrackRef.current();
+        playNextTrackRef.current(true);
       }
     });
 
@@ -231,6 +258,23 @@ export const SocketProvider = ({ children }) => {
       }
     });
 
+    s.on('jam:invite_received', (data) => {
+      if (data?.roomCode) {
+        showToast({
+          title: 'Jam Invite 📻',
+          message: `${data.host?.name || 'A friend'} invited you to join Jam ${data.roomCode}! Tap to join.`,
+          avatar: data.host?.avatar || '',
+          type: 'info',
+          duration: 6000,
+          onPress: () => {
+            if (joinJamRef.current) {
+              joinJamRef.current(data.roomCode);
+            }
+          }
+        });
+      }
+    });
+
     s.on('chat:dismiss_notification', ({ senderId }) => {
       if (senderId) {
         dismissChatNotification(senderId);
@@ -244,7 +288,7 @@ export const SocketProvider = ({ children }) => {
     };
   }, [token, currentUser?._id, currentUser?.id]);
 
-  const joinJam = (roomCode) => {
+  const joinJam = (roomCode, initialTrack = null, isPlaying = false, currentTime = 0) => {
     if (socket && isConnected && roomCode) {
       const cleanCode = String(roomCode).trim().toUpperCase();
       const userPayload = currentUser ? {
@@ -258,9 +302,39 @@ export const SocketProvider = ({ children }) => {
         name: 'Listener',
         avatar: '',
       };
-      socket.emit('jam:join_room', { roomCode: cleanCode, user: userPayload });
+
+      // Set optimistic room state in mobile so the room renders immediately with active track
+      setJamSession({
+        code: cleanCode,
+        roomCode: cleanCode,
+        hostId: socket.id,
+        hostUserId: userPayload.id,
+        isHost: true,
+        currentTrack: initialTrack || null,
+        isPlaying: Boolean(isPlaying),
+        currentTime: Number(currentTime) || 0,
+        updatedAt: Date.now(),
+        members: [{
+          ...userPayload,
+          socketId: socket.id,
+          isHost: true,
+        }],
+        queue: [],
+      });
+
+      socket.emit('jam:join_room', {
+        roomCode: cleanCode,
+        user: userPayload,
+        currentTrack: initialTrack || null,
+        isPlaying: Boolean(isPlaying),
+        currentTime: Number(currentTime) || 0
+      });
     }
   };
+  const joinJamRef = useRef(joinJam);
+  useEffect(() => {
+    joinJamRef.current = joinJam;
+  }, [socket, isConnected, currentUser]);
 
   const leaveJam = () => {
     const code = jamSession?.code || jamSession?.roomCode;

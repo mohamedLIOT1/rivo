@@ -139,13 +139,8 @@ export default function JamRoomModal({ visible, onClose }) {
   const handleCreateJam = () => {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const code = `JAM-${randomNum}`;
-    joinJam(code);
+    joinJam(code, currentTrack, isPlaying, progress?.currentTime || 0);
     showToast(`Created Jam Room ${code}`, 'success');
-    if (currentTrack) {
-      setTimeout(() => {
-        syncJamPlayState?.(isPlaying, currentTrack, 0);
-      }, 500);
-    }
   };
 
   const handleJoin = () => {
@@ -549,22 +544,36 @@ export default function JamRoomModal({ visible, onClose }) {
               const isQueued = justAddedId === tId;
               return (
                 <View key={tId} style={styles.searchResultItem}>
-                  <Image
-                    source={{
-                      uri:
-                        track.cover ||
-                        'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                  <TouchableOpacity
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginRight: 8 }}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
+                      if (canControl) {
+                        playTrack(track);
+                        showToast(`Playing "${track.title}" in Jam`, 'info');
+                      } else {
+                        handleAddTrack(track);
+                      }
                     }}
-                    style={styles.resultCover}
-                  />
-                  <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                    <Text style={styles.resultTitle} numberOfLines={1}>
-                      {track.title}
-                    </Text>
-                    <Text style={styles.resultArtist} numberOfLines={1}>
-                      {track.artist}
-                    </Text>
-                  </View>
+                  >
+                    <Image
+                      source={{
+                        uri:
+                          track.cover ||
+                          'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                      }}
+                      style={styles.resultCover}
+                    />
+                    <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                      <Text style={styles.resultTitle} numberOfLines={1}>
+                        {track.title}
+                      </Text>
+                      <Text style={styles.resultArtist} numberOfLines={1}>
+                        {track.artist}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                   <TouchableOpacity
                     style={[
                       styles.queueAddBtn,

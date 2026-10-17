@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle, Radio } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -523,6 +523,31 @@ export default function MiniPlayer({
                 {Math.round((volume || 0) * 100)}%
               </span>
             </div>
+
+            {/* Live Jam Button */}
+            {openJamModal && (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openJamModal();
+                }}
+                className={`p-2 brutal-border rounded-xl cursor-pointer brutal-btn brutal-shadow-sm flex items-center gap-1.5 transition ${
+                  jamSession?.code
+                    ? 'bg-[#10b981] text-black font-black animate-pulse'
+                    : isDark
+                      ? 'bg-zinc-900 border-zinc-800 text-[#17a398] hover:bg-zinc-800 hover:text-white'
+                      : 'bg-white border-[#0b1110] text-[#082621] hover:bg-[#ede5d3]'
+                }`}
+                title={jamSession?.code ? `Jam Active (${jamSession.code})` : "Live Jam Session"}
+              >
+                <Radio size={15} strokeWidth={2.5} className={jamSession?.code ? 'text-black' : 'text-[#17a398]'} />
+                {jamSession?.code && (
+                  <span className="text-[10px] font-mono font-bold hidden xl:inline">
+                    {jamSession.code}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Full Player Expand Button */}
             <button 

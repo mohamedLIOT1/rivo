@@ -133,6 +133,25 @@ export default function Navigation({
             })}
           </div>
 
+          {/* ── Prominent Live Jam Button ── */}
+          <button
+            onClick={openJamModal}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl brutal-border font-display font-black text-xs cursor-pointer transition brutal-shadow-sm ${
+              isDark 
+                ? 'bg-[#17a398]/15 border-[#17a398] text-[#26c4b7] hover:bg-[#17a398]/30' 
+                : 'bg-[#17a398]/20 border-[#0b1110] text-[#082621] hover:bg-[#17a398]/35'
+            }`}
+            title="Start or Join a Real-Time Live Jam Room"
+          >
+            <div className="flex items-center gap-2.5">
+              <Radio size={16} className="text-[#17a398] animate-pulse" strokeWidth={2.5} />
+              <span>Live Jam</span>
+            </div>
+            <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
+              RADIO
+            </span>
+          </button>
+
           {/* ── "Your Dispensary" Library Section ── */}
           <div className={`pt-2 border-t-2 border-dashed flex-1 flex flex-col min-h-0 ${
             isDark ? 'border-zinc-800' : 'border-[#ded2bb]'

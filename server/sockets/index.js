@@ -255,10 +255,10 @@ module.exports = function (io) {
         jamDisconnectTimeouts.delete(disconnectKey);
       }
 
-      const wasHostReconnecting = !room.hostId && room.hostUserId && uId && String(room.hostUserId) === String(uId);
+      const wasHostReconnecting = room.hostUserId && uId && String(room.hostUserId) === String(uId);
       const isHost = isNewRoom ? true : Boolean(room.hostId === socket.id || wasHostReconnecting || (room.members.length === 0 && !room.hostId));
 
-      room.members = (room.members || []).filter(m => m.socketId !== socket.id);
+      room.members = (room.members || []).filter(m => m.socketId !== socket.id && (!uId || String(m.id || m._id) !== String(uId)));
 
       if (isHost) {
         room.hostId = socket.id;
@@ -292,17 +292,19 @@ module.exports = function (io) {
 
       if (room.currentTrack) {
         let liveTime = Number(room.currentTime) || 0;
+        let syncUpdatedAt = room.updatedAt || Date.now();
         if (room.isPlaying && room.updatedAt) {
           const elapsed = (Date.now() - room.updatedAt) / 1000;
           if (elapsed > 0 && elapsed < 3600) {
             liveTime += elapsed;
+            syncUpdatedAt = Date.now();
           }
         }
         socket.emit('jam:sync_play_state', {
           isPlaying: Boolean(room.isPlaying),
           currentTrack: room.currentTrack,
           currentTime: liveTime,
-          updatedAt: room.updatedAt || Date.now(),
+          updatedAt: syncUpdatedAt,
           queue: room.queue || [],
           initiatorId: 'server'
         });
@@ -316,8 +318,10 @@ module.exports = function (io) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
+        const effUid = socket.userId || userId;
         const isHost = (room.hostId === socket.id) ||
-          (room.members || []).some(m => m.socketId === socket.id && m.isHost);
+          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
 
         // ONLY the Host may emit periodic playback time / clock synchronization!
         // Non-host members are never allowed to push lagging periodic time updates into the room.
@@ -327,15 +331,19 @@ module.exports = function (io) {
 
         if (!isHost && room.hostOnlyControl) {
           let liveTime = Number(room.currentTime) || 0;
+          let syncUpdatedAt = room.updatedAt || Date.now();
           if (room.isPlaying && room.updatedAt) {
             const elapsed = (Date.now() - room.updatedAt) / 1000;
-            if (elapsed > 0 && elapsed < 3600) liveTime += elapsed;
+            if (elapsed > 0 && elapsed < 3600) {
+              liveTime += elapsed;
+              syncUpdatedAt = Date.now();
+            }
           }
           socket.emit('jam:sync_play_state', {
             isPlaying: Boolean(room.isPlaying),
             currentTrack: room.currentTrack,
             currentTime: liveTime,
-            updatedAt: room.updatedAt || Date.now(),
+            updatedAt: syncUpdatedAt,
             queue: room.queue || [],
             initiatorId: 'server'
           });
@@ -376,24 +384,9 @@ module.exports = function (io) {
           userAction: userAction || (isSeek ? 'seek' : (isPlaying === false ? 'pause' : 'play'))
         };
 
-        if (room.isPlaying === false) {
-          io.to(cleanCode).emit('jam:on_play_state_changed', syncPayload);
-          io.to(cleanCode).emit('jam:sync_play_state', syncPayload);
-          io.to(cleanCode).emit('jam:pause_all', {
-            roomCode: cleanCode,
-            currentTime: room.currentTime,
-            currentTrack: room.currentTrack,
-            serverTime: Date.now(),
-            initiatorId: initiatorId || socket.id
-          });
-          io.to(cleanCode).emit('jam:room_updated', room);
-          io.to(cleanCode).emit('jam_updated', room);
-        } else {
-          io.to(cleanCode).emit('jam:on_play_state_changed', syncPayload);
-          io.to(cleanCode).emit('jam:sync_play_state', syncPayload);
-          io.to(cleanCode).emit('jam:room_updated', room);
-          io.to(cleanCode).emit('jam_updated', room);
-        }
+        // Consolidated clean emission: jam:sync_play_state + jam:room_updated
+        io.to(cleanCode).emit('jam:sync_play_state', syncPayload);
+        io.to(cleanCode).emit('jam:room_updated', room);
       }
     });
 
@@ -420,15 +413,19 @@ module.exports = function (io) {
       if (!room) return;
 
       let liveTime = Number(room.currentTime) || 0;
+      let syncUpdatedAt = room.updatedAt || Date.now();
       if (room.isPlaying && room.updatedAt) {
         const elapsed = (Date.now() - room.updatedAt) / 1000;
-        if (elapsed > 0 && elapsed < 3600) liveTime += elapsed;
+        if (elapsed > 0 && elapsed < 3600) {
+          liveTime += elapsed;
+          syncUpdatedAt = Date.now();
+        }
       }
       socket.emit('jam:sync_play_state', {
         isPlaying: Boolean(room.isPlaying),
         currentTrack: room.currentTrack,
         currentTime: liveTime,
-        updatedAt: room.updatedAt || Date.now(),
+        updatedAt: syncUpdatedAt,
         serverTime: Date.now(),
         queue: room.queue || [],
         initiatorId: 'server'
@@ -574,8 +571,10 @@ module.exports = function (io) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
+        const effUid = socket.userId;
         const isHost = (room.hostId === socket.id) ||
-          (room.members || []).some(m => m.socketId === socket.id && m.isHost);
+          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
         const canControl = isHost || !room.hostOnlyControl;
         if (!canControl) return;
 
@@ -621,8 +620,10 @@ module.exports = function (io) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
+        const effUid = socket.userId;
         const isHost = (room.hostId === socket.id) ||
-          (room.members || []).some(m => m.socketId === socket.id && m.isHost);
+          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
         const canControl = isHost || !room.hostOnlyControl;
         if (!canControl) return;
 
@@ -772,7 +773,7 @@ module.exports = function (io) {
             clearTimeout(jamDisconnectTimeouts.get(key));
           }
 
-          const gracePeriodMs = isHostDisconnect ? 3000 : 10000;
+          const gracePeriodMs = isHostDisconnect ? 25000 : 10000;
 
           const timer = setTimeout(() => {
             jamDisconnectTimeouts.delete(key);

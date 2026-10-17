@@ -272,6 +272,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const [jamSession, setJamSessionState] = useState(null);
   const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
+  const [isAutoplayBlocked, setIsAutoplayBlocked] = useState(false);
+
+  const resumeAutoplay = useCallback(() => {
+    setIsAutoplayBlocked(false);
+    resumeAudioContext();
+    if (audioRef.current) {
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+        isPlayingRef.current = true;
+      }).catch(err => {
+        console.warn('[Audio] play after resume failed:', err);
+      });
+    }
+  }, []);
 
   const repeatModeRef     = useRef(repeatMode);
   const isRepeatRef       = useRef(isRepeat);
@@ -787,13 +801,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
         resumeAudioContext();
         const playPromise = audio.play();
         if (playPromise !== undefined) {
-          playPromise.catch(e => {
+          playPromise.then(() => {
+            setIsAutoplayBlocked(false);
+          }).catch(e => {
+            if (e.name === 'NotAllowedError') {
+              setIsAutoplayBlocked(true);
+            }
             if (e.name !== 'AbortError') {
               console.warn('[Audio] play() blocked or waiting for gesture:', e.name);
               const retryPlay = () => {
                 if (!isPlayingRef.current) return;
                 resumeAudioContext();
-                audio.play().catch(() => {});
+                audio.play().then(() => {
+                  setIsAutoplayBlocked(false);
+                }).catch(() => {});
                 document.removeEventListener('touchstart', retryPlay);
                 document.removeEventListener('click', retryPlay);
               };
@@ -1048,7 +1069,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
         lastPauseTimeRef.current = 0;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
-          playPromise.catch(e => {
+          playPromise.then(() => {
+            setIsAutoplayBlocked(false);
+          }).catch(e => {
+            if (e?.name === 'NotAllowedError') {
+              setIsAutoplayBlocked(true);
+            }
             console.warn('[Audio] synchronous play rejected on phone:', e);
           });
         }
@@ -1429,8 +1455,25 @@ export function AudioProvider({ children, tracks, setTracks }) {
     return [];
   }, []);
 
+  const addToJamQueue = useCallback((trackOrTracks, playNext = false) => {
+    if (!trackOrTracks) return;
+    if (jamSessionRef.current && socketRef.current) {
+      const isArr = Array.isArray(trackOrTracks);
+      socketRef.current.emit('jam:add_to_queue', {
+        roomCode: jamSessionRef.current.code,
+        track: isArr ? undefined : trackOrTracks,
+        tracks: isArr ? trackOrTracks : undefined,
+        playNext
+      });
+    }
+  }, []);
+
   const addToQueue = useCallback((trackOrTracks, playNext = false) => {
     if (!trackOrTracks) return;
+    if (jamSessionRef.current?.code && socketRef.current) {
+      addToJamQueue(trackOrTracks, playNext);
+      return;
+    }
     const tracksToAdd = Array.isArray(trackOrTracks) ? trackOrTracks.filter(Boolean) : [trackOrTracks];
     if (tracksToAdd.length === 0) return;
 
@@ -2211,7 +2254,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (isJamHost()) {
         if (audioRef.current && audioRef.current.paused) {
           resumeAudioContext();
-          audioRef.current.play().catch(() => {});
+          audioRef.current.play().then(() => {
+            setIsAutoplayBlocked(false);
+          }).catch((e) => {
+            if (e?.name === 'NotAllowedError') {
+              setIsAutoplayBlocked(true);
+            }
+          });
         }
         return;
       }
@@ -2224,7 +2273,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       if (audioRef.current) {
         resumeAudioContext();
-        audioRef.current.play().catch(() => {});
+        audioRef.current.play().then(() => {
+          setIsAutoplayBlocked(false);
+        }).catch((e) => {
+          if (e?.name === 'NotAllowedError') {
+            setIsAutoplayBlocked(true);
+          }
+        });
       }
       setIsPlaying(true);
       isPlayingRef.current = true;
@@ -2308,19 +2363,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (newJamSession !== undefined) {
       setJamSessionState(newJamSession);
       jamSessionRef.current = newJamSession;
-    }
-  }, []);
-
-  const addToJamQueue = useCallback((trackOrTracks, playNext = false) => {
-    if (!trackOrTracks) return;
-    if (jamSessionRef.current && socketRef.current) {
-      const isArr = Array.isArray(trackOrTracks);
-      socketRef.current.emit('jam:add_to_queue', {
-        roomCode: jamSessionRef.current.code,
-        track: isArr ? undefined : trackOrTracks,
-        tracks: isArr ? trackOrTracks : undefined,
-        playNext
-      });
     }
   }, []);
 
@@ -2445,11 +2487,40 @@ export function AudioProvider({ children, tracks, setTracks }) {
     syncRemotePlayState,
     addToJamQueue, removeFromJamQueue, reorderJamQueue,
     remoteDevicePlayback,
+    isAutoplayBlocked, resumeAutoplay,
   };
 
   return (
     <AudioPlayerContext.Provider value={value}>
       {children}
+      {isAutoplayBlocked && (
+        <div 
+          onClick={resumeAutoplay}
+          style={{
+            position: 'fixed',
+            bottom: 96,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 99999,
+            backgroundColor: '#10b981',
+            color: '#000',
+            padding: '10px 22px',
+            borderRadius: '9999px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            cursor: 'pointer',
+            fontWeight: '800',
+            fontSize: '13px',
+            border: '2px solid #000',
+            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+          }}
+        >
+          <span style={{ fontSize: '16px' }}>📻</span>
+          <span>Click here to unmute and sync Jam audio</span>
+        </div>
+      )}
     </AudioPlayerContext.Provider>
   );
 }

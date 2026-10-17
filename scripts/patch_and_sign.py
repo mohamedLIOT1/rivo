@@ -31,11 +31,11 @@ def patch_ios():
     print(f"Compiled Hermes bundle ({len(hermes_bytes)} bytes)")
 
     src_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.5.ipa')
-    out_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.3.ipa')
-    legacy_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.2.ipa')
+    out_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.5.ipa')
+    legacy_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.4.ipa')
     generic_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.ipa')
-    dist_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.3.ipa')
-    dist_legacy_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.2.ipa')
+    dist_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.5.ipa')
+    dist_legacy_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.4.ipa')
     dist_gen_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.ipa')
 
     os.makedirs(os.path.dirname(out_ipa), exist_ok=True)
@@ -51,14 +51,14 @@ def patch_ios():
                     zout.writestr(item, hermes_bytes)
                 elif filename == 'Payload/Rivo.app/Info.plist':
                     plist_obj = plistlib.loads(zin.read(filename))
-                    plist_obj['CFBundleShortVersionString'] = '1.8.3'
-                    plist_obj['CFBundleVersion'] = '52'
+                    plist_obj['CFBundleShortVersionString'] = '1.8.5'
+                    plist_obj['CFBundleVersion'] = '54'
                     zout.writestr(item, plistlib.dumps(plist_obj, fmt=plistlib.FMT_BINARY))
                 elif filename == 'Payload/Rivo.app/EXConstants.bundle/app.config':
                     cfg = json.loads(zin.read(filename).decode('utf-8'))
-                    cfg['version'] = '1.8.3'
+                    cfg['version'] = '1.8.5'
                     if 'ios' in cfg:
-                        cfg['ios']['buildNumber'] = '52'
+                        cfg['ios']['buildNumber'] = '54'
                     zout.writestr(item, json.dumps(cfg).encode('utf-8'))
                 else:
                     zout.writestr(item, zin.read(filename))
@@ -84,11 +84,11 @@ def patch_android():
         bundle_bytes = f.read()
 
     base_apk = os.path.join(BASE_DIR, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.3.apk')
-    legacy_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.2.apk')
+    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.5.apk')
+    legacy_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.4.apk')
     generic_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.apk')
-    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.3.apk')
-    dist_legacy_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.2.apk')
+    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.5.apk')
+    dist_legacy_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.8.4.apk')
     dist_gen_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.apk')
 
     os.makedirs(os.path.dirname(out_apk), exist_ok=True)
@@ -110,8 +110,14 @@ def patch_android():
                     old_str3 = '1.8.0'.encode('utf-16le')
                     old_str4 = '1.8.1'.encode('utf-16le')
                     old_str5 = '1.8.2'.encode('utf-16le')
-                    new_str = '1.8.3'.encode('utf-16le')
-                    if old_str5 in manifest_bytes:
+                    old_str6 = '1.8.3'.encode('utf-16le')
+                    old_str7 = '1.8.4'.encode('utf-16le')
+                    new_str = '1.8.5'.encode('utf-16le')
+                    if old_str7 in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_str7, new_str)
+                    elif old_str6 in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_str6, new_str)
+                    elif old_str5 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_str5, new_str)
                     elif old_str4 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_str4, new_str)
@@ -126,8 +132,14 @@ def patch_android():
                     old_code3 = b'\x08\x00\x00\x10\x31\x00\x00\x00'  # versionCode 49
                     old_code4 = b'\x08\x00\x00\x10\x32\x00\x00\x00'  # versionCode 50
                     old_code5 = b'\x08\x00\x00\x10\x33\x00\x00\x00'  # versionCode 51
-                    new_code = b'\x08\x00\x00\x10\x34\x00\x00\x00'   # versionCode 52
-                    if old_code5 in manifest_bytes:
+                    old_code6 = b'\x08\x00\x00\x10\x34\x00\x00\x00'  # versionCode 52
+                    old_code7 = b'\x08\x00\x00\x10\x35\x00\x00\x00'  # versionCode 53
+                    new_code = b'\x08\x00\x00\x10\x36\x00\x00\x00'   # versionCode 54
+                    if old_code7 in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_code7, new_code)
+                    elif old_code6 in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_code6, new_code)
+                    elif old_code5 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_code5, new_code)
                     elif old_code4 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_code4, new_code)

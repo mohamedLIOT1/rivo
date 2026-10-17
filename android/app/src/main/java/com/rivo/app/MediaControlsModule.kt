@@ -22,9 +22,22 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         const val CHAT_GROUP_KEY = "com.rivo.app.CHAT_MESSAGES"
 
         private var instance: MediaControlsModule? = null
+        var initialChatSenderId: String? = null
+        var initialJamRoomCode: String? = null
 
         fun sendEvent(action: String) {
             instance?.sendEventInternal(action)
+        }
+
+        fun handleNewIntent(intent: Intent?) {
+            intent?.let {
+                val senderId = it.getStringExtra("openChatSenderId")
+                val roomCode = it.getStringExtra("joinJamRoomCode")
+                if (!senderId.isNullOrEmpty()) {
+                    initialChatSenderId = senderId
+                    instance?.emitChatNotificationEvent(senderId, roomCode)
+                }
+            }
         }
     }
 
@@ -198,6 +211,35 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             reactContext
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
                 ?.emit("onMediaAction", action)
+        }
+    }
+
+    fun emitChatNotificationEvent(senderId: String, roomCode: String? = null) {
+        if (reactContext.hasActiveReactInstance()) {
+            val map = com.facebook.react.bridge.Arguments.createMap().apply {
+                putString("senderId", senderId)
+                if (roomCode != null) putString("roomCode", roomCode)
+            }
+            reactContext
+                .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                ?.emit("onOpenChatFromNotification", map)
+        }
+    }
+
+    @ReactMethod
+    fun getInitialChatSenderId(promise: com.facebook.react.bridge.Promise) {
+        try {
+            val currentActivity = reactContext.currentActivity
+            val intent = currentActivity?.intent
+            val senderIdFromIntent = intent?.getStringExtra("openChatSenderId")
+            val senderId = senderIdFromIntent ?: initialChatSenderId
+            if (senderIdFromIntent != null) {
+                intent.removeExtra("openChatSenderId")
+            }
+            initialChatSenderId = null
+            promise.resolve(senderId)
+        } catch (e: Exception) {
+            promise.resolve(null)
         }
     }
 

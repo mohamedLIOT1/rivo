@@ -39,7 +39,7 @@ import {
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
-import { ToastProvider } from './src/native/context/ToastContext';
+import { ToastProvider, useToast } from './src/native/context/ToastContext';
 import { AudioProvider, useAudioPlayer } from './src/native/context/AudioContext';
 import { SocketProvider, useSocket } from './src/native/context/SocketContext';
 import { ConnectivityProvider, useConnectivity } from './src/native/context/ConnectivityContext';
@@ -48,7 +48,7 @@ import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 import * as FileSystem from 'expo-file-system';
-import { installApk } from './src/native/services/mediaControls';
+import { installApk, getInitialChatSenderId, subscribeToChatNotification } from './src/native/services/mediaControls';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
 
@@ -370,6 +370,110 @@ function NativeAppShell() {
   const { currentTrack } = useAudioPlayer();
   const { currentUser, isAuthLoaded } = useUser();
   const { isDark, toggleTheme } = useTheme();
+  const { socket } = useSocket();
+  const { showToast } = useToast();
+
+  const currentChatRef = useRef({ isChatOpen: false, chatTargetUser: null });
+  useEffect(() => {
+    currentChatRef.current = { isChatOpen, chatTargetUser };
+  }, [isChatOpen, chatTargetUser]);
+
+  // Real-time chat notification banner with 1-click direct navigation to friend's chat
+  useEffect(() => {
+    if (!socket) return;
+    const handleIncomingChatMessage = (msg) => {
+      if (!msg) return;
+      const myId = String(currentUser?._id || currentUser?.id || '');
+      const senderId = String(msg.sender?._id || msg.sender || msg.senderId || '');
+      const recipientId = String(msg.recipient?._id || msg.recipient || msg.recipientId || '');
+
+      // Don't toast if the message is from me
+      if (senderId && myId && senderId === myId) return;
+      // Don't toast if recipient is specified and not for me
+      if (recipientId && myId && recipientId !== myId) return;
+
+      const senderName = msg.senderName || msg.sender?.name || 'Friend';
+      const senderAvatar = msg.senderAvatar || msg.sender?.avatar || '';
+      const text = msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment'));
+
+      const targetUser = {
+        _id: senderId,
+        id: senderId,
+        name: senderName,
+        avatar: senderAvatar,
+      };
+
+      // Don't show toast if already chatting with this sender
+      const { isChatOpen: chatOpen, chatTargetUser: activeChatUser } = currentChatRef.current;
+      if (chatOpen && activeChatUser && String(activeChatUser._id || activeChatUser.id) === senderId) {
+        return;
+      }
+
+      showToast(text, 'chat', {
+        title: senderName,
+        avatar: senderAvatar,
+        onPress: () => {
+          setIsFullPlayerOpen(false);
+          setIsJamOpen(false);
+          setChatTargetUser(targetUser);
+          setIsChatOpen(true);
+        }
+      });
+    };
+
+    socket.on('chat:message', handleIncomingChatMessage);
+    socket.on('new_chat_message', handleIncomingChatMessage);
+    return () => {
+      socket.off('chat:message', handleIncomingChatMessage);
+      socket.off('new_chat_message', handleIncomingChatMessage);
+    };
+  }, [socket, currentUser, showToast]);
+
+  // Handle opening direct chat when tapping an Android system notification
+  const handleOpenChatFromNotification = useCallback((data) => {
+    if (!data) return;
+    const senderId = typeof data === 'string' ? data : (data?.senderId || data?.sender);
+    if (!senderId) return;
+    setIsFullPlayerOpen(false);
+    setIsJamOpen(false);
+    setChatTargetUser({
+      _id: senderId,
+      id: senderId,
+      name: data?.senderName || 'Friend',
+      avatar: data?.senderAvatar || ''
+    });
+    setIsChatOpen(true);
+  }, []);
+
+  useEffect(() => {
+    // 1. Cold start / initial launch from notification
+    getInitialChatSenderId().then((senderId) => {
+      if (senderId) {
+        handleOpenChatFromNotification(senderId);
+      }
+    }).catch(() => {});
+
+    // 2. Active app runtime notification tap
+    const unsubscribe = subscribeToChatNotification((data) => {
+      handleOpenChatFromNotification(data);
+    });
+
+    // 3. Resume from background
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        getInitialChatSenderId().then((senderId) => {
+          if (senderId) {
+            handleOpenChatFromNotification(senderId);
+          }
+        }).catch(() => {});
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      appStateSub.remove();
+    };
+  }, [handleOpenChatFromNotification]);
 
   // Launch login / register prompt for unauthenticated users, exactly matching the iOS IPA
   const hasPromptedAuthOnLaunchRef = useRef(false);

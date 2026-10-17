@@ -184,7 +184,7 @@ const importTrackHandler = async (req, res) => {
         if (metaCover) cover = metaCover;
       }
 
-      const ytId = await searchYouTubeId(`${artist} - ${title}`);
+      const ytId = await searchYouTubeId({ artist, title, targetDuration: duration });
       if (ytId) {
         audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
         if (!cover) cover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
@@ -254,7 +254,7 @@ const importTrackHandler = async (req, res) => {
       } catch (err) {}
 
       if (title && artist) {
-        const ytId = await searchYouTubeId(`${artist} - ${title}`);
+        const ytId = await searchYouTubeId({ artist, title, targetDuration: duration });
         if (ytId) {
           audioUrl = `https://www.youtube.com/watch?v=${ytId}`;
           if (!cover) cover = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
@@ -715,8 +715,9 @@ const handleTrackStream = async (req, res) => {
       } catch {}
     }
 
+    const duration = Number(req.query.duration || track?.duration) || null;
     const streamTarget = rawUrl || id || '';
-    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist);
+    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist, { duration });
     if (streamUrl) {
       const resolvedPath = streamUrl.url || String(streamUrl);
       const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -858,7 +859,7 @@ router.get('/download', async (req, res) => {
     }
     if (!videoId && (title || artist)) {
       try {
-        videoId = await searchYouTubeId(`${cleanArtist} ${cleanTitle}`.trim());
+        videoId = await searchYouTubeId({ artist: cleanArtist, title: cleanTitle, targetDuration: duration });
       } catch {}
     }
 
@@ -1177,7 +1178,7 @@ router.post('/clear-lyrics', adminAuth, async (req, res) => {
 // Resolve stream endpoint
 const resolveStreamHandler = async (req, res) => {
   try {
-    const { url, title, artist, id, trackId } = req.query;
+    const { url, title, artist, id, trackId, duration } = req.query;
 
     if (url && typeof url === 'string' && (url.startsWith('/uploads/') || url.includes('/uploads/'))) {
       const cleanPath = url.startsWith('/') ? url : `/${url}`;
@@ -1185,7 +1186,7 @@ const resolveStreamHandler = async (req, res) => {
         success: true,
         url: cleanPath,
         directUrl: cleanPath,
-        duration: 210,
+        duration: Number(duration) || 210,
         isYouTube: false
       });
     }
@@ -1215,7 +1216,7 @@ const resolveStreamHandler = async (req, res) => {
               isYouTube: false
             });
           }
-          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist);
+          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist, { duration: dbTrack.duration || Number(duration) || null });
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -1268,7 +1269,7 @@ const resolveStreamHandler = async (req, res) => {
           : ((m2 && m2[1]) ? m2[1] : (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim()) ? c.trim() : null));
 
         if (vidCandidate) {
-          const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '');
+          const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '', { duration: Number(duration) || null });
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -1287,7 +1288,7 @@ const resolveStreamHandler = async (req, res) => {
     }
 
     if (title || artist || url) {
-      const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '');
+      const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '', { duration: Number(duration) || null });
       if (directAudio) {
         const resolvedPath = directAudio.url || String(directAudio);
         const isLocalUpload = resolvedPath.startsWith('/uploads/');

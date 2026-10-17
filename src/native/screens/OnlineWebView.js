@@ -602,10 +602,17 @@ export default function OnlineWebView() {
             if (!ytId && (track.title || track.artist)) {
               try {
                 const { cleanTitle, cleanArtist } = getCleanQueries(track.title, track.artist);
-                const searchRes = await searchYouTubeClientSide(`${cleanArtist} ${cleanTitle}`.trim());
+                const targetDur = Number(track.duration) || null;
+                const searchRes = await searchYouTubeClientSide({
+                  artist: cleanArtist,
+                  title: cleanTitle,
+                  targetDuration: targetDur
+                });
                 if (searchRes?.videoId) {
                   ytId = searchRes.videoId;
-                  if (searchRes.duration) streamDuration = searchRes.duration;
+                  if (searchRes.duration && (!targetDur || Math.abs(searchRes.duration - targetDur) <= 60)) {
+                    streamDuration = searchRes.duration;
+                  }
                 }
               } catch (e) {}
             }
