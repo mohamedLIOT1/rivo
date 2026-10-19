@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "npm.cmd run dev",
-    "beforeBuildCommand": "npm.cmd run build"
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
@@ -53,6 +53,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxNTIzNTA2NENDNDQ4QTcKUldTblNNUk1CalZTc1hycUVESDVDVEJ0d2Rsa2luRFd4Q2JjUVF6dHphalpPTFNsbXY5WVM0RTAK",
       "endpoints": [
+        "https://github.com/WhooAre-you/Rivo/releases/latest/download/windows-update.json",
         "https://rivo-m.duckdns.org/downloads/windows-update.json"
       ]
     }

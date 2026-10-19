@@ -98,8 +98,8 @@ const APP_VERSIONS_DATA = {
     windows: {
       version: '1.9.3',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: '/downloads/Rivo.exe',
-      directFile: 'Rivo.exe',
+      downloadUrl: '/downloads/Rivo_Setup.exe',
+      directFile: 'Rivo_Setup.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
@@ -107,8 +107,8 @@ const APP_VERSIONS_DATA = {
       version: '1.9.3',
       build: 62,
       name: 'Rivo for Android (APK)',
-      downloadUrl: '/downloads/Rivo-v1.9.3.apk',
-      directFile: 'Rivo-v1.9.3.apk',
+      downloadUrl: '/downloads/Rivo.apk',
+      directFile: 'Rivo.apk',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     },
@@ -116,8 +116,8 @@ const APP_VERSIONS_DATA = {
       version: '1.9.3',
       build: 62,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: '/downloads/Rivo-v1.9.3.ipa',
-      directFile: 'Rivo-v1.9.3.ipa',
+      downloadUrl: '/downloads/Rivo.ipa',
+      directFile: 'Rivo.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     }
@@ -128,155 +128,31 @@ app.get('/api/app/version', (req, res) => {
   res.json(APP_VERSIONS_DATA);
 });
 
-// Download routes for APK/IPA releases
-app.get([
-  '/downloads/Rivo.apk',
-  '/downloads/Rivo-v1.9.2.apk',
-  '/downloads/Rivo-v1.9.1.apk',
-  '/downloads/Rivo-v1.9.0.apk',
-  '/downloads/Rivo-v1.8.9.apk',
-  '/downloads/Rivo-v1.8.8.apk',
-  '/downloads/Rivo-v1.8.7.apk',
-  '/downloads/Rivo-v1.8.6.apk',
-  '/downloads/Rivo-v1.8.5.apk',
-  '/downloads/Rivo-v1.8.4.apk',
-  '/downloads/Rivo-v1.8.3.apk',
-  '/downloads/Rivo-v1.8.2.apk',
-  '/downloads/Rivo-v1.8.1.apk',
-  '/downloads/Rivo-v1.8.0.apk',
-  '/downloads/Rivo-v1.7.9.apk',
-  '/downloads/Rivo-v1.7.8.apk',
-  '/downloads/Rivo-v1.7.7.apk',
-  '/downloads/Rivo-v1.7.6.apk',
-  '/downloads/Rivo-v1.7.5.apk',
-  '/downloads/Rivo-v1.7.4.apk',
-  '/downloads/app-release.apk'
-], async (req, res) => {
-  const requestedFile = path.basename(req.path);
-  const targetPath = path.join(__dirname, '../public/downloads', requestedFile);
-  if (fs.existsSync(targetPath)) return res.download(targetPath, requestedFile);
+// Dynamic download routes for Windows EXE, Android APK, and iOS IPA releases
+app.get('/downloads/:filename', async (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const localFile = path.join(__dirname, '../public/downloads', filename);
 
-  const default192 = path.join(__dirname, '../public/downloads/Rivo-v1.9.2.apk');
-  if (fs.existsSync(default192)) return res.download(default192, 'Rivo-v1.9.2.apk');
-
-  const default191 = path.join(__dirname, '../public/downloads/Rivo-v1.9.1.apk');
-  if (fs.existsSync(default191)) return res.download(default191, 'Rivo-v1.9.1.apk');
-
-  const default183 = path.join(__dirname, '../public/downloads/Rivo-v1.8.3.apk');
-  if (fs.existsSync(default183)) return res.download(default183, 'Rivo-v1.8.3.apk');
-
-  const default182 = path.join(__dirname, '../public/downloads/Rivo-v1.8.2.apk');
-  if (fs.existsSync(default182)) return res.download(default182, 'Rivo-v1.8.2.apk');
-
-  const default181 = path.join(__dirname, '../public/downloads/Rivo-v1.8.1.apk');
-  if (fs.existsSync(default181)) return res.download(default181, 'Rivo-v1.8.1.apk');
-
-  const default180 = path.join(__dirname, '../public/downloads/Rivo-v1.8.0.apk');
-  if (fs.existsSync(default180)) return res.download(default180, 'Rivo-v1.8.0.apk');
-
-  const default179 = path.join(__dirname, '../public/downloads/Rivo-v1.7.9.apk');
-  if (fs.existsSync(default179)) return res.download(default179, 'Rivo-v1.7.9.apk');
-
-  const default178 = path.join(__dirname, '../public/downloads/Rivo-v1.7.8.apk');
-  if (fs.existsSync(default178)) return res.download(default178, 'Rivo-v1.7.8.apk');
-
-  const default177 = path.join(__dirname, '../public/downloads/Rivo-v1.7.7.apk');
-  if (fs.existsSync(default177)) return res.download(default177, 'Rivo-v1.7.7.apk');
-
-  const default176 = path.join(__dirname, '../public/downloads/Rivo-v1.7.6.apk');
-  if (fs.existsSync(default176)) return res.download(default176, 'Rivo-v1.7.6.apk');
-
-  const default175 = path.join(__dirname, '../public/downloads/Rivo-v1.7.5.apk');
-  if (fs.existsSync(default175)) return res.download(default175, 'Rivo-v1.7.5.apk');
-
-  const default174 = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.apk');
-  if (fs.existsSync(default174)) return res.download(default174, 'Rivo-v1.7.4.apk');
-
-  const defaultGeneric = path.join(__dirname, '../public/downloads/Rivo.apk');
-  if (fs.existsSync(defaultGeneric)) return res.download(defaultGeneric, 'Rivo.apk');
-
-  const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-  if (ghToken) {
-    try {
-      const releaseRes = await axios.get('https://api.github.com/repos/WhooAre-you/Rivo/releases/tags/v1.9.2', {
-        headers: { 'Authorization': `Bearer ${ghToken}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Rivo-Server' }
-      });
-      const apkAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.apk'));
-      if (apkAsset) {
-        const streamRes = await axios.get(apkAsset.url, {
-          headers: { 'Authorization': `Bearer ${ghToken}`, 'Accept': 'application/octet-stream', 'User-Agent': 'Rivo-Server' },
-          responseType: 'stream'
-        });
-        res.setHeader('Content-Disposition', `attachment; filename="${apkAsset.name}"`);
-        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-        return streamRes.data.pipe(res);
-      }
-    } catch (e) {}
+  // 1. Serve local file if already present in public/downloads
+  if (fs.existsSync(localFile)) {
+    return res.download(localFile, filename);
   }
-  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.2/Rivo-v1.9.2.apk');
-});
 
-app.get([
-  '/downloads/Rivo.ipa',
-  '/downloads/Rivo-v1.9.2.ipa',
-  '/downloads/Rivo-v1.9.1.ipa',
-  '/downloads/Rivo-v1.9.0.ipa',
-  '/downloads/Rivo-v1.8.8.ipa',
-  '/downloads/Rivo-v1.8.7.ipa',
-  '/downloads/Rivo-v1.8.6.ipa',
-  '/downloads/Rivo-v1.8.5.ipa',
-  '/downloads/Rivo-v1.8.4.ipa',
-  '/downloads/Rivo-v1.8.3.ipa',
-  '/downloads/Rivo-v1.8.2.ipa',
-  '/downloads/Rivo-v1.8.1.ipa',
-  '/downloads/Rivo-v1.8.0.ipa',
-  '/downloads/Rivo-v1.7.9.ipa',
-  '/downloads/Rivo-v1.7.8.ipa',
-  '/downloads/Rivo-v1.7.7.ipa',
-  '/downloads/Rivo-v1.7.6.ipa',
-  '/downloads/Rivo-v1.7.5.ipa',
-  '/downloads/Rivo-v1.7.4.ipa'
-], async (req, res) => {
-  const localV192Path = path.join(__dirname, '../public/downloads/Rivo-v1.9.2.ipa');
-  if (fs.existsSync(localV192Path)) return res.download(localV192Path, 'Rivo-v1.9.2.ipa');
+  // 2. Redirect to latest GitHub Release based on file extension
+  if (filename.endsWith('.apk')) {
+    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo.apk');
+  }
+  if (filename.endsWith('.ipa')) {
+    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo.ipa');
+  }
+  if (filename.endsWith('.exe')) {
+    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo_Setup.exe');
+  }
+  if (filename === 'windows-update.json') {
+    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/windows-update.json');
+  }
 
-  const localV191Path = path.join(__dirname, '../public/downloads/Rivo-v1.9.1.ipa');
-  if (fs.existsSync(localV191Path)) return res.download(localV191Path, 'Rivo-v1.9.1.ipa');
-
-  const localV183Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.3.ipa');
-  if (fs.existsSync(localV183Path)) return res.download(localV183Path, 'Rivo-v1.8.3.ipa');
-
-  const localV182Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.2.ipa');
-  if (fs.existsSync(localV182Path)) return res.download(localV182Path, 'Rivo-v1.8.2.ipa');
-
-  const localV181Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.1.ipa');
-  if (fs.existsSync(localV181Path)) return res.download(localV181Path, 'Rivo-v1.8.1.ipa');
-
-  const localV180Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.0.ipa');
-  if (fs.existsSync(localV180Path)) return res.download(localV180Path, 'Rivo-v1.8.0.ipa');
-
-  const localV179Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.9.ipa');
-  if (fs.existsSync(localV179Path)) return res.download(localV179Path, 'Rivo-v1.7.9.ipa');
-
-  const localV178Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.8.ipa');
-  if (fs.existsSync(localV178Path)) return res.download(localV178Path, 'Rivo-v1.7.8.ipa');
-
-  const localV177Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.7.ipa');
-  if (fs.existsSync(localV177Path)) return res.download(localV177Path, 'Rivo-v1.7.7.ipa');
-
-  const localV176Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.6.ipa');
-  if (fs.existsSync(localV176Path)) return res.download(localV176Path, 'Rivo-v1.7.6.ipa');
-
-  const localV175Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.5.ipa');
-  if (fs.existsSync(localV175Path)) return res.download(localV175Path, 'Rivo-v1.7.5.ipa');
-
-  const localV174Path = path.join(__dirname, '../public/downloads/Rivo-v1.7.4.ipa');
-  if (fs.existsSync(localV174Path)) return res.download(localV174Path, 'Rivo-v1.7.4.ipa');
-
-  const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
-  if (fs.existsSync(localIpaPath)) return res.download(localIpaPath, 'Rivo.ipa');
-
-  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.2/Rivo-v1.9.2.ipa');
+  return res.status(404).json({ error: 'File not found' });
 });
 
 // Broadcast app update notification to all active web and mobile clients (Admin Only)
