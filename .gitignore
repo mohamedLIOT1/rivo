@@ -26,3 +26,4 @@ release-desktop/
 src-tauri/
 scripts/__pycache__/
 scripts/build-desktop.ps1
+scripts/generate_installer_graphics.py
