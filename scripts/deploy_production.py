@@ -29,7 +29,7 @@ def upload_file(local_path, remote_path):
     return True
 
 def main():
-    print("=== Deploying v1.9.0 to Production Server ===")
+    print("=== Deploying v1.9.1 to Production Server ===")
     
     # 1. Upload server files
     server_files = [
@@ -52,9 +52,9 @@ def main():
 
     # 2. Upload APK, IPA & EXE downloads and bot assets
     download_files = [
-        ("public/downloads/Rivo-v1.9.0.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v1.9.0.apk"),
-        ("public/downloads/Rivo-v1.9.0.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v1.9.0.ipa"),
-        ("public/downloads/Rivo-v1.9.0.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v1.9.0.exe"),
+        ("public/downloads/Rivo-v1.9.1.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v1.9.1.apk"),
+        ("public/downloads/Rivo-v1.9.1.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v1.9.1.ipa"),
+        ("public/downloads/Rivo-v1.9.1.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v1.9.1.exe"),
         ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
         ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
         ("public/downloads/Rivo.exe", f"{REMOTE_DIR}/public/downloads/Rivo.exe"),
@@ -68,21 +68,21 @@ def main():
 
     print("Replicating binary releases on remote server...")
     run_ssh(
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.apk {REMOTE_DIR}/public/downloads/Rivo.apk && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.exe {REMOTE_DIR}/public/downloads/Rivo.exe && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.apk {REMOTE_DIR}/public/downloads/Rivo.apk && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.exe {REMOTE_DIR}/public/downloads/Rivo.exe && "
         f"mkdir -p {REMOTE_DIR}/dist/downloads && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.apk {REMOTE_DIR}/dist/downloads/Rivo-v1.9.0.apk && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.apk {REMOTE_DIR}/dist/downloads/Rivo.apk && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.ipa {REMOTE_DIR}/dist/downloads/Rivo-v1.9.0.ipa && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.exe {REMOTE_DIR}/dist/downloads/Rivo-v1.9.0.exe && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.0.exe {REMOTE_DIR}/dist/downloads/Rivo.exe"
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.apk {REMOTE_DIR}/dist/downloads/Rivo-v1.9.1.apk && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.apk {REMOTE_DIR}/dist/downloads/Rivo.apk && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.ipa {REMOTE_DIR}/dist/downloads/Rivo-v1.9.1.ipa && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.exe {REMOTE_DIR}/dist/downloads/Rivo-v1.9.1.exe && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v1.9.1.exe {REMOTE_DIR}/dist/downloads/Rivo.exe"
     )
 
     # 3. Create dist archive and upload (excluding heavy downloads directory)
     dist_dir = os.path.join(BASE_DIR, 'dist')
-    tar_path = os.path.join(BASE_DIR, 'dist_v190.tar.gz')
+    tar_path = os.path.join(BASE_DIR, 'dist_v191.tar.gz')
     print("Archiving web dist (excluding downloads)...", flush=True)
     import tarfile
 
@@ -95,8 +95,8 @@ def main():
         tar.add(dist_dir, arcname="dist", filter=filter_downloads)
 
     print(f"Uploading dist archive ({os.path.getsize(tar_path)} bytes)...")
-    upload_file(tar_path, f"{REMOTE_DIR}/dist_v190.tar.gz")
-    run_ssh(f"cd {REMOTE_DIR} && tar -xzf dist_v190.tar.gz && rm dist_v190.tar.gz")
+    upload_file(tar_path, f"{REMOTE_DIR}/dist_v191.tar.gz")
+    run_ssh(f"cd {REMOTE_DIR} && tar -xzf dist_v191.tar.gz && rm dist_v191.tar.gz")
     if os.path.exists(tar_path):
         os.remove(tar_path)
 

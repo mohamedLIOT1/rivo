@@ -88,12 +88,12 @@ app.use((req, res, next) => {
 
 // App Version Manifest
 const APP_VERSIONS_DATA = {
-  version: '1.9.0',
-  releaseNotes: "v1.9.0: Full mobile drag-and-drop queue reordering without buttons, repeat current song priority, smart queue shuffle with AI auto-queue continuous playback, and fixed Discord Rich Presence.",
+  version: '1.9.1',
+  releaseNotes: "v1.9.1: Opaque full player backdrop fix, Quran vs Songs Jam filter, zero-lag draggable queue, and Discord rich presence.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.9.0',
+      version: '1.9.1',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -101,20 +101,20 @@ const APP_VERSIONS_DATA = {
       notes: 'Hardware-accelerated ultra-smooth lyrics rendering and audio controls.'
     },
     android: {
-      version: '1.9.0',
-      build: 59,
+      version: '1.9.1',
+      build: 60,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.9.0.apk',
-      directFile: 'Rivo-v1.9.0.apk',
+      downloadUrl: '/downloads/Rivo-v1.9.1.apk',
+      directFile: 'Rivo-v1.9.1.apk',
       mandatory: false,
       notes: 'Draggable queue without buttons, smart shuffle with AI recommendations, and background service.'
     },
     ios: {
-      version: '1.9.0',
-      build: 59,
+      version: '1.9.1',
+      build: 60,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.9.0.ipa',
-      directFile: 'Rivo-v1.9.0.ipa',
+      downloadUrl: '/downloads/Rivo-v1.9.1.ipa',
+      directFile: 'Rivo-v1.9.1.ipa',
       mandatory: false,
       notes: 'Draggable queue without buttons, repeat priority, and live Discord activity.'
     }
@@ -128,6 +128,7 @@ app.get('/api/app/version', (req, res) => {
 // Download routes for APK/IPA releases
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.9.1.apk',
   '/downloads/Rivo-v1.9.0.apk',
   '/downloads/Rivo-v1.8.9.apk',
   '/downloads/Rivo-v1.8.8.apk',
@@ -207,6 +208,8 @@ app.get([
 
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.9.1.ipa',
+  '/downloads/Rivo-v1.9.0.ipa',
   '/downloads/Rivo-v1.8.8.ipa',
   '/downloads/Rivo-v1.8.7.ipa',
   '/downloads/Rivo-v1.8.6.ipa',
