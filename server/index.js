@@ -173,7 +173,7 @@ app.post('/api/deploy-webhook', (req, res) => {
 
   const { exec } = require('child_process');
   const projectRoot = path.join(__dirname, '..');
-  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo';
+  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build';
 
   console.log('[DeployWebhook] Starting auto-deployment...');
   exec(deployCmd, { cwd: projectRoot, timeout: 300000 }, (error, stdout, stderr) => {
@@ -183,14 +183,10 @@ app.post('/api/deploy-webhook', (req, res) => {
       console.error('[DeployWebhook] Stderr:', stderr);
       return;
     }
-    console.log('[DeployWebhook] Deployment finished successfully!');
-    if (stdout) console.log(stdout);
-
-    // Broadcast update to all connected clients
-    if (io) {
-      io.emit('app:update_manifest', APP_VERSIONS_DATA);
-      io.emit('app:update_available', APP_VERSIONS_DATA);
-    }
+    console.log('[DeployWebhook] Deployment finished successfully! Respawning via PM2...');
+    setTimeout(() => {
+      process.exit(0);
+    }, 1000);
   });
 });
 
