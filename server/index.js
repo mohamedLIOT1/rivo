@@ -173,17 +173,25 @@ app.post('/api/deploy-webhook', (req, res) => {
 
   const { exec } = require('child_process');
   const projectRoot = path.join(__dirname, '..');
+  const nodeBinDir = path.dirname(process.execPath);
+  const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
+
   const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build';
 
-  console.log('[DeployWebhook] Starting auto-deployment...');
-  exec(deployCmd, { cwd: projectRoot, timeout: 300000 }, (error, stdout, stderr) => {
+  console.log('[DeployWebhook] Starting auto-deployment with bash...');
+  exec(deployCmd, { 
+    cwd: projectRoot, 
+    timeout: 300000, 
+    shell: '/bin/bash',
+    env: { ...process.env, PATH: fullPath }
+  }, (error, stdout, stderr) => {
     isDeploying = false;
     if (error) {
       console.error('[DeployWebhook] Execution error:', error);
       console.error('[DeployWebhook] Stderr:', stderr);
       return;
     }
-    console.log('[DeployWebhook] Deployment finished successfully! Respawning via PM2...');
+    console.log('[DeployWebhook] Deployment finished successfully! Respawning PM2 process...');
     setTimeout(() => {
       process.exit(0);
     }, 1000);
