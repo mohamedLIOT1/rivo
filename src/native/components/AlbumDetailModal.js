@@ -108,17 +108,13 @@ export default function AlbumDetailModal({
     });
   }, [album, allTracks, contextTracks]);
 
-  // Fallback: Fetch tracks remotely if 0 found locally
+  // Always fetch full tracks from API to avoid truncated local fallback lists
   useEffect(() => {
     if (!visible || !album) {
       setRemoteTracks([]);
       return;
     }
-    const hasFullTracks = albumTracks.length > 0 && albumTracks.every(t => t && typeof t === 'object' && t.title);
-    if (hasFullTracks) {
-      setRemoteTracks([]);
-      return;
-    }
+
     let isMounted = true;
     const albId = album._id || album.id;
     const cleanId = albId ? String(albId).replace(/^album-/, '') : '';
@@ -156,6 +152,20 @@ export default function AlbumDetailModal({
           const list = d.tracks || (Array.isArray(d) ? d : []);
           if (isMounted && Array.isArray(list) && list.length > 0) {
             setRemoteTracks(list);
+            return;
+          }
+        }
+
+        // Fallback: If album has no tracks in DB by album name, query by artist
+        const artName = album.artist;
+        if (artName && artName !== 'Various Artists') {
+          const artRes = await fetch(`${API_BASE_URL}/api/tracks?artist=${encodeURIComponent(artName)}`);
+          if (artRes.ok) {
+            const artD = await artRes.json();
+            const artList = artD.tracks || (Array.isArray(artD) ? artD : []);
+            if (isMounted && Array.isArray(artList) && artList.length > 0) {
+              setRemoteTracks(artList);
+            }
           }
         }
       } catch {}
@@ -166,10 +176,10 @@ export default function AlbumDetailModal({
     return () => {
       isMounted = false;
     };
-  }, [visible, album?.id, album?._id, album?.name, album?.isPlaylist, albumTracks.length]);
+  }, [visible, album?.id, album?._id, album?.name, album?.isPlaylist]);
 
   const effectiveAlbumTracks = useMemo(() => {
-    const list = albumTracks.length > 0 ? albumTracks : remoteTracks;
+    const list = remoteTracks.length > 0 ? remoteTracks : albumTracks;
     return list.filter(t => t && typeof t === 'object' && t.title);
   }, [albumTracks, remoteTracks]);
 

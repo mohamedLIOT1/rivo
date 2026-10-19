@@ -1254,6 +1254,10 @@ function AppContent() {
       showToast('👑 You are now the host of this Jam session!');
     });
 
+    s.on('jam:control_mode_changed', ({ hostOnlyControl }) => {
+      setJamSession(prev => prev ? ({ ...prev, hostOnlyControl: Boolean(hostOnlyControl) }) : null);
+    });
+
     s.on('jam:on_play_state_changed', (data) => {
       if (data?.initiatorId && data.initiatorId === s.id) return;
       setSelectedPlaylist(null);

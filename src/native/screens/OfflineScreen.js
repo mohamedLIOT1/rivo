@@ -21,6 +21,7 @@ import {
   getDownloadedTracks,
   removeDownloadedTrack,
   importLocalAudioFiles,
+  importAudioFolderFromDevice,
   scanOfflineVault,
   getStorageLocationInfo,
   deduplicateTrackList,
@@ -76,6 +77,27 @@ export default function OfflineScreen() {
       }
     } catch {
       showToast('Failed to import audio files', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleImportFolder = async () => {
+    try {
+      setActionLoading(true);
+      const res = await importAudioFolderFromDevice();
+      if (res && res.success) {
+        if (res.count > 0) {
+          showToast(`Linked ${res.count} songs from folder without copying!`, 'success');
+        } else {
+          showToast(res.message || 'Folder songs are already loaded', 'info');
+        }
+        await loadOffline();
+      } else if (res && res.message && res.message !== 'Permission not granted') {
+        showToast(res.message, 'info');
+      }
+    } catch {
+      showToast('Could not access folder', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -265,6 +287,16 @@ export default function OfflineScreen() {
               >
                 <FolderPlus size={14} color={colors.ink} />
                 <Text style={styles.heroActionText}>IMPORT</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.heroActionBtn, { backgroundColor: '#10b981' }]}
+                onPress={handleImportFolder}
+                disabled={actionLoading}
+                activeOpacity={0.8}
+              >
+                <HardDrive size={13} color={colors.ink} />
+                <Text style={styles.heroActionText}>FOLDER</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

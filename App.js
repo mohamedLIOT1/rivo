@@ -107,10 +107,27 @@ function MainAppShell() {
     }
   };
 
+  const cleanupOldApkInstallers = async () => {
+    if (Platform.OS !== 'android') return;
+    try {
+      const dirs = [FileSystem.cacheDirectory, FileSystem.documentDirectory];
+      for (const dir of dirs) {
+        if (!dir) continue;
+        const files = await FileSystem.readDirectoryAsync(dir).catch(() => []);
+        for (const file of files) {
+          if (file.toLowerCase().endsWith('.apk')) {
+            await FileSystem.deleteAsync(`${dir}${file}`, { idempotent: true }).catch(() => {});
+          }
+        }
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
     }
+    cleanupOldApkInstallers();
     checkAppUpdates();
 
     const sub = AppState.addEventListener('change', (state) => {

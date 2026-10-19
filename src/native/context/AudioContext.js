@@ -46,6 +46,7 @@ export const AudioProvider = ({ children }) => {
   const isSeekingRef = useRef(false);
   const isSmartMoodQueueRef = useRef(false);
   const playedSmartSongIdsRef = useRef(new Set());
+  const playedInQueueCycleRef = useRef(new Set());
   const shouldBePlayingRef = useRef(false);
   const loadedTrackIdRef = useRef(null);
   const isLoadingRef = useRef(false);
@@ -127,6 +128,7 @@ export const AudioProvider = ({ children }) => {
   const isJamHost = useCallback(() => {
     const session = jamSyncRef.current?.jamSession;
     if (!session) return false;
+    if (jamSyncRef.current.isHost) return true;
     const sock = jamSyncRef.current?.socket;
     const sockId = sock?.id;
     const myId = String(currentUser?._id || currentUser?.id || '');
@@ -143,8 +145,8 @@ export const AudioProvider = ({ children }) => {
   const canControlJam = useCallback(() => {
     const session = jamSyncRef.current?.jamSession;
     if (!session) return false;
-    if (!session.hostOnlyControl) return true;
-    return isJamHost();
+    if (isJamHost()) return true;
+    return !session.hostOnlyControl;
   }, [isJamHost]);
 
   const setJamSync = useCallback(({ socket, jamSession: newJamSession, isHost }) => {
@@ -311,13 +313,49 @@ export const AudioProvider = ({ children }) => {
     showToast(`Added ${tracksToAdd.length} track(s) to queue`, 'info');
   };
 
-  const removeFromQueue = (trackId) => {
-    const newQ = queueRef.current.filter(t => String(t._id || t.id) !== String(trackId));
+  const removeFromQueue = (trackIdOrIdx) => {
+    if (typeof trackIdOrIdx === 'number') {
+      const newQ = [...queueRef.current];
+      newQ.splice(trackIdOrIdx, 1);
+      setQueue(newQ);
+      return;
+    }
+    const newQ = queueRef.current.filter(t => String(t._id || t.id) !== String(trackIdOrIdx));
+    setQueue(newQ);
+  };
+
+  const reorderQueue = (fromIdx, toIdx) => {
+    if (fromIdx < 0 || toIdx < 0 || fromIdx >= queueRef.current.length || toIdx >= queueRef.current.length) return;
+    const newQ = [...queueRef.current];
+    const [moved] = newQ.splice(fromIdx, 1);
+    newQ.splice(toIdx, 0, moved);
     setQueue(newQ);
   };
 
   const clearQueue = () => {
     setQueue([]);
+  };
+
+  const toggleShuffle = () => {
+    setIsShuffle(prev => {
+      const next = !prev;
+      isShuffleRef.current = next;
+      if (next && queueRef.current.length > 1) {
+        const cur = currentTrackRef.current;
+        const curId = String(cur?._id || cur?.id || '');
+        const currentIdx = queueRef.current.findIndex(t => String(t._id || t.id) === curId);
+        if (currentIdx >= 0) {
+          const played = queueRef.current.slice(0, currentIdx + 1);
+          const upcoming = queueRef.current.slice(currentIdx + 1);
+          const shuffledUpcoming = [...upcoming].sort(() => Math.random() - 0.5);
+          setQueue([...played, ...shuffledUpcoming]);
+        } else {
+          const shuffled = [...queueRef.current].sort(() => Math.random() - 0.5);
+          setQueue(shuffled);
+        }
+      }
+      return next;
+    });
   };
 
   const startSleepTimer = (minutes) => {
@@ -936,11 +974,24 @@ export const AudioProvider = ({ children }) => {
       setIsLoading(true);
 
       if (Array.isArray(trackList) && trackList.length > 0) {
-        const tId = String(track._id || track.id);
-        const idx = trackList.findIndex(t => String(t._id || t.id) === tId);
-        const startIdx = idx >= 0 ? idx : 0;
-        const capped = trackList.slice(startIdx, startIdx + 10);
-        setQueue(capped.length > 0 ? capped : [track]);
+        let finalQ = trackList;
+        if (isShuffleRef.current && trackList.length > 1) {
+          const tid = String(track._id || track.id || '');
+          const others = trackList.filter(t => String(t._id || t.id) !== tid);
+          finalQ = [track, ...[...others].sort(() => Math.random() - 0.5)];
+        }
+        setQueue(finalQ);
+      } else if (!trackList || trackList.length <= 1) {
+        const isTargetQuran = Boolean(isQuranContent(track));
+        const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
+          .filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
+        const tid = String(track._id || track.id || '');
+        const others = pool.filter(t => String(t._id || t.id) !== tid);
+        let finalQ = [track, ...others];
+        if (isShuffleRef.current && others.length > 1) {
+          finalQ = [track, ...[...others].sort(() => Math.random() - 0.5)];
+        }
+        setQueue(finalQ);
       }
 
       // Proactively broadcast track play event immediately to Jam room if active and user can control
@@ -1152,15 +1203,8 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
-      // If playing with target time or from remote Jam, compensate for stream connect delay only after 2s into track
-      // At the start of the song (safeTargetSec <= 2), NEVER jump ahead: both host and members start cleanly from 0:00!
-      if (safeTargetSec > 2) {
-        const streamConnectElapsed = (Date.now() - connectStartTime) / 1000;
-        const compensatedTargetSec = safeTargetSec + Math.min(streamConnectElapsed, 5);
-        if (compensatedTargetSec > 0.1) {
-          await sound.setPositionAsync(Math.round(compensatedTargetSec * 1000)).catch(() => {});
-        }
-      } else if (safeTargetSec > 0.1) {
+      // If playing with target time or from remote Jam, seek cleanly without artificial offsets
+      if (safeTargetSec > 0.1) {
         await sound.setPositionAsync(Math.round(safeTargetSec * 1000)).catch(() => {});
       }
 
@@ -1288,31 +1332,40 @@ export const AudioProvider = ({ children }) => {
     }
     const safeIndex = Math.max(0, Math.min(startIndex, list.length - 1));
     const targetTrack = list[safeIndex];
-    const cappedList = list.slice(safeIndex, safeIndex + 10);
-    setQueue(cappedList);
-    return playTrack(targetTrack, cappedList);
+    let finalQueue = [...list];
+    if (isShuffleRef.current && finalQueue.length > 1) {
+      const rest = finalQueue.filter((_, idx) => idx !== safeIndex);
+      finalQueue = [targetTrack, ...rest.sort(() => Math.random() - 0.5)];
+    }
+    setQueue(finalQueue);
+    return playTrack(targetTrack, finalQueue);
   };
 
   const togglePlay = async (isRemoteParam = false) => {
     const isRemote = isRemoteParam === true;
     if (isResolvingRef.current) return;
+
+    // Enforce lock: If in Jam room and locked to host, non-hosts cannot toggle playback
+    if (!isRemote && jamSyncRef.current.jamSession && !canControlJam()) {
+      return;
+    }
+
     const nextPlaying = !isPlayingRef.current;
     if (isLoading && nextPlaying) return;
 
+    const curTrack = currentTrackRef.current || jamSyncRef.current.jamSession?.currentTrack;
+
     if (!soundRef.current) {
-      if (jamSyncRef.current.jamSession?.currentTrack) {
-        return playTrack(jamSyncRef.current.jamSession.currentTrack, queueRef.current);
-      }
-      if (currentTrackRef.current) return playTrack(currentTrackRef.current, queueRef.current);
+      if (curTrack) return playTrack(curTrack, queueRef.current);
       if (queueRef.current.length > 0) return playTrack(queueRef.current[0], queueRef.current);
       return;
     }
-    const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
+    const isLikedTrack = curTrack ? likedTrackIds.some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
     shouldBePlayingRef.current = nextPlaying;
     isPlayingRef.current = nextPlaying;
     setIsPlaying(nextPlaying);
     const curPos = playbackStatusRef.current?.currentTime || 0;
-    const curDur = playbackStatusRef.current?.duration || Number(currentTrackRef.current?.duration || 240);
+    const curDur = playbackStatusRef.current?.duration || Number(curTrack?.duration || 240);
 
     // ⚡ Optimistic Socket Broadcast IMMEDIATELY (No waiting on hardware pauseAsync!)
     if (!isRemote && jamSyncRef.current.jamSession && jamSyncRef.current.socket && canControlJam()) {
@@ -1324,7 +1377,7 @@ export const AudioProvider = ({ children }) => {
         jamSyncRef.current.socket.emit('jam:sync_play_state', {
           roomCode,
           isPlaying: nextPlaying,
-          currentTrack: currentTrackRef.current,
+          currentTrack: curTrack,
           currentTime: curPos,
           initiatorId: jamSyncRef.current.socket.id,
           userId: currentUser?._id || currentUser?.id,
@@ -1369,6 +1422,9 @@ export const AudioProvider = ({ children }) => {
 
   const seekTo = async (secs, isRemoteParam = false) => {
     const isRemote = isRemoteParam === true;
+    if (!isRemote && jamSyncRef.current.jamSession && !canControlJam()) {
+      return;
+    }
     const safeSecs = Math.max(0, Number(secs) || 0);
     const wasPlaying = isPlayingRef.current;
     isSeekingRef.current = true;
@@ -1463,7 +1519,7 @@ export const AudioProvider = ({ children }) => {
         }
         (queueRef.current || []).forEach(t => playedSmartSongIdsRef.current.add(String(t._id || t.id)));
 
-        const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0 ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : queueRef.current || []))
+        const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
           .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
 
         let next10 = getSmartTasteAndMoodTracks({
@@ -1472,7 +1528,7 @@ export const AudioProvider = ({ children }) => {
           followedArtists: currentUser?.following || [],
           likedTrackIds,
           excludeTrackIds: playedSmartSongIdsRef.current,
-          limit: 10,
+          limit: 30,
         });
 
         if (!next10 || next10.length === 0) {
@@ -1483,7 +1539,7 @@ export const AudioProvider = ({ children }) => {
             followedArtists: currentUser?.following || [],
             likedTrackIds,
             excludeTrackIds: playedSmartSongIdsRef.current,
-            limit: 10,
+            limit: 30,
           });
         }
 
@@ -1495,14 +1551,14 @@ export const AudioProvider = ({ children }) => {
       } catch (err) {}
 
       // Fallback: pick matching tracks from pool
-      const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0 ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : queueRef.current || []))
+      const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
         .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
       if (pool.length > 0) {
         const remaining = pool.filter(t => String(t._id || t.id) !== currentId);
         const candidates = remaining.length > 0 ? remaining : pool;
-        const fresh10 = candidates.slice(0, 10);
-        setQueue(fresh10);
-        playTrack(fresh10[0], fresh10);
+        const freshQ = candidates.slice(0, 30);
+        setQueue(freshQ);
+        playTrack(freshQ[0], freshQ);
       }
     };
 
@@ -1518,6 +1574,76 @@ export const AudioProvider = ({ children }) => {
       i = q.findIndex(t => String(t.title || '').trim().toLowerCase() === currentTitle);
     }
 
+    // Priority 1: Repeat Current Track (لو مشغل الrepeat علي الاغنيه الحاليا ف الrepeat يبقا الاوليه)
+    if (repeatModeRef.current === 'one') {
+      if (cur) {
+        seekTo(0);
+        if (soundRef.current) {
+          soundRef.current.replayAsync().catch(() => {
+            soundRef.current.playAsync().catch(() => {});
+          });
+        }
+        return;
+      }
+    }
+
+    // Priority 2: Repeat Queue (و لو مشغل الrepeat علي الqueue ف يعمل شافل علي الqueue دي بس و يعيد في الاغاني)
+    if (repeatModeRef.current === 'all') {
+      if (isShuffleRef.current) {
+        // User wants to shuffle and repeat ONLY within this existing queue!
+        // Never remove songs from queue!
+        if (!playedInQueueCycleRef.current) {
+          playedInQueueCycleRef.current = new Set();
+        }
+        if (currentId) {
+          playedInQueueCycleRef.current.add(currentId);
+        }
+
+        const unplayedInQueue = q.filter(t => !playedInQueueCycleRef.current.has(String(t._id || t.id)));
+
+        if (unplayedInQueue.length > 0) {
+          const nextTrack = unplayedInQueue[Math.floor(Math.random() * unplayedInQueue.length)];
+          playedInQueueCycleRef.current.add(String(nextTrack._id || nextTrack.id));
+          playTrack(nextTrack, q);
+          return;
+        } else {
+          // All songs in this queue have been played once in this cycle!
+          // Reshuffle THIS same queue and restart cycle
+          playedInQueueCycleRef.current.clear();
+          const reshuffled = [...q].sort(() => Math.random() - 0.5);
+          setQueue(reshuffled);
+          const nextTrack = reshuffled[0];
+          playedInQueueCycleRef.current.add(String(nextTrack._id || nextTrack.id));
+          playTrack(nextTrack, reshuffled);
+          return;
+        }
+      } else {
+        // Sequential repeat for queue
+        if (i >= 0 && i < q.length - 1) {
+          playTrack(q[i + 1], q);
+          return;
+        } else {
+          playTrack(q[0], q);
+          return;
+        }
+      }
+    }
+
+    // Priority 3: Shuffle with Repeat OFF (لما الشافل بتبقا شغاله يفضل يشغل اغاني و لو خلصت ف يشغل حسب اقتراحات الai)
+    if (isShuffleRef.current) {
+      const remainingQ = q.filter(t => String(t._id || t.id) !== currentId);
+      if (remainingQ.length > 0) {
+        setQueue(remainingQ);
+        playTrack(remainingQ[0], remainingQ);
+        return;
+      } else {
+        // Queue is completely finished!
+        // Automatically fetch and play AI smart taste recommendations so music never stops!
+        triggerAutoQueue();
+        return;
+      }
+    }
+
     const isSmartQueue = isSmartMoodQueueRef.current || q.some(t => t.isSmartMoodQueue);
     if (isSmartQueue) {
       if (i >= 0 && i < q.length - 1) {
@@ -1525,16 +1651,17 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
-      // Reached the end of the 10 songs! Refresh and fetch 10 BRAND NEW tracks matching current mood & taste!
+      // Reached the end of smart queue! Refresh and fetch brand new tracks matching current mood & taste
       q.forEach(t => playedSmartSongIdsRef.current.add(String(t._id || t.id)));
-      const pool = (INITIAL_TRACKS && INITIAL_TRACKS.length > 0) ? INITIAL_TRACKS : (userTracks && userTracks.length > 0 ? userTracks : q);
+      const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
+        .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
       let next10 = getSmartTasteAndMoodTracks({
         allTracks: pool,
         currentUser,
         followedArtists: currentUser?.following || [],
         likedTrackIds,
         excludeTrackIds: playedSmartSongIdsRef.current,
-        limit: 10,
+        limit: 30,
       });
 
       if (!next10 || next10.length === 0) {
@@ -1545,38 +1672,23 @@ export const AudioProvider = ({ children }) => {
           followedArtists: currentUser?.following || [],
           likedTrackIds,
           excludeTrackIds: playedSmartSongIdsRef.current,
-          limit: 10,
+          limit: 30,
         });
       }
 
       if (next10 && next10.length > 0) {
         const tagged = next10.map(t => ({ ...t, isSmartMoodQueue: true }));
-        let newQ = tagged;
-        if (isShuffle && tagged.length > 1) {
-          const [first, ...rest] = tagged;
-          newQ = [first, ...[...rest].sort(() => Math.random() - 0.5)];
-        }
-        setQueue(newQ);
-        playTrack(newQ[0], newQ, false, 0, false, true);
+        setQueue(tagged);
+        playTrack(tagged[0], tagged, false, 0, false, true);
         return;
       }
     }
 
-    if (isShuffle) {
-      // Pick next song avoiding immediate recent repeats
-      const recentIds = new Set(historyStackRef.current.slice(-5).map(t => String(t._id || t.id)));
-      recentIds.add(currentId);
-      const candidates = q.filter(t => !recentIds.has(String(t._id || t.id)));
-      const nextTrack = (candidates.length > 0)
-        ? candidates[Math.floor(Math.random() * candidates.length)]
-        : q[(i + 1) % q.length];
-      playTrack(nextTrack, q);
-    } else if (i >= 0 && i < q.length - 1) {
+    if (i >= 0 && i < q.length - 1) {
       playTrack(q[i + 1], q);
-    } else if (repeatModeRef.current === 'all' && q.length > 1) {
+    } else if (repeatModeRef.current === 'all' && q.length > 0) {
       playTrack(q[0], q);
     } else {
-      // Reached the end of the queue! Autoplay next songs obeying strict Quran/Music boundary!
       triggerAutoQueue();
     }
   };
@@ -1726,8 +1838,9 @@ export const AudioProvider = ({ children }) => {
     let targetTime = Number(syncTime) || 0;
     const refTimestamp = Number(updatedAt || serverTime || 0);
     if (syncPlaying && refTimestamp > 0) {
-      const elapsed = Math.max(0, (Date.now() - refTimestamp) / 1000);
-      if (elapsed > 0 && elapsed < 3600) {
+      const elapsed = (Date.now() - refTimestamp) / 1000;
+      // Clamp to network transit latency (0 - 0.8s), preventing multi-second device clock skew
+      if (elapsed > 0 && elapsed < 0.8) {
         targetTime += elapsed;
       }
     }
@@ -1759,13 +1872,16 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
-    // Debounce duplicate socket emissions occurring within 350ms for same track and position
-    if (!isDifferentTrack && Math.abs(targetTime - (lastSyncPayloadRef.current.time || 0)) < 0.5 && (nowTime - (lastSyncPayloadRef.current.timestamp || 0) < 350)) {
+    // ONLY debounce duplicate background periodic clock emissions occurring within 350ms for same track and position.
+    // NEVER debounce user-initiated actions (play, pause) or play-state transitions!
+    const isStateTransition = (syncPlaying !== undefined && Boolean(syncPlaying) !== isPlayingRef.current);
+    const isUserAction = Boolean(userAction || !isPeriodic);
+    if (!isUserAction && !isStateTransition && !isDifferentTrack && Math.abs(targetTime - (lastSyncPayloadRef.current.time || 0)) < 0.5 && (nowTime - (lastSyncPayloadRef.current.timestamp || 0) < 350)) {
       return;
     }
     lastSyncPayloadRef.current = { time: targetTime, trackId: syncTrackId || '', timestamp: nowTime };
 
-    // If remote state is PAUSED: pause immediately without any seeking or playback re-triggering!
+    // ── IF REMOTE STATE IS PAUSED: Pause immediately without seeking or re-triggering! ──
     if (syncPlaying === false) {
       shouldBePlayingRef.current = false;
       setIsPlaying(false);
@@ -1801,18 +1917,32 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
+    // ── REMOTE STATE IS PLAYING: Resume playback for ALL parties (Host and Member) ──
     shouldBePlayingRef.current = true;
     isPlayingRef.current = true;
     setIsPlaying(true);
 
+    if (jamSyncRef.current.jamSession) {
+      jamSyncRef.current.jamSession.isPlaying = true;
+      if (syncTrack) jamSyncRef.current.jamSession.currentTrack = syncTrack;
+      if (targetTime !== undefined) jamSyncRef.current.jamSession.currentTime = targetTime;
+      jamSyncRef.current.jamSession.updatedAt = Date.now();
+      setJamSessionState({ ...jamSyncRef.current.jamSession });
+    }
+
     if (isDifferentTrack || !soundRef.current) {
       await playTrack(syncTrack || cur, null, false /* isRetry */, targetTime, true /* isRemote */);
     } else {
-      // Host is master playback source: ignore periodic time sync updates of the same track!
-      if (isJamHost()) {
-        if (soundRef.current && !isPlayingRef.current) {
-          await soundRef.current.playAsync().catch(() => {});
-        }
+      // Sound is already loaded: resume audio playback immediately!
+      try {
+        await soundRef.current.playAsync();
+      } catch (e) {
+        // Fallback: If playAsync failed or sound was unloaded, re-load and play
+        await playTrack(syncTrack || cur, null, false, targetTime, true);
+      }
+
+      // Host is master playback source: ignore periodic background clock sync of the same track!
+      if (isPeriodic && isJamHost()) {
         return;
       }
 
@@ -1822,20 +1952,11 @@ export const AudioProvider = ({ children }) => {
       const isStartPhase = (targetTime || 0) < 15 || localCur < 15;
       const driftThreshold = isStartPhase ? 8.0 : 3.5;
 
-      if (targetTime !== undefined && drift > driftThreshold && (nowTime - (lastRemoteSeekRef.current || 0) > 4500)) {
+      if (!isJamHost() && targetTime !== undefined && drift > driftThreshold && (nowTime - (lastRemoteSeekRef.current || 0) > 4500)) {
         lastRemoteSeekRef.current = nowTime;
         seekTo(targetTime, true);
       }
-      if (soundRef.current) {
-        await soundRef.current.playAsync().catch(() => {});
-      }
-      if (jamSyncRef.current.jamSession) {
-        jamSyncRef.current.jamSession.isPlaying = true;
-        if (syncTrack) jamSyncRef.current.jamSession.currentTrack = syncTrack;
-        jamSyncRef.current.jamSession.currentTime = targetTime;
-        jamSyncRef.current.jamSession.updatedAt = Date.now();
-        setJamSessionState({ ...jamSyncRef.current.jamSession });
-      }
+
       const trackToUse = syncTrack || cur;
       if (trackToUse) {
         const isLikedTrack = likedTrackIds.some(id => String(id) === String(trackToUse._id || trackToUse.id));
@@ -1852,8 +1973,8 @@ export const AudioProvider = ({ children }) => {
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress: progressRef.current,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
-    playTrack, playPlaylist, togglePlay, seekTo, setIsShuffle, toggleRepeat, playNextTrack, playPrevTrack,
-    addToQueue, addMultipleToQueue, setQueue, removeFromQueue, clearQueue,
+    playTrack, playPlaylist, togglePlay, seekTo, isShuffle, setIsShuffle, toggleShuffle, toggleRepeat, playNextTrack, playPrevTrack,
+    addToQueue, addMultipleToQueue, setQueue, removeFromQueue, reorderQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
     handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
     autoDownloadFinished, toggleAutoDownloadFinished,

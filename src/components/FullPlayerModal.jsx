@@ -316,12 +316,6 @@ export default function FullPlayerModal({
       setLocalLyrics(null);
     }
 
-    // If track is local import or downloaded, do not generate AI lyrics
-    if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded) {
-      setLocalLyrics([]);
-      return;
-    }
-
     let isCancelled = false;
     const qTitle = currentTrack.title;
     const qArtist = currentTrack.artist;
@@ -346,7 +340,10 @@ export default function FullPlayerModal({
             currentTrack.isVerifiedLyrics = ver;
             currentTrack.lyricsVerifiedBy = d.verifiedBy || null;
           } else if (!currentTrack.lyrics || currentTrack.lyrics.length === 0) {
+            // For imported or downloaded tracks without lyrics, do not auto-run AI in background,
+            // let the user click "Auto-Search Lyrics" if they wish.
             if (currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded || isCancelled) {
+              setLocalLyrics([]);
               return;
             }
             setIsLyricsVerified(false);
@@ -370,13 +367,21 @@ export default function FullPlayerModal({
                 setIsLyricsVerified(false);
                 setLyricsVerifiedBy(null);
                 currentTrack.lyrics = parsedAi;
+              } else {
+                setLocalLyrics([]);
               }
             })
-            .catch(() => {});
+            .catch(() => {
+              if (!isCancelled) setLocalLyrics([]);
+            });
           }
         })
-        .catch(() => {});
-    }, 350);
+        .catch(() => {
+          if (!isCancelled && (!currentTrack.lyrics || currentTrack.lyrics.length === 0)) {
+            setLocalLyrics([]);
+          }
+        });
+    }, 250);
 
     return () => {
       isCancelled = true;
@@ -628,29 +633,65 @@ export default function FullPlayerModal({
   const handleGenerateLyrics = async () => {
     if (!currentTrack) return;
     setIsGeneratingLyrics(true);
+    const qTitle = currentTrack.title;
+    const qArtist = currentTrack.artist;
+    const tId = currentTrack.id || currentTrack._id;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
+      // 1. Try standard lyrics API (LRCLIB, lyrics.ovh, database)
+      const lyricsRes = await fetch(
+        `${API_BASE_URL}/api/tracks/lyrics?trackId=${encodeURIComponent(tId || '')}&title=${encodeURIComponent(qTitle || '')}&artist=${encodeURIComponent(qArtist || '')}`
+      );
+      if (lyricsRes.ok) {
+        const d = await lyricsRes.json();
+        if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
+          const parsed = parseLrcLyrics(d.lyrics);
+          currentTrack.lyrics = parsed;
+          setLocalLyrics(parsed);
+          setTranslatedLyrics(null);
+          setShowTranslation(false);
+          setIsLyricsVerified(Boolean(d.isVerified));
+          setLyricsVerifiedBy(d.verifiedBy || null);
+          showToast('Lyrics found successfully!');
+          setIsGeneratingLyrics(false);
+          return;
+        }
+      }
+
+      // 2. Try AI song lyrics generator / search
+      const aiRes = await fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          trackId: currentTrack.id || currentTrack._id,
-          title: currentTrack.title,
-          artist: currentTrack.artist,
+          trackId: tId,
+          title: qTitle,
+          artist: qArtist,
           duration: currentTrack.duration || 180,
           audioUrl: currentTrack.audioUrl
         })
       });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
-        currentTrack.lyrics = data.lyrics;
-        setLocalLyrics(data.lyrics);
-        setTranslatedLyrics(null);
-        setShowTranslation(false);
+      if (aiRes.ok) {
+        const data = await aiRes.json();
+        if (data.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
+          const parsedAi = parseLrcLyrics(data.lyrics);
+          currentTrack.lyrics = parsedAi;
+          setLocalLyrics(parsedAi);
+          setTranslatedLyrics(null);
+          setShowTranslation(false);
+          setIsLyricsVerified(Boolean(data.isVerified));
+          setLyricsVerifiedBy(data.verifiedBy || null);
+          showToast('Lyrics generated via AI!');
+          setIsGeneratingLyrics(false);
+          return;
+        }
       }
+
+      showToast('No lyrics found for this song.');
     } catch (e) {
-      console.warn('LRCLIB Lyrics error:', e);
+      console.warn('Lyrics search error:', e);
+      showToast('Error searching for lyrics.');
+    } finally {
+      setIsGeneratingLyrics(false);
     }
-    setIsGeneratingLyrics(false);
   };
 
   const [isClearLyricsConfirmOpen, setIsClearLyricsConfirmOpen] = useState(false);
@@ -716,23 +757,16 @@ export default function FullPlayerModal({
 
   const scrollContainerToActive = useCallback((container, itemEl, behavior = 'smooth') => {
     if (!container || !itemEl) return;
-    // Don't scroll if container or item is hidden or has 0 dimensions
     if (container.clientHeight <= 0 || itemEl.clientHeight <= 0) return;
 
-    let offsetTop = itemEl.offsetTop;
-    let parent = itemEl.offsetParent;
-    while (parent && parent !== container) {
-      offsetTop += parent.offsetTop;
-      parent = parent.offsetParent;
-    }
-
-    const targetScroll = offsetTop - (container.clientHeight / 2) + (itemEl.clientHeight / 2);
+    const targetScroll = itemEl.offsetTop - (container.clientHeight / 2) + (itemEl.clientHeight / 2);
+    if (Math.abs(container.scrollTop - targetScroll) < 12) return;
 
     isProgrammaticScrollRef.current = true;
     if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
     programmaticScrollTimerRef.current = setTimeout(() => {
       isProgrammaticScrollRef.current = false;
-    }, 700);
+    }, 450);
 
     container.scrollTo({
       top: Math.max(0, targetScroll),
@@ -919,7 +953,13 @@ export default function FullPlayerModal({
       onTouchStart={handleUserInteraction} 
       onWheel={handleUserInteraction}
       className="flex-1 overflow-y-auto py-16 px-2 relative h-full select-none"
-      style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+      style={{
+        scrollbarWidth: 'none',
+        WebkitOverflowScrolling: 'touch',
+        contain: 'content',
+        willChange: 'scroll-position',
+        transform: 'translateZ(0)',
+      }}
     >
       {lyrics.length > 0 ? (
         <div className="py-2 px-1 space-y-2 pb-48">
@@ -1326,9 +1366,9 @@ export default function FullPlayerModal({
           <img 
             src={currentTrack.cover} 
             alt="" 
-            className="absolute inset-0 w-full h-full object-cover scale-150 blur-3xl opacity-70 contrast-125 saturate-150 transition-opacity duration-1000" 
+            className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-60 transition-opacity duration-1000" 
           />
-          <div className={`absolute inset-0 ${isDark ? 'bg-black/60' : 'bg-black/40'} backdrop-blur-2xl transition-colors duration-500`} />
+          <div className={`absolute inset-0 ${isDark ? 'bg-black/75' : 'bg-black/50'} ${desktopSideTab === 'lyrics' || activeTab === 'lyrics' ? 'backdrop-blur-sm' : 'backdrop-blur-lg'} transition-colors duration-500`} />
         </div>
       ) : (
         <div 

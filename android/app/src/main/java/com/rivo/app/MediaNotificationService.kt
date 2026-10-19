@@ -321,7 +321,7 @@ class MediaNotificationService : Service() {
             ACTION_FORWARD -> dispatchMediaAction("forward")
         }
 
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private fun dispatchMediaAction(action: String) {

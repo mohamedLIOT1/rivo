@@ -14,9 +14,9 @@ def fetch_json(endpoint):
 print("=== 1. VERIFY APP VERSION ===")
 v_data = fetch_json('/api/app/version')
 print(f"Version: {v_data.get('version')}, Android Build: {v_data.get('platforms', {}).get('android', {}).get('build')}, iOS Build: {v_data.get('platforms', {}).get('ios', {}).get('build')}")
-assert v_data.get('version') == '1.8.5'
-assert v_data.get('platforms', {}).get('android', {}).get('build') == 54
-assert v_data.get('platforms', {}).get('ios', {}).get('build') == 54
+assert v_data.get('version') == '1.8.8'
+assert v_data.get('platforms', {}).get('android', {}).get('build') == 57
+assert v_data.get('platforms', {}).get('ios', {}).get('build') == 57
 
 print("\n=== 2. VERIFY ALBUMS API ===")
 alb_data = fetch_json('/api/albums')
@@ -62,7 +62,7 @@ print(f"Hussary artist: {hussary_art.get('name')}, Songs: {hussary_art.get('trac
 assert hussary_art.get('trackCount') == 114
 
 print("\n=== 4. VERIFY DOWNLOAD ARTIFACTS ===")
-for path in ['/downloads/Rivo-v1.8.5.apk', '/downloads/Rivo-v1.8.5.ipa', '/downloads/Rivo.apk', '/downloads/Rivo.ipa']:
+for path in ['/downloads/Rivo-v1.8.8.apk', '/downloads/Rivo-v1.8.8.ipa', '/downloads/Rivo.apk', '/downloads/Rivo.ipa']:
     req = urllib.request.Request(f'{BASE}{path}', headers={'User-Agent': 'Mozilla/5.0'}, method='HEAD')
     with urllib.request.urlopen(req) as resp:
         cl = resp.headers.get('Content-Length')

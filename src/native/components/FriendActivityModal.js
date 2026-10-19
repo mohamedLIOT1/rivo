@@ -162,7 +162,13 @@ export default function FriendActivityModal({ visible, onClose }) {
                 </Text>
               </View>
             )}
-            {item.isOnline && <View style={styles.onlineDot} />}
+            {item.isLive ? (
+              <View style={[styles.onlineDot, { backgroundColor: '#10b981', borderColor: '#0b1110', borderWidth: 2 }]} />
+            ) : item.isOnline ? (
+              <View style={[styles.onlineDot, { backgroundColor: '#34d399' }]} />
+            ) : (
+              <View style={[styles.onlineDot, { backgroundColor: '#64748b' }]} />
+            )}
           </View>
 
           {/* Info */}
@@ -171,20 +177,42 @@ export default function FriendActivityModal({ visible, onClose }) {
               <Text style={styles.friendName} numberOfLines={1}>
                 {item.name || 'Anonymous Listener'}
               </Text>
-              {isLive && (
+              {isLive ? (
                 <View style={styles.liveBadge}>
-                  <Radio size={10} color="#0b1110" strokeWidth={3} />
-                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                  <Radio size={9} color="#0b1110" strokeWidth={3} />
+                  <Text style={styles.liveBadgeText}>LISTENING NOW</Text>
+                </View>
+              ) : item.isOnline ? (
+                <View style={[styles.liveBadge, { backgroundColor: '#334155' }]}>
+                  <Text style={[styles.liveBadgeText, { color: '#cbd5e1' }]}>ONLINE</Text>
+                </View>
+              ) : (
+                <View style={[styles.liveBadge, { backgroundColor: '#1e293b' }]}>
+                  <Text style={[styles.liveBadgeText, { color: '#64748b' }]}>OFFLINE</Text>
                 </View>
               )}
             </View>
 
-            {listening ? (
+            {isLive && listening ? (
               <View style={styles.trackInfoRow}>
-                <Disc size={12} color="#17a398" strokeWidth={2.4} />
-                <Text style={styles.trackTitle} numberOfLines={1}>
+                <Disc size={12} color="#26c4b7" strokeWidth={2.4} />
+                <Text style={[styles.trackTitle, { color: '#26c4b7', fontWeight: '700' }]} numberOfLines={1}>
                   {listening.title || 'Playing song'}
                   {listening.artist ? ` • ${listening.artist}` : ''}
+                </Text>
+              </View>
+            ) : listening && item.isOnline ? (
+              <View style={styles.trackInfoRow}>
+                <Disc size={11} color="#64748b" strokeWidth={2} />
+                <Text style={[styles.trackTitle, { color: '#94a3b8' }]} numberOfLines={1}>
+                  Paused: {listening.title || 'Track'}
+                </Text>
+              </View>
+            ) : listening && !item.isOnline ? (
+              <View style={styles.trackInfoRow}>
+                <Disc size={11} color="#475569" strokeWidth={1.8} />
+                <Text style={[styles.trackTitle, { color: '#64748b' }]} numberOfLines={1}>
+                  Last played: {listening.title || 'Track'}
                 </Text>
               </View>
             ) : (
@@ -196,7 +224,7 @@ export default function FriendActivityModal({ visible, onClose }) {
         </TouchableOpacity>
 
         {/* 1-Tap Play Action */}
-        {listening && (
+        {isLive && listening && (
           <TouchableOpacity
             style={styles.listenAlongBtn}
             onPress={() => handleListenAlong(item)}

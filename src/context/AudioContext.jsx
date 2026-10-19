@@ -1868,8 +1868,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       if (nextIdx >= activeList.length) {
-        // Queue reached the end! Instead of repeating the same 1 or 2 songs:
-        // Use AI recommendations to continue playback seamlessly!
+        // Priority: If repeat queue is on, reshuffle and repeat THIS queue only!
+        if (repeatModeRef.current === 'all' || isRepeatRef.current) {
+          const reshuffled = shuffleArray(activeList);
+          currentQueueRef.current = reshuffled;
+          setCurrentQueue(reshuffled);
+          currentQueueIndexRef.current = 0;
+          setCurrentQueueIndex(0);
+          playTrack(reshuffled[0], reshuffled, false, 0);
+          return;
+        }
+
+        // When repeat is off: Use AI recommendations to continue playback seamlessly!
         (async () => {
           try {
             const fresh = await fetchSmartShuffleTracks(cur, activeList);
@@ -1900,16 +1910,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
             setCurrentQueueIndex(newIdx);
             playTrack(randomPick, updatedQueue, false, newIdx);
             return;
-          }
-
-          // If entire library is exhausted and repeat is on:
-          if (repeatModeRef.current === 'all' || isRepeatRef.current) {
-            const reshuffled = shuffleArray(activeList);
-            currentQueueRef.current = reshuffled;
-            setCurrentQueue(reshuffled);
-            currentQueueIndexRef.current = 0;
-            setCurrentQueueIndex(0);
-            playTrack(reshuffled[0], reshuffled, false, 0);
           }
         })();
         return;

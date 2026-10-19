@@ -5,6 +5,7 @@ const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
 const BOT_TOKEN = process.env.BOT_TOKEN;
+const DISCORD_APP_ID = process.env.DISCORD_CLIENT_ID || '1440997674630250506';
 
 // 🔒 Token Encryption & Decryption
 function encryptToken(text) {
@@ -76,12 +77,26 @@ async function disconnectUserSession(userId) {
 async function applyTrackPresence(client, track, currentTime = 0) {
   if (!client || !client.user || !track) return;
   try {
+    const appId = DISCORD_APP_ID;
     const curSec = Math.max(0, Number(currentTime) || 0);
     const startTs = Date.now() - Math.round(curSec * 1000);
     const durationSec = track.duration && track.duration > 0 ? Math.round(track.duration) : 0;
-    const appId = '1440997674630250506';
+    const rawCover = track.cover || track.coverUrl || '';
+    let resolvedCover = 'https://rivo-m.duckdns.org/discord-badge.png';
+    if (rawCover && typeof rawCover === 'string') {
+      const trimmed = rawCover.trim();
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        resolvedCover = trimmed;
+      } else if (trimmed.startsWith('//')) {
+        resolvedCover = `https:${trimmed}`;
+      } else if (trimmed.startsWith('/')) {
+        resolvedCover = `https://rivo-m.duckdns.org${trimmed}`;
+      } else if (!trimmed.startsWith('data:') && !trimmed.startsWith('file:')) {
+        resolvedCover = `https://rivo-m.duckdns.org/${trimmed}`;
+      }
+    }
 
-    const coverUrl = track.cover && track.cover.startsWith('http') ? track.cover : 'https://rivo-m.duckdns.org/discord-badge.png';
+    const coverUrl = resolvedCover;
     const iconUrl = 'https://rivo-m.duckdns.org/discord-badge.png';
 
     let largeAsset = null;
@@ -105,9 +120,13 @@ async function applyTrackPresence(client, track, currentTime = 0) {
 
     if (largeAsset) {
       r.setAssetsLargeImage(largeAsset).setAssetsLargeText(track.album || track.title || 'Rivo');
+    } else if (coverUrl) {
+      r.setAssetsLargeImage(coverUrl).setAssetsLargeText(track.album || track.title || 'Rivo');
     }
     if (smallAsset) {
       r.setAssetsSmallImage(smallAsset).setAssetsSmallText('Rivo Music');
+    } else if (iconUrl) {
+      r.setAssetsSmallImage(iconUrl).setAssetsSmallText('Rivo Music');
     }
 
     if (durationSec > 0) {

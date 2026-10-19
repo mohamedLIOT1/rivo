@@ -1525,6 +1525,90 @@ export function parseAudioMetadataFromFilename(filename) {
   };
 }
 
+export const importAudioFolderFromDevice = async () => {
+  try {
+    if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (!permissions.granted) {
+        return { success: false, count: 0, tracks: [], message: 'Permission not granted' };
+      }
+      const dirUri = permissions.directoryUri;
+      const fileUris = await FileSystem.StorageAccessFramework.readDirectoryAsync(dirUri);
+
+      const audioUris = (fileUris || []).filter(uri => {
+        const decoded = decodeURIComponent(uri).toLowerCase();
+        return /\.(mp3|m4a|wav|aac|flac|ogg|opus)$/i.test(decoded);
+      });
+
+      if (audioUris.length === 0) {
+        return { success: false, count: 0, tracks: [], message: 'No audio files found in selected folder' };
+      }
+
+      await ensureDirs();
+      const existing = await getDownloadedTracks();
+      const existingUris = new Set(existing.map(t => t.localAudioUri || t.nativeAudioUri || t.audioUrl));
+      const newTracks = [];
+
+      for (const uri of audioUris) {
+        try {
+          if (existingUris.has(uri)) continue;
+          const decoded = decodeURIComponent(uri);
+          const parts = decoded.split('/');
+          const rawName = parts[parts.length - 1] || 'Track.mp3';
+          const cleanName = rawName.replace(/^.*%2F/, '');
+          const fileId = `folder_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          const { title: filenameTitle, artist: filenameArtist } = parseAudioMetadataFromFilename(cleanName);
+
+          const title = cleanMetadataString(filenameTitle || cleanName.replace(/\.[^/.]+$/, ''), 'Local Track');
+          const artist = cleanMetadataString(filenameArtist || 'Device Music', 'Device Music');
+
+          const newTrack = {
+            id: fileId,
+            _id: fileId,
+            title,
+            artist,
+            album: 'Device Music Folder',
+            source: 'Device Folder',
+            publisher: 'Device Folder',
+            signature: 'Device Folder',
+            localAudioUri: uri,
+            nativeAudioUri: uri,
+            audioUrl: uri,
+            coverUrl: null,
+            cover: null,
+            lyrics: null,
+            embeddedLyrics: null,
+            isDownloaded: true,
+            downloaded: true,
+            isLocalImport: true,
+            isDirectFolderLink: true,
+            downloadedAt: new Date().toISOString(),
+            fileSize: 0,
+          };
+
+          newTracks.push(newTrack);
+        } catch (e) {
+          console.warn('[downloadManager] Error indexing folder track:', uri, e);
+        }
+      }
+
+      if (newTracks.length > 0) {
+        const updated = deduplicateTrackList([...newTracks, ...existing]);
+        await saveToStorageAndManifest(updated);
+        return { success: true, count: newTracks.length, tracks: updated };
+      }
+
+      return { success: true, count: 0, tracks: existing, message: 'Folder tracks are already indexed' };
+    }
+
+    // Fallback for iOS or platforms without SAF
+    return await importLocalAudioFiles();
+  } catch (err) {
+    console.warn('[downloadManager] importAudioFolderFromDevice failed:', err);
+    throw err;
+  }
+};
+
 export const importLocalAudioFiles = async () => {
   try {
     const result = await DocumentPicker.getDocumentAsync({
@@ -1553,15 +1637,6 @@ export const importLocalAudioFiles = async () => {
           from: asset.uri,
           to: destAudioPath,
         });
-
-        if (PERSISTENT_DIR) {
-          try {
-            await FileSystem.copyAsync({
-              from: destAudioPath,
-              to: `${PERSISTENT_DIR}${fileId}.${ext}`,
-            }).catch(() => {});
-          } catch {}
-        }
 
         const { title: filenameTitle, artist: filenameArtist } = parseAudioMetadataFromFilename(originalName);
         const id3Meta = await extractId3Metadata(destAudioPath, fileId);

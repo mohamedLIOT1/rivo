@@ -229,6 +229,10 @@ export const SocketProvider = ({ children }) => {
       setJamSession(data);
     });
 
+    s.on('jam:control_mode_changed', ({ hostOnlyControl }) => {
+      setJamSession(prev => prev ? ({ ...prev, hostOnlyControl: Boolean(hostOnlyControl) }) : null);
+    });
+
     s.on('jam:kicked', () => {
       setJamSession(null);
     });

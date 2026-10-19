@@ -257,11 +257,11 @@ export default function ListeningActivityPanel({
                     </div>
 
                     {isLive ? (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#dc2626] border border-[#0b1110] rounded-full animate-pulse flex items-center justify-center" title="Listening Live">
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border border-[#0b1110] rounded-full animate-pulse flex items-center justify-center shadow-[0_0_8px_#10b981]" title="Listening Live Now">
                         <span className="w-1.5 h-1.5 bg-white rounded-full" />
                       </span>
                     ) : isOnline ? (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border border-[#0b1110] rounded-full" title="Online" />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border border-[#0b1110] rounded-full" title="Online (Idle)" />
                     ) : (
                       <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-zinc-500 border border-[#0b1110] rounded-full" title="Offline" />
                     )}
@@ -274,16 +274,24 @@ export default function ListeningActivityPanel({
                         e.stopPropagation();
                         openProfileScreen?.(friend);
                       }}
-                      className="flex items-center gap-1 mb-0.5 cursor-pointer"
+                      className="flex items-center gap-1.5 mb-0.5 cursor-pointer"
                     >
-                      <span className={`text-xs font-bold truncate max-w-[120px] hover:underline ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                      <span className={`text-xs font-bold truncate max-w-[110px] hover:underline ${isDark ? 'text-white' : 'text-[#082621]'}`}>
                         {friend.name}
                       </span>
                       {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
 
-                      {!isLive && (
-                        <span className={`text-[9px] font-mono shrink-0 ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-                          • {isOnline ? 'online' : (timeAgo ? timeAgo : 'offline')}
+                      {isLive ? (
+                        <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase shrink-0">
+                          Listening Now
+                        </span>
+                      ) : isOnline ? (
+                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-700/50 text-zinc-300 border border-zinc-600/50 uppercase shrink-0">
+                          Online
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-500 border border-zinc-700/40 uppercase shrink-0">
+                          Offline {timeAgo ? `• ${timeAgo}` : ''}
                         </span>
                       )}
                     </div>
@@ -292,9 +300,9 @@ export default function ListeningActivityPanel({
                       <div
                         onClick={() => handlePlayFriendTrack(friend)}
                         className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-                        title={`Listening to ${listening.title}`}
+                        title={`Listening now: ${listening.title}`}
                       >
-                        <Disc size={11} className="shrink-0 text-[#17a398] animate-spin" style={{ animationDuration: '4s' }} />
+                        <Disc size={11} className="shrink-0 text-[#17a398] animate-spin" style={{ animationDuration: '3s' }} />
                         <p className="text-[11px] truncate leading-tight text-[#17a398] font-bold">
                           {listening.title} <span className="opacity-50">•</span> {listening.artist}
                         </p>
@@ -306,24 +314,24 @@ export default function ListeningActivityPanel({
                         title={`Last played: ${listening.title}`}
                       >
                         <Disc size={11} className="shrink-0 text-zinc-400" />
-                        <p className={`text-[11px] truncate leading-tight ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                          {listening.title} <span className="opacity-50">•</span> {listening.artist} <span className="text-[9px] opacity-60">(paused)</span>
+                        <p className={`text-[10.5px] truncate leading-tight ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                          <span className="opacity-60 text-[9.5px]">Paused:</span> {listening.title} <span className="opacity-50">•</span> {listening.artist}
                         </p>
                       </div>
                     ) : listening && !isOnline ? (
                       <div
                         onClick={() => handlePlayFriendTrack(friend)}
                         className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-                        title={`Last played: ${listening.title}`}
+                        title={`Last played before disconnect: ${listening.title}`}
                       >
-                        <Disc size={11} className="shrink-0 text-zinc-500" />
-                        <p className={`text-[11px] truncate leading-tight ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
-                          {listening.title} <span className="opacity-50">•</span> {listening.artist}
+                        <Disc size={11} className="shrink-0 text-zinc-600" />
+                        <p className={`text-[10px] truncate leading-tight ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
+                          <span className="opacity-60 text-[9px]">Last played:</span> {listening.title}
                         </p>
                       </div>
                     ) : (
                       <p className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
-                        {isOnline ? 'ONLINE • IDLE' : 'OFFLINE'}
+                        {isOnline ? 'Online • Browsing crates' : 'Offline'}
                       </p>
                     )}
                   </div>

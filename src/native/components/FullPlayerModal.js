@@ -2,12 +2,12 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions,
   ScrollView, Platform, FlatList, ActivityIndicator, Animated, TextInput, Alert,
-  KeyboardAvoidingView
+  KeyboardAvoidingView, PanResponder
 } from 'react-native';
 import {
-  ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
+  ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
   Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw,
-  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X
+  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical
 } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -22,6 +22,224 @@ import SleepTimerModal from './SleepTimerModal';
 import { parseLrcLyrics } from '../../utils/lrcParser';
 
 const { width, height } = Dimensions.get('window');
+const QUEUE_ROW_HEIGHT = 72;
+
+function DraggableQueueList({
+  queue,
+  trackId,
+  isDark,
+  colors,
+  deckBg,
+  deckBorder,
+  textTitle,
+  playTrack,
+  removeFromQueue,
+  reorderQueue,
+}) {
+  const [draggingIdx, setDraggingIdx] = useState(null);
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
+  const draggingIdxRef = useRef(null);
+  const hoverIdxRef = useRef(null);
+  const panY = useRef(new Animated.Value(0)).current;
+  const listRef = useRef(null);
+  const scrollOffsetRef = useRef(0);
+
+  draggingIdxRef.current = draggingIdx;
+  hoverIdxRef.current = hoverIdx;
+
+  const shiftAnims = useRef(new Map()).current;
+  const getShiftAnim = (idx) => {
+    if (!shiftAnims.has(idx)) {
+      shiftAnims.set(idx, new Animated.Value(0));
+    }
+    return shiftAnims.get(idx);
+  };
+
+  useEffect(() => {
+    if (draggingIdx === null || hoverIdx === null) {
+      queue.forEach((_, i) => {
+        const anim = getShiftAnim(i);
+        Animated.spring(anim, {
+          toValue: 0,
+          friction: 9,
+          tension: 70,
+          useNativeDriver: true,
+        }).start();
+      });
+      return;
+    }
+
+    queue.forEach((_, i) => {
+      if (i === draggingIdx) return;
+      let targetShift = 0;
+      if (draggingIdx < hoverIdx) {
+        if (i > draggingIdx && i <= hoverIdx) {
+          targetShift = -QUEUE_ROW_HEIGHT;
+        }
+      } else if (draggingIdx > hoverIdx) {
+        if (i >= hoverIdx && i < draggingIdx) {
+          targetShift = QUEUE_ROW_HEIGHT;
+        }
+      }
+      const anim = getShiftAnim(i);
+      Animated.spring(anim, {
+        toValue: targetShift,
+        friction: 9,
+        tension: 70,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [draggingIdx, hoverIdx, queue.length]);
+
+  const createPanResponder = (index) => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onPanResponderGrant: () => {
+        setScrollEnabled(false);
+        setDraggingIdx(index);
+        setHoverIdx(index);
+        panY.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        panY.setValue(gestureState.dy);
+        const deltaSlots = Math.round(gestureState.dy / QUEUE_ROW_HEIGHT);
+        const nextHover = Math.max(0, Math.min(queue.length - 1, index + deltaSlots));
+        if (hoverIdxRef.current !== nextHover) {
+          setHoverIdx(nextHover);
+        }
+        if (listRef.current) {
+          if (gestureState.moveY < 180 && scrollOffsetRef.current > 0) {
+            scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 8);
+            listRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
+          } else if (gestureState.moveY > height - 180) {
+            scrollOffsetRef.current = scrollOffsetRef.current + 8;
+            listRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
+          }
+        }
+      },
+      onPanResponderRelease: () => {
+        const from = index;
+        const to = hoverIdxRef.current;
+        if (to !== null && to !== from && reorderQueue) {
+          reorderQueue(from, to);
+        }
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        setScrollEnabled(true);
+        panY.setValue(0);
+      },
+      onPanResponderTerminate: () => {
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        setScrollEnabled(true);
+        panY.setValue(0);
+      },
+    });
+  };
+
+  const panResponders = useMemo(() => {
+    return queue.map((_, i) => createPanResponder(i));
+  }, [queue.length, reorderQueue]);
+
+  return (
+    <FlatList
+      ref={listRef}
+      data={queue}
+      scrollEnabled={scrollEnabled}
+      onScroll={(e) => {
+        scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+      }}
+      scrollEventThrottle={16}
+      keyExtractor={(item, index) => `${item._id || item.id}-${index}`}
+      renderItem={({ item, index }) => {
+        const isItemPlaying = String(item._id || item.id) === trackId;
+        const itemCover = normalizeCoverUri(item.coverUrl || item.cover, item);
+        const isDragging = draggingIdx === index;
+        const shift = isDragging ? panY : getShiftAnim(index);
+
+        return (
+          <Animated.View
+            style={[
+              styles.queueItem,
+              {
+                backgroundColor: deckBg,
+                borderColor: isDragging
+                  ? colors.mint
+                  : isItemPlaying
+                  ? colors.mint
+                  : deckBorder,
+                transform: [
+                  { translateY: shift },
+                  { scale: isDragging ? 1.03 : 1 }
+                ],
+                zIndex: isDragging ? 9999 : 1,
+                elevation: isDragging ? 20 : 0,
+                shadowColor: isDragging ? colors.mint : '#000',
+                shadowOffset: { width: 0, height: isDragging ? 6 : 1 },
+                shadowOpacity: isDragging ? 0.35 : 0.05,
+                shadowRadius: isDragging ? 8 : 2,
+              },
+              isItemPlaying && !isDragging && {
+                backgroundColor: isDark ? '#14201c' : '#e6f4f1'
+              },
+              isDragging && {
+                backgroundColor: isDark ? '#182d27' : '#d5f0eb'
+              }
+            ]}
+          >
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+              onPress={() => playTrack(item, queue)}
+              activeOpacity={0.75}
+              disabled={isDragging}
+            >
+              <Image source={{ uri: itemCover }} style={styles.queueThumb} />
+              <View style={{ flex: 1, marginHorizontal: 10 }}>
+                <Text style={[styles.queueTitle, { color: isItemPlaying ? colors.mint : textTitle }]} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={styles.queueArtist} numberOfLines={1}>{item.artist}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.queueControlsRow}>
+              <TouchableOpacity
+                onPress={() => removeFromQueue && removeFromQueue(index)}
+                style={styles.queueActionBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              >
+                <Trash2 size={15} color="#ef4444" />
+              </TouchableOpacity>
+
+              {queue.length > 1 && (
+                <View
+                  {...(panResponders[index] ? panResponders[index].panHandlers : {})}
+                  style={[
+                    styles.dragHandle,
+                    isDragging && { backgroundColor: colors.mint + '33' }
+                  ]}
+                  hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+                >
+                  <GripVertical size={18} color={isDragging ? colors.mint : (isDark ? '#94a3b8' : '#64748b')} />
+                </View>
+              )}
+            </View>
+          </Animated.View>
+        );
+      }}
+      contentContainerStyle={styles.queueBody}
+      ListEmptyComponent={
+        <View style={{ padding: 40, alignItems: 'center' }}>
+          <Text style={{ color: '#9ca3af', fontFamily: 'monospace' }}>Queue is empty.</Text>
+        </View>
+      }
+    />
+  );
+}
 
 export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const {
@@ -35,9 +253,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
     playNextTrack,
     playPrevTrack,
     setIsShuffle,
+    toggleShuffle,
     toggleRepeat,
     queue,
     playTrack,
+    reorderQueue,
+    removeFromQueue,
+    clearQueue,
     lyrics,
     isLoadingLyrics,
     setLyrics,
@@ -416,7 +638,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 {/* Shuffle Button */}
                 <TouchableOpacity
                   style={styles.transportBtnBox}
-                  onPress={() => setIsShuffle(!isShuffle)}
+                  onPress={() => toggleShuffle ? toggleShuffle() : setIsShuffle(!isShuffle)}
                   activeOpacity={0.7}
                 >
                   <Shuffle size={18} color={isShuffle ? colors.mint : '#9ca3af'} />
@@ -601,44 +823,44 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
         {/* ── Queue Tab ── */}
         {activeTab === 'queue' && (
-          <FlatList
-            data={queue}
-            keyExtractor={(item, index) => `${item._id || item.id}-${index}`}
-            renderItem={({ item, index }) => {
-              const isItemPlaying = String(item._id || item.id) === trackId;
-              const itemCover = normalizeCoverUri(item.coverUrl || item.cover, item);
-              return (
+          <View style={{ flex: 1 }}>
+            {queue.length > 0 && (
+              <View style={styles.queueHeaderRow}>
+                <Text style={[styles.queueHeaderTitle, { color: isDark ? colors.mint : colors.ink }]}>
+                  UP NEXT ({queue.length})
+                </Text>
                 <TouchableOpacity
-                  style={[
-                    styles.queueItem,
-                    { backgroundColor: deckBg, borderColor: isItemPlaying ? colors.mint : deckBorder },
-                    isItemPlaying && { backgroundColor: isDark ? '#14201c' : '#e6f4f1' }
-                  ]}
-                  onPress={() => playTrack(item, queue)}
-                  activeOpacity={0.8}
+                  style={styles.clearQueueBtn}
+                  onPress={() => {
+                    Alert.alert(
+                      'Clear Queue',
+                      'Remove all upcoming songs from queue?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Clear All', style: 'destructive', onPress: clearQueue }
+                      ]
+                    );
+                  }}
+                  activeOpacity={0.7}
                 >
-                  <Image source={{ uri: itemCover }} style={styles.queueThumb} />
-                  <View style={{ flex: 1, marginHorizontal: 12 }}>
-                    <Text style={[styles.queueTitle, { color: isItemPlaying ? colors.mint : textTitle }]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.queueArtist} numberOfLines={1}>{item.artist}</Text>
-                  </View>
-                  {isItemPlaying && (
-                    <View style={styles.playingIndicator}>
-                      <Play size={12} color={colors.ink} fill={colors.ink} />
-                    </View>
-                  )}
+                  <Text style={styles.clearQueueBtnText}>CLEAR ALL</Text>
                 </TouchableOpacity>
-              );
-            }}
-            contentContainerStyle={styles.queueBody}
-            ListEmptyComponent={
-              <View style={{ padding: 40, alignItems: 'center' }}>
-                <Text style={{ color: '#9ca3af', fontFamily: 'monospace' }}>Queue is empty.</Text>
               </View>
-            }
-          />
+            )}
+
+            <DraggableQueueList
+              queue={queue}
+              trackId={trackId}
+              isDark={isDark}
+              colors={colors}
+              deckBg={deckBg}
+              deckBorder={deckBorder}
+              textTitle={textTitle}
+              playTrack={playTrack}
+              removeFromQueue={removeFromQueue}
+              reorderQueue={reorderQueue}
+            />
+          </View>
         )}
 
         {/* Edit / Add Lyrics Modal */}
@@ -1280,6 +1502,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9ca3af',
     marginTop: 2,
+  },
+  queueHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  queueHeaderTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+    letterSpacing: 0.5,
+  },
+  clearQueueBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  clearQueueBtnText: {
+    color: '#ef4444',
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+  },
+  queueControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  queueActionBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dragHandle: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   playingIndicator: {
     width: 24,

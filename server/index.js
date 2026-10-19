@@ -88,35 +88,35 @@ app.use((req, res, next) => {
 
 // App Version Manifest
 const APP_VERSIONS_DATA = {
-  version: '1.8.5',
-  releaseNotes: "v1.8.5: Audio loading freeze & skip race conditions fixed, YouTube search accuracy & confidence filtering, Jam 25s grace period & double elapsed time fix, live collaborative queue delegation, and Android system notification direct chat navigation.",
+  version: '1.9.0',
+  releaseNotes: "v1.9.0: Full mobile drag-and-drop queue reordering without buttons, repeat current song priority, smart queue shuffle with AI auto-queue continuous playback, and fixed Discord Rich Presence.",
   publishedAt: new Date().toISOString(),
   platforms: {
     windows: {
-      version: '1.8.5',
+      version: '1.9.0',
       name: 'Rivo for Windows',
       downloadUrl: '/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Full Jam sync and player controls.'
+      notes: 'Hardware-accelerated ultra-smooth lyrics rendering and audio controls.'
     },
     android: {
-      version: '1.8.5',
-      build: 54,
+      version: '1.9.0',
+      build: 59,
       name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.8.5.apk',
-      directFile: 'Rivo-v1.8.5.apk',
+      downloadUrl: '/downloads/Rivo-v1.9.0.apk',
+      directFile: 'Rivo-v1.9.0.apk',
       mandatory: false,
-      notes: 'Audio loading freeze & skip race conditions fixed, YouTube search accuracy & confidence filtering, Jam 25s grace period & double elapsed time fix, live collaborative queue delegation, and Android system notification direct chat navigation.'
+      notes: 'Draggable queue without buttons, smart shuffle with AI recommendations, and background service.'
     },
     ios: {
-      version: '1.8.5',
-      build: 54,
+      version: '1.9.0',
+      build: 59,
       name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.8.5.ipa',
-      directFile: 'Rivo-v1.8.5.ipa',
+      downloadUrl: '/downloads/Rivo-v1.9.0.ipa',
+      directFile: 'Rivo-v1.9.0.ipa',
       mandatory: false,
-      notes: 'Audio loading freeze & skip race conditions fixed, YouTube search accuracy & confidence filtering, Jam 25s grace period & double elapsed time fix, live collaborative queue delegation, and Android system notification direct chat navigation.'
+      notes: 'Draggable queue without buttons, repeat priority, and live Discord activity.'
     }
   }
 };
@@ -128,6 +128,11 @@ app.get('/api/app/version', (req, res) => {
 // Download routes for APK/IPA releases
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.9.0.apk',
+  '/downloads/Rivo-v1.8.9.apk',
+  '/downloads/Rivo-v1.8.8.apk',
+  '/downloads/Rivo-v1.8.7.apk',
+  '/downloads/Rivo-v1.8.6.apk',
   '/downloads/Rivo-v1.8.5.apk',
   '/downloads/Rivo-v1.8.4.apk',
   '/downloads/Rivo-v1.8.3.apk',
@@ -202,6 +207,9 @@ app.get([
 
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.8.8.ipa',
+  '/downloads/Rivo-v1.8.7.ipa',
+  '/downloads/Rivo-v1.8.6.ipa',
   '/downloads/Rivo-v1.8.5.ipa',
   '/downloads/Rivo-v1.8.4.ipa',
   '/downloads/Rivo-v1.8.3.ipa',

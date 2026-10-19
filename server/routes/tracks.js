@@ -788,17 +788,26 @@ router.get('/download', async (req, res) => {
   try {
     let { url, title, artist, id, trackId } = req.query;
     trackId = trackId || id;
-    if (trackId && (!url || !title)) {
+    let dbTrack = null;
+    if (trackId && mongoose.isValidObjectId(trackId)) {
+      try { dbTrack = await Track.findById(trackId).lean(); } catch {}
+    }
+    if (!dbTrack && (title || artist)) {
       try {
-        if (mongoose.isValidObjectId(id)) {
-          const dbTrack = await Track.findById(id).lean();
-          if (dbTrack) {
-            url = url || dbTrack.audioUrl;
-            title = title || dbTrack.title;
-            artist = artist || dbTrack.artist;
-          }
+        const query = {};
+        if (title && artist) {
+          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+          query.artist = new RegExp(`^${escapeRegex(artist)}$`, 'i');
+        } else if (title) {
+          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
         }
+        dbTrack = await Track.findOne(query).lean();
       } catch {}
+    }
+    if (dbTrack) {
+      url = url || dbTrack.audioUrl;
+      title = title || dbTrack.title;
+      artist = artist || dbTrack.artist;
     }
 
     const sanitizeTag = (str, fallback = 'Rivo') => {
@@ -1141,6 +1150,13 @@ router.get('/lyrics', async (req, res) => {
     if (title) {
       const lyrics = await fetchLrclibLyrics(title, artist, 180);
       if (lyrics && lyrics.length > 0) {
+        if (trackKey && trackKey !== '___') {
+          SongLyrics.findOneAndUpdate(
+            { trackKey },
+            { trackKey, trackId: trackId ? String(trackId) : undefined, title, artist, lyrics, source: 'synced', isVerified: false },
+            { upsert: true }
+          ).catch(() => {});
+        }
         return res.json({ success: true, lyrics, source: 'synced', isVerified: false });
       }
     }
@@ -1234,27 +1250,52 @@ const resolveStreamHandler = async (req, res) => {
       } catch {}
     }
 
-    // Check if title and artist match an uploaded track in local DB
-    if (title && artist) {
+    // Check if title and artist match ANY catalog track in DB
+    if (title || artist) {
       try {
-        const localUploaded = await Track.findOne({
-          title: new RegExp(`^${escapeRegex(title)}$`, 'i'),
-          artist: new RegExp(`^${escapeRegex(artist)}$`, 'i'),
-          $or: [
-            { source: 'Upload' },
-            { audioUrl: /^\/?uploads\//i }
-          ]
-        }).lean();
-        if (localUploaded && localUploaded.audioUrl) {
-          const cleanPath = localUploaded.audioUrl.startsWith('/') ? localUploaded.audioUrl : `/${localUploaded.audioUrl}`;
-          return res.json({
-            success: true,
-            url: cleanPath,
-            directUrl: cleanPath,
-            duration: localUploaded.duration || 210,
-            cover: localUploaded.cover,
-            isYouTube: false
-          });
+        const query = {};
+        if (title && artist) {
+          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+          query.artist = new RegExp(`^${escapeRegex(artist)}$`, 'i');
+        } else if (title) {
+          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+        }
+        const dbTrack = await Track.findOne(query).lean();
+        if (dbTrack) {
+          if (dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
+            const cleanPath = dbTrack.audioUrl ? (dbTrack.audioUrl.startsWith('/') ? dbTrack.audioUrl : `/${dbTrack.audioUrl}`) : '';
+            return res.json({
+              success: true,
+              url: cleanPath,
+              directUrl: cleanPath,
+              duration: dbTrack.duration || 210,
+              cover: dbTrack.cover,
+              isYouTube: false
+            });
+          }
+          if (dbTrack.audioUrl && (dbTrack.audioUrl.endsWith('.mp3') || dbTrack.audioUrl.endsWith('.m4a')) && !dbTrack.audioUrl.includes('youtube') && !dbTrack.audioUrl.includes('soundcloud')) {
+            return res.json({
+              success: true,
+              url: dbTrack.audioUrl,
+              duration: dbTrack.duration || 240,
+              cover: dbTrack.cover,
+              isYouTube: false
+            });
+          }
+          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist, { duration: dbTrack.duration || Number(duration) || null });
+          if (directAudio) {
+            const resolvedPath = directAudio.url || String(directAudio);
+            const isLocalUpload = resolvedPath.startsWith('/uploads/');
+            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            return res.json({
+              success: true,
+              url: finalUrl,
+              directUrl: resolvedPath,
+              duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210),
+              cover: dbTrack.cover,
+              isYouTube: false
+            });
+          }
         }
       } catch {}
     }

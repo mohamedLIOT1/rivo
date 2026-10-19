@@ -164,58 +164,55 @@ export const resolveAudioStream = async (track) => {
 
   const targetDuration = Number(track.duration) || null;
 
-  // 3. Server-side Stream Resolution via Proxy (Primary - handles yt-dlp warm worker, uploads & proxying)
+  // 3. Server-side Stream Resolution (Primary: /stream endpoint checks local cache, uploads & DB instantly)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
 
-    // 3a. Resolve stream via /api/tracks/resolve-stream (matches authentic upload tracks & web logic)
+    // 3a. Direct fast stream endpoint: /api/tracks/:id/stream (same as Web)
     try {
-      const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
+      const serverStreamRes = await fetch(
+        `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}`,
+        { signal: controller.signal }
+      );
+      if (serverStreamRes.ok) {
+        const data = await serverStreamRes.json();
+        let streamUrl = data?.url || data?.directUrl;
+        if (streamUrl && !streamUrl.includes('youtube.com/watch') && !streamUrl.includes('youtu.be/')) {
+          if (streamUrl.startsWith('/')) {
+            streamUrl = `${API_BASE_URL}${streamUrl}`;
+          }
+          clearTimeout(timeoutId);
+          if (trackId) streamCache.set(trackId, streamUrl);
+          if (data?.duration && trackId) {
+            streamDurationCache.set(trackId, data.duration);
+          }
+          return streamUrl;
+        }
+      }
+    } catch {}
+
+    // 3b. Resolve stream via /api/tracks/resolve-stream
+    try {
       const resolveRes = await fetch(
         `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}`,
         { signal: controller.signal }
       );
+      clearTimeout(timeoutId);
       if (resolveRes.ok) {
         const d = await resolveRes.json();
         if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
           let cand = d.url;
           if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
-          clearTimeout(timeoutId);
           if (trackId) streamCache.set(trackId, cand);
           if (d.duration && trackId) {
-            if (!targetDuration || Math.abs(d.duration - targetDuration) <= 60) {
-              streamDurationCache.set(trackId, d.duration);
-            }
+            streamDurationCache.set(trackId, d.duration);
           }
           return cand;
         }
       }
     } catch {}
-
-    // 3b. Stream endpoint fallback
-    const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
-    const serverStreamRes = await fetch(
-      `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timeoutId);
-    if (serverStreamRes.ok) {
-      const data = await serverStreamRes.json();
-      let streamUrl = data?.url || data?.directUrl;
-      if (streamUrl) {
-        if (streamUrl.startsWith('/')) {
-          streamUrl = `${API_BASE_URL}${streamUrl}`;
-        }
-        if (trackId) streamCache.set(trackId, streamUrl);
-        if (data?.duration && trackId) {
-          if (!targetDuration || Math.abs(data.duration - targetDuration) <= 60) {
-            streamDurationCache.set(trackId, data.duration);
-          }
-        }
-        return streamUrl;
-      }
-    }
   } catch (e) {
     // Backend request failed or timed out, fallback to client-side
   }

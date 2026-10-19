@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   Alert,
   Clipboard,
   useWindowDimensions,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import {
   X,
@@ -22,8 +24,6 @@ import {
   Music,
   Plus,
   Trash2,
-  ChevronUp,
-  ChevronDown,
   Crown,
   UserMinus,
   Search,
@@ -34,6 +34,7 @@ import {
   SkipBack,
   SkipForward,
   Lock,
+  GripVertical,
 } from 'lucide-react-native';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
@@ -41,6 +42,196 @@ import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import UserDetailModal from './UserDetailModal';
+
+const JAM_ROW_HEIGHT = 68;
+
+function DraggableJamQueue({
+  queue,
+  isCurrentUserHost,
+  jamSession,
+  playTrack,
+  showToast,
+  handleReorder,
+  removeFromJamQueue,
+  styles,
+}) {
+  const [draggingIdx, setDraggingIdx] = useState(null);
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const draggingIdxRef = useRef(null);
+  const hoverIdxRef = useRef(null);
+  const panY = useRef(new Animated.Value(0)).current;
+
+  draggingIdxRef.current = draggingIdx;
+  hoverIdxRef.current = hoverIdx;
+
+  const shiftAnims = useRef(new Map()).current;
+  const getShiftAnim = (idx) => {
+    if (!shiftAnims.has(idx)) {
+      shiftAnims.set(idx, new Animated.Value(0));
+    }
+    return shiftAnims.get(idx);
+  };
+
+  useEffect(() => {
+    if (draggingIdx === null || hoverIdx === null) {
+      queue.forEach((_, i) => {
+        const anim = getShiftAnim(i);
+        Animated.spring(anim, {
+          toValue: 0,
+          friction: 9,
+          tension: 70,
+          useNativeDriver: true,
+        }).start();
+      });
+      return;
+    }
+
+    queue.forEach((_, i) => {
+      if (i === draggingIdx) return;
+      let targetShift = 0;
+      if (draggingIdx < hoverIdx) {
+        if (i > draggingIdx && i <= hoverIdx) {
+          targetShift = -JAM_ROW_HEIGHT;
+        }
+      } else if (draggingIdx > hoverIdx) {
+        if (i >= hoverIdx && i < draggingIdx) {
+          targetShift = JAM_ROW_HEIGHT;
+        }
+      }
+      const anim = getShiftAnim(i);
+      Animated.spring(anim, {
+        toValue: targetShift,
+        friction: 9,
+        tension: 70,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [draggingIdx, hoverIdx, queue.length]);
+
+  const createPanResponder = (index) => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onPanResponderGrant: () => {
+        setDraggingIdx(index);
+        setHoverIdx(index);
+        panY.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        panY.setValue(gestureState.dy);
+        const deltaSlots = Math.round(gestureState.dy / JAM_ROW_HEIGHT);
+        const nextHover = Math.max(0, Math.min(queue.length - 1, index + deltaSlots));
+        if (hoverIdxRef.current !== nextHover) {
+          setHoverIdx(nextHover);
+        }
+      },
+      onPanResponderRelease: () => {
+        const from = index;
+        const to = hoverIdxRef.current;
+        if (to !== null && to !== from && handleReorder) {
+          handleReorder(from, to);
+        }
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        panY.setValue(0);
+      },
+      onPanResponderTerminate: () => {
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        panY.setValue(0);
+      },
+    });
+  };
+
+  const panResponders = useMemo(() => {
+    return queue.map((_, i) => createPanResponder(i));
+  }, [queue.length, handleReorder]);
+
+  return (
+    <View style={styles.queueList}>
+      {queue.map((qTrack, idx) => {
+        const qId = qTrack._id || qTrack.id || idx;
+        const isDragging = draggingIdx === idx;
+        const shift = isDragging ? panY : getShiftAnim(idx);
+
+        return (
+          <Animated.View
+            key={`${qId}-${idx}`}
+            style={[
+              styles.queueItem,
+              {
+                transform: [
+                  { translateY: shift },
+                  { scale: isDragging ? 1.03 : 1 }
+                ],
+                zIndex: isDragging ? 9999 : 1,
+                elevation: isDragging ? 15 : 0,
+                borderColor: isDragging ? '#17a398' : 'rgba(255, 255, 255, 0.1)',
+                backgroundColor: isDragging ? '#1a2e29' : 'rgba(0, 0, 0, 0.3)',
+              }
+            ]}
+          >
+            <TouchableOpacity
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginRight: 6 }}
+              onPress={() => {
+                const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
+                if (canControl) {
+                  playTrack(qTrack);
+                  showToast(`Playing "${qTrack.title}"`, 'info');
+                }
+              }}
+              activeOpacity={0.7}
+              disabled={isDragging}
+            >
+              <Text style={styles.queueIndex}>{idx + 1}</Text>
+              <Image
+                source={{
+                  uri:
+                    qTrack.cover ||
+                    'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
+                }}
+                style={styles.queueCover}
+              />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.queueTrackTitle} numberOfLines={1}>
+                  {qTrack.title}
+                </Text>
+                <Text style={styles.queueTrackArtist} numberOfLines={1}>
+                  {qTrack.artist}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.queueActionsRow}>
+              <TouchableOpacity
+                onPress={() => removeFromJamQueue(idx, qId)}
+                style={styles.removeQueueBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              >
+                <Trash2 size={13} color="#ef4444" />
+              </TouchableOpacity>
+
+              {queue.length > 1 && (
+                <View
+                  {...(panResponders[idx] ? panResponders[idx].panHandlers : {})}
+                  style={[
+                    styles.dragHandle,
+                    isDragging && { backgroundColor: 'rgba(23, 163, 152, 0.3)' }
+                  ]}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <GripVertical size={16} color={isDragging ? '#17a398' : '#94a3b8'} />
+                </View>
+              )}
+            </View>
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function JamRoomModal({ visible, onClose }) {
   const {
@@ -110,15 +301,7 @@ export default function JamRoomModal({ visible, onClose }) {
       socket.emit('jam:request_sync', { roomCode });
     }
     if (jamSession?.currentTrack) {
-      let liveTime = Number(jamSession.currentTime) || 0;
-      if (jamSession.isPlaying && jamSession.updatedAt) {
-        const elapsed = (Date.now() - jamSession.updatedAt) / 1000;
-        if (liveTime <= 2 && elapsed > 2) {
-          liveTime = Math.min(2, liveTime);
-        } else if (elapsed > 0 && elapsed < 3600) {
-          liveTime += elapsed;
-        }
-      }
+      const liveTime = Number(jamSession.currentTime) || 0;
       if (syncRemotePlayState) {
         syncRemotePlayState({
           isPlaying: jamSession.isPlaying,
@@ -196,6 +379,7 @@ export default function JamRoomModal({ visible, onClose }) {
         (jamSession.hostId && socket?.id && jamSession.hostId === socket.id) ||
         (jamSession.members || []).some(m => (m.socketId === socket?.id || (myId && String(m.id || m._id) === myId)) && m.isHost))
   );
+  const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
 
   const renderBanner = () => (
     <View style={styles.codeCard}>
@@ -270,8 +454,9 @@ export default function JamRoomModal({ visible, onClose }) {
   const renderCurrentTrack = () => {
     const activeTrack = jamSession?.currentTrack || currentTrack;
     const isRoomPlaying = jamSession?.isPlaying !== undefined ? jamSession.isPlaying : isPlaying;
-    const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
-    const curTime = progress?.currentTime || jamSession?.currentTime || 0;
+    const curTime = (progress?.currentTime !== undefined && progress?.currentTime > 0)
+      ? progress.currentTime
+      : (jamSession?.currentTime || progress?.currentTime || 0);
     const durTime = progress?.duration || activeTrack?.duration || 240;
     const progressPercent = durTime > 0 ? Math.min(100, Math.max(0, (curTime / durTime) * 100)) : 0;
 
@@ -318,7 +503,8 @@ export default function JamRoomModal({ visible, onClose }) {
             disabled={!canControl}
             onPress={(e) => {
               if (!canControl || durTime <= 0 || progressBarWidth <= 0) return;
-              const ratio = Math.max(0, Math.min(1, e.nativeEvent.locationX / progressBarWidth));
+              const locX = e?.nativeEvent?.locationX ?? 0;
+              const ratio = Math.max(0, Math.min(1, locX / progressBarWidth));
               const targetSec = Math.round(ratio * durTime);
               seekTo(targetSec);
             }}
@@ -600,69 +786,16 @@ export default function JamRoomModal({ visible, onClose }) {
 
       {/* Shared Queue List Items */}
       {Array.isArray(jamSession.queue) && jamSession.queue.length > 0 ? (
-        <View style={styles.queueList}>
-          {jamSession.queue.map((qTrack, idx) => {
-            const qId = qTrack._id || qTrack.id || idx;
-            return (
-              <View key={`${qId}-${idx}`} style={styles.queueItem}>
-                <TouchableOpacity
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginRight: 6 }}
-                  onPress={() => {
-                    const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
-                    if (canControl) {
-                      playTrack(qTrack);
-                      showToast(`Playing "${qTrack.title}"`, 'info');
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.queueIndex}>{idx + 1}</Text>
-                  <Image
-                    source={{
-                      uri:
-                        qTrack.cover ||
-                        'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
-                    }}
-                    style={styles.queueCover}
-                  />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.queueTrackTitle} numberOfLines={1}>
-                      {qTrack.title}
-                    </Text>
-                    <Text style={styles.queueTrackArtist} numberOfLines={1}>
-                      {qTrack.artist}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-                <View style={styles.queueActionsRow}>
-                  <TouchableOpacity
-                    disabled={idx === 0}
-                    onPress={() => handleReorder(idx, idx - 1)}
-                    style={[styles.reorderBtn, idx === 0 && { opacity: 0.2 }]}
-                  >
-                    <ChevronUp size={14} color="#ffffff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    disabled={idx === jamSession.queue.length - 1}
-                    onPress={() => handleReorder(idx, idx + 1)}
-                    style={[
-                      styles.reorderBtn,
-                      idx === jamSession.queue.length - 1 && { opacity: 0.2 },
-                    ]}
-                  >
-                    <ChevronDown size={14} color="#ffffff" />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => removeFromJamQueue(idx, qId)}
-                    style={styles.removeQueueBtn}
-                  >
-                    <Trash2 size={13} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
-        </View>
+        <DraggableJamQueue
+          queue={jamSession.queue}
+          isCurrentUserHost={isCurrentUserHost}
+          jamSession={jamSession}
+          playTrack={playTrack}
+          showToast={showToast}
+          handleReorder={handleReorder}
+          removeFromJamQueue={removeFromJamQueue}
+          styles={styles}
+        />
       ) : (
         <Text style={styles.emptyQueueText}>JAM QUEUE IS CURRENTLY EMPTY.</Text>
       )}
@@ -1317,12 +1450,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  reorderBtn: {
-    padding: 3,
-  },
   removeQueueBtn: {
     padding: 4,
     marginLeft: 2,
+  },
+  dragHandle: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   emptyQueueText: {
     fontFamily: 'monospace',

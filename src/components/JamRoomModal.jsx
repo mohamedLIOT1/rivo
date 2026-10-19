@@ -421,34 +421,12 @@ export default function JamRoomModal({
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
-                            {/* Move Up / Down Buttons (Great for Touch / Mobile) */}
-                            <div className="flex flex-col">
-                              <button
-                                type="button"
-                                disabled={idx === 0}
-                                onClick={() => onReorderJamQueue?.(idx, idx - 1)}
-                                className="p-0.5 hover:text-[#17a398] disabled:opacity-20 cursor-pointer"
-                                title="Move up"
-                              >
-                                <ChevronUp size={11} />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={idx === jamSession.queue.length - 1}
-                                onClick={() => onReorderJamQueue?.(idx, idx + 1)}
-                                className="p-0.5 hover:text-[#17a398] disabled:opacity-20 cursor-pointer"
-                                title="Move down"
-                              >
-                                <ChevronDown size={11} />
-                              </button>
-                            </div>
-
                             <button
                               onClick={() => onRemoveFromJamQueue?.(idx, track.id || track._id)}
                               className="p-1 text-[#dc2626] hover:bg-red-500/20 rounded cursor-pointer"
                               title="Remove from queue"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>

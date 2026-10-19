@@ -56,7 +56,16 @@ export const UserProvider = ({ children }) => {
       if (cachedTracks) {
         const parsed = JSON.parse(cachedTracks);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const cleaned = deduplicateTrackList(parsed.filter(t => 
+          const updatedParsed = parsed.map(t => {
+            if (!t) return t;
+            const tid = String(t._id || t.id || '');
+            if (tid.startsWith('6aad57190ece10647dd1e91')) {
+              const matched = INITIAL_TRACKS.find(it => (it.title || '').toLowerCase() === (t.title || '').toLowerCase());
+              return matched || t;
+            }
+            return t;
+          });
+          const cleaned = deduplicateTrackList(updatedParsed.filter(t => 
             t &&
             t.source !== 'SoundCloud' &&
             t.album !== 'SoundCloud' &&
@@ -64,8 +73,8 @@ export const UserProvider = ({ children }) => {
             !String(t.audioUrl || '').includes('sndcdn.com') &&
             !String(t.id || t._id || '').startsWith('sc-')
           ));
-          setTracks(cleaned);
-          if (cleaned.length !== parsed.length) {
+          if (cleaned.length > 6) {
+            setTracks(cleaned);
             AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
           }
         }
@@ -84,7 +93,9 @@ export const UserProvider = ({ children }) => {
         setLikedTrackIds(userObj.likedTrackIds || []);
         syncUserData(storedToken);
       }
-    } catch {} finally {
+    } catch (e) {
+      console.warn('loadStoredAuth error:', e);
+    } finally {
       setIsAuthLoaded(true);
     }
   };
