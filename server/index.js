@@ -98,8 +98,8 @@ const APP_VERSIONS_DATA = {
     windows: {
       version: '1.9.3',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: '/downloads/Rivo_Setup.exe',
-      directFile: 'Rivo_Setup.exe',
+      downloadUrl: '/downloads/Rivo-v1.9.3.exe',
+      directFile: 'Rivo-v1.9.3.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
@@ -107,8 +107,8 @@ const APP_VERSIONS_DATA = {
       version: '1.9.3',
       build: 62,
       name: 'Rivo for Android (APK)',
-      downloadUrl: '/downloads/Rivo.apk',
-      directFile: 'Rivo.apk',
+      downloadUrl: '/downloads/Rivo-v1.9.3.apk',
+      directFile: 'Rivo-v1.9.3.apk',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     },
@@ -116,8 +116,8 @@ const APP_VERSIONS_DATA = {
       version: '1.9.3',
       build: 62,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: '/downloads/Rivo.ipa',
-      directFile: 'Rivo.ipa',
+      downloadUrl: '/downloads/Rivo-v1.9.3.ipa',
+      directFile: 'Rivo-v1.9.3.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     }
@@ -138,18 +138,17 @@ app.get('/downloads/:filename', async (req, res) => {
     return res.download(localFile, filename);
   }
 
+  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.3';
+
   // 2. Redirect to latest GitHub Release based on file extension
   if (filename.endsWith('.apk')) {
-    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo.apk');
+    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.apk`);
   }
   if (filename.endsWith('.ipa')) {
-    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo.ipa');
+    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.ipa`);
   }
   if (filename.endsWith('.exe')) {
-    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo_Setup.exe');
-  }
-  if (filename === 'windows-update.json') {
-    return res.redirect('https://github.com/WhooAre-you/Rivo/releases/latest/download/windows-update.json');
+    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.exe`);
   }
 
   return res.status(404).json({ error: 'File not found' });
