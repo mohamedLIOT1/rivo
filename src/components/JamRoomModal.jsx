@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { 
   X, Radio, Users, Copy, Check, Play, Pause, Volume2, Plus, Trash2, 
-  Search, Music, Headphones, UserMinus, Crown, GripVertical, ChevronUp, ChevronDown 
+  Search, Music, Headphones, UserMinus, Crown, GripVertical, ChevronUp, ChevronDown, BookOpen 
 } from 'lucide-react';
 import { resumeAudioContext } from '../utils/audioEngine';
+import { isQuranContent } from '../utils/quranUtils';
 import VerifiedBadge from './VerifiedBadge';
 
 export default function JamRoomModal({ 
@@ -33,6 +34,7 @@ export default function JamRoomModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [justAddedId, setJustAddedId] = useState(null);
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
+  const [jamContentFilter, setJamContentFilter] = useState('songs'); // 'songs' | 'quran'
 
   const isDark = globalTheme === 'dark' || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
@@ -57,12 +59,19 @@ export default function JamRoomModal({
     }
   };
 
-  const filteredTracks = searchQuery.trim()
-    ? tracks.filter(t => 
-        (t.title && t.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (t.artist && t.artist.toLowerCase().includes(searchQuery.toLowerCase()))
-      ).slice(0, 10)
-    : tracks.slice(0, 8);
+  const filteredTracks = (tracks || [])
+    .filter(t => {
+      const isQ = isQuranContent(t);
+      const matchesFilter = jamContentFilter === 'quran' ? isQ : !isQ;
+      if (!matchesFilter) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase().trim();
+      return (
+        (t.title && t.title.toLowerCase().includes(q)) ||
+        (t.artist && t.artist.toLowerCase().includes(q))
+      );
+    })
+    .slice(0, searchQuery.trim() ? 15 : 10);
 
   const handleAddTrack = (track) => {
     onAddToJamQueue?.(track);
@@ -323,11 +332,39 @@ export default function JamRoomModal({
                   <div className={`mb-3 p-2.5 brutal-border rounded-xl ${
                     isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3] border-black'
                   }`}>
+                    {/* Content Filter Tabs */}
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setJamContentFilter('songs')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg font-mono text-[10px] font-black uppercase brutal-border transition-all cursor-pointer ${
+                          jamContentFilter === 'songs'
+                            ? 'bg-[#17a398] text-[#082621] brutal-shadow-sm'
+                            : (isDark ? 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-700' : 'bg-[#fdfbf7] text-zinc-600 hover:text-black border-black')
+                        }`}
+                      >
+                        <Music size={11} />
+                        <span>SONGS (أغاني)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setJamContentFilter('quran')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg font-mono text-[10px] font-black uppercase brutal-border transition-all cursor-pointer ${
+                          jamContentFilter === 'quran'
+                            ? 'bg-[#17a398] text-[#082621] brutal-shadow-sm'
+                            : (isDark ? 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-700' : 'bg-[#fdfbf7] text-zinc-600 hover:text-black border-black')
+                        }`}
+                      >
+                        <BookOpen size={11} />
+                        <span>QURAN (قرآن)</span>
+                      </button>
+                    </div>
+
                     <div className="relative mb-2">
                       <Search size={13} className={`absolute left-2.5 top-1/2 -translate-y-1/2 ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`} />
                       <input
                         type="text"
-                        placeholder="Search songs to queue..."
+                        placeholder={jamContentFilter === 'quran' ? "Search Quran recitations..." : "Search songs to queue..."}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className={`w-full brutal-border pl-7 pr-3 py-1 text-xs font-mono rounded-lg focus:outline-none ${

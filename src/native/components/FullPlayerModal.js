@@ -38,7 +38,6 @@ function DraggableQueueList({
 }) {
   const [draggingIdx, setDraggingIdx] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
   const draggingIdxRef = useRef(null);
   const hoverIdxRef = useRef(null);
   const panY = useRef(new Animated.Value(0)).current;
@@ -48,58 +47,17 @@ function DraggableQueueList({
   draggingIdxRef.current = draggingIdx;
   hoverIdxRef.current = hoverIdx;
 
-  const shiftAnims = useRef(new Map()).current;
-  const getShiftAnim = (idx) => {
-    if (!shiftAnims.has(idx)) {
-      shiftAnims.set(idx, new Animated.Value(0));
-    }
-    return shiftAnims.get(idx);
-  };
-
-  useEffect(() => {
-    if (draggingIdx === null || hoverIdx === null) {
-      queue.forEach((_, i) => {
-        const anim = getShiftAnim(i);
-        Animated.spring(anim, {
-          toValue: 0,
-          friction: 9,
-          tension: 70,
-          useNativeDriver: true,
-        }).start();
-      });
-      return;
-    }
-
-    queue.forEach((_, i) => {
-      if (i === draggingIdx) return;
-      let targetShift = 0;
-      if (draggingIdx < hoverIdx) {
-        if (i > draggingIdx && i <= hoverIdx) {
-          targetShift = -QUEUE_ROW_HEIGHT;
-        }
-      } else if (draggingIdx > hoverIdx) {
-        if (i >= hoverIdx && i < draggingIdx) {
-          targetShift = QUEUE_ROW_HEIGHT;
-        }
-      }
-      const anim = getShiftAnim(i);
-      Animated.spring(anim, {
-        toValue: targetShift,
-        friction: 9,
-        tension: 70,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, [draggingIdx, hoverIdx, queue.length]);
-
   const createPanResponder = (index) => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
-      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 3,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 3,
+      onPanResponderTerminationRequest: () => false, // FlatList cannot cancel or steal this drag!
+      onShouldBlockNativeResponder: () => true,      // Native touch stealing blocked!
       onPanResponderGrant: () => {
-        setScrollEnabled(false);
+        draggingIdxRef.current = index;
+        hoverIdxRef.current = index;
         setDraggingIdx(index);
         setHoverIdx(index);
         panY.setValue(0);
@@ -109,14 +67,15 @@ function DraggableQueueList({
         const deltaSlots = Math.round(gestureState.dy / QUEUE_ROW_HEIGHT);
         const nextHover = Math.max(0, Math.min(queue.length - 1, index + deltaSlots));
         if (hoverIdxRef.current !== nextHover) {
+          hoverIdxRef.current = nextHover;
           setHoverIdx(nextHover);
         }
         if (listRef.current) {
           if (gestureState.moveY < 180 && scrollOffsetRef.current > 0) {
-            scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 8);
+            scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 10);
             listRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
           } else if (gestureState.moveY > height - 180) {
-            scrollOffsetRef.current = scrollOffsetRef.current + 8;
+            scrollOffsetRef.current = scrollOffsetRef.current + 10;
             listRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
           }
         }
@@ -124,18 +83,25 @@ function DraggableQueueList({
       onPanResponderRelease: () => {
         const from = index;
         const to = hoverIdxRef.current;
-        if (to !== null && to !== from && reorderQueue) {
+        if (to !== null && to !== undefined && to !== from && reorderQueue) {
           reorderQueue(from, to);
         }
+        draggingIdxRef.current = null;
+        hoverIdxRef.current = null;
         setDraggingIdx(null);
         setHoverIdx(null);
-        setScrollEnabled(true);
         panY.setValue(0);
       },
       onPanResponderTerminate: () => {
+        const from = index;
+        const to = hoverIdxRef.current;
+        if (to !== null && to !== undefined && to !== from && reorderQueue) {
+          reorderQueue(from, to);
+        }
+        draggingIdxRef.current = null;
+        hoverIdxRef.current = null;
         setDraggingIdx(null);
         setHoverIdx(null);
-        setScrollEnabled(true);
         panY.setValue(0);
       },
     });
@@ -149,7 +115,7 @@ function DraggableQueueList({
     <FlatList
       ref={listRef}
       data={queue}
-      scrollEnabled={scrollEnabled}
+      scrollEnabled={draggingIdx === null}
       onScroll={(e) => {
         scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
       }}
@@ -159,7 +125,7 @@ function DraggableQueueList({
         const isItemPlaying = String(item._id || item.id) === trackId;
         const itemCover = normalizeCoverUri(item.coverUrl || item.cover, item);
         const isDragging = draggingIdx === index;
-        const shift = isDragging ? panY : getShiftAnim(index);
+        const isTargetSlot = hoverIdx === index && draggingIdx !== null && draggingIdx !== index;
 
         return (
           <Animated.View
@@ -169,25 +135,34 @@ function DraggableQueueList({
                 backgroundColor: deckBg,
                 borderColor: isDragging
                   ? colors.mint
+                  : isTargetSlot
+                  ? colors.mint
                   : isItemPlaying
                   ? colors.mint
                   : deckBorder,
                 transform: [
-                  { translateY: shift },
-                  { scale: isDragging ? 1.03 : 1 }
+                  { translateY: isDragging ? panY : 0 },
+                  { scale: isDragging ? 1.04 : 1 }
                 ],
                 zIndex: isDragging ? 9999 : 1,
-                elevation: isDragging ? 20 : 0,
+                elevation: isDragging ? 30 : 0,
                 shadowColor: isDragging ? colors.mint : '#000',
-                shadowOffset: { width: 0, height: isDragging ? 6 : 1 },
-                shadowOpacity: isDragging ? 0.35 : 0.05,
-                shadowRadius: isDragging ? 8 : 2,
+                shadowOffset: { width: 0, height: isDragging ? 8 : 1 },
+                shadowOpacity: isDragging ? 0.45 : 0.05,
+                shadowRadius: isDragging ? 12 : 2,
               },
               isItemPlaying && !isDragging && {
                 backgroundColor: isDark ? '#14201c' : '#e6f4f1'
               },
               isDragging && {
-                backgroundColor: isDark ? '#182d27' : '#d5f0eb'
+                backgroundColor: isDark ? '#19332b' : '#c8f2e9',
+              },
+              isTargetSlot && {
+                borderTopWidth: hoverIdx < draggingIdx ? 3.5 : 1.5,
+                borderBottomWidth: hoverIdx > draggingIdx ? 3.5 : 1.5,
+                borderTopColor: hoverIdx < draggingIdx ? colors.mint : deckBorder,
+                borderBottomColor: hoverIdx > draggingIdx ? colors.mint : deckBorder,
+                backgroundColor: isDark ? '#152520' : '#e6f7f3',
               }
             ]}
           >
@@ -220,7 +195,7 @@ function DraggableQueueList({
                   {...(panResponders[index] ? panResponders[index].panHandlers : {})}
                   style={[
                     styles.dragHandle,
-                    isDragging && { backgroundColor: colors.mint + '33' }
+                    isDragging && { backgroundColor: colors.mint + '44' }
                   ]}
                   hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
                 >

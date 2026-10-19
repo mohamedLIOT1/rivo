@@ -35,7 +35,9 @@ import {
   SkipForward,
   Lock,
   GripVertical,
+  BookOpen,
 } from 'lucide-react-native';
+import { isQuranContent } from '../../utils/quranUtils';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
@@ -64,56 +66,14 @@ function DraggableJamQueue({
   draggingIdxRef.current = draggingIdx;
   hoverIdxRef.current = hoverIdx;
 
-  const shiftAnims = useRef(new Map()).current;
-  const getShiftAnim = (idx) => {
-    if (!shiftAnims.has(idx)) {
-      shiftAnims.set(idx, new Animated.Value(0));
-    }
-    return shiftAnims.get(idx);
-  };
-
-  useEffect(() => {
-    if (draggingIdx === null || hoverIdx === null) {
-      queue.forEach((_, i) => {
-        const anim = getShiftAnim(i);
-        Animated.spring(anim, {
-          toValue: 0,
-          friction: 9,
-          tension: 70,
-          useNativeDriver: true,
-        }).start();
-      });
-      return;
-    }
-
-    queue.forEach((_, i) => {
-      if (i === draggingIdx) return;
-      let targetShift = 0;
-      if (draggingIdx < hoverIdx) {
-        if (i > draggingIdx && i <= hoverIdx) {
-          targetShift = -JAM_ROW_HEIGHT;
-        }
-      } else if (draggingIdx > hoverIdx) {
-        if (i >= hoverIdx && i < draggingIdx) {
-          targetShift = JAM_ROW_HEIGHT;
-        }
-      }
-      const anim = getShiftAnim(i);
-      Animated.spring(anim, {
-        toValue: targetShift,
-        friction: 9,
-        tension: 70,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, [draggingIdx, hoverIdx, queue.length]);
-
   const createPanResponder = (index) => {
     return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 2,
-      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 2,
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 3,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 3,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: () => {
         setDraggingIdx(index);
         setHoverIdx(index);
@@ -154,22 +114,29 @@ function DraggableJamQueue({
       {queue.map((qTrack, idx) => {
         const qId = qTrack._id || qTrack.id || idx;
         const isDragging = draggingIdx === idx;
-        const shift = isDragging ? panY : getShiftAnim(idx);
+        const isTargetHover = draggingIdx !== null && hoverIdx === idx && !isDragging;
 
         return (
           <Animated.View
             key={`${qId}-${idx}`}
             style={[
               styles.queueItem,
-              {
-                transform: [
-                  { translateY: shift },
-                  { scale: isDragging ? 1.03 : 1 }
-                ],
-                zIndex: isDragging ? 9999 : 1,
-                elevation: isDragging ? 15 : 0,
-                borderColor: isDragging ? '#17a398' : 'rgba(255, 255, 255, 0.1)',
-                backgroundColor: isDragging ? '#1a2e29' : 'rgba(0, 0, 0, 0.3)',
+              isDragging && {
+                transform: [{ translateY: panY }, { scale: 1.03 }],
+                zIndex: 9999,
+                elevation: 20,
+                borderColor: '#17a398',
+                backgroundColor: '#1a2e29',
+                shadowColor: '#17a398',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.4,
+                shadowRadius: 8,
+              },
+              isTargetHover && {
+                borderTopWidth: hoverIdx < draggingIdx ? 3.5 : 1,
+                borderBottomWidth: hoverIdx > draggingIdx ? 3.5 : 1,
+                borderColor: '#17a398',
+                backgroundColor: 'rgba(23, 163, 152, 0.15)',
               }
             ]}
           >
@@ -270,6 +237,8 @@ export default function JamRoomModal({ visible, onClose }) {
   const [shuffleSeed, setShuffleSeed] = useState(0);
   const [selectedUser, setSelectedUser] = useState(null);
   const [progressBarWidth, setProgressBarWidth] = useState(0);
+  const [jamContentFilter, setJamContentFilter] = useState('songs'); // 'songs' | 'quran'
+  const [stableRecommendations, setStableRecommendations] = useState([]);
 
   const formatTime = (secs) => {
     const s = Math.floor(Math.max(0, Number(secs) || 0));
@@ -280,8 +249,6 @@ export default function JamRoomModal({ visible, onClose }) {
 
   const { width, height } = useWindowDimensions();
   const isLandscape = (width > height && width >= 480) || width >= 650;
-
-  // Modal visibility handled by <Modal visible={visible}>
 
   const handleCopyCode = () => {
     const code = jamSession?.code || jamSession?.roomCode;
@@ -350,27 +317,45 @@ export default function JamRoomModal({ visible, onClose }) {
     reorderJamQueue(fromIdx, toIdx);
   };
 
-  // Smart recommendations: user liked tracks + randomized library mix instead of chronological uploads
-  const smartRecommendations = useMemo(() => {
-    if (!Array.isArray(tracks) || tracks.length === 0) return [];
-    const liked = tracks.filter((t) =>
+  // Stable recommendations: populated when drawer opens, filter switches, or user taps SHUFFLE
+  useEffect(() => {
+    if (!isSearchOpen || !Array.isArray(tracks) || tracks.length === 0) return;
+
+    // Filter by content type first (Songs vs Quran)
+    const contentPool = tracks.filter((t) => {
+      const isQ = isQuranContent(t);
+      return jamContentFilter === 'quran' ? isQ : !isQ;
+    });
+
+    const liked = contentPool.filter((t) =>
       likedTrackIds.some((id) => String(id) === String(t._id || t.id))
     );
-    const others = tracks.filter((t) =>
+    const others = contentPool.filter((t) =>
       !likedTrackIds.some((id) => String(id) === String(t._id || t.id))
     );
+
     const shuffledOthers = [...others].sort(() => 0.5 - Math.random());
     const mixed = [...liked, ...shuffledOthers];
-    return mixed.slice(0, 18);
-  }, [tracks, likedTrackIds, shuffleSeed]);
+    setStableRecommendations(mixed.slice(0, 24));
+  }, [isSearchOpen, jamContentFilter, shuffleSeed, tracks.length]);
 
-  const filteredTracks = searchQuery.trim()
-    ? (tracks || []).filter(
-        (t) =>
-          (t?.title && t.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          (t?.artist && t.artist.toLowerCase().includes(searchQuery.toLowerCase()))
-      ).slice(0, 20)
-    : smartRecommendations;
+  const filteredTracks = useMemo(() => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      return (tracks || [])
+        .filter((t) => {
+          const isQ = isQuranContent(t);
+          const matchesFilter = jamContentFilter === 'quran' ? isQ : !isQ;
+          if (!matchesFilter) return false;
+          return (
+            (t?.title && t.title.toLowerCase().includes(q)) ||
+            (t?.artist && t.artist.toLowerCase().includes(q))
+          );
+        })
+        .slice(0, 25);
+    }
+    return stableRecommendations;
+  }, [searchQuery, jamContentFilter, stableRecommendations, tracks]);
 
   const myId = String(currentUser?._id || currentUser?.id || '');
   const isCurrentUserHost = Boolean(
@@ -683,11 +668,52 @@ export default function JamRoomModal({ visible, onClose }) {
       {/* Add Song Drawer */}
       {isSearchOpen && (
         <View style={styles.searchDrawer}>
+          {/* Content Type Filter: Songs vs Quran */}
+          <View style={styles.filterTabRow}>
+            <TouchableOpacity
+              style={[
+                styles.filterTabBtn,
+                jamContentFilter === 'songs' && styles.filterTabBtnActive,
+              ]}
+              onPress={() => setJamContentFilter('songs')}
+              activeOpacity={0.8}
+            >
+              <Music size={12} color={jamContentFilter === 'songs' ? '#082621' : '#9ca3af'} />
+              <Text
+                style={[
+                  styles.filterTabText,
+                  jamContentFilter === 'songs' && styles.filterTabTextActive,
+                ]}
+              >
+                SONGS (أغاني)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterTabBtn,
+                jamContentFilter === 'quran' && styles.filterTabBtnActive,
+              ]}
+              onPress={() => setJamContentFilter('quran')}
+              activeOpacity={0.8}
+            >
+              <BookOpen size={12} color={jamContentFilter === 'quran' ? '#082621' : '#9ca3af'} />
+              <Text
+                style={[
+                  styles.filterTabText,
+                  jamContentFilter === 'quran' && styles.filterTabTextActive,
+                ]}
+              >
+                QURAN (قرآن)
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.searchBox}>
             <Search size={14} color="#9ca3af" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search songs to queue..."
+              placeholder={jamContentFilter === 'quran' ? "Search Quran recitations..." : "Search songs to queue..."}
               placeholderTextColor="#6b7280"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -704,7 +730,9 @@ export default function JamRoomModal({ visible, onClose }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Sparkles size={11} color={colors.mint} />
               <Text style={styles.recsHeaderTitle}>
-                {searchQuery.trim() ? `RESULTS (${filteredTracks.length})` : 'YOUR FAVORITES & DISCOVERIES'}
+                {searchQuery.trim()
+                  ? `RESULTS (${filteredTracks.length})`
+                  : (jamContentFilter === 'quran' ? 'QURAN RECITATIONS' : 'YOUR FAVORITES & DISCOVERIES')}
               </Text>
             </View>
             {!searchQuery.trim() && (
@@ -1323,6 +1351,38 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     marginTop: 8,
+  },
+  filterTabRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  filterTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#18181b',
+    borderWidth: 1.5,
+    borderColor: '#3f3f46',
+  },
+  filterTabBtnActive: {
+    backgroundColor: '#17a398',
+    borderColor: '#17a398',
+  },
+  filterTabText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10.5,
+    color: '#9ca3af',
+  },
+  filterTabTextActive: {
+    color: '#082621',
   },
   searchBox: {
     flexDirection: 'row',

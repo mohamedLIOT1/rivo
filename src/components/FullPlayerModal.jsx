@@ -1356,27 +1356,27 @@ export default function FullPlayerModal({
 
   return (
     <div 
-      className={`fixed inset-0 z-[300] transition-all duration-300 flex flex-col overflow-hidden select-none font-sans ${
+      className={`fixed inset-0 z-[300] bg-[#060a09] transition-all duration-300 flex flex-col overflow-hidden select-none font-sans ${
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
     >
       {/* ── Dynamic Ambient Cover Art Background ── */}
       {currentTrack?.cover ? (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none transition-all duration-1000">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none transition-all duration-1000 bg-[#060a09]">
           <img 
             src={currentTrack.cover} 
             alt="" 
-            className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-60 transition-opacity duration-1000" 
+            className="absolute inset-0 w-full h-full object-cover scale-150 blur-3xl opacity-40 contrast-125 saturate-150 transition-opacity duration-1000" 
           />
-          <div className={`absolute inset-0 ${isDark ? 'bg-black/75' : 'bg-black/50'} ${desktopSideTab === 'lyrics' || activeTab === 'lyrics' ? 'backdrop-blur-sm' : 'backdrop-blur-lg'} transition-colors duration-500`} />
+          <div className={`absolute inset-0 ${isDark ? 'bg-[#060a09]/80' : 'bg-[#0b1c18]/70'} backdrop-blur-2xl transition-colors duration-500`} />
         </div>
       ) : (
         <div 
-          className="absolute inset-0 pointer-events-none transition-all duration-1000"
+          className="absolute inset-0 pointer-events-none transition-all duration-1000 bg-[#060a09]"
           style={{
             background: isDark
-              ? `radial-gradient(circle at 50% 30%, ${trackColor}55 0%, #060a09 85%)`
-              : `radial-gradient(circle at 50% 30%, ${trackColor}88 0%, #0b1c18 85%)`
+              ? `radial-gradient(circle at 50% 30%, ${trackColor}40 0%, #060a09 85%)`
+              : `radial-gradient(circle at 50% 30%, ${trackColor}60 0%, #0b1c18 85%)`
           }}
         />
       )}
