@@ -26,32 +26,44 @@ async function publish() {
   const version = pkg.version || '1.6.0';
   const tag = `v${version}`;
   const releaseName = `Rivo v${version}`;
-  const releaseBody = `## Rivo v${version} Update
+  const releaseBody = `## Rivo v${version} Release Notes
 
-### What's Changed
-- **Android Launcher Icon Safe Zone:** Centered adaptive icon within the standard safe zone (66%) across all mipmap densities (mdpi to xxxhdpi) to eliminate OS cropping.
-- **Clean Launch Splash Screen:** Removed splash screen bottle cap graphic, launching seamlessly into the brutalist dark background matching iOS.
-- **Auto Sign-in / Register Modal:** Prompt authentication immediately on launch for unauthenticated users, matching the iOS flow.
-- **Modals MiniPlayer & Continuous Playback:** Mounted the bottom MiniPlayer within Album and Artist detail views and resolved the audio focus collision that previously caused ExoPlayer to halt songs.
-- **People & Listeners Search:** Added listener search with avatar, followers count, public crate count, and direct profile view modal on both iOS and Android.
-- **Playlist Public / Private Toggle:** Added instant visibility switching directly from the playlist hero card, edit modal, and collection grid.
-- **Queue Playlist Control:** Added dedicated QUEUE button to set or append playlist crates directly into the playback queue.
+### What's New in v${version}
+- **Offline Folder Import Auto-Enrichment:** Importing audio directories on Android now parses full ID3v2 tags (embedded album art up to 3MB, USLT synchronized & unsynchronized lyrics, artist, title, album) and strips audio bitrate/rip suffixes.
+- **Scan Offline Vault Upgrade:** Tapping SCAN in the offline vault automatically enriches existing imported songs that lacked album art or embedded lyrics.
+- **60fps Silky Smooth Queue Dragging:** Virtualized queue reordering on Android with zero layout reflows, isolated item memoization, and throttled auto-scroller.
+- **Auto-Sync Lyrics for Local Tracks:** Playing local/downloaded tracks while online automatically queries matching lyrics and caches them permanently to the offline vault.
 `;
 
-  const rootFiles = fs.readdirSync(path.resolve(__dirname, '..'));
-  const apkFileName = rootFiles.find(f => f.endsWith('.apk') && f.includes(version)) ||
-                     rootFiles.find(f => f.endsWith('.apk') && f.includes('1.6.')) ||
-                     rootFiles.find(f => f.endsWith('.apk') && !f.includes('1.2.'));
-  const apkPath = apkFileName ? path.resolve(__dirname, '..', apkFileName) : null;
+  const searchDirs = [
+    path.resolve(__dirname, '../public/downloads'),
+    path.resolve(__dirname, '../dist/downloads'),
+    path.resolve(__dirname, '..')
+  ];
+
+  let apkPath = null;
+  let ipaPath = null;
+
+  for (const dir of searchDirs) {
+    if (!fs.existsSync(dir)) continue;
+    const files = fs.readdirSync(dir);
+    if (!apkPath) {
+      const match = files.find(f => f.endsWith('.apk') && f.includes(version)) ||
+                    files.find(f => f === 'Rivo.apk');
+      if (match) apkPath = path.join(dir, match);
+    }
+    if (!ipaPath) {
+      const match = files.find(f => f.endsWith('.ipa') && f.includes(version)) ||
+                    files.find(f => f === 'Rivo.ipa');
+      if (match) ipaPath = path.join(dir, match);
+    }
+  }
+
   const apkBytes = apkPath && fs.existsSync(apkPath) ? fs.readFileSync(apkPath) : null;
   if (apkBytes) {
     console.log(`Loaded APK from ${apkPath} (${apkBytes.length} bytes)`);
   }
 
-  const ipaFileName = rootFiles.find(f => f.endsWith('.ipa') && f.includes(version)) ||
-                     rootFiles.find(f => f.endsWith('.ipa') && f.includes('1.5.')) ||
-                     rootFiles.find(f => f.endsWith('.ipa'));
-  const ipaPath = ipaFileName ? path.resolve(__dirname, '..', ipaFileName) : null;
   const ipaBytes = ipaPath && fs.existsSync(ipaPath) ? fs.readFileSync(ipaPath) : null;
   if (ipaBytes) {
     console.log(`Loaded IPA from ${ipaPath} (${ipaBytes.length} bytes)`);

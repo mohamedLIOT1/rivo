@@ -436,6 +436,8 @@ function cleanMetadataString(str, fallback = '') {
     .replace(/youtu\.be\S*/gi, '')
     .replace(/liofy\S*/gi, '')
     .replace(/[\[\(]?(?:official|lyrics|video|audio|hd|4k|remastered)[\]\)]?/gi, '')
+    .replace(/[\[\(]?(?:mp3|128k|160k|256k|320k|m4a|wav|flac|mp3_\d+k)[\]\)]?/gi, '')
+    .replace(/_\d+k/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
   return cleaned || fallback;
@@ -1335,10 +1337,14 @@ export async function extractId3Metadata(fileUri, trackId = null) {
   if (!fileUri) return result;
 
   try {
-    const fileInfo = await FileSystem.getInfoAsync(fileUri);
-    if (!fileInfo.exists || fileInfo.size < 128) return result;
+    const isContentUri = typeof fileUri === 'string' && fileUri.startsWith('content://');
+    const fileInfo = await FileSystem.getInfoAsync(fileUri).catch(() => ({ exists: isContentUri }));
+    if (!fileInfo || (!fileInfo.exists && !isContentUri)) return result;
 
-    const sampleLength = Math.min(fileInfo.size, 393216);
+    const fileSize = (typeof fileInfo.size === 'number' && fileInfo.size > 0) ? fileInfo.size : null;
+    if (fileSize !== null && fileSize < 128) return result;
+
+    const sampleLength = fileSize ? Math.min(fileSize, 524288) : 524288;
     const headB64 = await FileSystem.readAsStringAsync(fileUri, {
       encoding: FileSystem.EncodingType.Base64,
       length: sampleLength,
@@ -1346,11 +1352,24 @@ export async function extractId3Metadata(fileUri, trackId = null) {
     }).catch(() => null);
 
     if (headB64) {
-      const bytes = base64ToUint8Array(headB64);
+      let bytes = base64ToUint8Array(headB64);
       if (bytes.length >= 10 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
         const version = bytes[3];
         const flags = bytes[5];
         const tagSize = readSynchSafeInt(bytes[6], bytes[7], bytes[8], bytes[9]);
+
+        // If the tag size is larger than the sample, read the full tag up to 3MB to preserve embedded covers/lyrics
+        if (tagSize + 10 > bytes.length && tagSize < 3145728) {
+          const fullTagB64 = await FileSystem.readAsStringAsync(fileUri, {
+            encoding: FileSystem.EncodingType.Base64,
+            length: tagSize + 10,
+            position: 0,
+          }).catch(() => null);
+          if (fullTagB64) {
+            bytes = base64ToUint8Array(fullTagB64);
+          }
+        }
+
         let offset = 10;
 
         if (version === 4 && (flags & 0x40)) {
@@ -1468,11 +1487,11 @@ export async function extractId3Metadata(fileUri, trackId = null) {
       }
     }
 
-    if ((!result.title || !result.artist) && fileInfo.size >= 128) {
+    if ((!result.title || !result.artist) && fileSize && fileSize >= 128) {
       const tailB64 = await FileSystem.readAsStringAsync(fileUri, {
         encoding: FileSystem.EncodingType.Base64,
         length: 128,
-        position: fileInfo.size - 128,
+        position: fileSize - 128,
       }).catch(() => null);
 
       if (tailB64) {
@@ -1557,27 +1576,32 @@ export const importAudioFolderFromDevice = async () => {
           const rawName = parts[parts.length - 1] || 'Track.mp3';
           const cleanName = rawName.replace(/^.*%2F/, '');
           const fileId = `folder_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+          
+          const id3Meta = await extractId3Metadata(uri, fileId);
           const { title: filenameTitle, artist: filenameArtist } = parseAudioMetadataFromFilename(cleanName);
 
-          const title = cleanMetadataString(filenameTitle || cleanName.replace(/\.[^/.]+$/, ''), 'Local Track');
-          const artist = cleanMetadataString(filenameArtist || 'Device Music', 'Device Music');
+          const title = cleanMetadataString(id3Meta.title || filenameTitle || cleanName.replace(/\.[^/.]+$/, ''), 'Local Track');
+          const artist = cleanMetadataString(id3Meta.artist || (filenameArtist !== 'Local Import' ? filenameArtist : null) || 'Device Music', 'Device Music');
+          const album = cleanMetadataString(id3Meta.album || 'Device Music Folder', 'Device Music Folder');
+          const coverUrl = id3Meta.coverUrl || null;
+          const lyrics = id3Meta.lyrics ? parseLrcLyrics(id3Meta.lyrics) : null;
 
           const newTrack = {
             id: fileId,
             _id: fileId,
             title,
             artist,
-            album: 'Device Music Folder',
+            album,
             source: 'Device Folder',
             publisher: 'Device Folder',
             signature: 'Device Folder',
             localAudioUri: uri,
             nativeAudioUri: uri,
             audioUrl: uri,
-            coverUrl: null,
-            cover: null,
-            lyrics: null,
-            embeddedLyrics: null,
+            coverUrl,
+            cover: coverUrl,
+            lyrics,
+            embeddedLyrics: lyrics,
             isDownloaded: true,
             downloaded: true,
             isLocalImport: true,
@@ -1884,10 +1908,69 @@ export const scanOfflineVault = async () => {
     }
   }
 
-  if (newTracks.length > 0) {
-    const updated = deduplicateTrackList([...newTracks, ...existing]);
+  // 4. Enrich existing tracks with missing metadata, cover art, or lyrics
+  let enrichedCount = 0;
+  const enrichedExisting = await Promise.all((existing || []).map(async (t) => {
+    if (!t) return t;
+    const uri = t.localAudioUri || t.nativeAudioUri || t.audioUrl;
+    const needsEnrichment = !t.coverUrl || !t.lyrics || t.artist === 'Local Import' || t.artist === 'Device Music' || /\(mp3_\d+k\)/i.test(t.title || '');
+    if (!uri || !needsEnrichment) return t;
+
+    try {
+      const fileId = t.id || t._id || `track_${Date.now()}`;
+      const id3Meta = await extractId3Metadata(uri, fileId);
+      let updated = false;
+      const copy = { ...t };
+
+      if (id3Meta.title && id3Meta.title !== copy.title) {
+        copy.title = cleanMetadataString(id3Meta.title, copy.title);
+        updated = true;
+      } else if (copy.title) {
+        const cleaned = cleanMetadataString(copy.title, copy.title);
+        if (cleaned !== copy.title) {
+          copy.title = cleaned;
+          updated = true;
+        }
+      }
+
+      if (id3Meta.artist && (copy.artist === 'Local Import' || copy.artist === 'Device Music' || !copy.artist)) {
+        copy.artist = cleanMetadataString(id3Meta.artist, copy.artist);
+        updated = true;
+      }
+
+      if (id3Meta.album && (copy.album === 'Device Music Folder' || !copy.album)) {
+        copy.album = cleanMetadataString(id3Meta.album, copy.album);
+        updated = true;
+      }
+
+      if (!copy.coverUrl && id3Meta.coverUrl) {
+        copy.coverUrl = id3Meta.coverUrl;
+        copy.cover = id3Meta.coverUrl;
+        updated = true;
+      }
+
+      if (!copy.lyrics && id3Meta.lyrics) {
+        const parsed = parseLrcLyrics(id3Meta.lyrics);
+        copy.lyrics = parsed;
+        copy.embeddedLyrics = parsed;
+        updated = true;
+      }
+
+      if (updated) {
+        enrichedCount++;
+        return copy;
+      }
+    } catch (e) {
+      console.warn('[downloadManager] error enriching track:', t.title, e.message);
+    }
+    return t;
+  }));
+
+  const allTracks = [...newTracks, ...enrichedExisting];
+  if (newTracks.length > 0 || enrichedCount > 0) {
+    const updated = deduplicateTrackList(allTracks);
     await saveToStorageAndManifest(updated);
-    return { newlyFound, tracks: updated };
+    return { newlyFound: newlyFound + enrichedCount, tracks: updated };
   }
 
   return { newlyFound: 0, tracks: existing };

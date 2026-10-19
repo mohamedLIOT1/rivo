@@ -24,7 +24,113 @@ import { parseLrcLyrics } from '../../utils/lrcParser';
 const { width, height } = Dimensions.get('window');
 const QUEUE_ROW_HEIGHT = 72;
 
-function DraggableQueueList({
+const QueueRowItem = React.memo(function QueueRowItem({
+  item,
+  index,
+  isItemPlaying,
+  isDragging,
+  isTargetSlot,
+  isAboveTarget,
+  panHandler,
+  panY,
+  deckBg,
+  deckBorder,
+  textTitle,
+  colors,
+  isDark,
+  onPlay,
+  onRemove,
+  canDrag,
+}) {
+  const itemCover = normalizeCoverUri(item?.coverUrl || item?.cover, item);
+
+  return (
+    <Animated.View
+      style={[
+        styles.queueItem,
+        {
+          backgroundColor: isDragging
+            ? (isDark ? '#19332b' : '#c8f2e9')
+            : isTargetSlot
+            ? (isDark ? '#152520' : '#e6f7f3')
+            : isItemPlaying
+            ? (isDark ? '#14201c' : '#e6f4f1')
+            : deckBg,
+          borderColor: (isDragging || isTargetSlot || isItemPlaying) ? colors.mint : deckBorder,
+          transform: [
+            { translateY: isDragging ? panY : 0 },
+            { scale: isDragging ? 1.03 : 1 }
+          ],
+          zIndex: isDragging ? 9999 : 1,
+          elevation: isDragging ? 24 : 0,
+        },
+      ]}
+    >
+      {isTargetSlot && (
+        <View
+          style={[
+            styles.dropIndicatorBar,
+            isAboveTarget ? { top: -2 } : { bottom: -2 },
+            { backgroundColor: colors.mint }
+          ]}
+        />
+      )}
+
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+        onPress={onPlay}
+        activeOpacity={0.75}
+        disabled={isDragging}
+      >
+        <Image source={{ uri: itemCover }} style={styles.queueThumb} />
+        <View style={{ flex: 1, marginHorizontal: 10 }}>
+          <Text style={[styles.queueTitle, { color: isItemPlaying ? colors.mint : textTitle }]} numberOfLines={1}>
+            {item?.title || 'Unknown Title'}
+          </Text>
+          <Text style={styles.queueArtist} numberOfLines={1}>{item?.artist || 'Unknown Artist'}</Text>
+        </View>
+      </TouchableOpacity>
+
+      <View style={styles.queueControlsRow}>
+        <TouchableOpacity
+          onPress={onRemove}
+          style={styles.queueActionBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+        >
+          <Trash2 size={15} color="#ef4444" />
+        </TouchableOpacity>
+
+        {canDrag && (
+          <View
+            {...(panHandler || {})}
+            style={[
+              styles.dragHandle,
+              isDragging && { backgroundColor: colors.mint + '44' }
+            ]}
+            hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+          >
+            <GripVertical size={18} color={isDragging ? colors.mint : (isDark ? '#94a3b8' : '#64748b')} />
+          </View>
+        )}
+      </View>
+    </Animated.View>
+  );
+}, (prev, next) => {
+  return (
+    prev.item === next.item &&
+    prev.isItemPlaying === next.isItemPlaying &&
+    prev.isDragging === next.isDragging &&
+    prev.isTargetSlot === next.isTargetSlot &&
+    prev.isAboveTarget === next.isAboveTarget &&
+    prev.deckBg === next.deckBg &&
+    prev.deckBorder === next.deckBorder &&
+    prev.textTitle === next.textTitle &&
+    prev.canDrag === next.canDrag &&
+    prev.isDark === next.isDark
+  );
+});
+
+const DraggableQueueList = React.memo(function DraggableQueueList({
   queue,
   trackId,
   isDark,
@@ -43,9 +149,48 @@ function DraggableQueueList({
   const panY = useRef(new Animated.Value(0)).current;
   const listRef = useRef(null);
   const scrollOffsetRef = useRef(0);
+  const autoScrollTimerRef = useRef(null);
 
   draggingIdxRef.current = draggingIdx;
   hoverIdxRef.current = hoverIdx;
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollTimerRef.current) {
+      clearInterval(autoScrollTimerRef.current);
+      autoScrollTimerRef.current = null;
+    }
+  }, []);
+
+  const handleAutoScroll = useCallback((moveY) => {
+    const topEdge = 160;
+    const bottomEdge = height - 160;
+
+    if (moveY < topEdge && scrollOffsetRef.current > 0) {
+      if (!autoScrollTimerRef.current) {
+        autoScrollTimerRef.current = setInterval(() => {
+          if (scrollOffsetRef.current <= 0) {
+            stopAutoScroll();
+            return;
+          }
+          scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 14);
+          listRef.current?.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
+        }, 25);
+      }
+    } else if (moveY > bottomEdge) {
+      if (!autoScrollTimerRef.current) {
+        autoScrollTimerRef.current = setInterval(() => {
+          scrollOffsetRef.current += 14;
+          listRef.current?.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
+        }, 25);
+      }
+    } else {
+      stopAutoScroll();
+    }
+  }, [stopAutoScroll]);
+
+  useEffect(() => {
+    return () => stopAutoScroll();
+  }, [stopAutoScroll]);
 
   const createPanResponder = (index) => {
     return PanResponder.create({
@@ -53,9 +198,10 @@ function DraggableQueueList({
       onStartShouldSetPanResponderCapture: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 3,
       onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 3,
-      onPanResponderTerminationRequest: () => false, // FlatList cannot cancel or steal this drag!
-      onShouldBlockNativeResponder: () => true,      // Native touch stealing blocked!
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: () => {
+        stopAutoScroll();
         draggingIdxRef.current = index;
         hoverIdxRef.current = index;
         setDraggingIdx(index);
@@ -70,17 +216,10 @@ function DraggableQueueList({
           hoverIdxRef.current = nextHover;
           setHoverIdx(nextHover);
         }
-        if (listRef.current) {
-          if (gestureState.moveY < 180 && scrollOffsetRef.current > 0) {
-            scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 10);
-            listRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-          } else if (gestureState.moveY > height - 180) {
-            scrollOffsetRef.current = scrollOffsetRef.current + 10;
-            listRef.current.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-          }
-        }
+        handleAutoScroll(gestureState.moveY);
       },
       onPanResponderRelease: () => {
+        stopAutoScroll();
         const from = index;
         const to = hoverIdxRef.current;
         if (to !== null && to !== undefined && to !== from && reorderQueue) {
@@ -93,6 +232,7 @@ function DraggableQueueList({
         panY.setValue(0);
       },
       onPanResponderTerminate: () => {
+        stopAutoScroll();
         const from = index;
         const to = hoverIdxRef.current;
         if (to !== null && to !== undefined && to !== from && reorderQueue) {
@@ -111,6 +251,34 @@ function DraggableQueueList({
     return queue.map((_, i) => createPanResponder(i));
   }, [queue.length, reorderQueue]);
 
+  const renderItem = useCallback(({ item, index }) => {
+    const isItemPlaying = String(item._id || item.id) === trackId;
+    const isDragging = draggingIdx === index;
+    const isTargetSlot = hoverIdx === index && draggingIdx !== null && draggingIdx !== index;
+    const isAboveTarget = hoverIdx !== null && draggingIdx !== null && hoverIdx < draggingIdx;
+
+    return (
+      <QueueRowItem
+        item={item}
+        index={index}
+        isItemPlaying={isItemPlaying}
+        isDragging={isDragging}
+        isTargetSlot={isTargetSlot}
+        isAboveTarget={isAboveTarget}
+        panHandler={panResponders[index] ? panResponders[index].panHandlers : null}
+        panY={panY}
+        deckBg={deckBg}
+        deckBorder={deckBorder}
+        textTitle={textTitle}
+        colors={colors}
+        isDark={isDark}
+        onPlay={() => playTrack(item, queue)}
+        onRemove={() => removeFromQueue && removeFromQueue(index)}
+        canDrag={queue.length > 1}
+      />
+    );
+  }, [trackId, draggingIdx, hoverIdx, panResponders, panY, deckBg, deckBorder, textTitle, colors, isDark, playTrack, queue, removeFromQueue]);
+
   return (
     <FlatList
       ref={listRef}
@@ -121,91 +289,16 @@ function DraggableQueueList({
       }}
       scrollEventThrottle={16}
       keyExtractor={(item, index) => `${item._id || item.id}-${index}`}
-      renderItem={({ item, index }) => {
-        const isItemPlaying = String(item._id || item.id) === trackId;
-        const itemCover = normalizeCoverUri(item.coverUrl || item.cover, item);
-        const isDragging = draggingIdx === index;
-        const isTargetSlot = hoverIdx === index && draggingIdx !== null && draggingIdx !== index;
-
-        return (
-          <Animated.View
-            style={[
-              styles.queueItem,
-              {
-                backgroundColor: deckBg,
-                borderColor: isDragging
-                  ? colors.mint
-                  : isTargetSlot
-                  ? colors.mint
-                  : isItemPlaying
-                  ? colors.mint
-                  : deckBorder,
-                transform: [
-                  { translateY: isDragging ? panY : 0 },
-                  { scale: isDragging ? 1.04 : 1 }
-                ],
-                zIndex: isDragging ? 9999 : 1,
-                elevation: isDragging ? 30 : 0,
-                shadowColor: isDragging ? colors.mint : '#000',
-                shadowOffset: { width: 0, height: isDragging ? 8 : 1 },
-                shadowOpacity: isDragging ? 0.45 : 0.05,
-                shadowRadius: isDragging ? 12 : 2,
-              },
-              isItemPlaying && !isDragging && {
-                backgroundColor: isDark ? '#14201c' : '#e6f4f1'
-              },
-              isDragging && {
-                backgroundColor: isDark ? '#19332b' : '#c8f2e9',
-              },
-              isTargetSlot && {
-                borderTopWidth: hoverIdx < draggingIdx ? 3.5 : 1.5,
-                borderBottomWidth: hoverIdx > draggingIdx ? 3.5 : 1.5,
-                borderTopColor: hoverIdx < draggingIdx ? colors.mint : deckBorder,
-                borderBottomColor: hoverIdx > draggingIdx ? colors.mint : deckBorder,
-                backgroundColor: isDark ? '#152520' : '#e6f7f3',
-              }
-            ]}
-          >
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-              onPress={() => playTrack(item, queue)}
-              activeOpacity={0.75}
-              disabled={isDragging}
-            >
-              <Image source={{ uri: itemCover }} style={styles.queueThumb} />
-              <View style={{ flex: 1, marginHorizontal: 10 }}>
-                <Text style={[styles.queueTitle, { color: isItemPlaying ? colors.mint : textTitle }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Text style={styles.queueArtist} numberOfLines={1}>{item.artist}</Text>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.queueControlsRow}>
-              <TouchableOpacity
-                onPress={() => removeFromQueue && removeFromQueue(index)}
-                style={styles.queueActionBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              >
-                <Trash2 size={15} color="#ef4444" />
-              </TouchableOpacity>
-
-              {queue.length > 1 && (
-                <View
-                  {...(panResponders[index] ? panResponders[index].panHandlers : {})}
-                  style={[
-                    styles.dragHandle,
-                    isDragging && { backgroundColor: colors.mint + '44' }
-                  ]}
-                  hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
-                >
-                  <GripVertical size={18} color={isDragging ? colors.mint : (isDark ? '#94a3b8' : '#64748b')} />
-                </View>
-              )}
-            </View>
-          </Animated.View>
-        );
-      }}
+      getItemLayout={(data, index) => ({
+        length: QUEUE_ROW_HEIGHT,
+        offset: QUEUE_ROW_HEIGHT * index,
+        index,
+      })}
+      initialNumToRender={12}
+      maxToRenderPerBatch={10}
+      windowSize={7}
+      removeClippedSubviews={Platform.OS === 'android'}
+      renderItem={renderItem}
       contentContainerStyle={styles.queueBody}
       ListEmptyComponent={
         <View style={{ padding: 40, alignItems: 'center' }}>
@@ -214,7 +307,7 @@ function DraggableQueueList({
       }
     />
   );
-}
+});
 
 export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const {
@@ -1460,8 +1553,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1.5,
-    padding: 10,
+    paddingHorizontal: 10,
+    height: 64,
     marginBottom: 8,
+  },
+  dropIndicatorBar: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    height: 3,
+    borderRadius: 2,
+    zIndex: 10,
   },
   queueThumb: {
     width: 44,

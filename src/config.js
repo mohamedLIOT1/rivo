@@ -1,5 +1,5 @@
 /**
- * Rivo config — API URL resolution (safe for all environments including Capacitor Android APK)
+ * Rivo config — API URL resolution (safe for all environments including Tauri Desktop & Capacitor Android APK)
  */
 
 export const API_BASE_URL = (() => {
@@ -8,8 +8,13 @@ export const API_BASE_URL = (() => {
     const { hostname, protocol, host } = window.location;
     if (
       window.Capacitor ||
+      window.__TAURI_INTERNALS__ ||
+      window.__TAURI__ ||
       protocol === 'capacitor:' ||
-      protocol === 'file:'
+      protocol === 'tauri:' ||
+      protocol === 'file:' ||
+      hostname.includes('tauri') ||
+      hostname.endsWith('.localhost')
     ) {
       return 'https://rivo-m.duckdns.org';
     }

@@ -18,6 +18,7 @@ import ChatModal from './components/ChatModal';
 import ShortcutsModal from './components/ShortcutsModal';
 import ListeningActivityPanel from './components/ListeningActivityPanel';
 import RivoLogo from './components/RivoLogo';
+import DesktopUpdateModal from './components/DesktopUpdateModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { buildUrl, parseLocation } from './utils/router';
 import { APP_VERSION } from './version';
@@ -2542,6 +2543,7 @@ function AppContent() {
           )}
         </div>
       )}
+      <DesktopUpdateModal />
     </div>
     </DownloadProvider>
   );

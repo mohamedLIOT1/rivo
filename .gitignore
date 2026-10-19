@@ -22,3 +22,7 @@ uploads/audio-cache/
 temp_artifacts_*/
 desktop-app/bin/
 desktop-app/obj/
+release-desktop/
+src-tauri/
+scripts/__pycache__/
+scripts/build-desktop.ps1

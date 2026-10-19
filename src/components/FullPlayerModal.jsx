@@ -10,6 +10,7 @@ import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
+import TrackActionMenuModal from './TrackActionMenuModal';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
@@ -150,6 +151,7 @@ export default function FullPlayerModal({
   const [activeTab, setActiveTab] = useState('player');
   const [desktopSideTab, setDesktopSideTab] = useState('lyrics');
   const [isVinylMode, setIsVinylMode] = useState(false);
+  const [actionMenuTrack, setActionMenuTrack] = useState(null);
 
   // Use global theme directly
   const isDark = globalTheme === 'dark';
@@ -260,24 +262,6 @@ export default function FullPlayerModal({
   const activeTime = rawActiveTime > 10000 ? Math.round(rawActiveTime / 1000) : rawActiveTime;
   const rawActiveDur = (duration !== undefined && duration > 0) ? duration : (audioDuration || currentTrack?.duration || 210);
   const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
-
-  // High-frequency 50ms sampler to eliminate visual lag during lyrics playback
-  const [smoothTime, setSmoothTime] = useState(activeTime);
-
-  useEffect(() => {
-    setSmoothTime(activeTime);
-  }, [activeTime]);
-
-  useEffect(() => {
-    if (!isOpen || !isPlaying) return;
-    const interval = setInterval(() => {
-      if (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime)) {
-        const curr = audioRef.current.currentTime;
-        setSmoothTime(prev => (Math.abs(curr - prev) >= 0.2 ? curr : prev));
-      }
-    }, 200);
-    return () => clearInterval(interval);
-  }, [isOpen, isPlaying, isYtTrack, audioRef]);
 
   const [isTranslating, setIsTranslating] = useState(false);
   const [translatedLyrics, setTranslatedLyrics] = useState(null);
@@ -433,16 +417,38 @@ export default function FullPlayerModal({
     }));
   }, [baseLyrics, syncOffset]);
 
-  const effectiveLyricTime = (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime) && isPlaying)
-    ? smoothTime
-    : activeTime;
+  const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
 
-  const activeLyricIndex = lyrics.length > 0
-    ? lyrics.findIndex((line, idx) => {
-        const nextLine = lyrics[idx + 1];
-        return effectiveLyricTime >= line.time && (!nextLine || effectiveLyricTime < nextLine.time);
-      })
-    : -1;
+  // Helper to determine the active lyric line for any given timestamp
+  const getActiveLyricIndexForTime = useCallback((timeVal) => {
+    if (!lyrics || lyrics.length === 0) return -1;
+    return lyrics.findIndex((line, idx) => {
+      const nextLine = lyrics[idx + 1];
+      return timeVal >= line.time && (!nextLine || timeVal < nextLine.time);
+    });
+  }, [lyrics]);
+
+  // Synchronize activeLyricIndex whenever activeTime (seek, pause, timeupdate) or lyrics change
+  useEffect(() => {
+    const t = (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime))
+      ? audioRef.current.currentTime
+      : activeTime;
+    const idx = getActiveLyricIndexForTime(t);
+    setActiveLyricIndex(prev => (prev === idx ? prev : idx));
+  }, [activeTime, lyrics, getActiveLyricIndexForTime, audioRef, isYtTrack]);
+
+  // High-frequency 100ms sampler during playback that ONLY triggers a state re-render when the line index actually changes
+  useEffect(() => {
+    if (!isOpen || !isPlaying || !lyrics.length) return;
+    const interval = setInterval(() => {
+      if (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime)) {
+        const curr = audioRef.current.currentTime;
+        const idx = getActiveLyricIndexForTime(curr);
+        setActiveLyricIndex(prev => (prev === idx ? prev : idx));
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [isOpen, isPlaying, lyrics, isYtTrack, audioRef, getActiveLyricIndexForTime]);
 
   const handleNudgeSync = (delta) => {
     setSyncOffset(prev => {
@@ -1360,34 +1366,50 @@ export default function FullPlayerModal({
         isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
       }`}
     >
-      {/* ── Dynamic Ambient Cover Art Background ── */}
-      {currentTrack?.cover ? (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none transition-all duration-1000 bg-[#060a09]">
-          <img 
-            src={currentTrack.cover} 
-            alt="" 
-            className="absolute inset-0 w-full h-full object-cover scale-150 blur-3xl opacity-40 contrast-125 saturate-150 transition-opacity duration-1000" 
+      {/* ── Dynamic Ambient Cover Art Background (GPU-optimized, zero backdrop-blur stalls) ── */}
+      <div 
+        className="absolute inset-0 overflow-hidden pointer-events-none bg-[#060a09]"
+        style={{ transform: 'translateZ(0)', contain: 'strict' }}
+      >
+        {currentTrack?.cover ? (
+          <>
+            <img 
+              src={currentTrack.cover} 
+              alt="" 
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-25 contrast-125 saturate-150 transition-opacity duration-700" 
+              style={{ transform: 'translateZ(0)' }}
+            />
+            <div 
+              className="absolute inset-0"
+              style={{
+                background: isDark
+                  ? `radial-gradient(circle at 50% 30%, ${trackColor}35 0%, #060a09 85%)`
+                  : `radial-gradient(circle at 50% 30%, ${trackColor}50 0%, #0b1c18 85%)`
+              }}
+            />
+            <div className={`absolute inset-0 ${isDark ? 'bg-[#060a09]/70' : 'bg-[#0b1c18]/60'} transition-colors duration-500`} />
+          </>
+        ) : (
+          <div 
+            className="absolute inset-0 transition-all duration-700"
+            style={{
+              background: isDark
+                ? `radial-gradient(circle at 50% 30%, ${trackColor}40 0%, #060a09 85%)`
+                : `radial-gradient(circle at 50% 30%, ${trackColor}60 0%, #0b1c18 85%)`
+            }}
           />
-          <div className={`absolute inset-0 ${isDark ? 'bg-[#060a09]/80' : 'bg-[#0b1c18]/70'} backdrop-blur-2xl transition-colors duration-500`} />
-        </div>
-      ) : (
-        <div 
-          className="absolute inset-0 pointer-events-none transition-all duration-1000 bg-[#060a09]"
-          style={{
-            background: isDark
-              ? `radial-gradient(circle at 50% 30%, ${trackColor}40 0%, #060a09 85%)`
-              : `radial-gradient(circle at 50% 30%, ${trackColor}60 0%, #0b1c18 85%)`
-          }}
-        />
-      )}
+        )}
+      </div>
 
       {/* Studio Acoustic Dot Grid Pattern */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-25 bg-[radial-gradient(#ffffff25_1px,transparent_1px)] [background-size:24px_24px]"
+        style={{ transform: 'translateZ(0)', contain: 'strict' }}
       />
 
       {/* ── Top Bar ── */}
-      <div className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 pt-[max(12px,env(safe-area-inset-top))] border-b-2 border-[#0b1110] bg-[#0b1110]/80 backdrop-blur-md">
+      <div className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 pt-[max(12px,env(safe-area-inset-top))] border-b-2 border-[#0b1110] bg-[#0b1110]/95">
         <button 
           onClick={onClose} 
           className="w-10 h-10 rounded-xl bg-[#fdfbf7] hover:bg-white text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
@@ -1408,8 +1430,8 @@ export default function FullPlayerModal({
         <div className="flex items-center gap-2">
           <button
             className="w-10 h-10 rounded-xl bg-[#fdfbf7] hover:bg-white text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
-            title="Add to Playlist"
-            onClick={openAddToPlaylist}
+            title="Track Options"
+            onClick={() => setActionMenuTrack(currentTrack)}
           >
             <MoreHorizontal size={20} strokeWidth={2.5} />
           </button>
@@ -2459,6 +2481,25 @@ export default function FullPlayerModal({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Track Action Menu Modal (Unified 3-dots menu for song) ── */}
+      {actionMenuTrack && (
+        <TrackActionMenuModal
+          isOpen={Boolean(actionMenuTrack)}
+          onClose={() => setActionMenuTrack(null)}
+          track={actionMenuTrack}
+          playlist={selectedPlaylist}
+          onPlayTrack={onPlayTrack || playTrack}
+          onAddToQueue={onAddToQueue}
+          openAddToPlaylist={openAddToPlaylist}
+          onRemoveTrackFromPlaylist={onRemoveTrackFromPlaylist}
+          openEditSongModal={onOpenEditSong}
+          onDeleteTrack={onDeleteTrack}
+          currentUser={currentUser}
+          globalTheme={globalTheme}
+          onToast={showToast}
+        />
       )}
 
       {/* Floating Action Toast Notification */}

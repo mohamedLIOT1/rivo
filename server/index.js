@@ -86,37 +86,40 @@ app.use((req, res, next) => {
   next();
 });
 
-// App Version Manifest
+// App Version Manifest — Independent versioning for each target
 const APP_VERSIONS_DATA = {
-  version: '1.9.1',
-  releaseNotes: "v1.9.1: Opaque full player backdrop fix, Quran vs Songs Jam filter, zero-lag draggable queue, and Discord rich presence.",
   publishedAt: new Date().toISOString(),
   platforms: {
+    web: {
+      version: '1.9.2',
+      name: 'Rivo Web',
+      notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
+    },
     windows: {
-      version: '1.9.1',
-      name: 'Rivo for Windows',
-      downloadUrl: '/downloads/Rivo.exe',
-      directFile: 'Rivo.exe',
+      version: '1.0.0',
+      name: 'Rivo Desktop for Windows (EXE)',
+      downloadUrl: '/downloads/Rivo_Setup.exe',
+      directFile: 'Rivo_Setup.exe',
       mandatory: false,
-      notes: 'Hardware-accelerated ultra-smooth lyrics rendering and audio controls.'
+      notes: 'Initial Tauri v2 native desktop release with permission auto-updater and zero network lag.'
     },
     android: {
-      version: '1.9.1',
-      build: 60,
-      name: 'Rivo for Android',
-      downloadUrl: '/downloads/Rivo-v1.9.1.apk',
-      directFile: 'Rivo-v1.9.1.apk',
+      version: '1.9.2',
+      build: 61,
+      name: 'Rivo for Android (APK)',
+      downloadUrl: '/downloads/Rivo-v1.9.2.apk',
+      directFile: 'Rivo-v1.9.2.apk',
       mandatory: false,
-      notes: 'Draggable queue without buttons, smart shuffle with AI recommendations, and background service.'
+      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     },
     ios: {
-      version: '1.9.1',
-      build: 60,
-      name: 'Rivo for iOS',
-      downloadUrl: '/downloads/Rivo-v1.9.1.ipa',
-      directFile: 'Rivo-v1.9.1.ipa',
+      version: '1.9.2',
+      build: 61,
+      name: 'Rivo for iOS (IPA)',
+      downloadUrl: '/downloads/Rivo-v1.9.2.ipa',
+      directFile: 'Rivo-v1.9.2.ipa',
       mandatory: false,
-      notes: 'Draggable queue without buttons, repeat priority, and live Discord activity.'
+      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     }
   }
 };
@@ -128,6 +131,7 @@ app.get('/api/app/version', (req, res) => {
 // Download routes for APK/IPA releases
 app.get([
   '/downloads/Rivo.apk',
+  '/downloads/Rivo-v1.9.2.apk',
   '/downloads/Rivo-v1.9.1.apk',
   '/downloads/Rivo-v1.9.0.apk',
   '/downloads/Rivo-v1.8.9.apk',
@@ -151,6 +155,12 @@ app.get([
   const requestedFile = path.basename(req.path);
   const targetPath = path.join(__dirname, '../public/downloads', requestedFile);
   if (fs.existsSync(targetPath)) return res.download(targetPath, requestedFile);
+
+  const default192 = path.join(__dirname, '../public/downloads/Rivo-v1.9.2.apk');
+  if (fs.existsSync(default192)) return res.download(default192, 'Rivo-v1.9.2.apk');
+
+  const default191 = path.join(__dirname, '../public/downloads/Rivo-v1.9.1.apk');
+  if (fs.existsSync(default191)) return res.download(default191, 'Rivo-v1.9.1.apk');
 
   const default183 = path.join(__dirname, '../public/downloads/Rivo-v1.8.3.apk');
   if (fs.existsSync(default183)) return res.download(default183, 'Rivo-v1.8.3.apk');
@@ -188,7 +198,7 @@ app.get([
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/WhooAre-you/Rivo/releases/tags/v1.9.1', {
+      const releaseRes = await axios.get('https://api.github.com/repos/WhooAre-you/Rivo/releases/tags/v1.9.2', {
         headers: { 'Authorization': `Bearer ${ghToken}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Rivo-Server' }
       });
       const apkAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.apk'));
@@ -203,11 +213,12 @@ app.get([
       }
     } catch (e) {}
   }
-  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.1/Rivo-v1.9.1.apk');
+  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.2/Rivo-v1.9.2.apk');
 });
 
 app.get([
   '/downloads/Rivo.ipa',
+  '/downloads/Rivo-v1.9.2.ipa',
   '/downloads/Rivo-v1.9.1.ipa',
   '/downloads/Rivo-v1.9.0.ipa',
   '/downloads/Rivo-v1.8.8.ipa',
@@ -226,6 +237,12 @@ app.get([
   '/downloads/Rivo-v1.7.5.ipa',
   '/downloads/Rivo-v1.7.4.ipa'
 ], async (req, res) => {
+  const localV192Path = path.join(__dirname, '../public/downloads/Rivo-v1.9.2.ipa');
+  if (fs.existsSync(localV192Path)) return res.download(localV192Path, 'Rivo-v1.9.2.ipa');
+
+  const localV191Path = path.join(__dirname, '../public/downloads/Rivo-v1.9.1.ipa');
+  if (fs.existsSync(localV191Path)) return res.download(localV191Path, 'Rivo-v1.9.1.ipa');
+
   const localV183Path = path.join(__dirname, '../public/downloads/Rivo-v1.8.3.ipa');
   if (fs.existsSync(localV183Path)) return res.download(localV183Path, 'Rivo-v1.8.3.ipa');
 
@@ -259,7 +276,7 @@ app.get([
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
   if (fs.existsSync(localIpaPath)) return res.download(localIpaPath, 'Rivo.ipa');
 
-  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.1/Rivo-v1.9.1.ipa');
+  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.2/Rivo-v1.9.2.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients (Admin Only)

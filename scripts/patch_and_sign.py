@@ -8,8 +8,20 @@ import sys
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERMESC = os.path.join(BASE_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
-ZIPALIGN = r"C:\Users\mohamed\AppData\Local\Android\Sdk\build-tools\34.0.0\zipalign.exe"
-APKSIGNER = r"C:\Users\mohamed\AppData\Local\Android\Sdk\build-tools\34.0.0\apksigner.bat"
+def find_build_tool(tool_name):
+    candidates = [
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Android', 'Sdk', 'build-tools', '36.0.0', tool_name),
+        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'Android', 'Sdk', 'build-tools', '34.0.0', tool_name),
+        os.path.join(r"C:\Users\Ali\AppData\Local\Android\Sdk\build-tools\36.0.0", tool_name),
+        os.path.join(r"C:\Users\mohamed\AppData\Local\Android\Sdk\build-tools\34.0.0", tool_name),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return tool_name
+
+ZIPALIGN = find_build_tool('zipalign.exe')
+APKSIGNER = find_build_tool('apksigner.bat')
 KEYSTORE = os.path.join(BASE_DIR, 'android', 'app', 'debug.keystore')
 
 def patch_ios():
@@ -31,11 +43,15 @@ def patch_ios():
     print(f"Compiled Hermes bundle ({len(hermes_bytes)} bytes)")
 
     src_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.7.5.ipa')
-    out_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.1.ipa')
-    legacy_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.0.ipa')
+    if not os.path.exists(src_ipa):
+        src_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.ipa')
+    if not os.path.exists(src_ipa):
+        src_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.5.7.ipa')
+    out_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.2.ipa')
+    legacy_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.1.ipa')
     generic_ipa = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.ipa')
-    dist_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.1.ipa')
-    dist_legacy_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.0.ipa')
+    dist_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.2.ipa')
+    dist_legacy_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.1.ipa')
     dist_gen_ipa = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.ipa')
 
     os.makedirs(os.path.dirname(out_ipa), exist_ok=True)
@@ -51,14 +67,14 @@ def patch_ios():
                     zout.writestr(item, hermes_bytes)
                 elif filename == 'Payload/Rivo.app/Info.plist':
                     plist_obj = plistlib.loads(zin.read(filename))
-                    plist_obj['CFBundleShortVersionString'] = '1.9.1'
-                    plist_obj['CFBundleVersion'] = '60'
+                    plist_obj['CFBundleShortVersionString'] = '1.9.2'
+                    plist_obj['CFBundleVersion'] = '61'
                     zout.writestr(item, plistlib.dumps(plist_obj, fmt=plistlib.FMT_BINARY))
                 elif filename == 'Payload/Rivo.app/EXConstants.bundle/app.config':
                     cfg = json.loads(zin.read(filename).decode('utf-8'))
-                    cfg['version'] = '1.9.1'
+                    cfg['version'] = '1.9.2'
                     if 'ios' in cfg:
-                        cfg['ios']['buildNumber'] = '60'
+                        cfg['ios']['buildNumber'] = '61'
                     zout.writestr(item, json.dumps(cfg).encode('utf-8'))
                 else:
                     zout.writestr(item, zin.read(filename))
@@ -86,11 +102,13 @@ def patch_android():
     base_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.8.8.apk')
     if not os.path.exists(base_apk):
         base_apk = os.path.join(BASE_DIR, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
-    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.1.apk')
-    legacy_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.0.apk')
+    if not os.path.exists(base_apk):
+        base_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.apk')
+    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.2.apk')
+    legacy_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.1.apk')
     generic_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.apk')
-    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.1.apk')
-    dist_legacy_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.0.apk')
+    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.2.apk')
+    dist_legacy_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.1.apk')
     dist_gen_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.apk')
 
     os.makedirs(os.path.dirname(out_apk), exist_ok=True)
@@ -107,13 +125,16 @@ def patch_android():
                     zout.writestr(item, bundle_bytes)
                 elif item.filename == 'AndroidManifest.xml':
                     manifest_bytes = bytearray(zin.read(item.filename))
+                    old_str14 = '1.9.1'.encode('utf-16le')
                     old_str13 = '1.9.0'.encode('utf-16le')
                     old_str12 = '1.8.9'.encode('utf-16le')
                     old_str11 = '1.8.8'.encode('utf-16le')
                     old_str10 = '1.8.7'.encode('utf-16le')
                     old_str_base = '1.7.8'.encode('utf-16le')
-                    new_str = '1.9.1'.encode('utf-16le')
-                    if old_str13 in manifest_bytes:
+                    new_str = '1.9.2'.encode('utf-16le')
+                    if old_str14 in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_str14, new_str)
+                    elif old_str13 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_str13, new_str)
                     elif old_str12 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_str12, new_str)
@@ -124,13 +145,16 @@ def patch_android():
                     elif old_str_base in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_str_base, new_str)
 
+                    old_code14 = b'\x08\x00\x00\x10\x3c\x00\x00\x00' # versionCode 60
                     old_code13 = b'\x08\x00\x00\x10\x3b\x00\x00\x00' # versionCode 59
                     old_code12 = b'\x08\x00\x00\x10\x3a\x00\x00\x00' # versionCode 58
                     old_code11 = b'\x08\x00\x00\x10\x39\x00\x00\x00' # versionCode 57
                     old_code10 = b'\x08\x00\x00\x10\x38\x00\x00\x00' # versionCode 56
                     old_code_base = b'\x08\x00\x00\x10\x2f\x00\x00\x00' # versionCode 47
-                    new_code = b'\x08\x00\x00\x10\x3c\x00\x00\x00'   # versionCode 60
-                    if old_code13 in manifest_bytes:
+                    new_code = b'\x08\x00\x00\x10\x3d\x00\x00\x00'   # versionCode 61
+                    if old_code14 in manifest_bytes:
+                        manifest_bytes = manifest_bytes.replace(old_code14, new_code)
+                    elif old_code13 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_code13, new_code)
                     elif old_code12 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_code12, new_code)
@@ -183,7 +207,7 @@ def patch_android():
 
     align_verify_cmd = [ZIPALIGN, '-c', '-v', '4', out_apk]
     align_verify_res = subprocess.run(align_verify_cmd, capture_output=True, text=True)
-    if 'Verification succesful' not in align_verify_res.stdout:
+    if align_verify_res.returncode != 0 and 'succes' not in align_verify_res.stdout.lower():
         print(f"Zipalign verification failed!")
         return False
     print("Zipalign verification successful!")

@@ -12,6 +12,7 @@ import {
   isTrackDownloaded,
   deduplicateTrackList,
   subscribeToDownloadedTracks,
+  updateDownloadedTrackLyrics,
 } from '../services/downloadManager';
 import { resolveAudioStream } from '../services/youtubeResolver';
 import { showMediaNotification, updateMediaNotification, hideMediaNotification, subscribeToMediaActions } from '../services/mediaControls';
@@ -857,11 +858,13 @@ export const AudioProvider = ({ children }) => {
       }
     }
 
-    // Never generate AI lyrics for local files or downloaded tracks or offline mode
-    if (isOffline || currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded || dl) {
+    // If offline, do not attempt network fetching
+    if (isOffline) {
       setLyrics([]);
       return;
     }
+
+    const isLocalTrack = Boolean(currentTrack.isLocalImport || currentTrack.localAudioUri || currentTrack.downloaded || dl);
 
     setLyrics([]);
     let isMounted = true;
@@ -877,11 +880,21 @@ export const AudioProvider = ({ children }) => {
           const data = await res.json();
           if (isMounted && data?.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
             setLyrics(data.lyrics);
+            // Cache to local vault for offline use
+            if (isLocalTrack) {
+              updateDownloadedTrackLyrics(currentTrack._id || currentTrack.id, data.lyrics).catch(() => {});
+            }
             return;
           }
         }
 
-        // Fallback: request AI generation if no lyrics found
+        // Never generate AI lyrics for local/downloaded tracks
+        if (isLocalTrack) {
+          if (isMounted) setLyrics([]);
+          return;
+        }
+
+        // Fallback: request AI generation if no lyrics found (online catalog tracks only)
         const genRes = await fetch(`${API_BASE_URL}/api/ai/generate-song-lyrics`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

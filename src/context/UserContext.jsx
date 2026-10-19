@@ -2,28 +2,10 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
 import { isUserAdmin } from '../utils/adminUtils';
 
-const API = (() => {
-  if (typeof window !== 'undefined') {
-    const { hostname, protocol, host } = window.location;
-    if (
-      window.Capacitor ||
-      protocol === 'capacitor:' ||
-      protocol === 'file:'
-    ) {
-      return 'https://rivo-m.duckdns.org';
-    }
-    if ((hostname === 'localhost' || hostname === '127.0.0.1') && !host.includes('5000')) {
-      return 'http://localhost:5000';
-    }
-    return `${protocol}//${host}`;
-  }
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
-  }
-  return 'https://rivo-m.duckdns.org';
-})();
+import { API_BASE_URL } from '../config';
 
-export const API_BASE_URL = API;
+const API = API_BASE_URL;
+export { API_BASE_URL };
 
 const migrateLegacyStorage = () => {
   try {
