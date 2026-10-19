@@ -194,6 +194,8 @@ app.post('/api/deploy-webhook', (req, res) => {
   });
 });
 
+console.log('🚀 Rivo Server v1.9.3 (Auto-Deploy Enabled)');
+
 // Broadcast app update notification to all active web and mobile clients (Admin Only)
 app.post('/api/app/broadcast-update', adminAuth, (req, res) => {
   if (io) {
