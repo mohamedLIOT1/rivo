@@ -98,7 +98,7 @@ const APP_VERSIONS_DATA = {
     windows: {
       version: '1.9.3',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: '/downloads/Rivo-v1.9.3.exe',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.exe',
       directFile: 'Rivo-v1.9.3.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
@@ -107,7 +107,7 @@ const APP_VERSIONS_DATA = {
       version: '1.9.3',
       build: 62,
       name: 'Rivo for Android (APK)',
-      downloadUrl: '/downloads/Rivo-v1.9.3.apk',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.apk',
       directFile: 'Rivo-v1.9.3.apk',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
@@ -116,7 +116,7 @@ const APP_VERSIONS_DATA = {
       version: '1.9.3',
       build: 62,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: '/downloads/Rivo-v1.9.3.ipa',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.ipa',
       directFile: 'Rivo-v1.9.3.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
@@ -129,7 +129,7 @@ app.get('/api/app/version', (req, res) => {
 });
 
 // Dynamic download routes for Windows EXE, Android APK, and iOS IPA releases
-app.get('/downloads/:filename', async (req, res) => {
+app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) => {
   const filename = path.basename(req.params.filename);
   const localFile = path.join(__dirname, '../public/downloads', filename);
 
