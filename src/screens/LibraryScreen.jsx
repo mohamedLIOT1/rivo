@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud, Trash2 } from 'lucide-react';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 export default function LibraryScreen({ 
   playlists = [], 
@@ -341,7 +342,7 @@ export default function LibraryScreen({
                 }`}
               >
                 <img 
-                  src={track.cover} 
+                  src={normalizeCoverUrl(track.cover, track)} 
                   alt={track.title} 
                   className="w-12 h-12 rounded-lg brutal-border object-cover shrink-0" 
                   onError={(e) => { e.target.style.display = 'none'; }}

@@ -91,33 +91,33 @@ const APP_VERSIONS_DATA = {
   publishedAt: new Date().toISOString(),
   platforms: {
     web: {
-      version: '1.9.2',
+      version: '1.9.3',
       name: 'Rivo Web',
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.0.0',
+      version: '1.9.3',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: '/downloads/Rivo_Setup.exe',
-      directFile: 'Rivo_Setup.exe',
+      downloadUrl: '/downloads/Rivo.exe',
+      directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Initial Tauri v2 native desktop release with permission auto-updater and zero network lag.'
+      notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
     android: {
-      version: '1.9.2',
-      build: 61,
+      version: '1.9.3',
+      build: 62,
       name: 'Rivo for Android (APK)',
-      downloadUrl: '/downloads/Rivo-v1.9.2.apk',
-      directFile: 'Rivo-v1.9.2.apk',
+      downloadUrl: '/downloads/Rivo-v1.9.3.apk',
+      directFile: 'Rivo-v1.9.3.apk',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     },
     ios: {
-      version: '1.9.2',
-      build: 61,
+      version: '1.9.3',
+      build: 62,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: '/downloads/Rivo-v1.9.2.ipa',
-      directFile: 'Rivo-v1.9.2.ipa',
+      downloadUrl: '/downloads/Rivo-v1.9.3.ipa',
+      directFile: 'Rivo-v1.9.3.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     }
@@ -322,7 +322,9 @@ app.get('/api/sync', auth, async (req, res) => {
       title: t.title,
       artist: t.artist,
       album: t.album,
-      cover: t.cover,
+      cover: (t.cover && typeof t.cover === 'string' && (t.cover.startsWith('/uploads/') || t.cover.startsWith('uploads/')))
+        ? (t.cover.startsWith('/') ? t.cover : `/${t.cover}`)
+        : t.cover,
       audioUrl: t.audioUrl,
       duration: t.duration || 180,
       genre: t.genre,

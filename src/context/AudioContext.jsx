@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../config';
 import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/listeningTracker';
 import { useUser } from './UserContext';
 import { getSmartTasteAndMoodTracks } from '../utils/tasteAlgorithm';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 const AudioPlayerContext = createContext(null);
 
@@ -185,7 +186,8 @@ async function doResolvePlayableAudioStream(track, signal = null) {
         return {
           url: cand,
           duration: sanitizeDuration(sData.duration || track.duration, 210),
-          cover: sData.cover || track.cover || track.coverUrl
+          cover: normalizeCoverUrl(sData.cover || track.cover || track.coverUrl),
+          track: sData.track || null
         };
       }
     }
@@ -204,7 +206,8 @@ async function doResolvePlayableAudioStream(track, signal = null) {
         return {
           url: cand,
           duration: sanitizeDuration(d.duration || track.duration, 210),
-          cover: d.cover || track.cover || track.coverUrl
+          cover: normalizeCoverUrl(d.cover || track.cover || track.coverUrl),
+          track: d.track || null
         };
       }
     }
@@ -777,6 +780,26 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const resolvedDur = sanitizeDuration(streamResult.duration, sDur);
         setDuration(resolvedDur);
         durationRef.current = resolvedDur;
+      }
+
+      if (streamResult?.track) {
+        const dbTrack = streamResult.track;
+        const realId = String(dbTrack._id || dbTrack.id);
+        setCurrentTrack(prev => (prev && (String(prev.id || prev._id) === newId || prev.title === dbTrack.title) ? { ...prev, ...dbTrack, id: realId, _id: realId } : prev));
+        setCurrentQueue(prevQueue =>
+          prevQueue.map(t => {
+            if (String(t.id || t._id) === newId || (t.title === dbTrack.title && t.artist === dbTrack.artist)) {
+              return { ...t, ...dbTrack, id: realId, _id: realId };
+            }
+            return t;
+          })
+        );
+        if (typeof setTracks === 'function') {
+          setTracks(prev => {
+            if (prev.some(t => String(t._id || t.id) === realId)) return prev;
+            return [dbTrack, ...prev];
+          });
+        }
       }
 
       const audio = audioRef.current;

@@ -3,6 +3,7 @@ import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, Ma
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 export default function MiniPlayer({
   currentTrack,
@@ -213,7 +214,7 @@ export default function MiniPlayer({
             <div className="w-10 h-10 rounded-lg bg-[#0b1110] text-[#17a398] brutal-border flex items-center justify-center shrink-0 overflow-hidden brutal-shadow-sm">
               {currentTrack.cover ? (
                 <img 
-                  src={currentTrack.cover} 
+                  src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
                   alt={currentTrack.title} 
                   className="w-full h-full object-cover" 
                 />
@@ -284,7 +285,7 @@ export default function MiniPlayer({
               className="relative w-12 h-12 rounded-xl brutal-border overflow-hidden shrink-0 group cursor-pointer"
             >
               <img 
-                src={currentTrack.cover} 
+                src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
                 alt={currentTrack.title} 
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
               />

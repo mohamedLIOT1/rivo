@@ -23,7 +23,7 @@ temp_artifacts_*/
 desktop-app/bin/
 desktop-app/obj/
 release-desktop/
-src-tauri/
+src-tauri/target/
+src-tauri/*.key
 scripts/__pycache__/
-scripts/build-desktop.ps1
-scripts/generate_installer_graphics.py
+

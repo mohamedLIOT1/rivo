@@ -15,6 +15,7 @@ import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
 import { parseLrcLyrics } from '../utils/lrcParser';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -772,7 +773,7 @@ export default function FullPlayerModal({
     if (programmaticScrollTimerRef.current) clearTimeout(programmaticScrollTimerRef.current);
     programmaticScrollTimerRef.current = setTimeout(() => {
       isProgrammaticScrollRef.current = false;
-    }, 450);
+    }, 700);
 
     container.scrollTo({
       top: Math.max(0, targetScroll),
@@ -1001,6 +1002,10 @@ export default function FullPlayerModal({
                       ? 'border-transparent opacity-35 hover:opacity-75 hover:bg-zinc-800/30'
                       : 'border-transparent opacity-40 hover:opacity-80 hover:bg-[#ede5d3]/40'
                 }`}
+                style={{
+                  contentVisibility: 'auto',
+                  containIntrinsicSize: '0 54px'
+                }}
               >
                 <p 
                   className={`leading-snug font-display text-lg sm:text-xl transition-colors duration-150 ${
@@ -1107,7 +1112,7 @@ export default function FullPlayerModal({
       >
         <div className="relative shrink-0">
           <img 
-            src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+            src={normalizeCoverUrl(track.cover, track)} 
             alt={title} 
             className="w-10 h-10 rounded-lg object-cover brutal-border bg-black" 
             onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
@@ -1374,11 +1379,11 @@ export default function FullPlayerModal({
         {currentTrack?.cover ? (
           <>
             <img 
-              src={currentTrack.cover} 
+              src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
               alt="" 
               aria-hidden="true"
-              className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-25 contrast-125 saturate-150 transition-opacity duration-700" 
-              style={{ transform: 'translateZ(0)' }}
+              className="absolute inset-0 w-full h-full object-cover scale-105 blur-md opacity-20 transition-opacity duration-700" 
+              style={{ transform: 'translate3d(0, 0, 0)', willChange: 'opacity' }}
             />
             <div 
               className="absolute inset-0"
@@ -1502,7 +1507,7 @@ export default function FullPlayerModal({
                     background: 'repeating-radial-gradient(circle at 50%, transparent 0, transparent 10px, rgba(255,255,255,0.03) 10px, rgba(255,255,255,0.03) 11px)'
                   }}/>
                   <div className="w-2/5 h-2/5 rounded-full overflow-hidden border-2 border-black shadow-xl z-10">
-                    <img src={currentTrack?.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'} alt={currentTrack?.title || ''} className="w-full h-full object-cover" />
+                    <img src={normalizeCoverUrl(currentTrack?.cover, currentTrack)} alt={currentTrack?.title || ''} className="w-full h-full object-cover" />
                   </div>
                   <div className="absolute w-4 h-4 rounded-full bg-[#ede5d3] border-2 border-[#0b1110] z-20" />
                 </div>
@@ -1522,7 +1527,7 @@ export default function FullPlayerModal({
                     {/* Ambient Glow / Cover Fill (seamlessly eliminates harsh black bars) */}
                     {currentTrack?.cover && (
                       <img 
-                        src={currentTrack.cover} 
+                        src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
                         alt="" 
                         aria-hidden="true"
                         className="absolute inset-0 w-full h-full object-cover filter blur-md opacity-35 scale-125 pointer-events-none"
@@ -1530,7 +1535,7 @@ export default function FullPlayerModal({
                     )}
                     {/* Primary Song Image: Centered, never squished or chopped off */}
                     <img 
-                      src={currentTrack?.cover || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'} 
+                      src={normalizeCoverUrl(currentTrack?.cover, currentTrack)} 
                       alt={currentTrack?.title || 'Song Cover'}
                       className="relative z-1 max-w-full max-h-full w-full h-full object-contain"
                       style={{ 

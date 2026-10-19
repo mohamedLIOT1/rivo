@@ -403,12 +403,14 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
   let targetDuration = null;
   let artist = '';
   let title = '';
+  let strictCatalogDuration = false;
 
   if (queryOrOptions && typeof queryOrOptions === 'object') {
     query = queryOrOptions.query || '';
     targetDuration = Number(queryOrOptions.targetDuration || queryOrOptions.duration) || null;
     artist = queryOrOptions.artist || '';
     title = queryOrOptions.title || '';
+    strictCatalogDuration = Boolean(queryOrOptions.strictCatalogDuration);
   } else if (typeof queryOrOptions === 'string') {
     query = queryOrOptions.trim();
     if (typeof maybeOptions === 'number') {
@@ -417,6 +419,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
       targetDuration = Number(maybeOptions.targetDuration || maybeOptions.duration) || null;
       artist = maybeOptions.artist || '';
       title = maybeOptions.title || '';
+      strictCatalogDuration = Boolean(maybeOptions.strictCatalogDuration);
     }
   }
 
@@ -531,15 +534,15 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
           };
         });
 
-        // Strict duration & title filter:
-        // Enforce candidate duration difference MUST be within 15 seconds (max 25s allowed with high similarity).
-        // If difference > 25 seconds or title similarity is low, REJECT the candidate.
+        // Duration & title filter:
+        // Enforce candidate duration difference is reasonable, allowing up to 90s for video/audio differences if title similarity is good (>= 0.35)
         scoredCandidates = scoredCandidates.filter(c => {
           if (targetDuration && c.durationDiff !== null) {
-            if (c.durationDiff > 25) return false;
-            if (c.durationDiff > 15 && c.similarity < 0.5) return false;
+            if (c.similarity >= 0.35 && c.durationDiff <= 90) return true;
+            if (c.durationDiff > 35) return false;
+            if (c.durationDiff > 15 && c.similarity < 0.4) return false;
           }
-          if (cleanTit && c.similarity < 0.25) return false;
+          if (cleanTit && c.similarity < 0.2) return false;
           return true;
         });
 
@@ -559,9 +562,9 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     } catch (err) {}
   }
 
-  // If Innertube searched and returned video candidates, but none matched the catalog duration (diff <= 15-25s),
-  // NEVER fall back to blind scrapers or unverified API results!
-  if (targetDuration && hadInnertubeCandidates) {
+  // If strict catalog matching is requested and candidate duration was way off, abort.
+  // Otherwise, fall back to API or scraping so AI & user-searched songs can play!
+  if (strictCatalogDuration && targetDuration && hadInnertubeCandidates && scoredCandidates.length === 0) {
     return null;
   }
 
@@ -1438,12 +1441,14 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
     retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
     retObj.duration = defaultDur;
+    retObj.videoId = videoId;
     return retObj;
   }
   if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
     const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
     retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
     retObj.duration = defaultDur;
+    retObj.videoId = videoId;
     return retObj;
   }
 
@@ -1453,6 +1458,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const retObj = new String(cachedStream.url);
     retObj.url = cachedStream.url;
     retObj.duration = defaultDur;
+    retObj.videoId = videoId;
     return retObj;
   }
 
@@ -1463,6 +1469,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
         const retObj = new String(url);
         retObj.url = url;
         retObj.duration = defaultDur;
+        retObj.videoId = videoId;
         return retObj;
       }
     } catch (e) {}
@@ -1509,6 +1516,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       const retObj = new String(resolvedUrl);
       retObj.url = resolvedUrl;
       retObj.duration = defaultDur;
+      retObj.videoId = videoId;
       return retObj;
     }
     return null;

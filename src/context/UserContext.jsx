@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
 import { isUserAdmin } from '../utils/adminUtils';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 import { API_BASE_URL } from '../config';
 
@@ -75,7 +76,12 @@ export function UserProvider({ children }) {
       if (s) {
         const parsed = JSON.parse(s);
         if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter(t => !isSoundCloudTrack(t));
+          const cleaned = parsed
+            .filter(t => !isSoundCloudTrack(t))
+            .map(t => ({
+              ...t,
+              cover: normalizeCoverUrl(t.cover, t)
+            }));
           if (cleaned.length !== parsed.length) {
             localStorage.setItem('rivo_tracks', JSON.stringify(cleaned));
             localStorage.setItem('liofy_tracks', JSON.stringify(cleaned));
@@ -241,11 +247,13 @@ export function UserProvider({ children }) {
             const titleKey = `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`;
             const off = offlineMap.get(cleanId) || offlineTitleMap.get(titleKey);
             const isLiked = likedSet.has(cleanId);
+            const cover = normalizeCoverUrl(t.cover, t);
             if (off) {
               const { audioBlob, coverBlob, ...cleanOff } = off;
               return {
                 ...t,
                 ...cleanOff,
+                cover,
                 album: (!t.album || /https?:\/\/|www\.|youtube|liofy/i.test(t.album)) ? 'Rivo' : t.album,
                 source: 'Rivo',
                 publisher: 'Rivo',
@@ -254,7 +262,7 @@ export function UserProvider({ children }) {
                 downloaded: true
               };
             }
-            return { ...t, liked: isLiked };
+            return { ...t, cover, liked: isLiked };
           });
           setTracks(deduplicateTracks(merged));
           return;
@@ -280,11 +288,13 @@ export function UserProvider({ children }) {
             const cleanId = String(t.id || t._id);
             const titleKey = `${(t.artist || '').toLowerCase().trim()}:::${(t.title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '')}`;
             const off = offlineMap.get(cleanId) || offlineTitleMap.get(titleKey);
+            const cover = normalizeCoverUrl(t.cover, t);
             if (off) {
               const { audioBlob, coverBlob, ...cleanOff } = off;
               return {
                 ...t,
                 ...cleanOff,
+                cover,
                 album: (!t.album || /https?:\/\/|www\.|youtube|liofy/i.test(t.album)) ? 'Rivo' : t.album,
                 source: 'Rivo',
                 publisher: 'Rivo',
@@ -295,6 +305,7 @@ export function UserProvider({ children }) {
             }
             return {
               ...t,
+              cover,
               liked: liked.has(cleanId),
               downloaded: false
             };

@@ -12,6 +12,7 @@ import { getTrackArtists, ArtistLinks, getCanonicalArtistName, getArtistAliases 
 import { isQuranContent } from '../utils/quranUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { useAudioPlayer } from '../context/AudioContext';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -910,7 +911,7 @@ export default function SearchScreen({
                           >
                             <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                               <img 
-                                src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'} 
+                                src={normalizeCoverUrl(track.cover, track)} 
                                 alt={track.title} 
                                 className="w-10 h-10 brutal-border object-cover bg-white shrink-0" 
                                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -998,7 +999,7 @@ export default function SearchScreen({
                             <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                               <div className="relative shrink-0">
                                 <img 
-                                src={track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100'} 
+                                src={normalizeCoverUrl(track.cover, track)} 
                                 alt={track.title} 
                                 className="w-10 h-10 brutal-border object-cover bg-white" 
                               />

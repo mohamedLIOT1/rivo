@@ -2,58 +2,97 @@
  * Rivo Client-Side Router Utility
  * Maps structured screen states to clean, bookmarkable URLs and vice versa.
  */
+import { isDesktopApp } from '../version';
 
 export function buildUrl(screen, params = {}) {
+  let path = '/';
   switch (screen) {
     case 'home':
-      return '/';
+      path = '/';
+      break;
     case 'search':
       if (params.query || params.q) {
-        return `/search?q=${encodeURIComponent(params.query || params.q)}`;
+        path = `/search?q=${encodeURIComponent(params.query || params.q)}`;
+      } else {
+        path = '/search';
       }
-      return '/search';
+      break;
     case 'library':
-      return '/library';
+      path = '/library';
+      break;
     case 'quran':
-      return '/quran';
+      path = '/quran';
+      break;
     case 'stats':
-      return '/stats';
+      path = '/stats';
+      break;
     case 'download':
-      return '/download';
+      path = '/download';
+      break;
     case 'admin':
-      return '/admin';
+      path = '/admin';
+      break;
     case 'profile':
       if (params.userId) {
-        return `/user/${encodeURIComponent(params.userId)}`;
+        path = `/user/${encodeURIComponent(params.userId)}`;
+      } else {
+        path = '/profile';
       }
-      return '/profile';
+      break;
     case 'playlist':
       if (params.id || params._id) {
         const id = String(params.id || params._id);
-        if (id === 'liked') return '/playlist/liked';
-        return `/playlist/${encodeURIComponent(id)}`;
+        path = id === 'liked' ? '/playlist/liked' : `/playlist/${encodeURIComponent(id)}`;
+      } else if (params.name) {
+        path = `/album/${encodeURIComponent(params.name)}`;
+      } else {
+        path = '/library';
       }
-      if (params.name) {
-        return `/album/${encodeURIComponent(params.name)}`;
-      }
-      return '/library';
+      break;
     case 'artist':
       if (params.name) {
-        return `/artist/${encodeURIComponent(params.name)}`;
+        path = `/artist/${encodeURIComponent(params.name)}`;
+      } else {
+        path = '/search';
       }
-      return '/search';
+      break;
     default:
-      return '/';
+      path = '/';
   }
+
+  // On native desktop (Tauri WebView2), keep base index.html intact via hash
+  // to prevent blank 404 pages upon window reload or restart.
+  if (isDesktopApp) {
+    return `#${path}`;
+  }
+  return path;
 }
 
 export function parseLocation(pathname = '/', search = '') {
   let cleanPath = pathname || '/';
+  let cleanSearch = search || '';
+
+  // Priority to hash if present (especially in Tauri / Desktop app)
+  if (typeof window !== 'undefined' && window.location.hash) {
+    const hashVal = window.location.hash.replace(/^#/, '');
+    if (hashVal) {
+      const qIdx = hashVal.indexOf('?');
+      if (qIdx >= 0) {
+        cleanPath = hashVal.slice(0, qIdx) || '/';
+        cleanSearch = hashVal.slice(qIdx);
+      } else {
+        cleanPath = hashVal;
+      }
+    }
+  }
+
+  // Normalize /index.html and trailing slashes
+  cleanPath = cleanPath.replace(/^\/index\.html/i, '').replace(/^index\.html/i, '') || '/';
   if (cleanPath.length > 1 && cleanPath.endsWith('/')) {
     cleanPath = cleanPath.slice(0, -1);
   }
 
-  const queryParams = new URLSearchParams(search || '');
+  const queryParams = new URLSearchParams(cleanSearch || '');
   const searchQ = queryParams.get('q') || '';
   const lowerPath = cleanPath.toLowerCase();
 

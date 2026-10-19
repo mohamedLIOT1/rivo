@@ -662,6 +662,47 @@ router.post('/:id/like', auth, async (req, res) => {
 });
 
 // Audio Stream Handler
+async function autoPersistExternalTrack({ title, artist, album, cover, audioUrl, duration }) {
+  if (!title) return null;
+  try {
+    let t = await Track.findOne({
+      title: new RegExp(`^${escapeRegex(title.trim())}$`, 'i'),
+      ...(artist ? { artist: new RegExp(`^${escapeRegex(artist.trim())}$`, 'i') } : {})
+    });
+    if (!t) {
+      t = await Track.create({
+        title: title.trim(),
+        artist: (artist || 'Unknown Artist').trim(),
+        album: album || 'Single',
+        cover: cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+        audioUrl: audioUrl || '',
+        duration: duration || 210,
+        source: 'Rivo',
+        addedBy: 'auto-search'
+      });
+      if (t && t.album && t.album !== 'Single') {
+        syncTrackToAlbum(t).catch(() => {});
+      }
+    }
+    return {
+      id: String(t._id || t.id),
+      _id: String(t._id || t.id),
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      cover: t.cover,
+      audioUrl: t.audioUrl,
+      duration: t.duration || duration || 210,
+      source: t.source || 'Rivo',
+      isQuran: Boolean(t.isQuran),
+      lyrics: t.lyrics || []
+    };
+  } catch (err) {
+    console.warn('[autoPersistExternalTrack error]', err.message);
+    return null;
+  }
+}
+
 const handleTrackStream = async (req, res) => {
   try {
     const id = req.params?.id || req.query?.trackId || req.query?.id || '';
@@ -682,7 +723,20 @@ const handleTrackStream = async (req, res) => {
         url: cleanPath,
         directUrl: cleanPath,
         duration: track?.duration || 210,
-        cover: track?.cover || ''
+        cover: track?.cover || '',
+        track: track ? {
+          id: String(track._id),
+          _id: String(track._id),
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          cover: track.cover,
+          audioUrl: track.audioUrl,
+          duration: track.duration || 210,
+          source: track.source || 'Upload',
+          isQuran: Boolean(track.isQuran),
+          lyrics: track.lyrics || []
+        } : null
       });
     }
 
@@ -709,7 +763,20 @@ const handleTrackStream = async (req, res) => {
             directUrl: cleanPath,
             duration: localUploaded.duration || 210,
             cover: localUploaded.cover || track?.cover || '',
-            isYouTube: false
+            isYouTube: false,
+            track: {
+              id: String(localUploaded._id),
+              _id: String(localUploaded._id),
+              title: localUploaded.title,
+              artist: localUploaded.artist,
+              album: localUploaded.album,
+              cover: localUploaded.cover,
+              audioUrl: localUploaded.audioUrl,
+              duration: localUploaded.duration || 210,
+              source: localUploaded.source || 'Upload',
+              isQuran: Boolean(localUploaded.isQuran),
+              lyrics: localUploaded.lyrics || []
+            }
           });
         }
       } catch {}
@@ -722,11 +789,25 @@ const handleTrackStream = async (req, res) => {
       const resolvedPath = streamUrl.url || String(streamUrl);
       const isLocalUpload = resolvedPath.startsWith('/uploads/');
       const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+
+      const vidCandidate = streamUrl.videoId || (rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+      const targetCover = req.query.cover || (vidCandidate ? `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg` : track?.cover || '');
+      const savedTrack = await autoPersistExternalTrack({
+        title,
+        artist,
+        album: req.query.album || track?.album || 'Single',
+        cover: targetCover,
+        audioUrl: rawUrl || (vidCandidate ? `https://www.youtube.com/watch?v=${vidCandidate}` : ''),
+        duration: streamUrl.duration || duration || 210
+      });
+
       return res.json({
         success: true,
         url: finalUrl,
         directUrl: resolvedPath,
-        duration: streamUrl.duration || track?.duration || 210
+        duration: streamUrl.duration || track?.duration || 210,
+        cover: savedTrack?.cover || track?.cover || targetCover,
+        track: savedTrack
       });
     }
     res.status(404).json({ success: false, error: 'Could not resolve audio stream' });
@@ -1315,13 +1396,23 @@ const resolveStreamHandler = async (req, res) => {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
             const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            const coverUrl = req.query.cover || `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg`;
+            const savedTrack = await autoPersistExternalTrack({
+              title,
+              artist,
+              album: req.query.album || 'Single',
+              cover: coverUrl,
+              audioUrl: `https://www.youtube.com/watch?v=${vidCandidate}`,
+              duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210
+            });
             return res.json({
               success: true,
               url: finalUrl,
               directUrl: resolvedPath,
               duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
-              cover: `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg`,
-              isYouTube: false
+              cover: savedTrack?.cover || coverUrl,
+              isYouTube: false,
+              track: savedTrack
             });
           }
         }
@@ -1334,12 +1425,24 @@ const resolveStreamHandler = async (req, res) => {
         const resolvedPath = directAudio.url || String(directAudio);
         const isLocalUpload = resolvedPath.startsWith('/uploads/');
         const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+        const vidId = directAudio.videoId || (url && url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+        const coverUrl = req.query.cover || (vidId ? `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg` : '');
+        const savedTrack = await autoPersistExternalTrack({
+          title,
+          artist,
+          album: req.query.album || 'Single',
+          cover: coverUrl,
+          audioUrl: url || (vidId ? `https://www.youtube.com/watch?v=${vidId}` : ''),
+          duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210
+        });
         return res.json({
           success: true,
           url: finalUrl,
           directUrl: resolvedPath,
           duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
+          cover: savedTrack?.cover || coverUrl,
           isYouTube: false,
+          track: savedTrack
         });
       }
     }

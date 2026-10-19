@@ -16,6 +16,7 @@ import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import { getAlbumArtwork } from './ArtistScreen';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 export default function PlaylistScreen({ 
   playlist, 
@@ -1114,7 +1115,7 @@ export default function PlaylistScreen({
                     {/* Title & Artist */}
                     <div className="col-span-6 md:col-span-5 flex items-center gap-2 sm:gap-3 truncate pr-1 sm:pr-2">
                       <img 
-                        src={track.cover} 
+                        src={normalizeCoverUrl(track.cover, track)} 
                         alt={track.title} 
                         className="w-9 h-9 sm:w-10 sm:h-10 brutal-border object-cover shrink-0 bg-[#ede5d3]" 
                         onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7`; }}
@@ -1291,7 +1292,7 @@ export default function PlaylistScreen({
                     onClick={() => handlePlayPlaylistTrack(rec)}
                     className="flex items-center gap-3 flex-1 truncate cursor-pointer"
                   >
-                    <img src={rec.cover} alt={rec.title} className="w-11 h-11 brutal-border object-cover shrink-0" />
+                    <img src={normalizeCoverUrl(rec.cover, rec)} alt={rec.title} className="w-11 h-11 brutal-border object-cover shrink-0" />
                     <div className="truncate">
                       <h4 className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{rec.title}</h4>
                       <p className={`text-[11px] truncate ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{rec.artist}</p>
@@ -1366,7 +1367,7 @@ export default function PlaylistScreen({
                   onClick={() => onSelectTrack(track)}
                   className="flex items-center gap-3 flex-1 truncate cursor-pointer"
                 >
-                  <img src={track.cover} alt={track.title} className="w-10 h-10 brutal-border object-cover shrink-0" />
+                  <img src={normalizeCoverUrl(track.cover, track)} alt={track.title} className="w-10 h-10 brutal-border object-cover shrink-0" />
                   <div className="truncate">
                     <h4 className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{track.title}</h4>
                     <p className={`text-[11px] truncate ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{track.artist} • {track.album}</p>

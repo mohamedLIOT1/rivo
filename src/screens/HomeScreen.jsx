@@ -9,6 +9,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { getAlbumArtwork } from './ArtistScreen';
 import { sortTracksByPopularity, getGlobalTrackScore } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 export { getGlobalTrackScore };
 
 export default function HomeScreen({ 
@@ -312,7 +313,7 @@ export default function HomeScreen({
                   >
                     {track.cover && (
                       <img 
-                        src={track.cover} 
+                        src={normalizeCoverUrl(track.cover, track)} 
                         alt={track.title} 
                         loading="lazy"
                         decoding="async"

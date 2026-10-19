@@ -97,31 +97,44 @@
     <script type="module" src="/src/main.jsx"></script>
     <script>
       // Remove splash when app is ready
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          const splash = document.getElementById('splash');
-          if (splash) {
-            splash.style.opacity = '0';
-            setTimeout(() => splash.remove(), 500);
-          }
-        }, 1000);
-      });
+      const removeSplash = () => {
+        const splash = document.getElementById('splash');
+        if (splash && splash.style.opacity !== '0') {
+          splash.style.opacity = '0';
+          setTimeout(() => splash.remove(), 500);
+        }
+      };
+      window.addEventListener('load', () => setTimeout(removeSplash, 600));
+      setTimeout(removeSplash, 2500);
 
-      // Register updated Service Worker
+      // Register updated Service Worker (Web only; strictly disabled in Tauri/Desktop to avoid asset stalls)
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            reg.addEventListener('updatefound', () => {
-              const newWorker = reg.installing;
-              newWorker?.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  newWorker.postMessage({ type: 'SKIP_WAITING' });
-                  window.location.reload();
-                }
-              });
-            });
+        const isDesktop = Boolean(
+          window.__TAURI_INTERNALS__ ||
+          window.__TAURI__ ||
+          window.location.protocol === 'tauri:' ||
+          window.location.hostname.includes('tauri') ||
+          window.location.hostname.endsWith('.localhost')
+        );
+        if (isDesktop) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            for (const r of regs) r.unregister();
           }).catch(() => {});
-        });
+        } else {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker?.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    window.location.reload();
+                  }
+                });
+              });
+            }).catch(() => {});
+          });
+        }
       }
     </script>
   </body>

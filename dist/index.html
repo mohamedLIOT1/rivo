@@ -12,16 +12,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Rivo" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png" />
 
     <!-- Favicons -->
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
-    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png" />
 
     <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="./manifest.json" />
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -79,8 +79,8 @@
         text-transform: uppercase;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-BzfF8nAs.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BjMRd51U.css">
+    <script type="module" crossorigin src="./assets/index-DALaKJ2P.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BjMRd51U.css">
   </head>
   <body class="bg-[#082621] text-[#0b1110] antialiased select-none overflow-hidden" style="font-family:'Plus Jakarta Sans',sans-serif">
 
@@ -98,31 +98,44 @@
 
     <script>
       // Remove splash when app is ready
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          const splash = document.getElementById('splash');
-          if (splash) {
-            splash.style.opacity = '0';
-            setTimeout(() => splash.remove(), 500);
-          }
-        }, 1000);
-      });
+      const removeSplash = () => {
+        const splash = document.getElementById('splash');
+        if (splash && splash.style.opacity !== '0') {
+          splash.style.opacity = '0';
+          setTimeout(() => splash.remove(), 500);
+        }
+      };
+      window.addEventListener('load', () => setTimeout(removeSplash, 600));
+      setTimeout(removeSplash, 2500);
 
-      // Register updated Service Worker
+      // Register updated Service Worker (Web only; strictly disabled in Tauri/Desktop to avoid asset stalls)
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            reg.addEventListener('updatefound', () => {
-              const newWorker = reg.installing;
-              newWorker?.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  newWorker.postMessage({ type: 'SKIP_WAITING' });
-                  window.location.reload();
-                }
-              });
-            });
+        const isDesktop = Boolean(
+          window.__TAURI_INTERNALS__ ||
+          window.__TAURI__ ||
+          window.location.protocol === 'tauri:' ||
+          window.location.hostname.includes('tauri') ||
+          window.location.hostname.endsWith('.localhost')
+        );
+        if (isDesktop) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            for (const r of regs) r.unregister();
           }).catch(() => {});
-        });
+        } else {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(reg => {
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker?.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                    window.location.reload();
+                  }
+                });
+              });
+            }).catch(() => {});
+          });
+        }
       }
     </script>
   </body>
