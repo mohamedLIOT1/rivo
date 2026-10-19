@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version      = "1.0.0"
   s.summary      = "Rivo Media Controls for iOS"
   s.author       = "Rivo"
-  s.homepage     = "https://github.com/mohamedLIOT1/liofy"
+  s.homepage     = "https://github.com/WhooAre-you/Rivo"
   s.license      = "MIT"
   s.platform     = :ios, "13.4"
   s.source       = { :git => "" }

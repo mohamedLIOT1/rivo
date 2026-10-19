@@ -57,7 +57,7 @@ async function publish() {
     console.log(`Loaded IPA from ${ipaPath} (${ipaBytes.length} bytes)`);
   }
 
-  const repos = ['mohamedLIOT1/rivo'];
+  const repos = ['WhooAre-you/Rivo'];
 
   for (const repo of repos) {
     console.log(`\n=== Processing repo: ${repo} ===`);

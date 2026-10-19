@@ -188,7 +188,7 @@ app.get([
   const ghToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
   if (ghToken) {
     try {
-      const releaseRes = await axios.get('https://api.github.com/repos/mohamedLIOT1/rivo/releases/tags/v1.8.3', {
+      const releaseRes = await axios.get('https://api.github.com/repos/WhooAre-you/Rivo/releases/tags/v1.9.1', {
         headers: { 'Authorization': `Bearer ${ghToken}`, 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Rivo-Server' }
       });
       const apkAsset = (releaseRes.data?.assets || []).find(a => a.name.endsWith('.apk'));
@@ -203,7 +203,7 @@ app.get([
       }
     } catch (e) {}
   }
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.8.3/Rivo-v1.8.3.apk');
+  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.1/Rivo-v1.9.1.apk');
 });
 
 app.get([
@@ -259,7 +259,7 @@ app.get([
   const localIpaPath = path.join(__dirname, '../public/downloads/Rivo.ipa');
   if (fs.existsSync(localIpaPath)) return res.download(localIpaPath, 'Rivo.ipa');
 
-  res.redirect('https://github.com/mohamedLIOT1/rivo/releases/download/v1.8.3/Rivo-v1.8.3.ipa');
+  res.redirect('https://github.com/WhooAre-you/Rivo/releases/download/v1.9.1/Rivo-v1.9.1.ipa');
 });
 
 // Broadcast app update notification to all active web and mobile clients (Admin Only)

@@ -1579,7 +1579,7 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
     try {
       const res = await axios.get('https://lrclib.net/api/search', {
         params: { q },
-        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/mohamedLIOT1/rivo)' },
+        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/WhooAre-you/Rivo)' },
         timeout: 4500
       });
       const items = res.data || [];

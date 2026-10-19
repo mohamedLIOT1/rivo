@@ -22,7 +22,7 @@ async function sleep(ms) {
 
 async function monitor() {
   const token = await getGitHubToken();
-  const repo = 'mohamedLIOT1/rivo';
+  const repo = 'WhooAre-you/Rivo';
   const tag = 'v1.5.7';
   const runId = process.argv[2] || '38467137734';
 
