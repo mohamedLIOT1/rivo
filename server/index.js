@@ -154,6 +154,46 @@ app.get('/downloads/:filename', async (req, res) => {
   return res.status(404).json({ error: 'File not found' });
 });
 
+// Secure Webhook for automated deployment on GitHub push
+const DEPLOY_SECRET = process.env.DEPLOY_SECRET || 'rivo-deploy-sec-2026';
+let isDeploying = false;
+
+app.post('/api/deploy-webhook', (req, res) => {
+  const secret = req.query.secret || req.headers['x-webhook-secret'] || req.body?.secret;
+  if (!secret || secret !== DEPLOY_SECRET) {
+    return res.status(403).json({ error: 'Unauthorized: Invalid deploy secret' });
+  }
+
+  if (isDeploying) {
+    return res.status(429).json({ message: 'Deployment already in progress' });
+  }
+
+  isDeploying = true;
+  res.json({ success: true, message: 'Deployment started in background' });
+
+  const { exec } = require('child_process');
+  const projectRoot = path.join(__dirname, '..');
+  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo';
+
+  console.log('[DeployWebhook] Starting auto-deployment...');
+  exec(deployCmd, { cwd: projectRoot, timeout: 300000 }, (error, stdout, stderr) => {
+    isDeploying = false;
+    if (error) {
+      console.error('[DeployWebhook] Execution error:', error);
+      console.error('[DeployWebhook] Stderr:', stderr);
+      return;
+    }
+    console.log('[DeployWebhook] Deployment finished successfully!');
+    if (stdout) console.log(stdout);
+
+    // Broadcast update to all connected clients
+    if (io) {
+      io.emit('app:update_manifest', APP_VERSIONS_DATA);
+      io.emit('app:update_available', APP_VERSIONS_DATA);
+    }
+  });
+});
+
 // Broadcast app update notification to all active web and mobile clients (Admin Only)
 app.post('/api/app/broadcast-update', adminAuth, (req, res) => {
   if (io) {

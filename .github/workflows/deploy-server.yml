@@ -1,40 +1,31 @@
-name: Deploy Web & Backend to AWS EC2
+name: Auto-Deploy to VPS (Webhook)
 
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'server/**'
+      - 'public/**'
+      - 'package.json'
+      - 'vite.config.js'
+      - 'index.html'
   workflow_dispatch:
 
 jobs:
   deploy:
-    name: Build & Deploy to AWS
+    name: Trigger VPS Auto-Deploy
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install Dependencies & Build Web
+      - name: Ping VPS Deploy Webhook
         run: |
-          npm install --legacy-peer-deps
-          npm run build
-
-      - name: Configure SSH Key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Sync Server & Web Dist to EC2
-        run: |
-          rsync -avz --delete dist/ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/rivo/dist/
-          rsync -avz server/ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/rivo/server/
-
-      - name: Restart Server & Broadcast Update
-        run: |
-          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "pm2 restart rivo && curl -s -X POST http://localhost:5000/api/app/broadcast-update || true"
+          echo "Pinging VPS webhook to trigger auto-deploy..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://rivo-m.duckdns.org/api/deploy-webhook?secret=${{ secrets.DEPLOY_SECRET || 'rivo-deploy-sec-2026' }}")
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✅ Deployment webhook received by VPS! Server is updating in the background."
+          else
+            echo "ℹ️ Webhook returned status $STATUS (Normal if server is on old version; run 'git pull' once on VPS to activate)."
+          fi
