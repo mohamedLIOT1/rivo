@@ -106,12 +106,3 @@ jobs:
           files: |
             build/Rivo*.ipa
 
-      - name: Deploy IPA to AWS Downloads (Optional)
-        if: ${{ secrets.EC2_HOST != '' && secrets.EC2_SSH_KEY != '' }}
-        continue-on-error: true
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-          scp build/Rivo*.ipa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ubuntu/rivo/public/downloads/

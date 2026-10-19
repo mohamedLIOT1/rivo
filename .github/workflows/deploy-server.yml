@@ -1,21 +1,12 @@
 name: Deploy Web & Backend to AWS EC2
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'src/**'
-      - 'server/**'
-      - 'public/**'
-      - 'package.json'
-      - 'vite.config.js'
   workflow_dispatch:
 
 jobs:
   deploy:
     name: Build & Deploy to AWS
     runs-on: ubuntu-latest
-    if: ${{ secrets.EC2_HOST != '' && secrets.EC2_SSH_KEY != '' }}
 
     steps:
       - name: Checkout Code
