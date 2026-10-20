@@ -1003,8 +1003,8 @@ export default function OnlineWebView() {
           }
           return true;
         }}
-        allowFileAccess={true}
-        allowUniversalAccessFromFileURLs={true}
+        allowFileAccess={false}
+        allowUniversalAccessFromFileURLs={false}
         mixedContentMode="always"
         userAgent={
           Platform.OS === 'ios'
@@ -1018,7 +1018,7 @@ export default function OnlineWebView() {
         androidLayerType="hardware"
         thirdPartyCookiesEnabled={true}
         sharedCookiesEnabled={true}
-        originWhitelist={['*']}
+        originWhitelist={['https://rivo-m.duckdns.org*', 'http://localhost*', 'https://*.google.com*', 'https://*.youtube.com*']}
         allowsFullscreenVideo={true}
         setSupportMultipleWindows={false}
         startInLoadingState={false}

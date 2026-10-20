@@ -120,7 +120,7 @@ function MainAppShell() {
     if (data?.channel === 'beta') {
       const userEmail = (currentUser?.email || '').toLowerCase().trim();
       const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
-      const isBetaTester = isAdmin || BETA_TESTER_EMAILS.includes(userEmail);
+      const isBetaTester = isAdmin || BETA_TESTER_EMAILS.includes(userEmail) || APP_VERSION.startsWith('1.9.6');
       if (!isBetaTester) {
         return; // Normal users are NEVER spammed with test builds!
       }
@@ -217,12 +217,34 @@ function MainAppShell() {
     };
   }, [socket]);
 
+  useEffect(() => {
+    if (currentUser?.email) {
+      checkAppUpdates();
+    }
+  }, [currentUser?.email]);
+
   const checkAppUpdates = async () => {
     try {
       const token = (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || currentUser?.token;
-      const email = currentUser?.email || '';
-      const query = email ? `?email=${encodeURIComponent(email)}` : '';
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      let email = (currentUser?.email || '').trim().toLowerCase();
+      if (!email) {
+        try {
+          const cachedUserStr = (await AsyncStorage.getItem('rivo_user')) || (await AsyncStorage.getItem('user'));
+          if (cachedUserStr) {
+            const cachedUser = JSON.parse(cachedUserStr);
+            email = (cachedUser?.email || '').trim().toLowerCase();
+          }
+        } catch {}
+      }
+      const params = new URLSearchParams();
+      if (email) params.set('email', email);
+      params.set('currentVersion', APP_VERSION);
+      params.set('platform', Platform.OS);
+      const query = `?${params.toString()}`;
+      const headers = {
+        'x-app-version': APP_VERSION,
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      };
       const res = await fetch(`${API_BASE_URL}/api/app/version${query}`, { headers });
       if (!res.ok) return;
       const data = await res.json();
@@ -265,6 +287,11 @@ function MainAppShell() {
 
       if (res?.success) {
         setIsOtaReadyToRestart(true);
+      } else if (res?.reason === 'already_up_to_date') {
+        Alert.alert('محدث بالفعل', 'تطبيق ريفو محدث بالفعل لآخر إصدار هوائي.');
+        setIsOtaModalOpen(false);
+      } else {
+        setOtaError(res?.reason || 'تعذر استكمال التحديث');
       }
     } catch (err) {
       console.warn('OTA Download error:', err);

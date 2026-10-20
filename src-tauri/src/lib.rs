@@ -327,21 +327,32 @@ fn delete_desktop_downloaded_track(app: tauri::AppHandle, id: String) -> Result<
 }
 
 #[tauri::command]
-fn read_desktop_lrc(lrc_path: String) -> Result<String, String> {
+fn read_desktop_lrc(app: tauri::AppHandle, lrc_path: String) -> Result<String, String> {
+    let downloads_dir = resolve_downloads_dir(&app);
+    let canonical_downloads = downloads_dir.canonicalize()
+        .map_err(|_| "Failed to resolve downloads directory".to_string())?;
+
     let p = Path::new(&lrc_path);
-    let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+    let canonical_path = p.canonicalize()
+        .map_err(|e| format!("Invalid path or file does not exist: {}", e))?;
+
+    if !canonical_path.starts_with(&canonical_downloads) {
+        return Err("Access denied: file must be located within the Rivo downloads directory.".to_string());
+    }
+
+    let ext = canonical_path.extension().and_then(|s| s.to_str()).unwrap_or("");
     if ext != "lrc" && ext != "mp3" {
         return Err("Access denied: only audio lyrics files (.lrc, .mp3) can be read.".to_string());
     }
 
     if ext == "mp3" {
-        if let Ok(tag) = Tag::read_from_path(&lrc_path) {
+        if let Ok(tag) = Tag::read_from_path(&canonical_path) {
             if let Some(lyrics) = tag.lyrics().next() {
                 return Ok(lyrics.text.clone());
             }
         }
     }
-    fs::read_to_string(&lrc_path).map_err(|e| e.to_string())
+    fs::read_to_string(&canonical_path).map_err(|e| e.to_string())
 }
 
 fn cleanup_old_desktop_installers(app: &tauri::AppHandle) {

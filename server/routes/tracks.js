@@ -916,19 +916,24 @@ router.get('/download', async (req, res) => {
     const cleanTitle = sanitizeTag(title, 'Track');
     const cleanFilename = `${cleanArtist} - ${cleanTitle}`;
 
-    // Direct uploaded files
+    // Direct uploaded files with path traversal protection
     if (url && (url.startsWith('/uploads/') || url.includes('/uploads/'))) {
-      const filePath = path.join(__dirname, '../../', url.startsWith('/') ? url : `/${url}`);
-      if (fs.existsSync(filePath)) {
+      const filePath = safeResolveUpload(url, uploadsDir);
+      if (filePath && fs.existsSync(filePath)) {
         return res.download(filePath, `${cleanFilename}${path.extname(filePath)}`);
       }
     }
 
     if (url && (url.startsWith('http://') || url.startsWith('https://')) && !url.includes('youtube.com') && !url.includes('youtu.be')) {
+      const safeUrl = await validateSafeUrl(url);
+      if (!safeUrl || !safeUrl.valid) {
+        return res.status(403).json({ error: safeUrl?.error || 'Access to this URL is blocked (SSRF Protection)' });
+      }
+
       try {
         const directRes = await axios({
           method: 'get',
-          url: url,
+          url: safeUrl.parsed.href,
           responseType: 'stream',
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
           timeout: 45000
@@ -940,7 +945,9 @@ router.get('/download', async (req, res) => {
           'Access-Control-Allow-Origin': '*'
         });
         return directRes.data.pipe(res);
-      } catch (e) {}
+      } catch (e) {
+        return res.status(502).json({ error: 'Failed to download remote audio stream' });
+      }
     }
 
     let videoId = null;
@@ -1005,7 +1012,7 @@ router.post('/:id/lyrics', auth, async (req, res) => {
     }
     const finalTitle = title || trackObj?.title || '';
     const finalArtist = artist || trackObj?.artist || '';
-    const isVer = req.user?.isAdmin ? (isVerified !== undefined ? Boolean(isVerified) : true) : true;
+    const isVer = req.user?.isAdmin ? (isVerified !== undefined ? Boolean(isVerified) : true) : false;
     const userName = req.user?.name || (req.user?.isAdmin ? 'Admin' : 'Listener');
     const trackKey = getTrackKey(finalTitle, finalArtist);
 
@@ -1068,11 +1075,14 @@ router.post('/:id/lyrics', auth, async (req, res) => {
 router.post('/update-lyrics', auth, async (req, res) => {
   try {
     const { trackId, title, artist, lyrics, isVerified } = req.body;
-    const isAdmin = true;
-    const isVer = isVerified !== undefined ? Boolean(isVerified) : true;
+    const isAdmin = Boolean(req.user?.isAdmin || isAdminUser(req.user));
+    const isVer = isAdmin ? (isVerified !== undefined ? Boolean(isVerified) : true) : false;
     const trackKey = getTrackKey(title, artist);
 
     if (!isVer && isVerified === false) {
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Permission denied: Administrator privileges required to unverify or remove verified lyrics.' });
+      }
       if (trackKey && trackKey !== '___') {
         await SongLyrics.deleteOne({ trackKey }).catch(() => {});
       }

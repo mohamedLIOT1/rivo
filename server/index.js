@@ -11,6 +11,7 @@ try { require('dotenv').config({ path: path.join(__dirname, '../.env') }); } cat
 const express = require('express');
 const http = require('http');
 const fs = require('fs');
+const crypto = require('crypto');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -206,10 +207,12 @@ const getOtaManifest = () => {
 app.get('/api/app/version', optionalAuth, (req, res) => {
   const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
   const reqChannel = (req.query.channel || '').trim().toLowerCase();
+  const clientVersion = (req.query.currentVersion || req.headers['x-app-version'] || '').trim();
   
-  const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
+  const isBetaClient = clientVersion.startsWith('1.9.6') || reqChannel === 'beta';
+  const hasBetaAccess = isBetaClient || isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
   
-  const manifest = (hasBetaAccess && (reqChannel === 'beta' || !reqChannel))
+  const manifest = (hasBetaAccess && (reqChannel === 'beta' || !reqChannel || isBetaClient))
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
     : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
@@ -279,8 +282,15 @@ app.post('/api/deploy-webhook', (req, res) => {
     return res.status(503).json({ error: 'Deployment webhook is not configured on this server.' });
   }
 
-  const secret = req.query.secret || req.headers['x-webhook-secret'] || req.body?.secret;
-  if (!secret || secret !== DEPLOY_SECRET) {
+  const secret = req.headers['x-webhook-secret'] || req.body?.secret;
+  if (!secret || typeof secret !== 'string') {
+    return res.status(403).json({ error: 'Unauthorized: Missing or invalid deploy secret header/body' });
+  }
+
+  const userHash = crypto.createHash('sha256').update(String(secret)).digest();
+  const serverHash = crypto.createHash('sha256').update(String(DEPLOY_SECRET)).digest();
+
+  if (!crypto.timingSafeEqual(userHash, serverHash)) {
     return res.status(403).json({ error: 'Unauthorized: Invalid deploy secret' });
   }
 
@@ -407,8 +417,8 @@ app.get('/api/proxy-audio', async (req, res) => {
     if (!rawUrl || typeof rawUrl !== 'string') return res.status(400).end();
 
     const safeUrl = await validateSafeUrl(rawUrl);
-    if (!safeUrl) {
-      return res.status(403).json({ error: 'Access to this URL is blocked for security reasons (SSRF Protection)' });
+    if (!safeUrl || !safeUrl.valid) {
+      return res.status(403).json({ error: safeUrl?.error || 'Access to this URL is blocked (SSRF Protection)' });
     }
 
     const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
@@ -416,7 +426,7 @@ app.get('/api/proxy-audio', async (req, res) => {
 
     const r = await axios({
       method: 'get',
-      url: safeUrl,
+      url: safeUrl.parsed.href,
       responseType: 'stream',
       headers,
       timeout: 25000,

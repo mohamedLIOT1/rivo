@@ -119,8 +119,8 @@ router.get('/lookup', async (req, res) => {
   }
 });
 
-// Admin / System: Trigger auto-fix for all album covers to official HD square artwork
-router.all('/auto-fix', async (req, res) => {
+// Admin / System: Trigger auto-fix for all album covers to official HD square artwork (Admin only)
+router.post('/auto-fix', adminAuth, async (req, res) => {
   try {
     const io = req.app.get('io') || req.io;
     await autoFixAlbumCovers(io);

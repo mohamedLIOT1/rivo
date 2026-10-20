@@ -26,11 +26,13 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https: data: blob:; media-src 'self' asset: https: data: blob:; connect-src 'self' ipc: http://ipc.localhost https://rivo-m.duckdns.org wss://rivo-m.duckdns.org https://api.github.com https://*.googlevideo.com https://*.ytimg.com https://*.sndcdn.com; font-src 'self' data: https:;",
       "assetProtocol": {
         "enable": true,
         "scope": [
-          "**"
+          "$APPLOCALDATA/downloads/**",
+          "$DOWNLOAD/**",
+          "$TEMP/Rivo/**"
         ]
       }
     }

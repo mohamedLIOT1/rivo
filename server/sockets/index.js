@@ -99,12 +99,16 @@ module.exports = function (io, updateConfig = {}) {
       }
     });
 
-    // Real-time notification sending
+    // Real-time notification sending (strictly authenticated sender)
     socket.on('notification:send', ({ recipientId, title, body, data }) => {
+      if (!socket.userId) {
+        return; // Reject unauthenticated notification sending
+      }
       const recipientSockets = userSocketMap.get(String(recipientId));
       if (recipientSockets) {
         recipientSockets.forEach(sid =>
           io.to(sid).emit('notification:received', {
+            senderId: socket.userId,
             title,
             body,
             data,
@@ -257,19 +261,21 @@ module.exports = function (io, updateConfig = {}) {
       });
     });
 
-    // Jam: Join Room
+    // Jam: Join Room (secure host verification via authenticated socket.userId)
     socket.on('jam:join_room', ({ roomCode, user, currentTrack, isPlaying, currentTime }) => {
       if (!roomCode) return;
       const cleanCode = String(roomCode).trim().toUpperCase();
       socket.join(cleanCode);
 
-      const uId = user?.id || user?._id || socket.userId || null;
+      // Authenticated userId strictly from JWT handshake
+      const authenticatedUserId = socket.userId ? String(socket.userId) : null;
+      const uId = authenticatedUserId || (user?.id ? String(user.id) : (user?._id ? String(user._id) : socket.id));
       const isNewRoom = !jamRooms[cleanCode];
       if (isNewRoom) {
         jamRooms[cleanCode] = {
           code: cleanCode,
           hostId: socket.id,
-          hostUserId: uId,
+          hostUserId: authenticatedUserId,
           hostOnlyControl: false,
           currentTrack: currentTrack || null,
           isPlaying: Boolean(isPlaying),
@@ -287,14 +293,15 @@ module.exports = function (io, updateConfig = {}) {
         jamDisconnectTimeouts.delete(disconnectKey);
       }
 
-      const wasHostReconnecting = room.hostUserId && uId && String(room.hostUserId) === String(uId);
+      // Reconnecting host check MUST strictly match authenticated socket.userId to prevent impersonation
+      const wasHostReconnecting = Boolean(room.hostUserId && authenticatedUserId && String(room.hostUserId) === authenticatedUserId);
       const isHost = isNewRoom ? true : Boolean(room.hostId === socket.id || wasHostReconnecting || (room.members.length === 0 && !room.hostId));
 
       room.members = (room.members || []).filter(m => m.socketId !== socket.id && (!uId || String(m.id || m._id) !== String(uId)));
 
       if (isHost) {
         room.hostId = socket.id;
-        room.hostUserId = uId;
+        room.hostUserId = authenticatedUserId || room.hostUserId || null;
         room.members.forEach(m => { m.isHost = false; });
         if (currentTrack && (!room.currentTrack || isNewRoom)) {
           room.currentTrack = currentTrack;
@@ -306,8 +313,8 @@ module.exports = function (io, updateConfig = {}) {
 
       const member = {
         ...user,
-        id: uId || user?.id || user?._id || socket.id,
-        _id: uId || user?.id || user?._id || socket.id,
+        id: uId,
+        _id: uId,
         name: user?.name || 'Listener',
         avatar: user?.avatar || '',
         socketId: socket.id,
@@ -550,29 +557,45 @@ module.exports = function (io, updateConfig = {}) {
     socket.on('jam:remove_from_queue', ({ roomCode, trackIndex, trackId }) => {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
-      if (room && room.queue) {
-        if (typeof trackIndex === 'number' && trackIndex >= 0 && trackIndex < room.queue.length) {
-          room.queue.splice(trackIndex, 1);
-        } else if (trackId) {
-          room.queue = room.queue.filter(t => String(t.id || t._id) !== String(trackId));
-        }
-        io.to(cleanCode).emit('jam:room_updated', room);
-        io.to(cleanCode).emit('jam_updated', room);
+      if (!room || !Array.isArray(room.queue)) return;
+
+      // Authorization check: User must be an active member of this room
+      const member = (room.members || []).find(m => m.socketId === socket.id);
+      if (!member) return;
+
+      // If room has hostOnlyControl enabled, only host can modify queue
+      const isHost = room.hostId === socket.id || Boolean(room.hostUserId && socket.userId && String(room.hostUserId) === String(socket.userId));
+      if (room.hostOnlyControl && !isHost) return;
+
+      if (typeof trackIndex === 'number' && trackIndex >= 0 && trackIndex < room.queue.length) {
+        room.queue.splice(trackIndex, 1);
+      } else if (trackId) {
+        room.queue = room.queue.filter(t => String(t.id || t._id) !== String(trackId));
       }
+      io.to(cleanCode).emit('jam:room_updated', room);
+      io.to(cleanCode).emit('jam_updated', room);
     });
 
     socket.on('jam:reorder_queue', ({ roomCode, fromIndex, toIndex }) => {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
-      if (room && Array.isArray(room.queue)) {
-        if (typeof fromIndex === 'number' && typeof toIndex === 'number' &&
-            fromIndex >= 0 && fromIndex < room.queue.length &&
-            toIndex >= 0 && toIndex < room.queue.length) {
-          const [moved] = room.queue.splice(fromIndex, 1);
-          room.queue.splice(toIndex, 0, moved);
-          io.to(cleanCode).emit('jam:room_updated', room);
-          io.to(cleanCode).emit('jam_updated', room);
-        }
+      if (!room || !Array.isArray(room.queue)) return;
+
+      // Authorization check: User must be an active member of this room
+      const member = (room.members || []).find(m => m.socketId === socket.id);
+      if (!member) return;
+
+      // If room has hostOnlyControl enabled, only host can modify queue
+      const isHost = room.hostId === socket.id || Boolean(room.hostUserId && socket.userId && String(room.hostUserId) === String(socket.userId));
+      if (room.hostOnlyControl && !isHost) return;
+
+      if (typeof fromIndex === 'number' && typeof toIndex === 'number' &&
+          fromIndex >= 0 && fromIndex < room.queue.length &&
+          toIndex >= 0 && toIndex < room.queue.length) {
+        const [moved] = room.queue.splice(fromIndex, 1);
+        room.queue.splice(toIndex, 0, moved);
+        io.to(cleanCode).emit('jam:room_updated', room);
+        io.to(cleanCode).emit('jam_updated', room);
       }
     });
 

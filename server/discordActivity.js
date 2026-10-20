@@ -3,51 +3,41 @@ const { Client: BotClient, MessageEmbed, MessageActionRow, MessageButton } = req
 const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
 
 const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'rivo-sec-discord-enc-key';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+  throw new Error('❌ [FATAL] ENCRYPTION_KEY is required in environment variables for Discord activity token security.');
+}
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DISCORD_APP_ID = process.env.DISCORD_CLIENT_ID || '1440997674630250506';
 
 // 🔒 Token Encryption & Decryption
 function encryptToken(text) {
   if (!text) return '';
-  try {
-    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
-  } catch (e) {
-    return text;
-  }
+  const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
 }
 
 function decryptToken(text) {
   if (!text) return '';
-  if (!text.includes(':')) return text;
-  
-  // Helper to attempt deciphering with a given key
-  const attemptDecipher = (kStr) => {
-    try {
-      const key = crypto.createHash('sha256').update(String(kStr)).digest();
-      const parts = text.split(':');
-      const iv = Buffer.from(parts[0], 'hex');
-      const encryptedText = Buffer.from(parts.slice(1).join(':'), 'hex');
-      const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-      let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
-      return decrypted;
-    } catch {
-      return null;
-    }
-  };
-
-  return attemptDecipher(ENCRYPTION_KEY) 
-    || attemptDecipher('6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a') 
-    || null;
+  if (!text.includes(':')) return null;
+  try {
+    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
+    const parts = text.split(':');
+    const iv = Buffer.from(parts[0], 'hex');
+    const encryptedText = Buffer.from(parts.slice(1).join(':'), 'hex');
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch {
+    return null;
+  }
 }
 
-// 🎧 Active Selfbots Management (Per-user sessions)
 const activeUserBots = new Map();
 const userIdleTimers = new Map();
 
