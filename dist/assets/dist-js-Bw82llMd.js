@@ -1,1 +1,0 @@
-import{r as e}from"./core-CDqm-P-H.js";async function t(){await e(`plugin:process|restart`)}export{t as relaunch};

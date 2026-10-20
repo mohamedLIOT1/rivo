@@ -849,7 +849,7 @@ router.get('/stream-proxy', async (req, res) => {
       responseType: 'stream',
       headers,
       timeout: 25000,
-      maxRedirects: 0,
+      maxRedirects: 5,
       validateStatus: (status) => status < 400
     });
 
@@ -1447,7 +1447,7 @@ const resolveStreamHandler = async (req, res) => {
       }
     }
 
-    if (url && url.startsWith('http') && !url.includes('pixabay.com') && !url.includes('preview') && !url.includes('soundcloud.com') && !url.includes('sndcdn.com')) {
+    if (url && url.startsWith('http') && !url.includes('youtube.com') && !url.includes('youtu.be') && !url.includes('pixabay.com') && !url.includes('preview') && !url.includes('soundcloud.com') && !url.includes('sndcdn.com')) {
       return res.json({ success: true, url });
     }
 

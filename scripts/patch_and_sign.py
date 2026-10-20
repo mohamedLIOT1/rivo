@@ -104,10 +104,10 @@ def patch_android():
         base_apk = os.path.join(BASE_DIR, 'android', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
     if not os.path.exists(base_apk):
         base_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.apk')
-    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.2.apk')
+    out_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.3.apk')
     legacy_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo-v1.9.1.apk')
     generic_apk = os.path.join(BASE_DIR, 'public', 'downloads', 'Rivo.apk')
-    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.2.apk')
+    dist_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.3.apk')
     dist_legacy_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo-v1.9.1.apk')
     dist_gen_apk = os.path.join(BASE_DIR, 'dist', 'downloads', 'Rivo.apk')
 
@@ -131,7 +131,7 @@ def patch_android():
                     old_str11 = '1.8.8'.encode('utf-16le')
                     old_str10 = '1.8.7'.encode('utf-16le')
                     old_str_base = '1.7.8'.encode('utf-16le')
-                    new_str = '1.9.2'.encode('utf-16le')
+                    new_str = '1.9.3'.encode('utf-16le')
                     if old_str14 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_str14, new_str)
                     elif old_str13 in manifest_bytes:
@@ -151,7 +151,7 @@ def patch_android():
                     old_code11 = b'\x08\x00\x00\x10\x39\x00\x00\x00' # versionCode 57
                     old_code10 = b'\x08\x00\x00\x10\x38\x00\x00\x00' # versionCode 56
                     old_code_base = b'\x08\x00\x00\x10\x2f\x00\x00\x00' # versionCode 47
-                    new_code = b'\x08\x00\x00\x10\x3d\x00\x00\x00'   # versionCode 61
+                    new_code = b'\x08\x00\x00\x10\x3e\x00\x00\x00'   # versionCode 62
                     if old_code14 in manifest_bytes:
                         manifest_bytes = manifest_bytes.replace(old_code14, new_code)
                     elif old_code13 in manifest_bytes:

@@ -15,7 +15,9 @@
       "bundleIdentifier": "com.rivo.app",
       "buildNumber": "62",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": [
+          "audio"
+        ],
         "UIFileSharingEnabled": true,
         "LSSupportsOpeningDocumentsInPlace": true,
         "NSAppTransportSecurity": {
@@ -29,7 +31,7 @@
         "backgroundColor": "#0b1110"
       },
       "package": "com.rivo.app",
-      "versionCode": 62,
+      "versionCode": 63,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",

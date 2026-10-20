@@ -105,18 +105,18 @@ const APP_VERSIONS_DATA = {
     },
     android: {
       version: '1.9.3',
-      build: 62,
+      build: 63,
       name: 'Rivo for Android (APK)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.apk',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.apk',
       directFile: 'Rivo-v1.9.3.apk',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     },
     ios: {
       version: '1.9.3',
-      build: 62,
+      build: 63,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.ipa',
       directFile: 'Rivo-v1.9.3.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'

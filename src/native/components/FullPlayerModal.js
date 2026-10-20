@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions,
   ScrollView, Platform, FlatList, ActivityIndicator, Animated, TextInput, Alert,
@@ -383,6 +383,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
   const activeLyricIndex = useMemo(() => {
     if (!lyricsList.length) return -1;
+    if (lyricsList[0]?.isUnsynced || lyricsList[0]?.time < 0) return -1;
     return lyricsList.findIndex((line, idx) => {
       const nextLine = lyricsList[idx + 1];
       const curTime = typeof currentTime === 'number' ? currentTime : 0;
@@ -405,6 +406,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
         const m = Math.floor(l.time / 60);
         const s = Math.floor(l.time % 60);
         const cs = Math.floor((l.time % 1) * 100);
+        if (l.isUnsynced || l.time < 0) return l.text;
         return `[${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}] ${l.text}`;
       }).join('\n');
       setLyricsInputText(formatted);

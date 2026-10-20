@@ -525,15 +525,18 @@ export default function AdminScreen({
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={userFilterQuery}
-                onChange={(e) => setUserFilterQuery(e.target.value)}
-                placeholder="Filter by name or email..."
-                className={`p-2 px-3 text-xs rounded-xl brutal-border focus:outline-none w-52 sm:w-64 font-mono ${
-                  isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
-                }`}
-              />
+              <div className="relative w-52 sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={userFilterQuery}
+                  onChange={(e) => setUserFilterQuery(e.target.value)}
+                  placeholder="Filter by name or email..."
+                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl brutal-border focus:outline-none font-mono ${
+                    isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                  }`}
+                />
+              </div>
               <button
                 onClick={fetchAllUsers}
                 className={`p-2 rounded-xl brutal-border cursor-pointer ${
@@ -625,7 +628,7 @@ export default function AdminScreen({
       {/* ── TAB 2: SONGS ── */}
       {activeTab === 'tracks' && (
         <div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-mono font-black uppercase flex items-center gap-2">
                 <Music2 size={18} className="text-[#f59e0b]" />
@@ -636,62 +639,66 @@ export default function AdminScreen({
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={`flex items-center gap-1 p-1 rounded-xl brutal-border ${
-                isDark ? 'bg-[#182320] border-zinc-700' : 'bg-white/80 border-black'
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => setSongTypeFilter('all')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    songTypeFilter === 'all'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  All ({tracks.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSongTypeFilter('songs')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    songTypeFilter === 'songs'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  Songs ({tracksSongsCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSongTypeFilter('quran')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    songTypeFilter === 'quran'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  Quran ({tracksQuranCount})
-                </button>
+            <button
+              type="button"
+              onClick={handleDeduplicateTracks}
+              disabled={isDeduplicating}
+              className="brutal-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] text-xs font-mono font-bold uppercase brutal-border brutal-shadow-sm cursor-pointer disabled:opacity-50 w-fit self-start sm:self-auto"
+              title="Scan and merge duplicate songs across database"
+            >
+              <Sparkles size={14} className={isDeduplicating ? 'animate-spin' : ''} />
+              <span>{isDeduplicating ? 'Deduplicating...' : 'Deduplicate Songs'}</span>
+            </button>
+          </div>
 
-                <button
-                  type="button"
-                  onClick={handleDeduplicateTracks}
-                  disabled={isDeduplicating}
-                  className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] brutal-shadow-sm flex items-center gap-1.5 disabled:opacity-50 ml-1"
-                  title="Scan and merge duplicate songs across database"
-                >
-                  <Sparkles size={13} className={isDeduplicating ? 'animate-spin' : ''} />
-                  <span>{isDeduplicating ? 'Deduplicating...' : 'Deduplicate Songs'}</span>
-                </button>
-              </div>
+          {/* Unified Songs Toolbar: Filters on Left, Search on Right */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+            <div className={`flex items-center gap-1 p-1 rounded-xl brutal-border w-fit ${
+              isDark ? 'bg-[#182320] border-zinc-700' : 'bg-white/80 border-black'
+            }`}>
+              <button
+                type="button"
+                onClick={() => setSongTypeFilter('all')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  songTypeFilter === 'all'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                All ({tracks.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSongTypeFilter('songs')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  songTypeFilter === 'songs'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Songs ({tracksSongsCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSongTypeFilter('quran')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  songTypeFilter === 'quran'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Quran ({tracksQuranCount})
+              </button>
+            </div>
 
+            <div className="relative w-full sm:w-72">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <input
                 type="text"
                 value={songFilterQuery}
                 onChange={(e) => setSongFilterQuery(e.target.value)}
-                placeholder="Search songs..."
-                className={`p-2 px-3 text-xs rounded-xl brutal-border focus:outline-none w-48 sm:w-56 font-mono ${
+                placeholder="Search songs or artists..."
+                className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl brutal-border focus:outline-none font-mono ${
                   isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
                 }`}
               />
@@ -788,7 +795,7 @@ export default function AdminScreen({
       {/* ── TAB 3: ALBUMS ── */}
       {activeTab === 'albums' && (
         <div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-mono font-black uppercase flex items-center gap-2">
                 <Disc size={18} className="text-[#26c4b7]" />
@@ -799,64 +806,19 @@ export default function AdminScreen({
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={`flex items-center gap-1 p-1 rounded-xl brutal-border ${
-                isDark ? 'bg-[#182320] border-zinc-700' : 'bg-white/80 border-black'
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => setAlbumTypeFilter('all')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    albumTypeFilter === 'all'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  All ({adminAlbums.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAlbumTypeFilter('songs')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    albumTypeFilter === 'songs'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  Songs ({albumsSongsCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAlbumTypeFilter('quran')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    albumTypeFilter === 'quran'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  Quran ({albumsQuranCount})
-                </button>
-              </div>
-
-              <input
-                type="text"
-                value={albumFilterQuery}
-                onChange={(e) => setAlbumFilterQuery(e.target.value)}
-                placeholder="Search albums..."
-                className={`p-2 px-3 text-xs rounded-xl brutal-border focus:outline-none w-48 sm:w-56 font-mono ${
-                  isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
-                }`}
-              />
+            <div className="flex items-center gap-2 w-fit self-start sm:self-auto">
               <button
+                type="button"
                 onClick={fetchAlbums}
-                className={`p-2 rounded-xl brutal-border cursor-pointer ${
-                  isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:text-white' : 'bg-[#ede5d3] text-black border-black'
+                className={`p-2 rounded-xl brutal-border cursor-pointer transition-colors ${
+                  isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:text-white hover:bg-zinc-800' : 'bg-[#ede5d3] text-black border-black hover:bg-[#dfd7c5]'
                 }`}
                 title="Refresh Albums"
               >
                 <RefreshCw size={14} className={isLoadingAlbums ? 'animate-spin' : ''} />
               </button>
               <button
+                type="button"
                 onClick={() => setIsAddAlbumOpen(true)}
                 className="brutal-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer"
                 title="Admin: Upload Album"
@@ -864,6 +826,60 @@ export default function AdminScreen({
                 <Plus size={14} strokeWidth={3} />
                 <span>Upload Album</span>
               </button>
+            </div>
+          </div>
+
+          {/* Unified Albums Toolbar: Filters on Left, Search on Right */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+            <div className={`flex items-center gap-1 p-1 rounded-xl brutal-border w-fit ${
+              isDark ? 'bg-[#182320] border-zinc-700' : 'bg-white/80 border-black'
+            }`}>
+              <button
+                type="button"
+                onClick={() => setAlbumTypeFilter('all')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  albumTypeFilter === 'all'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                All ({adminAlbums.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlbumTypeFilter('songs')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  albumTypeFilter === 'songs'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Songs ({albumsSongsCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAlbumTypeFilter('quran')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  albumTypeFilter === 'quran'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Quran ({albumsQuranCount})
+              </button>
+            </div>
+
+            <div className="relative w-full sm:w-72">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+              <input
+                type="text"
+                value={albumFilterQuery}
+                onChange={(e) => setAlbumFilterQuery(e.target.value)}
+                placeholder="Search albums..."
+                className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl brutal-border focus:outline-none font-mono ${
+                  isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                }`}
+              />
             </div>
           </div>
 
@@ -945,15 +961,18 @@ export default function AdminScreen({
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={artistFilterQuery}
-                onChange={(e) => setArtistFilterQuery(e.target.value)}
-                placeholder="Search artists..."
-                className={`p-2 px-3 text-xs rounded-xl brutal-border focus:outline-none w-52 sm:w-64 font-mono ${
-                  isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
-                }`}
-              />
+              <div className="relative w-52 sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={artistFilterQuery}
+                  onChange={(e) => setArtistFilterQuery(e.target.value)}
+                  placeholder="Search artists..."
+                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl brutal-border focus:outline-none font-mono ${
+                    isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                  }`}
+                />
+              </div>
               <button
                 onClick={fetchArtists}
                 className={`p-2 rounded-xl brutal-border cursor-pointer ${
@@ -1038,15 +1057,18 @@ export default function AdminScreen({
             </div>
 
             <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={playlistFilterQuery}
-                onChange={(e) => setPlaylistFilterQuery(e.target.value)}
-                placeholder="Search playlists..."
-                className={`p-2 px-3 text-xs rounded-xl brutal-border focus:outline-none w-52 sm:w-64 font-mono ${
-                  isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
-                }`}
-              />
+              <div className="relative w-52 sm:w-64">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={playlistFilterQuery}
+                  onChange={(e) => setPlaylistFilterQuery(e.target.value)}
+                  placeholder="Search playlists..."
+                  className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl brutal-border focus:outline-none font-mono ${
+                    isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
+                  }`}
+                />
+              </div>
               <button
                 onClick={fetchPlaylists}
                 className={`p-2 rounded-xl brutal-border cursor-pointer ${
@@ -1125,7 +1147,7 @@ export default function AdminScreen({
       {/* ── TAB 6: LYRICS ── */}
       {activeTab === 'lyrics' && (
         <div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-mono font-black uppercase flex items-center gap-2">
                 <FileText size={18} className="text-[#17a398]" />
@@ -1135,52 +1157,56 @@ export default function AdminScreen({
                 Verify if song lyrics are correct or inaccurate. Correct verified lyrics are locked and badged across all players; unverified songs continue using the normal dynamic search function.
               </p>
             </div>
+          </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={`flex items-center gap-1 p-1 rounded-xl brutal-border ${
-                isDark ? 'bg-[#182320] border-zinc-700' : 'bg-white/80 border-black'
-              }`}>
-                <button
-                  type="button"
-                  onClick={() => setLyricsTypeFilter('all')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    lyricsTypeFilter === 'all'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  All ({tracks.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLyricsTypeFilter('songs')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    lyricsTypeFilter === 'songs'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  Songs ({tracksSongsCount})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLyricsTypeFilter('quran')}
-                  className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
-                    lyricsTypeFilter === 'quran'
-                      ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
-                  }`}
-                >
-                  Quran ({tracksQuranCount})
-                </button>
-              </div>
+          {/* Unified Lyrics Toolbar: Filters on Left, Search on Right */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
+            <div className={`flex items-center gap-1 p-1 rounded-xl brutal-border w-fit ${
+              isDark ? 'bg-[#182320] border-zinc-700' : 'bg-white/80 border-black'
+            }`}>
+              <button
+                type="button"
+                onClick={() => setLyricsTypeFilter('all')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  lyricsTypeFilter === 'all'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                All ({tracks.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLyricsTypeFilter('songs')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  lyricsTypeFilter === 'songs'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Songs ({tracksSongsCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setLyricsTypeFilter('quran')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  lyricsTypeFilter === 'quran'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Quran ({tracksQuranCount})
+              </button>
+            </div>
 
+            <div className="relative w-full sm:w-72">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               <input
                 type="text"
                 value={lyricsFilterQuery}
                 onChange={(e) => setLyricsFilterQuery(e.target.value)}
-                placeholder="Search lyrics..."
-                className={`p-2 px-3 text-xs rounded-xl brutal-border focus:outline-none w-48 sm:w-56 font-mono ${
+                placeholder="Search lyrics or songs..."
+                className={`w-full pl-9 pr-3 py-2 text-xs rounded-xl brutal-border focus:outline-none font-mono ${
                   isDark ? 'bg-[#182320] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
                 }`}
               />

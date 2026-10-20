@@ -631,7 +631,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
   // 4. Fallback: yt-dlp
   try {
     const bin = getYtDlpBin();
-    const cookiesPath = path.join(__dirname, '../../cookies.txt');
+    const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const ytdlpArgs = ['--no-check-certificates', '--get-id', `ytsearch1:${finalQuery}`];
     if (fs.existsSync(cookiesPath)) {
       ytdlpArgs.splice(1, 0, '--cookies', cookiesPath);
@@ -1212,7 +1212,7 @@ let ytWorkerReqSeq = 0;
 function initWarmYtWorker() {
   if (process.platform === 'win32' || ytWorkerProc) return;
   try {
-    const cookiesPath = path.join(__dirname, '../../cookies.txt');
+    const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const pyScript = `
 import sys, os, json
 sys.path.insert(0, '/usr/local/bin/yt-dlp')
@@ -1223,8 +1223,7 @@ opts = {
     'no_warnings': True,
     'nocheckcertificate': True,
     'noplaylist': True,
-    'format': 'ba[ext=m4a]/ba/b',
-    'extractor_args': {'youtube': {'player_client': ['web'], 'player_skip': ['configs', 'initial_data']}}
+    'format': 'ba[ext=m4a]/ba/b'
 }
 cpath = ${JSON.stringify(cookiesPath)}
 if os.path.exists(cpath):
@@ -1330,11 +1329,10 @@ function processNextBgDownload() {
   activeBackgroundDownloads.add(videoId);
   const bin = getYtDlpBin();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const cookiesPath = path.join(__dirname, '../../cookies.txt');
+  const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
-    '--extractor-args', 'youtube:player_client=web;player_skip=configs,initial_data',
     '-f', 'ba[ext=m4a]/ba/b',
     '-o', targetFile
   ];
@@ -1359,11 +1357,10 @@ async function extractDirectStreamUrl(videoId) {
 
   const bin = getYtDlpBin();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const cookiesPath = path.join(__dirname, '../../cookies.txt');
+  const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
-    '--extractor-args', 'youtube:player_client=web;player_skip=configs,initial_data',
     '-g',
     '-f', 'ba[ext=m4a]/ba/b'
   ];
@@ -1485,12 +1482,11 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     const bin = getYtDlpBin();
     const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const cookiesPath = path.join(__dirname, '../../cookies.txt');
+    const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const ytdlpArgs = [
       '--no-check-certificates',
       '--no-playlist',
-      '--extractor-args', 'youtube:player_client=web;player_skip=configs,initial_data',
-      '-f', 'ba[ext=m4a]/ba/b',
+        '-f', 'ba[ext=m4a]/ba/b',
       '-o', cachedM4a
     ];
     if (fs.existsSync(cookiesPath)) ytdlpArgs.push('--cookies', cookiesPath);

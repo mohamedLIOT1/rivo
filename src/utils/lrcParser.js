@@ -97,7 +97,8 @@ export function parseLrcLyrics(input) {
   } else {
     // Unsynchronized plain text fallback (spaced 5 seconds apart)
     return parsed.map((item, idx) => ({
-      time: idx * 5,
+      time: -1,
+      isUnsynced: true,
       text: item.text
     }));
   }

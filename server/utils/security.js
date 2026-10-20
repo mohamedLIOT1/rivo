@@ -3,7 +3,7 @@ const net = require('net');
 const path = require('path');
 
 function isPrivateIp(ip) {
-  if (!ip || typeof ip !== 'string') return true;
+  if (!ip || typeof ip !== 'string') return false;
   const cleanIp = ip.trim();
 
   // IPv4 Checks
@@ -56,7 +56,7 @@ function isPrivateIp(ip) {
     return false;
   }
 
-  return true;
+  return false;
 }
 
 async function validateSafeUrl(urlString) {
@@ -74,7 +74,11 @@ async function validateSafeUrl(urlString) {
     }
 
     const hostname = parsed.hostname.toLowerCase();
-    if (!hostname || hostname === 'localhost' || isPrivateIp(hostname)) {
+    if (!hostname || hostname === 'localhost' || hostname.endsWith('.local') || hostname.endsWith('.internal')) {
+      return { valid: false, error: 'Access to internal or private hosts is forbidden' };
+    }
+
+    if ((net.isIPv4(hostname) || net.isIPv6(hostname)) && isPrivateIp(hostname)) {
       return { valid: false, error: 'Access to internal or private hosts is forbidden' };
     }
 
