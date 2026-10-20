@@ -52,6 +52,7 @@ jobs:
           
           if ($latestExe) { 
             Copy-Item $latestExe.FullName -Destination "release-desktop\Rivo-v${ver}.exe" -Force 
+            Copy-Item $latestExe.FullName -Destination "release-desktop\Rivo_Setup.exe" -Force 
           }
           if ($latestSig) { Copy-Item $latestSig.FullName -Destination "release-desktop\Rivo_Setup.exe.sig" -Force }
           
@@ -87,3 +88,6 @@ jobs:
           name: Rivo ${{ github.ref_name || inputs.tag_name }}
           files: |
             release-desktop/Rivo-v*.exe
+            release-desktop/Rivo_Setup.exe
+            release-desktop/Rivo_Setup.exe.sig
+            release-desktop/windows-update.json

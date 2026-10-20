@@ -116,9 +116,9 @@ const APP_VERSIONS_DATA = {
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.9.4',
+      version: '1.9.5',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.4/Rivo_Setup.exe',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.5/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
@@ -155,9 +155,9 @@ const BETA_VERSIONS_DATA = {
       notes: 'Preview build with test features and latest optimisations.'
     },
     windows: {
-      version: '1.9.4',
+      version: '1.9.5',
       name: 'Rivo Desktop for Windows (Beta)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.4/Rivo_Setup.exe',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.5/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
       notes: 'Preview build with offline storage and ID3 tag verified lyrics.'

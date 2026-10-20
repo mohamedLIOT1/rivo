@@ -329,7 +329,12 @@ fn delete_desktop_downloaded_track(app: tauri::AppHandle, id: String) -> Result<
 #[tauri::command]
 fn read_desktop_lrc(lrc_path: String) -> Result<String, String> {
     let p = Path::new(&lrc_path);
-    if p.extension().and_then(|s| s.to_str()) == Some("mp3") || lrc_path.ends_with(".mp3") {
+    let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("");
+    if ext != "lrc" && ext != "mp3" {
+        return Err("Access denied: only audio lyrics files (.lrc, .mp3) can be read.".to_string());
+    }
+
+    if ext == "mp3" {
         if let Ok(tag) = Tag::read_from_path(&lrc_path) {
             if let Some(lyrics) = tag.lyrics().next() {
                 return Ok(lyrics.text.clone());
