@@ -14,7 +14,6 @@ module.exports = function (io, updateConfig = {}) {
     APP_VERSIONS_DATA,
     isBetaTester,
     BETA_TESTER_EMAILS,
-    recordBetaTesterIp,
   } = updateConfig;
 
   // Authentication middleware for Socket.io
@@ -32,7 +31,7 @@ module.exports = function (io, updateConfig = {}) {
   });
 
   io.on('connection', (socket) => {
-    // Proactively push beta updates to eligible testers on socket connection
+    // Proactively push beta updates ONLY to verified beta testers on their private socket
     const pushBetaUpdateIfEligible = async (userId) => {
       if (!userId || !BETA_VERSIONS_DATA) return;
       try {
@@ -42,10 +41,6 @@ module.exports = function (io, updateConfig = {}) {
           const isEligible = (typeof isBetaTester === 'function' && isBetaTester(u)) ||
             (BETA_TESTER_EMAILS && BETA_TESTER_EMAILS.has(email));
           if (isEligible) {
-            const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-            if (typeof recordBetaTesterIp === 'function') {
-              recordBetaTesterIp(clientIp, email);
-            }
             socket.emit('app:update_manifest', BETA_VERSIONS_DATA);
             socket.emit('app:update_available', BETA_VERSIONS_DATA);
           }

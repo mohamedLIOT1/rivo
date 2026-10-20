@@ -1,11 +1,10 @@
 {
-  "pub_date": "2026-10-20T18:15:12Z",
-  "notes": "Rivo Desktop v1.9.6: In-place auto-updater and automatic temporary installer cleanup.",
+  "version": "1.9.3",
+  "notes": "Rivo Desktop Stable v1.9.3",
+  "pub_date": "2026-10-20T12:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo_Setup.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTblNNUk1CalZTc1hjRGpSaUh5OW16dWJDMlpDUVFkSjcrNWtyKzdzUjZNeU5HSE43UHROamo1N0xpYjhyUFh5MzVFdytlZGpUV0FEMXNsN2djcEVYT3lnbE5EeThWRHdBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNTIwMTExCWZpbGU6Uml2b18xLjkuNl94NjQtc2V0dXAuZXhlCXZlcnNpb246MS45LjYKTWt4bFJGRk5IQW43OG8vUFIydGVFTUIrdEgrWHE2RXlMTWtZS28vRzJDbklFaElkbjc1UGVUQXdhS0tlbWFhRjN1QXMzT04zZTVjRzd6N2NnSEFURGc9PQo="
+      "url": "https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo_Setup.exe"
     }
-  },
-  "version": "1.9.6"
+  }
 }

@@ -98,25 +98,6 @@ const BETA_TESTER_EMAILS = new Set([
   'rio288631@gmail.com'
 ]);
 
-// IP-based session memory to recognize beta testers across unauthenticated endpoints
-const betaTesterIps = new Map();
-
-function recordBetaTesterIp(ip, email) {
-  if (!ip) return;
-  const cleanIp = ip.split(',')[0].trim();
-  betaTesterIps.set(cleanIp, { email: email || '', expiresAt: Date.now() + 24 * 3600 * 1000 });
-}
-
-function isKnownBetaIp(ip) {
-  if (!ip) return false;
-  const cleanIp = ip.split(',')[0].trim();
-  const entry = betaTesterIps.get(cleanIp);
-  if (entry && entry.expiresAt > Date.now()) {
-    return entry;
-  }
-  return false;
-}
-
 function isBetaTester(user) {
   if (!user) return false;
   if (user.role === 'admin' || user.isAdmin === true) return true;
@@ -124,15 +105,6 @@ function isBetaTester(user) {
   if (email && BETA_TESTER_EMAILS.has(email)) return true;
   return false;
 }
-
-// Global IP session recorder for authenticated requests
-app.use((req, res, next) => {
-  if (req.user && isBetaTester(req.user)) {
-    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip;
-    recordBetaTesterIp(clientIp, req.user.email);
-  }
-  next();
-});
 
 // App Version Manifest — STABLE Channel (Default for normal users)
 const APP_VERSIONS_DATA = {
@@ -145,34 +117,27 @@ const APP_VERSIONS_DATA = {
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.9.5',
+      version: '1.9.3',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.5/Rivo_Setup.exe',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
     android: {
       version: '1.9.3',
-      build: 62,
+      build: 63,
       name: 'Rivo for Android (APK)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.apk',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.apk',
       directFile: 'Rivo-v1.9.3.apk',
       mandatory: false,
-      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.',
-      ota: {
-        enabled: true,
-        version: '1.9.5.1',
-        bundleUrl: '/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.0',
-        notes: 'تحديث هوائي سريع وفوري بدون إعادة تثبيت الـ APK'
-      }
+      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     },
     ios: {
       version: '1.9.3',
-      build: 62,
+      build: 63,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.ipa',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.ipa',
       directFile: 'Rivo-v1.9.3.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
@@ -239,20 +204,17 @@ const getOtaManifest = () => {
 
 // Dual-channel version check endpoint
 app.get('/api/app/version', optionalAuth, (req, res) => {
-  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip;
-  const knownBeta = isKnownBetaIp(clientIp);
-  
-  const reqEmail = (req.query.email || req.user?.email || (knownBeta ? knownBeta.email : '')).trim().toLowerCase();
+  const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
   const reqChannel = (req.query.channel || '').trim().toLowerCase();
   
-  const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail)) || Boolean(knownBeta);
+  const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
   
   const manifest = (hasBetaAccess && (reqChannel === 'beta' || !reqChannel))
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
     : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
   const dynamicOta = getOtaManifest();
-  if (dynamicOta && dynamicOta.enabled) {
+  if (dynamicOta && dynamicOta.enabled && hasBetaAccess) {
     if (manifest.platforms && manifest.platforms.android) {
       manifest.platforms.android.ota = {
         ...manifest.platforms.android.ota,
@@ -506,7 +468,6 @@ require('./sockets')(io, {
   APP_VERSIONS_DATA,
   isBetaTester,
   BETA_TESTER_EMAILS,
-  recordBetaTesterIp,
 });
 
 const PORT = process.env.PORT || 5000;
