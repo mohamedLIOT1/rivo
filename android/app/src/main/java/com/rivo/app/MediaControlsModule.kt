@@ -374,6 +374,4 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             promise.reject("INFO_ERROR", e.message, e)
         }
     }
-        }
-    }
 }

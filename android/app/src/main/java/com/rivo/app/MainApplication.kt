@@ -36,11 +36,11 @@ class MainApplication : Application(), ReactApplication {
 
           override fun getJSBundleFile(): String? {
             try {
-              val prefs = applicationContext.getSharedPreferences("rivo_ota_prefs", Context.MODE_PRIVATE)
+              val prefs = this@MainApplication.getSharedPreferences("rivo_ota_prefs", Context.MODE_PRIVATE)
               val lastVersionCode = prefs.getInt("last_app_version_code", -1)
               val currentVersionCode = BuildConfig.VERSION_CODE
 
-              val otaDir = java.io.File(applicationContext.filesDir, "rivo_ota")
+              val otaDir = java.io.File(this@MainApplication.filesDir, "rivo_ota")
               if (lastVersionCode != -1 && lastVersionCode < currentVersionCode) {
                 // If app was updated via full APK, clear legacy OTA bundles
                 if (otaDir.exists()) {
