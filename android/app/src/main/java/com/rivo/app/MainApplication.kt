@@ -66,8 +66,29 @@ class MainApplication : Application(), ReactApplication {
   override val reactHost: ReactHost
     get() = ReactNativeHostWrapper.createReactHost(applicationContext, reactNativeHost)
 
+  private fun cleanupOldInstallers() {
+    try {
+      val targetDirs = listOf(
+        applicationContext.cacheDir,
+        applicationContext.externalCacheDir,
+        applicationContext.filesDir
+      )
+      for (dir in targetDirs) {
+        if (dir == null || !dir.exists()) continue
+        dir.listFiles()?.forEach { file ->
+          if (file.isFile && (file.name.endsWith(".apk", ignoreCase = true) || file.name.endsWith(".ipa", ignoreCase = true) || file.name.startsWith("rivo_ota_temp", ignoreCase = true))) {
+            try { file.delete() } catch (ignored: Exception) {}
+          }
+        }
+      }
+    } catch (e: Exception) {
+      android.util.Log.e("Rivo", "Failed to cleanup old installers: ${e.message}")
+    }
+  }
+
   override fun onCreate() {
     super.onCreate()
+    cleanupOldInstallers()
     SoLoader.init(this, false)
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // If you opted-in for the New Architecture, we load the native entry point for this app.

@@ -157,42 +157,42 @@ const BETA_VERSIONS_DATA = {
   channel: 'beta',
   platforms: {
     web: {
-      version: '1.9.4',
+      version: '1.9.6',
       name: 'Rivo Web (Beta)',
       notes: 'Preview build with test features and latest optimisations.'
     },
     windows: {
-      version: '1.9.5',
+      version: '1.9.6',
       name: 'Rivo Desktop for Windows (Beta)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.5/Rivo_Setup.exe',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
-      notes: 'Preview build with offline storage and ID3 tag verified lyrics.'
+      notes: 'Beta v1.9.6: In-place self-updater, automatic cleanup of temporary installers, and offline player enhancements.'
     },
     android: {
-      version: '1.9.4',
-      build: 64,
+      version: '1.9.6',
+      build: 65,
       name: 'Rivo for Android (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.4.apk',
-      directFile: 'Rivo-v1.9.4.apk',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo-v1.9.6.apk',
+      directFile: 'Rivo-v1.9.6.apk',
       mandatory: false,
-      notes: 'Beta Testing Channel: Active testing build for verified testers and dev team.',
+      notes: 'Beta v1.9.6: Fast in-app OTA update engine, automatic APK storage cleaner (zero cache accumulation), and performance fixes.',
       ota: {
         enabled: true,
-        version: '1.9.5.1-beta',
+        version: '1.9.6.1-beta',
         bundleUrl: '/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.0',
-        notes: 'Beta OTA: أحدث التعديلات والتجارب المباشرة للمطورين والمجرّبين'
+        notesEn: 'Beta OTA v1.9.6: In-app fast updates, zero installer storage accumulation, and player optimizations.'
       }
     },
     ios: {
-      version: '1.9.4',
-      build: 64,
+      version: '1.9.6',
+      build: 65,
       name: 'Rivo for iOS (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.4.ipa',
-      directFile: 'Rivo-v1.9.4.ipa',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo-v1.9.6.ipa',
+      directFile: 'Rivo-v1.9.6.ipa',
       mandatory: false,
-      notes: 'Beta Testing Channel: Active testing build for verified testers and dev team.'
+      notes: 'Beta v1.9.6: Unsigned IPA build with automatic installer cache cleaner and offline player stability.'
     }
   }
 };

@@ -171,15 +171,16 @@ function MainAppShell() {
   };
 
   const cleanupOldApkInstallers = async () => {
-    if (Platform.OS !== 'android') return;
     try {
       const dirs = [FileSystem.cacheDirectory, FileSystem.documentDirectory];
       for (const dir of dirs) {
         if (!dir) continue;
-        const files = await FileSystem.readDirectoryAsync(dir).catch(() => []);
+        const normalizedDir = dir.endsWith('/') ? dir : `${dir}/`;
+        const files = await FileSystem.readDirectoryAsync(normalizedDir).catch(() => []);
         for (const file of files) {
-          if (file.toLowerCase().endsWith('.apk')) {
-            await FileSystem.deleteAsync(`${dir}${file}`, { idempotent: true }).catch(() => {});
+          const lower = file.toLowerCase();
+          if (lower.endsWith('.apk') || lower.endsWith('.ipa') || lower.startsWith('rivo_ota_temp')) {
+            await FileSystem.deleteAsync(`${normalizedDir}${file}`, { idempotent: true }).catch(() => {});
           }
         }
       }
@@ -472,16 +473,16 @@ function MainAppShell() {
           <View style={[styles.updateModalBox, { borderColor: '#17a398' }]}>
             <View style={styles.updateHeaderRow}>
               <View style={[styles.updateBadge, { backgroundColor: '#17a398' }]}>
-                <Text style={styles.updateBadgeText}>⚡ تحديث فوري (OTA)</Text>
+                <Text style={styles.updateBadgeText}>⚡ FAST OTA UPDATE</Text>
               </View>
               <Text style={styles.updateTitle}>RIVO v{otaUpdateInfo?.version}</Text>
             </View>
 
-            <Text style={[styles.updateVersionText, { textAlign: 'right', fontSize: 13, color: '#17a398' }]}>
-              تحديث هوائي فوري (حجم 3 ميجابايت فقط) • بدون إعادة تثبيت
+            <Text style={[styles.updateVersionText, { fontSize: 13, color: '#17a398' }]}>
+              Instant in-app update (~3 MB) • No reinstallation required
             </Text>
 
-            {/* ─── BILINGUAL DETAILS / CHANGELOG BOX ─── */}
+            {/* ─── RELEASE NOTES & CHANGELOG BOX ─── */}
             <View style={{ width: '100%', marginBottom: 16 }}>
               <TouchableOpacity
                 style={{
@@ -499,10 +500,10 @@ function MainAppShell() {
                 activeOpacity={0.8}
               >
                 <Text style={{ color: '#17a398', fontSize: 12.5, fontWeight: '700' }}>
-                  📋 تفاصيل التعديلات • What's New
+                  📋 What's New & Release Notes
                 </Text>
                 <Text style={{ color: '#94a3b8', fontSize: 11.5, fontWeight: 'bold' }}>
-                  {isOtaDetailsExpanded ? '▲ إخفاء' : '▼ عرض الشرح'}
+                  {isOtaDetailsExpanded ? '▲ Hide' : '▼ View Details'}
                 </Text>
               </TouchableOpacity>
 
@@ -513,59 +514,16 @@ function MainAppShell() {
                   borderWidth: 1,
                   borderColor: '#1e2928',
                   borderRadius: 8,
-                  padding: 10
+                  padding: 12
                 }}>
-                  {/* Language Switcher Tabs */}
-                  <View style={{ flexDirection: 'row', marginBottom: 8, gap: 6, justifyContent: 'flex-end' }}>
-                    <TouchableOpacity
-                      onPress={() => setOtaChangelogLang('ar')}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 3,
-                        borderRadius: 5,
-                        backgroundColor: otaChangelogLang === 'ar' ? '#17a398' : '#1e293b'
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: 11,
-                        fontWeight: 'bold',
-                        color: otaChangelogLang === 'ar' ? '#0b1110' : '#94a3b8'
-                      }}>
-                        🇸🇦 بالعربي
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => setOtaChangelogLang('en')}
-                      style={{
-                        paddingHorizontal: 10,
-                        paddingVertical: 3,
-                        borderRadius: 5,
-                        backgroundColor: otaChangelogLang === 'en' ? '#17a398' : '#1e293b'
-                      }}
-                    >
-                      <Text style={{
-                        fontSize: 11,
-                        fontWeight: 'bold',
-                        color: otaChangelogLang === 'en' ? '#0b1110' : '#94a3b8'
-                      }}>
-                        🇬🇧 English
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Changelog Content */}
-                  <ScrollView style={{ maxHeight: 95 }} nestedScrollEnabled={true}>
+                  <ScrollView style={{ maxHeight: 110 }} nestedScrollEnabled={true}>
                     <Text style={{
                       color: '#cbd5e1',
                       fontSize: 12,
                       lineHeight: 18,
-                      textAlign: otaChangelogLang === 'ar' ? 'right' : 'left'
+                      textAlign: 'left'
                     }}>
-                      {otaChangelogLang === 'ar'
-                        ? (otaUpdateInfo?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة.')
-                        : (otaUpdateInfo?.notesEn || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.')
-                      }
+                      {otaUpdateInfo?.notesEn || otaUpdateInfo?.notes || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.'}
                     </Text>
                   </ScrollView>
                 </View>
@@ -592,14 +550,14 @@ function MainAppShell() {
                   )}
                 </View>
                 <Text style={styles.installingNoteText}>
-                  جاري تنزيل التحديث السريع في الخلفية...
+                  Downloading fast update in background...
                 </Text>
               </View>
             ) : isOtaReadyToRestart ? (
               <>
                 <View style={{ backgroundColor: 'rgba(23,163,152,0.15)', padding: 12, borderRadius: 8, marginBottom: 14 }}>
                   <Text style={{ color: '#17a398', fontSize: 13, fontWeight: '700', textAlign: 'center' }}>
-                    ✅ تم تجهيز التحديث بنجاح! اضغط للتشغيل الفوري.
+                    ✅ Update ready! Tap below to restart & apply immediately.
                   </Text>
                 </View>
 
@@ -608,7 +566,7 @@ function MainAppShell() {
                   onPress={handleApplyOtaRestart}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateDownloadBtnText}>🚀 إعادة التشغيل لتطبيق التحديث الآن</Text>
+                  <Text style={styles.updateDownloadBtnText}>🚀 RESTART & APPLY UPDATE</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -616,7 +574,7 @@ function MainAppShell() {
                   onPress={() => setIsOtaModalOpen(false)}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateCancelBtnText}>تطبيق لاحقاً عند فتح التطبيق</Text>
+                  <Text style={styles.updateCancelBtnText}>APPLY ON NEXT LAUNCH</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -632,7 +590,7 @@ function MainAppShell() {
                   onPress={handleDownloadOta}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateDownloadBtnText}>⚡ تحديث فوري الآن (ثانيتين)</Text>
+                  <Text style={styles.updateDownloadBtnText}>⚡ FAST UPDATE NOW (2 SECONDS)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -640,7 +598,7 @@ function MainAppShell() {
                   onPress={() => setIsOtaModalOpen(false)}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateCancelBtnText}>تأجيل لمرة أخرى</Text>
+                  <Text style={styles.updateCancelBtnText}>REMIND ME LATER</Text>
                 </TouchableOpacity>
               </>
             )}

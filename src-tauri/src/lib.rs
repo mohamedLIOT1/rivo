@@ -344,6 +344,47 @@ fn read_desktop_lrc(lrc_path: String) -> Result<String, String> {
     fs::read_to_string(&lrc_path).map_err(|e| e.to_string())
 }
 
+fn cleanup_old_desktop_installers(app: &tauri::AppHandle) {
+    // 1. Purge leftover Rivo update installers from Windows Temp directory
+    let temp = std::env::temp_dir();
+    if let Ok(entries) = fs::read_dir(&temp) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    let lower = name.to_lowercase();
+                    if (lower.starts_with("rivo") || lower.starts_with("tauri-update"))
+                        && (lower.ends_with(".exe") || lower.ends_with(".tmp") || lower.ends_with(".sig"))
+                    {
+                        let _ = fs::remove_file(path);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Purge updater cache and orphan setup binaries in local app data
+    if let Ok(app_data) = app.path().app_local_data_dir() {
+        let updater_cache = app_data.join("updater");
+        if updater_cache.exists() {
+            let _ = fs::remove_dir_all(updater_cache);
+        }
+        if let Ok(entries) = fs::read_dir(&app_data) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                        let ext_lower = ext.to_lowercase();
+                        if ext_lower == "exe" || ext_lower == "sig" || ext_lower == "tmp" {
+                            let _ = fs::remove_file(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
@@ -358,6 +399,7 @@ pub fn run() {
         read_desktop_lrc
     ])
     .setup(|app| {
+      cleanup_old_desktop_installers(&app.handle());
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
