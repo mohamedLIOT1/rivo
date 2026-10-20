@@ -77,8 +77,8 @@ const MANIFEST_FILE = `${TRACKS_DIR}manifest.json`;
 const STORAGE_KEY = '@rivo_offline_tracks_v2';
 
 // Dedicated persistent external music vault (persists across full app uninstalls & reinstalls)
-const PERSISTENT_DIR = Platform.OS === 'android' ? 'file:///storage/emulated/0/Music/Rivo/' : null;
-const PERSISTENT_MANIFEST = PERSISTENT_DIR ? `${PERSISTENT_DIR}manifest.json` : null;
+const PERSISTENT_DIR = null;
+const PERSISTENT_MANIFEST = null;
 
 const LEGACY_STORAGE_KEYS = [
   '@rivo_offline_tracks_v2',
@@ -898,30 +898,6 @@ export const downloadTrack = async (track, onProgress) => {
   emitProgress(15);
 
   let success = false;
-
-  // ── TURBO TIER 0: High-Speed Parallel Range Download (2-5 MB/s, completes in 1-3 seconds) ──
-  // Only use Turbo Tier 0 if directGoogleStream is the authentic active stream, or if no authentic direct stream exists
-  if (!activeStreamIsDirectRemote && directGoogleStream && directGoogleContentLength && directGoogleContentLength > 50000) {
-    try {
-      emitProgress(15);
-      const turboOk = await downloadViaParallelRanges(
-        directGoogleStream,
-        directGoogleContentLength,
-        audioFileUriM4a,
-        (downloaded, total) => {
-          const frac = downloaded / total;
-          emitProgress(15 + frac * 77); // Smooth progress from 15% to 92% in 1-2 seconds!
-        }
-      );
-      if (turboOk) {
-        success = true;
-        audioFileUri = audioFileUriM4a;
-      }
-    } catch (turboErr) {
-      console.warn('[downloadManager] Turbo parallel download failed, falling back to sequential stream:', turboErr.message);
-      await FileSystem.deleteAsync(audioFileUriM4a, { idempotent: true }).catch(() => {});
-    }
-  }
 
   // Standard mobile browser headers with Range header support to bypass YouTube throttling
   const downloadHeaders = {

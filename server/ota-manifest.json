@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.6.1-beta",
+  "version": "1.9.6.2",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.0",
-  "notes": "Instant in-app OTA update (3MB only) • Auto-purge installer cache and audio optimizations",
-  "notesEn": "Instant in-app OTA update (3MB only) • No reinstall required • Auto-purge installer cache and audio player optimizations.",
-  "bundleSize": 3260993,
+  "notes": "إصلاح جذري لمشكلة إغلاق التطبيق أثناء التحميل • تشغيل فوري وسلس للأغاني المحملة • تحسينات شاملة في استقرار المشغل",
+  "notesEn": "Fix app crash during offline download • Instant smooth playback of saved tracks • General player stability fixes",
+  "bundleSize": 3256156,
   "sizeMb": "3.11 MB",
-  "updatedAt": "2026-10-20T17:51:32.545Z"
+  "updatedAt": "2026-10-20T20:10:10.048Z"
 }
