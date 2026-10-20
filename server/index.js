@@ -173,7 +173,7 @@ const BETA_VERSIONS_DATA = {
       notes: 'Beta v1.9.6: Fast in-app OTA update engine, automatic APK storage cleaner (zero cache accumulation), and performance fixes.',
       ota: {
         enabled: true,
-        version: '1.9.6.1-beta',
+        version: '1.9.6',
         bundleUrl: '/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.0',
         notesEn: 'Beta OTA v1.9.6: In-app fast updates, zero installer storage accumulation, and player optimizations.'

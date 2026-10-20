@@ -86,7 +86,8 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
     return { available: false, reason: 'unsupported_platform' };
   }
 
-  if (!otaManifest || !otaManifest.enabled || !otaManifest.bundleUrl || !otaManifest.version) {
+  const isEnabled = otaManifest && otaManifest.enabled !== false;
+  if (!otaManifest || !isEnabled || !otaManifest.bundleUrl || !otaManifest.version) {
     return { available: false, reason: 'manifest_empty' };
   }
 

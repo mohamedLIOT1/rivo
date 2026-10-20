@@ -143,6 +143,7 @@ function MainAppShell() {
 
         if (isOtaNewer && isBaseCompatible) {
           setOtaUpdateInfo({
+            enabled: true,
             version: ota.version,
             notes: ota.notes || remotePlatform?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة',
             notesEn: ota.notesEn || ota.notes_en || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.',

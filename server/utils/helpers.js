@@ -1223,7 +1223,7 @@ opts = {
     'no_warnings': True,
     'nocheckcertificate': True,
     'noplaylist': True,
-    'format': 'ba[ext=m4a]/ba/bestaudio'
+    'format': 'ba/b'
 }
 cpath = ${JSON.stringify(cookiesPath)}
 if os.path.exists(cpath):
@@ -1361,8 +1361,9 @@ async function extractDirectStreamUrl(videoId) {
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
+    '--remote-components', 'ejs:github',
     '-g',
-    '-f', 'ba[ext=m4a]/ba/bestaudio'
+    '-f', 'ba/b'
   ];
   if (fs.existsSync(cookiesPath)) {
     ytdlpArgs.push('--cookies', cookiesPath);
@@ -1486,7 +1487,8 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const ytdlpArgs = [
       '--no-check-certificates',
       '--no-playlist',
-        '-f', 'ba[ext=m4a]/ba/bestaudio',
+      '--remote-components', 'ejs:github',
+      '-f', 'ba/b',
       '-o', cachedM4a
     ];
     if (fs.existsSync(cookiesPath)) ytdlpArgs.push('--cookies', cookiesPath);
@@ -1500,6 +1502,12 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
       return `/uploads/audio-cache/${videoId}.m4a`;
+    }
+    if (title || artist) {
+      try {
+        const scUrl = await extractSoundCloudStream(title, artist);
+        if (scUrl) return scUrl;
+      } catch {}
     }
     return null;
   })();
@@ -1607,6 +1615,49 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
 
   return [];
 }
+
+
+async function extractSoundCloudStream(title = '', artist = '') {
+  if (!title && !artist) return null;
+  const bin = getYtDlpBin();
+  const query = `${artist ? artist + ' ' : ''}${title}`.trim();
+  const args = [
+    '--no-check-certificates',
+    '--no-playlist',
+    '-g',
+    '-f', 'ba/b',
+    `scsearch1:${query}`
+  ];
+  return new Promise((resolve) => {
+    execFile(bin, args, { timeout: 8000 }, (err, stdout) => {
+      if (err || !stdout) return resolve(null);
+      const lines = stdout.trim().split(/\r?\n/);
+      const url = lines.find(l => l.startsWith('http'))?.trim() || null;
+      resolve(url);
+    });
+  });
+}
+
+function cleanupAudioCache() {
+  try {
+    const audioCacheDir = path.join(__dirname, '../../uploads/audio-cache');
+    if (!fs.existsSync(audioCacheDir)) return;
+    const files = fs.readdirSync(audioCacheDir);
+    const now = Date.now();
+    const maxAge = 24 * 3600 * 1000; // 24 hours
+    for (const file of files) {
+      try {
+        const filePath = path.join(audioCacheDir, file);
+        const stat = fs.statSync(filePath);
+        if (now - stat.mtimeMs > maxAge) {
+          fs.unlinkSync(filePath);
+        }
+      } catch {}
+    }
+  } catch {}
+}
+setTimeout(cleanupAudioCache, 5000);
+setInterval(cleanupAudioCache, 6 * 3600 * 1000);
 
 module.exports = {
   escapeRegex,

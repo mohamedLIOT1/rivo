@@ -470,70 +470,43 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
     const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
     let visitorData = '';
     let cookies = '';
+    let sts = 20744;
 
-    // Fast official visitor_id token acquisition with in-memory caching
-    if (cachedVisitorData && (Date.now() - cachedVisitorTimestamp < VISITOR_CACHE_TTL)) {
-      visitorData = cachedVisitorData;
-    } else {
-      try {
-        const vController = new AbortController();
-        const vTimeout = setTimeout(() => vController.abort(), 2500);
-        const vRes = await fetch(`https://www.youtube.com/youtubei/v1/visitor_id?key=${key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            context: {
-              client: {
-                clientName: 'VISIONOS',
-                clientVersion: '1.02',
-                deviceMake: 'Apple',
-                deviceModel: 'RealityDevice17,1',
-                osName: 'visionOS',
-                osVersion: '26.5.23O471',
-                hl: 'en',
-                gl: 'US',
-              }
-            }
-          }),
-          signal: vController.signal,
-        });
-        clearTimeout(vTimeout);
-        if (vRes.ok) {
-          const vData = await vRes.json();
-          visitorData = vData?.responseContext?.visitorData || '';
-          if (visitorData) {
-            cachedVisitorData = visitorData;
-            cachedVisitorTimestamp = Date.now();
-          }
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        signal: controller.signal,
+      });
+      const html = await webRes.text();
+      clearTimeout(timeoutId);
+
+      const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
+      if (visitorMatch && visitorMatch[1]) {
+        visitorData = visitorMatch[1];
+        cachedVisitorData = visitorData;
+        cachedVisitorTimestamp = Date.now();
+      }
+
+      const stsMatch = html.match(/"signatureTimestamp":(\d+)/);
+      if (stsMatch && stsMatch[1]) {
+        sts = parseInt(stsMatch[1], 10);
+      }
+
+      if (webRes.headers?.getSetCookie) {
+        const sc = webRes.headers.getSetCookie();
+        if (Array.isArray(sc) && sc.length > 0) {
+          cookies = sc.map(c => c.split(';')[0]).join('; ');
         }
-      } catch (e) {}
-    }
-
-    // Fallback: scrape watch page only if visitor_id was completely missing
-    if (!visitorData) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-        const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-          signal: controller.signal,
-        });
-        const html = await webRes.text();
-        clearTimeout(timeoutId);
-
-        const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
-        if (visitorMatch && visitorMatch[1]) {
-          visitorData = visitorMatch[1];
-          cachedVisitorData = visitorData;
-          cachedVisitorTimestamp = Date.now();
-        }
-        cookies = webRes.headers?.get ? (webRes.headers.get('set-cookie') || '') : '';
-      } catch (e) {}
-    }
+      } else if (webRes.headers?.get) {
+        cookies = webRes.headers.get('set-cookie') || '';
+      }
+    } catch (e) {}
 
     const playerBody = {
       context: {
@@ -546,18 +519,30 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
           osName: 'visionOS',
           osVersion: '26.5.23O471',
           hl: 'en',
-          gl: 'US',
-          visitorData: visitorData || undefined,
+          timeZone: 'UTC',
+          utcOffsetMinutes: 0
         },
       },
       videoId: ytId,
+      playbackContext: {
+        contentPlaybackContext: {
+          html5Preference: 'HTML5_PREF_WANTS',
+          signatureTimestamp: sts
+        }
+      },
+      contentCheckOk: true,
+      racyCheckOk: true
     };
 
     const headers = {
       'Content-Type': 'application/json',
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      'X-Youtube-Client-Name': '101',
+      'X-Youtube-Client-Version': '1.02',
+      'Origin': 'https://www.youtube.com'
     };
     if (cookies) headers['Cookie'] = cookies;
+    if (visitorData) headers['X-Goog-Visitor-Id'] = visitorData;
 
     const playerController = new AbortController();
     const playerTimeout = setTimeout(() => playerController.abort(), 6000);
@@ -574,10 +559,11 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
       const data = await res.json();
       if (data?.playabilityStatus?.status === 'OK') {
         const formats = (data.streamingData?.adaptiveFormats || []).concat(data.streamingData?.formats || []);
-        // itag 140 is official AAC/m4a audio 128kbps, itag 139 is 48kbps, itag 251 is opus
+        // Prioritize official AAC (itag 140), then Opus (itag 251), then any audio
         const audio140 = formats.find(f => f.itag === 140 && f.url);
+        const audio251 = formats.find(f => f.itag === 251 && f.url);
         const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
-        const chosen = audio140 || anyAudio;
+        const chosen = audio140 || audio251 || anyAudio;
         if (chosen?.url) {
           const rawSec = parseInt(data.videoDetails?.lengthSeconds, 10);
           const rawMs = parseInt(chosen.approxDurationMs, 10);
