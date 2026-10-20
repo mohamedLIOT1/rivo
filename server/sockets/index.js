@@ -77,9 +77,18 @@ module.exports = function (io, updateConfig = {}) {
     // Proactively push beta updates ONLY to verified beta testers on their private socket
     const pushBetaUpdateIfEligible = async (userId) => {
       try {
-        const manifest = getEffectiveManifest();
-        socket.emit('app:update_manifest', manifest);
-        socket.emit('app:update_available', manifest);
+        const u = await User.findById(userId).select('email role isAdmin isBetaTester').lean();
+        const userEmail = (u?.email || '').toLowerCase().trim();
+        const isBeta = u?.isBetaTester || u?.role === 'admin' || u?.isAdmin || (userEmail && BETA_TESTER_EMAILS?.has?.(userEmail));
+        if (isBeta && BETA_VERSIONS_DATA) {
+          const betaManifest = JSON.parse(JSON.stringify(BETA_VERSIONS_DATA));
+          socket.emit('app:update_manifest', betaManifest);
+          socket.emit('app:update_available', betaManifest);
+        } else {
+          const manifest = getEffectiveManifest();
+          socket.emit('app:update_manifest', manifest);
+          socket.emit('app:update_available', manifest);
+        }
       } catch (e) {}
     };
 

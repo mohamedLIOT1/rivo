@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "version": "1.9.6.3",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",

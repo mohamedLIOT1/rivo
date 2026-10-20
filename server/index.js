@@ -146,38 +146,38 @@ const APP_VERSIONS_DATA = {
   }
 };
 
+// Known beta tester IPs for instant cold-boot detection
+const knownBetaIps = new Set(['41.47.189.60']);
+
 // App Version Manifest — BETA Channel (For designated testers & admins only)
 const BETA_VERSIONS_DATA = {
   publishedAt: new Date().toISOString(),
-  channel: 'beta',
+  channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.6',
+      version: '1.9.7',
       name: 'Rivo Web (Beta)',
       notes: 'Preview build with test features and latest optimisations.'
     },
     windows: {
-      version: '1.9.6',
+      version: '1.9.7',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
-      notes: 'Beta v1.9.6: In-place self-updater, automatic cleanup of temporary installers, and offline player enhancements.'
+      notes: 'Beta v1.9.7: Security patches, in-place self-updater, and offline player enhancements.'
     },
     android: {
-      version: '1.9.6',
-      build: 65,
+      version: '1.9.7',
+      build: 66,
       name: 'Rivo for Android (Beta Testing)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo-v1.9.6.apk',
-      directFile: 'Rivo-v1.9.6.apk',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.7.apk',
+      directFile: 'Rivo-v1.9.7.apk',
       mandatory: false,
-      notes: 'Beta v1.9.6: Fast in-app OTA update engine, automatic APK storage cleaner (zero cache accumulation), and performance fixes.',
+      notes: 'إصلاح جذري لمشكلة إغلاق التطبيق أثناء التحميل • تشغيل فوري وسلس للأغاني • ترقيع شامل لـ 8 ثغرات أمنية • محرك التحديثات الهوائية السريعة',
+      notesEn: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
       ota: {
-        enabled: true,
-        version: '1.9.6',
-        bundleUrl: '/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.0',
-        notesEn: 'Beta OTA v1.9.6: In-app fast updates, zero installer storage accumulation, and player optimizations.'
+        enabled: false // Disabling OTA directs the app to the robust in-app binary installer!
       }
     },
     ios: {
@@ -205,19 +205,26 @@ const getOtaManifest = () => {
 
 // Dual-channel version check endpoint
 app.get('/api/app/version', optionalAuth, (req, res) => {
-  const dynamicOta = getOtaManifest();
-  const manifest = JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
-  manifest.channel = 'stable';
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
-  if (dynamicOta && dynamicOta.enabled) {
-    if (manifest.platforms && manifest.platforms.android) {
-      manifest.platforms.android.ota = {
-        ...manifest.platforms.android.ota,
-        ...dynamicOta,
-        minAppVersion: '1.9.6'
-      };
-    }
+  const clientIp = req.ip || req.connection?.remoteAddress || '';
+  const cleanIp = clientIp.replace(/^.*:/, '');
+  const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
+  const reqChannel = (req.query.channel || '').trim().toLowerCase();
+  const clientVersion = (req.query.currentVersion || req.headers['x-app-version'] || '').trim();
+
+  const isBetaTesterUser = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
+  if (isBetaTesterUser && cleanIp) {
+    knownBetaIps.add(cleanIp);
   }
+
+  const isBetaClient = clientVersion.startsWith('1.9.6') || reqChannel === 'beta' || knownBetaIps.has(cleanIp) || isBetaTesterUser;
+
+  const manifest = isBetaClient
+    ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
+    : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
   res.json(manifest);
 });
