@@ -3,7 +3,7 @@ const { Client: BotClient, MessageEmbed, MessageActionRow, MessageButton } = req
 const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
 
 const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || '6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'rivo-sec-discord-enc-key';
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DISCORD_APP_ID = process.env.DISCORD_CLIENT_ID || '1440997674630250506';
 

@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { User, Track, Album } = require('../models');
 const { auth, isAdminUser, JWT_SECRET } = require('../middleware/auth');
+const { sanitizeText } = require('../utils/security');
 const { upload } = require('../middleware/upload');
 const {
   scrapePlaylistOrAlbum,
@@ -276,10 +277,15 @@ router.get('/:id', async (req, res) => {
 router.post('/create', auth, async (req, res) => {
   try {
     const u = await User.findById(req.user.id);
+    const cleanName = sanitizeText(req.body.name).slice(0, 100) || 'Untitled Playlist';
+    let cleanCover = (req.body.cover || '').trim();
+    if (cleanCover.toLowerCase().startsWith('javascript:') || cleanCover.toLowerCase().startsWith('data:text/html')) {
+      cleanCover = '';
+    }
     const newPl = {
       id: `pl-${Date.now()}`,
-      name: req.body.name,
-      cover: req.body.cover || '',
+      name: cleanName,
+      cover: cleanCover,
       trackIds: [],
       isLikedSongs: false,
       isPublic: req.body.isPublic !== false,
@@ -368,9 +374,14 @@ router.post('/:id/update', auth, async (req, res) => {
       }
     }
     if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
-    if (req.body.name) pl.name = req.body.name;
-    if (req.body.description !== undefined) pl.description = req.body.description;
-    if (req.body.cover !== undefined) pl.cover = req.body.cover;
+    if (req.body.name) pl.name = sanitizeText(req.body.name).slice(0, 100);
+    if (req.body.description !== undefined) pl.description = sanitizeText(req.body.description).slice(0, 300);
+    if (req.body.cover !== undefined && typeof req.body.cover === 'string') {
+      const cov = req.body.cover.trim();
+      if (!cov.toLowerCase().startsWith('javascript:') && !cov.toLowerCase().startsWith('data:text/html')) {
+        pl.cover = cov.slice(0, 2048);
+      }
+    }
     if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
     u.markModified('playlists');
     await u.save();
