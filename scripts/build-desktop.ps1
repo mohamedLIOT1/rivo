@@ -53,9 +53,10 @@ if ($LASTEXITCODE -eq 0) {
   }
 }
 "@
-        Set-Content -Path "$outDir\windows-update.json" -Value $updateJson -Encoding UTF8
-        Set-Content -Path "$publicDownloads\windows-update.json" -Value $updateJson -Encoding UTF8
-        Write-Host "Generated windows-update.json successfully!" -ForegroundColor Green
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText("$outDir\windows-update.json", $updateJson, $utf8NoBom)
+        [System.IO.File]::WriteAllText("$publicDownloads\windows-update.json", $updateJson, $utf8NoBom)
+        Write-Host "Generated windows-update.json successfully (UTF-8 without BOM)!" -ForegroundColor Green
     }
 
     Write-Host "Build complete! Files are ready in $outDir\ and $publicDownloads\" -ForegroundColor Green
