@@ -211,16 +211,17 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
 
   const clientIp = req.ip || req.connection?.remoteAddress || '';
   const cleanIp = clientIp.replace(/^.*:/, '');
+  const isLoopback = cleanIp === '127.0.0.1' || cleanIp === '1' || cleanIp === '::1';
   const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
   const reqChannel = (req.query.channel || '').trim().toLowerCase();
   const clientVersion = (req.query.currentVersion || req.headers['x-app-version'] || '').trim();
 
   const isBetaTesterUser = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
-  if (isBetaTesterUser && cleanIp) {
+  if (isBetaTesterUser && cleanIp && !isLoopback) {
     knownBetaIps.add(cleanIp);
   }
 
-  const isBetaClient = clientVersion.startsWith('1.9.6') || reqChannel === 'beta' || knownBetaIps.has(cleanIp) || isBetaTesterUser;
+  const isBetaClient = (clientVersion && clientVersion.startsWith('1.9.6')) || reqChannel === 'beta' || (!isLoopback && knownBetaIps.has(cleanIp)) || isBetaTesterUser;
 
   const manifest = isBetaClient
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
