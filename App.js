@@ -13,6 +13,7 @@ import {
   Linking,
   AppState,
   Alert,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -109,6 +110,8 @@ function MainAppShell() {
   const [otaBytes, setOtaBytes] = useState({ written: 0, total: 0 });
   const [isOtaReadyToRestart, setIsOtaReadyToRestart] = useState(false);
   const [otaError, setOtaError] = useState(null);
+  const [otaChangelogLang, setOtaChangelogLang] = useState('ar');
+  const [isOtaDetailsExpanded, setIsOtaDetailsExpanded] = useState(false);
 
   const handleRemoteUpdateManifest = async (data) => {
     if (!data) return;
@@ -141,7 +144,8 @@ function MainAppShell() {
         if (isOtaNewer && isBaseCompatible) {
           setOtaUpdateInfo({
             version: ota.version,
-            notes: ota.notes || remotePlatform?.notes || 'Fast over-the-air update with latest improvements.',
+            notes: ota.notes || remotePlatform?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة',
+            notesEn: ota.notesEn || ota.notes_en || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.',
             bundleUrl: ota.bundleUrl.startsWith('http') ? ota.bundleUrl : `${API_BASE_URL}${ota.bundleUrl}`,
             minAppVersion: ota.minAppVersion
           });
@@ -468,18 +472,105 @@ function MainAppShell() {
           <View style={[styles.updateModalBox, { borderColor: '#17a398' }]}>
             <View style={styles.updateHeaderRow}>
               <View style={[styles.updateBadge, { backgroundColor: '#17a398' }]}>
-                <Text style={styles.updateBadgeText}>⚡ FAST UPDATE (OTA)</Text>
+                <Text style={styles.updateBadgeText}>⚡ تحديث فوري (OTA)</Text>
               </View>
               <Text style={styles.updateTitle}>RIVO v{otaUpdateInfo?.version}</Text>
             </View>
 
-            <Text style={styles.updateVersionText}>
-              تحديث هوائي فوري • بدون إعادة تثبيت (حجم ~2.5 MB)
+            <Text style={[styles.updateVersionText, { textAlign: 'right', fontSize: 13, color: '#17a398' }]}>
+              تحديث هوائي فوري (حجم 3 ميجابايت فقط) • بدون إعادة تثبيت
             </Text>
 
-            <Text style={styles.updateNotesText}>
-              {otaUpdateInfo?.notes}
-            </Text>
+            {/* ─── BILINGUAL DETAILS / CHANGELOG BOX ─── */}
+            <View style={{ width: '100%', marginBottom: 16 }}>
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#162321',
+                  borderWidth: 1,
+                  borderColor: '#1f3d38',
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  borderRadius: 8
+                }}
+                onPress={() => setIsOtaDetailsExpanded(!isOtaDetailsExpanded)}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: '#17a398', fontSize: 12.5, fontWeight: '700' }}>
+                  📋 تفاصيل التعديلات • What's New
+                </Text>
+                <Text style={{ color: '#94a3b8', fontSize: 11.5, fontWeight: 'bold' }}>
+                  {isOtaDetailsExpanded ? '▲ إخفاء' : '▼ عرض الشرح'}
+                </Text>
+              </TouchableOpacity>
+
+              {isOtaDetailsExpanded && (
+                <View style={{
+                  marginTop: 6,
+                  backgroundColor: '#0c1413',
+                  borderWidth: 1,
+                  borderColor: '#1e2928',
+                  borderRadius: 8,
+                  padding: 10
+                }}>
+                  {/* Language Switcher Tabs */}
+                  <View style={{ flexDirection: 'row', marginBottom: 8, gap: 6, justifyContent: 'flex-end' }}>
+                    <TouchableOpacity
+                      onPress={() => setOtaChangelogLang('ar')}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                        borderRadius: 5,
+                        backgroundColor: otaChangelogLang === 'ar' ? '#17a398' : '#1e293b'
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: otaChangelogLang === 'ar' ? '#0b1110' : '#94a3b8'
+                      }}>
+                        🇸🇦 بالعربي
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setOtaChangelogLang('en')}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                        borderRadius: 5,
+                        backgroundColor: otaChangelogLang === 'en' ? '#17a398' : '#1e293b'
+                      }}
+                    >
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: 'bold',
+                        color: otaChangelogLang === 'en' ? '#0b1110' : '#94a3b8'
+                      }}>
+                        🇬🇧 English
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Changelog Content */}
+                  <ScrollView style={{ maxHeight: 95 }} nestedScrollEnabled={true}>
+                    <Text style={{
+                      color: '#cbd5e1',
+                      fontSize: 12,
+                      lineHeight: 18,
+                      textAlign: otaChangelogLang === 'ar' ? 'right' : 'left'
+                    }}>
+                      {otaChangelogLang === 'ar'
+                        ? (otaUpdateInfo?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة.')
+                        : (otaUpdateInfo?.notesEn || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.')
+                      }
+                    </Text>
+                  </ScrollView>
+                </View>
+              )}
+            </View>
 
             {isDownloadingOta ? (
               <View style={styles.downloadProgressWrap}>
@@ -517,7 +608,7 @@ function MainAppShell() {
                   onPress={handleApplyOtaRestart}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateDownloadBtnText}>🚀 RESTART & APPLY UPDATE</Text>
+                  <Text style={styles.updateDownloadBtnText}>🚀 إعادة التشغيل لتطبيق التحديث الآن</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -525,13 +616,13 @@ function MainAppShell() {
                   onPress={() => setIsOtaModalOpen(false)}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateCancelBtnText}>APPLY ON NEXT LAUNCH</Text>
+                  <Text style={styles.updateCancelBtnText}>تطبيق لاحقاً عند فتح التطبيق</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <>
                 {otaError && (
-                  <Text style={{ color: '#ef4444', fontSize: 12, marginBottom: 10 }}>
+                  <Text style={{ color: '#ef4444', fontSize: 12, marginBottom: 10, textAlign: 'center' }}>
                     {otaError}
                   </Text>
                 )}
@@ -541,7 +632,7 @@ function MainAppShell() {
                   onPress={handleDownloadOta}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateDownloadBtnText}>⚡ FAST 2-SECOND UPDATE</Text>
+                  <Text style={styles.updateDownloadBtnText}>⚡ تحديث فوري الآن (ثانيتين)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -549,7 +640,7 @@ function MainAppShell() {
                   onPress={() => setIsOtaModalOpen(false)}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateCancelBtnText}>LATER</Text>
+                  <Text style={styles.updateCancelBtnText}>تأجيل لمرة أخرى</Text>
                 </TouchableOpacity>
               </>
             )}

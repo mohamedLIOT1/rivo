@@ -3,7 +3,8 @@
   "version": "1.9.5.1",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.0",
-  "notes": "تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات الأداء وتحسينات عامة",
+  "notes": "تحديث هوائي فوري (حجم 3 ميجابايت فقط) • بدون إعادة تثبيت التطبيق • إصلاحات في استقرار المشغل، تحسينات الأداء، وسرعة استجابة التطبيق.",
+  "notesEn": "Instant in-app OTA update (3MB only) • No reinstall required • Audio player stability improvements, performance optimizations, and smoother transitions.",
   "bundleSize": 3259684,
   "sizeMb": "3.11 MB",
   "updatedAt": "2026-10-20T20:27:10.000Z"

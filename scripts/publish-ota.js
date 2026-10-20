@@ -30,7 +30,8 @@ if (!targetVersion) {
   targetVersion = parts.join('.');
 }
 
-const notes = process.argv[3] || 'تحديث هوائي فوري مع أحدث التحسينات والإصلاحات';
+const notes = process.argv[3] || 'تحديث هوائي فوري (حجم 3 ميجابايت فقط) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات';
+const notesEn = process.argv[4] || 'Instant in-app OTA update (3MB only) • No reinstall required • Performance improvements and bug fixes.';
 
 console.log(`\n========================================`);
 console.log(`🚀 Building Rivo OTA Fast Update v${targetVersion}...`);
@@ -56,6 +57,7 @@ try {
     bundleUrl: '/downloads/ota/index.android.bundle',
     minAppVersion: '1.9.0',
     notes,
+    notesEn,
     bundleSize: stat.size,
     sizeMb: `${sizeMb} MB`,
     updatedAt: new Date().toISOString()
