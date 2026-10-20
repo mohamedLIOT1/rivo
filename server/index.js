@@ -205,23 +205,16 @@ const getOtaManifest = () => {
 
 // Dual-channel version check endpoint
 app.get('/api/app/version', optionalAuth, (req, res) => {
-  const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
-  const reqChannel = (req.query.channel || '').trim().toLowerCase();
-  const clientVersion = (req.query.currentVersion || req.headers['x-app-version'] || '').trim();
-  
-  const isBetaClient = clientVersion.startsWith('1.9.6') || reqChannel === 'beta';
-  const hasBetaAccess = isBetaClient || isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
-  
-  const manifest = (hasBetaAccess && (reqChannel === 'beta' || !reqChannel || isBetaClient))
-    ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
-    : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
-
   const dynamicOta = getOtaManifest();
-  if (dynamicOta && dynamicOta.enabled && hasBetaAccess) {
+  const manifest = JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
+  manifest.channel = 'stable';
+
+  if (dynamicOta && dynamicOta.enabled) {
     if (manifest.platforms && manifest.platforms.android) {
       manifest.platforms.android.ota = {
         ...manifest.platforms.android.ota,
-        ...dynamicOta
+        ...dynamicOta,
+        minAppVersion: '1.9.6'
       };
     }
   }

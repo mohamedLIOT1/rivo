@@ -30,21 +30,56 @@ module.exports = function (io, updateConfig = {}) {
     next();
   });
 
+  const path = require('path');
+  const fs = require('fs');
+
+  const getOtaManifest = () => {
+    try {
+      const otaFile = path.join(__dirname, '../ota-manifest.json');
+      if (fs.existsSync(otaFile)) {
+        return JSON.parse(fs.readFileSync(otaFile, 'utf8'));
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const getEffectiveManifest = () => {
+    const manifest = JSON.parse(JSON.stringify(APP_VERSIONS_DATA || {}));
+    manifest.channel = 'stable';
+    const dynamicOta = getOtaManifest();
+    if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
+      manifest.platforms.android.ota = {
+        ...manifest.platforms.android.ota,
+        ...dynamicOta,
+        minAppVersion: '1.9.6'
+      };
+    }
+    return manifest;
+  };
+
+  // Broadcast live OTA update manifest to all connected clients on server boot/reload
+  setTimeout(() => {
+    try {
+      const manifest = getEffectiveManifest();
+      io.emit('app:update_manifest', manifest);
+      io.emit('app:update_available', manifest);
+    } catch (e) {}
+  }, 1500);
+
   io.on('connection', (socket) => {
+    // Proactively push OTA manifest immediately upon socket connect
+    try {
+      const manifest = getEffectiveManifest();
+      socket.emit('app:update_manifest', manifest);
+      socket.emit('app:update_available', manifest);
+    } catch (e) {}
+
     // Proactively push beta updates ONLY to verified beta testers on their private socket
     const pushBetaUpdateIfEligible = async (userId) => {
-      if (!userId || !BETA_VERSIONS_DATA) return;
       try {
-        const u = await User.findById(userId).select('email role isAdmin').lean();
-        if (u) {
-          const email = (u.email || '').trim().toLowerCase();
-          const isEligible = (typeof isBetaTester === 'function' && isBetaTester(u)) ||
-            (BETA_TESTER_EMAILS && BETA_TESTER_EMAILS.has(email));
-          if (isEligible) {
-            socket.emit('app:update_manifest', BETA_VERSIONS_DATA);
-            socket.emit('app:update_available', BETA_VERSIONS_DATA);
-          }
-        }
+        const manifest = getEffectiveManifest();
+        socket.emit('app:update_manifest', manifest);
+        socket.emit('app:update_available', manifest);
       } catch (e) {}
     };
 
