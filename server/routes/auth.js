@@ -3,11 +3,13 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const { auth, makeToken, isAdminUser, isVerifiedUser, revokedTokens } = require('../middleware/auth');
+const { sanitizeText } = require('../utils/security');
 
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    if (!name || !email || !password) {
+    const cleanName = sanitizeText(name);
+    if (!cleanName || !email || !password) {
       return res.status(400).json({ error: 'Name, email and password required' });
     }
     const existing = await User.findOne({ email: email.toLowerCase() });
@@ -18,7 +20,7 @@ router.post('/register', async (req, res) => {
 
     const isInitAdmin = isAdminUser({ email });
     const user = await new User({
-      name,
+      name: cleanName,
       email: email.toLowerCase(),
       password: hashed,
       avatar: defaultAvatar,
@@ -121,9 +123,14 @@ router.post('/update-profile', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (req.body.name) user.name = req.body.name;
-    if (req.body.bio !== undefined) user.bio = req.body.bio;
-    if (req.body.avatar) user.avatar = req.body.avatar;
+    if (req.body.name) user.name = sanitizeText(req.body.name);
+    if (req.body.bio !== undefined) user.bio = sanitizeText(req.body.bio);
+    if (req.body.avatar && typeof req.body.avatar === 'string') {
+      const cleanAv = req.body.avatar.trim();
+      if (!cleanAv.toLowerCase().startsWith('javascript:') && !cleanAv.toLowerCase().startsWith('data:text/html')) {
+        user.avatar = cleanAv;
+      }
+    }
     await user.save();
     const userObj = user.toObject();
     delete userObj.password;

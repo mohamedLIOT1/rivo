@@ -3,7 +3,7 @@ const { Client: BotClient, MessageEmbed, MessageActionRow, MessageButton } = req
 const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
 
 const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || '6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a';
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const DISCORD_APP_ID = process.env.DISCORD_CLIENT_ID || '1440997674630250506';
 
@@ -25,18 +25,26 @@ function encryptToken(text) {
 function decryptToken(text) {
   if (!text) return '';
   if (!text.includes(':')) return text;
-  try {
-    const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
-    const parts = text.split(':');
-    const iv = Buffer.from(parts.shift(), 'hex');
-    const encryptedText = Buffer.from(parts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
-    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    return decrypted;
-  } catch (e) {
-    return null;
-  }
+  
+  // Helper to attempt deciphering with a given key
+  const attemptDecipher = (kStr) => {
+    try {
+      const key = crypto.createHash('sha256').update(String(kStr)).digest();
+      const parts = text.split(':');
+      const iv = Buffer.from(parts[0], 'hex');
+      const encryptedText = Buffer.from(parts.slice(1).join(':'), 'hex');
+      const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+      let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch {
+      return null;
+    }
+  };
+
+  return attemptDecipher(ENCRYPTION_KEY) 
+    || attemptDecipher('6f9ad4b2c1e8f3a59d7b0c4e1f8a2b3c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a') 
+    || null;
 }
 
 // 🎧 Active Selfbots Management (Per-user sessions)
