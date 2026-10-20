@@ -41,9 +41,13 @@ def main():
     version = get_current_version()
     print(f"=== Deploying v{version} to Production Server ===")
     
+    # Pre-create remote directories
+    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server/middleware {REMOTE_DIR}/server/models")
+
     # 1. Upload server files
     server_files = [
         ("server/models/User.js", f"{REMOTE_DIR}/server/models/User.js"),
+        ("server/middleware/auth.js", f"{REMOTE_DIR}/server/middleware/auth.js"),
         ("server/routes/tracks.js", f"{REMOTE_DIR}/server/routes/tracks.js"),
         ("server/routes/albums.js", f"{REMOTE_DIR}/server/routes/albums.js"),
         ("server/routes/artists.js", f"{REMOTE_DIR}/server/routes/artists.js"),
@@ -60,8 +64,11 @@ def main():
         if not upload_file(local, remote):
             sys.exit(1)
 
-    # 2. Upload APK, IPA & EXE downloads and bot assets
+    # 2. Upload APK, IPA & EXE downloads, OTA bundles, and bot assets
     download_files = [
+        ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
+        ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
+        ("public/downloads/Rivo_Setup.exe.sig", f"{REMOTE_DIR}/public/downloads/Rivo_Setup.exe.sig"),
         (f"public/downloads/Rivo-v{version}.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.apk"),
         (f"public/downloads/Rivo-v{version}.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa"),
         (f"public/downloads/Rivo-v{version}.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.exe"),
@@ -76,18 +83,20 @@ def main():
         if os.path.exists(local):
             upload_file(local, remote)
 
-    print("Replicating binary releases on remote server...")
+    print("Fetching and verifying binary releases from GitHub on remote server...")
     run_ssh(
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v{version}.apk {REMOTE_DIR}/public/downloads/Rivo.apk 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v{version}.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
+        f"cd {REMOTE_DIR}/public/downloads && "
+        f"[ -f Rivo-v{version}.apk ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk && "
+        f"[ -f Rivo-v{version}.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.exe -o Rivo-v{version}.exe && "
+        f"[ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa && "
+        f"[ -f Rivo_Setup.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe && "
+        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/public/downloads/Rivo.apk 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
         f"mkdir -p {REMOTE_DIR}/dist/downloads && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo.apk {REMOTE_DIR}/dist/downloads/Rivo.apk 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo.exe {REMOTE_DIR}/dist/downloads/Rivo.exe 2>/dev/null || true"
+        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true"
     )
 
     # 3. Create dist archive and upload (excluding heavy downloads directory)

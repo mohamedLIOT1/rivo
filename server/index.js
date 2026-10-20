@@ -94,8 +94,28 @@ const BETA_TESTER_EMAILS = new Set([
   'lio@gmail.com',
   'test1@gmail.com',
   'test@gmail.com',
-  't1@gmail.com'
+  't1@gmail.com',
+  'rio288631@gmail.com'
 ]);
+
+// IP-based session memory to recognize beta testers across unauthenticated endpoints
+const betaTesterIps = new Map();
+
+function recordBetaTesterIp(ip, email) {
+  if (!ip) return;
+  const cleanIp = ip.split(',')[0].trim();
+  betaTesterIps.set(cleanIp, { email: email || '', expiresAt: Date.now() + 24 * 3600 * 1000 });
+}
+
+function isKnownBetaIp(ip) {
+  if (!ip) return false;
+  const cleanIp = ip.split(',')[0].trim();
+  const entry = betaTesterIps.get(cleanIp);
+  if (entry && entry.expiresAt > Date.now()) {
+    return entry;
+  }
+  return false;
+}
 
 function isBetaTester(user) {
   if (!user) return false;
@@ -104,6 +124,15 @@ function isBetaTester(user) {
   if (email && BETA_TESTER_EMAILS.has(email)) return true;
   return false;
 }
+
+// Global IP session recorder for authenticated requests
+app.use((req, res, next) => {
+  if (req.user && isBetaTester(req.user)) {
+    const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip;
+    recordBetaTesterIp(clientIp, req.user.email);
+  }
+  next();
+});
 
 // App Version Manifest — STABLE Channel (Default for normal users)
 const APP_VERSIONS_DATA = {
@@ -210,10 +239,13 @@ const getOtaManifest = () => {
 
 // Dual-channel version check endpoint
 app.get('/api/app/version', optionalAuth, (req, res) => {
-  const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
+  const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip;
+  const knownBeta = isKnownBetaIp(clientIp);
+  
+  const reqEmail = (req.query.email || req.user?.email || (knownBeta ? knownBeta.email : '')).trim().toLowerCase();
   const reqChannel = (req.query.channel || '').trim().toLowerCase();
   
-  const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
+  const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail)) || Boolean(knownBeta);
   
   const manifest = (hasBetaAccess && (reqChannel === 'beta' || !reqChannel))
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
@@ -253,9 +285,16 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
     return res.download(localFile, filename);
   }
 
+  // 2. Specific version redirect if filename specifies a version (e.g. Rivo-v1.9.6.apk)
+  const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
+  if (vMatch) {
+    const requestedVersion = vMatch[1];
+    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
+  }
+
   const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.3';
 
-  // 2. Redirect to latest GitHub Release based on file extension
+  // 3. Fallback redirect to latest GitHub Release based on file extension
   if (filename.endsWith('.apk')) {
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.apk`);
   }
@@ -462,7 +501,13 @@ app.get('*', (req, res, next) => {
 });
 
 // Socket.IO
-require('./sockets')(io);
+require('./sockets')(io, {
+  BETA_VERSIONS_DATA,
+  APP_VERSIONS_DATA,
+  isBetaTester,
+  BETA_TESTER_EMAILS,
+  recordBetaTesterIp,
+});
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
