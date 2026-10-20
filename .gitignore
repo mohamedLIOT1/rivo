@@ -27,3 +27,5 @@ src-tauri/target/
 src-tauri/*.key
 scripts/__pycache__/
 
+*.bundle
+public/downloads/

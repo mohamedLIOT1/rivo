@@ -130,7 +130,14 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.apk',
       directFile: 'Rivo-v1.9.3.apk',
       mandatory: false,
-      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
+      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.',
+      ota: {
+        enabled: true,
+        version: '1.9.5.1',
+        bundleUrl: '/downloads/ota/index.android.bundle',
+        minAppVersion: '1.9.0',
+        notes: 'تحديث هوائي سريع وفوري بدون إعادة تثبيت الـ APK'
+      }
     },
     ios: {
       version: '1.9.3',
@@ -169,7 +176,14 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.4.apk',
       directFile: 'Rivo-v1.9.4.apk',
       mandatory: false,
-      notes: 'Beta Testing Channel: Active testing build for verified testers and dev team.'
+      notes: 'Beta Testing Channel: Active testing build for verified testers and dev team.',
+      ota: {
+        enabled: true,
+        version: '1.9.5.1-beta',
+        bundleUrl: '/downloads/ota/index.android.bundle',
+        minAppVersion: '1.9.0',
+        notes: 'Beta OTA: أحدث التعديلات والتجارب المباشرة للمطورين والمجرّبين'
+      }
     },
     ios: {
       version: '1.9.4',
@@ -183,6 +197,17 @@ const BETA_VERSIONS_DATA = {
   }
 };
 
+// Helper to read dynamic OTA manifest if present
+const getOtaManifest = () => {
+  try {
+    const otaFile = path.join(__dirname, 'ota-manifest.json');
+    if (fs.existsSync(otaFile)) {
+      return JSON.parse(fs.readFileSync(otaFile, 'utf8'));
+    }
+  } catch (e) {}
+  return null;
+};
+
 // Dual-channel version check endpoint
 app.get('/api/app/version', optionalAuth, (req, res) => {
   const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
@@ -190,12 +215,32 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
   
   const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
   
-  if (hasBetaAccess && (reqChannel === 'beta' || !reqChannel)) {
-    return res.json(BETA_VERSIONS_DATA);
+  const manifest = (hasBetaAccess && (reqChannel === 'beta' || !reqChannel))
+    ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
+    : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
+
+  const dynamicOta = getOtaManifest();
+  if (dynamicOta && dynamicOta.enabled) {
+    if (manifest.platforms && manifest.platforms.android) {
+      manifest.platforms.android.ota = {
+        ...manifest.platforms.android.ota,
+        ...dynamicOta
+      };
+    }
   }
-  
-  // Normal users always receive Stable version
-  res.json(APP_VERSIONS_DATA);
+
+  res.json(manifest);
+});
+
+// Dynamic OTA bundle download route
+app.get(['/downloads/ota/:filename', '/api/downloads/ota/:filename'], (req, res) => {
+  const filename = path.basename(req.params.filename);
+  const otaFile = path.join(__dirname, '../public/downloads/ota', filename);
+  if (fs.existsSync(otaFile)) {
+    res.setHeader('Content-Type', 'application/javascript');
+    return res.sendFile(otaFile);
+  }
+  return res.status(404).json({ error: 'OTA bundle not found' });
 });
 
 // Dynamic download routes for Windows EXE, Android APK, and iOS IPA releases

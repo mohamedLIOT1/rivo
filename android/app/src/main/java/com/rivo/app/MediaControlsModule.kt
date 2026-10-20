@@ -7,6 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.WritableMap
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
@@ -281,6 +283,97 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("INSTALL_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun applyOtaBundle(tempFilePath: String, promise: com.facebook.react.bridge.Promise) {
+        try {
+            val context = reactContext.applicationContext
+            val cleanPath = tempFilePath.replace("file://", "")
+            val srcFile = java.io.File(cleanPath)
+            if (!srcFile.exists() || srcFile.length() < 1024) {
+                promise.reject("INVALID_BUNDLE", "Downloaded bundle is missing or invalid")
+                return
+            }
+
+            val otaDir = java.io.File(context.filesDir, "rivo_ota")
+            if (!otaDir.exists()) {
+                otaDir.mkdirs()
+            }
+
+            val targetFile = java.io.File(otaDir, "index.android.bundle")
+            val targetBackup = java.io.File(otaDir, "index.android.bundle.bak")
+
+            if (targetFile.exists()) {
+                targetFile.copyTo(targetBackup, overwrite = true)
+            }
+
+            srcFile.copyTo(targetFile, overwrite = true)
+            try { srcFile.delete() } catch (ignored: Exception) {}
+
+            promise.resolve(targetFile.absolutePath)
+        } catch (e: Exception) {
+            promise.reject("APPLY_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun reloadApp(promise: com.facebook.react.bridge.Promise) {
+        try {
+            val activity = reactContext.currentActivity
+            if (activity != null) {
+                val intent = activity.intent
+                activity.finish()
+                activity.startActivity(intent)
+                promise.resolve(true)
+            } else {
+                val intent = reactContext.packageManager.getLaunchIntentForPackage(reactContext.packageName)
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    reactContext.startActivity(intent)
+                    promise.resolve(true)
+                } else {
+                    promise.reject("RELOAD_ERROR", "Launch intent unavailable")
+                }
+            }
+        } catch (e: Exception) {
+            promise.reject("RELOAD_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun clearOtaBundle(promise: com.facebook.react.bridge.Promise) {
+        try {
+            val otaDir = java.io.File(reactContext.applicationContext.filesDir, "rivo_ota")
+            if (otaDir.exists()) {
+                otaDir.deleteRecursively()
+            }
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("CLEAR_ERROR", e.message, e)
+        }
+    }
+
+    @ReactMethod
+    fun getOtaInfo(promise: com.facebook.react.bridge.Promise) {
+        try {
+            val otaFile = java.io.File(reactContext.applicationContext.filesDir, "rivo_ota/index.android.bundle")
+            val map = Arguments.createMap()
+            if (otaFile.exists() && otaFile.isFile) {
+                map.putBoolean("exists", true)
+                map.putDouble("size", otaFile.length().toDouble())
+                map.putDouble("lastModified", otaFile.lastModified().toDouble())
+            } else {
+                map.putBoolean("exists", false)
+                map.putDouble("size", 0.0)
+                map.putDouble("lastModified", 0.0)
+            }
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("INFO_ERROR", e.message, e)
+        }
+    }
         }
     }
 }

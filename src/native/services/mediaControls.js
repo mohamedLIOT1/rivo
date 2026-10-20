@@ -181,3 +181,23 @@ export const subscribeToChatNotification = (callback) => {
   }
 };
 
+
+export const applyOtaBundle = async (filePath) => {
+  if (!RivoMediaControls || !RivoMediaControls.applyOtaBundle) return null;
+  return RivoMediaControls.applyOtaBundle(filePath);
+};
+
+export const reloadApp = async () => {
+  if (!RivoMediaControls || !RivoMediaControls.reloadApp) return false;
+  return RivoMediaControls.reloadApp();
+};
+
+export const clearOtaBundle = async () => {
+  if (!RivoMediaControls || !RivoMediaControls.clearOtaBundle) return false;
+  return RivoMediaControls.clearOtaBundle();
+};
+
+export const getOtaInfo = async () => {
+  if (!RivoMediaControls || !RivoMediaControls.getOtaInfo) return { exists: false, size: 0 };
+  return RivoMediaControls.getOtaInfo();
+};

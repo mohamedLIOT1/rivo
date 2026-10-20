@@ -49,6 +49,7 @@ import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 import * as FileSystem from 'expo-file-system';
 import { installApk, getInitialChatSenderId, subscribeToChatNotification } from './src/native/services/mediaControls';
+import { initOtaCrashGuard, checkAndDownloadOta, restartToApplyOta, getCurrentOtaVersion } from './src/native/services/otaService';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
 
@@ -100,7 +101,16 @@ function MainAppShell() {
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
-  const handleRemoteUpdateManifest = (data) => {
+  // OTA Fast Update States
+  const [otaUpdateInfo, setOtaUpdateInfo] = useState(null);
+  const [isOtaModalOpen, setIsOtaModalOpen] = useState(false);
+  const [isDownloadingOta, setIsDownloadingOta] = useState(false);
+  const [otaProgress, setOtaProgress] = useState(0);
+  const [otaBytes, setOtaBytes] = useState({ written: 0, total: 0 });
+  const [isOtaReadyToRestart, setIsOtaReadyToRestart] = useState(false);
+  const [otaError, setOtaError] = useState(null);
+
+  const handleRemoteUpdateManifest = async (data) => {
     if (!data) return;
 
     // Beta Channel Gate: if update is marked for beta, only alert designated testers or admins
@@ -117,6 +127,33 @@ function MainAppShell() {
     const remotePlatform = data?.platforms?.[currentPlatform];
     const remoteVersion = remotePlatform?.version || data?.version;
 
+    // ─── 1. Check Fast OTA Update first (Android only) ───
+    if (Platform.OS === 'android' && remotePlatform?.ota?.enabled) {
+      try {
+        const ota = remotePlatform.ota;
+        const currentOta = await getCurrentOtaVersion();
+        const isOtaNewer = currentOta 
+          ? isNewerVersion(ota.version, currentOta) 
+          : isNewerVersion(ota.version, APP_VERSION);
+        
+        const isBaseCompatible = !ota.minAppVersion || !isNewerVersion(ota.minAppVersion, APP_VERSION);
+
+        if (isOtaNewer && isBaseCompatible) {
+          setOtaUpdateInfo({
+            version: ota.version,
+            notes: ota.notes || remotePlatform?.notes || 'Fast over-the-air update with latest improvements.',
+            bundleUrl: ota.bundleUrl.startsWith('http') ? ota.bundleUrl : `${API_BASE_URL}${ota.bundleUrl}`,
+            minAppVersion: ota.minAppVersion
+          });
+          setIsOtaModalOpen(true);
+          return; // Handled via lightweight OTA!
+        }
+      } catch (e) {
+        console.warn('OTA manifest check error:', e);
+      }
+    }
+
+    // ─── 2. Fallback to full binary update (APK / IPA) ───
     if (remoteVersion && isNewerVersion(remoteVersion, APP_VERSION)) {
       setUpdateInfo({
         remoteVersion,
@@ -146,6 +183,7 @@ function MainAppShell() {
   };
 
   useEffect(() => {
+    initOtaCrashGuard();
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
     }
@@ -206,6 +244,38 @@ function MainAppShell() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadBytes, setDownloadBytes] = useState({ written: 0, total: 0 });
   const [downloadError, setDownloadError] = useState(null);
+
+  const handleDownloadOta = async () => {
+    if (!otaUpdateInfo) return;
+    try {
+      setIsDownloadingOta(true);
+      setOtaError(null);
+      setOtaProgress(0);
+
+      const res = await checkAndDownloadOta(otaUpdateInfo, (progress, written, total) => {
+        setOtaProgress(progress);
+        setOtaBytes({ written, total });
+      });
+
+      if (res?.success) {
+        setIsOtaReadyToRestart(true);
+      }
+    } catch (err) {
+      console.warn('OTA Download error:', err);
+      setOtaError(err?.message || 'Error downloading fast update');
+    } finally {
+      setIsDownloadingOta(false);
+    }
+  };
+
+  const handleApplyOtaRestart = async () => {
+    try {
+      await restartToApplyOta();
+    } catch (err) {
+      Alert.alert('Notice', 'Please restart Rivo to apply the update.');
+      setIsOtaModalOpen(false);
+    }
+  };
 
   const handleDownloadAndInstall = async () => {
     if (Platform.OS === 'ios') {
@@ -378,6 +448,108 @@ function MainAppShell() {
                   activeOpacity={0.85}
                 >
                   <Text style={styles.updateCancelBtnText}>STAY ON CURRENT VERSION</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── IN-APP FAST OTA UPDATE MODAL ─── */}
+      <Modal
+        visible={isOtaModalOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isDownloadingOta) setIsOtaModalOpen(false);
+        }}
+      >
+        <View style={styles.updateModalOverlay}>
+          <View style={[styles.updateModalBox, { borderColor: '#17a398' }]}>
+            <View style={styles.updateHeaderRow}>
+              <View style={[styles.updateBadge, { backgroundColor: '#17a398' }]}>
+                <Text style={styles.updateBadgeText}>⚡ FAST UPDATE (OTA)</Text>
+              </View>
+              <Text style={styles.updateTitle}>RIVO v{otaUpdateInfo?.version}</Text>
+            </View>
+
+            <Text style={styles.updateVersionText}>
+              تحديث هوائي فوري • بدون إعادة تثبيت (حجم ~2.5 MB)
+            </Text>
+
+            <Text style={styles.updateNotesText}>
+              {otaUpdateInfo?.notes}
+            </Text>
+
+            {isDownloadingOta ? (
+              <View style={styles.downloadProgressWrap}>
+                <View style={styles.progressBarTrack}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      { width: `${Math.round(otaProgress * 100)}%`, backgroundColor: '#17a398' },
+                    ]}
+                  />
+                </View>
+                <View style={styles.progressInfoRow}>
+                  <Text style={styles.progressPctText}>{Math.round(otaProgress * 100)}%</Text>
+                  {otaBytes.total > 0 && (
+                    <Text style={styles.progressMbText}>
+                      {(otaBytes.written / 1024 / 1024).toFixed(1)} MB /{' '}
+                      {(otaBytes.total / 1024 / 1024).toFixed(1)} MB
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.installingNoteText}>
+                  جاري تنزيل التحديث السريع في الخلفية...
+                </Text>
+              </View>
+            ) : isOtaReadyToRestart ? (
+              <>
+                <View style={{ backgroundColor: 'rgba(23,163,152,0.15)', padding: 12, borderRadius: 8, marginBottom: 14 }}>
+                  <Text style={{ color: '#17a398', fontSize: 13, fontWeight: '700', textAlign: 'center' }}>
+                    ✅ تم تجهيز التحديث بنجاح! اضغط للتشغيل الفوري.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.updateDownloadBtn, { backgroundColor: '#17a398' }]}
+                  onPress={handleApplyOtaRestart}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateDownloadBtnText}>🚀 RESTART & APPLY UPDATE</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.updateCancelBtn}
+                  onPress={() => setIsOtaModalOpen(false)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateCancelBtnText}>APPLY ON NEXT LAUNCH</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {otaError && (
+                  <Text style={{ color: '#ef4444', fontSize: 12, marginBottom: 10 }}>
+                    {otaError}
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  style={styles.updateDownloadBtn}
+                  onPress={handleDownloadOta}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateDownloadBtnText}>⚡ FAST 2-SECOND UPDATE</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.updateCancelBtn}
+                  onPress={() => setIsOtaModalOpen(false)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.updateCancelBtnText}>LATER</Text>
                 </TouchableOpacity>
               </>
             )}
