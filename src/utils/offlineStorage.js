@@ -1,4 +1,37 @@
 import { API_BASE_URL } from '../config';
+import { parseLrcLyrics, formatLrcLyrics } from './lrcParser';
+
+export const isTauriDesktop = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__);
+
+let tauriCorePromise = null;
+export async function getTauriCore() {
+  if (!isTauriDesktop) return null;
+  if (!tauriCorePromise) {
+    tauriCorePromise = import('@tauri-apps/api/core').catch(() => null);
+  }
+  return tauriCorePromise;
+}
+
+export async function openDesktopDownloadsDir() {
+  const tauri = await getTauriCore();
+  if (!tauri) return null;
+  try {
+    return await tauri.invoke('open_desktop_downloads_dir');
+  } catch (e) {
+    console.warn('Failed to open downloads dir:', e);
+    return null;
+  }
+}
+
+export async function getDesktopDownloadsDir() {
+  const tauri = await getTauriCore();
+  if (!tauri) return null;
+  try {
+    return await tauri.invoke('get_desktop_downloads_dir');
+  } catch {
+    return null;
+  }
+}
 
 // IndexedDB Offline Audio & Cover Storage Manager for Rivo (Pure Web & PWA)
 const DB_NAME = 'RivoOfflineDB';
@@ -391,6 +424,71 @@ export async function saveTrackOffline(track, options = {}) {
       coverBase64 = await blobToDataURI(coverBlob);
     }
 
+    // ── Verified Lyrics & Desktop App Folder Storage ──
+    let parsedLyrics = [];
+    let isVerifiedLyrics = Boolean(
+      track.isVerified || 
+      track.lyricsVerified || 
+      track.isVerifiedLyrics || 
+      track.isLyricsVerified
+    );
+    let lyricsVerifiedBy = track.verifiedBy || track.lyricsVerifiedBy || null;
+
+    if (track.lyrics) {
+      parsedLyrics = parseLrcLyrics(track.lyrics);
+    }
+
+    if (!parsedLyrics.length || !isVerifiedLyrics) {
+      try {
+        const lyricsRes = await fetch(`${API_BASE_URL}/api/tracks/lyrics?trackId=${encodeURIComponent(trackId)}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`, { signal }).catch(() => null);
+        if (lyricsRes && lyricsRes.ok) {
+          const lData = await lyricsRes.json();
+          if (lData.success && Array.isArray(lData.lyrics) && lData.lyrics.length > 0) {
+            parsedLyrics = parseLrcLyrics(lData.lyrics);
+            isVerifiedLyrics = Boolean(lData.isVerified);
+            lyricsVerifiedBy = lData.verifiedBy || null;
+          }
+        }
+      } catch {}
+    }
+
+    let desktopRecord = null;
+    let assetAudioUrl = null;
+    let audioBase64 = null;
+    if (audioBlob) {
+      audioBase64 = await blobToDataURI(audioBlob);
+    }
+
+    if (isTauriDesktop && audioBase64) {
+      try {
+        const tauri = await getTauriCore();
+        if (tauri) {
+          const lyricsLrc = formatLrcLyrics(parsedLyrics);
+          const lyricsText = parsedLyrics.map(l => l.text).join('\n');
+          desktopRecord = await tauri.invoke('save_desktop_downloaded_track', {
+            payload: {
+              id: trackId,
+              title: cleanTitle,
+              artist: cleanArtist,
+              album: cleanAlbum,
+              duration: track.duration || 0,
+              audio_base64: audioBase64,
+              cover_base64: coverBase64,
+              lyrics_text: lyricsText || null,
+              lyrics_lrc: lyricsLrc || null,
+              is_verified_lyrics: Boolean(isVerifiedLyrics),
+              verified_by: lyricsVerifiedBy || null,
+            }
+          });
+          if (desktopRecord?.file_path && tauri.convertFileSrc) {
+            assetAudioUrl = tauri.convertFileSrc(desktopRecord.file_path);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to save track in desktop app folder:', err);
+      }
+    }
+
     const db = await openDB();
     const offlineTrack = {
       ...track,
@@ -403,11 +501,19 @@ export async function saveTrackOffline(track, options = {}) {
       publisher: 'Rivo',
       signature: 'Rivo',
       downloaded: true,
+      localFilePath: desktopRecord?.file_path || track.localFilePath || null,
+      lrcPath: desktopRecord?.lrc_path || track.lrcPath || null,
+      coverPath: desktopRecord?.cover_path || track.coverPath || null,
+      isVerified: Boolean(isVerifiedLyrics),
+      lyricsVerified: Boolean(isVerifiedLyrics),
+      isVerifiedLyrics: Boolean(isVerifiedLyrics),
+      verifiedBy: lyricsVerifiedBy || null,
+      lyrics: parsedLyrics.length > 0 ? parsedLyrics : track.lyrics,
       audioBlob: audioBlob || null,
       coverBlob: coverBlob || null,
       coverBase64: coverBase64 || null,
       cover: coverBase64 || track.cover,
-      audioUrl: audioBlob ? URL.createObjectURL(audioBlob) : targetUrl,
+      audioUrl: assetAudioUrl || (audioBlob ? URL.createObjectURL(audioBlob) : targetUrl),
       savedAt: Date.now()
     };
 
@@ -461,6 +567,30 @@ export async function getOfflineTrackAudioUrl(trackId, title = null, artist = nu
         return localUri;
       }
     }
+  }
+
+  // 1b. FAST TAURI DESKTOP LOCAL FILE CHECK
+  if (isTauriDesktop) {
+    try {
+      const db = await openDB();
+      const localItem = await new Promise((res) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        if (idStr) {
+          const req = store.get(idStr);
+          req.onsuccess = () => res(req.result || null);
+          req.onerror = () => res(null);
+        } else {
+          res(null);
+        }
+      });
+      if (localItem?.localFilePath) {
+        const tauri = await getTauriCore();
+        if (tauri?.convertFileSrc) {
+          return tauri.convertFileSrc(localItem.localFilePath);
+        }
+      }
+    } catch {}
   }
 
   try {
@@ -748,7 +878,59 @@ export async function getOfflineTracks() {
 
           return { ...item, audioUrl, cover, downloaded: true };
         });
-        resolve(deduplicateOfflineTracks(formatted));
+
+        // Merge Desktop App Folder Downloads
+        (async () => {
+          let merged = [...formatted];
+          if (isTauriDesktop) {
+            try {
+              const tauri = await getTauriCore();
+              if (tauri) {
+                const dtList = await tauri.invoke('list_desktop_downloaded_tracks');
+                if (Array.isArray(dtList)) {
+                  for (const dt of dtList) {
+                    const normDtTitle = (dt.title || '').toLowerCase().trim();
+                    const normDtArtist = (dt.artist || '').toLowerCase().trim();
+                    const existingIdx = merged.findIndex(f => 
+                      String(f.id) === String(dt.id) || 
+                      (f.title && f.title.toLowerCase().trim() === normDtTitle && (!normDtArtist || f.artist?.toLowerCase().trim() === normDtArtist))
+                    );
+                    const audioUrl = tauri.convertFileSrc ? tauri.convertFileSrc(dt.file_path) : '';
+                    const cover = (dt.cover_path && tauri.convertFileSrc) ? tauri.convertFileSrc(dt.cover_path) : null;
+                    const mapped = {
+                      id: dt.id,
+                      _id: dt.id,
+                      title: dt.title,
+                      artist: dt.artist,
+                      album: dt.album,
+                      duration: dt.duration,
+                      localFilePath: dt.file_path,
+                      lrcPath: dt.lrc_path,
+                      coverPath: dt.cover_path,
+                      audioUrl: audioUrl || (existingIdx >= 0 ? merged[existingIdx].audioUrl : ''),
+                      cover: cover || (existingIdx >= 0 ? merged[existingIdx].cover : null),
+                      isVerified: dt.is_verified_lyrics,
+                      lyricsVerified: dt.is_verified_lyrics,
+                      isVerifiedLyrics: dt.is_verified_lyrics,
+                      verifiedBy: dt.verified_by,
+                      hasLyrics: dt.has_lyrics,
+                      downloaded: true,
+                      savedAt: dt.saved_at ? dt.saved_at * 1000 : Date.now(),
+                    };
+                    if (existingIdx >= 0) {
+                      merged[existingIdx] = { ...merged[existingIdx], ...mapped };
+                    } else {
+                      merged.push(mapped);
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Desktop offline tracks scan error:', e);
+            }
+          }
+          resolve(deduplicateOfflineTracks(merged));
+        })();
       };
       req.onerror = () => resolve([]);
     });
@@ -780,6 +962,14 @@ export async function getOfflineTrackIds() {
 export async function removeTrackOffline(trackId) {
   if (!trackId) return false;
   const idStr = String(trackId);
+
+  if (isTauriDesktop) {
+    try {
+      getTauriCore().then(tauri => {
+        if (tauri) tauri.invoke('delete_desktop_downloaded_track', { id: idStr });
+      }).catch(() => {});
+    } catch {}
+  }
 
   if (activeBlobUrls.has(idStr)) {
     try { URL.revokeObjectURL(activeBlobUrls.get(idStr)); } catch (e) {}

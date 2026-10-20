@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Zap, Download } from 'lucide-react';
+import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Zap, Download, FolderOpen } from 'lucide-react';
 import { FULL_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
+import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage';
 
 export default function SettingsModal({
   isOpen,
@@ -456,6 +457,32 @@ export default function SettingsModal({
             {isOfflineMode ? 'ACTIVE' : 'DISABLED'}
           </button>
         </div>
+
+        {/* Desktop Downloads Folder */}
+        {isTauriDesktop && (
+          <div className={`flex items-center justify-between py-3 border-b-2 ${
+            isDark ? 'border-zinc-700' : 'border-[#0b1110]'
+          }`}>
+            <div>
+              <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                Downloaded Songs Folder
+              </span>
+              <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                Offline MP3s with embedded ID3 tags & verified lyrics
+              </p>
+            </div>
+            <button
+              onClick={openDesktopDownloadsDir}
+              className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1.5 cursor-pointer ${
+                isDark ? 'bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600' : 'bg-[#ede5d3] text-[#0b1110] hover:bg-[#ded2bb] border-black'
+              }`}
+              title="Open folder in File Explorer"
+            >
+              <FolderOpen size={13} />
+              <span>Open Folder ↗</span>
+            </button>
+          </div>
+        )}
 
         {/* Crossfade Slider */}
         <div className={`py-4 border-b-2 ${isDark ? 'border-zinc-700' : 'border-[#0b1110]'}`}>

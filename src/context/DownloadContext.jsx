@@ -98,12 +98,14 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
           setTracks(prev => prev.map(t => String(t.id || t._id) === cleanId ? { ...t, ...patchFields } : t));
         }
 
-        // Web browser file trigger - desktop only (never in native app)
+        // Web browser file trigger - web desktop only (never in native app or Tauri desktop)
         const isNativeApp = typeof window !== 'undefined' && (
           Boolean(window.RIVO_NATIVE) ||
           Boolean(window.ReactNativeWebView) ||
           Boolean(window.Capacitor) ||
-          Boolean(window.__RIVO_NATIVE_INJECTED)
+          Boolean(window.__RIVO_NATIVE_INJECTED) ||
+          Boolean(window.__TAURI_INTERNALS__) ||
+          Boolean(window.__TAURI__)
         );
         if (typeof window !== 'undefined' && !isNativeApp) {
           try {

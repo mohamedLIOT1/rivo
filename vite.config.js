@@ -6,11 +6,6 @@ import fs from 'fs';
 export default defineConfig({
   base: './',
   root: fs.realpathSync(process.cwd()),
-  build: {
-    rollupOptions: {
-      external: ['@tauri-apps/plugin-updater', '@tauri-apps/plugin-process']
-    }
-  },
   plugins: [
     react(),
     tailwindcss()

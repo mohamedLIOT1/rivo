@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud, Trash2 } from 'lucide-react';
+import { Heart, Plus, Download, Grid, List, Search, Disc, Music, User, Link2, DownloadCloud, Trash2, FolderOpen } from 'lucide-react';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { normalizeCoverUrl } from '../utils/coverUtils';
+import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage';
 
 export default function LibraryScreen({ 
   playlists = [], 
@@ -323,13 +324,31 @@ export default function LibraryScreen({
       {/* ── Downloads Section ── */}
       {(filter === 'all' || filter === 'downloads') && downloadedTracks.length > 0 && (
         <section className="mt-4 mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Download size={18} className={isDark ? "text-[#17a398]" : "text-[#082621]"} strokeWidth={2.5} />
-            <h2 className={`font-display font-black text-xl ${
-              isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
-            }`}>
-              {isQuranMode ? 'Downloaded Surahs' : 'Downloaded Songs'} ({downloadedTracks.length})
-            </h2>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <Download size={18} className={isDark ? "text-[#17a398]" : "text-[#082621]"} strokeWidth={2.5} />
+              <h2 className={`font-display font-black text-xl ${
+                isDark ? 'text-white' : 'text-[#fdfbf7] drop-shadow-[1px_1px_0px_#082621]'
+              }`}>
+                {isQuranMode ? 'Downloaded Surahs' : 'Downloaded Songs'} ({downloadedTracks.length})
+              </h2>
+            </div>
+
+            {isTauriDesktop && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openDesktopDownloadsDir();
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold brutal-border brutal-shadow-xs rounded-lg transition cursor-pointer ${
+                  isDark ? 'bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600' : 'bg-[#ede5d3] text-[#0b1110] hover:bg-[#ded2bb] border-black'
+                }`}
+                title="Open downloaded songs folder in Windows File Explorer"
+              >
+                <FolderOpen size={14} />
+                <span>Open Folder</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

@@ -301,6 +301,25 @@ export default function FullPlayerModal({
       setLocalLyrics(null);
     }
 
+    // If track has local desktop LRC file path, load and parse immediately
+    if (currentTrack.lrcPath && (!currentTrack.lyrics || currentTrack.lyrics.length === 0)) {
+      if (typeof window !== 'undefined' && (window.__TAURI_INTERNALS__ || window.__TAURI__)) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('read_desktop_lrc', { lrcPath: currentTrack.lrcPath })
+            .then(lrcText => {
+              if (lrcText) {
+                const parsed = parseLrcLyrics(lrcText);
+                if (parsed.length > 0) {
+                  setLocalLyrics(parsed);
+                  currentTrack.lyrics = parsed;
+                }
+              }
+            })
+            .catch(() => {});
+        }).catch(() => {});
+      }
+    }
+
     let isCancelled = false;
     const qTitle = currentTrack.title;
     const qArtist = currentTrack.artist;

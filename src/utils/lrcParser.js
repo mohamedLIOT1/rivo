@@ -103,3 +103,26 @@ export function parseLrcLyrics(input) {
     }));
   }
 }
+
+/**
+ * Convert structured lyrics array back into standard LRC formatted string
+ */
+export function formatLrcLyrics(lyrics) {
+  if (!lyrics) return '';
+  if (typeof lyrics === 'string') return lyrics;
+  if (!Array.isArray(lyrics) || lyrics.length === 0) return '';
+
+  return lyrics.map(item => {
+    if (!item) return '';
+    if (typeof item.time === 'number' && item.time >= 0) {
+      const mins = Math.floor(item.time / 60);
+      const secs = Math.floor(item.time % 60);
+      const centis = Math.floor((item.time % 1) * 100);
+      const mm = String(mins).padStart(2, '0');
+      const ss = String(secs).padStart(2, '0');
+      const xx = String(centis).padStart(2, '0');
+      return `[${mm}:${ss}.${xx}] ${item.text || ''}`;
+    }
+    return item.text || '';
+  }).filter(Boolean).join('\n');
+}
