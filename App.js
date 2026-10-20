@@ -296,6 +296,9 @@ function MainAppShell() {
       setDownloadError(null);
       setDownloadProgress(0);
 
+      // Purge all legacy downloaded APKs before starting download
+      await cleanupOldApkInstallers();
+
       const downloadUrl = updateInfo.downloadUrl;
       // Use cacheDirectory to match FileProvider <cache-path name="internal_cache" path="." />
       const targetUri = `${FileSystem.cacheDirectory}Rivo-v${updateInfo.remoteVersion}.apk`;
