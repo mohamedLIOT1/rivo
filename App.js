@@ -162,7 +162,7 @@ function MainAppShell() {
     if (remoteVersion && isNewerVersion(remoteVersion, APP_VERSION)) {
       setUpdateInfo({
         remoteVersion,
-        releaseNotes: remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
+        releaseNotes: remotePlatform?.notesEn || remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
         downloadUrl: remotePlatform?.downloadUrl 
           ? (remotePlatform.downloadUrl.startsWith('http') ? remotePlatform.downloadUrl : `${API_BASE_URL}${remotePlatform.downloadUrl}`)
           : `${API_BASE_URL}/downloads/Rivo.${Platform.OS === 'ios' ? 'ipa' : 'apk'}`

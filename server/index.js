@@ -174,10 +174,15 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.7.apk',
       directFile: 'Rivo-v1.9.7.apk',
       mandatory: false,
-      notes: 'إصلاح جذري لمشكلة إغلاق التطبيق أثناء التحميل • تشغيل فوري وسلس للأغاني • ترقيع شامل لـ 8 ثغرات أمنية • محرك التحديثات الهوائية السريعة',
+      notes: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
       notesEn: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
       ota: {
-        enabled: false // Disabling OTA directs the app to the robust in-app binary installer!
+        enabled: true,
+        version: '1.9.7',
+        bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
+        minAppVersion: '1.9.6',
+        notes: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
+        notesEn: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes'
       }
     },
     ios: {
