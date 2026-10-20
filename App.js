@@ -1,3 +1,4 @@
+import { LOGO_BASE64 } from './src/native/assets/logoBase64';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
@@ -14,6 +15,7 @@ import {
   AppState,
   Alert,
   ScrollView,
+  BackHandler,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -303,11 +305,15 @@ function MainAppShell() {
 
   const handleApplyOtaRestart = async () => {
     try {
-      await restartToApplyOta();
-    } catch (err) {
-      Alert.alert('Notice', 'Please restart Rivo to apply the update.');
       setIsOtaModalOpen(false);
-    }
+      await restartToApplyOta().catch(() => {});
+    } catch (err) {}
+    // Fully exit the app as requested by user, so cold-booting loads the new bundle
+    setTimeout(() => {
+      if (Platform.OS === 'android') {
+        BackHandler.exitApp();
+      }
+    }, 300);
   };
 
   const handleDownloadAndInstall = async () => {
@@ -648,6 +654,13 @@ function MainAppShell() {
 function NativeAppShell() {
   const { appMode, setAppMode } = useConnectivity();
   const [activeTab, setActiveTab] = useState('home');
+  const [activeOtaVersion, setActiveOtaVersion] = useState(null);
+
+  useEffect(() => {
+    getCurrentOtaVersion().then(v => {
+      if (v) setActiveOtaVersion(v);
+    }).catch(() => {});
+  }, []);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
@@ -854,14 +867,14 @@ function NativeAppShell() {
           activeOpacity={0.8}
         >
           <Image
-            source={require('./assets/logo.png')}
+            source={{ uri: LOGO_BASE64 }}
             style={{ width: 28, height: 28, borderRadius: 14, marginRight: 6 }}
             resizeMode="contain"
           />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
             <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: '#17a398' }}>v{APP_VERSION}</Text>
+              <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: '#17a398' }}>v{activeOtaVersion || APP_VERSION}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -1267,6 +1280,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     position: 'relative',
+    marginRight: 6,
   },
   logoTealOffset: {
     position: 'absolute',
@@ -1286,7 +1300,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 14,
-    backgroundColor: '#fdfbf7',
+    backgroundColor: '#ffffff',
     borderWidth: 1.5,
     borderColor: '#0b1110',
     alignItems: 'center',

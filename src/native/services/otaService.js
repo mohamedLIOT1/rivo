@@ -33,6 +33,13 @@ export const compareVersions = (v1, v2) => {
  */
 export const getCurrentOtaVersion = async () => {
   try {
+    if (Platform.OS === 'android') {
+      const info = await getOtaInfo().catch(() => null);
+      if (!info || !info.exists || info.size < 50000) {
+        await AsyncStorage.removeItem(STORAGE_KEYS.OTA_VERSION).catch(() => {});
+        return null;
+      }
+    }
     return await AsyncStorage.getItem(STORAGE_KEYS.OTA_VERSION);
   } catch {
     return null;
@@ -50,7 +57,7 @@ export const initOtaCrashGuard = async () => {
     if (bootFlag === 'booting') {
       // App crashed before completing startup!
       let crashCount = parseInt((await AsyncStorage.getItem(STORAGE_KEYS.OTA_CRASH_COUNT)) || '0', 10) + 1;
-      if (crashCount >= 2) {
+      if (crashCount >= 5) {
         console.warn('[RivoOTA] Crash detected on OTA bundle! Rolling back to stock bundle...');
         await clearOtaBundle();
         await AsyncStorage.removeItem(STORAGE_KEYS.OTA_VERSION);
@@ -70,7 +77,7 @@ export const initOtaCrashGuard = async () => {
         await AsyncStorage.setItem(STORAGE_KEYS.OTA_BOOT_FLAG, 'healthy');
         await AsyncStorage.setItem(STORAGE_KEYS.OTA_CRASH_COUNT, '0');
       } catch {}
-    }, 6000);
+    }, 2500);
   } catch (err) {
     console.warn('[RivoOTA] Crash guard check failed:', err);
   }
@@ -143,8 +150,10 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
       throw new Error('Native applyOtaBundle failed');
     }
 
-    // Persist new OTA version in AsyncStorage
+    // Persist new OTA version in AsyncStorage and reset crash counter
     await AsyncStorage.setItem(STORAGE_KEYS.OTA_VERSION, otaManifest.version);
+    await AsyncStorage.setItem(STORAGE_KEYS.OTA_BOOT_FLAG, 'healthy');
+    await AsyncStorage.setItem(STORAGE_KEYS.OTA_CRASH_COUNT, '0');
 
     return {
       available: true,
@@ -165,5 +174,9 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
  * Restart the app to immediately apply the loaded OTA bundle
  */
 export const restartToApplyOta = async () => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.OTA_BOOT_FLAG, 'healthy');
+    await AsyncStorage.setItem(STORAGE_KEYS.OTA_CRASH_COUNT, '0');
+  } catch {}
   return reloadApp();
 };

@@ -82,6 +82,21 @@ async function validateSafeUrl(urlString) {
       return { valid: false, error: 'Access to internal or private hosts is forbidden' };
     }
 
+    // Whitelist public audio CDN domains: bypass slow/failing DNS lookups on VPS
+    const TRUSTED_DOMAINS = [
+      'googlevideo.com',
+      'youtube.com',
+      'youtu.be',
+      'ytimg.com',
+      'sndcdn.com',
+      'soundcloud.com',
+      'googleusercontent.com',
+      'ggpht.com'
+    ];
+    if (TRUSTED_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))) {
+      return { valid: true, parsed };
+    }
+
     // DNS Resolution Check
     const addresses = await dns.promises.lookup(hostname, { all: true });
     if (!addresses || addresses.length === 0) {

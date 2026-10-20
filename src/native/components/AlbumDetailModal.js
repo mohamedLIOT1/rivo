@@ -49,7 +49,7 @@ export default function AlbumDetailModal({
   onSelectArtist,
   onOpenFullPlayer,
 }) {
-  const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadPlaylist } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadTrack, handleDownloadPlaylist } = useAudioPlayer();
   const { token, syncUserData, playlists = [], likedTrackIds = [], toggleLikeTrack, tracks: contextTracks = [] } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -490,7 +490,7 @@ export default function AlbumDetailModal({
                 {/* Download Button */}
                 <TouchableOpacity
                   style={styles.iconBtn}
-                  onPress={() => downloadTrack && downloadTrack(t)}
+                  onPress={() => !isDl && handleDownloadTrack && handleDownloadTrack(t)}
                   activeOpacity={0.7}
                 >
                   {isDl ? (

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.7",
+  "version": "1.9.7.4",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.0",
-  "notes": "Fast OTA update: Version 1.9.7 • Crash fixes • Audio playback fixes • Security patches",
-  "notesEn": "Fast OTA update: Version 1.9.7 • Crash fixes • Audio playback fixes • Security patches",
-  "bundleSize": 3257029,
+  "notes": "Fast update • Official 3D white logo • Clean exit restart • All fixes",
+  "notesEn": "Fast update • Official 3D white logo • Clean exit restart • All fixes",
+  "bundleSize": 3264345,
   "sizeMb": "3.11 MB",
-  "updatedAt": "2026-10-20T21:33:22.851Z"
+  "updatedAt": "2026-10-20T22:57:18.663Z"
 }

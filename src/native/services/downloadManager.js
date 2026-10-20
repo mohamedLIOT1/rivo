@@ -348,10 +348,18 @@ export const getDownloadedTracks = async () => {
             }
           } else {
             // Check if this audio file belongs to an existing track by ID3 tags or filename
-            const id3Meta = await extractId3Metadata(fileUri, trackId);
-            const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(file);
+            const isMongoId = /^[a-f0-9]{24}$/i.test(trackId);
+            let id3Meta = { title: null, artist: null, album: null, lyrics: null, coverUrl: null };
+            let fTitle = null;
+            let fArtist = null;
+            if (!isMongoId) {
+              id3Meta = await extractId3Metadata(fileUri, trackId);
+              const parsed = parseAudioMetadataFromFilename(file);
+              fTitle = parsed.title;
+              fArtist = parsed.artist;
+            }
             const resolvedTitle = cleanMetadataString(id3Meta.title || fTitle || trackId, 'Offline Track');
-            const resolvedArtist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
+            const resolvedArtist = cleanMetadataString(id3Meta.artist || fArtist || (isMongoId ? 'Rivo Artist' : 'Local Import'), 'Offline Artist');
             const normKey = getTrackDedupeKey({ title: resolvedTitle, artist: resolvedArtist });
             existing = trackMap.get(normKey);
 
@@ -414,6 +422,66 @@ export const getDownloadedTracks = async () => {
       }
     } catch (diskErr) {
       console.warn('[downloadManager] disk reconciliation error:', diskErr.message);
+    }
+
+    // 5. Auto-heal damaged metadata for MongoDB ObjectId tracks or "Local Import"
+    const damagedTracks = tracks.filter(t => {
+      if (!t) return false;
+      const tid = String(t._id || t.id || '');
+      const tTitle = String(t.title || '');
+      const tArtist = String(t.artist || '');
+      const isHexId = /^[a-f0-9]{24}$/i.test(tid);
+      const hasHexTitle = /^[a-f0-9]{24}$/i.test(tTitle) || tTitle === tid;
+      const isDamaged = hasHexTitle || tArtist === 'Local Import' || !tTitle || tTitle === 'Offline Track';
+      return isHexId && isDamaged;
+    });
+
+    if (damagedTracks.length > 0) {
+      try {
+        const idsToFetch = [...new Set(damagedTracks.map(t => String(t._id || t.id)))];
+        const healController = new AbortController();
+        const healTimeout = setTimeout(() => healController.abort(), 3500);
+        const res = await fetch(`${API_BASE_URL}/api/tracks/by-ids`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: idsToFetch }),
+          signal: healController.signal,
+        });
+        clearTimeout(healTimeout);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+            const serverMap = new Map();
+            data.tracks.forEach(st => serverMap.set(String(st._id || st.id), st));
+
+            let repairedCount = 0;
+            tracks = tracks.map(t => {
+              if (!t) return t;
+              const tid = String(t._id || t.id);
+              const serverTrack = serverMap.get(tid);
+              if (serverTrack && serverTrack.title && !/^[a-f0-9]{24}$/i.test(serverTrack.title)) {
+                repairedCount++;
+                return {
+                  ...t,
+                  title: cleanMetadataString(serverTrack.title, t.title),
+                  artist: cleanMetadataString(serverTrack.artist, t.artist !== 'Local Import' ? t.artist : 'Artist'),
+                  album: cleanMetadataString(serverTrack.album, t.album),
+                  cover: serverTrack.cover || t.cover,
+                  coverUrl: serverTrack.cover || t.coverUrl,
+                  duration: serverTrack.duration || t.duration,
+                  lyrics: (serverTrack.lyrics && serverTrack.lyrics.length > 0) ? serverTrack.lyrics : t.lyrics,
+                };
+              }
+              return t;
+            });
+
+            if (repairedCount > 0) {
+              await saveToStorageAndManifest(tracks);
+            }
+          }
+        }
+      } catch (healErr) {}
     }
 
     return deduplicateTrackList(tracks);
@@ -593,15 +661,11 @@ const downloadCandidateWithWatchdog = (
       resolve(res);
     };
 
-    const finishReject = async (err) => {
+    const finishReject = (err) => {
       if (isSettled) return;
       isSettled = true;
       cleanup();
-      try {
-        if (downloadResumable) {
-          await downloadResumable.pauseAsync().catch(() => {});
-        }
-      } catch (e) {}
+      downloadResumable = null;
       reject(err);
     };
 
@@ -1320,7 +1384,7 @@ export async function extractId3Metadata(fileUri, trackId = null) {
     const fileSize = (typeof fileInfo.size === 'number' && fileInfo.size > 0) ? fileInfo.size : null;
     if (fileSize !== null && fileSize < 128) return result;
 
-    const sampleLength = fileSize ? Math.min(fileSize, 524288) : 524288;
+    const sampleLength = fileSize ? Math.min(fileSize, 32768) : 32768;
     const headB64 = await FileSystem.readAsStringAsync(fileUri, {
       encoding: FileSystem.EncodingType.Base64,
       length: sampleLength,
@@ -1335,10 +1399,10 @@ export async function extractId3Metadata(fileUri, trackId = null) {
         const tagSize = readSynchSafeInt(bytes[6], bytes[7], bytes[8], bytes[9]);
 
         // If the tag size is larger than the sample, read the full tag up to 3MB to preserve embedded covers/lyrics
-        if (tagSize + 10 > bytes.length && tagSize < 3145728) {
+        if (tagSize + 10 > bytes.length && tagSize < 65536) {
           const fullTagB64 = await FileSystem.readAsStringAsync(fileUri, {
             encoding: FileSystem.EncodingType.Base64,
-            length: tagSize + 10,
+            length: Math.min(tagSize + 10, 65536),
             position: 0,
           }).catch(() => null);
           if (fullTagB64) {
@@ -1498,6 +1562,9 @@ export async function extractId3Metadata(fileUri, trackId = null) {
 export function parseAudioMetadataFromFilename(filename) {
   if (!filename) return { title: 'Local Track', artist: 'Local Import' };
   let name = filename.replace(/\.(mp3|m4a|wav|aac|flac|ogg|opus)$/i, '').trim();
+  if (/^[a-f0-9]{24}$/i.test(name)) {
+    return { title: '', artist: '', isMongoId: true };
+  }
   name = cleanMetadataString(name, 'Local Track');
 
   if (name.includes(' - ')) {
@@ -1711,10 +1778,11 @@ export const scanOfflineVault = async () => {
       const info = await FileSystem.getInfoAsync(fileUri);
       if (!info.exists || info.size < 5000) continue;
 
-      const id3Meta = await extractId3Metadata(fileUri, baseId);
+      const isMongoId = /^[a-f0-9]{24}$/i.test(baseId);
+      const id3Meta = isMongoId ? { title: null, artist: null, album: null, lyrics: null, coverUrl: null } : await extractId3Metadata(fileUri, baseId);
       const { title: fTitle, artist: fArtist } = parseAudioMetadataFromFilename(f);
-      const title = cleanMetadataString(id3Meta.title || fTitle, 'Offline Track');
-      const artist = cleanMetadataString(id3Meta.artist || fArtist, 'Offline Artist');
+      const title = cleanMetadataString(id3Meta.title || fTitle, isMongoId ? 'Rivo Track' : 'Offline Track');
+      const artist = cleanMetadataString(id3Meta.artist || fArtist, isMongoId ? 'Rivo Artist' : 'Offline Artist');
       const album = cleanMetadataString(id3Meta.album || 'Offline Vault', 'Offline Vault');
       const dedupeKey = getTrackDedupeKey({ title, artist, id: baseId });
       if (dedupeKey && existingKeys.has(dedupeKey)) continue;
