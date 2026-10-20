@@ -1223,7 +1223,7 @@ opts = {
     'no_warnings': True,
     'nocheckcertificate': True,
     'noplaylist': True,
-    'format': 'ba[ext=m4a]/ba/b'
+    'format': 'ba[ext=m4a]/ba/bestaudio'
 }
 cpath = ${JSON.stringify(cookiesPath)}
 if os.path.exists(cpath):
@@ -1333,7 +1333,7 @@ function processNextBgDownload() {
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
-    '-f', 'ba[ext=m4a]/ba/b',
+    '-f', 'ba[ext=m4a]/ba/bestaudio',
     '-o', targetFile
   ];
   if (fs.existsSync(cookiesPath)) {
@@ -1362,7 +1362,7 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '-g',
-    '-f', 'ba[ext=m4a]/ba/b'
+    '-f', 'ba[ext=m4a]/ba/bestaudio'
   ];
   if (fs.existsSync(cookiesPath)) {
     ytdlpArgs.push('--cookies', cookiesPath);
@@ -1486,7 +1486,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const ytdlpArgs = [
       '--no-check-certificates',
       '--no-playlist',
-        '-f', 'ba[ext=m4a]/ba/b',
+        '-f', 'ba[ext=m4a]/ba/bestaudio',
       '-o', cachedM4a
     ];
     if (fs.existsSync(cookiesPath)) ytdlpArgs.push('--cookies', cookiesPath);

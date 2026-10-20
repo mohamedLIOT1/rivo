@@ -1,0 +1,50 @@
+# Dependencies & System
+node_modules/
+package-lock.json
+.git/
+.idea/
+.vscode/
+
+# Build Outputs & Binaries
+dist/
+build/
+android/app/build/
+android/build/
+android/.gradle/
+ios/build/
+ios/Pods/
+src-tauri/target/
+release-desktop/
+desktop-app/bin/
+desktop-app/obj/
+expo_ios_dist/
+*.apk
+*.ipa
+*.aab
+*.exe
+*.tar.gz
+*.idsig
+*.bundle
+*.hermes.bundle
+*.jsbundle
+public/downloads/*.apk
+public/downloads/*.ipa
+public/downloads/*.exe
+public/downloads/*.idsig
+uploads/
+
+# Temp Dirs & Build Artifacts
+.artifacts/
+temp_*
+downloaded_*
+downloads-*
+artifacts-*
+android_artifact/
+ios_artifact/
+
+# Media & Large Assets
+*.mp4
+*.wav
+*.m4a
+*.mp3
+promo_video/

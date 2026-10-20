@@ -123,31 +123,19 @@ fn save_desktop_downloaded_track(
         .map_err(|e| format!("Failed to decode audio base64: {}", e))?;
     fs::write(&mp3_path, audio_bytes).map_err(|e| format!("Failed to write MP3 file: {}", e))?;
 
-    // 2. Decode & save Cover image file alongside if provided
-    let mut cover_path_str: Option<String> = None;
+    // 2. Decode Cover image directly in memory for ID3 embedding (no separate loose .jpg file)
     let mut cover_raw_bytes: Option<Vec<u8>> = None;
     if let Some(ref cover_b64) = payload.cover_base64 {
         let raw_cover = clean_base64_data(cover_b64);
         if let Ok(cbytes) = BASE64_STANDARD.decode(raw_cover) {
-            let cover_path = downloads_dir.join(format!("{}.jpg", base_filename));
-            if fs::write(&cover_path, &cbytes).is_ok() {
-                cover_path_str = Some(cover_path.to_string_lossy().to_string());
-                cover_raw_bytes = Some(cbytes);
-            }
+            cover_raw_bytes = Some(cbytes);
         }
     }
 
-    // 3. Write synchronized .lrc file alongside if provided
-    let mut lrc_path_str: Option<String> = None;
+    // 3. Lyrics are embedded directly into MP3 ID3 tags (no separate loose .lrc file)
     let has_lyrics = payload.lyrics_lrc.is_some() || payload.lyrics_text.is_some();
-    if let Some(ref lrc_content) = payload.lyrics_lrc {
-        if !lrc_content.trim().is_empty() {
-            let lrc_path = downloads_dir.join(format!("{}.lrc", base_filename));
-            if fs::write(&lrc_path, lrc_content).is_ok() {
-                lrc_path_str = Some(lrc_path.to_string_lossy().to_string());
-            }
-        }
-    }
+    let lrc_path_str: Option<String> = Some(mp3_path.to_string_lossy().to_string());
+    let cover_path_str: Option<String> = None;
 
     // 4. Embed ID3 tags into MP3 (Title, Artist, Album, Cover Art, and Embedded Lyrics)
     let mut tag = Tag::read_from_path(&mp3_path).unwrap_or_else(|_| Tag::new());
@@ -340,6 +328,14 @@ fn delete_desktop_downloaded_track(app: tauri::AppHandle, id: String) -> Result<
 
 #[tauri::command]
 fn read_desktop_lrc(lrc_path: String) -> Result<String, String> {
+    let p = Path::new(&lrc_path);
+    if p.extension().and_then(|s| s.to_str()) == Some("mp3") || lrc_path.ends_with(".mp3") {
+        if let Ok(tag) = Tag::read_from_path(&lrc_path) {
+            if let Some(lyrics) = tag.lyrics().next() {
+                return Ok(lyrics.text.clone());
+            }
+        }
+    }
     fs::read_to_string(&lrc_path).map_err(|e| e.to_string())
 }
 

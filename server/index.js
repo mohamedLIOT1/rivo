@@ -18,7 +18,7 @@ const axios = require('axios');
 const { Server } = require('socket.io');
 
 const { User, Track, Album } = require('./models');
-const { auth, adminAuth } = require('./middleware/auth');
+const { auth, adminAuth, optionalAuth } = require('./middleware/auth');
 const { uploadsDir } = require('./middleware/upload');
 const { validateSafeUrl } = require('./utils/security');
 const { searchTracksInternal, isQuranContent, ensureYtDlpBinary } = require('./utils/helpers');
@@ -86,9 +86,29 @@ app.use((req, res, next) => {
   next();
 });
 
-// App Version Manifest — Independent versioning for each target
+// Authorized Beta Testing Accounts & Admins
+const BETA_TESTER_EMAILS = new Set([
+  'whooareyou152@gmail.com',
+  'alicrafter85@gmail.com',
+  'test@liofy.com',
+  'lio@gmail.com',
+  'test1@gmail.com',
+  'test@gmail.com',
+  't1@gmail.com'
+]);
+
+function isBetaTester(user) {
+  if (!user) return false;
+  if (user.role === 'admin' || user.isAdmin === true) return true;
+  const email = (user.email || '').trim().toLowerCase();
+  if (email && BETA_TESTER_EMAILS.has(email)) return true;
+  return false;
+}
+
+// App Version Manifest — STABLE Channel (Default for normal users)
 const APP_VERSIONS_DATA = {
   publishedAt: new Date().toISOString(),
+  channel: 'stable',
   platforms: {
     web: {
       version: '1.9.3',
@@ -96,16 +116,16 @@ const APP_VERSIONS_DATA = {
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.9.3',
+      version: '1.9.4',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.exe',
-      directFile: 'Rivo-v1.9.3.exe',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.4/Rivo_Setup.exe',
+      directFile: 'Rivo_Setup.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
     android: {
       version: '1.9.3',
-      build: 63,
+      build: 62,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.apk',
       directFile: 'Rivo-v1.9.3.apk',
@@ -114,7 +134,7 @@ const APP_VERSIONS_DATA = {
     },
     ios: {
       version: '1.9.3',
-      build: 63,
+      build: 62,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.3.ipa',
       directFile: 'Rivo-v1.9.3.ipa',
@@ -124,7 +144,57 @@ const APP_VERSIONS_DATA = {
   }
 };
 
-app.get('/api/app/version', (req, res) => {
+// App Version Manifest — BETA Channel (For designated testers & admins only)
+const BETA_VERSIONS_DATA = {
+  publishedAt: new Date().toISOString(),
+  channel: 'beta',
+  platforms: {
+    web: {
+      version: '1.9.4',
+      name: 'Rivo Web (Beta)',
+      notes: 'Preview build with test features and latest optimisations.'
+    },
+    windows: {
+      version: '1.9.4',
+      name: 'Rivo Desktop for Windows (Beta)',
+      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.4/Rivo_Setup.exe',
+      directFile: 'Rivo_Setup.exe',
+      mandatory: false,
+      notes: 'Preview build with offline storage and ID3 tag verified lyrics.'
+    },
+    android: {
+      version: '1.9.4',
+      build: 64,
+      name: 'Rivo for Android (Beta Testing)',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.4.apk',
+      directFile: 'Rivo-v1.9.4.apk',
+      mandatory: false,
+      notes: 'Beta Testing Channel: Active testing build for verified testers and dev team.'
+    },
+    ios: {
+      version: '1.9.4',
+      build: 64,
+      name: 'Rivo for iOS (Beta Testing)',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.4.ipa',
+      directFile: 'Rivo-v1.9.4.ipa',
+      mandatory: false,
+      notes: 'Beta Testing Channel: Active testing build for verified testers and dev team.'
+    }
+  }
+};
+
+// Dual-channel version check endpoint
+app.get('/api/app/version', optionalAuth, (req, res) => {
+  const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
+  const reqChannel = (req.query.channel || '').trim().toLowerCase();
+  
+  const hasBetaAccess = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
+  
+  if (hasBetaAccess && (reqChannel === 'beta' || !reqChannel)) {
+    return res.json(BETA_VERSIONS_DATA);
+  }
+  
+  // Normal users always receive Stable version
   res.json(APP_VERSIONS_DATA);
 });
 
@@ -155,10 +225,14 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
 });
 
 // Secure Webhook for automated deployment on GitHub push
-const DEPLOY_SECRET = process.env.DEPLOY_SECRET || 'rivo-deploy-sec-2026';
+const DEPLOY_SECRET = process.env.DEPLOY_SECRET;
 let isDeploying = false;
 
 app.post('/api/deploy-webhook', (req, res) => {
+  if (!DEPLOY_SECRET) {
+    return res.status(503).json({ error: 'Deployment webhook is not configured on this server.' });
+  }
+
   const secret = req.query.secret || req.headers['x-webhook-secret'] || req.body?.secret;
   if (!secret || secret !== DEPLOY_SECRET) {
     return res.status(403).json({ error: 'Unauthorized: Invalid deploy secret' });

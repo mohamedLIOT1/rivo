@@ -850,6 +850,13 @@ router.get('/stream-proxy', async (req, res) => {
       headers,
       timeout: 25000,
       maxRedirects: 5,
+      beforeRedirect: async (options) => {
+        const nextUrl = options.href || `${options.protocol}//${options.host}${options.path}`;
+        const check = await validateSafeUrl(nextUrl);
+        if (!check.valid) {
+          throw new Error('Blocked SSRF redirect to forbidden host');
+        }
+      },
       validateStatus: (status) => status < 400
     });
 

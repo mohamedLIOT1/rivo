@@ -197,6 +197,7 @@ async function resolveYouTubeAudioClientSide(videoId) {
           url: `https://www.youtube.com/watch?v=${videoId}`,
           downloadMode: 'audio',
           audioFormat: 'mp3',
+          audioBitrate: '128',
           isAudioOnly: true
         })
       });

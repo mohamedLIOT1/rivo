@@ -1,0 +1,11 @@
+{
+  "version": "1.9.4",
+  "notes": "Added dedicated offline songs storage in app folder with verified embedded lyrics and tags.",
+  "pub_date": "2026-10-20T15:37:40Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTblNNUk1CalZTc1pka2FOTEtxSkRLWFI2Y0JhWmxxcDNLTGRSSGlHbFRGOWFkTmMvdFBmODNIbTZMdUxYdEhXZGdDZkVWY2N6bzJIMFpYNFRpYWw2V29SdTQ4V3dGV3c4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyNTEwNjUxCWZpbGU6Uml2b18xLjkuNF94NjQtc2V0dXAuZXhlCXZlcnNpb246MS45LjQKdVRaK0RmbDZQMGdVYW4xMEZ4NXhET3M0YW1kN3JIcUdqSFNUUjVPT1hMTVBSRS82dnl2c3hZRHlwVndWVFlrVEZUTGRrVkRCc2Jia2Yyd29VRldkQmc9PQo=",
+      "url": "https://github.com/WhooAre-you/Rivo/releases/download/v1.9.4/Rivo_Setup.exe"
+    }
+  }
+}

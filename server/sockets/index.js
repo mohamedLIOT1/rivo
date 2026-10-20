@@ -6,6 +6,7 @@ const jamRooms = {};
 const jamDisconnectTimeouts = new Map();
 const userDeviceSessions = new Map();
 const userSocketMap = new Map();
+const userDisconnectGraceTimers = new Map();
 
 module.exports = function (io) {
   // Authentication middleware for Socket.io
@@ -25,6 +26,10 @@ module.exports = function (io) {
   io.on('connection', (socket) => {
     if (socket.userId) {
       const uidStr = socket.userId;
+      if (userDisconnectGraceTimers.has(uidStr)) {
+        clearTimeout(userDisconnectGraceTimers.get(uidStr));
+        userDisconnectGraceTimers.delete(uidStr);
+      }
       socket.join(`user:${uidStr}`);
       if (!userSocketMap.has(uidStr)) {
         userSocketMap.set(uidStr, new Set());
@@ -709,53 +714,64 @@ module.exports = function (io) {
       }
     });
 
-    // Disconnect event
+    // Disconnect event with 25s Grace Period (prevents offline/online flapping & lag)
     socket.on('disconnect', async () => {
       const uidStr = socket.userId;
       if (uidStr) {
-        let isFullyOffline = false;
+        let hasRemainingSockets = false;
         if (userSocketMap.has(uidStr)) {
           const sockets = userSocketMap.get(uidStr);
           sockets.delete(socket.id);
-          if (sockets.size === 0) {
-            userSocketMap.delete(uidStr);
-            isFullyOffline = true;
+          if (sockets.size > 0) {
+            hasRemainingSockets = true;
           }
-        } else {
-          isFullyOffline = true;
         }
 
-        const activeDevSession = userDeviceSessions.get(uidStr);
-        const isPlaybackDeviceDisconnect = activeDevSession && activeDevSession.activeSocketId === socket.id;
+        if (!hasRemainingSockets) {
+          // Cancel any existing timer and start a fresh 25s grace period
+          if (userDisconnectGraceTimers.has(uidStr)) {
+            clearTimeout(userDisconnectGraceTimers.get(uidStr));
+          }
 
-        if (isFullyOffline || isPlaybackDeviceDisconnect) {
-          userDeviceSessions.delete(uidStr);
+          const graceTimer = setTimeout(async () => {
+            userDisconnectGraceTimers.delete(uidStr);
 
-          try {
-            await User.findByIdAndUpdate(uidStr, {
-              $set: {
-                'currentListening.isPlaying': false,
-                lastActiveAt: new Date()
-              }
-            });
-          } catch (e) {}
+            // Verify user has not reconnected during grace period
+            const currentSockets = userSocketMap.get(uidStr);
+            if (currentSockets && currentSockets.size > 0) {
+              return; // User reconnected! Keep them online and active without any lag.
+            }
 
-          if (isFullyOffline) {
+            userSocketMap.delete(uidStr);
+            userDeviceSessions.delete(uidStr);
+
+            try {
+              await User.findByIdAndUpdate(uidStr, {
+                $set: {
+                  'currentListening.isPlaying': false,
+                  lastActiveAt: new Date()
+                }
+              });
+            } catch (e) {}
+
             io.emit('user:status', {
               userId: uidStr,
               isOnline: false,
               isLive: false
             });
             notifyFollowersStatus(uidStr, false);
-          }
-          io.emit('activity:updated', {
-            userId: uidStr,
-            isOnline: !isFullyOffline,
-            isLive: false,
-            currentListening: { isPlaying: false }
-          });
 
-          try { await discordActivity.disconnectUserSession(uidStr); } catch (e) {}
+            io.emit('activity:updated', {
+              userId: uidStr,
+              isOnline: false,
+              isLive: false,
+              currentListening: { isPlaying: false }
+            });
+
+            try { await discordActivity.disconnectUserSession(uidStr); } catch (e) {}
+          }, 25000); // 25s grace period
+
+          userDisconnectGraceTimers.set(uidStr, graceTimer);
         }
       }
 

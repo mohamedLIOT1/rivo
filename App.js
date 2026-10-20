@@ -82,15 +82,37 @@ const TABS = [
   { id: 'offline', label: 'Vault', icon: Download },
 ];
 
+const BETA_TESTER_EMAILS = [
+  'whooareyou152@gmail.com',
+  'alicrafter85@gmail.com',
+  'test@liofy.com',
+  'lio@gmail.com',
+  'test1@gmail.com',
+  'test@gmail.com',
+  't1@gmail.com'
+];
+
 function MainAppShell() {
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
   const { socket } = useSocket();
+  const { currentUser } = useUser();
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
 
   const handleRemoteUpdateManifest = (data) => {
     if (!data) return;
+
+    // Beta Channel Gate: if update is marked for beta, only alert designated testers or admins
+    if (data?.channel === 'beta') {
+      const userEmail = (currentUser?.email || '').toLowerCase().trim();
+      const isAdmin = currentUser?.role === 'admin' || currentUser?.isAdmin;
+      const isBetaTester = isAdmin || BETA_TESTER_EMAILS.includes(userEmail);
+      if (!isBetaTester) {
+        return; // Normal users are NEVER spammed with test builds!
+      }
+    }
+
     const currentPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
     const remotePlatform = data?.platforms?.[currentPlatform];
     const remoteVersion = remotePlatform?.version || data?.version;
@@ -153,7 +175,11 @@ function MainAppShell() {
 
   const checkAppUpdates = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/app/version`);
+      const token = (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || currentUser?.token;
+      const email = currentUser?.email || '';
+      const query = email ? `?email=${encodeURIComponent(email)}` : '';
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE_URL}/api/app/version${query}`, { headers });
       if (!res.ok) return;
       const data = await res.json();
       handleRemoteUpdateManifest(data);
