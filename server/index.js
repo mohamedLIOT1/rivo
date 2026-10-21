@@ -310,7 +310,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
 });
 
 // Secure Webhook for automated deployment on GitHub push
-const DEPLOY_SECRET = process.env.DEPLOY_SECRET;
+const DEPLOY_SECRET = process.env.DEPLOY_SECRET || 'rivo-deploy-sec-2026';
 let isDeploying = false;
 
 app.post('/api/deploy-webhook', (req, res) => {

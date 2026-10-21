@@ -1,4 +1,4 @@
-name: Auto-Deploy to VPS (Webhook)
+name: Auto-Deploy to VPS (SSH & Webhook)
 
 on:
   push:
@@ -10,22 +10,26 @@ on:
       - 'package.json'
       - 'vite.config.js'
       - 'index.html'
+      - '.github/workflows/deploy-server.yml'
   workflow_dispatch:
 
 jobs:
   deploy:
-    name: Trigger VPS Auto-Deploy
+    name: Deploy to VPS
     runs-on: ubuntu-latest
 
     steps:
       - name: Ping VPS Deploy Webhook
+        continue-on-error: true
         run: |
           echo "Pinging VPS webhook to trigger auto-deploy..."
           RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://rivo-m.duckdns.org/api/deploy-webhook?secret=${{ secrets.DEPLOY_SECRET || 'rivo-deploy-sec-2026' }}")
           echo "$RESPONSE"
-          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
-          if [ "$STATUS" -eq 200 ]; then
-            echo "✅ Deployment webhook received by VPS! Server is updating in the background."
-          else
-            echo "ℹ️ Webhook returned status $STATUS (Normal if server is on old version; run 'git pull' once on VPS to activate)."
-          fi
+
+      - name: Deploy to EC2 via SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd /home/ubuntu/rivo && git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo"
