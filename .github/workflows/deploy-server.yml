@@ -20,13 +20,18 @@ jobs:
 
     steps:
       - name: Deploy to EC2 via SSH
-        continue-on-error: true
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd /home/ubuntu/rivo && git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo"
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/rivo
+            git fetch origin main
+            git reset --hard origin/main
+            npm install --legacy-peer-deps
+            npm run build
+            pm2 restart rivo
 
       - name: Ping VPS Deploy Webhook
         if: always()
