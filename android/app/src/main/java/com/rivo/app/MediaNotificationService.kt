@@ -13,6 +13,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.support.v4.media.MediaMetadataCompat
@@ -69,6 +71,13 @@ class MediaNotificationService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioManager: AudioManager? = null
     private var audioFocusRequest: AudioFocusRequest? = null
+    private val wakeLockHandler = Handler(Looper.getMainLooper())
+    private val wakeLockReleaseRunnable = Runnable {
+        if (!isPlaying) {
+            releaseWakeLock()
+            abandonAudioFocus()
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -220,7 +229,7 @@ class MediaNotificationService : Service() {
                     val dSec = intent.getDoubleExtra("duration", 0.0)
                     if (dSec > 0) currentDurationMs = (dSec * 1000).toLong()
                 }
-                if (intent.hasExtra("currentTime")) {
+                if (intent.hasExtra("currentTime") && (now - lastUserSeekTimeMs > 3000L)) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
                     if (cSec >= 0) {
                         currentPositionMs = (cSec * 1000).toLong()
@@ -273,7 +282,7 @@ class MediaNotificationService : Service() {
                     val dSec = intent.getDoubleExtra("duration", 0.0)
                     if (dSec > 0) currentDurationMs = (dSec * 1000).toLong()
                 }
-                if (intent.hasExtra("currentTime")) {
+                if (intent.hasExtra("currentTime") && (now - lastUserSeekTimeMs > 3000L)) {
                     val cSec = intent.getDoubleExtra("currentTime", 0.0)
                     if (cSec >= 0) {
                         currentPositionMs = (cSec * 1000).toLong()
@@ -296,12 +305,13 @@ class MediaNotificationService : Service() {
                 }
 
                 if (isPlaying) {
+                    wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
                     acquireWakeLock()
                     requestAudioFocus()
                     startForegroundWithNotification()
                 } else {
-                    releaseWakeLock()
-                    abandonAudioFocus()
+                    wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
+                    wakeLockHandler.postDelayed(wakeLockReleaseRunnable, 15000L)
                 }
                 updateNotification()
             }

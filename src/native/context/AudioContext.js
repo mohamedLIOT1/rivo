@@ -667,7 +667,16 @@ export const AudioProvider = ({ children }) => {
       try {
         if (typeof action === 'string' && action.startsWith('seek:')) {
           const secs = parseFloat(action.split(':')[1]);
-          if (!isNaN(secs) && seekToRef.current) seekToRef.current(secs);
+          if (!isNaN(secs)) {
+            progressRef.current = { ...progressRef.current, currentTime: secs };
+            setProgress(p => ({ ...p, currentTime: secs }));
+            if (playbackStatusRef.current) {
+              playbackStatusRef.current.currentTime = secs;
+            }
+            if (seekToRef.current) {
+              seekToRef.current(secs);
+            }
+          }
           return;
         }
         const cur = currentTrackRef.current;
@@ -1028,8 +1037,19 @@ export const AudioProvider = ({ children }) => {
         const prevSound = soundRef.current;
         soundRef.current = null;
         loadedTrackIdRef.current = null;
+        try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
         prevSound.stopAsync().catch(() => {});
         prevSound.unloadAsync().catch(() => {});
+      }
+
+      // Proactively keep Android MediaNotificationService & WakeLock active during background transition
+      if (shouldBePlayingRef.current) {
+        const isLikedTrack = likedTrackIds.some(id => String(id) === String(track._id || track.id));
+        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+          ...track,
+          currentTime: safeTargetSec,
+          duration: Number(track.duration || 240)
+        });
       }
 
       // Prioritize local downloaded version in Online Mode to save mobile data:
@@ -1159,8 +1179,19 @@ export const AudioProvider = ({ children }) => {
         const prevSound = soundRef.current;
         soundRef.current = null;
         loadedTrackIdRef.current = null;
+        try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
         prevSound.stopAsync().catch(() => {});
         prevSound.unloadAsync().catch(() => {});
+      }
+
+      // Proactively keep Android MediaNotificationService & WakeLock active during background transition
+      if (shouldBePlayingRef.current) {
+        const isLikedTrack = likedTrackIds.some(id => String(id) === String(track._id || track.id));
+        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+          ...track,
+          currentTime: safeTargetSec,
+          duration: Number(track.duration || 240)
+        });
       }
 
       const soundSource = { uri };
@@ -1192,6 +1223,7 @@ export const AudioProvider = ({ children }) => {
       }
 
       if (soundRef.current && soundRef.current !== sound) {
+        try { soundRef.current.setOnPlaybackStatusUpdate(null); } catch {}
         soundRef.current.stopAsync().catch(() => {});
         soundRef.current.unloadAsync().catch(() => {});
       }
@@ -1798,11 +1830,36 @@ export const AudioProvider = ({ children }) => {
 
   const handleDownloadPlaylist = async (tracksToDownload) => {
     if (!tracksToDownload || tracksToDownload.length === 0) return;
-    for (const track of tracksToDownload) {
-      await handleDownloadTrack(track, false);
-      await new Promise(r => setTimeout(r, 400));
+    const wasPlayingBeforeDownload = isPlayingRef.current;
+    try {
+      // Keep foreground notification and wakeLock active so OS does not freeze JS or network
+      updateMediaNotification(true, 'off', false, false, {
+        title: `Downloading Playlist (${tracksToDownload.length} tracks)`,
+        artist: 'Rivo Vault • Keep in Background',
+        duration: tracksToDownload.length * 60,
+        currentTime: 0
+      });
+      for (let idx = 0; idx < tracksToDownload.length; idx++) {
+        const track = tracksToDownload[idx];
+        updateMediaNotification(true, 'off', false, false, {
+          title: `Downloading (${idx + 1}/${tracksToDownload.length}): ${track.title || 'Track'}`,
+          artist: track.artist || 'Rivo Vault',
+          duration: tracksToDownload.length,
+          currentTime: idx + 1
+        });
+        await handleDownloadTrack(track, false);
+        await new Promise(r => setTimeout(r, 300));
+      }
+      showToast('All tracks downloaded offline', 'info');
+    } finally {
+      if (!wasPlayingBeforeDownload && !isPlayingRef.current) {
+        hideMediaNotification();
+      } else if (currentTrackRef.current) {
+        const cur = currentTrackRef.current;
+        const isLikedTrack = likedTrackIds.some(id => String(id) === String(cur._id || cur.id));
+        updateMediaNotification(isPlayingRef.current, repeatModeRef.current, isShuffleRef.current, isLikedTrack, cur);
+      }
     }
-    showToast('All tracks downloaded offline', 'info');
   };
 
   const syncFromOnlineTrack = useCallback(({ track, isPlaying: onlinePlaying, currentTime: onlineTime, duration: onlineDur }) => {

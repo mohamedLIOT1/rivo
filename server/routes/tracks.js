@@ -861,10 +861,16 @@ router.get('/stream-proxy', async (req, res) => {
     });
 
     res.status(response.status);
+    const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
     for (const [key, value] of Object.entries(response.headers)) {
-      res.setHeader(key, value);
+      if (!HOP_BY_HOP.includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
     }
     res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', 'Range');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
     response.data.pipe(res);
   } catch (err) {
     res.status(500).send('Proxy streaming failed');

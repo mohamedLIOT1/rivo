@@ -400,7 +400,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Fast sync: 50ms if paused so friends/Discord see pause immediately, 500ms when playing to throttle track changes
     const delay = isPlaying ? 500 : 50;
     const timeout = setTimeout(() => {
-      const actuallyPlaying = Boolean(isPlaying && (!audioRef.current || !audioRef.current.paused || isChangingTrackRef.current));
+      const actuallyPlaying = Boolean(isPlaying && audioRef.current && !audioRef.current.paused && !isChangingTrackRef.current);
       fetch(`${API_BASE_URL}/api/users/listening-activity`, {
         method: 'POST',
         headers: {
@@ -601,6 +601,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
         stallRecoveryTimerRef.current = null;
       }
       resumeAudioContext();
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      if (token && currentTrackRef.current) {
+        const curDur = (durationRef.current > 0 ? durationRef.current : currentTrackRef.current.duration) || 0;
+        const curSec = audio.currentTime || 0;
+        const pTrack = { ...currentTrackRef.current, duration: curDur };
+        if (socketRef.current) {
+          socketRef.current.emit('activity:listening', { track: pTrack, isPlaying: true, currentTime: curSec });
+        }
+        fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ track: pTrack, isPlaying: true, currentTime: curSec })
+        }).catch(() => {});
+      }
     };
     // If audio stream stalls or connection was dropped by server while paused:
     // Automatically re-establish Range connection at exact current second without freezing or requiring manual seek!

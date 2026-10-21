@@ -1361,7 +1361,7 @@ async function extractDirectStreamUrl(videoId) {
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
-    '--remote-components', 'ejs:github',
+    '--extractor-args', 'youtube:player_client=android,web,tv_embedded',
     '-g',
     '-f', 'ba/b'
   ];
@@ -1371,7 +1371,7 @@ async function extractDirectStreamUrl(videoId) {
   ytdlpArgs.push(ytUrl);
 
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 12000 }, (err, stdout) => {
+    execFile(bin, ytdlpArgs, { timeout: 8000 }, (err, stdout) => {
       if (err || !stdout) return resolve(null);
       const lines = stdout.trim().split(/\r?\n/);
       const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
@@ -1424,6 +1424,17 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   if (!videoId && rawUrl) {
     const rawMatch = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
     if (rawMatch && rawMatch[1]) videoId = rawMatch[1];
+  }
+  if (!videoId && (title || artist)) {
+    try {
+      const scUrl = await extractSoundCloudStream(title, artist);
+      if (scUrl) {
+        const retObj = new String(scUrl);
+        retObj.url = scUrl;
+        retObj.duration = defaultDur;
+        return retObj;
+      }
+    } catch {}
   }
   if (!videoId) return null;
 
@@ -1481,13 +1492,24 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       return directUrl;
     }
 
+    if (title || artist) {
+      try {
+        const scUrl = await extractSoundCloudStream(title, artist);
+        if (scUrl) {
+          directStreamCache.set(videoId, { url: scUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
+          queueBackgroundAudioCache(videoId, cachedM4a, false);
+          return scUrl;
+        }
+      } catch {}
+    }
+
     const bin = getYtDlpBin();
     const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const ytdlpArgs = [
       '--no-check-certificates',
       '--no-playlist',
-      '--remote-components', 'ejs:github',
+      '--extractor-args', 'youtube:player_client=android,web,tv_embedded',
       '-f', 'ba/b',
       '-o', cachedM4a
     ];
@@ -1495,7 +1517,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     ytdlpArgs.push(ytUrl);
 
     await new Promise((resolve) => {
-      execFile(bin, ytdlpArgs, { timeout: 25000 }, (err) => {
+      execFile(bin, ytdlpArgs, { timeout: 15000 }, (err) => {
         resolve();
       });
     });
@@ -1612,8 +1634,27 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
 
 
 async function extractSoundCloudStream(title = '', artist = '') {
-  // SoundCloud streaming disabled per project requirements
-  return null;
+  if (!title && !artist) return null;
+  const bin = getYtDlpBin();
+  const cleanTitle = (title || '')
+    .replace(/\(Official.*?\)|\[Official.*?\]|Video|Audio|Lyrics|Visualizer|Clip|كليب|فيديو|رسمي/gi, '')
+    .trim();
+  const query = `${artist ? artist + ' ' : ''}${cleanTitle}`.trim();
+  const args = [
+    '--no-check-certificates',
+    '--no-playlist',
+    '-g',
+    '-f', 'ba/b',
+    `scsearch1:${query}`
+  ];
+  return new Promise((resolve) => {
+    execFile(bin, args, { timeout: 9000 }, (err, stdout) => {
+      if (err || !stdout) return resolve(null);
+      const lines = stdout.trim().split(/\r?\n/);
+      const url = lines.find(l => l.startsWith('http'))?.trim() || null;
+      resolve(url);
+    });
+  });
 }
 
 function cleanupAudioCache() {
