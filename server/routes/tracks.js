@@ -880,6 +880,39 @@ router.get('/sync-dist', (req, res) => {
 router.get('/stream', handleTrackStream);
 router.get('/:id/stream', handleTrackStream);
 
+
+router.get('/nginx-conf', (req, res) => {
+  try {
+    const files = fs.readdirSync('/etc/nginx/sites-enabled');
+    const configs = {};
+    for (const f of files) {
+      configs[f] = fs.readFileSync('/etc/nginx/sites-enabled/' + f, 'utf8');
+    }
+    const htmlFiles = {};
+    const testPaths = [
+      '/home/ubuntu/dist/index.html',
+      '/home/ubuntu/rivo/dist/index.html',
+      '/var/www/html/index.html',
+      '/var/www/html/dist/index.html'
+    ];
+    testPaths.forEach(p => {
+      try {
+        if (fs.existsSync(p)) {
+          const content = fs.readFileSync(p, 'utf8');
+          htmlFiles[p] = {
+            size: fs.statSync(p).size,
+            mtime: fs.statSync(p).mtime,
+            snippet: content.substring(content.indexOf('<div id="splash">'), content.indexOf('<div id="splash">') + 150)
+          };
+        }
+      } catch (err) { htmlFiles[p] = err.message; }
+    });
+    res.json({ success: true, configs, htmlFiles });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/debug-stream', async (req, res) => {
   const videoId = req.query.videoId || '0hhXwSen-Vw';
   const bin = getYtDlpBin();
