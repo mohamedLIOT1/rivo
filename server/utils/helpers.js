@@ -632,13 +632,14 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
   try {
     const bin = getYtDlpBin();
     const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
-    const ytdlpArgs = ['--no-check-certificates', '--get-id', `ytsearch1:${finalQuery}`];
+    const simpleQ = `${cleanArt} ${cleanTit}`.trim() || finalQuery;
+    const ytdlpArgs = ['--no-check-certificates', '--no-playlist', '--get-id', `ytsearch1:${simpleQ}`];
     if (fs.existsSync(cookiesPath)) {
       ytdlpArgs.splice(1, 0, '--cookies', cookiesPath);
     }
 
     const videoId = await new Promise((resolve) => {
-      execFile(bin, ytdlpArgs, { timeout: 6000 }, (err, stdout) => {
+      execFile(bin, ytdlpArgs, { timeout: 10000 }, (err, stdout) => {
         if (err || !stdout) return resolve(null);
         const lines = stdout.trim().split(/\r?\n/);
         const id = lines.find(l => /^[a-zA-Z0-9_-]{11}$/.test(l.trim()));
@@ -1651,7 +1652,7 @@ async function extractSoundCloudStream(title = '', artist = '') {
     execFile(bin, args, { timeout: 9000 }, (err, stdout) => {
       if (err || !stdout) return resolve(null);
       const lines = stdout.trim().split(/\r?\n/);
-      const url = lines.find(l => l.startsWith('http'))?.trim() || null;
+      const url = lines.find(l => l.startsWith('http') && !l.includes('preview-media') && !l.includes('/preview/'))?.trim() || null;
       resolve(url);
     });
   });
