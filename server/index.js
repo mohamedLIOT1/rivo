@@ -355,7 +355,7 @@ app.post('/api/deploy-webhook', (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
-  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
+  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm run build && node -e "const fs=require(\'fs\'),path=require(\'path\');const s=\'dist\',d=\'/home/ubuntu/dist\';if(fs.existsSync(s)&&fs.existsSync(d)){for(const f of fs.readdirSync(s)){const sp=path.join(s,f),dp=path.join(d,f);if(fs.statSync(sp).isFile())fs.copyFileSync(sp,dp);}const sa=\'dist/assets\',da=\'/home/ubuntu/dist/assets\';if(fs.existsSync(sa)){if(!fs.existsSync(da))fs.mkdirSync(da,{recursive:true});for(const f of fs.readdirSync(sa))fs.copyFileSync(path.join(sa,f),path.join(da,f));}}" && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 

@@ -819,6 +819,35 @@ const handleTrackStream = async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 };
+router.get('/sync-dist', (req, res) => {
+  try {
+    const srcDir = path.join(__dirname, '../../dist');
+    const destDir = '/home/ubuntu/dist';
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    const copied = [];
+    for (const f of fs.readdirSync(srcDir)) {
+      const srcFile = path.join(srcDir, f);
+      const destFile = path.join(destDir, f);
+      if (fs.statSync(srcFile).isFile()) {
+        fs.copyFileSync(srcFile, destFile);
+        copied.push(f);
+      }
+    }
+    const srcAssets = path.join(srcDir, 'assets');
+    const destAssets = path.join(destDir, 'assets');
+    if (fs.existsSync(srcAssets)) {
+      if (!fs.existsSync(destAssets)) fs.mkdirSync(destAssets, { recursive: true });
+      for (const af of fs.readdirSync(srcAssets)) {
+        fs.copyFileSync(path.join(srcAssets, af), path.join(destAssets, af));
+        copied.push('assets/' + af);
+      }
+    }
+    res.json({ success: true, copied });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/stream', handleTrackStream);
 router.get('/:id/stream', handleTrackStream);
 
