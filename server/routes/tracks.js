@@ -888,14 +888,31 @@ router.get('/debug-stream', async (req, res) => {
     }
   } catch (e) {}
 
-  let rivoIndex = '';
-  let ubuntuIndex = '';
+  let rootIndexHtml = '';
+  let distIndexHtml = '';
+  let ubuntuIndexHtml = '';
   try {
-    rivoIndex = fs.readFileSync(path.join(__dirname, '../../dist/index.html'), 'utf8').substring(0, 500);
-  } catch (e) { rivoIndex = e.message; }
+    rootIndexHtml = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
+  } catch (e) { rootIndexHtml = e.message; }
   try {
-    ubuntuIndex = fs.readFileSync('/home/ubuntu/dist/index.html', 'utf8').substring(0, 500);
-  } catch (e) { ubuntuIndex = e.message; }
+    distIndexHtml = fs.readFileSync(path.join(__dirname, '../../dist/index.html'), 'utf8');
+  } catch (e) { distIndexHtml = e.message; }
+  try {
+    ubuntuIndexHtml = fs.readFileSync('/home/ubuntu/dist/index.html', 'utf8');
+  } catch (e) { ubuntuIndexHtml = e.message; }
+
+  try {
+    if (distIndexHtml && distIndexHtml.length > 1000) {
+      fs.writeFileSync('/home/ubuntu/dist/index.html', distIndexHtml, 'utf8');
+      ubuntuIndexHtml = fs.readFileSync('/home/ubuntu/dist/index.html', 'utf8');
+    }
+  } catch (e) {}
+
+  const extractSplash = (html) => {
+    const idx = html.indexOf('<div id="splash">');
+    if (idx === -1) return 'NOT_FOUND';
+    return html.substring(idx, idx + 250);
+  };
   
   execFile(bin, ['--version'], { env: execEnv }, (verErr, verStdout) => {
     const args = ['--no-check-certificates', '--no-playlist', '--js-runtimes', 'node', '-g', '-f', 'ba/b'];
@@ -914,8 +931,9 @@ router.get('/debug-stream', async (req, res) => {
         cookiesPath: cp,
         version: verStdout ? verStdout.trim() : (verErr?.message || null),
         execPath: process.execPath,
-        rivoIndexHasDisc: rivoIndex.includes('rivo-front-disc'),
-        ubuntuIndexHasDisc: ubuntuIndex.includes('rivo-front-disc'),
+        splashInRootIndex: extractSplash(rootIndexHtml),
+        splashInDistIndex: extractSplash(distIndexHtml),
+        splashInUbuntuIndex: extractSplash(ubuntuIndexHtml),
         rivoIndexSnippet: rivoIndex.substring(0, 120),
         ubuntuIndexSnippet: ubuntuIndex.substring(0, 120),
         nginxConfig: nginxConfig.substring(0, 2500),
