@@ -1167,19 +1167,29 @@ const bgDownloadQueue = [];
 
 function getYtDlpBin() {
   const isWin = process.platform === 'win32';
-  if (!isWin) {
-    if (fs.existsSync('/usr/local/bin/yt-dlp')) return '/usr/local/bin/yt-dlp';
-    if (fs.existsSync('/usr/bin/yt-dlp')) return '/usr/bin/yt-dlp';
-    if (fs.existsSync('/home/ubuntu/.local/bin/yt-dlp')) return '/home/ubuntu/.local/bin/yt-dlp';
-  }
-  const binDir = path.join(__dirname, '../../bin');
-  const localBin = path.join(binDir, isWin ? 'yt-dlp.exe' : 'yt-dlp');
-  if (fs.existsSync(localBin)) {
-    if (!isWin) {
-      try { fs.chmodSync(localBin, 0o755); } catch {}
+  const binName = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+  
+  const possiblePaths = [
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    '/home/ubuntu/.local/bin/yt-dlp',
+    '/home/ubuntu/rivo/bin/yt-dlp',
+    '/home/ubuntu/bin/yt-dlp',
+    path.join(__dirname, '../../bin', binName),
+    path.join(__dirname, '../bin', binName),
+    path.join(process.cwd(), 'bin', binName),
+    path.join(process.cwd(), '../bin', binName)
+  ];
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      if (!isWin) {
+        try { fs.chmodSync(p, 0o755); } catch {}
+      }
+      return p;
     }
-    return localBin;
   }
+
   return 'yt-dlp';
 }
 
