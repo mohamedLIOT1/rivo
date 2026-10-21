@@ -1368,13 +1368,15 @@ function processNextBgDownload() {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
+    '--js-runtimes', 'node',
     '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-f', 'ba[ext=m4a]/ba/bestaudio',
     '-o', targetFile,
     ytUrl
   ];
 
-  const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
+  const nodeBinDir = path.dirname(process.execPath);
+  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, (err) => {
     activeBackgroundDownloads.delete(videoId);
     processNextBgDownload();
@@ -1395,13 +1397,15 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
+    '--js-runtimes', 'node',
     '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-g',
     '-f', 'ba/b',
     ytUrl
   ];
 
-  const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
+  const nodeBinDir = path.dirname(process.execPath);
+  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   return new Promise((resolve) => {
     execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err, stdout) => {
       if (stdout) {
@@ -1410,7 +1414,7 @@ async function extractDirectStreamUrl(videoId) {
         if (directUrl) return resolve(directUrl);
       }
       // Instant fallback without extractor args
-      execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-g', '-f', 'ba/b', ytUrl], { timeout: 15000, env: execEnv }, (err2, stdout2) => {
+      execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '-g', '-f', 'ba/b', ytUrl], { timeout: 15000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/);
         const directUrl2 = lines2.find(l => l.startsWith('http'))?.trim() || null;
@@ -1597,13 +1601,15 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       '--no-check-certificates',
       '--no-playlist',
       '--no-warnings',
+      '--js-runtimes', 'node',
       '--extractor-args', 'youtube:player_client=android,ios,mweb',
       '-f', 'ba/b',
       '-o', cachedM4a,
       ytUrl
     ];
 
-    const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
+    const nodeBinDir = path.dirname(process.execPath);
+    const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
     await new Promise((resolve) => {
       execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err) => {
         resolve();
