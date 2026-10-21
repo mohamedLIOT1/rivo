@@ -33,13 +33,28 @@ const trackCreateLimiter = rateLimit({
   message: { error: 'Too many tracks created from this IP, please try again after 15 minutes.' }
 });
 
+// High-speed in-memory cache for public tracks
+let cachedPublicTracksJson = null;
+let cachedPublicTracksTime = 0;
+const TRACKS_CACHE_TTL = 45 * 1000;
+
+function invalidateTracksCache() {
+  cachedPublicTracksJson = null;
+  cachedPublicTracksTime = 0;
+}
+
 // Get all tracks with optional album / artist filters
 router.get('/', async (req, res) => {
   try {
+    const isDefaultRequest = !req.query.album && !req.query.artist;
+    if (isDefaultRequest && cachedPublicTracksJson && (Date.now() - cachedPublicTracksTime < TRACKS_CACHE_TTL)) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.send(cachedPublicTracksJson);
+    }
+
     const filter = {
       source: { $ne: 'SoundCloud' },
-      album: { $ne: 'SoundCloud' },
-      audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
+      album: { $ne: 'SoundCloud' }
     };
     if (req.query.album) {
       const rawAlbName = req.query.album.trim().replace(/^album-/i, '');
@@ -68,11 +83,21 @@ router.get('/', async (req, res) => {
       filter.artist = new RegExp(`^${req.query.artist.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
     }
     const raw = await Track.find(filter, { lyrics: 0 }).sort({ createdAt: -1 }).limit(4000).lean();
-    const tracks = raw.map(t => ({
-      ...t,
-      id: String(t._id),
-      isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre))
-    }));
+    const tracks = raw
+      .filter(t => !t.audioUrl || (!t.audioUrl.includes('soundcloud.com') && !t.audioUrl.includes('sndcdn.com')))
+      .map(t => ({
+        ...t,
+        id: String(t._id),
+        isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre))
+      }));
+
+    if (isDefaultRequest) {
+      cachedPublicTracksJson = JSON.stringify({ success: true, tracks });
+      cachedPublicTracksTime = Date.now();
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.send(cachedPublicTracksJson);
+    }
+
     res.json({ success: true, tracks });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -125,6 +150,7 @@ router.post('/by-ids', async (req, res) => {
 
 // Import track from Spotify/YouTube link
 const importTrackHandler = async (req, res) => {
+  invalidateTracksCache();
   try {
     const rawUrl = (req.body.url || '').trim();
     if (!rawUrl) return res.status(400).json({ error: 'Song link / URL is required' });
@@ -443,6 +469,7 @@ router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio',
 
 // Create track manually with strict schema validation against mass assignment
 const createTrackHandler = async (req, res) => {
+  invalidateTracksCache();
   try {
     const { title, artist, album, cover, audioUrl, duration, genre, lyrics } = req.body;
     if (!title || typeof title !== 'string' || !title.trim()) {
@@ -514,6 +541,7 @@ router.post('/add', auth, trackCreateLimiter, createTrackHandler);
 
 // Delete track (Admin Only)
 const deleteTrackHandler = async (req, res) => {
+  invalidateTracksCache();
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Permission denied. Only administrators can delete songs from the website.' });
@@ -566,6 +594,7 @@ router.post('/delete', adminAuth, deleteTrackHandler);
 
 // Edit / Update track details (Admin Only)
 const updateTrackHandler = async (req, res) => {
+  invalidateTracksCache();
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Permission denied. Only administrators can edit songs.' });

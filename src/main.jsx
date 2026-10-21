@@ -14,3 +14,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+if (typeof window !== 'undefined' && typeof window.removeSplash === 'function') {
+  requestAnimationFrame(() => {
+    window.removeSplash();
+  });
+}

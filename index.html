@@ -23,10 +23,14 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Fonts -->
+    <!-- Fonts: Preconnect & Preload to prevent render blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    </noscript>
 
     <!-- Splash Screen Style -->
     <style>
@@ -36,38 +40,24 @@
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         gap: 18px;
-        transition: opacity 0.5s ease;
+        transition: opacity 0.25s ease-out;
       }
       #splash .rivo-logo-wrap {
         position: relative;
-        width: 100px; height: 100px;
-      }
-      #splash .rivo-shadow-disc {
-        position: absolute;
-        inset: 0;
-        transform: translate(6px, 6px);
-        background: #17a398;
-        border-radius: 9999px;
-        border: 3px solid #0b1110;
-      }
-      #splash .rivo-front-disc {
-        position: absolute;
-        inset: 0;
-        background: #fdfbf7;
-        border-radius: 9999px;
-        border: 3px solid #0b1110;
+        width: 104px; height: 104px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 52px;
-        font-weight: 900;
-        color: #0b1110;
-        font-family: 'Space Grotesk', sans-serif;
-        text-shadow: 2px 0px 0px rgba(23, 163, 152, 0.7), -1px 0px 0px rgba(220, 38, 38, 0.4);
+      }
+      #splash .rivo-logo-wrap img {
+        width: 100px;
+        height: 100px;
+        object-fit: contain;
+        filter: drop-shadow(0 4px 16px rgba(23,163,152,0.5));
       }
       #splash h1 {
         color: #fdfbf7; font-size: 34px; font-weight: 900;
-        font-family: 'Space Grotesk', sans-serif;
+        font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
         letter-spacing: -0.5px; margin: 0;
         text-shadow: 2px 2px 0px #0b1110;
       }
@@ -85,8 +75,7 @@
     <!-- Splash Screen -->
     <div id="splash">
       <div class="rivo-logo-wrap">
-        <div class="rivo-shadow-disc"></div>
-        <div class="rivo-front-disc">R</div>
+        <img src="/logo.png" alt="Rivo" />
       </div>
       <h1>RIVO</h1>
       <p>Pure Sound Relief • Est. 1954</p>
@@ -96,16 +85,21 @@
 
     <script type="module" src="/src/main.jsx"></script>
     <script>
-      // Remove splash when app is ready
-      const removeSplash = () => {
+      // Fast splash removal
+      window.removeSplash = () => {
         const splash = document.getElementById('splash');
         if (splash && splash.style.opacity !== '0') {
+          splash.style.transition = 'opacity 0.25s ease-out';
           splash.style.opacity = '0';
-          setTimeout(() => splash.remove(), 500);
+          splash.style.pointerEvents = 'none';
+          setTimeout(() => splash.remove(), 260);
         }
       };
-      window.addEventListener('load', () => setTimeout(removeSplash, 600));
-      setTimeout(removeSplash, 2500);
+      window.addEventListener('load', () => window.removeSplash());
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(window.removeSplash, 150);
+      });
+      setTimeout(window.removeSplash, 1000);
 
       // Register updated Service Worker (Web only; strictly disabled in Tauri/Desktop to avoid asset stalls)
       if ('serviceWorker' in navigator) {
@@ -128,7 +122,6 @@
                 newWorker?.addEventListener('statechange', () => {
                   if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                     newWorker.postMessage({ type: 'SKIP_WAITING' });
-                    window.location.reload();
                   }
                 });
               });

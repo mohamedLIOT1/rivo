@@ -109,6 +109,9 @@ function AppContent() {
     if (typeof window !== 'undefined' && (window.RIVO_NATIVE || window.ReactNativeWebView)) {
       setIsNativeApp(true);
     }
+    if (typeof window !== 'undefined' && typeof window.removeSplash === 'function') {
+      window.removeSplash();
+    }
   }, []);
   const [topSearchQuery, setTopSearchQuery]   = useState(initialNav.params?.query || '');
   const [selectedArtist, setSelectedArtist]   = useState(() => {

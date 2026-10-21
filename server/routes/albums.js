@@ -14,9 +14,23 @@ const {
   escapeRegex
 } = require('../utils/helpers');
 
+// High-speed in-memory cache for albums
+let cachedAlbumsJson = null;
+let cachedAlbumsTime = 0;
+const ALBUMS_CACHE_TTL = 60 * 1000;
+
+function invalidateAlbumsCache() {
+  cachedAlbumsJson = null;
+  cachedAlbumsTime = 0;
+}
+
 // Get all albums
 router.get('/', async (req, res) => {
   try {
+    if (cachedAlbumsJson && (Date.now() - cachedAlbumsTime < ALBUMS_CACHE_TTL)) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.send(cachedAlbumsJson);
+    }
     const albums = await Album.find().sort({ updatedAt: -1 }).lean();
     const formatted = albums.map(a => {
       const trackCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
@@ -29,7 +43,10 @@ router.get('/', async (req, res) => {
         tracks: a.tracks || []
       };
     });
-    res.json({ success: true, albums: formatted });
+    cachedAlbumsJson = JSON.stringify({ success: true, albums: formatted });
+    cachedAlbumsTime = Date.now();
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.send(cachedAlbumsJson);
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -186,6 +203,7 @@ router.get('/:id', async (req, res) => {
 
 // Admin: Create / Upload Album
 const createAlbumHandler = async (req, res) => {
+  invalidateAlbumsCache();
   try {
     const { name, artist, cover, linkUrl, releaseDate, genre, trackIds = [], isQuran = false, description = '' } = req.body;
     if (!name || !name.trim()) {
@@ -238,6 +256,7 @@ router.post('/create', adminAuth, createAlbumHandler);
 
 // Admin: Import Album from YouTube / Spotify Link
 const importAlbumHandler = async (req, res) => {
+  invalidateAlbumsCache();
   try {
     const { url, name, artist, cover, releaseDate, genre, isQuran, description } = req.body;
     if (!url || !url.trim()) {
@@ -420,6 +439,7 @@ router.post('/import', adminAuth, importAlbumHandler);
 
 // Admin: Edit / Update Album Details
 const updateAlbumHandler = async (req, res) => {
+  invalidateAlbumsCache();
   try {
     const albumId = req.params.id;
     const { name, artist, cover, linkUrl, releaseDate, genre, trackIds } = req.body;
@@ -456,6 +476,7 @@ router.post('/:id/update', adminAuth, updateAlbumHandler);
 
 // Admin: Delete Album
 const deleteAlbumHandler = async (req, res) => {
+  invalidateAlbumsCache();
   try {
     const albumId = req.params.id;
     const deleteTracks = req.body?.deleteTracks !== false;
