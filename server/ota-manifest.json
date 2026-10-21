@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.8.1",
+  "version": "1.9.8.2",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "إصلاح تشغيل كافة الأغاني واستعادة الشعار الأصلي وتجديد الروابط التالفة تلقائياً",
-  "notesEn": "Fix all song playback, restore 3D logo, and auto-heal broken links",
-  "bundleSize": 3267655,
+  "notes": "تحديث OTA v1.9.8.2 • استمرار تشغيل الأغاني بالخلفية تلقائياً • تسريع التقديم والتأخير والنتوفيكيشن • دعم تحميل البلاي ليست بالخلفية • إصلاح حالة الاستماع",
+  "notesEn": "OTA v1.9.8.2: Background auto-advance fix, instant seeking & notification controls, background playlist downloads, and listening activity fix",
+  "bundleSize": 3267708,
   "sizeMb": "3.12 MB",
-  "updatedAt": "2026-10-21T13:12:26.644Z"
+  "updatedAt": "2026-10-21T13:37:08.083Z"
 }

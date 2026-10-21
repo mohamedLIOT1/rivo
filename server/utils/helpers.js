@@ -1167,6 +1167,11 @@ const bgDownloadQueue = [];
 
 function getYtDlpBin() {
   const isWin = process.platform === 'win32';
+  if (!isWin) {
+    if (fs.existsSync('/usr/local/bin/yt-dlp')) return '/usr/local/bin/yt-dlp';
+    if (fs.existsSync('/usr/bin/yt-dlp')) return '/usr/bin/yt-dlp';
+    if (fs.existsSync('/home/ubuntu/.local/bin/yt-dlp')) return '/home/ubuntu/.local/bin/yt-dlp';
+  }
   const binDir = path.join(__dirname, '../../bin');
   const localBin = path.join(binDir, isWin ? 'yt-dlp.exe' : 'yt-dlp');
   if (fs.existsSync(localBin)) {
@@ -1174,11 +1179,6 @@ function getYtDlpBin() {
       try { fs.chmodSync(localBin, 0o755); } catch {}
     }
     return localBin;
-  }
-  if (!isWin) {
-    if (fs.existsSync('/usr/local/bin/yt-dlp')) return '/usr/local/bin/yt-dlp';
-    if (fs.existsSync('/usr/bin/yt-dlp')) return '/usr/bin/yt-dlp';
-    if (fs.existsSync('/home/ubuntu/.local/bin/yt-dlp')) return '/home/ubuntu/.local/bin/yt-dlp';
   }
   return 'yt-dlp';
 }
@@ -1357,13 +1357,15 @@ function processNextBgDownload() {
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
+    '--no-warnings',
     '--extractor-args', 'youtube:player_client=visionos,android',
     '-f', 'ba[ext=m4a]/ba/bestaudio',
     '-o', targetFile,
     ytUrl
   ];
 
-  execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
+  const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
+  execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, (err) => {
     activeBackgroundDownloads.delete(videoId);
     processNextBgDownload();
   });
@@ -1382,14 +1384,16 @@ async function extractDirectStreamUrl(videoId) {
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
+    '--no-warnings',
     '--extractor-args', 'youtube:player_client=visionos,android',
     '-g',
     '-f', 'ba/b',
     ytUrl
   ];
 
+  const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 15000 }, (err, stdout) => {
+    execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err, stdout) => {
       if (!stdout) return resolve(null);
       const lines = stdout.trim().split(/\r?\n/);
       const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
@@ -1445,12 +1449,15 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId && (title || artist)) {
     try {
-      const scUrl = await extractSoundCloudStream(title, artist, options);
-      if (scUrl) {
-        const retObj = new String(scUrl);
-        retObj.url = scUrl;
-        retObj.duration = defaultDur;
-        return retObj;
+      const scResult = await extractSoundCloudStream(title, artist, options);
+      if (scResult) {
+        const scUrl = typeof scResult === 'object' ? scResult.url : String(scResult);
+        if (scUrl && !scUrl.includes('.m3u8')) {
+          const retObj = new String(scUrl);
+          retObj.url = scUrl;
+          retObj.duration = defaultDur;
+          return retObj;
+        }
       }
     } catch {}
   }
@@ -1481,18 +1488,22 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
   const cachedStream = directStreamCache.get(videoId);
   if (cachedStream && Date.now() < cachedStream.expireAt) {
-    queueBackgroundAudioCache(videoId, cachedM4a, true);
-    const retObj = new String(cachedStream.url);
-    retObj.url = cachedStream.url;
-    retObj.duration = defaultDur;
-    retObj.videoId = videoId;
-    return retObj;
+    if (cachedStream.url && cachedStream.url.includes('.m3u8')) {
+      directStreamCache.delete(videoId);
+    } else {
+      queueBackgroundAudioCache(videoId, cachedM4a, true);
+      const retObj = new String(cachedStream.url);
+      retObj.url = cachedStream.url;
+      retObj.duration = defaultDur;
+      retObj.videoId = videoId;
+      return retObj;
+    }
   }
 
   if (downloadingAudioMap.has(videoId)) {
     try {
       const url = await downloadingAudioMap.get(videoId);
-      if (url) {
+      if (url && !url.includes('.m3u8')) {
         const retObj = new String(url);
         retObj.url = url;
         retObj.duration = defaultDur;
@@ -1525,7 +1536,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       } catch {}
     }
 
-    if (directUrl) {
+    if (directUrl && !directUrl.includes('.m3u8')) {
       directStreamCache.set(videoId, { url: directUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
       queueBackgroundAudioCache(videoId, cachedM4a, true);
       return directUrl;
@@ -1533,15 +1544,31 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     if (title || artist) {
       try {
-        const scUrl = await extractSoundCloudStream(title, artist, {
+        const scResult = await extractSoundCloudStream(title, artist, {
           album: options?.album,
           duration: defaultDur,
           strictDuration: true
         });
-        if (scUrl) {
-          directStreamCache.set(videoId, { url: scUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
-          queueBackgroundAudioCache(videoId, cachedM4a, false);
-          return scUrl;
+        if (scResult) {
+          const scUrl = typeof scResult === 'object' ? scResult.url : String(scResult);
+          const isM3u8 = scUrl.includes('.m3u8');
+          if (!isM3u8) {
+            directStreamCache.set(videoId, { url: scUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
+            queueBackgroundAudioCache(videoId, cachedM4a, false);
+            return scUrl;
+          } else {
+            // It's an M3U8 stream! HTML5 <audio> on Chrome/desktop cannot play M3U8 directly!
+            // Download to cachedM4a immediately using yt-dlp:
+            const bin = getYtDlpBin();
+            const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
+            const scSource = scResult.webpageUrl || scUrl;
+            await new Promise((resolve) => {
+              execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba/b', '-o', cachedM4a, scSource], { timeout: 25000, env: execEnv }, () => resolve());
+            });
+            if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
+              return `/uploads/audio-cache/${videoId}.m4a`;
+            }
+          }
         }
       } catch {}
     }
@@ -1551,14 +1578,16 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     const ytdlpArgs = [
       '--no-check-certificates',
       '--no-playlist',
+      '--no-warnings',
       '--extractor-args', 'youtube:player_client=visionos,android',
       '-f', 'ba/b',
       '-o', cachedM4a,
       ytUrl
     ];
 
+    const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
     await new Promise((resolve) => {
-      execFile(bin, ytdlpArgs, { timeout: 15000 }, (err) => {
+      execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err) => {
         resolve();
       });
     });
@@ -1723,13 +1752,22 @@ async function extractSoundCloudStream(title = '', artist = '', options = {}) {
           if (!item) continue;
 
           let audioUrl = null;
+          let isM3u8 = false;
           if (Array.isArray(item.formats)) {
-            const httpFmt = item.formats.find(f => f.url && f.protocol === 'http' && (f.ext === 'mp3' || f.vcodec === 'none'));
-            const anyFmt = item.formats.find(f => f.url && f.url.startsWith('http') && !f.url.includes('preview-media') && !f.url.includes('/preview/'));
-            audioUrl = httpFmt?.url || anyFmt?.url || null;
+            const progressiveFmt = item.formats.find(f => f.url && f.url.startsWith('http') && !f.url.includes('.m3u8') && !f.protocol?.includes('m3u8') && !f.url.includes('preview-media') && !f.url.includes('/preview/'));
+            if (progressiveFmt?.url) {
+              audioUrl = progressiveFmt.url;
+            } else {
+              const anyFmt = item.formats.find(f => f.url && f.url.startsWith('http') && !f.url.includes('preview-media') && !f.url.includes('/preview/'));
+              if (anyFmt?.url) {
+                audioUrl = anyFmt.url;
+                isM3u8 = anyFmt.url.includes('.m3u8') || Boolean(anyFmt.protocol?.includes('m3u8'));
+              }
+            }
           }
           if (!audioUrl && item.url && item.url.startsWith('http')) {
             audioUrl = item.url;
+            isM3u8 = item.url.includes('.m3u8');
           }
           if (!audioUrl) continue;
 
@@ -1754,6 +1792,8 @@ async function extractSoundCloudStream(title = '', artist = '', options = {}) {
 
           candidates.push({
             url: audioUrl,
+            webpageUrl: item.webpage_url || (item.url && item.url.startsWith('http') && !item.url.includes('.m3u8') ? item.url : null),
+            isM3u8: isM3u8,
             duration: dur,
             durDiff: durDiff !== null ? durDiff : 999,
             matchesVersion: matchesVersion ? 1 : 0
@@ -1765,10 +1805,17 @@ async function extractSoundCloudStream(title = '', artist = '', options = {}) {
 
       candidates.sort((a, b) => {
         if (b.matchesVersion !== a.matchesVersion) return b.matchesVersion - a.matchesVersion;
+        if (!a.isM3u8 && b.isM3u8) return -1;
+        if (a.isM3u8 && !b.isM3u8) return 1;
         return a.durDiff - b.durDiff;
       });
 
-      resolve(candidates[0].url);
+      const chosen = candidates[0];
+      const resObj = new String(chosen.url);
+      resObj.url = chosen.url;
+      resObj.webpageUrl = chosen.webpageUrl;
+      resObj.isM3u8 = chosen.isM3u8;
+      resolve(resObj);
     });
   });
 }

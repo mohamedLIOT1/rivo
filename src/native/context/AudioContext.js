@@ -541,6 +541,10 @@ export const AudioProvider = ({ children }) => {
 
     if (!isSeekingRef.current && !status.isBuffering) {
       if (isPlayingRef.current !== status.isPlaying) {
+        // If track just finished, it is transitioning to next track — do NOT treat as user pause!
+        if (status.didJustFinish) {
+          return;
+        }
         setIsPlaying(status.isPlaying);
         isPlayingRef.current = status.isPlaying;
         if (!isLoadingRef.current) {
@@ -1307,6 +1311,7 @@ export const AudioProvider = ({ children }) => {
       } catch {}
       broadcastListeningActivity(track, true, 0);
     } catch (err) {
+      broadcastListeningActivity(null, false, 0);
       if (playRequestSeqRef.current === requestSeq) {
         isLoadingRef.current = false;
         setIsLoading(false);
@@ -1504,14 +1509,11 @@ export const AudioProvider = ({ children }) => {
     }
 
     try {
-      await soundRef.current.setPositionAsync(safeSecs * 1000);
-      if (wasPlaying) {
-        await soundRef.current.playAsync().catch(() => {});
-      }
+      await soundRef.current.setPositionAsync(Math.round(safeSecs * 1000));
     } catch {} finally {
       setTimeout(() => {
         isSeekingRef.current = false;
-      }, 300);
+      }, 200);
     }
 
     if (wasPlaying) {
@@ -1527,6 +1529,9 @@ export const AudioProvider = ({ children }) => {
   };
 
   const playNextTrack = (forceLocal = false) => {
+    shouldBePlayingRef.current = true;
+    isPlayingRef.current = true;
+    setIsPlaying(true);
     // 1. Advance shared room queue if active in Jam
     if (!forceLocal && jamSyncRef.current.jamSession && jamSyncRef.current.socket) {
       const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;

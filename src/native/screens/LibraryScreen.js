@@ -69,6 +69,7 @@ export default function LibraryScreen({
     tracks: audioTracks,
     downloadedTracks = [],
     handleDownloadTrack,
+    handleDownloadPlaylist,
     addMultipleToQueue,
     setQueue,
   } = useAudioPlayer();
@@ -359,15 +360,16 @@ export default function LibraryScreen({
     setDownloadProgress({ done: 0, total: toDownload.length });
     showToast(`Downloading ${toDownload.length} track(s)...`, 'info');
 
-    let count = 0;
-    for (const t of toDownload) {
-      try {
-        await handleDownloadTrack(t);
-        count++;
-        setDownloadProgress({ done: count, total: toDownload.length });
-      } catch (err) {
-        console.warn('Playlist track dl error:', err.message);
+    try {
+      if (handleDownloadPlaylist) {
+        await handleDownloadPlaylist(toDownload);
+      } else {
+        for (const t of toDownload) {
+          await handleDownloadTrack(t);
+        }
       }
+    } catch (err) {
+      console.warn('Playlist track dl error:', err.message);
     }
 
     setIsDownloadingAll(false);
