@@ -55,7 +55,7 @@ try {
     enabled: true,
     version: targetVersion,
     bundleUrl: '/downloads/ota/index.android.bundle',
-    minAppVersion: '1.9.0',
+    minAppVersion: '1.9.7',
     notes,
     notesEn,
     bundleSize: stat.size,

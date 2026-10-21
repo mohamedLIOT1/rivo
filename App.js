@@ -1,4 +1,3 @@
-import { LOGO_BASE64 } from './src/native/assets/logoBase64';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
@@ -866,11 +865,12 @@ function NativeAppShell() {
           onPress={() => setActiveTab('home')}
           activeOpacity={0.8}
         >
-          <Image
-            source={{ uri: LOGO_BASE64 }}
-            style={{ width: 28, height: 28, borderRadius: 14, marginRight: 6 }}
-            resizeMode="contain"
-          />
+          <View style={styles.logoBadge}>
+            <View style={styles.logoTealOffset} />
+            <View style={styles.logoCreamDisc}>
+              <Text style={styles.logoLetter}>R</Text>
+            </View>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
             <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
@@ -1308,8 +1308,11 @@ const styles = StyleSheet.create({
   },
   logoLetter: {
     fontWeight: '900',
-    fontSize: 15,
+    fontSize: 16,
     color: '#0b1110',
+    textAlign: 'center',
+    includeFontPadding: false,
+    lineHeight: 20,
   },
   brandTitle: {
     fontSize: 18,

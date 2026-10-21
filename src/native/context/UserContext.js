@@ -40,62 +40,115 @@ export const UserProvider = ({ children }) => {
 
   const loadStoredAuth = async () => {
     try {
-      const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
-      const storedUser = await AsyncStorage.getItem(USER_KEY);
-      const cachedTracks = await AsyncStorage.getItem(CACHE_TRACKS_KEY);
-      const cachedPlaylists = await AsyncStorage.getItem(CACHE_PLAYLISTS_KEY);
-      const cachedAlbums = await AsyncStorage.getItem(CACHE_ALBUMS_KEY);
+      // 1. FAST PATH: Read token & user profile in parallel and apply immediately (0ms delay!)
+      const [storedToken, storedUser] = await Promise.all([
+        AsyncStorage.getItem(TOKEN_KEY),
+        AsyncStorage.getItem(USER_KEY)
+      ]);
 
-      if (cachedAlbums) {
+      let userObj = null;
+      let activeToken = storedToken;
+
+      if (storedUser) {
         try {
-          const parsedAlb = JSON.parse(cachedAlbums);
-          if (Array.isArray(parsedAlb)) setAlbums(parsedAlb);
+          userObj = JSON.parse(storedUser);
         } catch {}
       }
 
-      if (cachedTracks) {
-        const parsed = JSON.parse(cachedTracks);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const updatedParsed = parsed.map(t => {
-            if (!t) return t;
-            const tid = String(t._id || t.id || '');
-            if (tid.startsWith('6aad57190ece10647dd1e91')) {
-              const matched = INITIAL_TRACKS.find(it => (it.title || '').toLowerCase() === (t.title || '').toLowerCase());
-              return matched || t;
-            }
-            return t;
-          });
-          const cleaned = deduplicateTrackList(updatedParsed.filter(t => 
-            t &&
-            t.source !== 'SoundCloud' &&
-            t.album !== 'SoundCloud' &&
-            !String(t.audioUrl || '').includes('soundcloud.com') &&
-            !String(t.audioUrl || '').includes('sndcdn.com') &&
-            !String(t.id || t._id || '').startsWith('sc-')
-          ));
-          if (cleaned.length > 6) {
-            setTracks(cleaned);
-            AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
+      // Check legacy keys fallback if not found
+      if (!userObj || !activeToken) {
+        try {
+          const [legacyToken, legacyUser] = await Promise.all([
+            AsyncStorage.getItem('rivo_token'),
+            AsyncStorage.getItem('rivo_user')
+          ]);
+          if (!activeToken && legacyToken) {
+            activeToken = legacyToken;
+            AsyncStorage.setItem(TOKEN_KEY, legacyToken).catch(() => {});
           }
-        }
-      }
-      if (cachedPlaylists) {
-        const parsedPl = JSON.parse(cachedPlaylists);
-        if (Array.isArray(parsedPl)) {
-          setPlaylists(normalizePlaylists(parsedPl));
-        }
+          if (!userObj && legacyUser) {
+            try {
+              userObj = JSON.parse(legacyUser);
+              AsyncStorage.setItem(USER_KEY, legacyUser).catch(() => {});
+            } catch {}
+          }
+        } catch {}
       }
 
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        const userObj = JSON.parse(storedUser);
+      if (userObj) {
         setCurrentUser(userObj);
         setLikedTrackIds(userObj.likedTrackIds || []);
-        syncUserData(storedToken);
       }
+      if (activeToken) {
+        setToken(activeToken);
+      }
+
+      // Mark auth as loaded immediately! Header, username, avatar and account render instantly!
+      setIsAuthLoaded(true);
+
+      // Background network sync
+      if (activeToken) {
+        syncUserData(activeToken).catch(() => {});
+      }
+
+      // 2. BACKGROUND PATH: Load cached tracks, playlists, albums without blocking user account
+      setTimeout(async () => {
+        try {
+          const [cachedTracks, cachedPlaylists, cachedAlbums] = await Promise.all([
+            AsyncStorage.getItem(CACHE_TRACKS_KEY),
+            AsyncStorage.getItem(CACHE_PLAYLISTS_KEY),
+            AsyncStorage.getItem(CACHE_ALBUMS_KEY)
+          ]);
+
+          if (cachedAlbums) {
+            try {
+              const parsedAlb = JSON.parse(cachedAlbums);
+              if (Array.isArray(parsedAlb)) setAlbums(parsedAlb);
+            } catch {}
+          }
+
+          if (cachedPlaylists) {
+            try {
+              const parsedPl = JSON.parse(cachedPlaylists);
+              if (Array.isArray(parsedPl)) {
+                setPlaylists(normalizePlaylists(parsedPl));
+              }
+            } catch {}
+          }
+
+          if (cachedTracks) {
+            try {
+              const parsed = JSON.parse(cachedTracks);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const updatedParsed = parsed.map(t => {
+                  if (!t) return t;
+                  const tid = String(t._id || t.id || '');
+                  if (tid.startsWith('6aad57190ece10647dd1e91')) {
+                    const matched = INITIAL_TRACKS.find(it => (it.title || '').toLowerCase() === (t.title || '').toLowerCase());
+                    return matched || t;
+                  }
+                  return t;
+                });
+                const cleaned = deduplicateTrackList(updatedParsed.filter(t => 
+                  t &&
+                  t.source !== 'SoundCloud' &&
+                  t.album !== 'SoundCloud' &&
+                  !String(t.audioUrl || '').includes('soundcloud.com') &&
+                  !String(t.audioUrl || '').includes('sndcdn.com') &&
+                  !String(t.id || t._id || '').startsWith('sc-')
+                ));
+                if (cleaned.length > 6) {
+                  setTracks(cleaned);
+                }
+              }
+            } catch {}
+          }
+        } catch (err) {
+          console.warn('Background cache load notice:', err);
+        }
+      }, 0);
     } catch (e) {
       console.warn('loadStoredAuth error:', e);
-    } finally {
       setIsAuthLoaded(true);
     }
   };
@@ -141,10 +194,14 @@ export const UserProvider = ({ children }) => {
   const syncUserData = async (activeToken) => {
     const t = activeToken || token;
     if (!t) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${t}` },
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       if (res.ok) {
         const data = await res.json();
         if (data.user) {

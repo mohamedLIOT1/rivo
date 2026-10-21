@@ -113,33 +113,33 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.7.4',
+      version: '1.9.7.5',
       name: 'Rivo Web',
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.9.7.4',
+      version: '1.9.7.5',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo_Setup.exe',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
     android: {
-      version: '1.9.7.4',
-      build: 69,
+      version: '1.9.7.5',
+      build: 70,
       name: 'Rivo for Android (APK)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.apk',
-      directFile: 'Rivo-v1.9.3.apk',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
+      directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
+      notes: 'تحديث v1.9.7.5 • إصلاح شعار Rivo الرسمي • تشغيل الحساب الفوري 0ms • محرك تحديثات هوائية فائق السرعة'
     },
     ios: {
-      version: '1.9.3',
-      build: 63,
+      version: '1.9.6',
+      build: 65,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.3/Rivo-v1.9.3.ipa',
-      directFile: 'Rivo-v1.9.3.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
+      directFile: 'Rivo.ipa',
       mandatory: false,
       notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
     }
@@ -155,32 +155,32 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.7.4',
+      version: '1.9.7.5',
       name: 'Rivo Web (Beta)',
       notes: 'Preview build with test features and latest optimisations.'
     },
     windows: {
-      version: '1.9.7.4',
+      version: '1.9.7.5',
       name: 'Rivo Desktop for Windows (Beta)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo_Setup.exe',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
-      notes: 'Beta v1.9.7: Security patches, in-place self-updater, and offline player enhancements.'
+      notes: 'Beta v1.9.7.5: Security patches, in-place self-updater, and offline player enhancements.'
     },
     android: {
-      version: '1.9.7.4',
-      build: 69,
+      version: '1.9.7.5',
+      build: 70,
       name: 'Rivo for Android (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.7.apk',
-      directFile: 'Rivo-v1.9.7.apk',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
+      directFile: 'Rivo.apk',
       mandatory: false,
       notes: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
       notesEn: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
       ota: {
         enabled: true,
-        version: '1.9.7.4',
+        version: '1.9.7.5',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.0',
+        minAppVersion: '1.9.7',
         notes: 'Fast update • White branding logo • Auto-exit restart • High performance',
         notesEn: 'Fast update • White branding logo • Auto-exit restart • High performance'
       }
@@ -189,8 +189,8 @@ const BETA_VERSIONS_DATA = {
       version: '1.9.6',
       build: 65,
       name: 'Rivo for iOS (Beta Testing)',
-      downloadUrl: 'https://github.com/WhooAre-you/Rivo/releases/download/v1.9.6/Rivo-v1.9.6.ipa',
-      directFile: 'Rivo-v1.9.6.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
+      directFile: 'Rivo.ipa',
       mandatory: false,
       notes: 'Beta v1.9.6: Unsigned IPA build with automatic installer cache cleaner and offline player stability.'
     }
@@ -266,18 +266,38 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
     return res.download(localFile, filename);
   }
 
-  // 2. Specific version redirect if filename specifies a version (e.g. Rivo-v1.9.6.apk)
+  // 2. If any APK was requested and exact file not found, serve the active Rivo.apk
+  if (filename.toLowerCase().endsWith('.apk')) {
+    const mainApk = path.join(__dirname, '../public/downloads/Rivo.apk');
+    if (fs.existsSync(mainApk)) {
+      return res.download(mainApk, filename);
+    }
+    const altApk = path.join(__dirname, '../public/downloads/Rivo-v1.9.7.apk');
+    if (fs.existsSync(altApk)) {
+      return res.download(altApk, filename);
+    }
+  }
+
+  // 3. If Windows EXE is requested
+  if (filename.toLowerCase().endsWith('.exe')) {
+    const mainExe = path.join(__dirname, '../public/downloads/Rivo_Setup.exe');
+    if (fs.existsSync(mainExe)) {
+      return res.download(mainExe, filename);
+    }
+  }
+
+  // 4. Specific version redirect if filename specifies a version (e.g. Rivo-v1.9.6.apk)
   const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
   if (vMatch) {
     const requestedVersion = vMatch[1];
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
-  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.3';
+  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.7.5';
 
-  // 3. Fallback redirect to latest GitHub Release based on file extension
+  // 5. Fallback redirect based on file extension
   if (filename.endsWith('.apk')) {
-    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.apk`);
+    return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);
   }
   if (filename.endsWith('.ipa')) {
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.ipa`);

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.7.4",
+  "version": "1.9.7.5",
   "bundleUrl": "/downloads/ota/index.android.bundle",
-  "minAppVersion": "1.9.0",
-  "notes": "Fast update • Official 3D white logo • Clean exit restart • All fixes",
-  "notesEn": "Fast update • Official 3D white logo • Clean exit restart • All fixes",
-  "bundleSize": 3264345,
+  "minAppVersion": "1.9.7",
+  "notes": "Fast update • Official 3D white logo • Instant account load • Clean exit restart",
+  "notesEn": "Fast update • Official 3D white logo • Instant account load • Clean exit restart",
+  "bundleSize": 3259628,
   "sizeMb": "3.11 MB",
-  "updatedAt": "2026-10-20T22:57:18.663Z"
+  "updatedAt": "2026-10-21T07:47:55.780Z"
 }
