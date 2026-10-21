@@ -918,7 +918,11 @@ router.get('/debug-stream', async (req, res) => {
         ubuntuIndexHasDisc: ubuntuIndex.includes('rivo-front-disc'),
         rivoIndexSnippet: rivoIndex.substring(0, 120),
         ubuntuIndexSnippet: ubuntuIndex.substring(0, 120),
-        nginxConfig: nginxConfig.substring(0, 400),
+        nginxConfig: nginxConfig.substring(0, 2500),
+        realUbuntuPath: path.resolve('/home/ubuntu/dist/index.html'),
+        realRivoPath: path.resolve(path.join(__dirname, '../../dist/index.html')),
+        ubuntuIndexLength: ubuntuIndex.length,
+        rivoIndexLength: rivoIndex.length,
         error: err?.message || null,
         stderr: stderr || null,
         stdout: stdout ? stdout.trim().slice(0, 150) : null
