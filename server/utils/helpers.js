@@ -1378,17 +1378,22 @@ function processNextBgDownload() {
 
   activeBackgroundDownloads.add(videoId);
   const bin = getYtDlpBin();
+  const cp = getCookiesPath();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
     '--js-runtimes', 'node',
-    '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-f', 'ba[ext=m4a]/ba/bestaudio',
     '-o', targetFile,
     ytUrl
   ];
+  if (cp) {
+    ytdlpArgs.splice(1, 0, '--cookies', cp);
+  } else {
+    ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+  }
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
@@ -1416,11 +1421,14 @@ async function extractDirectStreamUrl(videoId) {
     '--no-playlist',
     '--no-warnings',
     '--js-runtimes', 'node',
-    '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-g',
     '-f', 'ba/b'
   ];
-  if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
+  if (cp) {
+    ytdlpArgs.splice(1, 0, '--cookies', cp);
+  } else {
+    ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+  }
   ytdlpArgs.push(ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
@@ -1595,11 +1603,14 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       '--no-playlist',
       '--no-warnings',
       '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android,ios,mweb',
       '-f', 'ba/b',
       '-o', cachedM4a
     ];
-    if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
+    if (cp) {
+      ytdlpArgs.splice(1, 0, '--cookies', cp);
+    } else {
+      ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+    }
     ytdlpArgs.push(ytUrl);
 
     const nodeBinDir = path.dirname(process.execPath);
@@ -1913,6 +1924,7 @@ module.exports = {
   searchTracksInternal,
   scrapePlaylistOrAlbum,
   autoAddTrackToUserLinksPlaylist,
+  getCookiesPath,
   getYtDlpBin,
   ensureYtDlpBinary,
   initWarmYtWorker,

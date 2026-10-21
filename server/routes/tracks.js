@@ -20,6 +20,7 @@ const {
   resolveOfficialYouTubeAudioStream,
   getTrackKey,
   fetchLrclibLyrics,
+  getCookiesPath,
   getYtDlpBin
 } = require('../utils/helpers');
 
@@ -825,14 +826,25 @@ router.get('/debug-stream', async (req, res) => {
   const videoId = req.query.videoId || '0hhXwSen-Vw';
   const bin = getYtDlpBin();
   const binExists = fs.existsSync(bin);
+  const cp = getCookiesPath();
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   
   execFile(bin, ['--version'], { env: execEnv }, (verErr, verStdout) => {
-    execFile(bin, ['--no-check-certificates', '--no-playlist', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=android,ios,mweb', '-g', '-f', 'ba/b', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000, env: execEnv }, (err, stdout, stderr) => {
+    const args = ['--no-check-certificates', '--no-playlist', '--js-runtimes', 'node', '-g', '-f', 'ba/b'];
+    if (cp) {
+      args.splice(1, 0, '--cookies', cp);
+    } else {
+      args.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+    }
+    args.push(`https://www.youtube.com/watch?v=${videoId}`);
+
+    execFile(bin, args, { timeout: 15000, env: execEnv }, (err, stdout, stderr) => {
       res.json({
         bin,
         binExists,
+        hasCookies: Boolean(cp),
+        cookiesPath: cp,
         version: verStdout ? verStdout.trim() : (verErr?.message || null),
         execPath: process.execPath,
         error: err?.message || null,
