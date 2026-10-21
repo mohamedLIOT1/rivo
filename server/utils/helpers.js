@@ -1503,12 +1503,6 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
       return `/uploads/audio-cache/${videoId}.m4a`;
     }
-    if (title || artist) {
-      try {
-        const scUrl = await extractSoundCloudStream(title, artist);
-        if (scUrl) return scUrl;
-      } catch {}
-    }
     return null;
   })();
 
@@ -1618,24 +1612,8 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
 
 
 async function extractSoundCloudStream(title = '', artist = '') {
-  if (!title && !artist) return null;
-  const bin = getYtDlpBin();
-  const query = `${artist ? artist + ' ' : ''}${title}`.trim();
-  const args = [
-    '--no-check-certificates',
-    '--no-playlist',
-    '-g',
-    '-f', 'ba/b',
-    `scsearch1:${query}`
-  ];
-  return new Promise((resolve) => {
-    execFile(bin, args, { timeout: 8000 }, (err, stdout) => {
-      if (err || !stdout) return resolve(null);
-      const lines = stdout.trim().split(/\r?\n/);
-      const url = lines.find(l => l.startsWith('http'))?.trim() || null;
-      resolve(url);
-    });
-  });
+  // SoundCloud streaming disabled per project requirements
+  return null;
 }
 
 function cleanupAudioCache() {

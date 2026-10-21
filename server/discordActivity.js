@@ -72,6 +72,41 @@ async function disconnectUserSession(userId) {
   }
 }
 
+function extractTrackImageKey(track) {
+  if (!track) return null;
+  const candidates = [
+    track.youtubeId,
+    track.audioUrl,
+    track.url,
+    track.cover,
+    track.coverUrl,
+    track.id,
+    track._id
+  ];
+  for (const c of candidates) {
+    if (!c || typeof c !== 'string') continue;
+    const m = c.match(/(?:v=|youtu\.be\/|\/vi\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (m && m[1]) return 'youtube:' + m[1];
+    const m2 = c.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+    if (m2 && m2[1]) return 'youtube:' + m2[1];
+    if (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !/^[0-9a-fA-F]{24}$/.test(c.trim())) {
+      return 'youtube:' + c.trim();
+    }
+  }
+
+  const cover = track.cover || track.coverUrl || '';
+  if (typeof cover === 'string') {
+    if (cover.includes('i.scdn.co/image/')) {
+      const parts = cover.split('i.scdn.co/image/')[1]?.split('?')[0];
+      if (parts) return 'spotify:' + parts;
+    }
+    if (cover.startsWith('https://cdn.discordapp.com/') || cover.startsWith('https://media.discordapp.net/')) {
+      return cover;
+    }
+  }
+  return null;
+}
+
 async function applyTrackPresence(client, track, currentTime = 0) {
   if (!client || !client.user || !track) return;
   try {
@@ -79,52 +114,20 @@ async function applyTrackPresence(client, track, currentTime = 0) {
     const curSec = Math.max(0, Number(currentTime) || 0);
     const startTs = Date.now() - Math.round(curSec * 1000);
     const durationSec = track.duration && track.duration > 0 ? Math.round(track.duration) : 0;
-    const rawCover = track.cover || track.coverUrl || '';
-    let resolvedCover = 'https://rivo-m.duckdns.org/discord-badge.png';
-    if (rawCover && typeof rawCover === 'string') {
-      const trimmed = rawCover.trim();
-      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-        resolvedCover = trimmed;
-      } else if (trimmed.startsWith('//')) {
-        resolvedCover = `https:${trimmed}`;
-      } else if (trimmed.startsWith('/')) {
-        resolvedCover = `https://rivo-m.duckdns.org${trimmed}`;
-      } else if (!trimmed.startsWith('data:') && !trimmed.startsWith('file:')) {
-        resolvedCover = `https://rivo-m.duckdns.org/${trimmed}`;
-      }
-    }
-
-    const coverUrl = resolvedCover;
-    const iconUrl = 'https://rivo-m.duckdns.org/discord-badge.png';
-
-    let largeAsset = null;
-    let smallAsset = null;
-
-    try {
-      const assets = await RichPresence.getExternal(client, appId, coverUrl, iconUrl);
-      if (assets && assets[0]?.external_asset_path) largeAsset = assets[0].external_asset_path;
-      if (assets && assets[1]?.external_asset_path) smallAsset = assets[1].external_asset_path;
-    } catch (assetErr) {
-      console.warn('[Discord Activity] getExternal warning:', assetErr.message);
-    }
 
     const r = new RichPresence(client)
       .setApplicationId(appId)
       .setType('LISTENING')
       .setName('Rivo')
       .setDetails(track.title || 'Unknown Title')
-      .setState(track.artist ? `by ${track.artist}` : 'Rivo Music')
+      .setState(track.artist ? ('by ' + track.artist) : 'Rivo Music')
       .setStartTimestamp(startTs);
 
-    if (largeAsset) {
-      r.setAssetsLargeImage(largeAsset).setAssetsLargeText(track.album || track.title || 'Rivo');
-    } else if (coverUrl) {
-      r.setAssetsLargeImage(coverUrl).setAssetsLargeText(track.album || track.title || 'Rivo');
-    }
-    if (smallAsset) {
-      r.setAssetsSmallImage(smallAsset).setAssetsSmallText('Rivo Music');
-    } else if (iconUrl) {
-      r.setAssetsSmallImage(iconUrl).setAssetsSmallText('Rivo Music');
+    const imageKey = extractTrackImageKey(track);
+    if (imageKey) {
+      try {
+        r.setAssetsLargeImage(imageKey).setAssetsLargeText(track.album || track.title || 'Rivo');
+      } catch (e) {}
     }
 
     if (durationSec > 0) {
@@ -135,7 +138,6 @@ async function applyTrackPresence(client, track, currentTime = 0) {
       r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org');
     } catch (e) {}
 
-    // Set Rich Presence Activity (Listening to Rivo card)
     try {
       await client.user.setActivity(r);
     } catch (presenceErr) {
@@ -168,6 +170,11 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
     clearTimeout(userIdleTimers.get(uidStr));
     userIdleTimers.delete(uidStr);
   }
+
+  // Safety idle watchdog: if no listening activity ping is received within 40s, auto-disconnect
+  userIdleTimers.set(uidStr, setTimeout(() => {
+    disconnectUserSession(uidStr);
+  }, 40000));
 
   const rawToken = decryptToken(user.discord.token);
   if (!rawToken) {

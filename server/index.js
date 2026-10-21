@@ -342,7 +342,7 @@ app.post('/api/deploy-webhook', (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
-  const deployCmd = 'git fetch origin main && git reset --hard origin/main && (if [ -d "/home/ubuntu/rivo" ]; then cp -a /home/ubuntu/server/* /home/ubuntu/rivo/server/ 2>/dev/null || true; cp -a /home/ubuntu/public/* /home/ubuntu/rivo/public/ 2>/dev/null || true; cp -a /home/ubuntu/dist/* /home/ubuntu/rivo/dist/ 2>/dev/null || true; fi) && npm install --legacy-peer-deps && npm run build';
+  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && (if [ -d "/home/ubuntu/rivo" ]; then cp -a /home/ubuntu/server/* /home/ubuntu/rivo/server/ 2>/dev/null || true; cp -a /home/ubuntu/public/* /home/ubuntu/rivo/public/ 2>/dev/null || true; cp -a /home/ubuntu/dist/* /home/ubuntu/rivo/dist/ 2>/dev/null || true; fi)';
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 

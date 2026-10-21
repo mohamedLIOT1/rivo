@@ -63,10 +63,32 @@ export default function HomeScreen({
     return sortTracksByPopularity(displayTracks);
   }, [displayTracks]);
 
+  // Resilient album state with automatic on-demand fetch fallback so featured albums never disappear
+  const [fetchedAlbums, setFetchedAlbums] = useState(albums || []);
+  React.useEffect(() => {
+    if (albums && albums.length > 0) {
+      setFetchedAlbums(albums);
+    }
+  }, [albums]);
+
+  React.useEffect(() => {
+    if (!fetchedAlbums || fetchedAlbums.length === 0) {
+      fetch('/api/albums')
+        .then(r => r.json())
+        .then(d => {
+          if (d && d.success && Array.isArray(d.albums) && d.albums.length > 0) {
+            setFetchedAlbums(d.albums);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
   // Strictly filter out any Quran recitations/albums from Featured Albums on Home
   const displayAlbums = useMemo(() => {
-    return (albums || []).filter(alb => !isQuranContent(alb));
-  }, [albums]);
+    const list = (fetchedAlbums && fetchedAlbums.length > 0) ? fetchedAlbums : (albums || []);
+    return list.filter(alb => !isQuranContent(alb));
+  }, [fetchedAlbums, albums]);
 
   // Preset vibrant badge colors for blister packs
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];

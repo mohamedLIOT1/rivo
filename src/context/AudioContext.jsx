@@ -400,13 +400,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Fast sync: 50ms if paused so friends/Discord see pause immediately, 500ms when playing to throttle track changes
     const delay = isPlaying ? 500 : 50;
     const timeout = setTimeout(() => {
+      const actuallyPlaying = Boolean(isPlaying && (!audioRef.current || !audioRef.current.paused || isChangingTrackRef.current));
       fetch(`${API_BASE_URL}/api/users/listening-activity`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ track: payloadTrack, isPlaying, currentTime: curSec })
+        body: JSON.stringify({ track: actuallyPlaying ? payloadTrack : null, isPlaying: actuallyPlaying, currentTime: curSec })
       }).catch(() => {});
     }, delay);
 
@@ -765,6 +766,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (!streamResult?.url) {
         console.warn('[AudioContext] Could not resolve audio stream for track:', currentTrack.title);
         isChangingTrackRef.current = false;
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        if (token) {
+          fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ track: null, isPlaying: false, currentTime: 0 })
+          }).catch(() => {});
+        }
         return;
       }
 
