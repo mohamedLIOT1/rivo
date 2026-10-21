@@ -259,33 +259,8 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
         </div>
       )}
 
-      {/* ── BROWSER EXTENSION & AUTO-UPDATE FOOTER ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Discord Extension */}
-        <div className={`brutal-border p-6 shadow-[4px_4px_0px_#000] ${isDark ? 'bg-[#0b1413] border-[#1a2826]' : 'bg-white border-slate-300'}`}>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded bg-[#5865F2]/10 border border-[#5865F2]/30 flex items-center justify-center text-[#5865F2]">
-              <Radio className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="font-bold text-sm text-white uppercase">Rivo Discord Helper</h4>
-              <p className="text-xs text-slate-400 font-mono">Browser Extension for Web Player</p>
-            </div>
-          </div>
-          <p className="text-xs text-slate-300 leading-relaxed mb-4">
-            If you listen via Chrome, Edge, Brave or Opera, install the Rivo extension to show "Listening to Rivo" on your Discord profile automatically.
-          </p>
-          <div className="flex gap-3">
-            <a
-              href="/downloads/rivo-extension.zip"
-              download="rivo-discord-helper.zip"
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold uppercase brutal-border flex items-center gap-2"
-            >
-              <Download className="w-3.5 h-3.5" /> Download ZIP
-            </a>
-          </div>
-        </div>
-
+      {/* ── AUTO-UPDATE FOOTER ── */}
+      <div className="grid grid-cols-1 gap-6">
         {/* In-App Auto-Update Guarantee */}
         <div className={`brutal-border p-6 shadow-[4px_4px_0px_#000] ${isDark ? 'bg-[#0b1413] border-[#1a2826]' : 'bg-white border-slate-300'}`}>
           <div className="flex items-center gap-3 mb-3">

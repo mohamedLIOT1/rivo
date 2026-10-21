@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Zap, Download, FolderOpen } from 'lucide-react';
+import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Download, FolderOpen } from 'lucide-react';
 import { FULL_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
 import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage';
@@ -20,7 +20,6 @@ export default function SettingsModal({
   const [linkCode, setLinkCode] = useState('');
   const [tokenInput, setTokenInput] = useState('');
   const [showTokenInput, setShowTokenInput] = useState(false);
-  const [showExtensionGuide, setShowExtensionGuide] = useState(false);
   const [discordLoading, setDiscordLoading] = useState(false);
   const [discordMsg, setDiscordMsg] = useState('');
   const [copiedCode, setCopiedCode] = useState(false);
@@ -50,70 +49,6 @@ export default function SettingsModal({
     window.addEventListener('message', handleMsg);
     return () => window.removeEventListener('message', handleMsg);
   }, []);
-
-  const downloadExtensionZip = () => {
-    const a = document.createElement('a');
-    a.href = '/rivo-extension.zip';
-    a.download = 'rivo-discord-helper.zip';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
-
-  const handleExtensionSync = () => {
-    setDiscordLoading(true);
-    setDiscordMsg('Detecting Rivo Extension...');
-    let handled = false;
-
-    const timer = setTimeout(() => {
-      if (!handled) {
-        setDiscordLoading(false);
-        downloadExtensionZip();
-        setShowExtensionGuide(true);
-        setDiscordMsg('Extension not detected! Downloading rivo-discord-helper.zip...');
-      }
-    }, 1200);
-
-    const onMessage = async (e) => {
-      if (e.data?.type === 'RIVO_EXTENSION_PONG' || e.data?.type === 'RIVO_EXTENSION_SYNC_DONE') {
-        handled = true;
-        clearTimeout(timer);
-        window.removeEventListener('message', onMessage);
-
-        const token = e.data.token;
-        if (token) {
-          setDiscordMsg('Discord session found! Verifying and linking...');
-          const userToken = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-          try {
-            const res = await fetch(`${API_BASE_URL}/api/discord/link-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userToken}` },
-              body: JSON.stringify({ token })
-            });
-            const data = await res.json();
-            if (data.success) {
-              setDiscordStatus({ linked: true, username: data.username, enabled: true });
-              setDiscordMsg(`Linked successfully as @${data.username}!`);
-              setShowExtensionGuide(false);
-            } else {
-              setDiscordMsg(data.error || 'Failed to verify token');
-            }
-          } catch (err) {
-            setDiscordMsg('Failed to connect to Rivo server');
-          } finally {
-            setDiscordLoading(false);
-          }
-        } else {
-          setDiscordLoading(false);
-          setDiscordMsg('Extension active, but please open discord.com and sign in first.');
-        }
-      }
-    };
-
-    window.addEventListener('message', onMessage);
-    window.postMessage({ type: 'RIVO_EXTENSION_REQUEST_SYNC' }, '*');
-    window.postMessage({ type: 'RIVO_EXTENSION_PING' }, '*');
-  };
 
   const handleGenerateCode = async () => {
     setDiscordLoading(true);
@@ -309,49 +244,6 @@ export default function SettingsModal({
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              <button
-                onClick={handleExtensionSync}
-                disabled={discordLoading}
-                className="brutal-btn w-full py-2 px-3 bg-[#5865F2] hover:bg-[#4752c4] text-white font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center gap-2 cursor-pointer transition active:scale-95 disabled:opacity-50"
-              >
-                <Zap size={14} className="text-amber-300 fill-amber-300 animate-bounce" />
-                {discordLoading ? 'Connecting...' : '⚡ Connect with Extension (1-Click)'}
-              </button>
-
-              {showExtensionGuide && (
-                <div className={`p-3 brutal-border flex flex-col gap-2 ${
-                  isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono font-black uppercase text-[#26c4b7]">
-                      Install Extension (10s Setup)
-                    </span>
-                    <button
-                      onClick={downloadExtensionZip}
-                      className="text-[10px] font-mono font-bold text-[#5865F2] hover:underline cursor-pointer flex items-center gap-1"
-                    >
-                      <Download size={12} />
-                      Download .zip
-                    </button>
-                  </div>
-                  <ol className={`text-[10px] font-mono space-y-1 list-decimal list-inside ${
-                    isDark ? 'text-zinc-300' : 'text-[#082621]/80'
-                  }`}>
-                    <li>Extract the downloaded <b>rivo-discord-helper.zip</b></li>
-                    <li>Go to <b>chrome://extensions</b> & enable <b>Developer mode</b></li>
-                    <li>Click <b>Load unpacked</b> & select the extracted folder</li>
-                    <li>Make sure you are logged in on <b>discord.com</b></li>
-                  </ol>
-                  <button
-                    onClick={handleExtensionSync}
-                    disabled={discordLoading}
-                    className="brutal-btn mt-1 py-1 px-2 bg-[#17a398] hover:bg-[#13847b] text-white font-mono text-[10px] font-bold uppercase brutal-border flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Check size={12} />
-                    Done installing? Click to Connect
-                  </button>
-                </div>
-              )}
               {linkCode ? (
                 <div className={`p-3 brutal-border text-center ${
                   isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
