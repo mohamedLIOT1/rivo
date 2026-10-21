@@ -1498,7 +1498,28 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
 
   const extractPromise = (async () => {
-    const directUrl = await extractDirectStreamUrl(videoId);
+    let directUrl = await extractDirectStreamUrl(videoId);
+    if (!directUrl && (title || artist)) {
+      try {
+        const freshId = await searchYouTubeId({ artist, title, targetDuration });
+        if (freshId && String(freshId) !== videoId) {
+          const freshVidStr = String(freshId);
+          const freshStream = await extractDirectStreamUrl(freshVidStr);
+          if (freshStream) {
+            videoId = freshVidStr;
+            directUrl = freshStream;
+            Track.updateOne(
+              {
+                $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }],
+                source: { $ne: 'Upload' }
+              },
+              { $set: { audioUrl: `https://www.youtube.com/watch?v=${freshVidStr}` } }
+            ).catch(() => {});
+          }
+        }
+      } catch {}
+    }
+
     if (directUrl) {
       directStreamCache.set(videoId, { url: directUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
       queueBackgroundAudioCache(videoId, cachedM4a, true);

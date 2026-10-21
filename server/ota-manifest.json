@@ -3,9 +3,9 @@
   "version": "1.9.8.1",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "استعادة النسخة الأكثر استقراراً والشعار الأصلي وحل مشاكل تشغيل الأغاني",
-  "notesEn": "Restore stable version, 3D official logo, and audio playback fix",
+  "notes": "إصلاح تشغيل كافة الأغاني واستعادة الشعار الأصلي وتجديد الروابط التالفة تلقائياً",
+  "notesEn": "Fix all song playback, restore 3D logo, and auto-heal broken links",
   "bundleSize": 3267655,
   "sizeMb": "3.12 MB",
-  "updatedAt": "2026-10-21T13:06:54.640Z"
+  "updatedAt": "2026-10-21T13:12:26.644Z"
 }
