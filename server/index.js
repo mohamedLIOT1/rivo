@@ -355,7 +355,7 @@ app.post('/api/deploy-webhook', (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
-  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && (curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp 2>/dev/null || curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /home/ubuntu/.local/bin/yt-dlp 2>/dev/null || pip install --break-system-packages -U yt-dlp 2>/dev/null || pip3 install --break-system-packages -U yt-dlp 2>/dev/null || yt-dlp -U 2>/dev/null || true) && (chmod +x /usr/local/bin/yt-dlp /home/ubuntu/.local/bin/yt-dlp /home/ubuntu/bin/yt-dlp /home/ubuntu/rivo/bin/yt-dlp 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true) && (if [ -d "/home/ubuntu/rivo" ]; then cp -a /home/ubuntu/rivo/dist/* /home/ubuntu/dist/ 2>/dev/null || true; fi)';
+  const deployCmd = 'git fetch origin main && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 

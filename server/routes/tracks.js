@@ -829,6 +829,21 @@ router.get('/debug-stream', async (req, res) => {
   const cp = getCookiesPath();
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
+
+  let nginxConfig = '';
+  try {
+    const files = fs.readdirSync('/etc/nginx/sites-enabled');
+    nginxConfig = files.map(f => `${f}:\n` + fs.readFileSync(`/etc/nginx/sites-enabled/${f}`, 'utf8')).join('\n');
+  } catch (e) { nginxConfig = e.message; }
+
+  let rivoIndex = '';
+  let ubuntuIndex = '';
+  try {
+    rivoIndex = fs.readFileSync(path.join(__dirname, '../../dist/index.html'), 'utf8').substring(0, 500);
+  } catch (e) { rivoIndex = e.message; }
+  try {
+    ubuntuIndex = fs.readFileSync('/home/ubuntu/dist/index.html', 'utf8').substring(0, 500);
+  } catch (e) { ubuntuIndex = e.message; }
   
   execFile(bin, ['--version'], { env: execEnv }, (verErr, verStdout) => {
     const args = ['--no-check-certificates', '--no-playlist', '--js-runtimes', 'node', '-g', '-f', 'ba/b'];
@@ -847,6 +862,11 @@ router.get('/debug-stream', async (req, res) => {
         cookiesPath: cp,
         version: verStdout ? verStdout.trim() : (verErr?.message || null),
         execPath: process.execPath,
+        rivoIndexHasDisc: rivoIndex.includes('rivo-front-disc'),
+        ubuntuIndexHasDisc: ubuntuIndex.includes('rivo-front-disc'),
+        rivoIndexSnippet: rivoIndex.substring(0, 120),
+        ubuntuIndexSnippet: ubuntuIndex.substring(0, 120),
+        nginxConfig: nginxConfig.substring(0, 400),
         error: err?.message || null,
         stderr: stderr || null,
         stdout: stdout ? stdout.trim().slice(0, 150) : null
