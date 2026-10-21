@@ -558,6 +558,9 @@ const deleteTrackHandler = async (req, res) => {
     try {
       await Track.deleteOne({ _id: trackId });
     } catch {}
+    try {
+      await Album.updateMany({}, { $pull: { trackIds: trackId } });
+    } catch {}
 
     const users = await User.find({
       $or: [
