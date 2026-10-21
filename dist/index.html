@@ -45,15 +45,30 @@
       #splash .rivo-logo-wrap {
         position: relative;
         width: 104px; height: 104px;
+      }
+      #splash .rivo-shadow-disc {
+        position: absolute;
+        inset: 0;
+        transform: translate(6px, 6px);
+        background: #17a398;
+        border-radius: 9999px;
+        border: 3px solid #0b1110;
+        box-shadow: 0 4px 16px rgba(23,163,152,0.5);
+      }
+      #splash .rivo-front-disc {
+        position: absolute;
+        inset: 0;
+        background: #ffffff;
+        border-radius: 9999px;
+        border: 3px solid #0b1110;
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-      #splash .rivo-logo-wrap img {
-        width: 100px;
-        height: 100px;
-        object-fit: contain;
-        filter: drop-shadow(0 4px 16px rgba(23,163,152,0.5));
+        font-size: 54px;
+        font-weight: 900;
+        color: #0b1110;
+        font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+        text-shadow: 2px 0px 0px rgba(23, 163, 152, 0.7), -1px 0px 0px rgba(220, 38, 38, 0.4);
       }
       #splash h1 {
         color: #fdfbf7; font-size: 34px; font-weight: 900;
@@ -69,15 +84,16 @@
         text-transform: uppercase;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-D-_wtzRa.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-CFO1j1xJ.css">
+    <script type="module" crossorigin src="/assets/index-iix0SX6c.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-ioZrGOQj.css">
   </head>
   <body class="bg-[#082621] text-[#0b1110] antialiased select-none overflow-hidden" style="font-family:'Plus Jakarta Sans',sans-serif">
 
     <!-- Splash Screen -->
     <div id="splash">
       <div class="rivo-logo-wrap">
-        <img src="/logo.png" alt="Rivo" />
+        <div class="rivo-shadow-disc"></div>
+        <div class="rivo-front-disc">R</div>
       </div>
       <h1>RIVO</h1>
       <p>Pure Sound Relief • Est. 1954</p>

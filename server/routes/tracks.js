@@ -139,7 +139,12 @@ router.post('/by-ids', async (req, res) => {
       genre: t.genre,
       source: t.source || 'YouTube',
       isQuran: Boolean(t.isQuran),
-      lyrics: t.lyrics || []
+      lyrics: t.lyrics || [],
+      isVerified: Boolean(t.isVerified || t.lyricsVerified || t.isVerifiedLyrics),
+      lyricsVerified: Boolean(t.isVerified || t.lyricsVerified || t.isVerifiedLyrics),
+      isVerifiedLyrics: Boolean(t.isVerified || t.lyricsVerified || t.isVerifiedLyrics),
+      verifiedBy: t.verifiedBy || t.lyricsVerifiedBy || null,
+      lyricsVerifiedBy: t.verifiedBy || t.lyricsVerifiedBy || null
     }));
 
     res.json({ success: true, tracks: formatted });
@@ -1012,11 +1017,16 @@ router.get('/stream-proxy', async (req, res) => {
       headers,
       timeout: 25000,
       maxRedirects: 5,
-      beforeRedirect: async (options) => {
-        const nextUrl = options.href || `${options.protocol}//${options.host}${options.path}`;
-        const check = await validateSafeUrl(nextUrl);
-        if (!check.valid) {
-          throw new Error('Blocked SSRF redirect to forbidden host');
+      beforeRedirect: (options) => {
+        const nextUrl = options.href || (options.protocol + '//' + options.host + options.path);
+        try {
+          const u = new URL(nextUrl);
+          const host = u.hostname.toLowerCase();
+          if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) {
+            throw new Error('Blocked SSRF redirect to internal host');
+          }
+        } catch (e) {
+          throw new Error('Blocked SSRF redirect: ' + e.message);
         }
       },
       validateStatus: (status) => status < 400
@@ -1374,15 +1384,22 @@ router.get('/lyrics', async (req, res) => {
     const { trackId, title, artist } = req.query;
     const trackKey = getTrackKey(title, artist);
 
+    let trk = null;
+    if (trackId && mongoose.isValidObjectId(trackId)) {
+      try { trk = await Track.findById(trackId).lean(); } catch {}
+    }
+    const isTrackVerified = Boolean(trk?.isVerified || trk?.lyricsVerified || trk?.isVerifiedLyrics);
+    const verifiedBy = trk?.verifiedBy || trk?.lyricsVerifiedBy || '';
+
     if (trackKey && trackKey !== '___') {
       const found = await SongLyrics.findOne({ trackKey }).lean();
       if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
         return res.json({
           success: true,
           lyrics: found.lyrics,
-          source: found.source || 'manual',
-          isVerified: Boolean(found.isVerified),
-          verifiedBy: found.verifiedBy || ''
+          source: (found.isVerified || isTrackVerified) ? 'verified' : (found.source || 'manual'),
+          isVerified: Boolean(found.isVerified || isTrackVerified),
+          verifiedBy: found.verifiedBy || verifiedBy
         });
       }
     }
@@ -1393,38 +1410,57 @@ router.get('/lyrics', async (req, res) => {
         return res.json({
           success: true,
           lyrics: found.lyrics,
-          source: found.source || 'manual',
-          isVerified: Boolean(found.isVerified),
-          verifiedBy: found.verifiedBy || ''
+          source: (found.isVerified || isTrackVerified) ? 'verified' : (found.source || 'manual'),
+          isVerified: Boolean(found.isVerified || isTrackVerified),
+          verifiedBy: found.verifiedBy || verifiedBy
         });
       }
 
-      if (mongoose.isValidObjectId(trackId)) {
-        const trk = await Track.findById(trackId).lean();
-        if (trk && Array.isArray(trk.lyrics) && trk.lyrics.length > 0) {
-          return res.json({
-            success: true,
-            lyrics: trk.lyrics,
-            source: trk.isVerified ? 'verified' : 'manual',
-            isVerified: Boolean(trk.isVerified || trk.isVerifiedLyrics),
-            verifiedBy: trk.verifiedBy || ''
-          });
-        }
+      if (trk && Array.isArray(trk.lyrics) && trk.lyrics.length > 0) {
+        return res.json({
+          success: true,
+          lyrics: trk.lyrics,
+          source: isTrackVerified ? 'verified' : 'manual',
+          isVerified: isTrackVerified,
+          verifiedBy: verifiedBy
+        });
       }
     }
 
     if (title) {
       const lyrics = await fetchLrclibLyrics(title, artist, 180);
       if (lyrics && lyrics.length > 0) {
+        const shouldBeVerified = isTrackVerified;
         if (trackKey && trackKey !== '___') {
           SongLyrics.findOneAndUpdate(
             { trackKey },
-            { trackKey, trackId: trackId ? String(trackId) : undefined, title, artist, lyrics, source: 'synced', isVerified: false },
+            { 
+              $set: {
+                trackKey, 
+                trackId: trackId ? String(trackId) : undefined, 
+                title, 
+                artist, 
+                lyrics, 
+                source: shouldBeVerified ? 'verified' : 'synced', 
+                isVerified: shouldBeVerified,
+                ...(shouldBeVerified && verifiedBy ? { verifiedBy } : {})
+              } 
+            },
             { upsert: true }
           ).catch(() => {});
         }
-        return res.json({ success: true, lyrics, source: 'synced', isVerified: false });
+        return res.json({ 
+          success: true, 
+          lyrics, 
+          source: shouldBeVerified ? 'verified' : 'synced', 
+          isVerified: shouldBeVerified,
+          verifiedBy: shouldBeVerified ? verifiedBy : ''
+        });
       }
+    }
+
+    if (trk && isTrackVerified) {
+      return res.json({ success: true, lyrics: trk.lyrics || [], isVerified: true, verifiedBy });
     }
 
     res.json({ success: false, lyrics: [], isVerified: false });

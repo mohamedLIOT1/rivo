@@ -1431,8 +1431,6 @@ function processNextBgDownload() {
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
-  const cp = getCookiesPath();
-  if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
   execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, (err) => {
     activeBackgroundDownloads.delete(videoId);
     processNextBgDownload();
@@ -1454,31 +1452,29 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--js-runtimes', 'node',
-    '-g',
-    '-f', 'ba/b'
+    '--js-runtimes', 'node'
   ];
   if (cp) {
-    ytdlpArgs.splice(1, 0, '--cookies', cp);
+    ytdlpArgs.push('--cookies', cp);
   } else {
-    ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+    ytdlpArgs.push('--extractor-args', 'youtube:player_client=android,ios,mweb');
   }
-  ytdlpArgs.push(ytUrl);
+  ytdlpArgs.push('-g', '-f', 'ba/b', ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err, stdout) => {
+    execFile(bin, ytdlpArgs, { timeout: 35000, env: execEnv }, (err, stdout) => {
       if (stdout) {
         const lines = stdout.trim().split(/\r?\n/);
         const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
         if (directUrl) return resolve(directUrl);
       }
       // Instant fallback without extractor args
-      const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '-g', '-f', 'ba/b'];
-      if (cp) fbArgs.splice(1, 0, '--cookies', cp);
-      fbArgs.push(ytUrl);
-      execFile(bin, fbArgs, { timeout: 15000, env: execEnv }, (err2, stdout2) => {
+      const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node'];
+      if (cp) fbArgs.push('--cookies', cp);
+      fbArgs.push('-g', '-f', 'ba/b', ytUrl);
+      execFile(bin, fbArgs, { timeout: 35000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/);
         const directUrl2 = lines2.find(l => l.startsWith('http'))?.trim() || null;
@@ -1517,16 +1513,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       videoId = await searchYouTubeId({ artist, title, targetDuration });
       const confidence = Number(videoId?.confidence) || 0;
       // STOP permanently writing unverified audioUrl to MongoDB on runtime searches unless strict duration and title verification passes with >= 85% match confidence
-      if (videoId && (title || artist) && confidence >= 0.85) {
-        Track.updateOne(
-          {
-            $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }],
-            source: { $ne: 'Upload' },
-            audioUrl: { $not: /^\/?uploads\// }
-          },
-          { $set: { audioUrl: `https://www.youtube.com/watch?v=${videoId}` } }
-        ).catch(() => {});
-      }
+      // In-memory resolution only; do not overwrite DB track
     } catch {}
   }
   if (!videoId && rawUrl) {
@@ -1610,13 +1597,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
           if (freshStream) {
             videoId = freshVidStr;
             directUrl = freshStream;
-            Track.updateOne(
-              {
-                $or: [{ title, artist }, { _id: mongoose.isValidObjectId(rawUrl) ? rawUrl : null }],
-                source: { $ne: 'Upload' }
-              },
-              { $set: { audioUrl: `https://www.youtube.com/watch?v=${freshVidStr}` } }
-            ).catch(() => {});
+            // Auto-heal in memory only; do not corrupt DB track
           }
         }
       } catch {}

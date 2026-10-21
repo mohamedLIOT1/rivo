@@ -335,9 +335,9 @@ export default function FullPlayerModal({
           if (d.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
             const parsed = parseLrcLyrics(d.lyrics);
             setLocalLyrics(parsed);
-            const ver = Boolean(d.isVerified);
+            const ver = Boolean(d.isVerified || currentTrack.isVerified || currentTrack.lyricsVerified || currentTrack.isVerifiedLyrics);
             setIsLyricsVerified(ver);
-            setLyricsVerifiedBy(d.verifiedBy || null);
+            setLyricsVerifiedBy(d.verifiedBy || currentTrack.verifiedBy || currentTrack.lyricsVerifiedBy || null);
             currentTrack.lyrics = parsed;
             currentTrack.isVerified = ver;
             currentTrack.lyricsVerified = ver;
