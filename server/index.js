@@ -291,32 +291,51 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
     }
   }
 
-  // 3. If Windows EXE is requested
+  // 3. If iOS IPA was requested and exact file not found, serve the active Rivo.ipa
+  if (filename.toLowerCase().endsWith('.ipa')) {
+    const mainIpa = path.join(__dirname, '../public/downloads/Rivo.ipa');
+    if (fs.existsSync(mainIpa)) {
+      return res.download(mainIpa, filename);
+    }
+    const altIpa = path.join(__dirname, '../public/downloads/Rivo-v1.9.7.9.ipa');
+    if (fs.existsSync(altIpa)) {
+      return res.download(altIpa, filename);
+    }
+    const anyIpa = path.join(__dirname, '../public/downloads/Rivo-v1.9.6.ipa');
+    if (fs.existsSync(anyIpa)) {
+      return res.download(anyIpa, filename);
+    }
+  }
+
+  // 4. If Windows EXE is requested
   if (filename.toLowerCase().endsWith('.exe')) {
     const mainExe = path.join(__dirname, '../public/downloads/Rivo_Setup.exe');
     if (fs.existsSync(mainExe)) {
       return res.download(mainExe, filename);
     }
+    const altExe = path.join(__dirname, '../public/downloads/Rivo.exe');
+    if (fs.existsSync(altExe)) {
+      return res.download(altExe, filename);
+    }
   }
 
-  // 4. Specific version redirect if filename specifies a version (e.g. Rivo-v1.9.6.apk)
+  // 5. Final fallback if local files truly do not exist on disk
   const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
   if (vMatch) {
     const requestedVersion = vMatch[1];
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
-  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.7.5';
+  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.8.3';
 
-  // 5. Fallback redirect based on file extension
   if (filename.endsWith('.apk')) {
     return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);
   }
   if (filename.endsWith('.ipa')) {
-    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.ipa`);
+    return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.ipa`);
   }
   if (filename.endsWith('.exe')) {
-    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/latest/download/Rivo-v${ver}.exe`);
+    return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe`);
   }
 
   return res.status(404).json({ error: 'File not found' });
