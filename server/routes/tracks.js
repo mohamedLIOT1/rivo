@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 const rateLimit = require('express-rate-limit');
 const { Track, Album, User, SongLyrics } = require('../models');
 const { auth, adminAuth, optionalAuth, isAdminUser } = require('../middleware/auth');
@@ -18,7 +19,8 @@ const {
   autoAddTrackToUserLinksPlaylist,
   resolveOfficialYouTubeAudioStream,
   getTrackKey,
-  fetchLrclibLyrics
+  fetchLrclibLyrics,
+  getYtDlpBin
 } = require('../utils/helpers');
 
 // Rate limiter for track creation to prevent DoS / spam
@@ -818,6 +820,24 @@ const handleTrackStream = async (req, res) => {
 };
 router.get('/stream', handleTrackStream);
 router.get('/:id/stream', handleTrackStream);
+
+router.get('/debug-stream', async (req, res) => {
+  const videoId = req.query.videoId || '0hhXwSen-Vw';
+  const bin = getYtDlpBin();
+  const binExists = fs.existsSync(bin);
+  const nodeBinDir = path.dirname(process.execPath);
+  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
+  
+  execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=android,ios,mweb', '-g', '-f', 'ba/b', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000, env: execEnv }, (err, stdout, stderr) => {
+    res.json({
+      bin,
+      binExists,
+      error: err?.message || null,
+      stderr: stderr || null,
+      stdout: stdout ? stdout.trim().slice(0, 150) : null
+    });
+  });
+});
 
 // Stream Proxy with Range header support and Path Traversal / SSRF Protection
 router.get('/stream-proxy', async (req, res) => {
