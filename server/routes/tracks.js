@@ -1686,25 +1686,6 @@ const resolveStreamHandler = async (req, res) => {
 };
 router.get('/resolve-stream', resolveStreamHandler);
 
-// Purge SoundCloud tracks
-router.post('/purge-soundcloud', adminAuth, async (req, res) => {
-  try {
-    const scQuery = {
-      $or: [
-        { source: { $regex: /soundcloud/i } },
-        { audioUrl: { $regex: /soundcloud\.com|sndcdn\.com/i } },
-        { album: { $regex: /soundcloud/i } },
-        { originalUrl: { $regex: /soundcloud\.com/i } },
-        { id: { $regex: /^sc-/i } },
-      ]
-    };
-    const r = await Track.deleteMany(scQuery);
-    res.json({ success: true, deletedCount: r.deletedCount });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
 // Deduplicate tracks across DB (Admin Only)
 function normalizeArtistForDedupe(artist) {
   if (!artist) return '';

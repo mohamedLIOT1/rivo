@@ -8,18 +8,7 @@ import { API_BASE_URL } from '../config';
 const API = API_BASE_URL;
 export { API_BASE_URL };
 
-const migrateLegacyStorage = () => {
-  try {
-    const keys = ['token', 'user', 'tracks', 'playlists', 'liked', 'followed_artists', 'activity_panel_open', 'daily_seed_date', 'daily_seed_track', 'last_played_music_track', 'active_transitions', 'listening_stats_v2'];
-    keys.forEach(k => {
-      const oldVal = localStorage.getItem(`liofy_${k}`);
-      if (oldVal && !localStorage.getItem(`rivo_${k}`)) {
-        localStorage.setItem(`rivo_${k}`, oldVal);
-      }
-    });
-  } catch {}
-};
-migrateLegacyStorage();
+
 
 const getToken = () => {
   try { return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || ''; } catch { return ''; }
