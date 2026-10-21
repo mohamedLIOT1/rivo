@@ -377,6 +377,32 @@ app.post('/api/deploy-webhook', (req, res) => {
   });
 });
 
+try {
+  const srcDist = path.join(__dirname, '../dist');
+  const targetDist = '/home/ubuntu/dist';
+  if (fs.existsSync(srcDist) && fs.existsSync('/home/ubuntu') && srcDist !== targetDist) {
+    if (!fs.existsSync(targetDist)) fs.mkdirSync(targetDist, { recursive: true });
+    for (const file of fs.readdirSync(srcDist)) {
+      const srcFile = path.join(srcDist, file);
+      const targetFile = path.join(targetDist, file);
+      if (fs.statSync(srcFile).isFile()) {
+        fs.copyFileSync(srcFile, targetFile);
+      }
+    }
+    const srcAssets = path.join(srcDist, 'assets');
+    const targetAssets = path.join(targetDist, 'assets');
+    if (fs.existsSync(srcAssets)) {
+      if (!fs.existsSync(targetAssets)) fs.mkdirSync(targetAssets, { recursive: true });
+      for (const af of fs.readdirSync(srcAssets)) {
+        fs.copyFileSync(path.join(srcAssets, af), path.join(targetAssets, af));
+      }
+    }
+    console.log('[Startup] Successfully synced fresh web dist to /home/ubuntu/dist');
+  }
+} catch (e) {
+  console.error('[Startup] Failed to sync web dist:', e);
+}
+
 console.log('🚀 Rivo Server v1.9.3 (Auto-Deploy Enabled)');
 
 // Broadcast app update notification to all active web and mobile clients (Admin Only)

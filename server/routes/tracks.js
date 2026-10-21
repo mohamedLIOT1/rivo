@@ -865,6 +865,29 @@ router.get('/debug-stream', async (req, res) => {
     nginxConfig = files.map(f => `${f}:\n` + fs.readFileSync(`/etc/nginx/sites-enabled/${f}`, 'utf8')).join('\n');
   } catch (e) { nginxConfig = e.message; }
 
+  // Synchronously overwrite /home/ubuntu/dist with fresh build from /home/ubuntu/rivo/dist
+  try {
+    const srcDist = path.join(__dirname, '../../dist');
+    const targetDist = '/home/ubuntu/dist';
+    if (fs.existsSync(srcDist) && fs.existsSync(targetDist)) {
+      for (const file of fs.readdirSync(srcDist)) {
+        const srcFile = path.join(srcDist, file);
+        const targetFile = path.join(targetDist, file);
+        if (fs.statSync(srcFile).isFile()) {
+          fs.copyFileSync(srcFile, targetFile);
+        }
+      }
+      const srcAssets = path.join(srcDist, 'assets');
+      const targetAssets = path.join(targetDist, 'assets');
+      if (fs.existsSync(srcAssets)) {
+        if (!fs.existsSync(targetAssets)) fs.mkdirSync(targetAssets, { recursive: true });
+        for (const af of fs.readdirSync(srcAssets)) {
+          fs.copyFileSync(path.join(srcAssets, af), path.join(targetAssets, af));
+        }
+      }
+    }
+  } catch (e) {}
+
   let rivoIndex = '';
   let ubuntuIndex = '';
   try {
