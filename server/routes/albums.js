@@ -186,16 +186,33 @@ router.get('/:id', async (req, res) => {
       _id: String(t._id || t.id),
       ...t
     }));
+
+    // Filter out tracks that explicitly belong to a different album (e.g. accidentally linked tracks)
+    const albumNameNorm = (album.name || album.title || '').trim().toLowerCase();
+    const validTracks = formattedTracks.filter(t => {
+      if (!t) return false;
+      if (t.album && albumNameNorm && t.album.trim().toLowerCase() !== albumNameNorm) {
+        return false;
+      }
+      return true;
+    });
+
+    const cleanTrackIds = validTracks.map(t => String(t._id || t.id));
+    if (album.trackIds && album.trackIds.length !== cleanTrackIds.length) {
+      Album.updateOne({ _id: album._id }, { $set: { trackIds: cleanTrackIds } }).catch(() => {});
+      invalidateAlbumsCache();
+    }
+
     const formattedAlbum = {
       ...album,
       title: album.title || album.name || 'Untitled Album',
       name: album.name || album.title || 'Untitled Album',
-      trackCount: formattedTracks.length,
-      songsCount: formattedTracks.length,
-      tracks: formattedTracks,
-      trackIds: album.trackIds && album.trackIds.length > 0 ? album.trackIds : formattedTracks.map(t => t.id)
+      trackCount: validTracks.length,
+      songsCount: validTracks.length,
+      tracks: validTracks,
+      trackIds: cleanTrackIds
     };
-    res.json({ success: true, album: formattedAlbum, tracks: formattedTracks });
+    res.json({ success: true, album: formattedAlbum, tracks: validTracks });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
