@@ -1240,7 +1240,7 @@ opts = {
     'no_warnings': True,
     'nocheckcertificate': True,
     'noplaylist': True,
-    'extractor_args': {'youtube': {'player_client': ['visionos', 'android']}},
+    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb']}},
     'format': 'ba/b'
 }
 
@@ -1358,7 +1358,7 @@ function processNextBgDownload() {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--extractor-args', 'youtube:player_client=visionos,android',
+    '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-f', 'ba[ext=m4a]/ba/bestaudio',
     '-o', targetFile,
     ytUrl
@@ -1385,7 +1385,7 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--extractor-args', 'youtube:player_client=visionos,android',
+    '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-g',
     '-f', 'ba/b',
     ytUrl
@@ -1394,10 +1394,18 @@ async function extractDirectStreamUrl(videoId) {
   const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
   return new Promise((resolve) => {
     execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err, stdout) => {
-      if (!stdout) return resolve(null);
-      const lines = stdout.trim().split(/\r?\n/);
-      const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
-      resolve(directUrl);
+      if (stdout) {
+        const lines = stdout.trim().split(/\r?\n/);
+        const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
+        if (directUrl) return resolve(directUrl);
+      }
+      // Instant fallback without extractor args
+      execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-g', '-f', 'ba/b', ytUrl], { timeout: 15000, env: execEnv }, (err2, stdout2) => {
+        if (!stdout2) return resolve(null);
+        const lines2 = stdout2.trim().split(/\r?\n/);
+        const directUrl2 = lines2.find(l => l.startsWith('http'))?.trim() || null;
+        resolve(directUrl2);
+      });
     });
   });
 }
@@ -1579,7 +1587,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       '--no-check-certificates',
       '--no-playlist',
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=visionos,android',
+      '--extractor-args', 'youtube:player_client=android,ios,mweb',
       '-f', 'ba/b',
       '-o', cachedM4a,
       ytUrl
