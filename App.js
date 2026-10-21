@@ -51,7 +51,7 @@ import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 import * as FileSystem from 'expo-file-system';
-import { installApk, getInitialChatSenderId, subscribeToChatNotification, exitAndRemoveTask } from './src/native/services/mediaControls';
+import { installApk, getInitialChatSenderId, subscribeToChatNotification, exitAndRemoveTask, hasNativeProcessRestart } from './src/native/services/mediaControls';
 import { initOtaCrashGuard, checkAndDownloadOta, restartToApplyOta, getCurrentOtaVersion } from './src/native/services/otaService';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
@@ -321,18 +321,23 @@ function MainAppShell() {
   const handleApplyOtaRestart = async () => {
     try {
       setIsOtaModalOpen(false);
-      // Try native exitAndRemoveTask if supported (new APK)
-      const exited = await exitAndRemoveTask().catch(() => false);
-      if (exited) return;
 
-      // On older base APK without native AlarmManager rebirth:
-      // Show confirmation and close app cleanly so Android cold-boots the new bundle on next launch
+      // Check if native APK supports AlarmManager rebirth & exitAndRemoveTask
+      const hasNativeColdRestart = hasNativeProcessRestart();
+
+      if (hasNativeColdRestart) {
+        // Modern APK: schedule clean reboot and terminate process
+        await restartToApplyOta().catch(() => {});
+        return;
+      }
+
+      // Legacy base APK fallback:
       Alert.alert(
         'تم تثبيت التحديث بنجاح! 🎉',
-        'لتطبيق التحديث الآن، يرجى إغلاق التطبيق وإعادة فتحه من الشاشة الرئيسية.',
+        'لتفعيل التحديث على هذا الإصدار:\nيرجى مسح التطبيق من شاشة التطبيقات الحديثة (Recent Apps) ثم إعادة فتحه ليتم تحميل الإصدار الجديد فوراً.',
         [
           {
-            text: 'إغلاق وتطبيق الآن',
+            text: 'إغلاق التطبيق الآن',
             onPress: () => {
               if (Platform.OS === 'android') {
                 BackHandler.exitApp();

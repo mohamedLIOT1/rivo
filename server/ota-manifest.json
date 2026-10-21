@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.7.8",
+  "version": "1.9.7.9",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث v1.9.7.8 • إصلاح خطأ الشاشة الحمراء activeOtaVersion • إغلاق نظيف وسلس لتطبيق التحديث",
-  "notesEn": "Fix activeOtaVersion crash • Clean restart • Instant boot",
-  "bundleSize": 3265858,
+  "notes": "تحديث v1.9.7.9 • إصلاح خطأ activeOtaVersion • استعادة الشعار الرسمي • تحسين تطبيق التحديث الهوائي",
+  "notesEn": "Fix activeOtaVersion crash • Restore official 3D logo • Seamless OTA restart",
+  "bundleSize": 3266283,
   "sizeMb": "3.11 MB",
-  "updatedAt": "2026-10-21T09:56:52.882Z"
+  "updatedAt": "2026-10-21T10:08:02.343Z"
 }

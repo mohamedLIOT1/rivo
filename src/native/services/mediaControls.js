@@ -211,3 +211,8 @@ export const exitAndRemoveTask = async () => {
   }
   return false;
 };
+
+export const hasNativeProcessRestart = () => {
+  return Boolean(RivoMediaControls && typeof RivoMediaControls.exitAndRemoveTask === 'function');
+};
+
