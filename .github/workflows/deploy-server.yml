@@ -19,22 +19,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to EC2 via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /home/ubuntu/rivo
-            git fetch origin main
-            git reset --hard origin/main
-            npm install --legacy-peer-deps
-            npm run build
-            pm2 restart rivo
+      - name: Deploy to EC2 via Native SSH
+        run: |
+          mkdir -p ~/.ssh
+          RAW_KEY='${{ secrets.EC2_SSH_KEY }}'
+          if [[ "$RAW_KEY" =~ "BEGIN" ]]; then
+            printf '%s\n' "$RAW_KEY" > ~/.ssh/id_rsa
+          else
+            echo "$RAW_KEY" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || printf '%s\n' "$RAW_KEY" > ~/.ssh/id_rsa
+          fi
+          sed -i 's/\r$//' ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -l -f ~/.ssh/id_rsa || true
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd /home/ubuntu/rivo && git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo"
 
       - name: Ping VPS Deploy Webhook
         if: always()
+        continue-on-error: true
         run: |
           echo "Pinging VPS webhook to trigger auto-deploy..."
           RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://rivo-m.duckdns.org/api/deploy-webhook?secret=${{ secrets.DEPLOY_SECRET || 'rivo-deploy-sec-2026' }}")
