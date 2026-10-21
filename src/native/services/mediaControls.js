@@ -201,3 +201,13 @@ export const getOtaInfo = async () => {
   if (!RivoMediaControls || !RivoMediaControls.getOtaInfo) return { exists: false, size: 0 };
   return RivoMediaControls.getOtaInfo();
 };
+
+export const exitAndRemoveTask = async () => {
+  if (RivoMediaControls && RivoMediaControls.exitAndRemoveTask) {
+    try {
+      await RivoMediaControls.exitAndRemoveTask();
+      return true;
+    } catch (e) {}
+  }
+  return false;
+};

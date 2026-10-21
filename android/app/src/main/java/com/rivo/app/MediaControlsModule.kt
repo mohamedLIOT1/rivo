@@ -343,6 +343,22 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun exitAndRemoveTask(promise: com.facebook.react.bridge.Promise) {
+        try {
+            val activity = reactContext.currentActivity
+            activity?.finishAndRemoveTask()
+            android.os.Process.killProcess(android.os.Process.myPid())
+            System.exit(0)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            try {
+                System.exit(0)
+            } catch (e2: Exception) {}
+            promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
     fun clearOtaBundle(promise: com.facebook.react.bridge.Promise) {
         try {
             val otaDir = java.io.File(reactContext.applicationContext.filesDir, "rivo_ota")

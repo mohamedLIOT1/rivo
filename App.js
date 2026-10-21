@@ -50,7 +50,7 @@ import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 import * as FileSystem from 'expo-file-system';
-import { installApk, getInitialChatSenderId, subscribeToChatNotification } from './src/native/services/mediaControls';
+import { installApk, getInitialChatSenderId, subscribeToChatNotification, exitAndRemoveTask } from './src/native/services/mediaControls';
 import { initOtaCrashGuard, checkAndDownloadOta, restartToApplyOta, getCurrentOtaVersion } from './src/native/services/otaService';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
@@ -136,10 +136,14 @@ function MainAppShell() {
       try {
         const ota = remotePlatform.ota;
         const currentOta = await getCurrentOtaVersion();
-        const isOtaNewer = currentOta 
-          ? isNewerVersion(ota.version, currentOta) 
-          : isNewerVersion(ota.version, APP_VERSION);
+        const activeRunningVersion = currentOta || APP_VERSION;
         
+        // If client is already running latest version (via active OTA or base APK), do nothing!
+        if (activeRunningVersion && !isNewerVersion(ota.version, activeRunningVersion) && !isNewerVersion(remoteVersion, activeRunningVersion)) {
+          return;
+        }
+
+        const isOtaNewer = isNewerVersion(ota.version, activeRunningVersion);
         const isBaseCompatible = !ota.minAppVersion || !isNewerVersion(ota.minAppVersion, APP_VERSION);
 
         if (isOtaNewer && isBaseCompatible) {
@@ -160,7 +164,10 @@ function MainAppShell() {
     }
 
     // ─── 2. Fallback to full binary update (APK / IPA) ───
-    if (remoteVersion && isNewerVersion(remoteVersion, APP_VERSION)) {
+    const currentOta = await getCurrentOtaVersion().catch(() => null);
+    const activeVersion = currentOta || APP_VERSION;
+
+    if (remoteVersion && isNewerVersion(remoteVersion, activeVersion)) {
       setUpdateInfo({
         remoteVersion,
         releaseNotes: remotePlatform?.notesEn || remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
@@ -307,8 +314,9 @@ function MainAppShell() {
       setIsOtaModalOpen(false);
       await restartToApplyOta().catch(() => {});
     } catch (err) {}
-    // Fully exit the app as requested by user, so cold-booting loads the new bundle
+    // Fully exit the app and remove task from recents/RAM
     setTimeout(() => {
+      exitAndRemoveTask().catch(() => {});
       if (Platform.OS === 'android') {
         BackHandler.exitApp();
       }
@@ -1302,14 +1310,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#0b1110',
+    borderColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoLetter: {
     fontWeight: '900',
     fontSize: 16,
-    color: '#0b1110',
+    color: '#000000',
     textAlign: 'center',
     includeFontPadding: false,
     lineHeight: 20,
