@@ -16,23 +16,18 @@ on:
 jobs:
   deploy:
     name: Deploy to VPS
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Deploy to EC2 via Native SSH
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          RAW_KEY='${{ secrets.EC2_SSH_KEY }}'
-          if [[ "$RAW_KEY" =~ "BEGIN" ]]; then
-            printf '%s\n' "$RAW_KEY" > ~/.ssh/id_rsa
-          else
-            echo "$RAW_KEY" | base64 -d > ~/.ssh/id_rsa 2>/dev/null || printf '%s\n' "$RAW_KEY" > ~/.ssh/id_rsa
-          fi
-          sed -i 's/\r$//' ~/.ssh/id_rsa
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keygen -l -f ~/.ssh/id_rsa || true
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd /home/ubuntu/rivo && git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo"
+          ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd /home/ubuntu/rivo && git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo"
 
       - name: Ping VPS Deploy Webhook
         if: always()
