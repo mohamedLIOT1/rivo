@@ -859,11 +859,11 @@ router.get('/debug-stream', async (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
 
-  let nginxConfig = '';
+  let logoFilesOnDisk = '';
   try {
-    const files = fs.readdirSync('/etc/nginx/sites-enabled');
-    nginxConfig = files.map(f => `${f}:\n` + fs.readFileSync(`/etc/nginx/sites-enabled/${f}`, 'utf8')).join('\n');
-  } catch (e) { nginxConfig = e.message; }
+    const { execSync } = require('child_process');
+    logoFilesOnDisk = execSync('grep -rn "rivo-logo-wrap" /home/ /var/www/ 2>/dev/null', { encoding: 'utf8' });
+  } catch (e) { logoFilesOnDisk = e.message; }
 
   // Synchronously overwrite /home/ubuntu/dist with fresh build from /home/ubuntu/rivo/dist
   try {
@@ -936,7 +936,7 @@ router.get('/debug-stream', async (req, res) => {
         splashInUbuntuIndex: extractSplash(ubuntuIndexHtml),
         rivoIndexSnippet: rivoIndex.substring(0, 120),
         ubuntuIndexSnippet: ubuntuIndex.substring(0, 120),
-        nginxConfig: nginxConfig.substring(0, 2500),
+        logoFilesOnDisk,
         realUbuntuPath: path.resolve('/home/ubuntu/dist/index.html'),
         realRivoPath: path.resolve(path.join(__dirname, '../../dist/index.html')),
         ubuntuIndexLength: ubuntuIndex.length,
