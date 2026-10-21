@@ -103,6 +103,13 @@ function MainAppShell() {
   const { currentUser } = useUser();
   const [updateInfo, setUpdateInfo] = useState(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [activeOtaVersion, setActiveOtaVersion] = useState(null);
+
+  useEffect(() => {
+    getCurrentOtaVersion().then(v => {
+      if (v) setActiveOtaVersion(v);
+    }).catch(() => {});
+  }, []);
 
   // OTA Fast Update States
   const [otaUpdateInfo, setOtaUpdateInfo] = useState(null);
@@ -296,6 +303,7 @@ function MainAppShell() {
 
       if (res?.success) {
         setIsOtaReadyToRestart(true);
+        if (res.version) setActiveOtaVersion(res.version);
       } else if (res?.reason === 'already_up_to_date') {
         Alert.alert('محدث بالفعل', 'تطبيق ريفو محدث بالفعل لآخر إصدار هوائي.');
         setIsOtaModalOpen(false);
@@ -313,15 +321,36 @@ function MainAppShell() {
   const handleApplyOtaRestart = async () => {
     try {
       setIsOtaModalOpen(false);
-      await restartToApplyOta().catch(() => {});
-    } catch (err) {}
-    // Fully exit the app and remove task from recents/RAM
-    setTimeout(() => {
-      exitAndRemoveTask().catch(() => {});
+      // Try native exitAndRemoveTask if supported (new APK)
+      const exited = await exitAndRemoveTask().catch(() => false);
+      if (exited) return;
+
+      // On older base APK without native AlarmManager rebirth:
+      // Show confirmation and close app cleanly so Android cold-boots the new bundle on next launch
+      Alert.alert(
+        'تم تثبيت التحديث بنجاح! 🎉',
+        'لتطبيق التحديث الآن، يرجى إغلاق التطبيق وإعادة فتحه من الشاشة الرئيسية.',
+        [
+          {
+            text: 'إغلاق وتطبيق الآن',
+            onPress: () => {
+              if (Platform.OS === 'android') {
+                BackHandler.exitApp();
+              }
+            }
+          },
+          {
+            text: 'لاحقاً',
+            style: 'cancel'
+          }
+        ],
+        { cancelable: false }
+      );
+    } catch (err) {
       if (Platform.OS === 'android') {
         BackHandler.exitApp();
       }
-    }, 300);
+    }
   };
 
   const handleDownloadAndInstall = async () => {
@@ -439,7 +468,7 @@ function MainAppShell() {
             </View>
 
             <Text style={styles.updateVersionText}>
-              Current: v{activeOtaVersion || APP_VERSION} → New: v{updateInfo?.remoteVersion}
+              Current: v{(typeof activeOtaVersion !== 'undefined' && activeOtaVersion) ? activeOtaVersion : APP_VERSION} → New: v{updateInfo?.remoteVersion}
             </Text>
 
             <Text style={styles.updateNotesText}>
@@ -882,7 +911,7 @@ function NativeAppShell() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
             <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: '#17a398' }}>v{activeOtaVersion || APP_VERSION}</Text>
+              <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: '#17a398' }}>v{(typeof activeOtaVersion !== 'undefined' && activeOtaVersion) ? activeOtaVersion : APP_VERSION}</Text>
             </View>
           </View>
         </TouchableOpacity>

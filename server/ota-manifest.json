@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.7.7",
+  "version": "1.9.7.8",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث v1.9.7.7 • استعادة شعار Rivo الرسمي ثلاثي الأبعاد • إصلاح إعادة التشغيل الفوري • تحديث فوري",
-  "notesEn": "Restore official 3D logo • Seamless restart • OTA engine update",
-  "bundleSize": 3264948,
+  "notes": "تحديث v1.9.7.8 • إصلاح خطأ الشاشة الحمراء activeOtaVersion • إغلاق نظيف وسلس لتطبيق التحديث",
+  "notesEn": "Fix activeOtaVersion crash • Clean restart • Instant boot",
+  "bundleSize": 3265858,
   "sizeMb": "3.11 MB",
-  "updatedAt": "2026-10-21T09:14:45.204Z"
+  "updatedAt": "2026-10-21T09:56:52.882Z"
 }
