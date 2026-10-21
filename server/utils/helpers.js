@@ -429,13 +429,18 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     title = parts.slice(1).join(' - ').trim();
   }
 
-  const cleanArt = String(artist || '').replace(/["']/g, ' ').trim();
+  const normArt = getCanonicalArtistName(artist);
+  const cleanArt = String(normArt || artist || '').replace(/official|offical|topic|vevo|channel/gi, '').replace(/["']/g, ' ').trim();
   const cleanTit = String(title || '').replace(/["']/g, ' ').trim();
 
   const searchQueries = [];
   if (cleanArt && cleanTit) {
+    searchQueries.push(`${cleanArt} ${cleanTit}`);
     searchQueries.push(`"${cleanArt}" "${cleanTit}"`);
     searchQueries.push(`"${cleanTit}" ${cleanArt} official audio`);
+  } else if (cleanTit) {
+    searchQueries.push(cleanTit);
+    searchQueries.push(`${cleanTit} official audio`);
   } else if (query) {
     const cleanQ = query.replace(/\s+music$/i, '').trim();
     searchQueries.push(cleanQ);
