@@ -859,11 +859,11 @@ router.get('/debug-stream', async (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
 
-  let exactFileOnDisk = '';
+  let runningNodeProcesses = '';
   try {
     const { execSync } = require('child_process');
-    exactFileOnDisk = execSync('find /home /var /etc /usr -size 5548c 2>/dev/null', { encoding: 'utf8' });
-  } catch (e) { exactFileOnDisk = e.message; }
+    runningNodeProcesses = execSync('ps aux | grep node', { encoding: 'utf8' });
+  } catch (e) { runningNodeProcesses = e.message; }
 
   // Synchronously overwrite /home/ubuntu/dist with fresh build from /home/ubuntu/rivo/dist
   try {
@@ -936,7 +936,7 @@ router.get('/debug-stream', async (req, res) => {
         splashInUbuntuIndex: extractSplash(ubuntuIndexHtml),
         rivoIndexSnippet: rivoIndex.substring(0, 120),
         ubuntuIndexSnippet: ubuntuIndex.substring(0, 120),
-        exactFileOnDisk,
+        runningNodeProcesses,
         realUbuntuPath: path.resolve('/home/ubuntu/dist/index.html'),
         realRivoPath: path.resolve(path.join(__dirname, '../../dist/index.html')),
         ubuntuIndexLength: ubuntuIndex.length,
