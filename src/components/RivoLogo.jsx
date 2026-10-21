@@ -2,22 +2,49 @@ import React from 'react';
 
 export default function RivoLogo({ size = 36, className = '', showText = false, textClassName = '', isDark }) {
   const innerSize = typeof size === 'number' ? size : parseInt(size, 10) || 36;
+  const offset = Math.max(2, Math.round(innerSize * 0.08));
+  const fontSize = Math.round(innerSize * 0.58);
+
   const darkMode = isDark !== undefined 
     ? isDark 
     : (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
 
   return (
     <div className={`inline-flex items-center gap-2 sm:gap-2.5 ${className}`}>
-      {/* ── Official 3D Glossy Rivo Logo ── */}
+      {/* ── Circular 'R' Badge with teal offset backing ── */}
       <div 
-        className="relative shrink-0 select-none cursor-pointer group flex items-center justify-center"
+        className="relative shrink-0 select-none cursor-pointer group"
         style={{ width: `${innerSize}px`, height: `${innerSize}px` }}
       >
-        <img 
-          src="/logo.png" 
-          alt="Rivo" 
-          className="w-full h-full object-contain drop-shadow-[0_2px_8px_rgba(23,163,152,0.4)] transition-transform duration-200 group-hover:scale-105 select-none" 
+        {/* Teal Offset Disc */}
+        <div 
+          className="absolute inset-0 rounded-full bg-[#17a398] transition-transform duration-150 group-hover:translate-x-[3px] group-hover:translate-y-[3px]"
+          style={{
+            transform: `translate(${offset}px, ${offset}px)`,
+            border: '2px solid #0b1110',
+          }}
         />
+
+        {/* Front Cream Disc */}
+        <div 
+          className="absolute inset-0 rounded-full bg-[#fdfbf7] flex items-center justify-center transition-transform duration-150 group-hover:-translate-x-[1px] group-hover:-translate-y-[1px]"
+          style={{
+            border: '2.5px solid #0b1110',
+          }}
+        >
+          {/* Letter R with subtle chromatic aberration offset */}
+          <span 
+            className="font-black leading-none text-[#0b1110] select-none"
+            style={{ 
+              fontFamily: '"Space Grotesk", "Plus Jakarta Sans", sans-serif',
+              fontSize: `${fontSize}px`,
+              textShadow: '1px 0px 0px rgba(23,163,152,0.8), -0.8px 0px 0px rgba(220,38,38,0.5)',
+              transform: 'translateY(-0.5px)'
+            }}
+          >
+            R
+          </span>
+        </div>
       </div>
 
       {showText && (
