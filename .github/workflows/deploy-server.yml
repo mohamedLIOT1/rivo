@@ -1,4 +1,4 @@
-name: Auto-Deploy to VPS (SSH & Webhook)
+name: Auto-Deploy to VPS (Webhook)
 
 on:
   push:
@@ -15,24 +15,20 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to VPS
-    runs-on: ubuntu-22.04
+    name: Trigger VPS Auto-Deploy
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to EC2 via Native SSH
-        env:
-          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          echo "$SSH_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -o StrictHostKeyChecking=no -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedKeyTypes=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "cd /home/ubuntu/rivo && git fetch origin main && git reset --hard origin/main && npm install --legacy-peer-deps && npm run build && pm2 restart rivo"
-
       - name: Ping VPS Deploy Webhook
-        if: always()
-        continue-on-error: true
         run: |
           echo "Pinging VPS webhook to trigger auto-deploy..."
-          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://rivo-m.duckdns.org/api/deploy-webhook?secret=${{ secrets.DEPLOY_SECRET || 'rivo-deploy-sec-2026' }}")
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
+            -H "x-webhook-secret: ${{ secrets.DEPLOY_SECRET || 'rivo-deploy-sec-2026' }}" \
+            "https://rivo-m.duckdns.org/api/deploy-webhook?secret=${{ secrets.DEPLOY_SECRET || 'rivo-deploy-sec-2026' }}")
           echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✅ Deployment webhook received by VPS! Server is updating in the background."
+          else
+            echo "⚠️ Webhook returned status $STATUS."
+          fi
