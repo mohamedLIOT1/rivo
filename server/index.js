@@ -148,13 +148,13 @@ const APP_VERSIONS_DATA = {
       notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
     },
     ios: {
-      version: '1.9.6',
-      build: 65,
+      version: '1.9.8.3',
+      build: 76,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.8.3.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'Offline folder import full metadata & lyrics extraction, and 60fps buttery-smooth queue dragging.'
+      notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
     }
   }
 };
@@ -199,13 +199,13 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '1.9.6',
-      build: 65,
+      version: '1.9.8.3',
+      build: 76,
       name: 'Rivo for iOS (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.8.3.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'Beta v1.9.6: Unsigned IPA build with automatic installer cache cleaner and offline player stability.'
+      notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
     }
   }
 };
