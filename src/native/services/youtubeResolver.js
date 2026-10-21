@@ -169,11 +169,12 @@ export const resolveAudioStream = async (track) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
     const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
+    const albumParam = track.album ? `&album=${encodeURIComponent(track.album)}` : '';
 
     // 3a. Direct fast stream endpoint: /api/tracks/:id/stream (same as Web)
     try {
       const serverStreamRes = await fetch(
-        `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}`,
+        `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}${albumParam}`,
         { signal: controller.signal }
       );
       if (serverStreamRes.ok) {
@@ -196,7 +197,7 @@ export const resolveAudioStream = async (track) => {
     // 3b. Resolve stream via /api/tracks/resolve-stream
     try {
       const resolveRes = await fetch(
-        `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}`,
+        `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}${albumParam}`,
         { signal: controller.signal }
       );
       clearTimeout(timeoutId);

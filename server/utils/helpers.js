@@ -1209,26 +1209,30 @@ async function ensureYtDlpBinary() {
 let ytWorkerProc = null;
 const ytWorkerPending = new Map();
 let ytWorkerReqSeq = 0;
+let warmWorkerFailedPermanently = false;
 
 function initWarmYtWorker() {
-  if (process.platform === 'win32' || ytWorkerProc) return;
+  if (process.platform === 'win32' || ytWorkerProc || warmWorkerFailedPermanently) return;
   try {
-    const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const pyScript = `
 import sys, os, json
-sys.path.insert(0, '/usr/local/bin/yt-dlp')
-import yt_dlp
+try:
+    import yt_dlp
+except ImportError:
+    try:
+        sys.path.insert(0, '/usr/local/bin/yt-dlp')
+        import yt_dlp
+    except Exception:
+        sys.exit(42)
 
 opts = {
     'quiet': True,
     'no_warnings': True,
     'nocheckcertificate': True,
     'noplaylist': True,
+    'extractor_args': {'youtube': {'player_client': ['visionos', 'android']}},
     'format': 'ba/b'
 }
-cpath = ${JSON.stringify(cookiesPath)}
-if os.path.exists(cpath):
-    opts['cookiefile'] = cpath
 
 ydl = yt_dlp.YoutubeDL(opts)
 print("READY", flush=True)
@@ -1247,6 +1251,7 @@ for line in sys.stdin:
         print(json.dumps({'id': rid, 'url': None, 'error': str(e)}), flush=True)
 `;
     const proc = spawn('python3', ['-u', '-c', pyScript], { stdio: ['pipe', 'pipe', 'ignore'] });
+    let isReady = false;
     let buf = '';
     proc.stdout.on('data', (chunk) => {
       buf += chunk.toString();
@@ -1254,7 +1259,11 @@ for line in sys.stdin:
       buf = lines.pop();
       for (const l of lines) {
         const trimmed = l.trim();
-        if (!trimmed || trimmed === 'READY') continue;
+        if (trimmed === 'READY') {
+          isReady = true;
+          continue;
+        }
+        if (!trimmed) continue;
         try {
           const parsed = JSON.parse(trimmed);
           if (parsed && ytWorkerPending.has(parsed.id)) {
@@ -1266,22 +1275,27 @@ for line in sys.stdin:
         } catch {}
       }
     });
-    proc.on('exit', () => {
+    proc.on('exit', (code) => {
       ytWorkerProc = null;
       for (const [, { resolve, timer }] of ytWorkerPending.entries()) {
         clearTimeout(timer);
         resolve(null);
       }
       ytWorkerPending.clear();
-      setTimeout(initWarmYtWorker, 3000);
+      if (!isReady || code === 42) {
+        warmWorkerFailedPermanently = true;
+      } else {
+        setTimeout(initWarmYtWorker, 10000);
+      }
     });
     ytWorkerProc = proc;
-  } catch (e) {}
+  } catch (e) {
+    warmWorkerFailedPermanently = true;
+  }
 }
 
 function extractViaWarmWorker(videoId) {
-  if (!ytWorkerProc || !ytWorkerProc.stdin || !ytWorkerProc.stdin.writable) {
-    initWarmYtWorker();
+  if (warmWorkerFailedPermanently || !ytWorkerProc || !ytWorkerProc.stdin || !ytWorkerProc.stdin.writable) {
     return Promise.resolve(null);
   }
   return new Promise((resolve) => {
@@ -1289,7 +1303,7 @@ function extractViaWarmWorker(videoId) {
     const timer = setTimeout(() => {
       ytWorkerPending.delete(id);
       resolve(null);
-    }, 8000);
+    }, 1500);
     ytWorkerPending.set(id, { resolve, timer });
     try {
       ytWorkerProc.stdin.write(JSON.stringify({ id, videoId }) + '\n');
@@ -1330,17 +1344,14 @@ function processNextBgDownload() {
   activeBackgroundDownloads.add(videoId);
   const bin = getYtDlpBin();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
+    '--extractor-args', 'youtube:player_client=visionos,android',
     '-f', 'ba[ext=m4a]/ba/bestaudio',
-    '-o', targetFile
+    '-o', targetFile,
+    ytUrl
   ];
-  if (fs.existsSync(cookiesPath)) {
-    ytdlpArgs.push('--cookies', cookiesPath);
-  }
-  ytdlpArgs.push(ytUrl);
 
   execFile(bin, ytdlpArgs, { timeout: 45000 }, (err) => {
     activeBackgroundDownloads.delete(videoId);
@@ -1358,18 +1369,14 @@ async function extractDirectStreamUrl(videoId) {
 
   const bin = getYtDlpBin();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
   const ytdlpArgs = [
     '--no-check-certificates',
     '--no-playlist',
-    '--extractor-args', 'youtube:player_client=android,web,tv_embedded',
+    '--extractor-args', 'youtube:player_client=visionos,android',
     '-g',
-    '-f', 'ba/b'
+    '-f', 'ba/b',
+    ytUrl
   ];
-  if (fs.existsSync(cookiesPath)) {
-    ytdlpArgs.push('--cookies', cookiesPath);
-  }
-  ytdlpArgs.push(ytUrl);
 
   return new Promise((resolve) => {
     execFile(bin, ytdlpArgs, { timeout: 8000 }, (err, stdout) => {
@@ -1428,7 +1435,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId && (title || artist)) {
     try {
-      const scUrl = await extractSoundCloudStream(title, artist);
+      const scUrl = await extractSoundCloudStream(title, artist, options);
       if (scUrl) {
         const retObj = new String(scUrl);
         retObj.url = scUrl;
@@ -1495,7 +1502,11 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     if (title || artist) {
       try {
-        const scUrl = await extractSoundCloudStream(title, artist);
+        const scUrl = await extractSoundCloudStream(title, artist, {
+          album: options?.album,
+          duration: defaultDur,
+          strictDuration: true
+        });
         if (scUrl) {
           directStreamCache.set(videoId, { url: scUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
           queueBackgroundAudioCache(videoId, cachedM4a, false);
@@ -1506,16 +1517,14 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
     const bin = getYtDlpBin();
     const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const ytdlpArgs = [
       '--no-check-certificates',
       '--no-playlist',
-      '--extractor-args', 'youtube:player_client=android,web,tv_embedded',
+      '--extractor-args', 'youtube:player_client=visionos,android',
       '-f', 'ba/b',
-      '-o', cachedM4a
+      '-o', cachedM4a,
+      ytUrl
     ];
-    if (fs.existsSync(cookiesPath)) ytdlpArgs.push('--cookies', cookiesPath);
-    ytdlpArgs.push(ytUrl);
 
     await new Promise((resolve) => {
       execFile(bin, ytdlpArgs, { timeout: 15000 }, (err) => {
@@ -1634,26 +1643,101 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
 }
 
 
-async function extractSoundCloudStream(title = '', artist = '') {
+async function extractSoundCloudStream(title = '', artist = '', options = {}) {
   if (!title && !artist) return null;
   const bin = getYtDlpBin();
   const cleanTitle = (title || '')
     .replace(/\(Official.*?\)|\[Official.*?\]|Video|Audio|Lyrics|Visualizer|Clip|كليب|فيديو|رسمي/gi, '')
     .trim();
-  const query = `${artist ? artist + ' ' : ''}${cleanTitle}`.trim();
+
+  const VERSION_KEYWORDS = [
+    'red bull', 'symphonic', 'سيمفونيك', 'ريد بول', 'ريدبول',
+    'live', 'حفلة', 'حفله', 'لايف',
+    'remix', 'ريمكس',
+    'acoustic', 'أكوستيك', 'اكوستيك',
+    'orchestra', 'أوركسترا', 'اوركسترا',
+    'piano', 'بيانو',
+    'instrumental', 'موسيقى'
+  ];
+
+  const albumStr = (options?.album || '').toLowerCase();
+  const titleStr = (title || '').toLowerCase();
+  const extraKws = [];
+  for (const kw of VERSION_KEYWORDS) {
+    if ((albumStr.includes(kw) || titleStr.includes(kw)) && !cleanTitle.toLowerCase().includes(kw)) {
+      extraKws.push(kw);
+    }
+  }
+
+  const query = `${artist ? artist + ' ' : ''}${cleanTitle}${extraKws.length > 0 ? ' ' + extraKws.join(' ') : ''}`.trim();
+  const targetDuration = Number(options?.duration || options?.targetDuration) || null;
+  const strictDuration = Boolean(options?.strictDuration || targetDuration);
+
   const args = [
     '--no-check-certificates',
     '--no-playlist',
-    '-g',
-    '-f', 'ba/b',
-    `scsearch1:${query}`
+    '-j',
+    `scsearch5:${query}`
   ];
+
   return new Promise((resolve) => {
     execFile(bin, args, { timeout: 9000 }, (err, stdout) => {
       if (err || !stdout) return resolve(null);
       const lines = stdout.trim().split(/\r?\n/);
-      const url = lines.find(l => l.startsWith('http') && !l.includes('preview-media') && !l.includes('/preview/'))?.trim() || null;
-      resolve(url);
+      const candidates = [];
+
+      for (const line of lines) {
+        try {
+          const item = JSON.parse(line.trim());
+          if (!item) continue;
+
+          let audioUrl = null;
+          if (Array.isArray(item.formats)) {
+            const httpFmt = item.formats.find(f => f.url && f.protocol === 'http' && (f.ext === 'mp3' || f.vcodec === 'none'));
+            const anyFmt = item.formats.find(f => f.url && f.url.startsWith('http') && !f.url.includes('preview-media') && !f.url.includes('/preview/'));
+            audioUrl = httpFmt?.url || anyFmt?.url || null;
+          }
+          if (!audioUrl && item.url && item.url.startsWith('http')) {
+            audioUrl = item.url;
+          }
+          if (!audioUrl) continue;
+
+          const dur = Number(item.duration) || 0;
+          const candTitle = String(item.title || item.track || '').toLowerCase();
+          const candUploader = String(item.uploader || '').toLowerCase();
+
+          let matchesVersion = true;
+          if (extraKws.length > 0) {
+            matchesVersion = extraKws.some(kw => candTitle.includes(kw) || candUploader.includes(kw));
+          }
+
+          let durDiff = targetDuration && dur > 0 ? Math.abs(dur - targetDuration) : null;
+
+          if (strictDuration && durDiff !== null && durDiff > 35) {
+            continue;
+          }
+
+          if (extraKws.length > 0 && !matchesVersion) {
+            continue;
+          }
+
+          candidates.push({
+            url: audioUrl,
+            duration: dur,
+            durDiff: durDiff !== null ? durDiff : 999,
+            matchesVersion: matchesVersion ? 1 : 0
+          });
+        } catch {}
+      }
+
+      if (candidates.length === 0) return resolve(null);
+
+      candidates.sort((a, b) => {
+        if (b.matchesVersion !== a.matchesVersion) return b.matchesVersion - a.matchesVersion;
+        return a.durDiff - b.durDiff;
+      });
+
+      resolve(candidates[0].url);
     });
   });
 }

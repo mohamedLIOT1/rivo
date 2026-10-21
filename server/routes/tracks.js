@@ -783,8 +783,9 @@ const handleTrackStream = async (req, res) => {
     }
 
     const duration = Number(req.query.duration || track?.duration) || null;
+    const albumName = req.query.album || track?.album || '';
     const streamTarget = rawUrl || id || '';
-    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist, { duration });
+    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist, { duration, album: albumName });
     if (streamUrl) {
       const resolvedPath = streamUrl.url || String(streamUrl);
       const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -1336,7 +1337,7 @@ const resolveStreamHandler = async (req, res) => {
               isYouTube: false
             });
           }
-          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist, { duration: dbTrack.duration || Number(duration) || null });
+          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist, { duration: dbTrack.duration || Number(duration) || null, album: dbTrack.album || req.query.album || '' });
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -1364,7 +1365,14 @@ const resolveStreamHandler = async (req, res) => {
         } else if (title) {
           query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
         }
-        const dbTrack = await Track.findOne(query).lean();
+        if (req.query.album) {
+          query.album = new RegExp(`^${escapeRegex(req.query.album)}$`, 'i');
+        }
+        let dbTrack = await Track.findOne(query).lean();
+        if (!dbTrack && query.album) {
+          delete query.album;
+          dbTrack = await Track.findOne(query).lean();
+        }
         if (dbTrack) {
           if (dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
             const cleanPath = dbTrack.audioUrl ? (dbTrack.audioUrl.startsWith('/') ? dbTrack.audioUrl : `/${dbTrack.audioUrl}`) : '';
@@ -1386,7 +1394,7 @@ const resolveStreamHandler = async (req, res) => {
               isYouTube: false
             });
           }
-          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist, { duration: dbTrack.duration || Number(duration) || null });
+          const directAudio = await resolveOfficialYouTubeAudioStream(dbTrack.audioUrl, dbTrack.title, dbTrack.artist, { duration: dbTrack.duration || Number(duration) || null, album: dbTrack.album || req.query.album || '' });
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -1414,7 +1422,7 @@ const resolveStreamHandler = async (req, res) => {
           : ((m2 && m2[1]) ? m2[1] : (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !mongoose.isValidObjectId(c.trim()) ? c.trim() : null));
 
         if (vidCandidate) {
-          const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '', { duration: Number(duration) || null });
+          const directAudio = await resolveOfficialYouTubeAudioStream(vidCandidate, title || '', artist || '', { duration: Number(duration) || null, album: req.query.album || '' });
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
@@ -1443,7 +1451,7 @@ const resolveStreamHandler = async (req, res) => {
     }
 
     if (title || artist || url) {
-      const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '', { duration: Number(duration) || null });
+      const directAudio = await resolveOfficialYouTubeAudioStream(url || '', title || '', artist || '', { duration: Number(duration) || null, album: req.query.album || '' });
       if (directAudio) {
         const resolvedPath = directAudio.url || String(directAudio);
         const isLocalUpload = resolvedPath.startsWith('/uploads/');

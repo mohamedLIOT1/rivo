@@ -174,10 +174,12 @@ async function doResolvePlayableAudioStream(track, signal = null) {
 
   const qTitle = encodeURIComponent(track.title || '');
   const qArtist = encodeURIComponent(track.artist || '');
+  const qAlbum = encodeURIComponent(track.album || '');
+  const qDuration = encodeURIComponent(track.duration || '');
 
   // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream
   try {
-    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}`, { signal });
+    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}`, { signal });
     if (sRes.ok) {
       const sData = await sRes.json();
       let cand = sData?.url || sData?.directUrl;
@@ -197,7 +199,7 @@ async function doResolvePlayableAudioStream(track, signal = null) {
 
   // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true
   try {
-    const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}`, { signal });
+    const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}`, { signal });
     if (res.ok) {
       const d = await res.json();
       if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {

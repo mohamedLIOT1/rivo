@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.8.0",
+  "version": "1.9.8.1",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري (حجم 3 ميجابايت فقط) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (3MB only) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3267594,
+  "notes": "إصلاح سرعة تشغيل الأغاني وحل مشكلة تشغيل النسخ الدقيقة الرسمية",
+  "notesEn": "Instant audio playback speed fix and official version matching",
+  "bundleSize": 3267655,
   "sizeMb": "3.12 MB",
-  "updatedAt": "2026-10-21T12:25:06.131Z"
+  "updatedAt": "2026-10-21T12:52:51.359Z"
 }
