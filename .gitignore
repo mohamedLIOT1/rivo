@@ -31,4 +31,4 @@ scripts/__pycache__/
 public/downloads/*
 !public/downloads/ota/
 !public/downloads/ota/*
-cookies.txt
+

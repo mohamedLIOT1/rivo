@@ -1165,6 +1165,35 @@ const activeBackgroundDownloads = new Set();
 const MAX_CONCURRENT_BG_DOWNLOADS = 3;
 const bgDownloadQueue = [];
 
+const EMBEDDED_YOUTUBE_COOKIES = `# Netscape HTTP Cookie File
+# https://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file! Do not edit.
+
+.youtube.com\tTRUE\t/\tFALSE\t1827141845\tHSID\tAQbU9Tf375bT4QpZs
+.youtube.com\tTRUE\t/\tTRUE\t1827141845\tSSID\tAclKQ8_TaNTLqZD3K
+.youtube.com\tTRUE\t/\tFALSE\t1827141845\tAPISID\t3zneGuIfvKtozDjN/AXOz5H_n5FGLInD6k
+.youtube.com\tTRUE\t/\tTRUE\t1827141845\tSAPISID\tzaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
+.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-1PAPISID\tzaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
+.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-3PAPISID\tzaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
+.youtube.com\tTRUE\t/\tTRUE\t1806394086\t__Secure-BUCKET\tCNwH
+.youtube.com\tTRUE\t/\tTRUE\t1827152440\tPREF\tf6=40000000&f7=100&tz=Africa.Cairo
+.youtube.com\tTRUE\t/\tFALSE\t1827141845\tSID\tg.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkFk3GtoMcaISajUtaI2z2sQACgYKASASARISFQHGX2Mihh8rHmNr7-9nMkhuI0W56xoVAUF8yKoOfUkWGe4ikoU9i0vnsdws0076
+.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-1PSID\tg.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkZcR7ZicwZ5nK8Reny4qfsAACgYKAS4SARISFQHGX2MiTI5rRe-BIYBIoHKenMhSihoVAUF8yKpetsu8nrg9c9LolLnHcSGf0076
+.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-3PSID\tg.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkRoeRVdjXRxsiP4X_OSkwZgACgYKAX4SARISFQHGX2MiMBeLd5mC9jclOeOiPyFVCRoVAUF8yKoQScwucgwCtlMFvX_MiBsT0076
+.youtube.com\tTRUE\t/\tTRUE\t1792593020\tCONSISTENCY\tAJDB8J9z1qgYbsjF6VYTS5cBrXdf5dQM1oJ8DSCx-AJZB-Y9iTllaCB3M5IN_vpaYUwCTr4BPCPuOzg839fWfQhS1CvbFwq9T1wjPtxo8vmO9d_wifxw_lWB3pzMV3X6mqRqDV5h85kUhTSVTJf4kqMP
+.youtube.com\tTRUE\t/\tTRUE\t1824128424\t__Secure-1PSIDTS\tsidts-CjUBkldj_7mVUKAMxfd-g-VgeaKxTY1onG8l_MXkiAtE3OKdjgjam0AzcwqxddA8f_eUH0SBNBAA
+.youtube.com\tTRUE\t/\tTRUE\t1824128424\t__Secure-3PSIDTS\tsidts-CjUBkldj_7mVUKAMxfd-g-VgeaKxTY1onG8l_MXkiAtE3OKdjgjam0AzcwqxddA8f_eUH0SBNBAA
+.youtube.com\tTRUE\t/\tTRUE\t1827152434\tLOGIN_INFO\tAFmmF2swRAIgLxwOUj2Afdq2fj95ZDcqoBYWUm2ghtMiZTwvM3UbMA8CIA79yuKwJqRTTNZeoPvrKwDDgTziIbNeL9tpBwzzId79:QUQ3MjNmdzFqOWNUZUtSVGxsemxqTXByQmJFbnl6YXZfLXBRZ2JxeEF6ZkpEQ2RYZ3l1NDRScHBreGRHYTVZd2wzQlFjQ0NZLWtpdjhOWldHdml3cnJTNHg2V0VLODV4OWJadmFXWWZhSUhRS0JGMG9lbU1BMmNEMUNQTzI1bGduUmRtNElZMmQyYXhRVXhyZjRQeDhWaVlJV3B1eHlzRmlR
+.youtube.com\tTRUE\t/\tFALSE\t1824128444\tSIDCC\tAPD_SKGd0obHwAh4uz7zEc3kP4oTDfaG4PJwJouvgSWEFI1_pohfOqyelVmYl_QN29q5jdhGbA
+.youtube.com\tTRUE\t/\tTRUE\t1824128444\t__Secure-1PSIDCC\tAPD_SKHnFyJ44WrYIfaghirV_s2P10Xn_mjYmNloVgIiTBxrzvx_QNBqFJC1jVHxKP23FnN3hw
+.youtube.com\tTRUE\t/\tTRUE\t1824128444\t__Secure-3PSIDCC\tAPD_SKEt0lAGgtKLHDCjfi8-NRge2SZyUnKqHFss0yG6viDAwTyGg9_O62dCJkYMohy7Gyy7cA
+.youtube.com\tTRUE\t/\tTRUE\t1808144444\tVISITOR_INFO1_LIVE\tJf8osUMeS10
+.youtube.com\tTRUE\t/\tTRUE\t1808144444\tVISITOR_PRIVACY_METADATA\tCgJFRxIEGgAgSw%3D%3D
+.youtube.com\tTRUE\t/\tTRUE\t1808074648\t__Secure-ROLLOUT_TOKEN\tCPXGhauU6_yKbRC204iuxJ6WAxixutido8mXAw%3D%3D
+.youtube.com\tTRUE\t/\tTRUE\t1808074651\t__Secure-YNID\tCvUBCAUSpwEB8QZuZjUnroPvujPC3Wq9VPpVyFXjJkEVLyX0G2ZeWt-yWDcVxGpQc56oqwstlhl6_p8Z8v6Yjvz7CpAeQhqKrK8hf3UkgGOjx8schwdfmFyxjatR63v14OPmhdVGOOokRuWYlOaqCwHs1ddI8Sb7ENQOMtWJVysT5pOCja3CUj73YTh_bs4wGChhb6g3AT0KwSblKXMo3jjouAN1thjfeKjbm9RMAigFMkUB3qmdT745vqUOfinqih3J96-yqVENg_JunC0qPZ_QGKe4M3r_1CLQNKfJqYVYboBLdxZrdzTVDWOc728PPFqPLcehzwY
+.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\terQZ8FhXOLo
+`;
+
 function getCookiesPath() {
   const possibleCookiePaths = [
     '/home/ubuntu/rivo/cookies.txt',
@@ -1175,8 +1204,13 @@ function getCookiesPath() {
     path.join(process.cwd(), 'server/cookies.txt')
   ];
   for (const cp of possibleCookiePaths) {
-    if (fs.existsSync(cp)) return cp;
+    if (fs.existsSync(cp) && fs.statSync(cp).size > 100) return cp;
   }
+  try {
+    const targetFile = fs.existsSync('/home/ubuntu/rivo') ? '/home/ubuntu/rivo/cookies.txt' : path.join(__dirname, '../../cookies.txt');
+    fs.writeFileSync(targetFile, EMBEDDED_YOUTUBE_COOKIES, 'utf8');
+    return targetFile;
+  } catch {}
   return null;
 }
 
