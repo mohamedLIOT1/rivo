@@ -840,7 +840,7 @@ router.get('/stream-proxy', async (req, res) => {
 
   try {
     const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
-    if (req.headers.range) {
+    if (req.headers.range && !targetUrl.includes('sndcdn.com') && !targetUrl.includes('soundcloud.')) {
       headers['Range'] = req.headers.range;
     }
 

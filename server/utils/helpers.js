@@ -1384,8 +1384,8 @@ async function extractDirectStreamUrl(videoId) {
   ];
 
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 8000 }, (err, stdout) => {
-      if (err || !stdout) return resolve(null);
+    execFile(bin, ytdlpArgs, { timeout: 15000 }, (err, stdout) => {
+      if (!stdout) return resolve(null);
       const lines = stdout.trim().split(/\r?\n/);
       const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
       resolve(directUrl);
