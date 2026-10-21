@@ -828,13 +828,17 @@ router.get('/debug-stream', async (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   
-  execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=android,ios,mweb', '-g', '-f', 'ba/b', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000, env: execEnv }, (err, stdout, stderr) => {
-    res.json({
-      bin,
-      binExists,
-      error: err?.message || null,
-      stderr: stderr || null,
-      stdout: stdout ? stdout.trim().slice(0, 150) : null
+  execFile(bin, ['--version'], { env: execEnv }, (verErr, verStdout) => {
+    execFile(bin, ['--no-check-certificates', '--no-playlist', '--js-runtimes', 'node', '--extractor-args', 'youtube:player_client=android,ios,mweb', '-g', '-f', 'ba/b', `https://www.youtube.com/watch?v=${videoId}`], { timeout: 15000, env: execEnv }, (err, stdout, stderr) => {
+      res.json({
+        bin,
+        binExists,
+        version: verStdout ? verStdout.trim() : (verErr?.message || null),
+        execPath: process.execPath,
+        error: err?.message || null,
+        stderr: stderr || null,
+        stdout: stdout ? stdout.trim().slice(0, 150) : null
+      });
     });
   });
 });
