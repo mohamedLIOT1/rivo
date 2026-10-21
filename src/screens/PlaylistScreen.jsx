@@ -204,10 +204,35 @@ export default function PlaylistScreen({
   // Preserve EXACT track order as stored in playlist.trackIds, or strictly filter liked tracks for Liked Songs
   const playlistTracks = useMemo(() => {
     if (!isLikedPlaylist) {
+      let list = [];
       if (Array.isArray(playlist.tracks) && playlist.tracks.length > 0) {
-        return playlist.tracks.map(t => trackMap.get(String(t.id || t._id)) || t);
+        list = playlist.tracks.map(t => trackMap.get(String(t.id || t._id)) || t);
+      } else {
+        list = playlistTrackIds.map(id => trackMap.get(id)).filter(Boolean);
       }
-      return playlistTrackIds.map(id => trackMap.get(id)).filter(Boolean);
+
+      if (playlist.isAlbum || playlist.name?.startsWith('Album -') || playlist.id?.startsWith('album-')) {
+        const albNorm = (playlist.name || playlist.title || '').trim().toLowerCase();
+        list = list.filter(t => {
+          if (!t) return false;
+          if (t.album && albNorm && t.album.trim().toLowerCase() !== albNorm) {
+            return false;
+          }
+          return true;
+        });
+
+        const seen = new Set();
+        list = list.filter(t => {
+          const baseTitle = (t.title || '').replace(/\s*\(feat\.[^)]+\)/i, '').trim().toLowerCase();
+          const artist = (t.artist || '').trim().toLowerCase();
+          const key = `${baseTitle}|${artist}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+
+      return list;
     }
     const likedSet = new Set([
       ...(playlistTrackIds || []),

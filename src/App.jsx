@@ -486,9 +486,15 @@ function AppContent() {
       if (!prev) return prev;
       return {
         ...prev,
-        trackIds: (prev.trackIds || []).filter(id => String(id) !== cleanId)
+        trackIds: (prev.trackIds || []).filter(id => String(id) !== cleanId),
+        tracks: (prev.tracks || []).filter(t => String(t.id || t._id) !== cleanId)
       };
     });
+    setAlbums(prev => prev.map(a => ({
+      ...a,
+      trackIds: (a.trackIds || []).filter(id => String(id) !== cleanId),
+      tracks: (a.tracks || []).filter(t => String(t.id || t._id) !== cleanId)
+    })));
     await deleteTrack(cleanId);
   };
 
