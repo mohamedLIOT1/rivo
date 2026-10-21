@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import fs from 'fs';
 
 export default defineConfig({
-  base: './',
+  base: '/',
   root: fs.realpathSync(process.cwd()),
   build: {
     rollupOptions: {

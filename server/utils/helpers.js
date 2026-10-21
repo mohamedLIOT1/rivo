@@ -1165,6 +1165,21 @@ const activeBackgroundDownloads = new Set();
 const MAX_CONCURRENT_BG_DOWNLOADS = 3;
 const bgDownloadQueue = [];
 
+function getCookiesPath() {
+  const possibleCookiePaths = [
+    '/home/ubuntu/rivo/cookies.txt',
+    '/home/ubuntu/cookies.txt',
+    path.join(__dirname, '../../cookies.txt'),
+    path.join(__dirname, '../cookies.txt'),
+    path.join(process.cwd(), 'cookies.txt'),
+    path.join(process.cwd(), 'server/cookies.txt')
+  ];
+  for (const cp of possibleCookiePaths) {
+    if (fs.existsSync(cp)) return cp;
+  }
+  return null;
+}
+
 function getYtDlpBin() {
   const isWin = process.platform === 'win32';
   const binName = isWin ? 'yt-dlp.exe' : 'yt-dlp';
@@ -1377,6 +1392,8 @@ function processNextBgDownload() {
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
+  const cp = getCookiesPath();
+  if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
   execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, (err) => {
     activeBackgroundDownloads.delete(videoId);
     processNextBgDownload();
@@ -1392,6 +1409,7 @@ async function extractDirectStreamUrl(videoId) {
   } catch {}
 
   const bin = getYtDlpBin();
+  const cp = getCookiesPath();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const ytdlpArgs = [
     '--no-check-certificates',
@@ -1400,9 +1418,10 @@ async function extractDirectStreamUrl(videoId) {
     '--js-runtimes', 'node',
     '--extractor-args', 'youtube:player_client=android,ios,mweb',
     '-g',
-    '-f', 'ba/b',
-    ytUrl
+    '-f', 'ba/b'
   ];
+  if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
+  ytdlpArgs.push(ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
@@ -1414,7 +1433,10 @@ async function extractDirectStreamUrl(videoId) {
         if (directUrl) return resolve(directUrl);
       }
       // Instant fallback without extractor args
-      execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '-g', '-f', 'ba/b', ytUrl], { timeout: 15000, env: execEnv }, (err2, stdout2) => {
+      const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '-g', '-f', 'ba/b'];
+      if (cp) fbArgs.splice(1, 0, '--cookies', cp);
+      fbArgs.push(ytUrl);
+      execFile(bin, fbArgs, { timeout: 15000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/);
         const directUrl2 = lines2.find(l => l.startsWith('http'))?.trim() || null;
@@ -1564,6 +1586,33 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       return directUrl;
     }
 
+    // 1. Direct YouTube download to disk with cookies
+    const bin = getYtDlpBin();
+    const cp = getCookiesPath();
+    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const ytdlpArgs = [
+      '--no-check-certificates',
+      '--no-playlist',
+      '--no-warnings',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android,ios,mweb',
+      '-f', 'ba/b',
+      '-o', cachedM4a
+    ];
+    if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
+    ytdlpArgs.push(ytUrl);
+
+    const nodeBinDir = path.dirname(process.execPath);
+    const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
+    await new Promise((resolve) => {
+      execFile(bin, ytdlpArgs, { timeout: 20000, env: execEnv }, () => resolve());
+    });
+
+    if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
+      return `/uploads/audio-cache/${videoId}.m4a`;
+    }
+
+    // 2. Fallback to SoundCloud only if YouTube completely fails
     if (title || artist) {
       try {
         const scResult = await extractSoundCloudStream(title, artist, {
@@ -1579,10 +1628,6 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
             queueBackgroundAudioCache(videoId, cachedM4a, false);
             return scUrl;
           } else {
-            // It's an M3U8 stream! HTML5 <audio> on Chrome/desktop cannot play M3U8 directly!
-            // Download to cachedM4a immediately using yt-dlp:
-            const bin = getYtDlpBin();
-            const execEnv = { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin:' + (process.env.PATH || '') };
             const scSource = scResult.webpageUrl || scUrl;
             await new Promise((resolve) => {
               execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba/b', '-o', cachedM4a, scSource], { timeout: 25000, env: execEnv }, () => resolve());
@@ -1594,27 +1639,6 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
         }
       } catch {}
     }
-
-    const bin = getYtDlpBin();
-    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const ytdlpArgs = [
-      '--no-check-certificates',
-      '--no-playlist',
-      '--no-warnings',
-      '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android,ios,mweb',
-      '-f', 'ba/b',
-      '-o', cachedM4a,
-      ytUrl
-    ];
-
-    const nodeBinDir = path.dirname(process.execPath);
-    const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
-    await new Promise((resolve) => {
-      execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err) => {
-        resolve();
-      });
-    });
 
     if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
       return `/uploads/audio-cache/${videoId}.m4a`;
