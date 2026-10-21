@@ -1170,6 +1170,11 @@ function getYtDlpBin() {
     }
     return localBin;
   }
+  if (!isWin) {
+    if (fs.existsSync('/usr/local/bin/yt-dlp')) return '/usr/local/bin/yt-dlp';
+    if (fs.existsSync('/usr/bin/yt-dlp')) return '/usr/bin/yt-dlp';
+    if (fs.existsSync('/home/ubuntu/.local/bin/yt-dlp')) return '/home/ubuntu/.local/bin/yt-dlp';
+  }
   return 'yt-dlp';
 }
 
