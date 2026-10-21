@@ -1,3 +1,4 @@
+import { LOGO_BASE64 } from './src/native/assets/logoBase64';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
@@ -136,7 +137,7 @@ function MainAppShell() {
       try {
         const ota = remotePlatform.ota;
         const currentOta = await getCurrentOtaVersion();
-        const activeRunningVersion = currentOta || APP_VERSION;
+        const activeRunningVersion = (currentOta && isNewerVersion(currentOta, APP_VERSION)) ? currentOta : APP_VERSION;
         
         // If client is already running latest version (via active OTA or base APK), do nothing!
         if (activeRunningVersion && !isNewerVersion(ota.version, activeRunningVersion) && !isNewerVersion(remoteVersion, activeRunningVersion)) {
@@ -165,7 +166,7 @@ function MainAppShell() {
 
     // ─── 2. Fallback to full binary update (APK / IPA) ───
     const currentOta = await getCurrentOtaVersion().catch(() => null);
-    const activeVersion = currentOta || APP_VERSION;
+    const activeVersion = (currentOta && isNewerVersion(currentOta, APP_VERSION)) ? currentOta : APP_VERSION;
 
     if (remoteVersion && isNewerVersion(remoteVersion, activeVersion)) {
       setUpdateInfo({
@@ -438,7 +439,7 @@ function MainAppShell() {
             </View>
 
             <Text style={styles.updateVersionText}>
-              Current: v{APP_VERSION} → New: v{updateInfo?.remoteVersion}
+              Current: v{activeOtaVersion || APP_VERSION} → New: v{updateInfo?.remoteVersion}
             </Text>
 
             <Text style={styles.updateNotesText}>
@@ -873,12 +874,11 @@ function NativeAppShell() {
           onPress={() => setActiveTab('home')}
           activeOpacity={0.8}
         >
-          <View style={styles.logoBadge}>
-            <View style={styles.logoTealOffset} />
-            <View style={styles.logoCreamDisc}>
-              <Text style={styles.logoLetter}>R</Text>
-            </View>
-          </View>
+          <Image
+            source={{ uri: LOGO_BASE64 }}
+            style={{ width: 28, height: 28, borderRadius: 14, marginRight: 6 }}
+            resizeMode="contain"
+          />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
             <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
@@ -1283,44 +1283,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  logoBadge: {
-    width: 28,
-    height: 28,
-    position: 'relative',
-    marginRight: 6,
-  },
-  logoTealOffset: {
-    position: 'absolute',
-    top: 2,
-    left: 2,
-    right: -2,
-    bottom: -2,
-    borderRadius: 14,
-    backgroundColor: '#17a398',
-    borderWidth: 1,
-    borderColor: '#0b1110',
-  },
-  logoCreamDisc: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontWeight: '900',
-    fontSize: 16,
-    color: '#000000',
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 20,
   },
   brandTitle: {
     fontSize: 18,

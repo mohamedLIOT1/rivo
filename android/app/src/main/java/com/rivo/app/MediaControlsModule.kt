@@ -322,23 +322,43 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     fun reloadApp(promise: com.facebook.react.bridge.Promise) {
         try {
             val activity = reactContext.currentActivity
-            if (activity != null) {
-                val intent = activity.intent
-                activity.finish()
-                activity.startActivity(intent)
+            val context = reactContext.applicationContext
+            val packageManager = context.packageManager
+            val intent = packageManager.getLaunchIntentForPackage(context.packageName)
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                val pendingIntent = android.app.PendingIntent.getActivity(
+                    context,
+                    123456,
+                    intent,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        android.app.PendingIntent.FLAG_CANCEL_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                    } else {
+                        android.app.PendingIntent.FLAG_CANCEL_CURRENT
+                    }
+                )
+                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
+                alarmManager?.set(
+                    android.app.AlarmManager.RTC,
+                    System.currentTimeMillis() + 250,
+                    pendingIntent
+                )
+
+                activity?.finishAffinity()
+                activity?.finishAndRemoveTask()
+                android.os.Process.killProcess(android.os.Process.myPid())
+                System.exit(0)
                 promise.resolve(true)
             } else {
-                val intent = reactContext.packageManager.getLaunchIntentForPackage(reactContext.packageName)
-                if (intent != null) {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    reactContext.startActivity(intent)
-                    promise.resolve(true)
-                } else {
-                    promise.reject("RELOAD_ERROR", "Launch intent unavailable")
-                }
+                promise.reject("RELOAD_ERROR", "Launch intent unavailable")
             }
         } catch (e: Exception) {
-            promise.reject("RELOAD_ERROR", e.message, e)
+            try {
+                reactContext.currentActivity?.finishAndRemoveTask()
+                android.os.Process.killProcess(android.os.Process.myPid())
+                System.exit(0)
+            } catch (e2: Exception) {}
+            promise.resolve(true)
         }
     }
 

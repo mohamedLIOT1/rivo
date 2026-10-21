@@ -28,5 +28,7 @@ src-tauri/*.key
 scripts/__pycache__/
 
 *.bundle
-public/downloads/
+public/downloads/*
+!public/downloads/ota/
+!public/downloads/ota/*
 cookies.txt

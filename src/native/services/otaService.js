@@ -33,14 +33,16 @@ export const compareVersions = (v1, v2) => {
  */
 export const getCurrentOtaVersion = async () => {
   try {
+    const stored = await AsyncStorage.getItem(STORAGE_KEYS.OTA_VERSION);
+    if (!stored) return null;
     if (Platform.OS === 'android') {
       const info = await getOtaInfo().catch(() => null);
-      if (!info || !info.exists || info.size < 50000) {
+      if (info && info.exists === false) {
         await AsyncStorage.removeItem(STORAGE_KEYS.OTA_VERSION).catch(() => {});
         return null;
       }
     }
-    return await AsyncStorage.getItem(STORAGE_KEYS.OTA_VERSION);
+    return stored;
   } catch {
     return null;
   }

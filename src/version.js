@@ -1,6 +1,6 @@
 // Centralized Versioning for Web & Desktop (Tauri)
-export const WEB_VERSION = '1.9.7.4';
-export const DESKTOP_VERSION = '1.9.7.4';
+export const WEB_VERSION = '1.9.7.7';
+export const DESKTOP_VERSION = '1.9.7.7';
 
 export const isDesktopApp = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__);
 

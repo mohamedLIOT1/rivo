@@ -113,12 +113,12 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.7.6',
+      version: '1.9.7.7',
       name: 'Rivo Web',
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.9.7.6',
+      version: '1.9.7.7',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
@@ -126,13 +126,13 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
     android: {
-      version: '1.9.7.6',
-      build: 71,
+      version: '1.9.7.7',
+      build: 72,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.7.6 • الشعار الدائري الأبيض الرسمي • إغلاق كامل ومسح من قائمة المهام • تشغيل فوري للحساب'
+      notes: 'تحديث v1.9.7.7 • استعادة شعار Rivo الرسمي ثلاثي الأبعاد • إصلاح إعادة التشغيل الفوري • تحديث فوري'
     },
     ios: {
       version: '1.9.6',
@@ -155,33 +155,33 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.7.6',
+      version: '1.9.7.7',
       name: 'Rivo Web (Beta)',
       notes: 'Preview build with test features and latest optimisations.'
     },
     windows: {
-      version: '1.9.7.6',
+      version: '1.9.7.7',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
       mandatory: false,
-      notes: 'Beta v1.9.7.6: Security patches, in-place self-updater, and offline player enhancements.'
+      notes: 'Beta v1.9.7.7: Security patches, in-place self-updater, and offline player enhancements.'
     },
     android: {
-      version: '1.9.7.6',
-      build: 71,
+      version: '1.9.7.7',
+      build: 72,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
-      notesEn: 'Fix crash during downloads • Instant smooth audio playback • 8 security fixes • OTA engine fixes',
+      notes: 'تحديث v1.9.7.7 • استعادة شعار Rivo الرسمي ثلاثي الأبعاد • إصلاح إعادة التشغيل الفوري • تحديث فوري',
+      notesEn: 'Fix logo restoration • Seamless instant restart • OTA engine fixes',
       ota: {
         enabled: true,
-        version: '1.9.7.6',
+        version: '1.9.7.7',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.7',
-        notes: 'Fast update • Official 3D white logo • Clean exit restart • Instant boot',
+        minAppVersion: '1.9.6',
+        notes: 'تحديث v1.9.7.7 • استعادة شعار Rivo الرسمي ثلاثي الأبعاد • إصلاح إعادة التشغيل الفوري',
         notesEn: 'Fast update • Official 3D white logo • Clean exit restart • Instant boot'
       }
     },
