@@ -187,15 +187,21 @@ router.get('/:id', async (req, res) => {
       ...t
     }));
 
-    // Filter out tracks that explicitly belong to a different album and deduplicate by title/ID
+    // Filter out tracks that explicitly belong to a different album, deduplicate, and remove bogus YT playlist entries
     const albumNameNorm = (album.name || album.title || '').trim().toLowerCase();
     const seenIds = new Set();
     const seenTitles = new Set();
     const validTracks = [];
+    const bogusTrackIds = [];
 
     for (const t of formattedTracks) {
       if (!t) continue;
       const tid = String(t._id || t.id || '');
+      const audioUrl = String(t.audioUrl || '');
+      if (audioUrl.includes('watch?v=PL') || (t.videoId && String(t.videoId).startsWith('PL'))) {
+        if (tid) bogusTrackIds.push(tid);
+        continue;
+      }
       if (t.album && albumNameNorm && t.album.trim().toLowerCase() !== albumNameNorm) {
         continue;
       }
@@ -205,6 +211,10 @@ router.get('/:id', async (req, res) => {
       if (tid) seenIds.add(tid);
       if (normTitle) seenTitles.add(normTitle);
       validTracks.push(t);
+    }
+
+    if (bogusTrackIds.length > 0) {
+      Track.deleteMany({ _id: { $in: bogusTrackIds } }).catch(() => {});
     }
 
     const cleanTrackIds = validTracks.map(t => String(t._id || t.id));
@@ -630,5 +640,30 @@ const deleteAlbumHandler = async (req, res) => {
 };
 router.delete('/:id', adminAuth, deleteAlbumHandler);
 router.post('/:id/delete', adminAuth, deleteAlbumHandler);
+
+// Auto-cleanup any bogus tracks mistakenly imported from YouTube sidebar playlists (watch?v=PL...)
+setTimeout(async () => {
+  try {
+    const bogusTracks = await Track.find({
+      $or: [
+        { audioUrl: /watch\?v=PL/i },
+        { audioUrl: /youtube\.com\/watch\?v=PL/i }
+      ]
+    }).lean();
+
+    if (bogusTracks.length > 0) {
+      const bogusIds = bogusTracks.map(t => String(t._id || t.id));
+      await Track.deleteMany({ _id: { $in: bogusIds } });
+      await Album.updateMany(
+        { trackIds: { $in: bogusIds } },
+        { $pull: { trackIds: { $in: bogusIds } } }
+      );
+      invalidateAlbumsCache();
+      console.log(`[Auto-Clean] Purged ${bogusIds.length} bogus YouTube playlist entries from database.`);
+    }
+  } catch (err) {
+    console.warn('[Auto-Clean] Notice:', err.message);
+  }
+}, 5000);
 
 module.exports = router;

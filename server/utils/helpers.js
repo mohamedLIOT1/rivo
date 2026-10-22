@@ -946,11 +946,15 @@ async function scrapePlaylistOrAlbum(url) {
       });
       const html = ytRes.data;
 
+      const isValidYouTubeVideoId = (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(id) && !id.startsWith('PL');
+
       const extractYTVideos = (node, dest = []) => {
         if (!node || typeof node !== 'object') return dest;
         if (node.lockupViewModel && node.lockupViewModel.contentId) {
           const vm = node.lockupViewModel;
           const videoId = vm.contentId;
+          // Filter out YouTube recommended playlists or non-video items in sidebar
+          if (!isValidYouTubeVideoId(videoId)) return dest;
           const vTitle = vm.metadata?.lockupMetadataViewModel?.title?.content || 'Unknown Track';
           const metadataRows = vm.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows || [];
           const author = metadataRows[0]?.metadataParts?.[0]?.text?.content || 'Artist';
@@ -967,6 +971,7 @@ async function scrapePlaylistOrAlbum(url) {
         } else if (node.playlistVideoRenderer && node.playlistVideoRenderer.videoId) {
           const p = node.playlistVideoRenderer;
           const videoId = p.videoId;
+          if (!isValidYouTubeVideoId(videoId)) return dest;
           const vTitle = p.title?.runs?.[0]?.text || p.title?.simpleText || 'Unknown Track';
           const author = p.shortBylineText?.runs?.[0]?.text || 'Artist';
           const duration = p.lengthSeconds ? parseInt(p.lengthSeconds, 10) : 200;
@@ -1075,7 +1080,7 @@ async function scrapePlaylistOrAlbum(url) {
 
           const seenVids = new Set();
           rawItems = rawItems.filter(item => {
-            if (!item.videoId) return true;
+            if (!item.videoId || !isValidYouTubeVideoId(item.videoId)) return false;
             if (seenVids.has(item.videoId)) return false;
             seenVids.add(item.videoId);
             return true;
