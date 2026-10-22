@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { RefreshCw, AlertTriangle } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { clearOtaBundle, reloadApp } from '../services/mediaControls';
 import { colors } from '../theme/colors';
 
 export default class ErrorBoundary extends React.Component {
@@ -17,7 +19,20 @@ export default class ErrorBoundary extends React.Component {
     console.warn('[Rivo ErrorBoundary Caught]:', error, errorInfo);
   }
 
-  handleReload = () => {
+  handleReload = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        // Rollback any corrupted/stale OTA bundle to prevent persistent crash loops
+        await clearOtaBundle().catch(() => {});
+        await AsyncStorage.removeItem('rivo_ota_version').catch(() => {});
+        await AsyncStorage.removeItem('rivo_ota_boot_flag').catch(() => {});
+        await AsyncStorage.removeItem('rivo_ota_crash_count').catch(() => {});
+        if (typeof reloadApp === 'function') {
+          await reloadApp().catch(() => {});
+          return;
+        }
+      }
+    } catch {}
     this.setState({ hasError: false, error: null });
     if (this.props.onReset) {
       this.props.onReset();
