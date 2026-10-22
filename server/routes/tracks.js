@@ -191,13 +191,38 @@ const autoPersistTrackHandler = async (req, res) => {
       return res.json({ success: true, track: existing, alreadyExisted: true });
     }
 
+    // Resolve audioUrl fallback to satisfy Mongoose validation
+    let finalAudioUrl = targetUrl;
+    if (!finalAudioUrl) {
+      try {
+        const foundYtId = await searchYouTubeId(cleanTitle, cleanArtist);
+        if (foundYtId) {
+          finalAudioUrl = 'https://www.youtube.com/watch?v=' + foundYtId;
+        }
+      } catch {}
+    }
+    if (!finalAudioUrl) {
+      finalAudioUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(cleanTitle + ' ' + cleanArtist);
+    }
+
+    // Resolve cover fallback
+    let finalCover = targetCover;
+    if (!finalCover) {
+      try {
+        finalCover = await fetchTrackCover(cleanTitle, cleanArtist);
+      } catch {}
+    }
+    if (!finalCover) {
+      finalCover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
+    }
+
     // Create new track entry
     const newTrack = await Track.create({
       title: cleanTitle,
       artist: cleanArtist,
       album: cleanAlbum,
-      cover: targetCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
-      audioUrl: targetUrl,
+      cover: finalCover,
+      audioUrl: finalAudioUrl,
       duration: Math.round(Number(duration)) || 210,
       source: source || 'Rivo',
       addedBy: 'auto-listened'
@@ -219,7 +244,6 @@ const autoPersistTrackHandler = async (req, res) => {
 
 router.post('/auto-persist', optionalAuth, autoPersistTrackHandler);
 router.post('/persist-listened', optionalAuth, autoPersistTrackHandler);
-
 
 // Import track from Spotify/YouTube link
 const importTrackHandler = async (req, res) => {
