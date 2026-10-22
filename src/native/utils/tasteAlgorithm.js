@@ -49,6 +49,7 @@ export function getSmartTasteAndMoodTracks({
   likedTrackIds = [],
   excludeTrackIds = new Set(),
   limit = 10,
+  listeningStats = null,
 }) {
   if (!Array.isArray(allTracks) || allTracks.length === 0) return [];
 
@@ -74,6 +75,10 @@ export function getSmartTasteAndMoodTracks({
     }
   });
 
+  // Extract real audio listening stats & top tracks
+  const userTopTrackTitle = (currentUser?.topTrack?.title || '').toLowerCase().trim();
+  const userTopTrackArtist = (currentUser?.topTrack?.artist || '').toLowerCase().trim();
+
   // Exclude already queued / played tracks if possible
   let candidates = allTracks.filter(t => {
     const id = String(t._id || t.id);
@@ -90,8 +95,17 @@ export function getSmartTasteAndMoodTracks({
     const tTitle = (track.title || '').toLowerCase().trim();
     const tGenre = (track.genre || '').toLowerCase().trim();
     const tText = `${tTitle} ${tArtist} ${tGenre}`;
+    const tId = String(track._id || track.id);
 
-    // 1. Followed Artist match (+60 pts)
+    // 1. Real Listened Top Track & Artist Affinity (from user profile listening data)
+    if (userTopTrackTitle && (tTitle.includes(userTopTrackTitle) || userTopTrackTitle.includes(tTitle))) {
+      score += 65;
+    }
+    if (userTopTrackArtist && (tArtist.includes(userTopTrackArtist) || userTopTrackArtist.includes(tArtist))) {
+      score += 45;
+    }
+
+    // 2. Followed Artist match (+60 pts)
     for (const followed of followedSet) {
       if (followed && tArtist.includes(followed)) {
         score += 60;
@@ -99,18 +113,17 @@ export function getSmartTasteAndMoodTracks({
       }
     }
 
-    // 2. Liked song match (+50 pts)
-    const tId = String(track._id || track.id);
+    // 3. Liked song match (+50 pts)
     if (likedSet.has(tId)) {
       score += 50;
     }
 
-    // 3. Artist taste similarity from liked songs (+40 pts)
+    // 4. Artist taste similarity from liked songs (+40 pts)
     if (likedArtistSet.has(tArtist)) {
       score += 40;
     }
 
-    // 4. Time-of-day mood keywords match (+30 pts)
+    // 5. Time-of-day mood keywords match (+30 pts)
     for (const kw of mood.keywords) {
       if (tText.includes(kw)) {
         score += 30;
@@ -118,11 +131,11 @@ export function getSmartTasteAndMoodTracks({
       }
     }
 
-    // 5. Popularity / play count bonus (up to +15 pts)
+    // 6. Popularity / play count bonus (up to +15 pts)
     const plays = Number(track.plays || track.playCount || 0);
     score += Math.min(15, Math.log10(plays + 1) * 4);
 
-    // 6. Dynamic micro-jitter for organic variety (+0 to 12 pts)
+    // 7. Dynamic micro-jitter for organic variety (+0 to 12 pts)
     score += Math.random() * 12;
 
     return { track, score };

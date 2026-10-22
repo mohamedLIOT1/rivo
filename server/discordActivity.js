@@ -40,6 +40,94 @@ function decryptToken(text) {
 
 const activeUserBots = new Map();
 const userIdleTimers = new Map();
+const assetPathCache = new Map();
+const RIVO_BASE_URL = 'https://rivo-m.duckdns.org';
+const DEFAULT_BADGE_URL = `${RIVO_BASE_URL}/discord-badge.png`;
+
+function getTrackImageUrl(track) {
+  if (!track) return null;
+
+  // 1. Direct cover URL check (uploads, cloud storage, external CDNs, etc.)
+  const rawCover = track.cover || track.coverUrl || '';
+  if (typeof rawCover === 'string' && rawCover.trim()) {
+    let clean = rawCover.trim();
+    if (clean.startsWith('//')) {
+      clean = 'https:' + clean;
+    } else if (clean.startsWith('/')) {
+      clean = RIVO_BASE_URL + clean;
+    } else if (clean.startsWith('uploads/')) {
+      clean = `${RIVO_BASE_URL}/${clean}`;
+    } else if (clean.startsWith('http://')) {
+      clean = clean.replace(/^http:\/\//i, 'https://');
+    }
+
+    // If the cover was erroneously set to a YouTube video page, extract thumbnail
+    const ytMatch = clean.match(/(?:v=|youtu\.be\/|\/vi\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (ytMatch && ytMatch[1] && !clean.includes('i.ytimg.com')) {
+      return `https://i.ytimg.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    }
+
+    if (clean.startsWith('https://')) {
+      return clean;
+    }
+  }
+
+  // 2. YouTube ID from youtubeId, audioUrl, or url
+  const ytCandidates = [track.youtubeId, track.audioUrl, track.url];
+  for (const c of ytCandidates) {
+    if (!c || typeof c !== 'string') continue;
+    const m = c.match(/(?:v=|youtu\.be\/|\/vi\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (m && m[1]) return `https://i.ytimg.com/vi/${m[1]}/hqdefault.jpg`;
+    const m2 = c.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
+    if (m2 && m2[1]) return `https://i.ytimg.com/vi/${m2[1]}/hqdefault.jpg`;
+    if (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !/^[0-9a-fA-F]{24}$/.test(c.trim())) {
+      return `https://i.ytimg.com/vi/${c.trim()}/hqdefault.jpg`;
+    }
+  }
+
+  return DEFAULT_BADGE_URL;
+}
+
+async function resolveDiscordAsset(client, imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+
+  // Discord native CDN URLs are handled directly by discord.js-selfbot-v13
+  if (imageUrl.startsWith('https://cdn.discordapp.com/') || imageUrl.startsWith('https://media.discordapp.net/')) {
+    return imageUrl;
+  }
+
+  // Already proxied via external/... or mp:
+  if (imageUrl.startsWith('external/') || imageUrl.startsWith('mp:')) {
+    return imageUrl;
+  }
+
+  // Check memory cache to avoid Discord API rate-limits
+  if (assetPathCache.has(imageUrl)) {
+    return assetPathCache.get(imageUrl);
+  }
+
+  if (!client || !client.token || !client.api) {
+    return null;
+  }
+
+  try {
+    const res = await RichPresence.getExternal(client, DISCORD_APP_ID, imageUrl);
+    if (Array.isArray(res) && res[0]?.external_asset_path) {
+      const assetPath = res[0].external_asset_path;
+      // LRU cache limit 3000
+      if (assetPathCache.size >= 3000) {
+        const oldestKey = assetPathCache.keys().next().value;
+        assetPathCache.delete(oldestKey);
+      }
+      assetPathCache.set(imageUrl, assetPath);
+      return assetPath;
+    }
+  } catch (err) {
+    console.warn(`[Discord Activity] Proxy external asset failed for ${imageUrl}:`, err.message);
+  }
+
+  return null;
+}
 
 async function disconnectUserSession(userId) {
   if (userIdleTimers.has(userId)) {
@@ -72,41 +160,6 @@ async function disconnectUserSession(userId) {
   }
 }
 
-function extractTrackImageKey(track) {
-  if (!track) return null;
-  const candidates = [
-    track.youtubeId,
-    track.audioUrl,
-    track.url,
-    track.cover,
-    track.coverUrl,
-    track.id,
-    track._id
-  ];
-  for (const c of candidates) {
-    if (!c || typeof c !== 'string') continue;
-    const m = c.match(/(?:v=|youtu\.be\/|\/vi\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-    if (m && m[1]) return 'youtube:' + m[1];
-    const m2 = c.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
-    if (m2 && m2[1]) return 'youtube:' + m2[1];
-    if (/^[a-zA-Z0-9_-]{11}$/.test(c.trim()) && !/^[0-9a-fA-F]{24}$/.test(c.trim())) {
-      return 'youtube:' + c.trim();
-    }
-  }
-
-  const cover = track.cover || track.coverUrl || '';
-  if (typeof cover === 'string') {
-    if (cover.includes('i.scdn.co/image/')) {
-      const parts = cover.split('i.scdn.co/image/')[1]?.split('?')[0];
-      if (parts) return 'spotify:' + parts;
-    }
-    if (cover.startsWith('https://cdn.discordapp.com/') || cover.startsWith('https://media.discordapp.net/')) {
-      return cover;
-    }
-  }
-  return null;
-}
-
 async function applyTrackPresence(client, track, currentTime = 0) {
   if (!client || !client.user || !track) return;
   try {
@@ -123,11 +176,22 @@ async function applyTrackPresence(client, track, currentTime = 0) {
       .setState(track.artist ? ('by ' + track.artist) : 'Rivo Music')
       .setStartTimestamp(startTs);
 
-    const imageKey = extractTrackImageKey(track);
-    if (imageKey) {
+    const imageUrl = getTrackImageUrl(track);
+    let assetKey = null;
+
+    if (imageUrl) {
+      assetKey = await resolveDiscordAsset(client, imageUrl);
+      if (!assetKey && imageUrl !== DEFAULT_BADGE_URL) {
+        assetKey = await resolveDiscordAsset(client, DEFAULT_BADGE_URL);
+      }
+    }
+
+    if (assetKey) {
       try {
-        r.setAssetsLargeImage(imageKey).setAssetsLargeText(track.album || track.title || 'Rivo');
-      } catch (e) {}
+        r.setAssetsLargeImage(assetKey).setAssetsLargeText(track.album || track.title || 'Rivo');
+      } catch (e) {
+        console.warn('[Discord Activity] setAssetsLargeImage error:', e.message);
+      }
     }
 
     if (durationSec > 0) {

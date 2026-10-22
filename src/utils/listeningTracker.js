@@ -220,7 +220,8 @@ export async function flushSessionToServer(isEnd = false) {
         artist: activeSessionTrack.artist,
         cover: activeSessionTrack.cover,
         seconds: secToSend,
-        isCompleted: isEnd || activeSessionPlayCounted
+        isCompleted: isEnd || activeSessionPlayCounted,
+        clientTopTrack: getRealTopTrack()
       })
     });
     if (!res.ok) {

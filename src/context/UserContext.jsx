@@ -269,7 +269,8 @@ export function UserProvider({ children }) {
       const data = await api.get('/api/sync');
       if (data && data.success) {
         if (data.user) {
-          setCurrentUser(prev => ({ ...prev, ...data.user }));
+          const lIds = data.likedTrackIds || data.user.likedTrackIds || [];
+          setCurrentUser(prev => ({ ...prev, ...data.user, likedTrackIds: lIds, likedTracks: lIds }));
         }
         if (Array.isArray(data.tracks)) {
           const liked = new Set((data.likedTrackIds || []).map(String));

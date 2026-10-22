@@ -38,8 +38,37 @@ const isQuranTrack = (t) => {
 // أ. Smart Recommendations for Playlists and Moods
 router.post('/recommendations', optionalAuth, async (req, res) => {
   try {
-    const { mood, timeOfDay, recentTracks = [], availableTracks = [], isQuran = false, name = '', trackIds = [] } = req.body;
-    const isPlQuran = Boolean(isQuran || QURAN_REGEX.test(name));
+    const { 
+      mood, 
+      timeOfDay, 
+      recentTracks = [], 
+      seedTracks = [], 
+      availableTracks = [], 
+      isQuran = false, 
+      name = '', 
+      playlistName = '', 
+      trackIds = [] 
+    } = req.body;
+
+    const effectiveName = name || playlistName || '';
+    const isPlQuran = Boolean(isQuran || QURAN_REGEX.test(effectiveName));
+
+    // Normalize incoming seed/recent tracks
+    const rawSeeds = (recentTracks && recentTracks.length > 0) ? recentTracks : seedTracks;
+    const normalizedSeeds = rawSeeds.map(t => {
+      if (typeof t === 'string') return t;
+      return `${t.title || ''} ${t.artist || ''}`.trim();
+    }).filter(Boolean);
+
+    // Extract seed track IDs to exclude from recommendations
+    const incomingIds = (trackIds || []).map(String);
+    rawSeeds.forEach(t => {
+      if (typeof t === 'object' && (t.id || t._id)) {
+        incomingIds.push(String(t.id || t._id));
+      }
+    });
+    const excludedIds = new Set(incomingIds);
+
     let pool = availableTracks;
     if (!pool || pool.length === 0) {
       if (isPlQuran) {
@@ -50,16 +79,16 @@ router.post('/recommendations', optionalAuth, async (req, res) => {
             { genre: 'Quran' },
             { title: /سورة|سوره|قرآن|قران/i }
           ]
-        }).limit(150).lean();
+        }).sort({ plays: -1 }).limit(200).lean();
       } else {
         pool = await Track.find({
           isQuran: { $ne: true },
           category: { $ne: 'quran' },
           genre: { $ne: 'Quran' }
-        }).limit(150).lean();
+        }).sort({ plays: -1 }).limit(200).lean();
       }
     }
-    const excludedIds = new Set((trackIds || []).map(String));
+
     const filteredPool = pool.filter(t => {
       if (excludedIds.has(String(t._id || t.id))) return false;
       const q = isQuranTrack(t);
@@ -72,15 +101,19 @@ router.post('/recommendations', optionalAuth, async (req, res) => {
         const model = getGeminiModel();
         if (model) {
           const trackList = filteredPool.slice(0, 50).map(t => `"${t.title}" by ${t.artist}`).join(', ');
-          const prompt = `You are a music and recitation curator. Given these available tracks: ${trackList}
-Context: ${isPlQuran ? 'Quran Recitations' : 'Music Playlist'}, Name: "${name || 'My Playlist'}", User mood: ${mood || 'neutral'}, Time of day: ${timeOfDay || 'evening'}, Recently played: ${(recentTracks || []).slice(0,5).join(', ')}.
-Select the 10 best matching tracks from the available list. Return ONLY a JSON array of track titles exactly as written. No explanation.`;
+          const prompt = `You are an expert music and recitation curator. Given these available tracks: ${trackList}
+Context: ${isPlQuran ? 'Quran Recitations' : 'Music Playlist'}, Name: "${effectiveName || 'My Playlist'}", User mood: ${mood || 'neutral'}, Time of day: ${timeOfDay || 'evening'}, Seed / Recent tracks: ${normalizedSeeds.slice(0, 5).join(', ')}.
+Select the 10 best matching tracks from the available list that fit the style and mood. Return ONLY a valid JSON array of track titles exactly as written. No markdown, no explanation.`;
           const result = await model.generateContent(prompt);
           const text = result.response.text().trim();
           const jsonMatch = text.match(/\[[\s\S]*\]/);
           const suggested = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
           const matched = filteredPool.filter(t =>
-            suggested.some(s => s.toLowerCase().includes(t.title.toLowerCase().slice(0, 10)))
+            suggested.some(s => {
+              const sClean = String(s).toLowerCase();
+              const tClean = String(t.title).toLowerCase();
+              return sClean.includes(tClean.slice(0, 8)) || tClean.includes(sClean.slice(0, 8));
+            })
           );
           if (matched.length > 0) finalRecs = matched.slice(0, 10);
         }
@@ -89,8 +122,24 @@ Select the 10 best matching tracks from the available list. Return ONLY a JSON a
       }
     }
 
+    // High-quality heuristic fallback if AI not configured or yields empty
     if (finalRecs.length === 0) {
-      finalRecs = [...filteredPool].sort(() => 0.5 - Math.random()).slice(0, 10);
+      // Extract seed artists
+      const seedArtists = new Set();
+      rawSeeds.forEach(t => {
+        if (typeof t === 'object' && t.artist) seedArtists.add(t.artist.toLowerCase().trim());
+      });
+
+      const scoredPool = filteredPool.map(t => {
+        let score = Math.random() * 15;
+        const art = (t.artist || '').toLowerCase().trim();
+        if (seedArtists.has(art)) score += 50;
+        score += Math.min(20, Math.log10((Number(t.plays) || 0) + 1) * 5);
+        return { track: t, score };
+      });
+
+      scoredPool.sort((a, b) => b.score - a.score);
+      finalRecs = scoredPool.slice(0, 10).map(s => s.track);
     }
 
     res.json({ success: true, recommendations: finalRecs, tracks: finalRecs });
@@ -270,6 +319,186 @@ Rules:
   } catch (err) {
     console.error('[generate-song-lyrics error]', err);
     res.status(500).json({ success: false, error: err.message, lyrics: [] });
+  }
+});
+
+// هـ. AI Smart Shuffle Stream Resolver
+router.post('/smart-shuffle', optionalAuth, async (req, res) => {
+  try {
+    const { currentTrack, seedTracks = [], followedArtists = [], limit = 8 } = req.body;
+    const isCurQuran = isQuranTrack(currentTrack);
+
+    const excludeIds = new Set();
+    if (currentTrack) excludeIds.add(String(currentTrack.id || currentTrack._id));
+    (seedTracks || []).forEach(s => {
+      if (s) excludeIds.add(String(s.id || s._id));
+    });
+
+    const followedSet = new Set((followedArtists || []).map(a => String(a).toLowerCase().trim()));
+
+    let query = isCurQuran
+      ? {
+          $or: [
+            { isQuran: true },
+            { category: 'quran' },
+            { genre: 'Quran' },
+            { title: /سورة|سوره|قرآن|قران/i }
+          ]
+        }
+      : {
+          isQuran: { $ne: true },
+          category: { $ne: 'quran' },
+          genre: { $ne: 'Quran' }
+        };
+
+    const candidatePool = await Track.find(query).sort({ plays: -1 }).limit(150).lean();
+    const available = candidatePool.filter(t => !excludeIds.has(String(t._id || t.id)));
+
+    if (available.length === 0) {
+      return res.json({ success: true, tracks: [] });
+    }
+
+    let finalTracks = [];
+
+    // Optional Gemini Curation
+    if (process.env.GEMINI_API_KEY && genAI && available.length >= limit) {
+      try {
+        const model = getGeminiModel();
+        if (model) {
+          const sampleList = available.slice(0, 45).map(t => `"${t.title}" by ${t.artist}`).join(', ');
+          const seedStr = currentTrack ? `"${currentTrack.title}" by ${currentTrack.artist}` : 'General music';
+          const prompt = `You are an expert streaming radio DJ. The user is listening to: ${seedStr}.
+Available tracks in library: ${sampleList}.
+Select the top ${limit} tracks from this list that flow best sonically and stylistically after the seed track.
+Return ONLY a valid JSON array of track titles exactly as written. No explanations, no markdown.`;
+          const result = await model.generateContent(prompt);
+          const raw = result.response.text().trim();
+          const jsonMatch = raw.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const titles = JSON.parse(jsonMatch[0]);
+            const matched = available.filter(t =>
+              titles.some(titleStr => {
+                const a = String(titleStr).toLowerCase();
+                const b = String(t.title).toLowerCase();
+                return a.includes(b.slice(0, 8)) || b.includes(a.slice(0, 8));
+              })
+            );
+            if (matched.length >= Math.min(3, limit)) {
+              finalTracks = matched.slice(0, limit);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Smart Shuffle Gemini]', e.message);
+      }
+    }
+
+    // High quality intelligent scoring fallback
+    if (finalTracks.length === 0) {
+      const curArtist = (currentTrack?.artist || '').toLowerCase().trim();
+      const curGenre = (currentTrack?.genre || '').toLowerCase().trim();
+
+      const scored = available.map(t => {
+        let score = Math.random() * 12; // Natural variety jitter
+        const tArtist = (t.artist || '').toLowerCase().trim();
+        const tGenre = (t.genre || '').toLowerCase().trim();
+
+        // Followed artists
+        if (followedSet.has(tArtist) || [...followedSet].some(fa => tArtist.includes(fa))) {
+          score += 45;
+        }
+
+        // Matching seed artist
+        if (curArtist && (tArtist.includes(curArtist) || curArtist.includes(tArtist))) {
+          score += 40;
+        }
+
+        // Matching genre
+        if (curGenre && tGenre && (curGenre === tGenre || curGenre.includes(tGenre))) {
+          score += 25;
+        }
+
+        // Play count popularity
+        score += Math.min(15, Math.log10((Number(t.plays) || 0) + 1) * 4);
+
+        return { track: t, score };
+      });
+
+      scored.sort((a, b) => b.score - a.score);
+      finalTracks = scored.slice(0, limit).map(s => s.track);
+    }
+
+    res.json({ success: true, tracks: finalTracks });
+  } catch (err) {
+    console.error('[smart-shuffle error]', err);
+    res.json({ success: true, tracks: [] });
+  }
+});
+
+// و. AI Lyrics Timestamps Synchronization
+router.post('/sync-timestamps', optionalAuth, async (req, res) => {
+  try {
+    const { rawText = '', title = '', artist = '', duration = 180 } = req.body;
+    if (!rawText || !rawText.trim()) {
+      return res.status(400).json({ success: false, error: 'rawText is required' });
+    }
+
+    const dur = Math.max(30, Number(duration) || 180);
+    const cleanLines = rawText
+      .split('\n')
+      .map(l => l.replace(/^\[\d{2}:\d{2}(?:\.\d{2,3})?\]\s*/, '').trim())
+      .filter(l => l.length > 0);
+
+    if (cleanLines.length === 0) {
+      return res.json({ success: true, timestampedText: rawText });
+    }
+
+    let timestampedLines = null;
+
+    // Optional Gemini Timestamp Estimation
+    if (process.env.GEMINI_API_KEY && genAI) {
+      try {
+        const model = getGeminiModel();
+        if (model) {
+          const prompt = `You are a professional audio & lyrics sync engineer.
+Song: "${title}" by "${artist}". Total duration: ${dur} seconds.
+Here are the unsynced lyrics lines:
+${cleanLines.map((l, i) => `${i + 1}. ${l}`).join('\n')}
+
+Format each line with a realistic LRC timestamp starting around 00:05.00 and distributed evenly up to ${Math.floor(dur * 0.95)} seconds in standard [mm:ss.xx] format.
+Output requirements:
+Return ONLY the synced lyrics lines with [mm:ss.xx] prefix. No explanations, no markdown blocks.`;
+
+          const result = await model.generateContent(prompt);
+          const text = result.response.text().trim().replace(/```lrc|```/g, '').trim();
+          if (text.includes('[') && text.includes(']')) {
+            timestampedLines = text;
+          }
+        }
+      } catch (e) {
+        console.warn('[AI sync-timestamps Gemini]', e.message);
+      }
+    }
+
+    // Reliable Algorithmic Interpolation Fallback
+    if (!timestampedLines) {
+      const startSec = 5;
+      const endSec = Math.max(startSec + 10, dur - 8);
+      const step = (endSec - startSec) / Math.max(1, cleanLines.length);
+
+      timestampedLines = cleanLines.map((line, idx) => {
+        const lineTime = startSec + (idx * step);
+        const mins = Math.floor(lineTime / 60);
+        const secs = (lineTime % 60).toFixed(2).padStart(5, '0');
+        const stamp = `[${String(mins).padStart(2, '0')}:${secs}]`;
+        return `${stamp} ${line}`;
+      }).join('\n');
+    }
+
+    res.json({ success: true, timestampedText: timestampedLines });
+  } catch (err) {
+    console.error('[sync-timestamps error]', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

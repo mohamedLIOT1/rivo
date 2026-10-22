@@ -32,15 +32,23 @@ router.post('/listen', optionalAuth, async (req, res) => {
         user.totalListeningSeconds = (user.totalListeningSeconds || 0) + sec;
         user.weeklyListeningSeconds = (user.weeklyListeningSeconds || 0) + sec;
 
-        if (title && artist) {
+        const clientTop = req.body.clientTopTrack;
+        if (clientTop && clientTop.title && clientTop.artist) {
+          user.topTrack = {
+            id: clientTop.id || trackId,
+            title: clientTop.title,
+            artist: clientTop.artist,
+            cover: clientTop.cover || cover || user.topTrack?.cover || '',
+            plays: Number(clientTop.plays) || 1,
+            seconds: Number(clientTop.seconds) || sec
+          };
+        } else if (title && artist) {
           if (!user.topTrack || !user.topTrack.title) {
             user.topTrack = { id: trackId, title, artist, cover: cover || '', plays: isCompleted ? 1 : 0, seconds: sec };
           } else if (user.topTrack.title === title) {
             user.topTrack.seconds = (user.topTrack.seconds || 0) + sec;
             if (isCompleted) user.topTrack.plays = (user.topTrack.plays || 0) + 1;
             if (cover) user.topTrack.cover = cover;
-          } else if (sec > (user.topTrack.seconds || 0) && isCompleted) {
-            user.topTrack = { id: trackId, title, artist, cover: cover || user.topTrack.cover || '', plays: 1, seconds: sec };
           }
         }
 

@@ -111,7 +111,7 @@ export default function HomeScreen({
       allTracks: displayTracks,
       currentUser,
       followedArtists: followed,
-      likedTrackIds: currentUser?.likedTracks || [],
+      likedTrackIds: currentUser?.likedTrackIds || currentUser?.likedTracks || [],
       limit: 10,
     });
 
