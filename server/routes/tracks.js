@@ -110,8 +110,13 @@ router.post('/by-ids', async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.json({ success: true, tracks: [] });
-    const tracks = await Track.find({
-      _id: { $in: ids },
+    const validObjectIds = ids.filter(id => id && mongoose.isValidObjectId(id)).map(id => new mongoose.Types.ObjectId(id));
+    const stringIds = ids.map(String).filter(Boolean);
+    const orConditions = [];
+    if (validObjectIds.length > 0) orConditions.push({ _id: { $in: validObjectIds } });
+    if (stringIds.length > 0) orConditions.push({ id: { $in: stringIds } });
+    const tracks = orConditions.length > 0 ? await Track.find({
+      $or: orConditions,
       source: { $ne: 'SoundCloud' },
       album: { $ne: 'SoundCloud' },
       audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }

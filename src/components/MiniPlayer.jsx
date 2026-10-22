@@ -50,6 +50,7 @@ export default function MiniPlayer({
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPercent, setScrubPercent] = useState(0);
 
+  const [isVolScrubbing, setIsVolScrubbing] = useState(false);
   if (!currentTrack) return null;
 
   const isQuran = isQuranContent(currentTrack);
@@ -127,7 +128,6 @@ export default function MiniPlayer({
     }
   };
 
-  const [isVolScrubbing, setIsVolScrubbing] = useState(false);
 
   const setVolumeFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;

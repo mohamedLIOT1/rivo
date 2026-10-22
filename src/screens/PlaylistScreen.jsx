@@ -227,7 +227,12 @@ export default function PlaylistScreen({
       setFetchedTracks([]);
       return;
     }
-    const knownIds = new Set(tracks.map(t => String(t.id || t._id)));
+    const knownIds = new Set();
+    tracks.forEach(t => {
+      if (!t) return;
+      if (t._id) knownIds.add(String(t._id));
+      if (t.id) knownIds.add(String(t.id));
+    });
     const missing = playlist.trackIds.map(String).filter(id => !knownIds.has(id));
 
     if (missing.length > 0) {
@@ -250,7 +255,15 @@ export default function PlaylistScreen({
 
 
   const allAvailable = useMemo(() => [...tracks, ...fetchedTracks], [tracks, fetchedTracks]);
-  const trackMap = useMemo(() => new Map(allAvailable.map(t => [String(t.id || t._id), t])), [allAvailable]);
+  const trackMap = useMemo(() => {
+    const map = new Map();
+    allAvailable.forEach(t => {
+      if (!t) return;
+      if (t._id) map.set(String(t._id), t);
+      if (t.id) map.set(String(t.id), t);
+    });
+    return map;
+  }, [allAvailable]);
 
   const isLikedPlaylist = Boolean(playlist?.isLikedSongs || playlist?.id === 'liked');
 
