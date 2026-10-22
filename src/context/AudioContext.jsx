@@ -236,11 +236,8 @@ async function doResolvePlayableAudioStream(track, signal = null) {
 // ──────────────────────────────────────────────────────────────────
 
 export function AudioProvider({ children, tracks, setTracks }) {
-  let userCtx = {};
-  try {
-    userCtx = useUser() || {};
-  } catch {}
-  const { currentUser = null, likedTrackIds = [], toggleLike } = userCtx;
+  const userCtx = useUser();
+  const { currentUser = null, likedTrackIds = [], toggleLike } = userCtx || {};
 
   const [currentTrack, setCurrentTrack] = useState(null);
   const [currentQueue, setCurrentQueue] = useState([]);

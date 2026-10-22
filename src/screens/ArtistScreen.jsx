@@ -78,9 +78,8 @@ export default function ArtistScreen({
     setArtist(initialArtist);
   }, [initialArtist]);
 
-  if (!artist) return null;
 
-  const rawArtistName = (artist.name || artist.artist || (typeof artist === 'string' ? artist : '')).trim();
+  const rawArtistName = (artist?.name || artist?.artist || (typeof artist === 'string' ? artist : '') || '').trim();
   const canonicalName = getCanonicalArtistName(rawArtistName);
   const artistName = canonicalName || rawArtistName;
   const artistKey = artistName.toLowerCase();
@@ -164,6 +163,8 @@ export default function ArtistScreen({
   const totalPlays = useMemo(() => {
     return artistTracks.reduce((acc, t) => acc + (Number(t.plays) || 0), 0);
   }, [artistTracks]);
+
+  if (!artist) return null;
 
   return (
     <div className={`flex-1 overflow-y-auto pb-32 select-none p-3 sm:p-4 md:p-8 transition-colors ${

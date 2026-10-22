@@ -47,13 +47,13 @@ export default function MiniPlayer({
   };
 
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(0);
 
   if (!currentTrack) return null;
 
   const isQuran = isQuranContent(currentTrack);
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubPercent, setScrubPercent] = useState(0);
 
   const rawActiveDur = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
   const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);

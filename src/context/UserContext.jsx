@@ -604,6 +604,5 @@ export function UserProvider({ children }) {
 
 export function useUser() {
   const ctx = useContext(UserContext);
-  if (!ctx) throw new Error('useUser must be inside UserProvider');
-  return ctx;
+  return ctx || {};
 }

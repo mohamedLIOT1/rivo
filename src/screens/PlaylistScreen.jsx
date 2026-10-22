@@ -18,8 +18,8 @@ import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import { getAlbumArtwork } from './ArtistScreen';
 import { normalizeCoverUrl } from '../utils/coverUtils';
 
-export default function PlaylistScreen({ 
-  playlist, 
+export default function PlaylistScreen({
+  playlist: initialPlaylist, 
   tracks = [], 
   likedTrackIds = [],
   currentUser,
@@ -43,6 +43,60 @@ export default function PlaylistScreen({
   onToast = () => {},
 }) {
   const isDark = globalTheme === 'dark';
+  const [remotePlaylist, setRemotePlaylist] = useState(null);
+
+  const playlist = useMemo(() => {
+    if (!initialPlaylist) return remotePlaylist;
+    if (!remotePlaylist) return initialPlaylist;
+    return {
+      ...initialPlaylist,
+      ...remotePlaylist,
+      name: (remotePlaylist.name && remotePlaylist.name !== 'Playlist') ? remotePlaylist.name : initialPlaylist.name,
+      trackIds: (Array.isArray(remotePlaylist.trackIds) && remotePlaylist.trackIds.length > 0)
+        ? remotePlaylist.trackIds
+        : (Array.isArray(initialPlaylist.trackIds) ? initialPlaylist.trackIds : []),
+      tracks: (Array.isArray(remotePlaylist.tracks) && remotePlaylist.tracks.length > 0)
+        ? remotePlaylist.tracks
+        : (Array.isArray(initialPlaylist.tracks) ? initialPlaylist.tracks : [])
+    };
+  }, [initialPlaylist, remotePlaylist]);
+
+  useEffect(() => {
+    const plId = initialPlaylist?.id || initialPlaylist?._id;
+    if (!plId || plId === 'liked') {
+      setRemotePlaylist(null);
+      return;
+    }
+    const hasTracks = (Array.isArray(initialPlaylist?.trackIds) && initialPlaylist.trackIds.length > 0) || (Array.isArray(initialPlaylist?.tracks) && initialPlaylist.tracks.length > 0);
+    const isAlb = String(plId).startsWith('album-') || Boolean(initialPlaylist?.isAlbum);
+    if (!hasTracks || isAlb || !initialPlaylist?.name || initialPlaylist.name === 'Playlist') {
+      const url = isAlb
+        ? `${API_BASE_URL}/api/albums/${encodeURIComponent(plId)}`
+        : `${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}`;
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            const fetched = data.album || data.playlist;
+            if (fetched) {
+              const fTrackIds = Array.isArray(fetched.trackIds) && fetched.trackIds.length > 0
+                ? fetched.trackIds.map(String)
+                : (Array.isArray(data.tracks) ? data.tracks.map(t => String(t.id || t._id)) : []);
+              setRemotePlaylist({
+                ...fetched,
+                isAlbum: isAlb || fetched.isAlbum,
+                trackIds: fTrackIds,
+                tracks: data.tracks || fetched.tracks || []
+              });
+              if (Array.isArray(data.tracks) && data.tracks.length > 0) {
+                setFetchedTracks(data.tracks);
+              }
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [initialPlaylist?.id, initialPlaylist?.name]);
   const { currentTrack, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
@@ -194,15 +248,15 @@ export default function PlaylistScreen({
     }
   }, [playlist?.id, JSON.stringify(playlist?.trackIds || []), tracks.length]);
 
-  if (!playlist) return null;
 
   const allAvailable = useMemo(() => [...tracks, ...fetchedTracks], [tracks, fetchedTracks]);
   const trackMap = useMemo(() => new Map(allAvailable.map(t => [String(t.id || t._id), t])), [allAvailable]);
 
-  const isLikedPlaylist = Boolean(playlist.isLikedSongs || playlist.id === 'liked');
+  const isLikedPlaylist = Boolean(playlist?.isLikedSongs || playlist?.id === 'liked');
 
   // Preserve EXACT track order as stored in playlist.trackIds, or strictly filter liked tracks for Liked Songs
   const playlistTracks = useMemo(() => {
+    if (!playlist) return [];
     if (!isLikedPlaylist) {
       let list = [];
       if (Array.isArray(playlist.tracks) && playlist.tracks.length > 0) {
@@ -385,8 +439,10 @@ export default function PlaylistScreen({
     return `${mins} min`;
   };
 
-  const isMixView = playlist.isMix || playlist.name.toUpperCase().includes('MIX');
-  const isPublic = playlist.isPublic !== false;
+  const isMixView = Boolean(playlist?.isMix || playlist?.name?.toUpperCase()?.includes('MIX'));
+  const isPublic = playlist?.isPublic !== false;
+
+  if (!playlist) return null;
 
   const resolvePlaylistCover = (cover) => {
     if (!cover) return `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist?.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;

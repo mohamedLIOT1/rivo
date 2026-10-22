@@ -22,7 +22,7 @@ import { UIProvider, useUI } from './context/UIContext';
 import { NavigationProvider, useNavigation } from './context/NavigationContext';
 import { JamProvider, useJam } from './context/JamContext';
 
-function MainAppShell() {
+function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
   const {
     currentUser, logout,
     tracks, setTracks,
@@ -81,7 +81,9 @@ function MainAppShell() {
     leaveJam,
   } = useJam();
 
-  const [albums, setAlbums] = useState([]);
+  const [localAlbums, setLocalAlbums] = useState([]);
+  const albums = propAlbums || localAlbums;
+  const setAlbums = propSetAlbums || setLocalAlbums;
   const [audioQuality, setAudioQuality] = useState('320');
   const [crossfade, setCrossfade] = useState(4);
 
@@ -577,12 +579,18 @@ function MainAppShell() {
 
 export default function App() {
   const { tracks, setTracks, likedTrackIds, playlists } = useUser();
+  const [albums, setAlbums] = useState([]);
+
+  useEffect(() => {
+    dataService.fetchAlbums().then(alb => setAlbums(alb || [])).catch(() => {});
+  }, []);
+
   return (
     <UIProvider>
       <AudioProvider tracks={tracks} setTracks={setTracks}>
         <JamProvider>
-          <NavigationProvider likedTrackIds={likedTrackIds} playlists={playlists}>
-            <MainAppShell />
+          <NavigationProvider likedTrackIds={likedTrackIds} playlists={playlists} albums={albums}>
+            <MainAppShell albums={albums} setAlbums={setAlbums} />
           </NavigationProvider>
         </JamProvider>
       </AudioProvider>

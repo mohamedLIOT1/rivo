@@ -6,9 +6,8 @@ const NavigationContext = createContext(null);
 
 export function NavigationProvider({ children, likedTrackIds = [], playlists = [], albums = [] }) {
   const playlistsRef = useRef(playlists);
-  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
-
   const albumsRef = useRef(albums);
+  useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
   useEffect(() => { albumsRef.current = albums; }, [albums]);
 
   const initialNav = useMemo(() => {
@@ -129,6 +128,8 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
             const alb = albumsRef.current.find(a => String(a.id || a._id) === idStr);
             if (alb) {
               setSelectedPlaylist({ ...alb, isAlbum: true });
+            } else {
+              setSelectedPlaylist({ id: idStr, name: params.albumName || 'Playlist', isAlbum: Boolean(params.albumName || idStr.startsWith('album-')) });
             }
           }
         }
@@ -174,7 +175,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     const isQ = Boolean(pl.isQuran || isQuranContent(pl));
     setLibraryMode(isQ ? 'quran' : 'music');
     setSelectedPlaylist(pl);
-    navigateTo('playlist', { id: pl.id || pl._id, albumName: pl.isAlbum ? pl.name : undefined });
+    navigateTo('playlist', { id: pl.id || pl._id, playlist: pl, albumName: pl.isAlbum ? pl.name : undefined });
   }, [goToScreen, navigateTo]);
 
   // Window Popstate Listener
