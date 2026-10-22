@@ -130,35 +130,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.8.5',
+      version: '1.9.8.8',
       name: 'Rivo Web',
-      notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
+      notes: 'إصلاح أزرار التشغيل والتنقل، استمرار البلاي ليست تلقائياً، جلب كلمات الأغاني الرسمية، وإزالة أزرار الترجمة والتقديم.'
     },
     windows: {
-      version: '1.9.8.5',
+      version: '1.9.8.8',
       name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
-      directFile: 'Rivo_Setup.exe',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
+      directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
+      notes: 'تحديث v1.9.8.8 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
     },
     android: {
-      version: '1.9.8.5',
-      build: 77,
+      version: '1.9.8.8',
+      build: 78,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
+      notes: 'تحديث v1.9.8.8 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
     },
     ios: {
-      version: '1.9.8.5',
-      build: 77,
+      version: '1.9.8.8',
+      build: 78,
       name: 'Rivo for iOS (IPA)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.8.3.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
+      notes: 'تحديث v1.9.8.8 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
     }
   }
 };
@@ -175,44 +175,44 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.8.5',
+      version: '1.9.8.8',
       name: 'Rivo Web (Beta)',
-      notes: 'Preview build with test features and latest optimisations.'
+      notes: 'إصلاح أزرار التشغيل والتنقل، استمرار البلاي ليست تلقائياً، جلب كلمات الأغاني الرسمية، وإزالة أزرار الترجمة والتقديم.'
     },
     windows: {
-      version: '1.9.8.5',
+      version: '1.9.8.8',
       name: 'Rivo Desktop for Windows (Beta)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
-      directFile: 'Rivo_Setup.exe',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
+      directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Beta v1.9.7.9: Security patches, in-place self-updater, and offline player enhancements.'
+      notes: 'تحديث v1.9.8.8 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
     },
     android: {
-      version: '1.9.8.5',
-      build: 77,
+      version: '1.9.8.8',
+      build: 78,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات',
-      notesEn: 'Root fix audio playback • Restore original badge • Background auto-advance • Fast seeking & notification fix • Background playlist downloads',
+      notes: 'تحديث v1.9.8.8 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم',
+      notesEn: 'Player buttons fixed • Background playlist auto-advance • Official Genius & LRCLIB lyrics • Removed translation and timing buttons',
       ota: {
         enabled: true,
-        version: '1.9.8.5',
+        version: '1.9.8.8',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث v1.9.8.0 • حل مشكلة تشغيل الأغاني من الجذور • استعادة الشعار الأصلي • استمرار تشغيل الخلفية • تسريع التقديم والنتوفيكيشن • دعم تحميل البلاي ليست بالخلفية',
-        notesEn: 'Root fix audio playback • Restore original badge • Background auto-advance • Fast seeking & notification fix • Background playlist downloads'
+        notes: 'تحديث هوائي فوري v1.9.8.8 • إصلاح أزرار المشغل واستمرار البلاي ليست والكلمات الرسمية',
+        notesEn: 'Instant OTA update v1.9.8.8 • Player controls fix • Playlist auto-advance • Real lyrics'
       }
     },
     ios: {
-      version: '1.9.8.5',
-      build: 77,
+      version: '1.9.8.8',
+      build: 78,
       name: 'Rivo for iOS (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.8.3.ipa',
+      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
+      notes: 'تحديث v1.9.8.8 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
     }
   }
 };
@@ -342,7 +342,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
-  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.8.5';
+  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.8.8';
 
   if (filename.endsWith('.apk')) {
     return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);
