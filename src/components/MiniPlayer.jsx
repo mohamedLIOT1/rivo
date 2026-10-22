@@ -7,10 +7,13 @@ import { normalizeCoverUrl } from '../utils/coverUtils';
 
 export default function MiniPlayer({
   currentTrack,
-  isPlaying,
-  togglePlay,
-  playNext,
-  playPrev,
+  isPlaying: propIsPlaying,
+  togglePlay: propTogglePlay,
+  onTogglePlay,
+  playNext: propPlayNext,
+  onNext,
+  playPrev: propPlayPrev,
+  onPrev,
   isShuffle,
   toggleShuffle,
   isRepeat,
@@ -18,8 +21,10 @@ export default function MiniPlayer({
   toggleRepeat,
   toggleLike,
   likedTrackIds = [],
-  openFullPlayer,
-  openAddToPlaylist,
+  openFullPlayer: propOpenFullPlayer,
+  onOpenFullPlayer,
+  openAddToPlaylist: propOpenAddToPlaylist,
+  onOpenAddToPlaylist,
   currentTime: propCurrentTime,
   duration: propDuration,
   seekTo: propSeekTo,
@@ -32,6 +37,12 @@ export default function MiniPlayer({
 }) {
   const isDark = globalTheme === 'dark';
   const audio = useAudioPlayer();
+  const isPlaying = propIsPlaying !== undefined ? propIsPlaying : audio?.isPlaying;
+  const togglePlay = propTogglePlay || onTogglePlay || audio?.togglePlay;
+  const playNext = propPlayNext || onNext || audio?.playNextTrack;
+  const playPrev = propPlayPrev || onPrev || audio?.playPrevTrack;
+  const openFullPlayer = propOpenFullPlayer || onOpenFullPlayer;
+  const openAddToPlaylist = propOpenAddToPlaylist || onOpenAddToPlaylist;
   const repeatMode = propRepeatMode || audio?.repeatMode || (isRepeat ? 'all' : 'off');
   const rawCurrentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
   const currentTime = rawCurrentTime > 10000 ? Math.round(rawCurrentTime / 1000) : rawCurrentTime;

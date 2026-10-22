@@ -140,8 +140,19 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
   }, [getLikedSongsPlaylist]);
 
   const goToScreen = useCallback((screen, extra = {}) => {
-    if (screen === 'liked') {
+    if (screen === 'liked' || screen === 'playlist:liked') {
       navigateTo('playlist', { id: 'liked', playlist: getLikedSongsPlaylist() });
+      return;
+    }
+    if (typeof screen === 'string' && screen.startsWith('playlist:')) {
+      const plId = screen.slice('playlist:'.length);
+      const foundPl = (playlistsRef.current || []).find(p => String(p.id || p._id) === plId) || { id: plId, name: 'Playlist' };
+      if (foundPl.isLikedSongs || plId === 'liked') {
+        navigateTo('playlist', { id: 'liked', playlist: getLikedSongsPlaylist() });
+        return;
+      }
+      setSelectedPlaylist(foundPl);
+      navigateTo('playlist', { id: foundPl.id || foundPl._id || plId, playlist: foundPl });
       return;
     }
     navigateTo(screen, extra);

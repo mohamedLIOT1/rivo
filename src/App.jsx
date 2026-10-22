@@ -429,6 +429,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
             likedTrackIds={likedTrackIds}
             selectedPlaylist={selectedPlaylist}
             onSelectLikedSongs={() => goToScreen('liked')}
+            onSelectPlaylist={handleSelectPlaylistView}
           />
 
           {/* Main Content Area */}
@@ -496,12 +497,16 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
         <MiniPlayer
           currentTrack={currentTrack}
           isPlaying={isPlaying}
+          togglePlay={togglePlay}
           onTogglePlay={togglePlay}
+          playNext={playNextTrack}
           onNext={playNextTrack}
+          playPrev={playPrevTrack}
           onPrev={playPrevTrack}
           liked={Boolean(currentTrack && likedTrackIds?.some(id => String(id) === String(currentTrack.id || currentTrack._id)))}
           toggleLike={toggleLike}
           toggleDownload={handleDownload}
+          openFullPlayer={openFullPlayer}
           onOpenFullPlayer={openFullPlayer}
           currentTime={currentTime}
           duration={duration}

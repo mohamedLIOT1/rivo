@@ -29,6 +29,7 @@ export default function Navigation({
   likedTrackIds = [],
   selectedPlaylist = null,
   onSelectLikedSongs,
+  onSelectPlaylist,
 }) {
   const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
