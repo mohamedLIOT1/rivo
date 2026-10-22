@@ -9,7 +9,7 @@ try {
 const mongoose = require('mongoose');
 const { auth, adminAuth, optionalAuth } = require('../middleware/auth');
 const { Track, SongLyrics } = require('../models');
-const { fetchLrclibLyrics, getTrackKey, parsePlain } = require('../utils/helpers');
+const { fetchLrclibLyrics, fetchGeniusLyrics, cleanLyricsMetadata, getTrackKey, parsePlain } = require('../utils/helpers');
 
 const genAI = (process.env.GEMINI_API_KEY && GoogleGenerativeAI) ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
 
@@ -195,18 +195,76 @@ router.post('/generate-song-lyrics', optionalAuth, async (req, res) => {
     }
 
     const dur = Math.max(30, parseInt(duration, 10) || 180);
-    const cleanTitle = (title || '')
-      .replace(/\(.*?\)|\[.*?\]|\|.*$/g, '')
-      .replace(/(?:ft\.?|feat\.?|featuring)\s+.*$/i, '')
-      .trim();
-    const cleanArtist = (artist || '')
-      .split(/[|/•,]/)[0]
-      .replace(/\(.*?\)|\[.*?\]/g, '')
-      .trim();
+    const meta = cleanLyricsMetadata ? cleanLyricsMetadata(title, artist) : { cleanTitle: title, cleanArtist: artist, arabicTitle: '' };
+    const cleanTitle = meta.cleanTitle || title;
+    const cleanArtist = meta.cleanArtist || artist;
 
     const trackKey = getTrackKey(title, artist);
 
     // 1. Check database first (SongLyrics or Track)
+    // If lyrics are verified, or from trusted sources ('verified', 'synced', 'genius'), return them
+    if (trackKey && trackKey !== '___') {
+      const found = await SongLyrics.findOne({ trackKey }).lean();
+      if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
+        if (found.isVerified || found.source === 'verified' || found.source === 'synced' || found.source === 'genius') {
+          return res.json({
+            success: true,
+            lyrics: found.lyrics,
+            source: found.source || 'db',
+            isVerified: Boolean(found.isVerified),
+            verifiedBy: found.verifiedBy || ''
+          });
+        }
+      }
+    }
+
+    if (trackId && mongoose.isValidObjectId(trackId)) {
+      const trk = await Track.findById(trackId).lean();
+      if (trk && Array.isArray(trk.lyrics) && trk.lyrics.length > 0) {
+        if (trk.isVerified || trk.isVerifiedLyrics || trk.lyricsVerified) {
+          return res.json({
+            success: true,
+            lyrics: trk.lyrics,
+            source: 'verified',
+            isVerified: true,
+            verifiedBy: trk.verifiedBy || ''
+          });
+        }
+      }
+    }
+
+    // 2. Fetch from LRCLIB / lyrics.ovh (synced lyrics preferred)
+    let onlineLyrics = await fetchLrclibLyrics(cleanTitle, cleanArtist, dur);
+    let lyricsSource = 'synced';
+
+    // 3. Fallback to Genius Scraper (real, official lyrics)
+    if ((!onlineLyrics || onlineLyrics.length === 0) && fetchGeniusLyrics) {
+      onlineLyrics = await fetchGeniusLyrics(cleanTitle, cleanArtist, dur);
+      if (onlineLyrics && onlineLyrics.length > 0) {
+        lyricsSource = 'genius';
+      }
+    }
+
+    if (onlineLyrics && Array.isArray(onlineLyrics) && onlineLyrics.length > 0) {
+      if (trackKey && trackKey !== '___') {
+        await SongLyrics.findOneAndUpdate(
+          { trackKey },
+          {
+            trackKey,
+            trackId: trackId ? String(trackId) : undefined,
+            title,
+            artist,
+            lyrics: onlineLyrics,
+            source: lyricsSource,
+            isVerified: false
+          },
+          { upsert: true, new: true }
+        ).catch(() => {});
+      }
+      return res.json({ success: true, lyrics: onlineLyrics, source: lyricsSource, isVerified: false });
+    }
+
+    // If SongLyrics had an unverified cached entry and online search gave nothing, return it
     if (trackKey && trackKey !== '___') {
       const found = await SongLyrics.findOne({ trackKey }).lean();
       if (found && Array.isArray(found.lyrics) && found.lyrics.length > 0) {
@@ -220,46 +278,12 @@ router.post('/generate-song-lyrics', optionalAuth, async (req, res) => {
       }
     }
 
-    if (trackId && mongoose.isValidObjectId(trackId)) {
-      const trk = await Track.findById(trackId).lean();
-      if (trk && Array.isArray(trk.lyrics) && trk.lyrics.length > 0) {
-        return res.json({
-          success: true,
-          lyrics: trk.lyrics,
-          source: trk.isVerified ? 'verified' : 'manual',
-          isVerified: Boolean(trk.isVerified || trk.isVerifiedLyrics),
-          verifiedBy: trk.verifiedBy || ''
-        });
-      }
-    }
-
-    // 2. Fetch from LRCLIB / lyrics.ovh
-    const onlineLyrics = await fetchLrclibLyrics(cleanTitle || title, cleanArtist || artist, dur);
-    if (onlineLyrics && Array.isArray(onlineLyrics) && onlineLyrics.length > 0) {
-      if (trackKey && trackKey !== '___') {
-        await SongLyrics.findOneAndUpdate(
-          { trackKey },
-          {
-            trackKey,
-            trackId: trackId ? String(trackId) : undefined,
-            title,
-            artist,
-            lyrics: onlineLyrics,
-            source: 'synced',
-            isVerified: false
-          },
-          { upsert: true, new: true }
-        ).catch(() => {});
-      }
-      return res.json({ success: true, lyrics: onlineLyrics, source: 'synced', isVerified: false });
-    }
-
-    // 3. Fallback: AI Generation with Gemini
+    // 4. Fallback: AI Generation with Gemini (Strict Real Lyrics Only - NO Hallucination)
     if (process.env.GEMINI_API_KEY && genAI) {
       try {
         const model = getGeminiModel();
         if (model) {
-          const prompt = `You are an expert music lyrics researcher and archivist. Provide the exact song lyrics for "${title}" by artist "${artist || 'Unknown'}".
+          const prompt = `You are a music lyrics researcher. Provide the exact, official, real-world song lyrics for the song "${cleanTitle}" by artist "${cleanArtist}".
 Duration: approximately ${dur} seconds.
 Output requirements:
 Return ONLY a valid JSON array of objects with "time" (in seconds, numbers starting from 0, increasing chronologically up to ${dur}) and "text" (the line of lyrics in its original language, e.g. Arabic, English, etc.).
@@ -268,10 +292,11 @@ Example format:
   {"time": 0, "text": "First line"},
   {"time": 12, "text": "Second line"}
 ]
-Rules:
-- DO NOT wrap in markdown code blocks (\`\`\`json).
-- Return ONLY the raw JSON array.
-- If you do not know the lyrics for this song, return: []`;
+CRITICAL RULES:
+- DO NOT invent, hallucinate, rhyme, or make up lyrics under ANY circumstances.
+- If you do not know the exact, real-world official lyrics to this specific song, you MUST return ONLY an empty array: []
+- DO NOT wrap in markdown code blocks.
+- Return ONLY the raw JSON array.`;
 
           const result = await model.generateContent(prompt);
           const rawText = result.response.text().trim();
@@ -320,7 +345,7 @@ Rules:
   }
 });
 
-// هـ. AI Smart Shuffle Stream Resolver
+// د. AI & Online Song Lyrics Generator / Search
 router.post('/smart-shuffle', optionalAuth, async (req, res) => {
   try {
     const { currentTrack, seedTracks = [], followedArtists = [], limit = 8 } = req.body;

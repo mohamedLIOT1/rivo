@@ -281,7 +281,7 @@ export default function AdminScreen({
       const data = await res.json();
       if (data.success) {
         flashMessage(data.message || `Deduplication complete: Purged ${data.removedCount} duplicate tracks.`);
-        if (onTrackDeleted) onTrackDeleted();
+        if (typeof onDeleteTrack === 'function') onDeleteTrack();
       } else {
         flashMessage(data.error || 'Failed to deduplicate tracks');
       }

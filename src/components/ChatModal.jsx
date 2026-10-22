@@ -259,7 +259,7 @@ export default function ChatModal({
           });
           setTimeout(scrollToBottom, 100);
         } else {
-          fetchConversations();
+          fetchHubData();
         }
       }
     } catch (err) {

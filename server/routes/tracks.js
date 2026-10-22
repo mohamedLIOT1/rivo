@@ -20,6 +20,8 @@ const {
   resolveOfficialYouTubeAudioStream,
   getTrackKey,
   fetchLrclibLyrics,
+  fetchGeniusLyrics,
+  cleanLyricsMetadata,
   getCookiesPath,
   getYtDlpBin,
   invalidateAudioCache
@@ -1186,7 +1188,7 @@ router.get('/stream-proxy', async (req, res) => {
 // Download track with tags
 router.get('/download', async (req, res) => {
   try {
-    let { url, title, artist, id, trackId } = req.query;
+    let { url, title, artist, id, trackId, duration } = req.query;
     trackId = trackId || id;
     let dbTrack = null;
     if (trackId && mongoose.isValidObjectId(trackId)) {
@@ -1208,6 +1210,7 @@ router.get('/download', async (req, res) => {
       url = url || dbTrack.audioUrl;
       title = title || dbTrack.title;
       artist = artist || dbTrack.artist;
+      duration = duration || dbTrack.duration;
     }
 
     const sanitizeTag = (str, fallback = 'Rivo') => {
@@ -1562,7 +1565,13 @@ router.get('/lyrics', async (req, res) => {
     }
 
     if (title) {
-      const lyrics = await fetchLrclibLyrics(title, artist, 180);
+      const meta = cleanLyricsMetadata(title, artist);
+      let lyrics = await fetchLrclibLyrics(meta.cleanTitle || title, meta.cleanArtist || artist, 180);
+      let lyricSource = 'synced';
+      if (!lyrics || lyrics.length === 0) {
+        lyrics = await fetchGeniusLyrics(meta.cleanTitle || title, meta.cleanArtist || artist, 180);
+        lyricSource = 'genius';
+      }
       if (lyrics && lyrics.length > 0) {
         const shouldBeVerified = isTrackVerified;
         if (trackKey && trackKey !== '___') {
@@ -1575,7 +1584,7 @@ router.get('/lyrics', async (req, res) => {
                 title, 
                 artist, 
                 lyrics, 
-                source: shouldBeVerified ? 'verified' : 'synced', 
+                source: shouldBeVerified ? 'verified' : lyricSource, 
                 isVerified: shouldBeVerified,
                 ...(shouldBeVerified && verifiedBy ? { verifiedBy } : {})
               } 
@@ -1586,7 +1595,7 @@ router.get('/lyrics', async (req, res) => {
         return res.json({ 
           success: true, 
           lyrics, 
-          source: shouldBeVerified ? 'verified' : 'synced', 
+          source: shouldBeVerified ? 'verified' : lyricSource, 
           isVerified: shouldBeVerified,
           verifiedBy: shouldBeVerified ? verifiedBy : ''
         });

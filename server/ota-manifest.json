@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.8.7",
+  "version": "1.9.8.8",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث تجريبي فوري v1.9.8.7 (Beta) • إصلاح استقرار التطبيق وشاشة Recovery • بحث الخزنة الأوفلاين وحذف فائق السرعة",
-  "notesEn": "Beta Hotfix v1.9.8.7 • Stability hotfix for recovery screen • Offline vault search & bulk delete",
-  "bundleSize": 3301442,
+  "notes": "إصلاح أزرار التشغيل والتنقل وإزالة أزرار الترجمة والتقديم وتحسين الليركس الرسمي",
+  "notesEn": "Instant in-app OTA update (3.15 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 3301469,
   "sizeMb": "3.15 MB",
-  "updatedAt": "2026-10-22T14:44:29.947Z"
+  "updatedAt": "2026-10-22T17:33:00.582Z"
 }

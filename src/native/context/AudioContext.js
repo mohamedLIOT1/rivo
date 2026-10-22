@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +14,7 @@ import {
   deduplicateTrackList,
   subscribeToDownloadedTracks,
   updateDownloadedTrackLyrics,
+  getTrackDedupeKey,
 } from '../services/downloadManager';
 import { resolveAudioStream } from '../services/youtubeResolver';
 import { showMediaNotification, updateMediaNotification, hideMediaNotification, subscribeToMediaActions } from '../services/mediaControls';
@@ -534,20 +535,6 @@ export const AudioProvider = ({ children }) => {
     const cleaned = deduplicateTrackList(updated || []);
     setDownloadedTracks(cleaned);
     downloadedTracksRef.current = cleaned;
-
-    const targetIds = new Set(
-      (Array.isArray(tracksOrIds) ? tracksOrIds : [tracksOrIds])
-        .filter(Boolean)
-        .map(t => (typeof t === 'object' ? String(t._id || t.id || '') : String(t)))
-        .filter(Boolean)
-    );
-
-    setDownloadedTrackIds(prev => {
-      const next = new Set(prev);
-      targetIds.forEach(id => next.delete(id));
-      return next;
-    });
-
     return cleaned;
   };
 

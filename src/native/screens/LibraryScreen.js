@@ -15,6 +15,7 @@ import {
   TextInput,
   BackHandler,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -378,7 +379,7 @@ export default function LibraryScreen({
     }
 
     setIsDownloadingAll(false);
-    showToast(`Saved all ${count} track(s) to Offline Vault!`, 'success');
+    showToast(`Saved all ${toDownload.length} track(s) to Offline Vault!`, 'success');
   };
 
   const openEditPlaylist = (pl) => {

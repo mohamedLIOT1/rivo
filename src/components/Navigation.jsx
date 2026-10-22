@@ -273,15 +273,16 @@ export default function Navigation({
 
 
               {filteredPlaylists.map((pl, idx) => {
-                const isActive = currentScreen === `playlist:${pl.id}` || (currentScreen === 'playlist' && pl.id);
+                const plId = pl.id || pl._id;
+                const isActive = currentScreen === `playlist:${plId}` || (currentScreen === 'playlist' && String(selectedPlaylist?.id || selectedPlaylist?._id) === String(plId));
                 const count = (pl.trackIds || []).length;
                 const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899'];
                 const badgeColor = colors[idx % colors.length];
 
                 return (
                   <div
-                    key={pl.id || idx}
-                    onClick={() => setCurrentScreen(`playlist:${pl.id}`)}
+                    key={plId || idx}
+                    onClick={() => onSelectPlaylist ? onSelectPlaylist(pl) : setCurrentScreen(`playlist:${plId}`)}
                     className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition ${
                       isActive 
                         ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm' : 'bg-[#ede5d3] brutal-shadow-sm'

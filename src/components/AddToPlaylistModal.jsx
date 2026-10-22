@@ -31,7 +31,7 @@ export default function AddToPlaylistModal({
   const handlePlaylistClick = (pl) => {
     if (isMultiple) {
       for (const t of track) {
-        onAddTrackToPlaylist?.(t.id || t._id, pl.id, true);
+        onAddTrackToPlaylist?.(t.id || t._id, pl.id || pl._id, true);
       }
       onClose();
       return;
@@ -41,7 +41,7 @@ export default function AddToPlaylistModal({
     if (isAlreadyAdded) {
       setDuplicateConfirmPlaylist(pl);
     } else {
-      onAddTrackToPlaylist?.(sampleTrack.id || sampleTrack._id, pl.id, false);
+      onAddTrackToPlaylist?.(sampleTrack.id || sampleTrack._id, pl.id || pl._id, false);
       onClose();
     }
   };
@@ -109,7 +109,7 @@ export default function AddToPlaylistModal({
               <button
                 type="button"
                 onClick={() => {
-                  onAddTrackToPlaylist?.(track.id || track._id, duplicateConfirmPlaylist.id, true);
+                  onAddTrackToPlaylist?.(track.id || track._id, duplicateConfirmPlaylist.id || duplicateConfirmPlaylist._id, true);
                   setDuplicateConfirmPlaylist(null);
                   onClose();
                 }}

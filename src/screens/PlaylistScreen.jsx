@@ -30,6 +30,7 @@ export default function PlaylistScreen({
   onRemoveTrackFromPlaylist,
   onDeleteTrack,
   onDeletePlaylist = () => {},
+  onUpdatePlaylist = () => {},
   onDeleteAlbum,
   onTogglePlaylistVisibility = () => {},
   onSavePlaylist,

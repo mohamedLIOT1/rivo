@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
 import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
 import TrackActionMenuModal from './TrackActionMenuModal';
@@ -83,11 +84,11 @@ function extractColorFromImage(src, callback) {
 
 export default function FullPlayerModal({
   currentTrack,
-  isPlaying,
-  togglePlay,
-  playNext,
-  playPrev,
-  toggleLike,
+  isPlaying: propIsPlaying,
+  togglePlay: propTogglePlay,
+  playNext: propPlayNext,
+  playPrev: propPlayPrev,
+  toggleLike: propToggleLike,
   likedTrackIds = [],
   toggleDownload,
   isOpen,
@@ -128,8 +129,17 @@ export default function FullPlayerModal({
     audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration,
     isShuffle: ctxIsShuffle, toggleShuffle: ctxToggleShuffle,
     isRepeat: ctxIsRepeat, repeatMode: ctxRepeatMode, toggleRepeat: ctxToggleRepeat, setIsRepeat,
-    currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue
+    currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue,
+    togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
+    isPlaying: ctxIsPlaying
   } = useAudioPlayer();
+
+  const { toggleLike: ctxToggleLike } = useUser() || {};
+  const isPlaying = propIsPlaying !== undefined ? propIsPlaying : ctxIsPlaying;
+  const togglePlay = propTogglePlay || ctxTogglePlay;
+  const playNext = propPlayNext || ctxPlayNextTrack;
+  const playPrev = propPlayPrev || ctxPlayPrevTrack;
+  const toggleLike = propToggleLike || ctxToggleLike;
 
   const isShuffle = propIsShuffle !== undefined ? propIsShuffle : ctxIsShuffle;
   const toggleShuffle = propToggleShuffle || ctxToggleShuffle;
@@ -264,19 +274,12 @@ export default function FullPlayerModal({
   const rawActiveDur = (duration !== undefined && duration > 0) ? duration : (audioDuration || currentTrack?.duration || 210);
   const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
 
-  const [isTranslating, setIsTranslating] = useState(false);
-  const [translatedLyrics, setTranslatedLyrics] = useState(null);
-  const [showTranslation, setShowTranslation] = useState(false);
-  const [syncOffset, setSyncOffset] = useState(0);
 
   const [localLyrics, setLocalLyrics] = useState(null);
   const [isLyricsVerified, setIsLyricsVerified] = useState(false);
   const [lyricsVerifiedBy, setLyricsVerifiedBy] = useState(null);
 
   useEffect(() => {
-    setSyncOffset(0);
-    setTranslatedLyrics(null);
-    setShowTranslation(false);
 
     if (!isOpen || !currentTrack) return;
 
@@ -425,17 +428,10 @@ export default function FullPlayerModal({
     };
   }, [currentTrack?.id, currentTrack?._id, currentTrack?.title]);
 
-  const rawLyrics = localLyrics || (currentTrack?.lyrics ? parseLrcLyrics(currentTrack.lyrics) : []);
-  const baseLyrics = (showTranslation && translatedLyrics) ? translatedLyrics : rawLyrics;
-
   const lyrics = useMemo(() => {
-    if (!baseLyrics || !baseLyrics.length) return [];
-    if (!syncOffset) return baseLyrics;
-    return baseLyrics.map(l => ({
-      ...l,
-      time: Math.max(0, Math.round((l.time + syncOffset) * 100) / 100)
-    }));
-  }, [baseLyrics, syncOffset]);
+    return localLyrics || (currentTrack?.lyrics ? parseLrcLyrics(currentTrack.lyrics) : []);
+  }, [localLyrics, currentTrack?.lyrics]);
+  const rawLyrics = lyrics;
 
   const [activeLyricIndex, setActiveLyricIndex] = useState(-1);
 
@@ -469,86 +465,6 @@ export default function FullPlayerModal({
     }, 100);
     return () => clearInterval(interval);
   }, [isOpen, isPlaying, lyrics, isYtTrack, audioRef, getActiveLyricIndexForTime]);
-
-  const handleNudgeSync = (delta) => {
-    setSyncOffset(prev => {
-      const next = Math.round((prev + delta) * 10) / 10;
-      showToast(next === 0 ? 'Lyrics sync reset' : `Lyrics timing: ${next > 0 ? '+' : ''}${next}s ${next < 0 ? '(earlier)' : '(later)'}`);
-      return next;
-    });
-    setTimeout(() => {
-      scrollToActiveLyric('smooth');
-    }, 60);
-  };
-
-  const [isSavingSync, setIsSavingSync] = useState(false);
-  const handleSavePermanentSync = async () => {
-    if (!currentTrack || !rawLyrics.length || syncOffset === 0) return;
-    setIsSavingSync(true);
-    try {
-      const shifted = rawLyrics.map(l => ({
-        ...l,
-        time: Math.max(0, Math.round((Number(l.time || 0) + syncOffset) * 100) / 100)
-      }));
-      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || (currentUser && currentUser.token);
-      await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          trackId: currentTrack.id || currentTrack._id,
-          title: currentTrack.title,
-          artist: currentTrack.artist,
-          audioUrl: currentTrack.audioUrl,
-          lyrics: shifted,
-          isVerified: isLyricsVerified
-        })
-      });
-      currentTrack.lyrics = shifted;
-      setLocalLyrics(shifted);
-      setSyncOffset(0);
-      showToast('Lyrics sync permanently saved!');
-    } catch (err) {
-      console.warn('Failed to save sync:', err);
-      showToast('Failed to save sync');
-    }
-    setIsSavingSync(false);
-  };
-
-
-  const handleTranslateLyrics = async () => {
-    if (showTranslation) {
-      setShowTranslation(false);
-      return;
-    }
-    if (translatedLyrics) {
-      setShowTranslation(true);
-      return;
-    }
-    if (!rawLyrics.length) return;
-    setIsTranslating(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/ai/translate-lyrics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lyrics: rawLyrics,
-          title: currentTrack?.title,
-          artist: currentTrack?.artist
-        })
-      });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.translatedLyrics)) {
-        setTranslatedLyrics(data.translatedLyrics);
-        setShowTranslation(true);
-      }
-    } catch (e) {
-      console.warn('AI Translate error:', e);
-    }
-    setIsTranslating(false);
-  };
 
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
@@ -646,8 +562,6 @@ export default function FullPlayerModal({
         handleGenerateLyrics();
       }
 
-      setTranslatedLyrics(null);
-      setShowTranslation(false);
       setIsManualEditOpen(false);
     } catch (e) {
       console.warn('Save manual lyrics error:', e);
@@ -673,8 +587,6 @@ export default function FullPlayerModal({
           const parsed = parseLrcLyrics(d.lyrics);
           currentTrack.lyrics = parsed;
           setLocalLyrics(parsed);
-          setTranslatedLyrics(null);
-          setShowTranslation(false);
           setIsLyricsVerified(Boolean(d.isVerified));
           setLyricsVerifiedBy(d.verifiedBy || null);
           showToast('Lyrics found successfully!');
@@ -701,8 +613,6 @@ export default function FullPlayerModal({
           const parsedAi = parseLrcLyrics(data.lyrics);
           currentTrack.lyrics = parsedAi;
           setLocalLyrics(parsedAi);
-          setTranslatedLyrics(null);
-          setShowTranslation(false);
           setIsLyricsVerified(Boolean(data.isVerified));
           setLyricsVerifiedBy(data.verifiedBy || null);
           showToast('Lyrics generated via AI!');
@@ -744,8 +654,6 @@ export default function FullPlayerModal({
       setLocalLyrics([]);
       setIsLyricsVerified(false);
       setLyricsVerifiedBy(null);
-      setTranslatedLyrics(null);
-      setShowTranslation(false);
     } catch (e) {
       console.warn('Clear lyrics error:', e);
     }
@@ -1647,7 +1555,7 @@ export default function FullPlayerModal({
             </div>
 
             <button 
-              onClick={() => toggleLike(currentTrack.id)}
+              onClick={() => toggleLike && toggleLike(currentTrack?.id || currentTrack?._id)}
               className={`p-2 rounded-xl brutal-btn hover:scale-105 active:scale-95 cursor-pointer shrink-0 ${
                 isDark 
                   ? 'bg-[#182421] hover:bg-[#20302c] border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.12)] text-white' 
@@ -1934,63 +1842,6 @@ export default function FullPlayerModal({
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {rawLyrics.length > 0 && (
-                  <div className="inline-flex items-center rounded-lg overflow-hidden border border-zinc-700/60 bg-black/20 p-0.5 text-[10px] font-mono font-bold">
-                    <button
-                      onClick={() => handleNudgeSync(-0.5)}
-                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
-                      title="Nudge lyrics 0.5s earlier"
-                    >
-                      -0.5s
-                    </button>
-                    <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
-                    <button
-                      onClick={() => handleNudgeSync(0.5)}
-                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
-                      title="Nudge lyrics 0.5s later"
-                    >
-                      +0.5s
-                    </button>
-                    {syncOffset !== 0 && (
-                      <>
-                        <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
-                        <button
-                          onClick={() => setSyncOffset(0)}
-                          className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors flex items-center gap-0.5"
-                          title="Reset sync offset"
-                        >
-                          <span>{syncOffset > 0 ? `+${syncOffset}` : syncOffset}s</span>
-                          <X size={10} />
-                        </button>
-                        <button
-                          onClick={handleSavePermanentSync}
-                          disabled={isSavingSync}
-                          className="ml-0.5 px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] font-bold hover:brightness-110 transition-all flex items-center gap-0.5 disabled:opacity-50"
-                          title="Save adjusted timing permanently"
-                        >
-                          {isSavingSync ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                          <span>Save</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-                {rawLyrics.length > 0 && (
-                  <button
-                    onClick={handleTranslateLyrics}
-                    disabled={isTranslating}
-                    className={`p-1.5 rounded-lg transition-all text-xs ${
-                      showTranslation 
-                        ? 'text-[#0b1110] bg-[#17a398]' 
-                        : isDark 
-                          ? 'bg-[#182421] text-zinc-300 hover:text-white border border-zinc-700/60' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-zinc-300'
-                    }`}
-                    title={showTranslation ? "Hide translation" : "Translate lyrics"}
-                  >
-                    {isTranslating ? <Loader2 size={13} className="animate-spin" /> : <Languages size={13} />}
-                  </button>
-                )}
                 {isAdmin && (
                   <div className="flex items-center gap-1">
                     <button
@@ -2073,64 +1924,6 @@ export default function FullPlayerModal({
                     <CheckCircle2 size={12} className="text-[#17a398]" />
                     <span className="text-[10px] font-mono font-bold uppercase">Verified</span>
                   </div>
-                )}
-                {rawLyrics.length > 0 && (
-                  <div className="inline-flex items-center rounded-lg overflow-hidden border border-zinc-700/60 bg-black/20 p-0.5 text-[10px] font-mono font-bold">
-                    <button
-                      onClick={() => handleNudgeSync(-0.5)}
-                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
-                      title="Nudge lyrics 0.5s earlier"
-                    >
-                      -0.5s
-                    </button>
-                    <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
-                    <button
-                      onClick={() => handleNudgeSync(0.5)}
-                      className="px-1.5 py-0.5 rounded text-zinc-300 hover:text-white hover:bg-white/10 transition-colors"
-                      title="Nudge lyrics 0.5s later"
-                    >
-                      +0.5s
-                    </button>
-                    {syncOffset !== 0 && (
-                      <>
-                        <div className="w-[1px] h-3 bg-zinc-700/60 mx-0.5" />
-                        <button
-                          onClick={() => setSyncOffset(0)}
-                          className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors flex items-center gap-0.5"
-                          title="Reset sync offset"
-                        >
-                          <span>{syncOffset > 0 ? `+${syncOffset}` : syncOffset}s</span>
-                          <X size={10} />
-                        </button>
-                        <button
-                          onClick={handleSavePermanentSync}
-                          disabled={isSavingSync}
-                          className="ml-0.5 px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] font-bold hover:brightness-110 transition-all flex items-center gap-0.5 disabled:opacity-50"
-                          title="Save adjusted timing permanently"
-                        >
-                          {isSavingSync ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                          <span>Save</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-                {rawLyrics.length > 0 && (
-                  <button
-                    onClick={handleTranslateLyrics}
-                    disabled={isTranslating}
-                    className={`px-2 py-1 rounded-lg transition-all text-xs font-bold flex items-center gap-1 ${
-                      showTranslation 
-                        ? 'text-[#0b1110] bg-[#17a398] font-bold' 
-                        : isDark 
-                          ? 'bg-[#182421] text-zinc-300 hover:text-white border border-zinc-700/60' 
-                          : 'bg-white text-zinc-700 hover:text-black border border-zinc-300'
-                    }`}
-                    title="Translate Lyrics"
-                  >
-                    {isTranslating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={13} />}
-                    <span className="text-[10px]">Translate</span>
-                  </button>
                 )}
                 {isAdmin && (
                   <div className="flex items-center gap-1">

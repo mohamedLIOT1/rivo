@@ -29,6 +29,7 @@ export default function AppModals({
   albums,
   setAlbums,
   likedTrackIds,
+  toggleLike,
   syncFromServer,
   audioQuality,
   setAudioQuality,
@@ -121,6 +122,9 @@ export default function AppModals({
     isRepeat,
     repeatMode,
     toggleRepeat,
+    togglePlay,
+    playNextTrack,
+    playPrevTrack,
     currentQueue,
     currentQueueIndex,
     playTrack,
@@ -149,6 +153,10 @@ export default function AppModals({
       <FullPlayerModal
         currentTrack={currentTrack}
         isPlaying={isPlaying}
+        togglePlay={togglePlay}
+        playNext={playNextTrack}
+        playPrev={playPrevTrack}
+        toggleLike={toggleLike}
         likedTrackIds={likedTrackIds}
         toggleDownload={handleDownload}
         isOpen={isFullPlayerOpen}

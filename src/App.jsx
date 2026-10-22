@@ -40,7 +40,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     volume, setVolume,
     isShuffle, setIsShuffle, toggleShuffle,
     isRepeat, setIsRepeat, repeatMode, toggleRepeat,
-    togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo,
+    togglePlay, playTrack, playNextTrack, playPrevTrack, seekTo, addToQueue,
   } = audio;
 
   const {
@@ -312,14 +312,25 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
 
   const handleAddTrackToPlaylist = async (trackId, playlistId, allowDuplicate = false) => {
     const cleanTrackId = String(trackId);
+    const cleanPlId = String(playlistId);
     setPlaylists(prev => prev.map(pl => {
-      if (String(pl.id) !== String(playlistId)) return pl;
+      if (String(pl.id || pl._id) !== cleanPlId) return pl;
       const ids = (pl.trackIds || []).map(String);
       if (!allowDuplicate && ids.includes(cleanTrackId)) return pl;
       return { ...pl, trackIds: [...ids, cleanTrackId] };
     }));
+    setSelectedPlaylist(prev => {
+      if (!prev || String(prev.id || prev._id) !== cleanPlId) return prev;
+      const ids = (prev.trackIds || []).map(String);
+      if (!allowDuplicate && ids.includes(cleanTrackId)) return prev;
+      return { ...prev, trackIds: [...ids, cleanTrackId] };
+    });
+    const newTrack = (tracks || []).find(t => String(t.id || t._id) === cleanTrackId);
+    if (newTrack && addToQueue) {
+      addToQueue(newTrack);
+    }
     try {
-      await dataService.addTrackToPlaylist(playlistId, cleanTrackId, allowDuplicate);
+      await dataService.addTrackToPlaylist(cleanPlId, cleanTrackId, allowDuplicate);
     } catch {}
   };
 

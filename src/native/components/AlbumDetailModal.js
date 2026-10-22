@@ -248,6 +248,7 @@ export default function AlbumDetailModal({
           }
         }
 
+        const cleanId = albId.replace(/^album-/, '');
         const queryName = album.name || cleanId || albId || '';
         const targetUrl = (albId && String(albId).length === 24)
           ? `${API_BASE_URL}/api/albums/${albId}`
