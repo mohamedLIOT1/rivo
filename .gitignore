@@ -1,34 +1,78 @@
+# Dependencies
 node_modules/
-.DS_Store
+server/node_modules/
+
+# Environment and sensitive keys
 .env
-*.log
-*-player-script.js
-*-watch.html
-.idea/
+.env.local
+.env.*.local
+cookies.txt
+server/cookies.txt
+src-tauri/*.key
+
+# Build outputs and distribution directories
+dist/
+build/
+bin/
+publish/
+dist_ios/
+expo_ios_dist/
+ios_artifact/
+drawable-mdpi/
+release-desktop/
+downloaded_ipa/
+temp_artifacts_*/
 .artifacts/
+
+# Native OS and Mobile Builds
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/index.android.bundle
+android/local.properties
+ios/build/
+ios/Pods/
+src-tauri/target/
+
+# Bundles & Compiled Assets
+*.bundle
+*.jsbundle
+*.hermes.bundle
+android_main.jsbundle
+ios_main.jsbundle
+ios_main.hermes.bundle
+main.hermes.bundle
+
+# Binaries & Packages
 *.apk
 *.ipa
 *.aab
-android/app/src/main/assets/
-ios/build/
-android/build/
-android/app/build/
-downloaded_ipa/
-uploads/audio-cache/
 *.exe
+*.dll
 *.pdb
-*.tar.gz
 *.idsig
-temp_artifacts_*/
-desktop-app/bin/
-desktop-app/obj/
-release-desktop/
-src-tauri/target/
-src-tauri/*.key
-scripts/__pycache__/
+*.sig
+*.tar.gz
+*.zip
 
-*.bundle
+# Public downloads (Keep OTA and configuration files only)
 public/downloads/*
+!public/downloads/.gitkeep
+!public/downloads/windows-update.json
 !public/downloads/ota/
 !public/downloads/ota/*
 
+# Uploads & Caches
+uploads/audio-cache/
+uploads/*
+!uploads/.gitkeep
+scripts/__pycache__/
+*.log
+*-player-script.js
+*-watch.html
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

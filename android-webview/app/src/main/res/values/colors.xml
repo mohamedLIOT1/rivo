@@ -1,8 +1,0 @@
-<resources>
-    <color name="colorPrimary">#0A0A0C</color>
-    <color name="colorPrimaryDark">#050507</color>
-    <color name="colorAccent">#E02847</color>
-    <color name="backgroundColor">#0A0A0C</color>
-    <color name="iconBackground">#1b4e3b</color>
-    <color name="splashscreen_background">#09090b</color>
-</resources>
