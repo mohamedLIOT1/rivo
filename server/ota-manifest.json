@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.8.4",
+  "version": "1.9.8.5",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث v1.9.8.4 هوائي فوري • تشغيل خوارزمية الذوق الذكية بربطها باستماعك الحقيقي • تصليح التشغيل العشوائي الذكي Smart Shuffle • تحسينات شاملة",
-  "notesEn": "Instant OTA v1.9.8.4 • Smart Taste & Mood Engine now learns from actual listening history • Fixed Smart Shuffle AI • Overall stability.",
-  "bundleSize": 3268494,
-  "sizeMb": "3.12 MB",
-  "updatedAt": "2026-10-22T08:33:24.681Z"
+  "notes": "تحديث هوائي فوري (3.14 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
+  "notesEn": "Instant in-app OTA update (3.14 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 3296857,
+  "sizeMb": "3.14 MB",
+  "updatedAt": "2026-10-22T12:29:07.127Z"
 }

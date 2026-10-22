@@ -107,7 +107,7 @@ const QueueRowItem = React.memo(function QueueRowItem({
               styles.dragHandle,
               isDragging && { backgroundColor: colors.mint + '44' }
             ]}
-            hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+            hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
           >
             <GripVertical size={18} color={isDragging ? colors.mint : (isDark ? '#94a3b8' : '#64748b')} />
           </View>
@@ -151,6 +151,16 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
   const scrollOffsetRef = useRef(0);
   const autoScrollTimerRef = useRef(null);
 
+  const queueLengthRef = useRef(queue.length);
+  useEffect(() => {
+    queueLengthRef.current = queue.length;
+  }, [queue.length]);
+
+  const reorderQueueRef = useRef(reorderQueue);
+  useEffect(() => {
+    reorderQueueRef.current = reorderQueue;
+  }, [reorderQueue]);
+
   draggingIdxRef.current = draggingIdx;
   hoverIdxRef.current = hoverIdx;
 
@@ -162,26 +172,27 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
   }, []);
 
   const handleAutoScroll = useCallback((moveY) => {
-    const topEdge = 160;
-    const bottomEdge = height - 160;
+    // Only auto-scroll when user finger reaches near top or bottom extremities
+    const topLimit = 110;
+    const bottomLimit = height - 130;
 
-    if (moveY < topEdge && scrollOffsetRef.current > 0) {
+    if (moveY < topLimit && scrollOffsetRef.current > 0) {
       if (!autoScrollTimerRef.current) {
         autoScrollTimerRef.current = setInterval(() => {
           if (scrollOffsetRef.current <= 0) {
             stopAutoScroll();
             return;
           }
-          scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 14);
+          scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 12);
           listRef.current?.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-        }, 25);
+        }, 40);
       }
-    } else if (moveY > bottomEdge) {
+    } else if (moveY > bottomLimit) {
       if (!autoScrollTimerRef.current) {
         autoScrollTimerRef.current = setInterval(() => {
-          scrollOffsetRef.current += 14;
+          scrollOffsetRef.current += 12;
           listRef.current?.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-        }, 25);
+        }, 40);
       }
     } else {
       stopAutoScroll();
@@ -195,9 +206,9 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
   const createPanResponder = (index) => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 3,
-      onMoveShouldSetPanResponderCapture: (_, gestureState) => Math.abs(gestureState.dy) > 3,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderTerminationRequest: () => false,
       onShouldBlockNativeResponder: () => true,
       onPanResponderGrant: () => {
@@ -211,7 +222,8 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
       onPanResponderMove: (_, gestureState) => {
         panY.setValue(gestureState.dy);
         const deltaSlots = Math.round(gestureState.dy / QUEUE_ROW_HEIGHT);
-        const nextHover = Math.max(0, Math.min(queue.length - 1, index + deltaSlots));
+        const maxIdx = Math.max(0, queueLengthRef.current - 1);
+        const nextHover = Math.max(0, Math.min(maxIdx, index + deltaSlots));
         if (hoverIdxRef.current !== nextHover) {
           hoverIdxRef.current = nextHover;
           setHoverIdx(nextHover);
@@ -222,8 +234,9 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
         stopAutoScroll();
         const from = index;
         const to = hoverIdxRef.current;
-        if (to !== null && to !== undefined && to !== from && reorderQueue) {
-          reorderQueue(from, to);
+        const fn = reorderQueueRef.current;
+        if (to !== null && to !== undefined && to !== from && typeof fn === 'function') {
+          fn(from, to);
         }
         draggingIdxRef.current = null;
         hoverIdxRef.current = null;
@@ -235,8 +248,9 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
         stopAutoScroll();
         const from = index;
         const to = hoverIdxRef.current;
-        if (to !== null && to !== undefined && to !== from && reorderQueue) {
-          reorderQueue(from, to);
+        const fn = reorderQueueRef.current;
+        if (to !== null && to !== undefined && to !== from && typeof fn === 'function') {
+          fn(from, to);
         }
         draggingIdxRef.current = null;
         hoverIdxRef.current = null;
@@ -249,7 +263,7 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
 
   const panResponders = useMemo(() => {
     return queue.map((_, i) => createPanResponder(i));
-  }, [queue.length, reorderQueue]);
+  }, [queue.length]);
 
   const renderItem = useCallback(({ item, index }) => {
     const isItemPlaying = String(item._id || item.id) === trackId;
@@ -288,16 +302,16 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
         scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
       }}
       scrollEventThrottle={16}
-      keyExtractor={(item, index) => `${item._id || item.id}-${index}`}
+      keyExtractor={(item, index) => `${item._id || item.id || 'track'}-${index}`}
       getItemLayout={(data, index) => ({
         length: QUEUE_ROW_HEIGHT,
         offset: QUEUE_ROW_HEIGHT * index,
         index,
       })}
-      initialNumToRender={12}
+      initialNumToRender={14}
       maxToRenderPerBatch={10}
       windowSize={7}
-      removeClippedSubviews={Platform.OS === 'android'}
+      removeClippedSubviews={draggingIdx === null && Platform.OS === 'android'}
       renderItem={renderItem}
       contentContainerStyle={styles.queueBody}
       ListEmptyComponent={
@@ -306,6 +320,15 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
         </View>
       }
     />
+  );
+}, (prev, next) => {
+  return (
+    prev.queue === next.queue &&
+    prev.trackId === next.trackId &&
+    prev.isDark === next.isDark &&
+    prev.deckBg === next.deckBg &&
+    prev.deckBorder === next.deckBorder &&
+    prev.textTitle === next.textTitle
   );
 });
 

@@ -130,12 +130,12 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       name: 'Rivo Web',
       notes: 'Web browser release with hi-fi streaming, responsive design, and enhanced lyrics sync.'
     },
     windows: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
@@ -143,7 +143,7 @@ const APP_VERSIONS_DATA = {
       notes: 'Native Windows desktop release with in-place auto-updater, smooth lyrics scrolling, and zero network lag.'
     },
     android: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       build: 77,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
@@ -152,7 +152,7 @@ const APP_VERSIONS_DATA = {
       notes: 'تحديث v1.9.8.3 • استعادة اللوجو الرسمي الأصلي 3D • تسريع فائق لفتح الموقع وإلغاء بطء شاشة البداية • تحسين كاش الأغاني وقاعدة البيانات'
     },
     ios: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       build: 77,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.8.3.ipa',
@@ -175,12 +175,12 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       name: 'Rivo Web (Beta)',
       notes: 'Preview build with test features and latest optimisations.'
     },
     windows: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe',
       directFile: 'Rivo_Setup.exe',
@@ -188,7 +188,7 @@ const BETA_VERSIONS_DATA = {
       notes: 'Beta v1.9.7.9: Security patches, in-place self-updater, and offline player enhancements.'
     },
     android: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       build: 77,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
@@ -198,7 +198,7 @@ const BETA_VERSIONS_DATA = {
       notesEn: 'Root fix audio playback • Restore original badge • Background auto-advance • Fast seeking & notification fix • Background playlist downloads',
       ota: {
         enabled: true,
-        version: '1.9.8.4',
+        version: '1.9.8.5',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'تحديث v1.9.8.0 • حل مشكلة تشغيل الأغاني من الجذور • استعادة الشعار الأصلي • استمرار تشغيل الخلفية • تسريع التقديم والنتوفيكيشن • دعم تحميل البلاي ليست بالخلفية',
@@ -206,7 +206,7 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '1.9.8.4',
+      version: '1.9.8.5',
       build: 77,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo-v1.9.8.3.ipa',
@@ -342,7 +342,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
-  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.8.4';
+  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.8.5';
 
   if (filename.endsWith('.apk')) {
     return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);

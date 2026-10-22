@@ -314,7 +314,7 @@ export const AudioProvider = ({ children }) => {
     showToast(`Added ${tracksToAdd.length} track(s) to queue`, 'info');
   };
 
-  const removeFromQueue = (trackIdOrIdx) => {
+  const removeFromQueue = useCallback((trackIdOrIdx) => {
     if (typeof trackIdOrIdx === 'number') {
       const newQ = [...queueRef.current];
       newQ.splice(trackIdOrIdx, 1);
@@ -323,19 +323,19 @@ export const AudioProvider = ({ children }) => {
     }
     const newQ = queueRef.current.filter(t => String(t._id || t.id) !== String(trackIdOrIdx));
     setQueue(newQ);
-  };
+  }, []);
 
-  const reorderQueue = (fromIdx, toIdx) => {
+  const reorderQueue = useCallback((fromIdx, toIdx) => {
     if (fromIdx < 0 || toIdx < 0 || fromIdx >= queueRef.current.length || toIdx >= queueRef.current.length) return;
     const newQ = [...queueRef.current];
     const [moved] = newQ.splice(fromIdx, 1);
     newQ.splice(toIdx, 0, moved);
     setQueue(newQ);
-  };
+  }, []);
 
-  const clearQueue = () => {
+  const clearQueue = useCallback(() => {
     setQueue([]);
-  };
+  }, []);
 
   const toggleShuffle = () => {
     setIsShuffle(prev => {
