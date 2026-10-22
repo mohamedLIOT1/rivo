@@ -190,6 +190,40 @@ router.get('/:id', async (req, res) => {
     }
 
     if (!owner) {
+      const cleanName = plId.replace(/^album-/i, '').replace(/[-_]/g, ' ').trim();
+      const strippedId = plId.replace(/^album-/i, '');
+      const prefixedId = `album-${strippedId}`;
+      const album = await Album.findOne({
+        $or: [
+          ...(isObjId ? [{ _id: new mongoose.Types.ObjectId(plId) }] : []),
+          { id: plId },
+          { id: strippedId },
+          { id: prefixedId },
+          { name: new RegExp(`^${plId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+          { name: new RegExp(`^${cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        ]
+      }).lean();
+
+      if (album) {
+        const trackIds = Array.isArray(album.trackIds) ? album.trackIds : [];
+        const validObjectIds = trackIds.filter(id => mongoose.isValidObjectId(id));
+        const orConditions = [];
+        if (validObjectIds.length > 0) orConditions.push({ _id: { $in: validObjectIds } });
+        if (trackIds.length > 0) orConditions.push({ id: { $in: trackIds } });
+        if (album.name && album.name.trim()) {
+          orConditions.push({ album: new RegExp(`^${album.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+        }
+        let albumTracks = [];
+        if (orConditions.length > 0) {
+          albumTracks = await Track.find({ $or: orConditions }).lean();
+        }
+        return res.json({
+          success: true,
+          playlist: { ...album, isAlbum: true, isPublic: true },
+          tracks: albumTracks
+        });
+      }
+
       return res.status(404).json({ error: 'Playlist not found' });
     }
 

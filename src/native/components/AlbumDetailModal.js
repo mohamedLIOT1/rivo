@@ -216,14 +216,26 @@ export default function AlbumDetailModal({
     }
 
     let isMounted = true;
-    const albId = album._id || album.id;
-    const cleanId = albId ? String(albId).replace(/^album-/, '') : '';
-    const isPl = Boolean(album.isPlaylist || album.trackIds);
+    const albId = String(album._id || album.id || '');
+    const isAlb = Boolean(album.isAlbum || albId.startsWith('album-'));
+    const isPl = Boolean(album.isPlaylist) && !isAlb;
 
     const tryFetch = async () => {
       try {
-        if (isPl && (albId || cleanId)) {
-          const res = await fetch(`${API_BASE_URL}/api/playlists/${albId || cleanId}`, {
+        if (isAlb && albId) {
+          const res = await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albId)}`);
+          if (res.ok) {
+            const d = await res.json();
+            const list = d.album?.tracks || d.tracks || [];
+            if (isMounted && Array.isArray(list) && list.length > 0) {
+              setRemoteTracks(list);
+              return;
+            }
+          }
+        }
+
+        if (isPl && albId) {
+          const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(albId)}`, {
             headers: token ? { Authorization: `Bearer ${token}` } : {}
           });
           if (res.ok) {

@@ -99,6 +99,24 @@
 
     <div id="root"></div>
 
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.message && (e.message.includes('310') || e.message.includes('dynamically imported module') || e.message.includes('ChunkLoadError'))) {
+          if (!sessionStorage.getItem('rivo_reloaded_for_err')) {
+            sessionStorage.setItem('rivo_reloaded_for_err', '1');
+            if ('caches' in window) {
+              caches.keys().then(function(keys) {
+                return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+              }).then(function() {
+                window.location.reload();
+              });
+            } else {
+              window.location.reload();
+            }
+          }
+        }
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       // Fast splash removal
@@ -132,7 +150,10 @@
           }).catch(() => {});
         } else {
           window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').then(reg => {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+              });
+              navigator.serviceWorker.register('/sw.js').then(reg => {
               reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
                 newWorker?.addEventListener('statechange', () => {

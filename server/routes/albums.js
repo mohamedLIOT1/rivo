@@ -156,10 +156,13 @@ router.get('/:id', async (req, res) => {
       album = await Album.findById(rawId).lean();
     }
     if (!album) {
-      const cleanName = rawId.replace(/^album-/i, '').replace(/[-_]/g, ' ').trim();
+      const cleanName = rawId.replace(/^album-/i, '').replace(/[-_]/g, ' ').trim();      const strippedId = rawId.replace(/^album-/i, '');
+      const prefixedId = `album-${strippedId}`;
       album = await Album.findOne({
         $or: [
           { id: rawId },
+          { id: strippedId },
+          { id: prefixedId },
           { name: new RegExp(`^${rawId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
           { name: new RegExp(`^${cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
         ]
