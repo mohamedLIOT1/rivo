@@ -119,8 +119,8 @@ router.post('/by-ids', async (req, res) => {
       $or: orConditions,
       source: { $ne: 'SoundCloud' },
       album: { $ne: 'SoundCloud' },
-      audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
-    }).lean();
+      audioUrl: { $not: /soundcloud.com|sndcdn.com/i }
+    }).lean() : [];
 
     setImmediate(async () => {
       for (const t of tracks) {
