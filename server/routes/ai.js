@@ -4,9 +4,7 @@ let GoogleGenerativeAI;
 try {
   GoogleGenerativeAI = require('@google/generative-ai').GoogleGenerativeAI;
 } catch (e) {
-  try {
-    GoogleGenerativeAI = require('../../node_modules/@google/generative-ai').GoogleGenerativeAI;
-  } catch (err) {}
+  GoogleGenerativeAI = null;
 }
 const mongoose = require('mongoose');
 const { auth, adminAuth, optionalAuth } = require('../middleware/auth');

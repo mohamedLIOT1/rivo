@@ -100,8 +100,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Authorized Beta Testing Accounts & Admins
-const BETA_TESTER_EMAILS = new Set([
+// Authorized Beta Testing Accounts & Admins (configurable via environment variable)
+const defaultBetaEmails = [
   'whooareyou152@gmail.com',
   'alicrafter85@gmail.com',
   'test@liofy.com',
@@ -110,7 +110,11 @@ const BETA_TESTER_EMAILS = new Set([
   'test@gmail.com',
   't1@gmail.com',
   'rio288631@gmail.com'
-]);
+];
+const envBetaEmails = process.env.BETA_TESTER_EMAILS
+  ? process.env.BETA_TESTER_EMAILS.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+  : defaultBetaEmails;
+const BETA_TESTER_EMAILS = new Set(envBetaEmails);
 
 function isBetaTester(user) {
   if (!user) return false;
@@ -159,8 +163,11 @@ const APP_VERSIONS_DATA = {
   }
 };
 
-// Known beta tester IPs for instant cold-boot detection
-const knownBetaIps = new Set(['41.47.189.60']);
+// Known beta tester IPs for instant cold-boot detection (configurable via BETA_TESTER_IPS)
+const envBetaIps = process.env.BETA_TESTER_IPS
+  ? process.env.BETA_TESTER_IPS.split(',').map(ip => ip.trim()).filter(Boolean)
+  : ['41.47.189.60'];
+const knownBetaIps = new Set(envBetaIps);
 
 // App Version Manifest — BETA Channel (For designated testers & admins only)
 const BETA_VERSIONS_DATA = {

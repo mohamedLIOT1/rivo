@@ -67,6 +67,7 @@ uploads/audio-cache/
 uploads/*
 !uploads/.gitkeep
 scripts/__pycache__/
+scripts/archive/
 *.log
 *-player-script.js
 *-watch.html
