@@ -1,13 +1,13 @@
 {
   "enabled": true,
-  "version": "1.9.8.6",
+  "version": "1.9.8.7",
   "channel": "beta",
   "betaOnly": true,
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث تجريبي v1.9.8.6 (Beta) • إصلاح بحث الخزنة الأوفلاين • حذف فائق السرعة • إصلاح أزرار الفنانين • فتح المشغل فوراً",
-  "notesEn": "Beta Update v1.9.8.6 • Offline vault search • Ultra-fast bulk delete • Fixed artist buttons • Full player tap",
-  "bundleSize": 3300274,
+  "notes": "تحديث تجريبي فوري v1.9.8.7 (Beta) • إصلاح استقرار التطبيق وشاشة Recovery • بحث الخزنة الأوفلاين وحذف فائق السرعة",
+  "notesEn": "Beta Hotfix v1.9.8.7 • Stability hotfix for recovery screen • Offline vault search & bulk delete",
+  "bundleSize": 3301019,
   "sizeMb": "3.15 MB",
-  "updatedAt": "2026-10-22T14:09:29.230Z"
+  "updatedAt": "2026-10-22T14:31:20.596Z"
 }

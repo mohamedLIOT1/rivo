@@ -710,7 +710,9 @@ function NativeAppShell() {
   const [chatTargetUser, setChatTargetUser] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
 
-  const { currentTrack, registerFullPlayerHandler } = useAudioPlayer();
+  const audioContext = useAudioPlayer() || {};
+  const currentTrack = audioContext.currentTrack;
+  const registerFullPlayerHandler = audioContext.registerFullPlayerHandler;
 
   useEffect(() => {
     if (typeof registerFullPlayerHandler === 'function') {

@@ -73,6 +73,45 @@ export const AudioProvider = ({ children }) => {
     tokenRef.current = token;
   }, [token]);
 
+  // Global Full Player Modal trigger registry
+  const fullPlayerHandlerRef = useRef(null);
+  const registerFullPlayerHandler = useCallback((fn) => {
+    fullPlayerHandlerRef.current = fn;
+  }, []);
+  const openFullPlayer = useCallback(() => {
+    if (typeof fullPlayerHandlerRef.current === 'function') {
+      fullPlayerHandlerRef.current();
+    }
+  }, []);
+
+  // Auto-persist finished external song to server database so it appears in search
+  const autoPersistFinishedTrack = useCallback(async (track) => {
+    if (!track || !track.title) return;
+    const tid = String(track._id || track.id || '');
+    const isMongoId = /^[a-f0-9]{24}$/i.test(tid);
+    if (isMongoId && track.source === 'Rivo' && !track.isExternal) return;
+
+    try {
+      await fetch(`${API_BASE_URL}/api/tracks/auto-persist`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: tid,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          cover: track.cover || track.coverUrl,
+          audioUrl: track.audioUrl || track.streamUrl,
+          duration: track.duration,
+          youtubeId: track.youtubeId,
+          source: track.source || 'YouTube'
+        })
+      });
+    } catch (err) {
+      // Non-blocking background sync
+    }
+  }, []);
+
   const broadcastListeningActivity = useCallback((track, playingState, posSeconds = 0) => {
     const activeToken = tokenRef.current;
     if (!activeToken) return;
@@ -555,6 +594,11 @@ export const AudioProvider = ({ children }) => {
     // ─── TRACK COMPLETION / NEXT TRACK / REPEAT ONE HANDLER ───
     if (status.didJustFinish && ((status.positionMillis || 0) > 500 || (status.durationMillis || 0) > 500)) {
       const finishedTrack = currentTrackRef.current;
+      if (finishedTrack && !isOfflineRef.current) {
+        if (typeof autoPersistFinishedTrack === 'function') {
+          autoPersistFinishedTrack(finishedTrack);
+        }
+      }
       if (finishedTrack && !isOfflineRef.current && autoDownloadFinishedRef.current) {
         const fId = String(finishedTrack._id || finishedTrack.id || '');
         const isAlreadyDl = (downloadedTracksRef.current || []).some(d => String(d._id || d.id) === fId);
@@ -2122,7 +2166,7 @@ export const AudioProvider = ({ children }) => {
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
     jamSession, setJamSync,
     remoteDevicePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
 
   return (
     <AudioContext.Provider value={controls}>
