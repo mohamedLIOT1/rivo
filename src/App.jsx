@@ -70,6 +70,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     libraryMode,
     goToScreen,
     navigateTo,
+    handleSelectPlaylistView,
   } = useNavigation();
 
   const {
