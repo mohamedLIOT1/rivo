@@ -9,6 +9,7 @@ import {
   downloadTrack,
   getDownloadedTracks,
   removeDownloadedTrack as rawRemoveDownloadedTrack,
+  removeDownloadedTracksBatch as rawRemoveDownloadedTracksBatch,
   isTrackDownloaded,
   deduplicateTrackList,
   subscribeToDownloadedTracks,
@@ -488,6 +489,28 @@ export const AudioProvider = ({ children }) => {
     }
     return false;
   }, []);
+
+  const removeDownloadedTracksBatch = async (tracksOrIds) => {
+    const updated = await rawRemoveDownloadedTracksBatch(tracksOrIds);
+    const cleaned = deduplicateTrackList(updated || []);
+    setDownloadedTracks(cleaned);
+    downloadedTracksRef.current = cleaned;
+
+    const targetIds = new Set(
+      (Array.isArray(tracksOrIds) ? tracksOrIds : [tracksOrIds])
+        .filter(Boolean)
+        .map(t => (typeof t === 'object' ? String(t._id || t.id || '') : String(t)))
+        .filter(Boolean)
+    );
+
+    setDownloadedTrackIds(prev => {
+      const next = new Set(prev);
+      targetIds.forEach(id => next.delete(id));
+      return next;
+    });
+
+    return cleaned;
+  };
 
   const removeDownloadedTrack = async (trackOrId) => {
     const updated = await rawRemoveDownloadedTrack(trackOrId);
@@ -2092,7 +2115,8 @@ export const AudioProvider = ({ children }) => {
     playTrack, playPlaylist, togglePlay, seekTo, isShuffle, setIsShuffle, toggleShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, reorderQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
-    handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, refreshDownloadedTracks,
+    handleDownloadTrack, handleDownloadPlaylist, removeDownloadedTrack, removeDownloadedTracksBatch, refreshDownloadedTracks,
+    registerFullPlayerHandler, openFullPlayer,
     autoDownloadFinished, toggleAutoDownloadFinished,
     downloadedTrackIds, isTrackDownloaded,
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,

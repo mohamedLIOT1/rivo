@@ -64,8 +64,12 @@ const AlbumTrackRow = React.memo(({
     <TouchableOpacity
       style={[styles.trackRow, isCurrent && styles.trackRowActive]}
       onPress={() => {
-        if (isCurrent && onOpenFullPlayer) {
-          onOpenFullPlayer();
+        if (isCurrent) {
+          if (onOpenFullPlayer) {
+            onOpenFullPlayer();
+          } else {
+            onPlay(track);
+          }
         } else {
           onPlay(track);
         }
@@ -144,7 +148,8 @@ export default function AlbumDetailModal({
   onSelectArtist,
   onOpenFullPlayer,
 }) {
-  const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadTrack, handleDownloadPlaylist } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadTrack, handleDownloadPlaylist, openFullPlayer: contextOpenFullPlayer } = useAudioPlayer();
+  const handleOpenFull = onOpenFullPlayer || contextOpenFullPlayer;
   const { token, syncUserData, playlists = [], likedTrackIds = [], toggleLikeTrack, tracks: contextTracks = [] } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -397,7 +402,7 @@ export default function AlbumDetailModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="fullScreen"
+      presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
       onRequestClose={onClose}
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
@@ -586,7 +591,7 @@ export default function AlbumDetailModal({
                 coverUri={coverUri}
                 albumArtist={albumArtist}
                 onPlay={(selected) => playTrack(selected, effectiveAlbumTracks)}
-                onOpenFullPlayer={onOpenFullPlayer}
+                onOpenFullPlayer={handleOpenFull}
                 onDownload={(selected) => !isDl && handleDownloadTrack && handleDownloadTrack(selected)}
                 onToggleLike={(id) => toggleLikeTrack && toggleLikeTrack(id)}
                 onTrackAction={(selected) => onTrackAction && onTrackAction(selected)}
@@ -601,7 +606,7 @@ export default function AlbumDetailModal({
         {/* Floating Mini Player matching home screen experience */}
         {currentTrack && (
           <MiniPlayer
-            onOpenFullPlayer={onOpenFullPlayer}
+            onOpenFullPlayer={handleOpenFull}
             bottomOffset={Platform.OS === 'ios' ? 24 : 12}
           />
         )}

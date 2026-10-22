@@ -21,6 +21,7 @@ import { normalizeCoverUri } from '../utils/coverUtils';
 import {
   getDownloadedTracks,
   removeDownloadedTrack,
+  removeDownloadedTracksBatch,
   importLocalAudioFiles,
   importAudioFolderFromDevice,
   scanOfflineVault,
@@ -31,7 +32,7 @@ import {
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 
 export default function OfflineScreen() {
-  const { playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue, removeDownloadedTrack: contextRemoveTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue, removeDownloadedTrack: contextRemoveTrack, removeDownloadedTracksBatch: contextRemoveBatch, downloadedTracks = [] } = useAudioPlayer();
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const [offlineTracks, setOfflineTracks] = useState([]);
@@ -175,8 +176,9 @@ export default function OfflineScreen() {
   };
 
   const handleSelectAll = () => {
-    const allIds = (offlineTracks || []).map((t) => String(t._id || t.id));
-    if (selectedIds.length === allIds.length) {
+    const targetList = (searchQuery.trim() ? filteredOfflineTracks : offlineTracks) || [];
+    const allIds = targetList.map((t) => String(t._id || t.id));
+    if (selectedIds.length === allIds.length && allIds.length > 0) {
       setSelectedIds([]);
     } else {
       setSelectedIds(allIds);
@@ -214,10 +216,8 @@ export default function OfflineScreen() {
           onPress: async () => {
             try {
               setActionLoading(true);
-              const removeFn = contextRemoveTrack || removeDownloadedTrack;
-              for (const t of sel) {
-                await removeFn(t);
-              }
+              const batchFn = contextRemoveBatch || removeDownloadedTracksBatch;
+              await batchFn(sel);
               const selSet = new Set(sel.map((t) => String(t._id || t.id)));
               const selTitles = new Set(sel.map((t) => (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim()).filter(Boolean));
               setOfflineTracks((prev) => prev.filter((t) => {
@@ -386,9 +386,24 @@ export default function OfflineScreen() {
                 </Text>
               </View>
             </View>
+          ) : (filteredOfflineTracks.length === 0 && searchQuery.trim().length > 0) ? (
+            <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
+              <Search size={36} color={colors.mint} />
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, { marginTop: 8 }]}>No Matching Songs</Text>
+              <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
+                No downloaded songs found matching "{searchQuery}"
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                style={[styles.heroActionBtnSec, { marginTop: 12, paddingHorizontal: 16 }]}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.heroActionTextSec}>CLEAR SEARCH</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <View style={styles.tracksList}>
-              {(offlineTracks || []).filter(Boolean).map((track, idx) => {
+              {(filteredOfflineTracks || []).filter(Boolean).map((track, idx) => {
                 const trackId = String(track?._id || track?.id || idx);
                 const currentId = String(currentTrack?._id || currentTrack?.id || '');
                 const active = Boolean(currentTrack && trackId === currentId);
@@ -497,7 +512,7 @@ export default function OfflineScreen() {
           </View>
           <TouchableOpacity onPress={handleSelectAll} style={styles.selectActionBtnSec}>
             <Text style={styles.selectActionBtnTextSec}>
-              {selectedIds.length === (offlineTracks || []).length ? 'Deselect All' : 'Select All'}
+              {selectedIds.length > 0 && selectedIds.length === ((searchQuery.trim() ? filteredOfflineTracks : offlineTracks) || []).length ? 'Deselect All' : 'Select All'}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

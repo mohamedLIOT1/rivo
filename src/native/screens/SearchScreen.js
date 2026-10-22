@@ -684,6 +684,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
         onClose={() => setSelectedAlbum(null)}
         allTracks={allTracks}
         onTrackAction={onTrackAction}
+        onOpenFullPlayer={onOpenFullPlayer}
         onSelectArtist={(artistName) => {
           setSelectedAlbum(null);
           setSelectedArtist({ name: artistName });
@@ -697,6 +698,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
         onClose={() => setSelectedArtist(null)}
         allTracks={allTracks}
         allAlbums={userAlbums}
+        onOpenFullPlayer={onOpenFullPlayer}
         onSelectAlbum={(alb) => {
           setSelectedArtist(null);
           setSelectedAlbum(alb);

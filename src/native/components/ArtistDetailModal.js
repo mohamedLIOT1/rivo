@@ -51,7 +51,8 @@ export default function ArtistDetailModal({
   onTrackAction,
   onOpenFullPlayer,
 }) {
-  const { playTrack, currentTrack, addToQueue, downloadedTracks = [], downloadTrack } = useAudioPlayer();
+  const { playTrack, currentTrack, addToQueue, downloadedTracks = [], downloadTrack, openFullPlayer: contextOpenFullPlayer } = useAudioPlayer();
+  const handleOpenFull = onOpenFullPlayer || contextOpenFullPlayer;
   const { likedTrackIds = [], toggleLikeTrack, currentUser } = useUser();
   const { isDark } = useTheme();
   const [isFollowing, setIsFollowing] = useState(false);
@@ -161,7 +162,7 @@ export default function ArtistDetailModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="fullScreen"
+      presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
       onRequestClose={onClose}
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
@@ -245,29 +246,30 @@ export default function ArtistDetailModal({
                   {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
                 </Text>
               </TouchableOpacity>
-
-              {isAdmin && (
-                <>
-                  <TouchableOpacity
-                    style={styles.addAlbumHeroBtn}
-                    onPress={() => setIsAddAlbumOpen(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Plus size={14} color="#0b1110" strokeWidth={2.8} />
-                    <Text style={styles.addAlbumHeroBtnText}>ADD ALBUM</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.editArtistHeroBtn}
-                    onPress={() => setIsEditArtistOpen(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Edit size={13} color="#0b1110" strokeWidth={2.5} />
-                    <Text style={styles.editArtistHeroBtnText}>EDIT ARTIST PAGE</Text>
-                  </TouchableOpacity>
-                </>
-              )}
             </View>
+
+            {/* Admin Controls Dedicated Row — never pushes outside screen bounds */}
+            {isAdmin && (
+              <View style={styles.adminActionRow}>
+                <TouchableOpacity
+                  style={styles.addAlbumHeroBtn}
+                  onPress={() => setIsAddAlbumOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <Plus size={13} color="#0b1110" strokeWidth={2.8} />
+                  <Text style={styles.addAlbumHeroBtnText}>ADD ALBUM</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.editArtistHeroBtn}
+                  onPress={() => setIsEditArtistOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <Edit size={13} color="#0b1110" strokeWidth={2.5} />
+                  <Text style={styles.editArtistHeroBtnText}>EDIT ARTIST PAGE</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {/* Discography / Albums Section matching Image 2 */}
@@ -360,8 +362,12 @@ export default function ArtistDetailModal({
                   key={trackId || index}
                   style={[styles.trackRow, isCurrent && styles.trackRowActive]}
                   onPress={() => {
-                    if (isCurrent && onOpenFullPlayer) {
-                      onOpenFullPlayer();
+                    if (isCurrent) {
+                      if (handleOpenFull) {
+                        handleOpenFull();
+                      } else {
+                        playTrack(t, artistTracks);
+                      }
                     } else {
                       playTrack(t, artistTracks);
                     }
@@ -421,7 +427,7 @@ export default function ArtistDetailModal({
         {/* Floating Mini Player matching home screen experience */}
         {currentTrack && (
           <MiniPlayer
-            onOpenFullPlayer={onOpenFullPlayer}
+            onOpenFullPlayer={handleOpenFull}
             bottomOffset={Platform.OS === 'ios' ? 24 : 12}
           />
         )}
@@ -648,7 +654,21 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  adminActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    width: '100%',
+    paddingHorizontal: 8,
   },
   playBtn: {
     width: 44,

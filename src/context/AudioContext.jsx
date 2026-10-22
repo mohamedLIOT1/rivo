@@ -580,9 +580,31 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
       }
     };
-    const handleEnded = () => {
+        const handleEnded = () => {
       if (isChangingTrackRef.current) return;
       onTrackEnded(currentTrackRef.current);
+      const finished = currentTrackRef.current;
+      if (finished && finished.title) {
+        const tid = String(finished._id || finished.id || '');
+        const isMongo = /^[a-f0-9]{24}$/i.test(tid);
+        if (!isMongo || finished.source === 'YouTube' || finished.isExternal) {
+          fetch(`${API_BASE_URL}/api/tracks/auto-persist`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: tid,
+              title: finished.title,
+              artist: finished.artist,
+              album: finished.album,
+              cover: finished.cover || finished.coverUrl,
+              audioUrl: finished.audioUrl,
+              duration: finished.duration,
+              youtubeId: finished.youtubeId,
+              source: finished.source || 'YouTube'
+            })
+          }).catch(() => {});
+        }
+      }
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => {});

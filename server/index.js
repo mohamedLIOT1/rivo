@@ -263,12 +263,15 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
 
   const dynamicOta = getOtaManifest();
   if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
-    manifest.platforms.android.ota = {
-      ...(manifest.platforms.android.ota || {}),
-      ...dynamicOta,
-      bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
-      minAppVersion: dynamicOta.minAppVersion || '1.9.0'
-    };
+    const isBetaOnly = dynamicOta.channel === 'beta' || dynamicOta.betaOnly === true;
+    if (!isBetaOnly || isBetaClient) {
+      manifest.platforms.android.ota = {
+        ...(manifest.platforms.android.ota || {}),
+        ...dynamicOta,
+        bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
+        minAppVersion: dynamicOta.minAppVersion || '1.9.0'
+      };
+    }
   }
 
   res.json(manifest);

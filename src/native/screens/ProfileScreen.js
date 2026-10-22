@@ -620,6 +620,7 @@ export default function ProfileScreen({
             trackIds: selectedPlaylistModal.trackIds || [],
             isPlaylist: true,
           } : null}
+          onOpenFullPlayer={onOpenFullPlayer}
           onClose={() => setSelectedPlaylistModal(null)}
           allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
           onOpenFullPlayer={onOpenFullPlayer}
@@ -1112,6 +1113,7 @@ export default function ProfileScreen({
           trackIds: selectedPlaylistModal.trackIds || [],
           isPlaylist: true,
         } : null}
+          onOpenFullPlayer={onOpenFullPlayer}
         onClose={() => setSelectedPlaylistModal(null)}
         allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
         onOpenFullPlayer={onOpenFullPlayer}

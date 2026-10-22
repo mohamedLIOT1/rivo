@@ -1176,6 +1176,112 @@ export const downloadTrack = async (track, onProgress) => {
   return record;
 };
 
+
+export const removeDownloadedTracksBatch = async (tracksOrIds = []) => {
+  if (!Array.isArray(tracksOrIds) || tracksOrIds.length === 0) return await getDownloadedTracks();
+
+  const existing = await getDownloadedTracks();
+  if (existing.length === 0) return [];
+
+  const targetIds = new Set();
+  const targetKeys = new Set();
+  const fileUrisToDelete = new Set();
+
+  for (const item of tracksOrIds) {
+    if (!item) continue;
+    const idStr = (typeof item === 'object') ? String(item._id || item.id || '') : String(item);
+    if (idStr) targetIds.add(idStr);
+
+    const targetObj = (typeof item === 'object')
+      ? item
+      : existing.find(t => String(t._id || t.id) === idStr);
+
+    const key = getTrackDedupeKey(targetObj);
+    if (key) targetKeys.add(key);
+
+    if (targetObj) {
+      const uris = [targetObj.localAudioUri, targetObj.nativeAudioUri, targetObj.audioUrl, targetObj.coverUrl, targetObj.cover];
+      for (const u of uris) {
+        if (u && typeof u === 'string' && u.startsWith('file://')) {
+          fileUrisToDelete.add(u);
+        }
+      }
+    }
+  }
+
+  // Also match existing items that match any targetKeys
+  for (const t of existing) {
+    if (!t) continue;
+    const tid = String(t._id || t.id);
+    const tKey = getTrackDedupeKey(t);
+    if (targetIds.has(tid) || (tKey && targetKeys.has(tKey))) {
+      targetIds.add(tid);
+      const uris = [t.localAudioUri, t.nativeAudioUri, t.audioUrl, t.coverUrl, t.cover];
+      for (const u of uris) {
+        if (u && typeof u === 'string' && u.startsWith('file://')) {
+          fileUrisToDelete.add(u);
+        }
+      }
+    }
+  }
+
+  // Prepare standard paths for all target IDs
+  for (const tid of targetIds) {
+    clearStreamCache(tid);
+    fileUrisToDelete.add(`${TRACKS_DIR}${tid}.mp3`);
+    fileUrisToDelete.add(`${TRACKS_DIR}${tid}.m4a`);
+    fileUrisToDelete.add(`${COVERS_DIR}${tid}.jpg`);
+    if (PERSISTENT_DIR) {
+      fileUrisToDelete.add(`${PERSISTENT_DIR}${tid}.mp3`);
+      fileUrisToDelete.add(`${PERSISTENT_DIR}${tid}.m4a`);
+      fileUrisToDelete.add(`${PERSISTENT_DIR}${tid}.jpg`);
+    }
+  }
+
+  // Delete all disk files concurrently
+  const deletePromises = Array.from(fileUrisToDelete).map(uri =>
+    FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {})
+  );
+  await Promise.all(deletePromises);
+
+  // Filter existing tracks list in one pass
+  const updated = existing.filter(t => {
+    if (!t) return false;
+    const tid = String(t._id || t.id);
+    if (targetIds.has(tid)) return false;
+    const tKey = getTrackDedupeKey(t);
+    if (tKey && targetKeys.has(tKey)) return false;
+    return true;
+  });
+
+  // Single commit to storage and manifest
+  await saveToStorageAndManifest(updated);
+
+  // Single pass through legacy storage keys
+  for (const legKey of LEGACY_STORAGE_KEYS) {
+    if (legKey === STORAGE_KEY) continue;
+    try {
+      const raw = await AsyncStorage.getItem(legKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const legFiltered = parsed.filter(t => {
+            if (!t) return false;
+            const tid = String(t._id || t.id);
+            if (targetIds.has(tid)) return false;
+            const tKey = getTrackDedupeKey(t);
+            if (tKey && targetKeys.has(tKey)) return false;
+            return true;
+          });
+          await AsyncStorage.setItem(legKey, JSON.stringify(legFiltered));
+        }
+      }
+    } catch {}
+  }
+
+  return updated;
+};
+
 export const removeDownloadedTrack = async (trackOrId) => {
   if (!trackOrId) return [];
   const idStr = (typeof trackOrId === 'object' && trackOrId !== null)

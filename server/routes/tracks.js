@@ -154,6 +154,73 @@ router.post('/by-ids', async (req, res) => {
   }
 });
 
+
+// Auto-persist fully listened external song into database so it becomes available in global search
+const autoPersistTrackHandler = async (req, res) => {
+  try {
+    const { id, trackId, title, artist, album, cover, coverUrl, audioUrl, streamUrl, duration, youtubeId, source } = req.body || {};
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const cleanTitle = title.trim();
+    const cleanArtist = (artist || 'Unknown Artist').trim();
+    const cleanAlbum = (album && album !== 'YouTube' && album !== 'SoundCloud' && album !== 'Direct Stream') ? album.trim() : 'Single';
+    const targetUrl = audioUrl || streamUrl || (youtubeId ? ('https://www.youtube.com/watch?v=' + youtubeId) : '');
+    const targetCover = cover || coverUrl || (youtubeId ? ('https://i.ytimg.com/vi/' + youtubeId + '/hqdefault.jpg') : '');
+
+    const targetId = id || trackId;
+    let existing = null;
+    if (targetId && mongoose.isValidObjectId(targetId)) {
+      existing = await Track.findById(targetId);
+    }
+    if (!existing) {
+      existing = await Track.findOne({
+        title: new RegExp('^' + escapeRegex(cleanTitle) + '$', 'i'),
+        ...(cleanArtist && cleanArtist !== 'Unknown Artist' ? { artist: new RegExp('^' + escapeRegex(cleanArtist) + '$', 'i') } : {})
+      });
+    }
+    if (!existing && targetUrl && (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be'))) {
+      const vidMatch = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      if (vidMatch) {
+        existing = await Track.findOne({ audioUrl: new RegExp(vidMatch[1], 'i') });
+      }
+    }
+
+    if (existing) {
+      return res.json({ success: true, track: existing, alreadyExisted: true });
+    }
+
+    // Create new track entry
+    const newTrack = await Track.create({
+      title: cleanTitle,
+      artist: cleanArtist,
+      album: cleanAlbum,
+      cover: targetCover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
+      audioUrl: targetUrl,
+      duration: Math.round(Number(duration)) || 210,
+      source: source || 'Rivo',
+      addedBy: 'auto-listened'
+    });
+
+    invalidateTracksCache();
+
+    // Broadcast track:created to all live clients
+    if (req.io) {
+      req.io.emit('track:created', newTrack);
+    }
+
+    return res.status(201).json({ success: true, track: newTrack, created: true });
+  } catch (err) {
+    console.error('[autoPersistTrackHandler error]', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+router.post('/auto-persist', optionalAuth, autoPersistTrackHandler);
+router.post('/persist-listened', optionalAuth, autoPersistTrackHandler);
+
+
 // Import track from Spotify/YouTube link
 const importTrackHandler = async (req, res) => {
   invalidateTracksCache();
