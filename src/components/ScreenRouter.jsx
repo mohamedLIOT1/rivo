@@ -1,6 +1,9 @@
 import React from 'react';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { useNavigation } from '../context/NavigationContext';
+import { useJam } from '../context/JamContext';
+import { useUI } from '../context/UIContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -14,7 +17,6 @@ import AdminScreen from '../screens/AdminScreen';
 import DownloadScreen from '../screens/DownloadScreen';
 
 export default function ScreenRouter({
-  currentScreen,
   musicTracks,
   quranTracks,
   tracks,
@@ -23,22 +25,9 @@ export default function ScreenRouter({
   playlists,
   musicAlbums,
   albums,
-  selectedPlaylist,
-  selectedArtist,
-  viewingProfileUserId,
-  setViewingProfileUserId,
-  topSearchQuery,
   playTrack,
-  handleSelectPlaylistView,
-  handleSelectArtist,
   toggleLike,
   handleDownload,
-  handleNavigateBack,
-  goToScreen,
-  navigateTo,
-  handleOpenEditSong,
-  handleOpenEditAlbum,
-  handleOpenAddToPlaylist,
   handleDeleteTrack,
   handleDeleteAlbum,
   handleCreateAlbum,
@@ -51,27 +40,51 @@ export default function ScreenRouter({
   handleTogglePlaylistVisibility,
   savePublicPlaylist,
   unsavePublicPlaylist,
-  handleStartJamWithTargetUser,
-  handleOpenJam,
-  handleOpenChat,
-  jamSession,
-  unreadChatCount,
   currentTrack,
   isPlaying,
   currentUser,
   logout,
   likedTrackIds,
-  globalTheme,
-  showToast,
-  isActivityPanelOpen,
-  toggleActivityPanel,
-  setIsAddSongOpen,
-  setIsCreatePlaylistOpen,
-  setIsImportPlaylistOpen,
-  setIsImportSongOpen,
-  setIsAuthOpen,
-  setIsSettingsOpen,
 }) {
+  const {
+    currentScreen,
+    topSearchQuery,
+    selectedArtist,
+    selectedPlaylist,
+    viewingProfileUserId,
+    setViewingProfileUserId,
+    navigateTo,
+    goToScreen,
+    handleNavigateBack,
+    handleSelectArtist,
+    handleSelectPlaylistView,
+  } = useNavigation();
+
+  const {
+    jamSession,
+    startJamWithTargetUser,
+  } = useJam();
+
+  const {
+    globalTheme,
+    showToast,
+    isActivityPanelOpen,
+    toggleActivityPanel,
+    openEditSong,
+    openEditAlbum,
+    openAddToPlaylist,
+    setIsAddSongOpen,
+    setIsCreatePlaylistOpen,
+    setIsImportPlaylistOpen,
+    setIsImportSongOpen,
+    setIsAuthOpen,
+    setIsSettingsOpen,
+    setIsJamOpen,
+    setIsChatOpen,
+    setChatTargetUser,
+    unreadChatCount,
+  } = useUI();
+
   return (
     <>
       {currentScreen === 'home' && (
@@ -84,8 +97,8 @@ export default function ScreenRouter({
           toggleLike={toggleLike}
           onSelectArtist={handleSelectArtist}
           openAddSongModal={() => setIsAddSongOpen(true)}
-          openEditSongModal={handleOpenEditSong}
-          openAddToPlaylist={handleOpenAddToPlaylist}
+          openEditSongModal={openEditSong}
+          openAddToPlaylist={openAddToPlaylist}
           onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
           currentTrack={currentTrack}
           isPlaying={isPlaying}
@@ -93,9 +106,12 @@ export default function ScreenRouter({
           logout={logout}
           openAuthModal={() => setIsAuthOpen(true)}
           openProfileScreen={() => navigateTo('profile')}
-          openJamModal={handleOpenJam}
+          openJamModal={() => setIsJamOpen(true)}
           jamSession={jamSession}
-          openChatModal={() => handleOpenChat(null)}
+          openChatModal={() => {
+            setChatTargetUser(null);
+            setIsChatOpen(true);
+          }}
           unreadChatCount={unreadChatCount}
           isActivityPanelOpen={isActivityPanelOpen}
           toggleActivityPanel={toggleActivityPanel}
@@ -112,8 +128,8 @@ export default function ScreenRouter({
           onSelectPlaylist={handleSelectPlaylistView}
           onSelectArtist={handleSelectArtist}
           toggleLike={toggleLike}
-          openEditSongModal={handleOpenEditSong}
-          openAddToPlaylist={handleOpenAddToPlaylist}
+          openEditSongModal={openEditSong}
+          openAddToPlaylist={openAddToPlaylist}
           onOpenAddSongModal={() => setIsAddSongOpen(true)}
           onAddToLibrary={handleAddSong}
           onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
@@ -205,9 +221,9 @@ export default function ScreenRouter({
           onAddTrackToPlaylist={handleAddTrackToPlaylist}
           onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
           onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
-          openEditSongModal={handleOpenEditSong}
-          openEditAlbumModal={handleOpenEditAlbum}
-          openAddToPlaylist={handleOpenAddToPlaylist}
+          openEditSongModal={openEditSong}
+          openEditAlbumModal={openEditAlbum}
+          openAddToPlaylist={openAddToPlaylist}
           onUpdatePlaylist={handleUpdatePlaylist}
           onDeletePlaylist={handleDeletePlaylist}
           onDeleteAlbum={handleDeleteAlbum}
@@ -231,9 +247,9 @@ export default function ScreenRouter({
           toggleLike={toggleLike}
           onBack={() => handleNavigateBack('home')}
           currentUser={currentUser}
-          openEditSongModal={handleOpenEditSong}
-          openEditAlbumModal={handleOpenEditAlbum}
-          openAddToPlaylist={handleOpenAddToPlaylist}
+          openEditSongModal={openEditSong}
+          openEditAlbumModal={openEditAlbum}
+          openAddToPlaylist={openAddToPlaylist}
           onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
           onAlbumCreated={handleCreateAlbum}
           onDeleteAlbum={handleDeleteAlbum}
@@ -252,8 +268,8 @@ export default function ScreenRouter({
           onPlayTrack={playTrack}
           onSelectArtist={handleSelectArtist}
           onSelectPlaylist={handleSelectPlaylistView}
-          openEditSongModal={handleOpenEditSong}
-          openEditAlbumModal={handleOpenEditAlbum}
+          openEditSongModal={openEditSong}
+          openEditAlbumModal={openEditAlbum}
           onAlbumCreated={handleCreateAlbum}
           onDeleteAlbum={handleDeleteAlbum}
           onUpdatePlaylist={handleUpdatePlaylist}
@@ -288,9 +304,10 @@ export default function ScreenRouter({
             handleSelectPlaylistView(pl);
           }}
           onOpenChat={(target) => {
-            handleOpenChat(target);
+            setChatTargetUser(target);
+            setIsChatOpen(true);
           }}
-          onStartJamWithUser={handleStartJamWithTargetUser}
+          onStartJamWithUser={startJamWithTargetUser}
           onTogglePlaylistVisibility={handleTogglePlaylistVisibility}
           onSavePlaylist={savePublicPlaylist}
           onUnsavePlaylist={unsavePublicPlaylist}

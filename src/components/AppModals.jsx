@@ -1,5 +1,7 @@
 import React from 'react';
 import { useUI } from '../context/UIContext';
+import { useNavigation } from '../context/NavigationContext';
+import { useJam } from '../context/JamContext';
 import { isQuranContent, getQuranReciterName } from '../utils/quranUtils';
 
 import FullPlayerModal from './FullPlayerModal';
@@ -33,7 +35,6 @@ export default function AppModals({
   crossfade,
   setCrossfade,
   handleDownload,
-  handleSelectArtist,
   handleDeleteTrack,
   handleRemoveTrackFromPlaylist,
   selectedPlaylist,
@@ -44,20 +45,6 @@ export default function AppModals({
   handleDeleteSong,
   handleDeleteAlbum,
   handleAddSong,
-  handleCloseJam,
-  handleStartJam,
-  handleJoinJam,
-  handleLeaveJam,
-  handleTransferHost,
-  handleKickMember,
-  handleStartJamWithTargetUser,
-  handleCloseChat,
-  navigateTo,
-  socket,
-  jamSession,
-  currentScreen,
-  libraryMode,
-  setLibraryMode,
   musicPlaylists,
   quranPlaylists,
   musicTracks,
@@ -85,18 +72,41 @@ export default function AppModals({
     isEditSongOpen,
     setIsEditSongOpen,
     editingTrack,
+    setEditingTrack,
     isEditAlbumOpen,
     setIsEditAlbumOpen,
     editingAlbum,
     isAuthOpen,
     setIsAuthOpen,
     isJamOpen,
+    setIsJamOpen,
     isChatOpen,
+    setIsChatOpen,
     chatTargetUser,
+    setChatTargetUser,
     isShortcutsOpen,
     setIsShortcutsOpen,
     showToast,
   } = useUI();
+
+  const {
+    currentScreen,
+    libraryMode,
+    setLibraryMode,
+    navigateTo,
+    handleSelectArtist,
+  } = useNavigation();
+
+  const {
+    socket,
+    jamSession,
+    startJam,
+    startJamWithTargetUser,
+    joinJam,
+    leaveJam,
+    transferHost,
+    kickMember,
+  } = useJam();
 
   const {
     currentTrack,
@@ -124,6 +134,15 @@ export default function AppModals({
     removeFromJamQueue,
     reorderJamQueue,
   } = audio;
+
+  const handleCloseChat = () => {
+    setIsChatOpen(false);
+    setChatTargetUser(null);
+  };
+
+  const handleCloseJam = () => {
+    setIsJamOpen(false);
+  };
 
   return (
     <>
@@ -248,20 +267,20 @@ export default function AppModals({
         isOpen={isJamOpen}
         onClose={handleCloseJam}
         jamSession={jamSession}
-        onStartJam={handleStartJam}
-        onJoinJam={handleJoinJam}
-        onLeaveJam={handleLeaveJam}
+        onStartJam={startJam}
+        onJoinJam={joinJam}
+        onLeaveJam={leaveJam}
         currentTrack={jamSession?.currentTrack || currentTrack}
         isPlaying={jamSession ? Boolean(jamSession.isPlaying) : isPlaying}
         tracks={tracks}
         onAddToJamQueue={addToJamQueue}
         onRemoveFromJamQueue={removeFromJamQueue}
         onReorderJamQueue={reorderJamQueue}
-        onTransferHost={handleTransferHost}
+        onTransferHost={transferHost}
         onPlayTrack={playTrack}
         currentUser={currentUser}
         socket={socket}
-        onKickMember={handleKickMember}
+        onKickMember={kickMember}
         onViewProfile={(uid) => navigateTo('profile', { userId: uid })}
         globalTheme={globalTheme}
       />
@@ -316,9 +335,9 @@ export default function AppModals({
         targetUser={chatTargetUser}
         currentUser={currentUser}
         socket={socket}
-        onStartJamWithUser={handleStartJamWithTargetUser}
+        onStartJamWithUser={startJamWithTargetUser}
         onJoinJam={(code) => {
-          handleJoinJam(code);
+          joinJam(code);
         }}
         onPlayTrack={(track) => {
           playTrack(track);

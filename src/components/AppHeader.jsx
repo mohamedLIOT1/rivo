@@ -1,18 +1,11 @@
 import React from 'react';
 import { Search as SearchIcon, X, Sun, Moon, Users, WifiOff, Menu } from 'lucide-react';
 import { useUI } from '../context/UIContext';
+import { useNavigation } from '../context/NavigationContext';
 import RivoLogo from './RivoLogo';
 import { buildUrl } from '../utils/router';
 
-export default function AppHeader({
-  currentScreen,
-  goToScreen,
-  navigateTo,
-  topSearchQuery,
-  setTopSearchQuery,
-  currentUser,
-  handleUserAvatarClick,
-}) {
+export default function AppHeader({ currentUser, handleUserAvatarClick }) {
   const {
     globalTheme,
     toggleGlobalTheme,
@@ -21,6 +14,14 @@ export default function AppHeader({
     openMobileMenu,
     unreadChatCount,
   } = useUI();
+
+  const {
+    currentScreen,
+    goToScreen,
+    navigateTo,
+    topSearchQuery,
+    setTopSearchQuery,
+  } = useNavigation();
 
   return (
     <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2.5 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
