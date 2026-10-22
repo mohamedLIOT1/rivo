@@ -73,7 +73,9 @@ export default function PlaylistScreen({
       const url = isAlb
         ? `${API_BASE_URL}/api/albums/${encodeURIComponent(plId)}`
         : `${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}`;
-      fetch(url)
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      fetch(url, { headers })
         .then(r => r.json())
         .then(data => {
           if (data.success) {
@@ -96,7 +98,7 @@ export default function PlaylistScreen({
         })
         .catch(() => {});
     }
-  }, [initialPlaylist?.id, initialPlaylist?.name]);
+  }, [initialPlaylist?.id, initialPlaylist?._id, initialPlaylist?.name]);
   const { currentTrack, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
@@ -279,11 +281,16 @@ export default function PlaylistScreen({
       }
 
       if (playlist.isAlbum || playlist.name?.startsWith('Album -') || playlist.id?.startsWith('album-')) {
+        const cleanAlbName = (playlist.name || playlist.title || '').replace(/^album\s*-\s*/i, '').trim().toLowerCase();
         const albNorm = (playlist.name || playlist.title || '').trim().toLowerCase();
         list = list.filter(t => {
           if (!t) return false;
-          if (t.album && albNorm && t.album.trim().toLowerCase() !== albNorm) {
-            return false;
+          if (t.album) {
+            const trackAlb = (t.album || '').trim().toLowerCase();
+            const trackClean = trackAlb.replace(/^album\s*-\s*/i, '');
+            if (trackAlb !== albNorm && trackClean !== cleanAlbName && !albNorm.includes(trackClean) && !trackClean.includes(cleanAlbName)) {
+              return false;
+            }
           }
           return true;
         });
