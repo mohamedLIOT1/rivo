@@ -21,7 +21,8 @@ const {
   getTrackKey,
   fetchLrclibLyrics,
   getCookiesPath,
-  getYtDlpBin
+  getYtDlpBin,
+  invalidateAudioCache
 } = require('../utils/helpers');
 
 // Rate limiter for track creation to prevent DoS / spam
@@ -565,6 +566,8 @@ const deleteTrackHandler = async (req, res) => {
     if (!trackId) return res.status(400).json({ error: 'Track ID required' });
 
     try {
+      const existing = await Track.findById(trackId);
+      if (existing?.audioUrl) invalidateAudioCache(existing.audioUrl);
       await Track.deleteOne({ _id: trackId });
     } catch {}
     try {
@@ -622,12 +625,18 @@ const updateTrackHandler = async (req, res) => {
     const track = await Track.findOne({ $or: [{ _id: mongoose.isValidObjectId(trackId) ? trackId : null }, { id: trackId }] });
     if (!track) return res.status(404).json({ error: 'Track not found' });
 
+    const oldAudioUrl = track.audioUrl;
     const { title, artist, album, cover, audioUrl, duration, genre, lyrics } = req.body;
     if (title) track.title = title.trim();
     if (artist) track.artist = artist.trim();
     if (album !== undefined) track.album = album.trim();
     if (cover) track.cover = cover.trim();
-    if (audioUrl) track.audioUrl = audioUrl.trim();
+    if (audioUrl !== undefined) {
+      const cleanAudioUrl = (audioUrl || '').trim();
+      track.audioUrl = cleanAudioUrl;
+      invalidateAudioCache(oldAudioUrl);
+      if (cleanAudioUrl) invalidateAudioCache(cleanAudioUrl);
+    }
     if (duration !== undefined) track.duration = Number(duration) || track.duration;
     if (genre !== undefined) track.genre = genre;
     if (Array.isArray(lyrics)) track.lyrics = lyrics;
@@ -747,9 +756,7 @@ async function autoPersistExternalTrack({ id, trackId, title, artist, album, cov
         source: 'Rivo',
         addedBy: 'auto-search'
       });
-      if (t && t.album && t.album !== 'Single') {
-        syncTrackToAlbum(t).catch(() => {});
-      }
+      // NOTE: Do not auto-push runtime stream searches into albums (prevents duplicate tracks)
     }
     return {
       id: String(t._id || t.id),
@@ -1001,13 +1008,13 @@ router.get('/debug-stream', async (req, res) => {
         splashInRootIndex: extractSplash(rootIndexHtml),
         splashInDistIndex: extractSplash(distIndexHtml),
         splashInUbuntuIndex: extractSplash(ubuntuIndexHtml),
-        rivoIndexSnippet: rivoIndex.substring(0, 120),
-        ubuntuIndexSnippet: ubuntuIndex.substring(0, 120),
+        rivoIndexSnippet: (distIndexHtml || "").substring(0, 120),
+        ubuntuIndexSnippet: (ubuntuIndexHtml || "").substring(0, 120),
         runningNodeProcesses,
         realUbuntuPath: path.resolve('/home/ubuntu/dist/index.html'),
         realRivoPath: path.resolve(path.join(__dirname, '../../dist/index.html')),
-        ubuntuIndexLength: ubuntuIndex.length,
-        rivoIndexLength: rivoIndex.length,
+        ubuntuIndexLength: (ubuntuIndexHtml || "").length,
+        rivoIndexLength: (distIndexHtml || "").length,
         error: err?.message || null,
         stderr: stderr || null,
         stdout: stdout ? stdout.trim().slice(0, 150) : null

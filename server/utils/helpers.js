@@ -1170,6 +1170,29 @@ const activeBackgroundDownloads = new Set();
 const MAX_CONCURRENT_BG_DOWNLOADS = 3;
 const bgDownloadQueue = [];
 
+function invalidateAudioCache(videoIdOrUrl) {
+  if (!videoIdOrUrl || typeof videoIdOrUrl !== 'string') return;
+  const m = videoIdOrUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  const vid = m ? m[1] : (/^[a-zA-Z0-9_-]{11}$/.test(videoIdOrUrl.trim()) && !mongoose.isValidObjectId(videoIdOrUrl.trim()) ? videoIdOrUrl.trim() : null);
+  if (!vid) return;
+
+  directStreamCache.delete(vid);
+
+  const audioCacheDirs = [
+    path.join(__dirname, '../../uploads/audio-cache'),
+    '/home/ubuntu/uploads/audio-cache',
+    '/home/ubuntu/rivo/uploads/audio-cache'
+  ];
+  for (const dir of audioCacheDirs) {
+    try {
+      const f1 = path.join(dir, `${vid}.m4a`);
+      const f2 = path.join(dir, `${vid}.mp3`);
+      if (fs.existsSync(f1)) fs.unlinkSync(f1);
+      if (fs.existsSync(f2)) fs.unlinkSync(f2);
+    } catch {}
+  }
+}
+
 const EMBEDDED_YOUTUBE_COOKIES = `# Netscape HTTP Cookie File
 # https://curl.haxx.se/rfc/cookie_spec.html
 # This is a generated file! Do not edit.
@@ -1501,15 +1524,17 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
 
   let videoId = null;
+  let isExplicitVideoId = false;
   const candidates = [rawUrl];
   for (const cand of candidates) {
     if (!cand || typeof cand !== 'string') continue;
     const m1 = cand.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-    if (m1 && m1[1]) { videoId = m1[1]; break; }
+    if (m1 && m1[1]) { videoId = m1[1]; isExplicitVideoId = true; break; }
     const m2 = cand.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
-    if (m2 && m2[1]) { videoId = m2[1]; break; }
+    if (m2 && m2[1]) { videoId = m2[1]; isExplicitVideoId = true; break; }
     if (/^[a-zA-Z0-9_-]{11}$/.test(cand.trim()) && !mongoose.isValidObjectId(cand.trim())) {
       videoId = cand.trim();
+      isExplicitVideoId = true;
       break;
     }
   }
@@ -1523,7 +1548,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId && rawUrl) {
     const rawMatch = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-    if (rawMatch && rawMatch[1]) videoId = rawMatch[1];
+    if (rawMatch && rawMatch[1]) { videoId = rawMatch[1]; isExplicitVideoId = true; }
   }
   if (!videoId && (title || artist)) {
     try {
@@ -1593,16 +1618,16 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
   const extractPromise = (async () => {
     let directUrl = await extractDirectStreamUrl(videoId);
-    if (!directUrl && (title || artist)) {
+    // Never overwrite an explicit videoId with a fuzzy YouTube search fallback
+    if (!directUrl && !isExplicitVideoId && (title || artist)) {
       try {
         const freshId = await searchYouTubeId({ artist, title, targetDuration });
         if (freshId && String(freshId) !== videoId) {
           const freshVidStr = String(freshId);
           const freshStream = await extractDirectStreamUrl(freshVidStr);
           if (freshStream) {
-            videoId = freshVidStr;
-            directUrl = freshStream;
-            // Auto-heal in memory only; do not corrupt DB track
+            directStreamCache.set(freshVidStr, { url: freshStream, expireAt: Date.now() + 3 * 3600 * 1000 });
+            return freshStream;
           }
         }
       } catch {}
@@ -1623,7 +1648,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       '--no-playlist',
       '--no-warnings',
       '--js-runtimes', 'node',
-      '-f', 'ba/b',
+      '-f', 'ba[ext=m4a]/ba/b',
       '-o', cachedM4a
     ];
     if (cp) {
@@ -1643,8 +1668,8 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       return `/uploads/audio-cache/${videoId}.m4a`;
     }
 
-    // 2. Fallback to SoundCloud only if YouTube completely fails
-    if (title || artist) {
+    // 2. Fallback to SoundCloud only if YouTube completely fails AND not explicit video ID
+    if (!isExplicitVideoId && (title || artist)) {
       try {
         const scResult = await extractSoundCloudStream(title, artist, {
           album: options?.album,
@@ -1954,5 +1979,6 @@ module.exports = {
   resolveOfficialYouTubeAudioStream,
   parseLrc,
   parsePlain,
-  fetchLrclibLyrics
+  fetchLrclibLyrics,
+  invalidateAudioCache
 };
