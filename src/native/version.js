@@ -1,11 +1,11 @@
 import { Platform } from 'react-native';
 
 // Centralized Application Versions for Mobile Layer (APK / IPA)
-export const ANDROID_VERSION = '1.9.8.7';
-export const ANDROID_BUILD = '80';
+export const ANDROID_VERSION = '1.9.8.8';
+export const ANDROID_BUILD = '81';
 
-export const IOS_VERSION = '1.9.8.7';
-export const IOS_BUILD = '80';
+export const IOS_VERSION = '1.9.8.8';
+export const IOS_BUILD = '81';
 
 export const isAndroid = Platform.OS === 'android';
 export const APP_PLATFORM = isAndroid ? 'android' : 'ios';
@@ -13,7 +13,7 @@ export const APP_VERSION = isAndroid ? ANDROID_VERSION : IOS_VERSION;
 export const BUILD_NUMBER = isAndroid ? ANDROID_BUILD : IOS_BUILD;
 export const PLATFORM_NAME = isAndroid ? 'Rivo for Android (APK)' : 'Rivo for iOS (IPA)';
 export const FULL_VERSION = `v${APP_VERSION} (Build ${BUILD_NUMBER}) [${isAndroid ? 'APK' : 'IPA'}]`;
-export const BUILD_DATE = '2026-10-21';
+export const BUILD_DATE = '2026-10-22';
 
 export default {
   version: APP_VERSION,

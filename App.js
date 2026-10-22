@@ -505,19 +505,23 @@ function MainAppShell() {
                   onPress={handleDownloadAndInstall}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateDownloadBtnText}>1-CLICK IN-APP UPDATE & INSTALL</Text>
+                  <Text style={styles.updateDownloadBtnText}>
+                    {Platform.OS === 'ios' ? 'OPEN DOWNLOAD IN BROWSER' : '1-CLICK IN-APP UPDATE & INSTALL'}
+                  </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.updateBrowserBtn}
-                  onPress={() => {
-                    if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
-                    setIsUpdateModalOpen(false);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.updateBrowserBtnText}>OPEN DOWNLOAD IN BROWSER</Text>
-                </TouchableOpacity>
+                {Platform.OS !== 'ios' && (
+                  <TouchableOpacity
+                    style={styles.updateBrowserBtn}
+                    onPress={() => {
+                      if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
+                      setIsUpdateModalOpen(false);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.updateBrowserBtnText}>OPEN DOWNLOAD IN BROWSER</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.updateCancelBtn}
