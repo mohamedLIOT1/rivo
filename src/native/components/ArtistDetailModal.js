@@ -24,6 +24,8 @@ import {
   Music,
   MoreVertical,
   CheckSquare,
+  Plus,
+  Edit,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -32,6 +34,9 @@ import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { matchesArtist } from '../../utils/artistUtils.jsx';
 import MiniPlayer from './MiniPlayer';
+import AddAlbumModal from './AddAlbumModal';
+import EditArtistModal from './EditArtistModal';
+
 
 const { width } = Dimensions.get('window');
 const ALBUM_CARD_WIDTH = (width - 48) / 2;
@@ -47,9 +52,13 @@ export default function ArtistDetailModal({
   onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, addToQueue, downloadedTracks = [], downloadTrack } = useAudioPlayer();
-  const { likedTrackIds = [], toggleLikeTrack } = useUser();
+  const { likedTrackIds = [], toggleLikeTrack, currentUser } = useUser();
   const { isDark } = useTheme();
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
+  const [isEditArtistOpen, setIsEditArtistOpen] = useState(false);
+  const isAdmin = Boolean(currentUser?.role === 'admin' || currentUser?.isAdmin);
+
 
   // Normalize artist name
   const artistName = useMemo(() => {
@@ -236,44 +245,92 @@ export default function ArtistDetailModal({
                   {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
                 </Text>
               </TouchableOpacity>
+
+              {isAdmin && (
+                <>
+                  <TouchableOpacity
+                    style={styles.addAlbumHeroBtn}
+                    onPress={() => setIsAddAlbumOpen(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Plus size={14} color="#0b1110" strokeWidth={2.8} />
+                    <Text style={styles.addAlbumHeroBtnText}>ADD ALBUM</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.editArtistHeroBtn}
+                    onPress={() => setIsEditArtistOpen(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Edit size={13} color="#0b1110" strokeWidth={2.5} />
+                    <Text style={styles.editArtistHeroBtnText}>EDIT ARTIST PAGE</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
 
           {/* Discography / Albums Section matching Image 2 */}
-          {artistAlbums.length > 0 && (
+          {(artistAlbums.length > 0 || isAdmin) && (
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Disc size={16} color="#17a398" />
                   <Text style={styles.sectionTitle}>DISCOGRAPHY / ALBUMS</Text>
                 </View>
-                <Text style={styles.sectionCounter}>{artistAlbums.length} ALBUMS</Text>
-              </View>
-
-              <View style={styles.albumGrid}>
-                {artistAlbums.map((album, idx) => {
-                  const albumKey = album.id || album.name || idx;
-                  const albCover = normalizeCoverUri(album.cover || album.coverUrl || artistCover);
-                  const songCount = (album.tracks && album.tracks.length) || (album.trackIds && album.trackIds.length) || 0;
-
-                  return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.sectionCounter}>{artistAlbums.length} ALBUMS</Text>
+                  {isAdmin && (
                     <TouchableOpacity
-                      key={albumKey}
-                      style={styles.albumCard}
-                      onPress={() => onSelectAlbum && onSelectAlbum(album)}
-                      activeOpacity={0.85}
+                      style={styles.headerAddBtn}
+                      onPress={() => setIsAddAlbumOpen(true)}
+                      activeOpacity={0.8}
                     >
-                      <Image source={{ uri: albCover }} style={styles.albumCover} resizeMode="cover" />
-                      <Text style={styles.albumCardTitle} numberOfLines={1}>
-                        {album.name || 'Untitled Album'}
-                      </Text>
-                      <Text style={styles.albumCardSub}>
-                        ALBUM • {songCount} songs
-                      </Text>
+                      <Plus size={11} color="#0b1110" strokeWidth={2.8} />
+                      <Text style={styles.headerAddBtnText}>ADD ALBUM</Text>
                     </TouchableOpacity>
-                  );
-                })}
+                  )}
+                </View>
               </View>
+
+              {artistAlbums.length > 0 ? (
+                <View style={styles.albumGrid}>
+                  {artistAlbums.map((album, idx) => {
+                    const albumKey = album.id || album.name || idx;
+                    const albCover = normalizeCoverUri(album.cover || album.coverUrl || artistCover);
+                    const songCount = (album.tracks && album.tracks.length) || (album.trackIds && album.trackIds.length) || 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={albumKey}
+                        style={styles.albumCard}
+                        onPress={() => onSelectAlbum && onSelectAlbum(album)}
+                        activeOpacity={0.85}
+                      >
+                        <Image source={{ uri: albCover }} style={styles.albumCover} resizeMode="cover" />
+                        <Text style={styles.albumCardTitle} numberOfLines={1}>
+                          {album.name || 'Untitled Album'}
+                        </Text>
+                        <Text style={styles.albumCardSub}>
+                          ALBUM • {songCount} songs
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyAlbumBox}>
+                  <Text style={styles.emptyAlbumText}>No official albums added for this artist yet.</Text>
+                  <TouchableOpacity
+                    style={styles.uploadFirstBtn}
+                    onPress={() => setIsAddAlbumOpen(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Plus size={13} color="#0b1110" strokeWidth={2.8} />
+                    <Text style={styles.uploadFirstBtnText}>UPLOAD FIRST ALBUM</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
 
@@ -302,7 +359,13 @@ export default function ArtistDetailModal({
                 <TouchableOpacity
                   key={trackId || index}
                   style={[styles.trackRow, isCurrent && styles.trackRowActive]}
-                  onPress={() => playTrack(t, artistTracks)}
+                  onPress={() => {
+                    if (isCurrent && onOpenFullPlayer) {
+                      onOpenFullPlayer();
+                    } else {
+                      playTrack(t, artistTracks);
+                    }
+                  }}
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
@@ -362,6 +425,21 @@ export default function ArtistDetailModal({
             bottomOffset={Platform.OS === 'ios' ? 24 : 12}
           />
         )}
+
+        {/* Admin Modals */}
+        <AddAlbumModal
+          visible={isAddAlbumOpen}
+          onClose={() => setIsAddAlbumOpen(false)}
+          initialArtistName={artistName}
+          artistTracks={artistTracks}
+          artistAvatar={artistCover}
+        />
+
+        <EditArtistModal
+          visible={isEditArtistOpen}
+          onClose={() => setIsEditArtistOpen(false)}
+          artist={artist}
+        />
       </View>
     </Modal>
   );
@@ -482,6 +560,90 @@ const styles = StyleSheet.create({
   metaDot: {
     color: '#6b7280',
     fontSize: 10,
+  },
+  addAlbumHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#17a398',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+  },
+  addAlbumHeroBtnText: {
+    color: '#0b1110',
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  editArtistHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+  },
+  editArtistHeroBtnText: {
+    color: '#0b1110',
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  headerAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#17a398',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1.2,
+    borderColor: '#0b1110',
+  },
+  headerAddBtnText: {
+    color: '#0b1110',
+    fontSize: 9.5,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  emptyAlbumBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    backgroundColor: '#141d1b',
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#243b37',
+    marginTop: 8,
+    gap: 12,
+  },
+  emptyAlbumText: {
+    color: '#9ca3af',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  uploadFirstBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#17a398',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#0b1110',
+  },
+  uploadFirstBtnText: {
+    color: '#0b1110',
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   actionRow: {
     flexDirection: 'row',

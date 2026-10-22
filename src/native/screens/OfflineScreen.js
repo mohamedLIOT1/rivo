@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,10 @@ import {
   Image,
   Alert,
   Platform,
+  TextInput,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw, CheckSquare, Square, Check, ListPlus, X } from 'lucide-react-native';
+import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw, CheckSquare, Square, Check, ListPlus, X, Search } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -40,6 +41,18 @@ export default function OfflineScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredOfflineTracks = useMemo(() => {
+    if (!searchQuery.trim()) return offlineTracks;
+    const q = searchQuery.toLowerCase().trim();
+    return (offlineTracks || []).filter(t => {
+      const title = (t.title || '').toLowerCase();
+      const artist = (t.artist || '').toLowerCase();
+      const album = (t.album || '').toLowerCase();
+      return title.includes(q) || artist.includes(q) || album.includes(q);
+    });
+  }, [offlineTracks, searchQuery]);
 
   useEffect(() => {
     loadOffline();
@@ -329,6 +342,26 @@ export default function OfflineScreen() {
                 </TouchableOpacity>
               )}
             </View>
+
+            {/* Offline Vault Search Bar */}
+            {(offlineTracks || []).length > 0 && (
+              <View style={styles.vaultSearchBar}>
+                <Search size={16} color="#6b7280" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.vaultSearchInput}
+                  placeholder="Search in offline vault by title, artist, album..."
+                  placeholderTextColor="#6b7280"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7} style={{ padding: 4 }}>
+                    <X size={15} color="#9ca3af" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         </View>
 
@@ -336,7 +369,7 @@ export default function OfflineScreen() {
         <View style={styles.listSection}>
           <View style={[styles.listHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
             <Text style={[styles.listTitle, !isDark && styles.listTitleLight]}>DOWNLOADED SONGS</Text>
-            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>{(offlineTracks || []).length} SAVED</Text>
+            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>{searchQuery ? `${filteredOfflineTracks.length} OF ${(offlineTracks || []).length}` : `${(offlineTracks || []).length} SAVED`}</Text>
           </View>
 
           {(!offlineTracks || offlineTracks.length === 0) ? (
@@ -796,6 +829,23 @@ const styles = StyleSheet.create({
   },
   vaultSizeTextLight: {
     color: '#64748b',
+  },
+  vaultSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141d1b',
+    borderWidth: 1.5,
+    borderColor: '#243b37',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 7,
+    marginTop: 14,
+  },
+  vaultSearchInput: {
+    flex: 1,
+    color: '#fdfbf7',
+    fontSize: 12.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   heroActionsRow: {
     flexDirection: 'row',

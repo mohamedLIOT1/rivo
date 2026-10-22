@@ -529,6 +529,51 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
+    // ─── TRACK COMPLETION / NEXT TRACK / REPEAT ONE HANDLER ───
+    if (status.didJustFinish && ((status.positionMillis || 0) > 500 || (status.durationMillis || 0) > 500)) {
+      const finishedTrack = currentTrackRef.current;
+      if (finishedTrack && !isOfflineRef.current && autoDownloadFinishedRef.current) {
+        const fId = String(finishedTrack._id || finishedTrack.id || '');
+        const isAlreadyDl = (downloadedTracksRef.current || []).some(d => String(d._id || d.id) === fId);
+        if (!isAlreadyDl && !downloadingIdsRef.current[fId]) {
+          downloadTrack(finishedTrack)
+            .then((rec) => {
+              if (rec) {
+                setDownloadedTracks(prev => [rec, ...(prev || []).filter(t => String(t._id || t.id) !== fId)]);
+                showToast(`Auto-cached "${finishedTrack.title || 'Track'}" to Vault`, 'success');
+              }
+            })
+            .catch(() => {});
+        }
+      }
+
+      if (repeatModeRef.current === 'one') {
+        shouldBePlayingRef.current = true;
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        if (soundRef.current) {
+          soundRef.current.setPositionAsync(0).then(() => {
+            if (soundRef.current) soundRef.current.playAsync().catch(() => {});
+          }).catch(() => {
+            if (soundRef.current) soundRef.current.replayAsync().catch(() => {});
+          });
+        }
+        return;
+      }
+
+      // In Jam Session: ONLY the Host auto-advances when track finishes!
+      if (jamSyncRef.current?.jamSession) {
+        if (isJamHost() && playNextTrackRef.current) {
+          playNextTrackRef.current();
+        }
+      } else {
+        if (playNextTrackRef.current) {
+          playNextTrackRef.current();
+        }
+      }
+      return;
+    }
+
     // Hard safeguard: If playback should be paused, immediately kill any rogue playing state
     if (!shouldBePlayingRef.current && !isLoadingRef.current) {
       if (status.isPlaying && soundRef.current) {
@@ -541,10 +586,6 @@ export const AudioProvider = ({ children }) => {
 
     if (!isSeekingRef.current && !status.isBuffering) {
       if (isPlayingRef.current !== status.isPlaying) {
-        // If track just finished, it is transitioning to next track — do NOT treat as user pause!
-        if (status.didJustFinish) {
-          return;
-        }
         setIsPlaying(status.isPlaying);
         isPlayingRef.current = status.isPlaying;
         if (!isLoadingRef.current) {

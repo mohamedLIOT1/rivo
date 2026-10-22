@@ -222,7 +222,16 @@ const getOtaManifest = () => {
   try {
     const otaFile = path.join(__dirname, 'ota-manifest.json');
     if (fs.existsSync(otaFile)) {
-      return JSON.parse(fs.readFileSync(otaFile, 'utf8'));
+      const manifest = JSON.parse(fs.readFileSync(otaFile, 'utf8'));
+      if (manifest && (!manifest.sizeMb || !manifest.bundleSize)) {
+        const bundlePath = path.join(__dirname, '../public/downloads/ota/index.android.bundle');
+        if (fs.existsSync(bundlePath)) {
+          const stat = fs.statSync(bundlePath);
+          if (!manifest.bundleSize) manifest.bundleSize = stat.size;
+          if (!manifest.sizeMb) manifest.sizeMb = `${(stat.size / 1048576).toFixed(2)} MB`;
+        }
+      }
+      return manifest;
     }
   } catch (e) {}
   return null;

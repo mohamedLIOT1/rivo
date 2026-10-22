@@ -5,7 +5,7 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   Image,
   TextInput,
   Dimensions,
@@ -39,6 +39,101 @@ import { INITIAL_TRACKS } from '../data/initialTracks';
 import MiniPlayer from './MiniPlayer';
 
 const { width } = Dimensions.get('window');
+
+
+const AlbumTrackRow = React.memo(({
+  track,
+  index,
+  isCurrent,
+  isLiked,
+  isDl,
+  coverUri,
+  albumArtist,
+  onPlay,
+  onOpenFullPlayer,
+  onDownload,
+  onToggleLike,
+  onTrackAction,
+  styles,
+  formatDuration
+}) => {
+  const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
+  const trackCover = normalizeCoverUri(track.coverUrl || track.cover || coverUri);
+
+  return (
+    <TouchableOpacity
+      style={[styles.trackRow, isCurrent && styles.trackRowActive]}
+      onPress={() => {
+        if (isCurrent && onOpenFullPlayer) {
+          onOpenFullPlayer();
+        } else {
+          onPlay(track);
+        }
+      }}
+      activeOpacity={0.8}
+    >
+      <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
+        {numStr}
+      </Text>
+
+      <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
+
+      <View style={styles.trackDetails}>
+        <Text style={[styles.trackTitle, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
+          {track.title || 'Untitled Track'}
+        </Text>
+        <Text style={styles.trackArtist} numberOfLines={1}>
+          {track.artist || albumArtist}
+        </Text>
+      </View>
+
+      <Text style={styles.trackDuration}>{formatDuration(track.duration)}</Text>
+
+      <TouchableOpacity
+        style={styles.iconBtn}
+        onPress={() => onDownload && onDownload(track)}
+        activeOpacity={0.7}
+      >
+        {isDl ? (
+          <CheckCircle2 size={16} color="#17a398" />
+        ) : (
+          <Download size={16} color="#6b7280" />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.iconBtn}
+        onPress={() => onToggleLike && onToggleLike(String(track._id || track.id || ''))}
+        activeOpacity={0.7}
+      >
+        <Heart
+          size={16}
+          color={isLiked ? '#dc2626' : '#6b7280'}
+          fill={isLiked ? '#dc2626' : 'transparent'}
+        />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.iconBtn}
+        onPress={() => onTrackAction && onTrackAction(track)}
+        activeOpacity={0.7}
+      >
+        <MoreVertical size={16} color="#9ca3af" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}, (prev, next) => {
+  return (
+    prev.isCurrent === next.isCurrent &&
+    prev.isLiked === next.isLiked &&
+    prev.isDl === next.isDl &&
+    prev.coverUri === next.coverUri &&
+    prev.albumArtist === next.albumArtist &&
+    (prev.track?._id || prev.track?.id) === (next.track?._id || next.track?.id) &&
+    prev.track?.title === next.track?.title &&
+    prev.track?.duration === next.track?.duration
+  );
+});
 
 export default function AlbumDetailModal({
   visible,
@@ -180,7 +275,20 @@ export default function AlbumDetailModal({
 
   const effectiveAlbumTracks = useMemo(() => {
     const list = remoteTracks.length > 0 ? remoteTracks : albumTracks;
-    return list.filter(t => t && typeof t === 'object' && t.title);
+    const seenIds = new Set();
+    const seenTitles = new Set();
+    const unique = [];
+    for (const t of list) {
+      if (!t || typeof t !== 'object' || !t.title) continue;
+      const tid = String(t._id || t.id || '');
+      const normTitle = String(t.title || '').trim().toLowerCase().replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (tid && seenIds.has(tid)) continue;
+      if (normTitle && seenTitles.has(normTitle)) continue;
+      if (tid) seenIds.add(tid);
+      if (normTitle) seenTitles.add(normTitle);
+      unique.push(t);
+    }
+    return unique;
   }, [albumTracks, remoteTracks]);
 
   // Filtered tracks by search
@@ -305,150 +413,162 @@ export default function AlbumDetailModal({
           </View>
         </View>
 
-        <ScrollView
+        <FlatList
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-        >
-          {/* Hero Card matching Image 3 */}
-          <View style={styles.heroCard}>
-            <View style={styles.heroLayout}>
-              {/* Cover Art with RIVO-TAPE badge */}
-              <View style={styles.coverWrapper}>
-                <Image
-                  source={{ uri: normalizeCoverUri(coverUri) }}
-                  style={styles.heroCover}
-                  resizeMode="cover"
-                />
-                <View style={styles.tapeBadge}>
-                  <Text style={styles.tapeText}>RIVO-TAPE</Text>
-                </View>
-              </View>
-
-              {/* Title & Meta Info */}
-              <View style={styles.heroInfo}>
-                <View style={[styles.albumBadge, isPlaylist && { borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-                  <Text style={[styles.albumBadgeText, isPlaylist && { color: '#f59e0b' }]}>
-                    {isPlaylist ? 'OFFICIAL PLAYLIST' : 'OFFICIAL ALBUM'}
-                  </Text>
-                </View>
-
-                <Text style={styles.albumTitle} numberOfLines={2}>
-                  {albumTitle}
-                </Text>
-
-                <TouchableOpacity
-                  onPress={() => {
-                    if (onSelectArtist && !isPlaylist) {
-                      onClose();
-                      onSelectArtist(albumArtist);
-                    }
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.albumArtist}>
-                    {isPlaylist ? 'Curated by ' : 'Album by '}
-                    <Text style={styles.artistHighlight}>{albumArtist}</Text>
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={styles.statsPillRow}>
-                  <View style={[styles.statsPill, isPlaylist && { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
-                    <Text style={[styles.statsPillText, isPlaylist && { color: '#17a398' }]}>
-                      {isPlaylist ? 'PLAYLIST' : 'ALBUM'}
-                    </Text>
+          data={filteredTracks}
+          keyExtractor={(t, idx) => String(t._id || t.id || idx)}
+          initialNumToRender={14}
+          maxToRenderPerBatch={12}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          getItemLayout={(data, index) => ({
+            length: 64,
+            offset: 64 * index,
+            index,
+          })}
+          ListHeaderComponent={(
+            <View>
+              {/* Hero Card matching Image 3 */}
+              <View style={styles.heroCard}>
+                <View style={styles.heroLayout}>
+                  {/* Cover Art with RIVO-TAPE badge */}
+                  <View style={styles.coverWrapper}>
+                    <Image
+                      source={{ uri: normalizeCoverUri(coverUri) }}
+                      style={styles.heroCover}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.tapeBadge}>
+                      <Text style={styles.tapeText}>RIVO-TAPE</Text>
+                    </View>
                   </View>
-                  <Text style={styles.statsDot}>•</Text>
-                  <Text style={styles.statsMeta}>{effectiveAlbumTracks.length} TRACKS</Text>
-                  <Text style={styles.statsDot}>•</Text>
-                  <Text style={styles.statsMeta}>{totalMinutes} MIN</Text>
+
+                  {/* Title & Meta Info */}
+                  <View style={styles.heroInfo}>
+                    <View style={[styles.albumBadge, isPlaylist && { borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                      <Text style={[styles.albumBadgeText, isPlaylist && { color: '#f59e0b' }]}>
+                        {isPlaylist ? 'OFFICIAL PLAYLIST' : 'OFFICIAL ALBUM'}
+                      </Text>
+                    </View>
+
+                    <Text style={styles.albumTitle} numberOfLines={2}>
+                      {albumTitle}
+                    </Text>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (onSelectArtist && !isPlaylist) {
+                          onClose();
+                          onSelectArtist(albumArtist);
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.albumArtist}>
+                        {isPlaylist ? 'Curated by ' : 'Album by '}
+                        <Text style={styles.artistHighlight}>{albumArtist}</Text>
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.statsPillRow}>
+                      <View style={[styles.statsPill, isPlaylist && { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
+                        <Text style={[styles.statsPillText, isPlaylist && { color: '#17a398' }]}>
+                          {isPlaylist ? 'PLAYLIST' : 'ALBUM'}
+                        </Text>
+                      </View>
+                      <Text style={styles.statsDot}>•</Text>
+                      <Text style={styles.statsMeta}>{effectiveAlbumTracks.length} TRACKS</Text>
+                      <Text style={styles.statsDot}>•</Text>
+                      <Text style={styles.statsMeta}>{totalMinutes} MIN</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Action Buttons Bar matching Image 3 */}
+                <View style={styles.actionBar}>
+                  {/* Big Yellow Play Button */}
+                  <TouchableOpacity
+                    style={styles.playBtn}
+                    onPress={() => handlePlayAll(false)}
+                    activeOpacity={0.85}
+                  >
+                    <Play size={22} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+                  </TouchableOpacity>
+
+                  {/* Queue Playlist Button */}
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => {
+                      if (addMultipleToQueue && effectiveAlbumTracks.length > 0) {
+                        addMultipleToQueue(effectiveAlbumTracks);
+                      }
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
+                    <Text style={styles.actionBtnText}>{isPlaylist ? 'QUEUE PLAYLIST' : 'QUEUE ALL'}</Text>
+                  </TouchableOpacity>
+
+                  {/* Save to Library Button */}
+                  <TouchableOpacity
+                    style={[styles.actionBtn, isSaved && styles.actionBtnActive]}
+                    onPress={handleToggleSave}
+                    activeOpacity={0.8}
+                  >
+                    {isSaved ? (
+                      <BookmarkCheck size={15} color="#17a398" strokeWidth={2.4} />
+                    ) : (
+                      <BookmarkPlus size={15} color="#fdfbf7" strokeWidth={2.2} />
+                    )}
+                    <Text style={styles.actionBtnText}>{isSaved ? 'SAVED' : 'SAVE'}</Text>
+                  </TouchableOpacity>
+
+                  {/* Download All Button */}
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={handleDownloadAll}
+                    activeOpacity={0.8}
+                  >
+                    <Download size={15} color="#26c4b7" strokeWidth={2.2} />
+                    <Text style={styles.actionBtnText}>DOWNLOAD ({effectiveAlbumTracks.length})</Text>
+                  </TouchableOpacity>
+
+                  {/* Shuffle Button */}
+                  <TouchableOpacity
+                    style={styles.actionBtn}
+                    onPress={() => handlePlayAll(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Shuffle size={15} color="#f59e0b" strokeWidth={2.2} />
+                    <Text style={styles.actionBtnText}>SHUFFLE</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Prescription Search Bar matching Image 3 */}
+                <View style={styles.searchBar}>
+                  <Search size={16} color="#6b7280" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search in prescription list..."
+                    placeholderTextColor="#6b7280"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCorrect={false}
+                  />
                 </View>
               </View>
+
+              {/* Table Header matching Image 3 */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.colHeader, { width: 34 }]}>#</Text>
+                <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>TITLE & ARTIST</Text>
+                <Text style={[styles.colHeader, { width: 90, textAlign: 'right' }]}>ACTIONS</Text>
+              </View>
             </View>
-
-            {/* Action Buttons Bar matching Image 3 */}
-            <View style={styles.actionBar}>
-              {/* Big Yellow Play Button */}
-              <TouchableOpacity
-                style={styles.playBtn}
-                onPress={() => handlePlayAll(false)}
-                activeOpacity={0.85}
-              >
-                <Play size={22} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
-              </TouchableOpacity>
-
-              {/* Queue Playlist Button */}
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => {
-                  if (addMultipleToQueue && effectiveAlbumTracks.length > 0) {
-                    addMultipleToQueue(effectiveAlbumTracks);
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
-                <Text style={styles.actionBtnText}>{isPlaylist ? 'QUEUE PLAYLIST' : 'QUEUE ALL'}</Text>
-              </TouchableOpacity>
-
-              {/* Save to Library Button */}
-              <TouchableOpacity
-                style={[styles.actionBtn, isSaved && styles.actionBtnActive]}
-                onPress={handleToggleSave}
-                activeOpacity={0.8}
-              >
-                {isSaved ? (
-                  <BookmarkCheck size={15} color="#17a398" strokeWidth={2.4} />
-                ) : (
-                  <BookmarkPlus size={15} color="#fdfbf7" strokeWidth={2.2} />
-                )}
-                <Text style={styles.actionBtnText}>{isSaved ? 'SAVED' : 'SAVE'}</Text>
-              </TouchableOpacity>
-
-              {/* Download All Button */}
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={handleDownloadAll}
-                activeOpacity={0.8}
-              >
-                <Download size={15} color="#26c4b7" strokeWidth={2.2} />
-                <Text style={styles.actionBtnText}>DOWNLOAD ({effectiveAlbumTracks.length})</Text>
-              </TouchableOpacity>
-
-              {/* Shuffle Button */}
-              <TouchableOpacity
-                style={styles.actionBtn}
-                onPress={() => handlePlayAll(true)}
-                activeOpacity={0.8}
-              >
-                <Shuffle size={15} color="#f59e0b" strokeWidth={2.2} />
-                <Text style={styles.actionBtnText}>SHUFFLE</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Prescription Search Bar matching Image 3 */}
-            <View style={styles.searchBar}>
-              <Search size={16} color="#6b7280" style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search in prescription list..."
-                placeholderTextColor="#6b7280"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-              />
-            </View>
-          </View>
-
-          {/* Table Header matching Image 3 */}
-          <View style={styles.tableHeader}>
-            <Text style={[styles.colHeader, { width: 34 }]}>#</Text>
-            <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>TITLE & ARTIST</Text>
-            <Text style={[styles.colHeader, { width: 90, textAlign: 'right' }]}>ACTIONS</Text>
-          </View>
-
-          {/* Tracklist Rows */}
-          {filteredTracks.map((t, index) => {
+          )}
+          renderItem={({ item: t, index }) => {
             const trackId = String(t._id || t.id || '');
             const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
             const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
@@ -456,77 +576,27 @@ export default function AlbumDetailModal({
               (d) => String(d._id || d.id) === trackId
             ) || Boolean(t.isDownloaded || t.localAudioUri);
 
-            const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
-            const trackCover = normalizeCoverUri(t.coverUrl || t.cover || coverUri);
-
             return (
-              <TouchableOpacity
-                key={trackId || index}
-                style={[styles.trackRow, isCurrent && styles.trackRowActive]}
-                onPress={() => playTrack(t, effectiveAlbumTracks)}
-                activeOpacity={0.8}
-              >
-                {/* Index # */}
-                <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
-                  {numStr}
-                </Text>
-
-                {/* Cover Thumbnail */}
-                <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
-
-                {/* Title & Artist */}
-                <View style={styles.trackDetails}>
-                  <Text style={[styles.trackTitle, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
-                    {t.title || 'Untitled Track'}
-                  </Text>
-                  <Text style={styles.trackArtist} numberOfLines={1}>
-                    {t.artist || albumArtist}
-                  </Text>
-                </View>
-
-                {/* Duration */}
-                <Text style={styles.trackDuration}>{formatDuration(t.duration)}</Text>
-
-                {/* Download Button */}
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => !isDl && handleDownloadTrack && handleDownloadTrack(t)}
-                  activeOpacity={0.7}
-                >
-                  {isDl ? (
-                    <CheckCircle2 size={16} color="#17a398" />
-                  ) : (
-                    <Download size={16} color="#6b7280" />
-                  )}
-                </TouchableOpacity>
-
-                {/* Like Button */}
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => toggleLikeTrack && toggleLikeTrack(trackId)}
-                  activeOpacity={0.7}
-                >
-                  <Heart
-                    size={16}
-                    color={isLiked ? '#dc2626' : '#6b7280'}
-                    fill={isLiked ? '#dc2626' : 'transparent'}
-                  />
-                </TouchableOpacity>
-
-                {/* Action Menu (3 dots) */}
-                <TouchableOpacity
-                  style={styles.iconBtn}
-                  onPress={() => onTrackAction && onTrackAction(t)}
-                  activeOpacity={0.7}
-                >
-                  <MoreVertical size={16} color="#9ca3af" />
-                </TouchableOpacity>
-              </TouchableOpacity>
+              <AlbumTrackRow
+                track={t}
+                index={index}
+                isCurrent={isCurrent}
+                isLiked={isLiked}
+                isDl={isDl}
+                coverUri={coverUri}
+                albumArtist={albumArtist}
+                onPlay={(selected) => playTrack(selected, effectiveAlbumTracks)}
+                onOpenFullPlayer={onOpenFullPlayer}
+                onDownload={(selected) => !isDl && handleDownloadTrack && handleDownloadTrack(selected)}
+                onToggleLike={(id) => toggleLikeTrack && toggleLikeTrack(id)}
+                onTrackAction={(selected) => onTrackAction && onTrackAction(selected)}
+                styles={styles}
+                formatDuration={formatDuration}
+              />
             );
-          })}
-
-          <View style={{ height: currentTrack ? 120 : 60 }} />
-        </ScrollView>
+          }}
+          ListFooterComponent={<View style={{ height: currentTrack ? 120 : 60 }} />}
+        />
 
         {/* Floating Mini Player matching home screen experience */}
         {currentTrack && (

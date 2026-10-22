@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
   useWindowDimensions,
   ActivityIndicator,
   Image,
@@ -62,7 +63,18 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
   const genreCardWidth = Math.floor((width - albumPadding - (genreColumns - 1) * albumGap) / genreColumns);
 
   const { playTrack, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
-  const { tracks: userTracks, albums: userAlbums = [] } = useUser();
+  const { tracks: userTracks, albums: userAlbums = [], fetchPublicTracks } = useUser();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      if (fetchPublicTracks) await fetchPublicTracks();
+    } catch {}
+    finally {
+      setIsRefreshing(false);
+    }
+  };
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
 
@@ -413,6 +425,14 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.mint}
+            colors={[colors.mint]}
+          />
+        }
       >
         {/* If no query and no selected genre: Show 12 Genre Blister Packs */}
         {!hasSearch && (

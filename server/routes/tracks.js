@@ -400,6 +400,9 @@ const importTrackHandler = async (req, res) => {
       await autoAddTrackToUserLinksPlaylist(req.user.id, trackId, cover);
     }
 
+    const io = req.app?.get('io') || req.io;
+    if (io) io.emit('track:created', trackObj);
+
     res.json({ success: true, track: trackObj });
   } catch (e) {
     res.status(500).json({ error: e.message || 'Server error while importing track' });
@@ -465,6 +468,9 @@ router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio',
     if (req.user?.id) {
       await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
     }
+
+    const io = req.app?.get('io') || req.io;
+    if (io) io.emit('track:created', newTrack);
 
     res.json({ success: true, track: newTrack });
   } catch (err) {
@@ -534,6 +540,9 @@ const createTrackHandler = async (req, res) => {
     if (req.user?.id) {
       await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
     }
+
+    const io = req.app?.get('io') || req.io;
+    if (io) io.emit('track:created', newTrack);
 
     res.json({ success: true, track: newTrack });
   } catch (e) {
@@ -702,13 +711,31 @@ router.post('/:id/like', auth, async (req, res) => {
 });
 
 // Audio Stream Handler
-async function autoPersistExternalTrack({ title, artist, album, cover, audioUrl, duration }) {
+async function autoPersistExternalTrack({ id, trackId, title, artist, album, cover, audioUrl, duration }) {
   if (!title) return null;
   try {
-    let t = await Track.findOne({
-      title: new RegExp(`^${escapeRegex(title.trim())}$`, 'i'),
-      ...(artist ? { artist: new RegExp(`^${escapeRegex(artist.trim())}$`, 'i') } : {})
-    });
+    const targetId = id || trackId;
+    let t = null;
+    if (targetId && mongoose.isValidObjectId(targetId)) {
+      t = await Track.findById(targetId);
+    }
+    if (!t) {
+      const cleanT = (title || '').trim();
+      const cleanA = (artist || '').trim();
+      t = await Track.findOne({
+        title: new RegExp(`^${escapeRegex(cleanT)}$`, 'i'),
+        ...(cleanA ? { artist: new RegExp(`^${escapeRegex(cleanA)}$`, 'i') } : {})
+      });
+      if (!t) {
+        const stripped = cleanT.replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (stripped.length > 2) {
+          t = await Track.findOne({
+            title: new RegExp(escapeRegex(stripped), 'i'),
+            ...(cleanA ? { artist: new RegExp(escapeRegex(cleanA), 'i') } : {})
+          });
+        }
+      }
+    }
     if (!t) {
       t = await Track.create({
         title: title.trim(),
@@ -834,6 +861,7 @@ const handleTrackStream = async (req, res) => {
       const vidCandidate = streamUrl.videoId || (rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
       const targetCover = req.query.cover || (vidCandidate ? `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg` : track?.cover || '');
       const savedTrack = await autoPersistExternalTrack({
+        id: track?._id || id,
         title,
         artist,
         album: req.query.album || track?.album || 'Single',

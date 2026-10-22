@@ -49,6 +49,9 @@ try {
 
   const stat = fs.statSync(bundlePath);
   const sizeMb = (stat.size / 1024 / 1024).toFixed(2);
+  const realSizeFormatted = `${sizeMb} MB`;
+  const notes = userNotes || `تحديث هوائي فوري (${realSizeFormatted}) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات`;
+  const notesEn = userNotesEn || `Instant in-app OTA update (${realSizeFormatted}) • No reinstall required • Performance improvements and bug fixes.`;
 
   // 2. Update server/ota-manifest.json
   const manifest = {
@@ -59,7 +62,7 @@ try {
     notes,
     notesEn,
     bundleSize: stat.size,
-    sizeMb: `${sizeMb} MB`,
+    sizeMb: realSizeFormatted,
     updatedAt: new Date().toISOString()
   };
 

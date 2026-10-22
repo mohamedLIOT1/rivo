@@ -9,7 +9,11 @@ import { useToast } from './ToastContext';
 const SocketContext = createContext();
 
 export const SocketProvider = ({ children }) => {
-  const { currentUser, token } = useUser();
+  const { currentUser, token, fetchPublicTracks } = useUser();
+  const fetchPublicTracksRef = useRef(fetchPublicTracks);
+  useEffect(() => {
+    fetchPublicTracksRef.current = fetchPublicTracks;
+  }, [fetchPublicTracks]);
   const currentUserRef = useRef(currentUser);
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -99,6 +103,19 @@ export const SocketProvider = ({ children }) => {
     s.on('disconnect', () => {
       setIsConnected(false);
     });
+
+    // Real-time catalog updates when tracks or albums are added/edited
+    const onCatalogUpdate = () => {
+      if (fetchPublicTracksRef.current) {
+        fetchPublicTracksRef.current();
+      }
+    };
+    s.on('track:created', onCatalogUpdate);
+    s.on('track:updated', onCatalogUpdate);
+    s.on('track:deleted', onCatalogUpdate);
+    s.on('album:created', onCatalogUpdate);
+    s.on('album:updated', onCatalogUpdate);
+    s.on('album:deleted', onCatalogUpdate);
 
     // Listen to real Jam Room server events with automatic synchronization
     s.on('jam:room_updated', (data) => {

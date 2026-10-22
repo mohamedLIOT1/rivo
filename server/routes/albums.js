@@ -187,15 +187,25 @@ router.get('/:id', async (req, res) => {
       ...t
     }));
 
-    // Filter out tracks that explicitly belong to a different album (e.g. accidentally linked tracks)
+    // Filter out tracks that explicitly belong to a different album and deduplicate by title/ID
     const albumNameNorm = (album.name || album.title || '').trim().toLowerCase();
-    const validTracks = formattedTracks.filter(t => {
-      if (!t) return false;
+    const seenIds = new Set();
+    const seenTitles = new Set();
+    const validTracks = [];
+
+    for (const t of formattedTracks) {
+      if (!t) continue;
+      const tid = String(t._id || t.id || '');
       if (t.album && albumNameNorm && t.album.trim().toLowerCase() !== albumNameNorm) {
-        return false;
+        continue;
       }
-      return true;
-    });
+      const normTitle = String(t.title || '').trim().toLowerCase().replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (tid && seenIds.has(tid)) continue;
+      if (normTitle && seenTitles.has(normTitle)) continue;
+      if (tid) seenIds.add(tid);
+      if (normTitle) seenTitles.add(normTitle);
+      validTracks.push(t);
+    }
 
     const cleanTrackIds = validTracks.map(t => String(t._id || t.id));
     if (album.trackIds && album.trackIds.length !== cleanTrackIds.length) {

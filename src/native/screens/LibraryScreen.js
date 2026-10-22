@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Dimensions,
@@ -78,6 +79,7 @@ export default function LibraryScreen({
     playlists = [],
     likedTrackIds = [],
     tracks: userTracks = [],
+    fetchPublicTracks,
     updatePlaylist,
     uploadPlaylistCover,
     togglePlaylistVisibility,
@@ -124,7 +126,10 @@ export default function LibraryScreen({
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      if (syncUserData) await syncUserData();
+      await Promise.allSettled([
+        syncUserData ? syncUserData() : Promise.resolve(),
+        fetchPublicTracks ? fetchPublicTracks() : Promise.resolve()
+      ]);
     } catch {}
     finally {
       setIsRefreshing(false);
@@ -518,308 +523,324 @@ export default function LibraryScreen({
         )}
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.mint}
-            colors={[colors.mint]}
-          />
-        }
-      >
-        {selectedView === 'liked' ? (
-          /* Detailed Liked Tracks */
-          <View>
-            <View style={styles.likedHeroCard}>
-              <View style={styles.hardShadow} />
-              <View style={[styles.likedHero, !isDark && styles.likedHeroLight]}>
-                <View style={styles.heartBigBox}>
-                  <Heart size={32} color={colors.rust} fill={colors.rust} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
-                  <Text style={[styles.likedHeroTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
-                  <Text style={[styles.likedHeroSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} songs preserved</Text>
-                  <View style={styles.likedBtnRow}>
-                    <TouchableOpacity
-                      style={styles.playHeroBtn}
-                      onPress={() => handlePlayLiked(false)}
-                    >
-                      <Play size={14} color={colors.ink} fill={colors.ink} />
-                      <Text style={styles.playHeroBtnText}>PLAY ALL</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.shuffleHeroBtn}
-                      onPress={() => handlePlayLiked(true)}
-                    >
-                      <Shuffle size={14} color={colors.paper} />
-                    </TouchableOpacity>
+      {selectedView ? (
+        <FlatList
+          data={selectedView === 'liked' ? likedTracks : activePlaylistTracks}
+          keyExtractor={(item, idx) => String(item._id || item.id || idx)}
+          renderItem={({ item, index }) => (
+            <SongItem
+              key={item._id || item.id || String(index)}
+              track={item}
+              index={index + 1}
+              onPlay={() => {
+                if (selectedView === 'liked') {
+                  if (typeof playPlaylist === 'function') {
+                    playPlaylist(likedTracks, index);
+                  } else if (typeof playTrack === 'function') {
+                    playTrack(item, likedTracks);
+                  }
+                } else {
+                  if (typeof playPlaylist === 'function') {
+                    playPlaylist(activePlaylistTracks, index);
+                  } else if (typeof playTrack === 'function') {
+                    playTrack(item, activePlaylistTracks);
+                  }
+                }
+              }}
+              onMorePress={() => onTrackAction && onTrackAction(item)}
+            />
+          )}
+          ListHeaderComponent={
+            selectedView === 'liked' ? (
+              <View>
+                <View style={styles.likedHeroCard}>
+                  <View style={styles.hardShadow} />
+                  <View style={[styles.likedHero, !isDark && styles.likedHeroLight]}>
+                    <View style={styles.heartBigBox}>
+                      <Heart size={32} color={colors.rust} fill={colors.rust} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+                      <Text style={[styles.likedHeroTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
+                      <Text style={[styles.likedHeroSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} songs preserved</Text>
+                      <View style={styles.likedBtnRow}>
+                        <TouchableOpacity
+                          style={styles.playHeroBtn}
+                          onPress={() => handlePlayLiked(false)}
+                        >
+                          <Play size={14} color={colors.ink} fill={colors.ink} />
+                          <Text style={styles.playHeroBtnText}>PLAY ALL</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.shuffleHeroBtn}
+                          onPress={() => handlePlayLiked(true)}
+                        >
+                          <Shuffle size={14} color={colors.paper} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
                 </View>
-              </View>
-            </View>
 
-            {likedTracks.length === 0 ? (
-              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
-                <Heart size={36} color={colors.rust} />
-                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No liked recordings yet</Text>
-                <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>Tap the heart icon on any tape to archive it here.</Text>
+                {likedTracks.length === 0 ? (
+                  <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
+                    <Heart size={36} color={colors.rust} />
+                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No liked recordings yet</Text>
+                    <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>Tap the heart icon on any tape to archive it here.</Text>
+                  </View>
+                ) : null}
               </View>
             ) : (
-              <View style={styles.tracksList}>
-                {likedTracks.map((track, idx) => (
-                  <SongItem
-                    key={track._id || track.id || idx}
-                    track={track}
-                    index={idx + 1}
-                    onMorePress={() => onTrackAction && onTrackAction(track)}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
-        ) : selectedView && typeof selectedView === 'object' ? (
-          /* Detailed Playlist View */
-          <View>
-            <View style={styles.playlistHeroCard}>
-              <View style={styles.hardShadow} />
-              <View style={[styles.playlistHero, !isDark && styles.playlistHeroLight]}>
-                <View style={styles.playlistBigBox}>
-                  <View style={StyleSheet.absoluteFillObject}>
-                    <Disc size={32} color={colors.mint} style={{ alignSelf: 'center', marginTop: 12 }} />
+              <View>
+                <View style={styles.playlistHeroCard}>
+                  <View style={styles.hardShadow} />
+                  <View style={[styles.playlistHero, !isDark && styles.playlistHeroLight]}>
+                    <View style={styles.playlistBigBox}>
+                      <View style={StyleSheet.absoluteFillObject}>
+                        <Disc size={32} color={colors.mint} style={{ alignSelf: 'center', marginTop: 12 }} />
+                      </View>
+                      {((!coverFailed && selectedView.cover) || (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)) ? (
+                        <Image
+                          source={{
+                            uri: normalizeCoverUri(
+                              (!coverFailed && selectedView.cover)
+                                ? selectedView.cover
+                                : (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)
+                            ),
+                          }}
+                          style={{ width: '100%', height: '100%', borderRadius: 8 }}
+                          resizeMode="cover"
+                          onError={() => setCoverFailed(true)}
+                        />
+                      ) : null}
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <CassetteTag label="CRATE PLAYLIST" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+                          <TouchableOpacity
+                            style={[
+                              styles.visibilityHeroPill,
+                              selectedView.isPublic !== false ? styles.visibilityHeroPillPublic : styles.visibilityHeroPillPrivate
+                            ]}
+                            onPress={handleToggleCurrentPlaylistVisibility}
+                            disabled={isTogglingVisibility}
+                            activeOpacity={0.7}
+                          >
+                            {isTogglingVisibility ? (
+                              <ActivityIndicator size="small" color={selectedView.isPublic !== false ? '#17a398' : '#9ca3af'} />
+                            ) : selectedView.isPublic !== false ? (
+                              <>
+                                <Globe size={11} color="#17a398" />
+                                <Text style={[styles.visibilityHeroPillText, { color: '#17a398' }]}>PUBLIC</Text>
+                              </>
+                            ) : (
+                              <>
+                                <Lock size={11} color="#9ca3af" />
+                                <Text style={[styles.visibilityHeroPillText, { color: '#9ca3af' }]}>PRIVATE</Text>
+                              </>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.editHeroPill}
+                          onPress={() => openEditPlaylist(selectedView)}
+                          activeOpacity={0.7}
+                        >
+                          <Edit3 size={11} color={colors.mint} />
+                          <Text style={styles.editHeroPillText}>EDIT</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }]}>{selectedView.name}</Text>
+                      <Text style={[styles.playlistHeroSub, !isDark && { color: '#57534e' }]}>
+                        {(selectedView.tracks || selectedView.trackIds || activePlaylistTracks || []).length} recordings compiled
+                      </Text>
+                      <View style={styles.likedBtnRow}>
+                        <TouchableOpacity
+                          style={styles.playHeroBtn}
+                          onPress={() => handlePlayPlaylist(selectedView, false)}
+                        >
+                          <Play size={14} color={colors.ink} fill={colors.ink} />
+                          <Text style={styles.playHeroBtnText}>PLAY</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.shuffleHeroBtn}
+                          onPress={() => handlePlayPlaylist(selectedView, true)}
+                        >
+                          <Shuffle size={14} color={colors.paper} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.queueHeroBtn}
+                          onPress={handleSetPlaylistAsQueue}
+                          activeOpacity={0.8}
+                        >
+                          <ListPlus size={13} color="#17a398" />
+                          <Text style={styles.queueHeroBtnText}>QUEUE</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.downloadHeroBtn, isDownloadingAll && { opacity: 0.7 }]}
+                          onPress={handleDownloadAllPlaylist}
+                          disabled={isDownloadingAll}
+                          activeOpacity={0.8}
+                        >
+                          {isDownloadingAll ? (
+                            <ActivityIndicator size="small" color={colors.ink} />
+                          ) : (
+                            <Download size={13} color={colors.ink} />
+                          )}
+                          <Text style={styles.downloadHeroBtnText}>
+                            {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : 'DOWNLOAD ALL'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
-                  {((!coverFailed && selectedView.cover) || (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)) ? (
-                    <Image
-                      source={{
-                        uri: normalizeCoverUri(
-                          (!coverFailed && selectedView.cover)
-                            ? selectedView.cover
-                            : (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)
-                        ),
-                      }}
-                      style={{ width: '100%', height: '100%', borderRadius: 8 }}
-                      resizeMode="cover"
-                      onError={() => setCoverFailed(true)}
-                    />
+                </View>
+
+                {isLoadingTracks && activePlaylistTracks.length === 0 ? (
+                  <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 40 }]}>
+                    <ActivityIndicator size="large" color="#17a398" />
+                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, { marginTop: 12 }]}>Loading playlist tracks...</Text>
+                  </View>
+                ) : activePlaylistTracks.length === 0 ? (
+                  <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 24 }]}>
+                    <Disc size={36} color={colors.mint} />
+                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>This crate is empty</Text>
+                    <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
+                      Search below or pick from AI recommendations to add songs instantly!
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            )
+          }
+          ListFooterComponent={
+            selectedView !== 'liked' ? (
+              <View style={[styles.playlistAddSection, { marginBottom: 30 }]}>
+                <View style={styles.playlistAddHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                    <Sparkles size={14} color="#17a398" strokeWidth={2.5} />
+                    <Text style={styles.playlistAddTitle} numberOfLines={1}>
+                      {songSearchQuery.trim()
+                        ? `SEARCH RESULTS (${searchResultsForAdd.length})`
+                        : `AI RECOMMENDATIONS FOR "${selectedView.name}"`}
+                    </Text>
+                  </View>
+                  {!songSearchQuery.trim() && (
+                    <TouchableOpacity
+                      style={styles.refreshAiBtn}
+                      onPress={fetchAiRecommendations}
+                      disabled={isLoadingAi}
+                      activeOpacity={0.7}
+                    >
+                      {isLoadingAi ? (
+                        <ActivityIndicator size="small" color="#17a398" />
+                      ) : (
+                        <>
+                          <RefreshCw size={11} color="#17a398" />
+                          <Text style={styles.refreshAiText}>REFRESH</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.searchAddInputRow}>
+                  <Search size={14} color="#6b7280" />
+                  <TextInput
+                    style={styles.searchAddInput}
+                    placeholder="Search songs to add to this crate..."
+                    placeholderTextColor="#6b7280"
+                    value={songSearchQuery}
+                    onChangeText={setSongSearchQuery}
+                    autoCorrect={false}
+                  />
+                  {songSearchQuery.trim() ? (
+                    <TouchableOpacity onPress={() => setSongSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <X size={14} color="#9ca3af" />
+                    </TouchableOpacity>
                   ) : null}
                 </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <CassetteTag label="CRATE PLAYLIST" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+
+                {/* Tracks List: Search Results or AI Recommendations */}
+                {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).map((recTrack) => {
+                  const recId = String(recTrack._id || recTrack.id);
+                  const isJustAdded = justAddedSongId === recId;
+                  return (
+                    <View key={recId} style={styles.recItemRow}>
                       <TouchableOpacity
-                        style={[
-                          styles.visibilityHeroPill,
-                          selectedView.isPublic !== false ? styles.visibilityHeroPillPublic : styles.visibilityHeroPillPrivate
-                        ]}
-                        onPress={handleToggleCurrentPlaylistVisibility}
-                        disabled={isTogglingVisibility}
+                        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+                        onPress={() => playTrack && playTrack(recTrack)}
                         activeOpacity={0.7}
                       >
-                        {isTogglingVisibility ? (
-                          <ActivityIndicator size="small" color={selectedView.isPublic !== false ? '#17a398' : '#9ca3af'} />
-                        ) : selectedView.isPublic !== false ? (
+                        <Image
+                          source={{ uri: normalizeCoverUri(recTrack.cover || recTrack.coverUrl) }}
+                          style={styles.recItemCover}
+                        />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={styles.recItemTitle} numberOfLines={1}>
+                            {recTrack.title}
+                          </Text>
+                          <Text style={styles.recItemArtist} numberOfLines={1}>
+                            {recTrack.artist || 'Unknown Artist'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.quickAddBtn, isJustAdded && styles.quickAddBtnDone]}
+                        onPress={() => handleQuickAddTrack(recTrack)}
+                        disabled={isJustAdded}
+                        activeOpacity={0.8}
+                      >
+                        {isJustAdded ? (
                           <>
-                            <Globe size={11} color="#17a398" />
-                            <Text style={[styles.visibilityHeroPillText, { color: '#17a398' }]}>PUBLIC</Text>
+                            <Check size={12} color="#082621" strokeWidth={3} />
+                            <Text style={styles.quickAddBtnTextDone}>ADDED</Text>
                           </>
                         ) : (
                           <>
-                            <Lock size={11} color="#9ca3af" />
-                            <Text style={[styles.visibilityHeroPillText, { color: '#9ca3af' }]}>PRIVATE</Text>
+                            <Plus size={12} color="#082621" strokeWidth={3} />
+                            <Text style={styles.quickAddBtnText}>ADD</Text>
                           </>
                         )}
                       </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity
-                      style={styles.editHeroPill}
-                      onPress={() => openEditPlaylist(selectedView)}
-                      activeOpacity={0.7}
-                    >
-                      <Edit3 size={11} color={colors.mint} />
-                      <Text style={styles.editHeroPillText}>EDIT</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }]}>{selectedView.name}</Text>
-                  <Text style={[styles.playlistHeroSub, !isDark && { color: '#57534e' }]}>
-                    {(selectedView.tracks || selectedView.trackIds || activePlaylistTracks || []).length} recordings compiled
-                  </Text>
-                  <View style={styles.likedBtnRow}>
-                    <TouchableOpacity
-                      style={styles.playHeroBtn}
-                      onPress={() => handlePlayPlaylist(selectedView, false)}
-                    >
-                      <Play size={14} color={colors.ink} fill={colors.ink} />
-                      <Text style={styles.playHeroBtnText}>PLAY</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.shuffleHeroBtn}
-                      onPress={() => handlePlayPlaylist(selectedView, true)}
-                    >
-                      <Shuffle size={14} color={colors.paper} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.queueHeroBtn}
-                      onPress={handleSetPlaylistAsQueue}
-                      activeOpacity={0.8}
-                    >
-                      <ListPlus size={13} color="#17a398" />
-                      <Text style={styles.queueHeroBtnText}>QUEUE</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.downloadHeroBtn, isDownloadingAll && { opacity: 0.7 }]}
-                      onPress={handleDownloadAllPlaylist}
-                      disabled={isDownloadingAll}
-                      activeOpacity={0.8}
-                    >
-                      {isDownloadingAll ? (
-                        <ActivityIndicator size="small" color={colors.ink} />
-                      ) : (
-                        <Download size={13} color={colors.ink} />
-                      )}
-                      <Text style={styles.downloadHeroBtnText}>
-                        {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : 'DOWNLOAD ALL'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                  );
+                })}
               </View>
-            </View>
-
-            {isLoadingTracks && activePlaylistTracks.length === 0 ? (
-              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 40 }]}>
-                <ActivityIndicator size="large" color="#17a398" />
-                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, { marginTop: 12 }]}>Loading playlist tracks...</Text>
-              </View>
-            ) : activePlaylistTracks.length === 0 ? (
-              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 24 }]}>
-                <Disc size={36} color={colors.mint} />
-                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>This crate is empty</Text>
-                <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
-                  Search below or pick from AI recommendations to add songs instantly!
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.tracksList}>
-                {activePlaylistTracks.map((track, idx) => (
-                  <SongItem
-                    key={track._id || track.id || idx}
-                    track={track}
-                    index={idx + 1}
-                    onPlay={() => {
-                      if (typeof playPlaylist === 'function') {
-                        playPlaylist(activePlaylistTracks, idx);
-                      } else if (typeof playTrack === 'function') {
-                        playTrack(track, activePlaylistTracks);
-                      }
-                    }}
-                    onMorePress={() => onTrackAction && onTrackAction(track)}
-                  />
-                ))}
-              </View>
-            )}
-
-            {/* Search & AI Recommendations for adding songs into this playlist */}
-            <View style={styles.playlistAddSection}>
-              <View style={styles.playlistAddHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                  <Sparkles size={14} color="#17a398" strokeWidth={2.5} />
-                  <Text style={styles.playlistAddTitle} numberOfLines={1}>
-                    {songSearchQuery.trim()
-                      ? `SEARCH RESULTS (${searchResultsForAdd.length})`
-                      : `AI RECOMMENDATIONS FOR "${selectedView.name}"`}
-                  </Text>
-                </View>
-                {!songSearchQuery.trim() && (
-                  <TouchableOpacity
-                    style={styles.refreshAiBtn}
-                    onPress={fetchAiRecommendations}
-                    disabled={isLoadingAi}
-                    activeOpacity={0.7}
-                  >
-                    {isLoadingAi ? (
-                      <ActivityIndicator size="small" color="#17a398" />
-                    ) : (
-                      <>
-                        <RefreshCw size={11} color="#17a398" />
-                        <Text style={styles.refreshAiText}>REFRESH</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              <View style={styles.searchAddInputRow}>
-                <Search size={14} color="#6b7280" />
-                <TextInput
-                  style={styles.searchAddInput}
-                  placeholder="Search songs to add to this crate..."
-                  placeholderTextColor="#6b7280"
-                  value={songSearchQuery}
-                  onChangeText={setSongSearchQuery}
-                  autoCorrect={false}
-                />
-                {songSearchQuery.trim() ? (
-                  <TouchableOpacity onPress={() => setSongSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <X size={14} color="#9ca3af" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {/* Tracks List: Search Results or AI Recommendations */}
-              {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).map((recTrack) => {
-                const recId = String(recTrack._id || recTrack.id);
-                const isJustAdded = justAddedSongId === recId;
-                return (
-                  <View key={recId} style={styles.recItemRow}>
-                    <TouchableOpacity
-                      style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-                      onPress={() => playTrack && playTrack(recTrack)}
-                      activeOpacity={0.7}
-                    >
-                      <Image
-                        source={{ uri: normalizeCoverUri(recTrack.cover || recTrack.coverUrl) }}
-                        style={styles.recItemCover}
-                      />
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.recItemTitle} numberOfLines={1}>
-                          {recTrack.title}
-                        </Text>
-                        <Text style={styles.recItemArtist} numberOfLines={1}>
-                          {recTrack.artist || 'Unknown Artist'}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.quickAddBtn, isJustAdded && styles.quickAddBtnDone]}
-                      onPress={() => handleQuickAddTrack(recTrack)}
-                      disabled={isJustAdded}
-                      activeOpacity={0.8}
-                    >
-                      {isJustAdded ? (
-                        <>
-                          <Check size={12} color="#082621" strokeWidth={3} />
-                          <Text style={styles.quickAddBtnTextDone}>ADDED</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Plus size={12} color="#082621" strokeWidth={3} />
-                          <Text style={styles.quickAddBtnText}>ADD</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          /* Main Library Overview */
+            ) : <View style={{ height: 32 }} />
+          }
+          getItemLayout={(data, index) => ({ length: 64, offset: 64 * index, index })}
+          initialNumToRender={14}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.mint}
+              colors={[colors.mint]}
+            />
+          }
+        />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={colors.mint}
+              colors={[colors.mint]}
+            />
+          }
+        >
           <View>
             {/* Liked Songs Cassette Card */}
             <TouchableOpacity
@@ -925,8 +946,8 @@ export default function LibraryScreen({
               </View>
             )}
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
       {/* ── Edit Playlist Modal ── */}
       <Modal

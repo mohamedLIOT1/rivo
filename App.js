@@ -152,7 +152,9 @@ function MainAppShell() {
             notes: ota.notes || remotePlatform?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة',
             notesEn: ota.notesEn || ota.notes_en || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.',
             bundleUrl: ota.bundleUrl.startsWith('http') ? ota.bundleUrl : `${API_BASE_URL}${ota.bundleUrl}`,
-            minAppVersion: ota.minAppVersion
+            minAppVersion: ota.minAppVersion,
+            bundleSize: ota.bundleSize,
+            sizeMb: ota.sizeMb || (ota.bundleSize ? `${(ota.bundleSize / 1048576).toFixed(2)} MB` : null)
           });
           setIsOtaModalOpen(true);
           return; // Handled via lightweight OTA!
@@ -549,7 +551,7 @@ function MainAppShell() {
             </View>
 
             <Text style={[styles.updateVersionText, { fontSize: 13, color: '#17a398' }]}>
-              Instant in-app update (~3 MB) • No reinstallation required
+              Instant in-app update {otaUpdateInfo?.sizeMb ? `(${otaUpdateInfo.sizeMb})` : (otaUpdateInfo?.bundleSize ? `(${(otaUpdateInfo.bundleSize / 1048576).toFixed(2)} MB)` : '')} • No reinstallation required
             </Text>
 
             {/* ─── RELEASE NOTES & CHANGELOG BOX ─── */}

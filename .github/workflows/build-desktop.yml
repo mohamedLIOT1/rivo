@@ -7,9 +7,6 @@ on:
         description: 'Release Tag (e.g. v1.9.3)'
         required: false
         default: 'latest'
-  push:
-    tags:
-      - 'v*'
 
 permissions:
   contents: write
