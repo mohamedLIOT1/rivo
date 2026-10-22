@@ -4,7 +4,7 @@ import sys
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-KEY = r"C:\Users\mohamed\Downloads\my-bot-key.pem"
+KEY = os.path.expanduser(r"~/.ssh/id_ed25519")
 HOST = "ubuntu@rivo-m.duckdns.org"
 REMOTE_DIR = "/home/ubuntu/rivo"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,6 +55,8 @@ def main():
         ("server/routes/chat.js", f"{REMOTE_DIR}/server/routes/chat.js"),
         ("server/routes/ai.js", f"{REMOTE_DIR}/server/routes/ai.js"),
         ("server/utils/helpers.js", f"{REMOTE_DIR}/server/utils/helpers.js"),
+        ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
+        ("package.json", f"{REMOTE_DIR}/package.json"),
         ("server/sockets/index.js", f"{REMOTE_DIR}/server/sockets/index.js"),
         ("server/discordActivity.js", f"{REMOTE_DIR}/server/discordActivity.js"),
         ("server/index.js", f"{REMOTE_DIR}/server/index.js"),
@@ -86,10 +88,10 @@ def main():
     print("Fetching and verifying binary releases from GitHub on remote server...")
     run_ssh(
         f"cd {REMOTE_DIR}/public/downloads && "
-        f"[ -f Rivo-v{version}.apk ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk && "
-        f"[ -f Rivo-v{version}.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.exe -o Rivo-v{version}.exe && "
-        f"[ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa && "
-        f"[ -f Rivo_Setup.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe && "
+        f"([ -f Rivo-v{version}.apk ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk 2>/dev/null || true) && "
+        f"([ -f Rivo-v{version}.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.exe -o Rivo-v{version}.exe 2>/dev/null || true) && "
+        f"([ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa 2>/dev/null || true) && "
+        f"([ -f Rivo_Setup.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe 2>/dev/null || true) && "
         f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/public/downloads/Rivo.apk 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
@@ -116,7 +118,7 @@ def main():
     tar_filename = os.path.basename(tar_path)
     print(f"Uploading dist archive ({os.path.getsize(tar_path)} bytes)...")
     upload_file(tar_path, f"{REMOTE_DIR}/{tar_filename}")
-    run_ssh(f"cd {REMOTE_DIR} && tar -xzf {tar_filename} && rm {tar_filename}")
+    run_ssh(f"cd {REMOTE_DIR} && tar -xzf {tar_filename} && rm {tar_filename} && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true)")
     if os.path.exists(tar_path):
         os.remove(tar_path)
 
