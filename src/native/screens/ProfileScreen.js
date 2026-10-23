@@ -60,6 +60,8 @@ export default function ProfileScreen({
   onOpenChat,
   onSelectPlaylist,
   onOpenFullPlayer,
+  onSelectAlbum,
+  onSelectArtist,
 }) {
   const {
     currentUser,
@@ -123,6 +125,23 @@ export default function ProfileScreen({
   const [viewingLoading, setViewingLoading] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [selectedPlaylistModal, setSelectedPlaylistModal] = useState(null);
+
+  const handleOpenPlaylistModal = (pl, artistName = 'Listener') => {
+    if (onSelectAlbum && pl) {
+      onSelectAlbum({
+        id: pl.id || pl._id,
+        _id: pl._id || pl.id,
+        name: pl.name,
+        artist: artistName,
+        cover: pl.cover || pl.tracks?.[0]?.coverUrl || pl.tracks?.[0]?.cover,
+        tracks: pl.tracks || [],
+        trackIds: pl.trackIds || [],
+        isPlaylist: true,
+      });
+    } else {
+      setSelectedPlaylistModal(pl);
+    }
+  };
 
   const [socialModal, setSocialModal] = useState({
     isOpen: false,
@@ -582,7 +601,7 @@ export default function ProfileScreen({
                 key={crate._id || crate.id || String(idx)}
                 style={styles.crateItemCard}
                 onPress={() => {
-                  setSelectedPlaylistModal(crate);
+                  handleOpenPlaylistModal(crate, viewingProfile.name || 'Listener');
                 }}
                 activeOpacity={0.8}
               >
@@ -609,22 +628,23 @@ export default function ProfileScreen({
         {renderSocialModal()}
 
         {/* Playlist Full View Modal */}
-        <AlbumDetailModal
-          visible={Boolean(selectedPlaylistModal)}
-          album={selectedPlaylistModal ? {
-            id: selectedPlaylistModal.id || selectedPlaylistModal._id,
-            name: selectedPlaylistModal.name,
-            artist: viewingProfile.name || 'Listener',
-            cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
-            tracks: selectedPlaylistModal.tracks || [],
-            trackIds: selectedPlaylistModal.trackIds || [],
-            isPlaylist: true,
-          } : null}
-          onOpenFullPlayer={onOpenFullPlayer}
-          onClose={() => setSelectedPlaylistModal(null)}
-          allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
-          onOpenFullPlayer={onOpenFullPlayer}
-        />
+        {!onSelectAlbum && (
+          <AlbumDetailModal
+            visible={Boolean(selectedPlaylistModal)}
+            album={selectedPlaylistModal ? {
+              id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+              name: selectedPlaylistModal.name,
+              artist: viewingProfile.name || 'Listener',
+              cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
+              tracks: selectedPlaylistModal.tracks || [],
+              trackIds: selectedPlaylistModal.trackIds || [],
+              isPlaylist: true,
+            } : null}
+            onOpenFullPlayer={onOpenFullPlayer}
+            onClose={() => setSelectedPlaylistModal(null)}
+            allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
+          />
+        )}
       </ScrollView>
     );
   }
@@ -941,7 +961,7 @@ export default function ProfileScreen({
               >
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-                  onPress={() => setSelectedPlaylistModal(pl)}
+                  onPress={() => handleOpenPlaylistModal(pl, currentUser?.name || 'Listener')}
                   activeOpacity={0.7}
                 >
                   <View style={styles.playlistThumb}>
@@ -983,7 +1003,7 @@ export default function ProfileScreen({
                   style={styles.playlistPlayBtn}
                   onPress={() => {
                     if (playPlaylist) playPlaylist(pl);
-                    else setSelectedPlaylistModal(pl);
+                    else handleOpenPlaylistModal(pl, currentUser?.name || 'Listener');
                   }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   activeOpacity={0.7}
@@ -1102,22 +1122,23 @@ export default function ProfileScreen({
       </Modal>
 
       {/* Playlist Tracks Full View Modal */}
-      <AlbumDetailModal
-        visible={Boolean(selectedPlaylistModal)}
-        album={selectedPlaylistModal ? {
-          id: selectedPlaylistModal.id || selectedPlaylistModal._id,
-          name: selectedPlaylistModal.name,
-          artist: selectedPlaylistModal.ownerName || currentUser?.name || 'Listener',
-          cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
-          tracks: selectedPlaylistModal.tracks || [],
-          trackIds: selectedPlaylistModal.trackIds || [],
-          isPlaylist: true,
-        } : null}
+      {!onSelectAlbum && (
+        <AlbumDetailModal
+          visible={Boolean(selectedPlaylistModal)}
+          album={selectedPlaylistModal ? {
+            id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+            name: selectedPlaylistModal.name,
+            artist: selectedPlaylistModal.ownerName || currentUser?.name || 'Listener',
+            cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
+            tracks: selectedPlaylistModal.tracks || [],
+            trackIds: selectedPlaylistModal.trackIds || [],
+            isPlaylist: true,
+          } : null}
           onOpenFullPlayer={onOpenFullPlayer}
-        onClose={() => setSelectedPlaylistModal(null)}
-        allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
-        onOpenFullPlayer={onOpenFullPlayer}
-      />
+          onClose={() => setSelectedPlaylistModal(null)}
+          allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
+        />
+      )}
     </ScrollView>
   );
 }

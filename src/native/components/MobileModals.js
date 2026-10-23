@@ -10,10 +10,16 @@ import JamRoomModal from './JamRoomModal';
 import FriendActivityModal from './FriendActivityModal';
 import IntroAuthModal from './IntroAuthModal';
 import UserDetailModal from './UserDetailModal';
+import AlbumDetailModal from './AlbumDetailModal';
+import ArtistDetailModal from './ArtistDetailModal';
 
 export default function MobileModals({
   isFullPlayerOpen,
   setIsFullPlayerOpen,
+  selectedAlbum,
+  setSelectedAlbum,
+  selectedArtist,
+  setSelectedArtist,
   actionTrack,
   setActionTrack,
   playlistTrack,
@@ -41,6 +47,33 @@ export default function MobileModals({
 }) {
   return (
     <>
+      {Boolean(selectedAlbum) && (
+        <AlbumDetailModal
+          visible={Boolean(selectedAlbum)}
+          album={selectedAlbum}
+          onClose={() => setSelectedAlbum && setSelectedAlbum(null)}
+          onTrackAction={(track) => setActionTrack && setActionTrack(track)}
+          onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
+          onSelectArtist={(artistName) => {
+            if (setSelectedAlbum) setSelectedAlbum(null);
+            if (setSelectedArtist) setSelectedArtist({ name: artistName });
+          }}
+        />
+      )}
+
+      {Boolean(selectedArtist) && (
+        <ArtistDetailModal
+          visible={Boolean(selectedArtist)}
+          artist={selectedArtist}
+          onClose={() => setSelectedArtist && setSelectedArtist(null)}
+          onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
+          onSelectAlbum={(alb) => {
+            if (setSelectedArtist) setSelectedArtist(null);
+            if (setSelectedAlbum) setSelectedAlbum(alb);
+          }}
+          onTrackAction={(track) => setActionTrack && setActionTrack(track)}
+        />
+      )}
       {isFullPlayerOpen && (
         <FullPlayerModal
           visible={isFullPlayerOpen}
@@ -123,6 +156,7 @@ export default function MobileModals({
             setIsJamOpen(true);
           }}
           onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+          onSelectAlbum={(alb) => setSelectedAlbum && setSelectedAlbum(alb)}
         />
       )}
 

@@ -705,6 +705,8 @@ function NativeAppShell() {
     }).catch(() => {});
   }, []);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [selectedArtist, setSelectedArtist] = useState(null);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
@@ -849,6 +851,8 @@ function NativeAppShell() {
     if (tabId === 'chat') {
       setIsChatOpen(true);
     } else {
+      setSelectedAlbum(null);
+      setSelectedArtist(null);
       setActiveTab(tabId);
     }
   };
@@ -864,6 +868,8 @@ function NativeAppShell() {
               setIsChatOpen(true);
             }}
             onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
           />
         );
       case 'library':
@@ -889,6 +895,8 @@ function NativeAppShell() {
             }}
             onSelectPlaylist={() => setActiveTab('library')}
             onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
           />
         );
       case 'stats':
@@ -903,6 +911,8 @@ function NativeAppShell() {
             onOpenAddSong={() => setIsAddSongOpen(true)}
             onTrackAction={(track) => setActionTrack(track)}
             onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
           />
         );
     }
@@ -1176,6 +1186,10 @@ function NativeAppShell() {
       <MobileModals
         isFullPlayerOpen={isFullPlayerOpen}
         setIsFullPlayerOpen={setIsFullPlayerOpen}
+        selectedAlbum={selectedAlbum}
+        setSelectedAlbum={setSelectedAlbum}
+        selectedArtist={selectedArtist}
+        setSelectedArtist={setSelectedArtist}
         actionTrack={actionTrack}
         setActionTrack={setActionTrack}
         playlistTrack={playlistTrack}

@@ -1,11 +1,11 @@
 import { Platform } from 'react-native';
 
 // Centralized Application Versions for Mobile Layer (APK / IPA)
-export const ANDROID_VERSION = '1.9.9.0';
-export const ANDROID_BUILD = '83';
+export const ANDROID_VERSION = '1.9.9.1';
+export const ANDROID_BUILD = '84';
 
-export const IOS_VERSION = '1.9.9.0';
-export const IOS_BUILD = '83';
+export const IOS_VERSION = '1.9.9.1';
+export const IOS_BUILD = '84';
 
 export const isAndroid = Platform.OS === 'android';
 export const APP_PLATFORM = isAndroid ? 'android' : 'ios';

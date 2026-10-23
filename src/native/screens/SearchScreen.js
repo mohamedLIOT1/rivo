@@ -52,7 +52,7 @@ const DISPENSARY_GENRES = [
   { id: 'ambient', label: 'NIGHT AMBIENT', color: '#6366f1', tag: 'FOCUS DEEP' },
 ];
 
-export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer }) {
+export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist }) {
   const { width } = useWindowDimensions();
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
   const albumGap = 10;
@@ -564,7 +564,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
                   <TouchableOpacity
                     key={artist.name || idx}
                     style={[styles.artistCard, !isDark && styles.artistCardLight]}
-                    onPress={() => setSelectedArtist(artist)}
+                    onPress={() => onSelectArtist ? onSelectArtist(artist) : setSelectedArtist(artist)}
                     activeOpacity={0.85}
                   >
                     <View style={styles.artistAvatarWrap}>
@@ -607,7 +607,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
                   <TouchableOpacity
                     key={alb.id || alb.name || String(index)}
                     style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
-                    onPress={() => setSelectedAlbum(alb)}
+                    onPress={() => onSelectAlbum ? onSelectAlbum(alb) : setSelectedAlbum(alb)}
                     activeOpacity={0.85}
                   >
                     <View style={styles.albumCoverWrap}>
@@ -678,33 +678,37 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
       </ScrollView>
 
       {/* Album Details Modal */}
-      <AlbumDetailModal
-        visible={Boolean(selectedAlbum)}
-        album={selectedAlbum}
-        onClose={() => setSelectedAlbum(null)}
-        allTracks={allTracks}
-        onTrackAction={onTrackAction}
-        onOpenFullPlayer={onOpenFullPlayer}
-        onSelectArtist={(artistName) => {
-          setSelectedAlbum(null);
-          setSelectedArtist({ name: artistName });
-        }}
-      />
+      {!onSelectAlbum && (
+        <AlbumDetailModal
+          visible={Boolean(selectedAlbum)}
+          album={selectedAlbum}
+          onClose={() => setSelectedAlbum(null)}
+          allTracks={allTracks}
+          onTrackAction={onTrackAction}
+          onOpenFullPlayer={onOpenFullPlayer}
+          onSelectArtist={(artistName) => {
+            setSelectedAlbum(null);
+            setSelectedArtist({ name: artistName });
+          }}
+        />
+      )}
 
       {/* Artist Details Modal */}
-      <ArtistDetailModal
-        visible={Boolean(selectedArtist)}
-        artist={selectedArtist}
-        onClose={() => setSelectedArtist(null)}
-        allTracks={allTracks}
-        allAlbums={userAlbums}
-        onOpenFullPlayer={onOpenFullPlayer}
-        onSelectAlbum={(alb) => {
-          setSelectedArtist(null);
-          setSelectedAlbum(alb);
-        }}
-        onTrackAction={onTrackAction}
-      />
+      {!onSelectArtist && (
+        <ArtistDetailModal
+          visible={Boolean(selectedArtist)}
+          artist={selectedArtist}
+          onClose={() => setSelectedArtist(null)}
+          allTracks={allTracks}
+          allAlbums={userAlbums}
+          onOpenFullPlayer={onOpenFullPlayer}
+          onSelectAlbum={(alb) => {
+            setSelectedArtist(null);
+            setSelectedAlbum(alb);
+          }}
+          onTrackAction={onTrackAction}
+        />
+      )}
 
       {/* User Details Modal */}
       <UserDetailModal

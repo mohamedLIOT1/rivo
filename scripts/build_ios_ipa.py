@@ -10,8 +10,22 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERMESC = os.path.join(BASE_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
 
 def build_ios_ipa():
-    version = '1.9.9.0'
-    build_num = '83'
+    pkg_path = os.path.join(BASE_DIR, 'package.json')
+    app_json_path = os.path.join(BASE_DIR, 'app.json')
+    version = '1.9.9.1'
+    build_num = '84'
+    if os.path.exists(pkg_path):
+        try:
+            with open(pkg_path, 'r', encoding='utf-8') as f:
+                version = json.load(f).get('version', version)
+        except:
+            pass
+    if os.path.exists(app_json_path):
+        try:
+            with open(app_json_path, 'r', encoding='utf-8') as f:
+                build_num = str(json.load(f).get('expo', {}).get('ios', {}).get('buildNumber', build_num))
+        except:
+            pass
     
     ios_raw = os.path.join(BASE_DIR, 'ios_main.jsbundle')
     if not os.path.exists(ios_raw):
