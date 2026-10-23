@@ -5,6 +5,10 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 KEY = os.path.expanduser(r"~/.ssh/id_ed25519")
+if not os.path.exists(KEY):
+    alt_key = os.path.expanduser(r"~/Desktop/LightsailDefaultKey-eu-north-1.pem")
+    if os.path.exists(alt_key):
+        KEY = alt_key
 HOST = "ubuntu@rivo-m.duckdns.org"
 REMOTE_DIR = "/home/ubuntu/rivo"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,10 +92,10 @@ def main():
     print("Fetching and verifying binary releases from GitHub on remote server...")
     run_ssh(
         f"cd {REMOTE_DIR}/public/downloads && "
-        f"([ -f Rivo-v{version}.apk ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk 2>/dev/null || true) && "
-        f"([ -f Rivo-v{version}.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.exe -o Rivo-v{version}.exe 2>/dev/null || true) && "
-        f"([ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa 2>/dev/null || true) && "
-        f"([ -f Rivo_Setup.exe ] || curl -sL https://github.com/WhooAre-you/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe 2>/dev/null || true) && "
+        f"([ -f Rivo-v{version}.apk ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk 2>/dev/null || true) && "
+        f"([ -f Rivo-v{version}.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.exe -o Rivo-v{version}.exe 2>/dev/null || true) && "
+        f"([ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa 2>/dev/null || true) && "
+        f"([ -f Rivo_Setup.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe 2>/dev/null || true) && "
         f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/public/downloads/Rivo.apk 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "

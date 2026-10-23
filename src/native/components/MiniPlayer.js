@@ -22,7 +22,8 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-  const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const isLive = Boolean(currentTrack?.isLive || currentTrack?.genre === 'quran-radio');
+  const progressPercent = isLive ? 100 : (duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0);
   const rawCover = currentTrack?.coverUrl || currentTrack?.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 
@@ -39,7 +40,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
         >
         {/* Top Progress Line */}
         <View style={[styles.progressTrack, !isDark && styles.progressTrackLight]}>
-          <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+          <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: isLive ? '#ef4444' : colors.mint }]} />
         </View>
 
         <View style={styles.contentRow}>
@@ -57,16 +58,23 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
           {/* Title & Artist */}
           <View style={styles.textColumn}>
-            <Text style={[styles.title, !isDark && styles.titleLight]} numberOfLines={1}>
-              {currentTrack.title || 'Untitled'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {isLive && (
+                <View style={{ backgroundColor: '#ef4444', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                  <Text style={{ color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text>
+                </View>
+              )}
+              <Text style={[styles.title, !isDark && styles.titleLight, { flex: 1 }]} numberOfLines={1}>
+                {currentTrack.title || 'Untitled'}
+              </Text>
+            </View>
             {isLoading ? (
               <Text style={styles.connectingText} numberOfLines={1}>
                 CONNECTING STREAM...
               </Text>
             ) : (
               <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
-                {currentTrack.artist || 'Unknown Artist'}
+                {isLive ? 'إذاعة القرآن الكريم • 24/7' : (currentTrack.artist || 'Unknown Artist')}
               </Text>
             )}
           </View>

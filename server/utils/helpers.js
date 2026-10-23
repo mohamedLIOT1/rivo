@@ -1878,7 +1878,7 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
       try {
         const getRes = await axios.get('https://lrclib.net/api/get', {
           params: { track_name: t, artist_name: a },
-          headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/WhooAre-you/Rivo)' },
+          headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/mohamedLIOT1/Rivo)' },
           timeout: 3500
         });
         if (getRes.data?.syncedLyrics) {
@@ -1905,7 +1905,7 @@ async function fetchLrclibLyrics(title, artist, duration = 180) {
     try {
       const res = await axios.get('https://lrclib.net/api/search', {
         params: { q },
-        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/WhooAre-you/Rivo)' },
+        headers: { 'User-Agent': 'RivoApp/1.0 (https://github.com/mohamedLIOT1/Rivo)' },
         timeout: 4000
       });
       const items = res.data || [];

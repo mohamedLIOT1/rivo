@@ -7,7 +7,7 @@ import {
 import {
   ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
   Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw,
-  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical
+  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical, BookOpen
 } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -20,6 +20,8 @@ import { updateDownloadedTrackLyrics } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 import SleepTimerModal from './SleepTimerModal';
 import { parseLrcLyrics } from '../../utils/lrcParser';
+import { isQuranContent } from '../../utils/quranUtils';
+import QuranMushafViewer from './QuranMushafViewer';
 
 const { width, height } = Dimensions.get('window');
 const QUEUE_ROW_HEIGHT = 72;
@@ -365,6 +367,8 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const { likedTrackIds = [], toggleLikeTrack, token, currentUser } = useUser();
   const { isDark } = useTheme();
   const { showToast } = useToast();
+
+  const isCurQuran = useMemo(() => isQuranContent(currentTrack?.title || currentTrack?.name, currentTrack?.artist, currentTrack?.album), [currentTrack]);
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
@@ -719,15 +723,26 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
               {/* ── Seekbar with White Circular Thumb Indicator ── */}
               <View style={styles.seekSection}>
-                <TouchableOpacity activeOpacity={1} onPress={handleSeekPress} style={styles.seekTouchArea}>
+                <TouchableOpacity activeOpacity={1} onPress={currentTrack?.isLive ? undefined : handleSeekPress} style={styles.seekTouchArea}>
                   <View style={styles.seekTrack}>
-                    <View style={[styles.seekFill, { width: `${progressPercent}%` }]} />
-                    <View style={[styles.seekThumb, { left: `${Math.max(0, Math.min(100, progressPercent))}%` }]} />
+                    <View style={[styles.seekFill, { width: currentTrack?.isLive ? '100%' : `${progressPercent}%`, backgroundColor: currentTrack?.isLive ? '#ef4444' : colors.mint }]} />
+                    {!currentTrack?.isLive && (
+                      <View style={[styles.seekThumb, { left: `${Math.max(0, Math.min(100, progressPercent))}%` }]} />
+                    )}
                   </View>
                 </TouchableOpacity>
                 <View style={styles.timeRow}>
-                  <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                  {currentTrack?.isLive ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#ef4444' }} />
+                      <Text style={[styles.timeText, { color: '#ef4444', fontWeight: 'bold' }]}>بث مباشر 24/7 (LIVE)</Text>
+                    </View>
+                  ) : (
+                    <>
+                      <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+                      <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                    </>
+                  )}
                 </View>
               </View>
 
@@ -806,13 +821,17 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     <Disc size={17} color="#94a3b8" />
                   </TouchableOpacity>
 
-                  {/* Lyrics Quick Button (Teal Box) */}
+                  {/* Lyrics / Mushaf Quick Button */}
                   <TouchableOpacity
                     style={styles.quickToolBtnTeal}
                     onPress={() => setActiveTab('lyrics')}
                     activeOpacity={0.8}
                   >
-                    <Mic size={17} color="#0b1110" strokeWidth={2.4} />
+                    {isCurQuran ? (
+                      <BookOpen size={17} color="#0b1110" strokeWidth={2.4} />
+                    ) : (
+                      <Mic size={17} color="#0b1110" strokeWidth={2.4} />
+                    )}
                   </TouchableOpacity>
 
                   {/* Download Button */}
@@ -836,87 +855,93 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
           </ScrollView>
         )}
 
-        {/* ── Lyrics Tab ── */}
+        {/* ── Lyrics / Quran Mushaf Tab ── */}
         {activeTab === 'lyrics' && (
-          <ScrollView
-            ref={lyricsScrollRef}
-            contentContainerStyle={styles.lyricsBody}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[styles.lyricsCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
-              <View style={[styles.lyricsCardHeaderRow, { borderBottomColor: isDark ? '#1f2e2a' : '#ded2bb' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  {isVerifiedLyrics && (
-                    <View style={styles.verifiedTag}>
-                      <CheckCircle2 size={12} color={colors.mint} />
-                      <Text style={styles.verifiedTagText}>VERIFIED</Text>
-                    </View>
-                  )}
-                  <Text style={[styles.lyricsHeader, { color: textSub }]}>OFFICIAL TRANSCRIPT</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  {isLoadingLyrics && (
-                    <ActivityIndicator size="small" color={colors.mint} />
-                  )}
-                  <TouchableOpacity
-                    onPress={handleOpenEditLyrics}
-                    style={styles.lyricsActionBtn}
-                    activeOpacity={0.8}
-                  >
-                    <Edit3 size={14} color="#000000" strokeWidth={2.5} />
-                    <Text style={styles.lyricsActionBtnText}>EDIT</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {lyricsList.length > 0 ? (
-                <View style={styles.lyricsLinesList}>
-                  {lyricsList.map((line, idx) => {
-                    const isActive = idx === activeLyricIndex;
-                    return (
-                      <TouchableOpacity
-                        key={idx}
-                        onPress={() => seekTo(line.time)}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.lyricLineBox,
-                          isActive && {
-                            backgroundColor: isDark ? 'rgba(23, 163, 152, 0.2)' : 'rgba(23, 163, 152, 0.15)',
-                            borderColor: colors.mint,
-                            borderWidth: 1.5,
-                          }
-                        ]}
-                      >
-                        <Text style={[
-                          styles.lyricLineText,
-                          { color: isActive ? (isDark ? '#ffffff' : colors.ink) : (isDark ? '#9ca3af' : '#4b5563') },
-                          isActive && styles.lyricLineTextActive
-                        ]}>
-                          {line.text}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View style={styles.emptyLyricsBox}>
-                  <ListMusic size={32} color={colors.mint} style={{ marginBottom: 12 }} />
-                  <Text style={[styles.emptyLyricsTitle, { color: textTitle }]}>No Lyrics Found</Text>
-                  <Text style={styles.emptyLyricsText}>
-                    {isLoadingLyrics ? 'Retrieving synchronized lyrics...' : 'Lyrics could not be loaded for this track.'}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleOpenEditLyrics}
-                    style={[styles.lyricsActionBtn, { marginTop: 16, paddingHorizontal: 16 }]}
-                    activeOpacity={0.8}
-                  >
-                    <Plus size={15} color="#000000" strokeWidth={2.5} />
-                    <Text style={styles.lyricsActionBtnText}>ADD / SYNC LYRICS</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+          isCurQuran ? (
+            <View style={{ flex: 1, paddingHorizontal: 8, paddingBottom: 12 }}>
+              <QuranMushafViewer track={currentTrack} globalTheme={isDark ? 'dark' : 'light'} />
             </View>
-          </ScrollView>
+          ) : (
+            <ScrollView
+              ref={lyricsScrollRef}
+              contentContainerStyle={styles.lyricsBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={[styles.lyricsCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
+                <View style={[styles.lyricsCardHeaderRow, { borderBottomColor: isDark ? '#1f2e2a' : '#ded2bb' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {isVerifiedLyrics && (
+                      <View style={styles.verifiedTag}>
+                        <CheckCircle2 size={12} color={colors.mint} />
+                        <Text style={styles.verifiedTagText}>VERIFIED</Text>
+                      </View>
+                    )}
+                    <Text style={[styles.lyricsHeader, { color: textSub }]}>OFFICIAL TRANSCRIPT</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {isLoadingLyrics && (
+                      <ActivityIndicator size="small" color={colors.mint} />
+                    )}
+                    <TouchableOpacity
+                      onPress={handleOpenEditLyrics}
+                      style={styles.lyricsActionBtn}
+                      activeOpacity={0.8}
+                    >
+                      <Edit3 size={14} color="#000000" strokeWidth={2.5} />
+                      <Text style={styles.lyricsActionBtnText}>EDIT</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {lyricsList.length > 0 ? (
+                  <View style={styles.lyricsLinesList}>
+                    {lyricsList.map((line, idx) => {
+                      const isActive = idx === activeLyricIndex;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => seekTo(line.time)}
+                          activeOpacity={0.7}
+                          style={[
+                            styles.lyricLineBox,
+                            isActive && {
+                              backgroundColor: isDark ? 'rgba(23, 163, 152, 0.2)' : 'rgba(23, 163, 152, 0.15)',
+                              borderColor: colors.mint,
+                              borderWidth: 1.5,
+                            }
+                          ]}
+                        >
+                          <Text style={[
+                            styles.lyricLineText,
+                            { color: isActive ? (isDark ? '#ffffff' : colors.ink) : (isDark ? '#9ca3af' : '#4b5563') },
+                            isActive && styles.lyricLineTextActive
+                          ]}>
+                            {line.text}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={styles.emptyLyricsBox}>
+                    <ListMusic size={32} color={colors.mint} style={{ marginBottom: 12 }} />
+                    <Text style={[styles.emptyLyricsTitle, { color: textTitle }]}>No Lyrics Found</Text>
+                    <Text style={styles.emptyLyricsText}>
+                      {isLoadingLyrics ? 'Retrieving synchronized lyrics...' : 'Lyrics could not be loaded for this track.'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={handleOpenEditLyrics}
+                      style={[styles.lyricsActionBtn, { marginTop: 16, paddingHorizontal: 16 }]}
+                      activeOpacity={0.8}
+                    >
+                      <Plus size={15} color="#000000" strokeWidth={2.5} />
+                      <Text style={styles.lyricsActionBtnText}>ADD / SYNC LYRICS</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+          )
         )}
 
         {/* ── Queue Tab ── */}

@@ -457,37 +457,46 @@ export default function MiniPlayer({
             <div className={`w-full flex items-center gap-2 text-[10px] sm:text-[11px] font-mono font-bold ${
               isDark ? 'text-zinc-400' : 'text-zinc-700'
             }`}>
-              <span className="w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
-              <div 
-                role="slider"
-                tabIndex={0}
-                aria-label="Seek track"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(progressPercent)}
-                onKeyDown={handleKeyDown}
-                className="relative flex-1 group h-8 flex items-center cursor-pointer select-none py-2 touch-none focus:outline-none"
-                onPointerDown={handleDesktopPointerDown}
-                onPointerMove={handleDesktopPointerMove}
-                onPointerUp={handleDesktopPointerUp}
-                onPointerCancel={handleDesktopPointerUp}
-              >
-                {/* Track background & vibrant active fill */}
-                <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden brutal-border transition-all pointer-events-none ${
-                  isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
-                }`}>
-                  <div 
-                    className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
-                    style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
-                  />
+              {currentTrack?.isLive ? (
+                <div className="w-full flex items-center justify-center gap-2 py-1 text-red-500 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <span>بث مباشر • إذاعة القرآن الكريم (LIVE)</span>
                 </div>
-                {/* Tactile thumb knob */}
-                <div 
-                  className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
-                  style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
-                />
-              </div>
-              <span className="w-8 tabular-nums">{formatTime(duration)}</span>
+              ) : (
+                <>
+                  <span className="w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
+                  <div 
+                    role="slider"
+                    tabIndex={0}
+                    aria-label="Seek track"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(progressPercent)}
+                    onKeyDown={handleKeyDown}
+                    className="relative flex-1 group h-8 flex items-center cursor-pointer select-none py-2 touch-none focus:outline-none"
+                    onPointerDown={handleDesktopPointerDown}
+                    onPointerMove={handleDesktopPointerMove}
+                    onPointerUp={handleDesktopPointerUp}
+                    onPointerCancel={handleDesktopPointerUp}
+                  >
+                    {/* Track background & vibrant active fill */}
+                    <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden brutal-border transition-all pointer-events-none ${
+                      isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
+                    }`}>
+                      <div 
+                        className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
+                        style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
+                      />
+                    </div>
+                    {/* Tactile thumb knob */}
+                    <div 
+                      className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
+                      style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
+                    />
+                  </div>
+                  <span className="w-8 tabular-nums">{formatTime(duration)}</span>
+                </>
+              )}
             </div>
           </div>
 

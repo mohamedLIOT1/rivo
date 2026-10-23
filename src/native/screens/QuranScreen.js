@@ -8,7 +8,7 @@ import {
   TextInput,
   Image,
 } from 'react-native';
-import { BookOpen, Search, Play, Pause, Disc, User, Volume2 } from 'lucide-react-native';
+import { BookOpen, Search, Play, Pause, Disc, User, Volume2, Radio } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -16,6 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
+import QuranRadioModal from '../components/QuranRadioModal';
 import {
   isQuranContent,
   getQuranReciterName,
@@ -32,6 +33,7 @@ export default function QuranScreen({ onTrackAction }) {
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleLimit, setVisibleLimit] = useState(30);
+  const [isRadioModalOpen, setIsRadioModalOpen] = useState(false);
 
   React.useEffect(() => {
     setVisibleLimit(30);
@@ -273,10 +275,10 @@ export default function QuranScreen({ onTrackAction }) {
           </View>
         )}
       </ScrollView>
+      <QuranRadioModal visible={isRadioModalOpen} onClose={() => setIsRadioModalOpen(false)} />
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -456,6 +458,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 8,
     marginBottom: 20,
+  },
+  radioBannerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#d4af37',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#000000',
+    marginBottom: 12,
+    shadowColor: '#d4af37',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  radioBannerBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 13,
+    color: '#000000',
   },
   loadMoreText: {
     fontFamily: 'monospace',

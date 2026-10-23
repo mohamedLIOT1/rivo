@@ -4,7 +4,7 @@ import {
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
   Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
   MoreHorizontal, MoreVertical, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save, GripVertical
+  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save, GripVertical, BookOpen
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -17,6 +17,7 @@ import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
 import { parseLrcLyrics } from '../utils/lrcParser';
 import { normalizeCoverUrl } from '../utils/coverUtils';
+import QuranMushafViewer from './QuranMushafViewer';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -1610,11 +1611,20 @@ export default function FullPlayerModal({
                 style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
               />
             </div>
-            <div className={`flex justify-between mt-1 font-mono font-bold text-[10px] ${
+            <div className={`flex justify-between items-center mt-1 font-mono font-bold text-[10px] ${
               isDark ? 'text-[#26c4b7]' : 'text-zinc-600'
             }`}>
-              <span className="tabular-nums">{formatTime(activeTime)}</span>
-              <span className="tabular-nums">{formatTime(activeDuration)}</span>
+              {currentTrack?.isLive ? (
+                <div className="flex items-center gap-1.5 text-red-500 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  <span>بث مباشر 24/7 (LIVE)</span>
+                </div>
+              ) : (
+                <>
+                  <span className="tabular-nums">{formatTime(activeTime)}</span>
+                  <span className="tabular-nums">{formatTime(activeDuration)}</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -1800,9 +1810,9 @@ export default function FullPlayerModal({
                       ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
                       : 'bg-white text-zinc-700 hover:bg-[#ede5d3] brutal-border'
                 }`}
-                title="Lyrics Display"
+                title={isCurQuran ? 'المصحف الشريف' : 'Lyrics Display'}
               >
-                <Mic size={15} strokeWidth={2.5} />
+                {isCurQuran ? <BookOpen size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
               </button>
 
               {/* Download Audio */}
@@ -1831,11 +1841,16 @@ export default function FullPlayerModal({
 
         </div>
 
-        {/* ─── MOBILE LYRICS TAB ─── */}
+        {/* ─── MOBILE LYRICS / MUSHAF TAB ─── */}
         {activeTab === 'lyrics' && (
-          <div className={`lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto ${
-            isDark ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
-          } rounded-2xl p-4 brutal-shadow-lg`}>
+          isCurQuran ? (
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto rounded-2xl border-2 border-[#c29b38]/40 shadow-2xl">
+              <QuranMushafViewer track={currentTrack} globalTheme={globalTheme} />
+            </div>
+          ) : (
+            <div className={`lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto ${
+              isDark ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
+            } rounded-2xl p-4 brutal-shadow-lg`}>
             <div className={`flex items-center justify-between pb-2 mb-2 border-b ${
               isDark ? 'border-zinc-800' : 'border-zinc-300'
             }`}>
@@ -1878,6 +1893,7 @@ export default function FullPlayerModal({
             </div>
             {renderLyrics(mobileLyricsContainerRef, mobileLyricRefs)}
           </div>
+          )
         )}
 
         {/* ─── MOBILE QUEUE TAB ─── */}
@@ -1907,7 +1923,7 @@ export default function FullPlayerModal({
                     : isDark ? 'bg-[#1c2422] text-zinc-400 hover:text-white' : 'bg-white text-[#0b1110] border border-[#0b1110] hover:bg-[#ede5d3]'
                 }`}
               >
-                Lyrics
+                {isCurQuran ? 'المصحف الشريف' : 'Lyrics'}
               </button>
               <button
                 onClick={() => setDesktopSideTab('queue')}
@@ -1963,7 +1979,13 @@ export default function FullPlayerModal({
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {desktopSideTab === 'lyrics' ? renderLyrics(desktopLyricsContainerRef, desktopLyricRefs) : renderQueue()}
+            {desktopSideTab === 'lyrics' ? (
+              isCurQuran ? (
+                <QuranMushafViewer track={currentTrack} globalTheme={globalTheme} />
+              ) : (
+                renderLyrics(desktopLyricsContainerRef, desktopLyricRefs)
+              )
+            ) : renderQueue()}
           </div>
         </div>
 

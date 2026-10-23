@@ -339,7 +339,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
   const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
   if (vMatch) {
     const requestedVersion = vMatch[1];
-    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
+    return res.redirect(`https://github.com/mohamedLIOT1/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
   const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.9.0';
@@ -390,7 +390,7 @@ app.post('/api/deploy-webhook', (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
-  const deployCmd = 'git config --global --add safe.directory "*" 2>/dev/null || true; git remote set-url origin https://github.com/WhooAre-you/Rivo.git 2>/dev/null || true; git fetch origin main --force && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
+  const deployCmd = 'git config --global --add safe.directory "*" 2>/dev/null || true; git remote set-url origin https://github.com/mohamedLIOT1/Rivo.git 2>/dev/null || true; git fetch origin main --force && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 

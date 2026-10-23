@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { 
-  Play, Pause, Plus, Heart, Search, BookOpen, DownloadCloud, 
+  Play, Pause, Plus, Heart, Search, BookOpen, DownloadCloud, Radio, 
   Link2, Disc, User, Check, Sparkles, Volume2 
 } from 'lucide-react';
 import { 
@@ -28,6 +28,7 @@ export default function QuranScreen({
   const isDark = globalTheme === 'dark';
   const [activeTab, setActiveTab] = useState('surahs'); // 'surahs' | 'playlists' | 'reciters'
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRadioOpen, setIsRadioOpen] = useState(false);
   const [visibleLimit, setVisibleLimit] = useState(40);
 
   React.useEffect(() => {
