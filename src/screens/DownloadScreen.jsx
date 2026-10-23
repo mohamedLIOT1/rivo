@@ -21,7 +21,21 @@ import { APP_VERSION } from '../version';
 export default function DownloadScreen({ globalTheme = 'dark' }) {
   const [detectedOs, setDetectedOs] = useState('windows');
   const [showIosGuide, setShowIosGuide] = useState(false);
+  const [platformVersions, setPlatformVersions] = useState(null);
   const isDark = globalTheme === 'dark';
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/app/version')
+      .then(res => res.json())
+      .then(data => {
+        if (active && data?.platforms) {
+          setPlatformVersions(data.platforms);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -38,18 +52,22 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
     }
   }, []);
 
+  const winVer = platformVersions?.windows?.version || APP_VERSION;
+  const androidVer = platformVersions?.android?.version || APP_VERSION;
+  const iosVer = platformVersions?.ios?.version || APP_VERSION;
+
   const apps = [
     {
       id: 'windows',
       name: 'Rivo for Windows',
       osLabel: 'Windows 10 / 11 (64-bit)',
       badge: 'NATIVE DESKTOP',
-      version: `v${APP_VERSION}`,
+      version: `v${winVer}`,
       fileType: '.EXE',
-      fileSize: '112 MB',
+      fileSize: '50 MB',
       icon: Monitor,
-      downloadUrl: '/downloads/Rivo.exe',
-      directName: 'Rivo.exe',
+      downloadUrl: platformVersions?.windows?.downloadUrl || '/downloads/Rivo.exe',
+      directName: `Rivo-v${winVer}.exe`,
       highlights: [
         'Official Discord Rich Presence sync (No extensions needed)',
         'Native Windows media session & taskbar playback controls',
@@ -64,12 +82,12 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       name: 'Rivo for Android',
       osLabel: 'Android 8.0 & Above',
       badge: 'HYBRID HI-FI',
-      version: `v${APP_VERSION}`,
+      version: `v${androidVer}`,
       fileType: '.APK',
-      fileSize: '67 MB',
+      fileSize: '64 MB',
       icon: Smartphone,
-      downloadUrl: `/downloads/Rivo-v${APP_VERSION}.apk`,
-      directName: `Rivo-v${APP_VERSION}.apk`,
+      downloadUrl: platformVersions?.android?.downloadUrl || '/downloads/Rivo.apk',
+      directName: `Rivo-v${androidVer}.apk`,
       highlights: [
         'Complete Rivo Web UI: all playlists, full profile & Friend Activity',
         'Real-time Chat, Live Jam Rooms & Discord Rich Presence sync',
@@ -83,12 +101,12 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       name: 'Rivo for iOS',
       osLabel: 'iOS 15.0 & Above',
       badge: 'HYBRID HI-FI',
-      version: `v${APP_VERSION}`,
+      version: `v${iosVer}`,
       fileType: '.IPA',
       fileSize: '7.9 MB',
       icon: Apple,
-      downloadUrl: `/downloads/Rivo-v${APP_VERSION}.ipa`,
-      directName: `Rivo-v${APP_VERSION}.ipa`,
+      downloadUrl: platformVersions?.ios?.downloadUrl || '/downloads/Rivo.ipa',
+      directName: `Rivo-v${iosVer}.ipa`,
       highlights: [
         'Complete Rivo Web UI: 100% web design, all playlists & songs',
         'Full Profile, real-time Chat, Live Jam & Friend Activity',
