@@ -199,6 +199,17 @@ export function normalizeArabicText(text = '') {
     .trim();
 }
 
+export function isRadioTrack(item) {
+  if (!item || typeof item !== 'object') return false;
+  return Boolean(
+    item.isRadio === true ||
+    item.isLive === true ||
+    item.genre === 'Quran Radio' ||
+    item.genre === 'quran-radio' ||
+    String(item.id || item._id || '').startsWith('radio-')
+  );
+}
+
 export function isQuranContent(item, artist = '', album = '') {
   if (!item) return false;
   if (typeof item === 'object') {

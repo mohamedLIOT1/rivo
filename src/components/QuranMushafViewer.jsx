@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   ChevronLeft, ChevronRight, BookOpen, Sun, Moon, 
-  ZoomIn, ZoomOut, RotateCcw, Sparkles, AlertCircle 
+  ZoomIn, ZoomOut, RotateCcw, Sparkles, AlertCircle, Maximize2, Minimize2 
 } from 'lucide-react';
 import { getSurahPageRange, getMushafPageUrl } from '../utils/quranMetadata';
 
@@ -18,6 +18,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Sync to surah startPage when track changes
   useEffect(() => {
@@ -71,7 +72,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
   const isLastPage = currentPage >= endPage;
 
   return (
-    <div className="relative flex flex-col h-full w-full bg-[#060b0a] text-white select-none overflow-hidden font-sans">
+    <div className={`flex flex-col w-full bg-[#060b0a] text-white select-none overflow-hidden font-sans ${isFullscreen ? "fixed inset-0 z-[1000] h-screen p-2 md:p-6 bg-black/95 backdrop-blur-md" : "relative h-full"}`}>
       {/* ── TOP ORNATE BAR ── */}
       <div className="shrink-0 flex items-center justify-between px-3 md:px-6 py-2.5 bg-black/60 border-b border-[#c29b38]/30 backdrop-blur-md z-20">
         <div className="flex items-center gap-2">
@@ -96,6 +97,31 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
 
           {/* Toggle AMOLED Dark / Clean Paper */}
           <button
+            onClick={() => setIsFullscreen(f => !f)}
+            className="flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded border transition-colors cursor-pointer bg-[#0e1b19] border-white/10 hover:border-[#c29b38]/50 text-slate-300 hover:text-white"
+            title={isFullscreen ? 'تصغير' : 'ملء الشاشة'}
+          >
+            {isFullscreen ? <Minimize2 size={13} className="text-[#c29b38]" /> : <Maximize2 size={13} className="text-[#c29b38]" />}
+            <span className="hidden sm:inline text-[11px]">{isFullscreen ? 'تصغير' : 'تكبير'}</span>
+          </button>
+
+          {/* Zoom controls */}
+          <button
+            onClick={() => setZoomLevel(z => Math.min(2, z + 0.15))}
+            className="p-1 rounded border border-white/10 hover:border-[#c29b38]/40 text-slate-300 hover:text-white cursor-pointer"
+            title="تكبير"
+          >
+            <ZoomIn size={13} />
+          </button>
+          <button
+            onClick={() => setZoomLevel(z => Math.max(0.8, z - 0.15))}
+            className="p-1 rounded border border-white/10 hover:border-[#c29b38]/40 text-slate-300 hover:text-white cursor-pointer"
+            title="تصغير"
+          >
+            <ZoomOut size={13} />
+          </button>
+
+          <button
             onClick={() => setViewMode(v => v === 'dark' ? 'clean' : 'dark')}
             className="flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded border transition-colors cursor-pointer bg-[#0e1b19] border-white/10 hover:border-[#c29b38]/50 text-slate-300 hover:text-white"
             title="تبديل وضع العرض (داكن / أصلي)"
@@ -107,18 +133,18 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
       </div>
 
       {/* ── MAIN MUSHAF PAGE CANVAS ── */}
-      <div className="relative flex-1 min-h-0 flex items-center justify-center overflow-auto p-2 md:p-4 bg-[#070c0b]">
+      <div className="relative flex-1 min-h-0 flex flex-col items-center justify-start overflow-y-auto p-2 sm:p-4 bg-[#070c0b]">
         {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/40 backdrop-blur-xs">
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/50 backdrop-blur-xs">
             <div className="w-8 h-8 rounded-full border-2 border-[#c29b38] border-t-transparent animate-spin mb-2" />
-            <span className="text-xs font-mono text-[#c29b38]">جاري تحميل الصفحة {currentPage}...</span>
+            <span className="text-xs font-mono text-[#c29b38]">جاري تحميل صفحة المصحف {currentPage}...</span>
           </div>
         )}
 
         {/* Error Fallback */}
         {hasError && (
-          <div className="flex flex-col items-center justify-center p-6 text-center z-10">
+          <div className="flex flex-col items-center justify-center p-6 text-center z-10 my-auto">
             <AlertCircle size={32} className="text-amber-400 mb-2" />
             <p className="text-sm font-bold text-white mb-2">تعذر تحميل صفحة المصحف</p>
             <button
@@ -130,10 +156,10 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
           </div>
         )}
 
-        {/* Page Canvas Container with Ornate Golden Border */}
+        {/* Page Container: Aligned to TOP, large width, scrollable, zoomable */}
         <div 
-          className="relative max-h-full max-w-full flex items-center justify-center transition-transform duration-200"
-          style={{ transform: `scale(${zoomLevel})` }}
+          className="w-full flex flex-col items-center justify-start my-auto transition-transform duration-200"
+          style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}
         >
           <img
             key={currentImageUrl}
@@ -141,15 +167,15 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
             alt={`مصحف المدينة - صفحة ${currentPage}`}
             onLoad={() => setIsLoading(false)}
             onError={() => { setIsLoading(false); setHasError(true); }}
-            className={`max-h-[calc(100vh-230px)] md:max-h-[calc(100vh-260px)] w-auto object-contain transition-all duration-300 rounded shadow-2xl ${
+            className={`w-full max-w-xl md:max-w-2xl h-auto object-contain transition-all duration-300 rounded-lg shadow-2xl ${
               viewMode === 'dark'
                 ? 'brightness-0 invert contrast-125'
-                : 'bg-[#faf7ee] p-1'
+                : 'bg-[#faf7ee] p-2'
             }`}
             style={{
               boxShadow: viewMode === 'dark' 
-                ? '0 0 25px rgba(194, 155, 56, 0.15), 0 0 0 1px rgba(194, 155, 56, 0.25)' 
-                : '0 4px 20px rgba(0,0,0,0.5)'
+                ? '0 0 35px rgba(194, 155, 56, 0.2), 0 0 0 1px rgba(194, 155, 56, 0.3)' 
+                : '0 4px 25px rgba(0,0,0,0.5)'
             }}
           />
         </div>
@@ -161,7 +187,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
           className={`absolute left-2 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center z-20 transition-all cursor-pointer ${
             isLastPage 
               ? 'opacity-20 cursor-not-allowed bg-black/40 text-zinc-600' 
-              : 'bg-black/70 hover:bg-[#c29b38] text-white hover:text-black border border-[#c29b38]/40 hover:scale-105 shadow-lg'
+              : 'bg-black/80 hover:bg-[#c29b38] text-white hover:text-black border border-[#c29b38]/40 hover:scale-105 shadow-xl'
           }`}
           title="الصفحة التالية (يسار)"
         >
@@ -175,7 +201,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
           className={`absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center z-20 transition-all cursor-pointer ${
             isFirstPage 
               ? 'opacity-20 cursor-not-allowed bg-black/40 text-zinc-600' 
-              : 'bg-black/70 hover:bg-[#c29b38] text-white hover:text-black border border-[#c29b38]/40 hover:scale-105 shadow-lg'
+              : 'bg-black/80 hover:bg-[#c29b38] text-white hover:text-black border border-[#c29b38]/40 hover:scale-105 shadow-xl'
           }`}
           title="الصفحة السابقة (يمين)"
         >

@@ -130,35 +130,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.9.1',
+      version: '1.9.9.3',
       name: 'Rivo Web',
-      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'تحديث v1.9.9.3 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     windows: {
-      version: '1.9.9.1',
+      version: '1.9.9.3',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'تحديث v1.9.9.3 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     android: {
-      version: '1.9.9.1',
-      build: 84,
+      version: '1.9.9.3',
+      build: 86,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.9.1 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة'
+      notes: 'تحديث v1.9.9.3 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة'
     },
     ios: {
-      version: '1.9.9.1',
-      build: 84,
+      version: '1.9.9.3',
+      build: 86,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.9.1 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
+      notes: 'تحديث v1.9.9.3 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
     }
   }
 };
@@ -175,44 +175,44 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.9.1',
+      version: '1.9.9.3',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'تحديث v1.9.9.3 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     windows: {
-      version: '1.9.9.1',
+      version: '1.9.9.3',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'تحديث v1.9.9.3 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     android: {
-      version: '1.9.9.1',
-      build: 84,
+      version: '1.9.9.3',
+      build: 86,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.9.1 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة',
-      notesEn: 'Instant OTA update v1.9.9.1 • Album and full player navigation fix • Touch freeze resolved',
+      notes: 'تحديث v1.9.9.3 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة',
+      notesEn: 'Instant OTA update v1.9.9.3 • Album and full player navigation fix • Touch freeze resolved',
       ota: {
         enabled: true,
-        version: '1.9.9.1',
+        version: '1.9.9.3',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v1.9.9.1 • إصلاح شاشة الألبوم والمشغل السريع',
-        notesEn: 'Instant OTA update v1.9.9.1 • Album and full player navigation fix'
+        notes: 'تحديث هوائي فوري v1.9.9.3 • إصلاح شاشة الألبوم والمشغل السريع',
+        notesEn: 'Instant OTA update v1.9.9.3 • Album and full player navigation fix'
       }
     },
     ios: {
-      version: '1.9.9.1',
-      build: 84,
+      version: '1.9.9.3',
+      build: 86,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.9.1 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
+      notes: 'تحديث v1.9.9.3 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
     }
   }
 };
@@ -261,7 +261,20 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
     : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+    if (pkg && pkg.version) {
+      if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
+      if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = pkg.version;
+      if (manifest.platforms && manifest.platforms.android) manifest.platforms.android.version = pkg.version;
+      if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
+    }
+  } catch (e) {}
+
   const dynamicOta = getOtaManifest();
+  if (dynamicOta && dynamicOta.version && manifest.platforms && manifest.platforms.android) {
+    manifest.platforms.android.version = dynamicOta.version;
+  }
   if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
     manifest.platforms.android.ota = {
       ...(manifest.platforms.android.ota || {}),

@@ -14,7 +14,7 @@ import ConfirmModal from './ConfirmModal';
 import TrackActionMenuModal from './TrackActionMenuModal';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
-import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
+import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName, isRadioTrack } from '../utils/quranUtils';
 import { parseLrcLyrics } from '../utils/lrcParser';
 import { normalizeCoverUrl } from '../utils/coverUtils';
 import QuranMushafViewer from './QuranMushafViewer';
@@ -170,6 +170,15 @@ export default function FullPlayerModal({
 
   // Strictly isolate queue: Quran only displays Quran; Music only displays Music
   const isCurQuran = isQuranContent(currentTrack);
+  const isCurRadio = isRadioTrack(currentTrack);
+
+  // When playing live radio, automatically reset away from lyrics/Ayat tab
+  useEffect(() => {
+    if (isCurRadio) {
+      if (activeTab === 'lyrics') setActiveTab('player');
+      if (desktopSideTab === 'lyrics') setDesktopSideTab('queue');
+    }
+  }, [isCurRadio, activeTab, desktopSideTab]);
   const displayQueue = useMemo(() => {
     const raw = (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
     if (!currentTrack) return raw;
@@ -1379,7 +1388,7 @@ export default function FullPlayerModal({
       <div className="relative z-10 flex lg:hidden justify-center gap-1 px-4 py-2">
         {[
           { id: 'player', label: 'Now Playing' },
-          { id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' },
+          ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
           { id: 'queue', label: `Queue (${displayQueue.length})` },
         ].map((tab) => (
           <button
@@ -1792,7 +1801,8 @@ export default function FullPlayerModal({
                 <Disc size={15} strokeWidth={2.5} />
               </button>
 
-              {/* Quick Lyrics View Toggle */}
+              {/* Quick Lyrics View Toggle (Hidden on Radio) */}
+              {!isCurRadio && (
               <button 
                 onClick={() => {
                   if (window.innerWidth < 1024) {
@@ -1814,6 +1824,7 @@ export default function FullPlayerModal({
               >
                 {isCurQuran ? <BookOpen size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
               </button>
+              )}
 
               {/* Download Audio */}
               {toggleDownload && (
@@ -1906,15 +1917,20 @@ export default function FullPlayerModal({
         )}
 
         {/* ─── DESKTOP RIGHT PANEL (Lyrics & Queue) ─── */}
-        <div className={`hidden lg:flex flex-1 h-[530px] ${
-          isDark 
-            ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700 shadow-2xl' 
-            : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick brutal-shadow-lg paper-texture'
-        } rounded-2xl p-6 flex-col overflow-hidden`}>
+        <div className={`hidden lg:flex flex-1 ${
+    isCurQuran && desktopSideTab === 'lyrics' 
+      ? 'h-[calc(100vh-140px)] min-h-[620px] max-h-[880px] p-2' 
+      : 'h-[530px] p-6'
+  } ${
+    isDark 
+      ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700 shadow-2xl' 
+      : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick brutal-shadow-lg paper-texture'
+  } rounded-2xl flex-col overflow-hidden`}>
           <div className={`flex items-center justify-between pb-3 border-b-2 ${
             isDark ? 'border-zinc-800' : 'border-black'
           } mb-3 shrink-0`}>
             <div className="flex items-center gap-2">
+              {!isCurRadio && (
               <button
                 onClick={() => setDesktopSideTab('lyrics')}
                 className={`px-4 py-1.5 rounded-lg text-xs font-display font-black transition-all ${
@@ -1925,6 +1941,7 @@ export default function FullPlayerModal({
               >
                 {isCurQuran ? 'المصحف الشريف' : 'Lyrics'}
               </button>
+              )}
               <button
                 onClick={() => setDesktopSideTab('queue')}
                 className={`px-4 py-1.5 rounded-lg text-xs font-display font-black transition-all ${
@@ -1979,7 +1996,7 @@ export default function FullPlayerModal({
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {desktopSideTab === 'lyrics' ? (
+            {(desktopSideTab === 'lyrics' && !isCurRadio) ? (
               isCurQuran ? (
                 <QuranMushafViewer track={currentTrack} globalTheme={globalTheme} />
               ) : (

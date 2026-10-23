@@ -20,7 +20,7 @@ import { updateDownloadedTrackLyrics } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 import SleepTimerModal from './SleepTimerModal';
 import { parseLrcLyrics } from '../../utils/lrcParser';
-import { isQuranContent } from '../../utils/quranUtils';
+import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
 import QuranMushafViewer from './QuranMushafViewer';
 
 const { width, height } = Dimensions.get('window');
@@ -369,6 +369,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const { showToast } = useToast();
 
   const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
+  const isCurRadio = useMemo(() => isRadioTrack(currentTrack), [currentTrack]);
+
+  useEffect(() => {
+    if (isCurRadio && activeTab === 'lyrics') {
+      setActiveTab('player');
+    }
+  }, [isCurRadio, activeTab]);
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
@@ -623,7 +630,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
         <View style={styles.tabsRow}>
           {[
             { id: 'player', label: 'Now Playing' },
-            { id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' },
+            ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
             { id: 'queue', label: `Queue (${queue.length})` },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
@@ -827,18 +834,20 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     <Disc size={17} color="#94a3b8" />
                   </TouchableOpacity>
 
-                  {/* Lyrics / Mushaf Quick Button */}
-                  <TouchableOpacity
-                    style={styles.quickToolBtnTeal}
-                    onPress={() => setActiveTab('lyrics')}
-                    activeOpacity={0.8}
-                  >
-                    {isCurQuran ? (
-                      <BookOpen size={17} color="#0b1110" strokeWidth={2.4} />
-                    ) : (
-                      <Mic size={17} color="#0b1110" strokeWidth={2.4} />
-                    )}
-                  </TouchableOpacity>
+                  {/* Lyrics / Mushaf Quick Button (Hidden for Live Radio) */}
+                  {!isCurRadio && (
+                    <TouchableOpacity
+                      style={styles.quickToolBtnTeal}
+                      onPress={() => setActiveTab('lyrics')}
+                      activeOpacity={0.8}
+                    >
+                      {isCurQuran ? (
+                        <BookOpen size={17} color="#0b1110" strokeWidth={2.4} />
+                      ) : (
+                        <Mic size={17} color="#0b1110" strokeWidth={2.4} />
+                      )}
+                    </TouchableOpacity>
+                  )}
 
                   {/* Download Button */}
                   <TouchableOpacity
@@ -862,7 +871,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
         )}
 
         {/* ── Lyrics / Quran Mushaf Tab ── */}
-        {activeTab === 'lyrics' && (
+        {activeTab === 'lyrics' && !isCurRadio && (
           isCurQuran ? (
             <View style={{ flex: 1, paddingHorizontal: 8, paddingBottom: 12 }}>
               <QuranMushafViewer track={currentTrack} globalTheme={isDark ? 'dark' : 'light'} />

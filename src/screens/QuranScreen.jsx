@@ -279,9 +279,40 @@ export default function QuranScreen({
         </div>
       </section>
 
+      {/* ── LIVE QURAN RADIO HERO BAR ── */}
+      <div 
+        onClick={() => setIsRadioOpen(true)}
+        className="mb-5 p-3.5 rounded-xl bg-gradient-to-r from-[#0d1f1c] via-[#14332e] to-[#0d1f1c] border-2 border-[#d4af37]/50 flex items-center justify-between cursor-pointer hover:border-[#d4af37] transition-all shadow-[0_0_25px_rgba(212,175,55,0.2)] group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/50 flex items-center justify-center text-[#d4af37] group-hover:scale-110 transition-transform">
+            <Radio size={20} className="animate-pulse" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-display font-black text-sm text-[#fdfbf7]">إذاعة القرآن الكريم • بث مباشر 24/7</span>
+              <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">🔴 مباشر</span>
+            </div>
+            <p className="text-xs text-emerald-200/80 font-medium">بث مباشر متواصل: إذاعة القرآن من السعودية، المنشاوي، عبد الباسط، الحصري، العفاسي، المعيقلي وتفسير القرآن</p>
+          </div>
+        </div>
+        <button className="hidden sm:flex items-center gap-2 bg-[#d4af37] text-black font-display font-black text-xs px-4 py-2 rounded-xl shadow group-hover:bg-[#f1c40f] transition-all">
+          <Play size={14} fill="currentColor" />
+          <span>اختر الإذاعة</span>
+        </button>
+      </div>
+
       {/* ── Navigation Tabs & Search ── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <button
+            data-radio-tab-btn="true"
+            onClick={() => setIsRadioOpen(true)}
+            className="px-3.5 py-2 rounded-lg text-xs font-display font-black transition-all brutal-btn whitespace-nowrap cursor-pointer bg-gradient-to-r from-amber-500 to-amber-400 text-black border border-black shadow-[0_0_15px_rgba(245,158,11,0.3)] flex items-center gap-1.5 shrink-0"
+          >
+            <Radio size={14} className="text-black animate-pulse" />
+            <span>إذاعة القرآن (مباشر 24/7)</span>
+          </button>
           {[
             { id: 'reciters', label: `القراء (${reciters.length})` },
             { id: 'playlists', label: `المصاحف والقوائم (${quranPlaylists.length})` },
