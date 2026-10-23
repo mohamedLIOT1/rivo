@@ -8,7 +8,7 @@ import {
   TextInput,
   Image,
 } from 'react-native';
-import { BookOpen, Search, Play, Pause, Disc, User, Volume2 } from 'lucide-react-native';
+import { BookOpen, Search, Play, Pause, Disc, User, Volume2, ArrowLeft } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -22,6 +22,9 @@ import {
   cleanQuranTrackTitle,
   normalizeArabicText,
   FAMOUS_RECITERS,
+  sortQuranTracks,
+  getSurahNumber,
+  getSurahName,
 } from '../../utils/quranUtils';
 
 export default function QuranScreen({ onTrackAction }) {
@@ -31,10 +34,10 @@ export default function QuranScreen({ onTrackAction }) {
   const { isDark } = useTheme();
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [visibleLimit, setVisibleLimit] = useState(30);
+  const [visibleLimit, setVisibleLimit] = useState(40);
 
   React.useEffect(() => {
-    setVisibleLimit(30);
+    setVisibleLimit(40);
   }, [selectedReciter, searchQuery]);
 
   const isOffline = appMode === 'offline';
@@ -88,7 +91,7 @@ export default function QuranScreen({ onTrackAction }) {
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [quranTracks]);
 
-  // Filtered tracks with Arabic normalization
+  // Filtered tracks with canonical Quranic sorting (1 to 114)
   const displayedTracks = useMemo(() => {
     let result = quranTracks;
     if (selectedReciter) {
@@ -114,7 +117,7 @@ export default function QuranScreen({ onTrackAction }) {
         return trackText.includes(normQ);
       });
     }
-    return result;
+    return sortQuranTracks(result);
   }, [quranTracks, selectedReciter, searchQuery]);
 
   return (
@@ -133,7 +136,7 @@ export default function QuranScreen({ onTrackAction }) {
 
           <Text style={styles.arabicTitle}>القرآن الكريم</Text>
           <Text style={styles.arabicSub}>
-            استمع لتلاوات خاشعة بأصوات كبار القراء بدقة صوتية عالية وبدون إعلانات.
+            استمع لتلاوات خاشعة مرتبة حسب المصحف الشريف بدقة صوتية عالية وبدون إعلانات.
           </Text>
 
           {/* Search bar inside Quran */}
@@ -152,7 +155,7 @@ export default function QuranScreen({ onTrackAction }) {
 
       {/* Reciters Horizontal Carousel */}
       <View style={styles.recitersSection}>
-        <Text style={styles.sectionHeading}>كبار القراء • RECITERS</Text>
+        <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }]}>كبار القراء • RECITERS</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -171,106 +174,167 @@ export default function QuranScreen({ onTrackAction }) {
                 selectedReciter === null && styles.reciterPillTextActive,
               ]}
             >
-              الكل ({quranTracks.length})
+              كل القراء ({recitersList.length})
             </Text>
           </TouchableOpacity>
 
-          {recitersList.length > 0 ? (
-            recitersList.slice(0, 18).map((r) => {
-              const active = selectedReciter === r.name;
-              return (
-                <TouchableOpacity
-                  key={r.name}
-                  style={[styles.reciterPill, active && styles.reciterPillActive]}
-                  onPress={() => setSelectedReciter(active ? null : r.name)}
+          {recitersList.map((r) => {
+            const active = selectedReciter === r.name;
+            return (
+              <TouchableOpacity
+                key={r.name}
+                style={[styles.reciterPill, active && styles.reciterPillActive]}
+                onPress={() => setSelectedReciter(active ? null : r.name)}
+              >
+                <Text
+                  style={[
+                    styles.reciterPillText,
+                    active && styles.reciterPillTextActive,
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.reciterPillText,
-                      active && styles.reciterPillTextActive,
-                    ]}
-                  >
-                    {r.name} ({r.count})
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
-          ) : (
-            FAMOUS_RECITERS.slice(0, 8).map((r) => {
-              const active = selectedReciter === r.name;
-              return (
-                <TouchableOpacity
-                  key={r.name}
-                  style={[styles.reciterPill, active && styles.reciterPillActive]}
-                  onPress={() => setSelectedReciter(active ? null : r.name)}
-                >
-                  <Text
-                    style={[
-                      styles.reciterPillText,
-                      active && styles.reciterPillTextActive,
-                    ]}
-                  >
-                    {r.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
-          )}
+                  {r.name} ({r.count})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
-      {/* Tracks List */}
+      {/* Main Content Area */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.listHeader}>
-          <Text style={styles.listCount}>
-            {displayedTracks.length} تلاوة مسجلة • RECITATIONS
-          </Text>
-          {selectedReciter && (
-            <TouchableOpacity onPress={() => setSelectedReciter(null)}>
-              <Text style={styles.clearFilterText}>إلغاء التصفية ✕</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* VIEW 1: No reciter selected & no search -> Show Reciter Cards (prevent dumping 457 tracks!) */}
+        {!selectedReciter && !searchQuery.trim() ? (
+          <View style={styles.reciterGridSection}>
+            <View style={styles.reciterGridHeader}>
+              <Text style={[styles.reciterGridTitle, !isDark && { color: colors.ink }]}>
+                اختر القارئ للاستماع للمصحف كاملاً
+              </Text>
+              <Text style={styles.reciterGridSubtitle}>
+                تصفح سور القرآن الكريم مرتبة بالترتيب الشرعي (1 إلى 114)
+              </Text>
+            </View>
 
-        {displayedTracks.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <BookOpen size={36} color={colors.mint} />
-            <Text style={styles.emptyTitle}>
-              {isOffline ? 'لا توجد سور قرآنية محملة' : 'لا توجد تلاوات مطابقة'}
-            </Text>
-            <Text style={styles.emptySub}>
-              {isOffline
-                ? 'لم تقم بتحميل أي سور أو تلاوات بعد. قم بالتحميل في الوضع الأون لاين لتستمع إليها بدون إنترنت.'
-                : 'جرب البحث باسم سورة أو قارئ آخر.'}
-            </Text>
+            <View style={styles.reciterCardsGrid}>
+              {recitersList.map((reciter) => (
+                <TouchableOpacity
+                  key={reciter.name}
+                  style={[styles.reciterCard, !isDark && styles.reciterCardLight]}
+                  onPress={() => setSelectedReciter(reciter.name)}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: reciter.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300' }}
+                    style={styles.reciterCardCover}
+                  />
+                  <View style={styles.reciterCardInfo}>
+                    <Text style={[styles.reciterCardName, !isDark && { color: colors.ink }]} numberOfLines={1}>
+                      {reciter.name}
+                    </Text>
+                    <View style={styles.reciterCardBadge}>
+                      <Text style={styles.reciterCardBadgeText}>
+                        {reciter.count} سورة مرتبة
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         ) : (
-          <View style={styles.tracksList}>
-            {displayedTracks.slice(0, visibleLimit).map((track, idx) => (
-              <SongItem
-                key={track._id || track.id || idx}
-                track={track}
-                index={idx + 1}
-                onPlay={(t) => playTrack(t, displayedTracks)}
-                onMorePress={() => onTrackAction && onTrackAction(track)}
-              />
-            ))}
+          /* VIEW 2: Reciter chosen OR user searching -> Show Canonical Sorted Surahs */
+          <>
+            {selectedReciter && (
+              <View style={[styles.selectedReciterBanner, !isDark && styles.selectedReciterBannerLight]}>
+                <View style={styles.selectedReciterRow}>
+                  <TouchableOpacity
+                    style={styles.backBtn}
+                    onPress={() => setSelectedReciter(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.backBtnText}>← كل القراء</Text>
+                  </TouchableOpacity>
 
-            {displayedTracks.length > visibleLimit && (
-              <TouchableOpacity
-                style={styles.loadMoreBtn}
-                onPress={() => setVisibleLimit((prev) => prev + 35)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.loadMoreText}>
-                  عرض المزيد من التلاوات ({displayedTracks.length - visibleLimit} متبقية) ↓
-                </Text>
-              </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    <Text style={[styles.selectedReciterName, !isDark && { color: colors.ink }]} numberOfLines={1}>
+                      مصحف الشيخ {selectedReciter}
+                    </Text>
+                    <Text style={styles.selectedReciterCount}>
+                      {displayedTracks.length} سورة • مرتبة من الفاتحة إلى الناس (1 إلى 114)
+                    </Text>
+                  </View>
+                </View>
+
+                {displayedTracks.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.playAllBtn}
+                    onPress={() => playTrack(displayedTracks[0], displayedTracks)}
+                    activeOpacity={0.8}
+                  >
+                    <Play size={14} color={colors.ink} fill={colors.ink} />
+                    <Text style={styles.playAllBtnText}>
+                      تشغيل المصحف كاملاً بالترتيب (من سورة {getSurahName(displayedTracks[0]) || 'البداية'})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
-          </View>
+
+            <View style={styles.listHeader}>
+              <Text style={styles.listCount}>
+                {displayedTracks.length} سورة متوفرة • مرتبة ترتيب المصحف
+              </Text>
+              {(selectedReciter || searchQuery.trim()) && (
+                <TouchableOpacity onPress={() => { setSelectedReciter(null); setSearchQuery(''); }}>
+                  <Text style={styles.clearFilterText}>إلغاء التصفية ✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {displayedTracks.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <BookOpen size={36} color={colors.mint} />
+                <Text style={styles.emptyTitle}>
+                  {isOffline ? 'لا توجد سور قرآنية محملة' : 'لا توجد تلاوات مطابقة'}
+                </Text>
+                <Text style={styles.emptySub}>
+                  {isOffline
+                    ? 'لم تقم بتحميل أي سور أو تلاوات بعد. قم بالتحميل في الوضع الأون لاين لتستمع إليها بدون إنترنت.'
+                    : 'جرب البحث باسم سورة أو قارئ آخر.'}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.tracksList}>
+                {displayedTracks.slice(0, visibleLimit).map((track, idx) => {
+                  const sNum = getSurahNumber(track);
+                  const displayIndex = (sNum >= 1 && sNum <= 114) ? sNum : (idx + 1);
+                  return (
+                    <SongItem
+                      key={track._id || track.id || idx}
+                      track={track}
+                      index={displayIndex}
+                      onPlay={(t) => playTrack(t, displayedTracks)}
+                      onMorePress={() => onTrackAction && onTrackAction(track)}
+                    />
+                  );
+                })}
+
+                {displayedTracks.length > visibleLimit && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    onPress={() => setVisibleLimit((prev) => prev + 35)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.loadMoreText}>
+                      عرض المزيد من التلاوات ({displayedTracks.length - visibleLimit} متبقية) ↓
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -462,5 +526,146 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 12,
     color: colors.mint,
+  },
+  reciterGridSection: {
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  reciterGridHeader: {
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  reciterGridTitle: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 14,
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  reciterGridSubtitle: {
+    fontSize: 11,
+    color: '#a7f3d0',
+    textAlign: 'center',
+  },
+  reciterCardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  reciterCard: {
+    width: '48%',
+    backgroundColor: '#0a231f',
+    borderWidth: 2,
+    borderColor: '#17a398',
+    borderRadius: 12,
+    padding: 10,
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reciterCardLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: colors.ink,
+  },
+  reciterCardCover: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: colors.mint,
+    marginBottom: 8,
+    backgroundColor: '#041d1a',
+  },
+  reciterCardInfo: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  reciterCardName: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 12,
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  reciterCardBadge: {
+    backgroundColor: '#064e3b',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  reciterCardBadgeText: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 10,
+    color: '#a7f3d0',
+  },
+  selectedReciterBanner: {
+    backgroundColor: '#08332b',
+    borderWidth: 2,
+    borderColor: '#17a398',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  selectedReciterBannerLight: {
+    backgroundColor: '#e6f7f4',
+    borderColor: colors.ink,
+  },
+  selectedReciterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  backBtn: {
+    backgroundColor: colors.mint,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  backBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: colors.ink,
+  },
+  selectedReciterName: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 13,
+    color: '#ffffff',
+    textAlign: 'right',
+  },
+  selectedReciterCount: {
+    fontFamily: 'monospace',
+    fontSize: 10,
+    color: '#a7f3d0',
+    marginTop: 2,
+    textAlign: 'right',
+  },
+  playAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mint,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  playAllBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: colors.ink,
   },
 });

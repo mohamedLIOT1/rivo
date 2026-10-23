@@ -130,35 +130,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.8.9',
+      version: '1.9.9.0',
       name: 'Rivo Web',
       notes: 'إصلاح أزرار التشغيل والتنقل، استمرار البلاي ليست تلقائياً، جلب كلمات الأغاني الرسمية، وإزالة أزرار الترجمة والتقديم.'
     },
     windows: {
-      version: '1.9.8.9',
+      version: '1.9.9.0',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.8.9 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
+      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
     },
     android: {
-      version: '1.9.8.9',
-      build: 82,
+      version: '1.9.9.0',
+      build: 83,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.8.9 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
+      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
     },
     ios: {
-      version: '1.9.8.9',
-      build: 82,
+      version: '1.9.9.0',
+      build: 83,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.8.9 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
+      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
     }
   }
 };
@@ -175,44 +175,44 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.8.9',
+      version: '1.9.9.0',
       name: 'Rivo Web (Beta)',
       notes: 'إصلاح أزرار التشغيل والتنقل، استمرار البلاي ليست تلقائياً، جلب كلمات الأغاني الرسمية، وإزالة أزرار الترجمة والتقديم.'
     },
     windows: {
-      version: '1.9.8.9',
+      version: '1.9.9.0',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.8.9 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
+      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
     },
     android: {
-      version: '1.9.8.9',
-      build: 82,
+      version: '1.9.9.0',
+      build: 83,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.8.9 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم',
+      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم',
       notesEn: 'Player buttons fixed • Background playlist auto-advance • Official Genius & LRCLIB lyrics • Removed translation and timing buttons',
       ota: {
         enabled: true,
-        version: '1.9.8.9',
+        version: '1.9.9.0',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v1.9.8.9 • إصلاح أزرار المشغل واستمرار البلاي ليست والكلمات الرسمية',
-        notesEn: 'Instant OTA update v1.9.8.9 • Player controls fix • Playlist auto-advance • Real lyrics'
+        notes: 'تحديث هوائي فوري v1.9.9.0 • إصلاح أزرار المشغل واستمرار البلاي ليست والكلمات الرسمية',
+        notesEn: 'Instant OTA update v1.9.9.0 • Player controls fix • Playlist auto-advance • Real lyrics'
       }
     },
     ios: {
-      version: '1.9.8.9',
-      build: 82,
+      version: '1.9.9.0',
+      build: 83,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.8.9 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
+      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
     }
   }
 };
@@ -342,7 +342,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
     return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
-  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.8.9';
+  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.9.0';
 
   if (filename.endsWith('.apk')) {
     return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);
