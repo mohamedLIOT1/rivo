@@ -3,6 +3,7 @@ const path = require('path');
 const cp = require('child_process');
 
 function getGitHubToken() {
+  if (process.env.GITHUB_TOKEN) return Promise.resolve(process.env.GITHUB_TOKEN);
   return new Promise((resolve, reject) => {
     const p = cp.spawn('git', ['credential', 'fill']);
     p.stdin.write('protocol=https\nhost=github.com\n\n');
@@ -14,7 +15,7 @@ function getGitHubToken() {
       if (passLine) {
         resolve(passLine.slice(9).trim());
       } else {
-        reject(new Error('GitHub token not found via git credential fill'));
+        reject(new Error('GitHub token not found'));
       }
     });
   });
@@ -28,11 +29,14 @@ async function publish() {
   const releaseName = `Rivo v${version}`;
   const releaseBody = `## Rivo v${version} Release Notes
 
-### What's New in v${version}
-- **Offline Folder Import Auto-Enrichment:** Importing audio directories on Android now parses full ID3v2 tags (embedded album art up to 3MB, USLT synchronized & unsynchronized lyrics, artist, title, album) and strips audio bitrate/rip suffixes.
-- **Scan Offline Vault Upgrade:** Tapping SCAN in the offline vault automatically enriches existing imported songs that lacked album art or embedded lyrics.
-- **60fps Silky Smooth Queue Dragging:** Virtualized queue reordering on Android with zero layout reflows, isolated item memoization, and throttled auto-scroller.
-- **Auto-Sync Lyrics for Local Tracks:** Playing local/downloaded tracks while online automatically queries matching lyrics and caches them permanently to the offline vault.
+### 📖 Authentic Medina Mushaf Quran Pages (Ayat)
+- High-DPI Medina Mushaf pages (1-604) for all 114 Surahs replacing plain lyrics during Quran recitation.
+- AMOLED Dark Mode with crystal-clear King Fahd Medina Mushaf aesthetic.
+- Touch swipe navigation bounded strictly to each Surah's page range with instant prefetching.
+
+### 📻 Official 24/7 Live Quran Radio
+- Uninterrupted 24/7 broadcasts: Saudi Quran Radio, Sheikh Al-Minshawi, Sheikh Abdul Basit, Sheikh Al-Hussary, Sheikh Mishary Al-Afasy, Sheikh Maher Al-Muaiqly, and Tafseer.
+- Dedicated player indicators across Web, Android, and iOS.
 `;
 
   const searchDirs = [
