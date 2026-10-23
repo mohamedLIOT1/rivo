@@ -22,7 +22,8 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-  const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+  const progressPercent = effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0;
   const rawCover = currentTrack?.coverUrl || currentTrack?.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 

@@ -448,6 +448,7 @@ function MainAppShell() {
       </View>
 
       {/* ─── IN-APP AUTO-UPDATE MODAL (Global) ─── */}
+      {isUpdateModalOpen && (
       <Modal
         visible={isUpdateModalOpen}
         transparent={true}
@@ -535,8 +536,10 @@ function MainAppShell() {
           </View>
         </View>
       </Modal>
+      )}
 
       {/* ─── IN-APP FAST OTA UPDATE MODAL ─── */}
+      {isOtaModalOpen && (
       <Modal
         visible={isOtaModalOpen}
         transparent={true}
@@ -681,6 +684,7 @@ function MainAppShell() {
           </View>
         </View>
       </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -835,7 +839,7 @@ function NativeAppShell() {
   useEffect(() => {
     if (isAuthLoaded && !hasPromptedAuthOnLaunchRef.current) {
       hasPromptedAuthOnLaunchRef.current = true;
-      if (!currentUser) {
+      if (!currentUser && !isUpdateModalOpen) {
         setIsIntroAuthOpen(true);
       }
     }
@@ -1020,6 +1024,7 @@ function NativeAppShell() {
       {/* ─────────────────────────────────────────
           QUICK TOOLS & SHORTCUTS MENU DRAWER
           ───────────────────────────────────────── */}
+      {isMenuOpen && (
       <Modal
         visible={isMenuOpen}
         transparent={true}
@@ -1165,6 +1170,7 @@ function NativeAppShell() {
           </View>
         </TouchableOpacity>
       </Modal>
+      )}
 
       {/* ── Mobile Modals ── */}
       <MobileModals

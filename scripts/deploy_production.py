@@ -96,9 +96,15 @@ def main():
         f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
         f"mkdir -p {REMOTE_DIR}/dist/downloads && "
-        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/ 2>/dev/null || true"
+        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/Rivo-v{version}.apk 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/Rivo-v{version}.ipa 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/Rivo-v{version}.exe 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/Rivo.apk 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa 2>/dev/null || true && "
+        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/Rivo.exe 2>/dev/null || true && "
+        f"mkdir -p /home/ubuntu/dist/downloads /var/www/html/downloads && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /home/ubuntu/dist/downloads/ 2>/dev/null || true && "
+        f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /var/www/html/downloads/ 2>/dev/null || true"
     )
 
     # 3. Create dist archive and upload (excluding heavy downloads directory)

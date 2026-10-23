@@ -41,96 +41,118 @@ export default function MobileModals({
 }) {
   return (
     <>
-      <FullPlayerModal
-        visible={isFullPlayerOpen}
-        onClose={() => setIsFullPlayerOpen(false)}
-        onTrackAction={(track) => setActionTrack(track)}
-      />
+      {isFullPlayerOpen && (
+        <FullPlayerModal
+          visible={isFullPlayerOpen}
+          onClose={() => setIsFullPlayerOpen(false)}
+          onTrackAction={(track) => setActionTrack(track)}
+        />
+      )}
 
-      <TrackActionMenuModal
-        visible={!!actionTrack}
-        track={actionTrack}
-        onClose={() => setActionTrack(null)}
-        onOpenAddToPlaylist={(track) => setPlaylistTrack(track)}
-      />
+      {Boolean(actionTrack) && (
+        <TrackActionMenuModal
+          visible={!!actionTrack}
+          track={actionTrack}
+          onClose={() => setActionTrack(null)}
+          onOpenAddToPlaylist={(track) => setPlaylistTrack(track)}
+        />
+      )}
 
-      <PlaylistPickerModal
-        visible={!!playlistTrack}
-        track={playlistTrack}
-        onClose={() => setPlaylistTrack(null)}
-      />
+      {Boolean(playlistTrack) && (
+        <PlaylistPickerModal
+          visible={!!playlistTrack}
+          track={playlistTrack}
+          onClose={() => setPlaylistTrack(null)}
+        />
+      )}
 
-      <CreatePlaylistModal
-        visible={isCreatePlaylistOpen}
-        onClose={() => setIsCreatePlaylistOpen(false)}
-        onSuccess={() => setIsCreatePlaylistOpen(false)}
-      />
+      {isCreatePlaylistOpen && (
+        <CreatePlaylistModal
+          visible={isCreatePlaylistOpen}
+          onClose={() => setIsCreatePlaylistOpen(false)}
+          onSuccess={() => setIsCreatePlaylistOpen(false)}
+        />
+      )}
 
-      <AddSongModal
-        visible={isAddSongOpen}
-        onClose={() => setIsAddSongOpen(false)}
-        onSuccess={() => setIsAddSongOpen(false)}
-      />
+      {isAddSongOpen && (
+        <AddSongModal
+          visible={isAddSongOpen}
+          onClose={() => setIsAddSongOpen(false)}
+          onSuccess={() => setIsAddSongOpen(false)}
+        />
+      )}
 
-      <ChatModal
-        visible={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          setChatTargetUser(null);
-        }}
-        initialTargetUser={chatTargetUser}
-        onOpenJam={() => {
-          setIsChatOpen(false);
-          setIsJamOpen(true);
-        }}
-        onViewProfile={(target) => {
-          setIsChatOpen(false);
-          const myId = currentUser?._id || currentUser?.id;
-          const targetId = target?._id || target?.id;
-          if (targetId && myId && String(targetId) === String(myId)) {
-            setActiveTab('profile');
-          } else {
-            setViewingUser(target);
-          }
-        }}
-      />
+      {isChatOpen && (
+        <ChatModal
+          visible={isChatOpen}
+          onClose={() => {
+            setIsChatOpen(false);
+            setChatTargetUser(null);
+          }}
+          initialTargetUser={chatTargetUser}
+          onOpenJam={() => {
+            setIsChatOpen(false);
+            setIsJamOpen(true);
+          }}
+          onViewProfile={(target) => {
+            setIsChatOpen(false);
+            const myId = currentUser?._id || currentUser?.id;
+            const targetId = target?._id || target?.id;
+            if (targetId && myId && String(targetId) === String(myId)) {
+              setActiveTab('profile');
+            } else {
+              setViewingUser(target);
+            }
+          }}
+        />
+      )}
 
-      <UserDetailModal
-        visible={Boolean(viewingUser)}
-        user={viewingUser}
-        userId={viewingUser?._id || viewingUser?.id}
-        onClose={() => setViewingUser(null)}
-        onOpenChat={(target) => {
-          setViewingUser(null);
-          setChatTargetUser(target);
-          setIsChatOpen(true);
-        }}
-        onOpenJam={() => {
-          setViewingUser(null);
-          setIsJamOpen(true);
-        }}
-        onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-      />
+      {Boolean(viewingUser) && (
+        <UserDetailModal
+          visible={Boolean(viewingUser)}
+          user={viewingUser}
+          userId={viewingUser?._id || viewingUser?.id}
+          onClose={() => setViewingUser(null)}
+          onOpenChat={(target) => {
+            setViewingUser(null);
+            setChatTargetUser(target);
+            setIsChatOpen(true);
+          }}
+          onOpenJam={() => {
+            setViewingUser(null);
+            setIsJamOpen(true);
+          }}
+          onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+        />
+      )}
 
-      <SettingsModal
-        visible={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          visible={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
 
-      <JamRoomModal
-        visible={isJamOpen}
-        onClose={() => setIsJamOpen(false)}
-      />
+      {isJamOpen && (
+        <JamRoomModal
+          visible={isJamOpen}
+          onClose={() => setIsJamOpen(false)}
+        />
+      )}
 
-      <FriendActivityModal
-        visible={isFriendActivityOpen}
-        onClose={() => setIsFriendActivityOpen(false)}
-      />
+      {isFriendActivityOpen && (
+        <FriendActivityModal
+          visible={isFriendActivityOpen}
+          onClose={() => setIsFriendActivityOpen(false)}
+        />
+      )}
 
-      <IntroAuthModal
-        visible={isIntroAuthOpen}
-        onClose={() => setIsIntroAuthOpen(false)}
-      />
+      {isIntroAuthOpen && (
+        <IntroAuthModal
+          visible={isIntroAuthOpen}
+          onClose={() => setIsIntroAuthOpen(false)}
+        />
+      )}
     </>
   );
 }

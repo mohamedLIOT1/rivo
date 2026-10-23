@@ -530,7 +530,12 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const isDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(t => String(t._id || t.id) === trackId);
   const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
-  const isVerifiedLyrics = Boolean(currentTrack.isVerified || currentTrack.isVerifiedLyrics);
+  const isVerifiedLyrics = Boolean(
+    currentTrack.isVerified || 
+    currentTrack.lyricsVerified || 
+    currentTrack.isVerifiedLyrics
+  );
+  const lyricsVerifiedBy = currentTrack.verifiedBy || currentTrack.lyricsVerifiedBy || null;
 
   const formatTime = (secs) => {
     if (isNaN(secs) || secs === null || secs < 0) return '0:00';
@@ -539,14 +544,15 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+  const progressPercent = effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0;
   const coverUri = normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover, currentTrack);
 
   const handleSeekPress = (e) => {
     const { locationX } = e.nativeEvent;
     const barWidth = width - 64;
     const targetPercent = Math.max(0, Math.min(1, locationX / barWidth));
-    seekTo(targetPercent * duration);
+    seekTo(targetPercent * effectiveDuration);
   };
 
   const handleVolumePress = (e) => {
@@ -722,7 +728,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 </TouchableOpacity>
                 <View style={styles.timeRow}>
                   <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                  <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                  <Text style={styles.timeText}>{formatTime(effectiveDuration)}</Text>
                 </View>
               </View>
 
@@ -844,7 +850,9 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                   {isVerifiedLyrics && (
                     <View style={styles.verifiedTag}>
                       <CheckCircle2 size={12} color={colors.mint} />
-                      <Text style={styles.verifiedTagText}>VERIFIED</Text>
+                      <Text style={styles.verifiedTagText}>
+                        VERIFIED LYRICS {lyricsVerifiedBy ? (' • BY @' + lyricsVerifiedBy) : ''}
+                      </Text>
                     </View>
                   )}
                   <Text style={[styles.lyricsHeader, { color: textSub }]}>OFFICIAL TRANSCRIPT</Text>

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.8.8",
+  "version": "1.9.8.9",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "إصلاح أزرار التشغيل والتنقل وإزالة أزرار الترجمة والتقديم وتحسين الليركس الرسمي",
-  "notesEn": "Instant in-app OTA update (3.15 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3301469,
+  "notes": "تحديث v1.9.8.9 • تسريع فائق للأغاني والقرآن وحل التهنيج ومزامنة الكلمات الموثقة",
+  "notesEn": "Instant OTA update v1.9.8.9 • Fast playback fix • iOS freeze resolved • Real lyrics & timing sync",
+  "bundleSize": 3301959,
   "sizeMb": "3.15 MB",
-  "updatedAt": "2026-10-22T17:33:00.582Z"
+  "updatedAt": "2026-10-23T12:24:17.909Z"
 }
