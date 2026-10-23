@@ -93,6 +93,7 @@ export default function QuranScreen({ onTrackAction }) {
 
   // Filtered tracks with canonical Quranic sorting (1 to 114)
   const displayedTracks = useMemo(() => {
+    if (!selectedReciter && !searchQuery.trim()) return [];
     let result = quranTracks;
     if (selectedReciter) {
       const normSelected = normalizeArabicText(selectedReciter);

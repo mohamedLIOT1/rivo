@@ -3,9 +3,9 @@
   "version": "1.9.9.0",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري v1.9.9.0 • تحسين تجربة القرآن الكريم وترتيب السور الشرعي",
-  "notesEn": "Instant OTA update v1.9.9.0 • Enhanced Quran reciters view & canonical Surah order",
-  "bundleSize": 3325702,
+  "notes": "تحديث هوائي فوري v1.9.9.0 • تسريع فائق للقرآن الكريم وحل مشكلة dl وترتيب السور",
+  "notesEn": "Instant OTA update v1.9.9.0 • Instant Quran reciters view and dl fix",
+  "bundleSize": 3326172,
   "sizeMb": "3.17 MB",
-  "updatedAt": "2026-10-23T12:52:27.494Z"
+  "updatedAt": "2026-10-23T13:12:16.038Z"
 }

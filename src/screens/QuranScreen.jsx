@@ -132,14 +132,14 @@ export default function QuranScreen({
 
   // Filtered tracks with canonical Quranic sorting (1 to 114)
   const filteredTracks = useMemo(() => {
-    const baseList = selectedReciter ? reciterTracks : quranTracks;
     if (!searchQuery.trim()) {
-      return sortQuranTracks(baseList);
+      return selectedReciter ? reciterTracks : sortQuranTracks(quranTracks);
     }
     const q = searchQuery.toLowerCase().trim();
     const normQ = normalizeArabicText(q);
 
-    const filtered = (selectedReciter ? reciterTracks : quranTracks).filter(t => {
+    const source = selectedReciter ? reciterTracks : quranTracks;
+    const filtered = source.filter(t => {
       const reciter = getQuranReciterName(t, quranPlaylists);
       const title = t.title || '';
       const artist = t.artist || '';

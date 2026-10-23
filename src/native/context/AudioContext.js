@@ -950,17 +950,16 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
+    const dl = (downloadedTracks || []).find(t => String(t._id || t.id) === String(currentTrack._id || currentTrack.id));
+
     // Immediate local lyrics fallback while fetching verified lyrics
     let initialParsed = [];
     if (currentTrack.lyrics) {
       initialParsed = parseLrcLyrics(currentTrack.lyrics);
       if (initialParsed.length > 0) setLyrics(initialParsed);
-    } else {
-      const dl = (downloadedTracks || []).find(t => String(t._id || t.id) === String(currentTrack._id || currentTrack.id));
-      if (dl?.lyrics) {
-        initialParsed = parseLrcLyrics(dl.lyrics);
-        if (initialParsed.length > 0) setLyrics(initialParsed);
-      }
+    } else if (dl?.lyrics) {
+      initialParsed = parseLrcLyrics(dl.lyrics);
+      if (initialParsed.length > 0) setLyrics(initialParsed);
     }
 
     // If offline, do not attempt network fetching

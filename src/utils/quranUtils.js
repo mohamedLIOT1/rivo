@@ -406,64 +406,87 @@ export const CANONICAL_SURAHS = [
   { number: 114, name: 'الناس', english: 'An-Nas', aliases: ['ناس', 'قل أعوذ برب الناس', 'an-nas', 'nas'] },
 ];
 
+// Precompiled keyword map for instant O(1) surah lookup
+const SURAH_KEYWORD_MAP = new Map();
+const SHORT_SURAHS = new Set(['ص', 'ق', 'طه', 'يس', 'ن']);
+
+for (const s of CANONICAL_SURAHS) {
+  const allAliases = [s.name, s.english, ...(s.aliases || [])];
+  for (const a of allAliases) {
+    const norm = normalizeArabicText(a);
+    if (!norm) continue;
+    if (!SURAH_KEYWORD_MAP.has(norm)) {
+      SURAH_KEYWORD_MAP.set(norm, s.number);
+    }
+  }
+}
+
 export function getSurahNumber(item) {
   if (!item) return 999;
-  if (typeof item === 'number' && item >= 1 && item <= 114) return item;
+  if (typeof item === 'number') return (item >= 1 && item <= 114) ? item : 999;
+  if (typeof item === 'object' && item !== null && item._surahNum !== undefined) {
+    return item._surahNum;
+  }
+
   const rawTitle = typeof item === 'string' ? item : (item.title || item.name || '');
   const normTitle = normalizeArabicText(rawTitle);
-  const cleanTitle = ' ' + normTitle.replace(/[^a-z0-9\u0621-\u064A]/gi, ' ') + ' ';
 
-  let bestMatch = null;
-  let highestScore = 0;
+  // 1. Direct match for 'سورة X' where X is a number
+  const numMatch = normTitle.match(/(?:سوره|سورة|surah)\s*0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\b|$)/i) ||
+                   normTitle.match(/(?:^|[\s\-_|#])0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\s*[\.\-–\s]|\s*$)/);
+  if (numMatch && numMatch[1]) {
+    const n = parseInt(numMatch[1], 10);
+    if (n >= 1 && n <= 114) {
+      if (typeof item === 'object' && item !== null) item._surahNum = n;
+      return n;
+    }
+  }
 
-  for (const s of CANONICAL_SURAHS) {
-    const allAliases = [s.name, s.english, ...(s.aliases || [])];
-    for (const a of allAliases) {
-      const normA = normalizeArabicText(a);
-      if (!normA) continue;
+  // 2. Tokenize words for instant O(1) map lookups
+  const words = normTitle.match(/[\u0621-\u064A0-9a-z]+/gi) || [];
 
-      // Special case short words: 'ص', 'ق', 'طه', 'يس', 'ن'
-      if (normA.length <= 2) {
-        const regexSurah = new RegExp('(?:سوره|سورة|surah)\\s+' + normA + '(?=[\\s]|$)', 'i');
-        if (regexSurah.test(normTitle)) {
-          const score = 200 + normA.length;
-          if (score > highestScore) {
-            highestScore = score;
-            bestMatch = s.number;
-          }
+  // Pass A: Check directly after 'سورة' or 'surah'
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if ((w === 'سوره' || w === 'سورة' || w === 'surah') && i + 1 < words.length) {
+      if (i + 2 < words.length) {
+        const twoWord = words[i+1] + ' ' + words[i+2];
+        if (SURAH_KEYWORD_MAP.has(twoWord)) {
+          const res = SURAH_KEYWORD_MAP.get(twoWord);
+          if (typeof item === 'object' && item !== null) item._surahNum = res;
+          return res;
         }
-        continue;
       }
-
-      // Check if preceded by سورة or surah
-      const escaped = normA.replace(/[-\\/\\^$*+?.()|[\]{}]/g, '\\$&');
-      const regexPrefixed = new RegExp('(?:سوره|سورة|surah)\\s+' + escaped + '(?=[\\s]|$)', 'i');
-      if (regexPrefixed.test(normTitle)) {
-        const score = 150 + normA.length;
-        if (score > highestScore) {
-          highestScore = score;
-          bestMatch = s.number;
-        }
-      } else if (cleanTitle.includes(' ' + normA + ' ')) {
-        const score = 50 + normA.length;
-        if (score > highestScore) {
-          highestScore = score;
-          bestMatch = s.number;
-        }
+      const nextWord = words[i+1];
+      if (SURAH_KEYWORD_MAP.has(nextWord)) {
+        const res = SURAH_KEYWORD_MAP.get(nextWord);
+        if (typeof item === 'object' && item !== null) item._surahNum = res;
+        return res;
       }
     }
   }
 
-  if (bestMatch) return bestMatch;
-
-  // Fallback to explicit number if present (e.g. 'سورة 002' or trailing '101' but ignore years like 1435/2015)
-  const numMatch = rawTitle.match(/(?:سورة|سوره|surah)\s*0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\b|$)/i) ||
-                   rawTitle.match(/(?:^|[\s\-_|#])0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\s*[\.\-–\s]|\s*$)/);
-  if (numMatch && numMatch[1]) {
-    const n = parseInt(numMatch[1], 10);
-    if (n >= 1 && n <= 114) return n;
+  // Pass B: Check two-word pairs anywhere
+  for (let i = 0; i < words.length - 1; i++) {
+    const pair = words[i] + ' ' + words[i+1];
+    if (SURAH_KEYWORD_MAP.has(pair)) {
+      const res = SURAH_KEYWORD_MAP.get(pair);
+      if (typeof item === 'object' && item !== null) item._surahNum = res;
+      return res;
+    }
   }
 
+  // Pass C: Check single words anywhere (skip single-letter short names without 'سورة')
+  for (const w of words) {
+    if (SHORT_SURAHS.has(w)) continue;
+    if (SURAH_KEYWORD_MAP.has(w)) {
+      const res = SURAH_KEYWORD_MAP.get(w);
+      if (typeof item === 'object' && item !== null) item._surahNum = res;
+      return res;
+    }
+  }
+
+  if (typeof item === 'object' && item !== null) item._surahNum = 999;
   return 999;
 }
 
@@ -474,14 +497,14 @@ export function getSurahName(trackOrNumber) {
 }
 
 export function sortQuranTracks(tracks = []) {
-  if (!Array.isArray(tracks)) return [];
-  return [...tracks].sort((a, b) => {
-    const orderA = getSurahNumber(a);
-    const orderB = getSurahNumber(b);
-    if (orderA !== orderB) {
-      return orderA - orderB;
-    }
-    return (a.title || '').localeCompare(b.title || '', 'ar');
+  if (!Array.isArray(tracks) || tracks.length === 0) return [];
+  // Schwartzian transform to call getSurahNumber once per track (O(N) instead of O(N log N * 570 regexes))
+  const decorated = tracks.map((t, idx) => ({ t, num: getSurahNumber(t), idx }));
+  decorated.sort((a, b) => {
+    if (a.num !== b.num) return a.num - b.num;
+    return a.idx - b.idx;
   });
+  return decorated.map(d => d.t);
 }
+
 
