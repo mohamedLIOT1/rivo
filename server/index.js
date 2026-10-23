@@ -130,35 +130,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.9.0',
+      version: '1.9.9.1',
       name: 'Rivo Web',
-      notes: 'إصلاح أزرار التشغيل والتنقل، استمرار البلاي ليست تلقائياً، جلب كلمات الأغاني الرسمية، وإزالة أزرار الترجمة والتقديم.'
+      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     windows: {
-      version: '1.9.9.0',
+      version: '1.9.9.1',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
+      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     android: {
-      version: '1.9.9.0',
-      build: 83,
+      version: '1.9.9.1',
+      build: 84,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
+      notes: 'تحديث v1.9.9.1 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة'
     },
     ios: {
-      version: '1.9.9.0',
-      build: 83,
+      version: '1.9.9.1',
+      build: 84,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
+      notes: 'تحديث v1.9.9.1 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
     }
   }
 };
@@ -175,44 +175,44 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.9.0',
+      version: '1.9.9.1',
       name: 'Rivo Web (Beta)',
-      notes: 'إصلاح أزرار التشغيل والتنقل، استمرار البلاي ليست تلقائياً، جلب كلمات الأغاني الرسمية، وإزالة أزرار الترجمة والتقديم.'
+      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     windows: {
-      version: '1.9.9.0',
+      version: '1.9.9.1',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية.'
+      notes: 'تحديث v1.9.9.1 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
     },
     android: {
-      version: '1.9.9.0',
-      build: 83,
+      version: '1.9.9.1',
+      build: 84,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم',
-      notesEn: 'Player buttons fixed • Background playlist auto-advance • Official Genius & LRCLIB lyrics • Removed translation and timing buttons',
+      notes: 'تحديث v1.9.9.1 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة',
+      notesEn: 'Instant OTA update v1.9.9.1 • Album and full player navigation fix • Touch freeze resolved',
       ota: {
         enabled: true,
-        version: '1.9.9.0',
+        version: '1.9.9.1',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v1.9.9.0 • إصلاح أزرار المشغل واستمرار البلاي ليست والكلمات الرسمية',
-        notesEn: 'Instant OTA update v1.9.9.0 • Player controls fix • Playlist auto-advance • Real lyrics'
+        notes: 'تحديث هوائي فوري v1.9.9.1 • إصلاح شاشة الألبوم والمشغل السريع',
+        notesEn: 'Instant OTA update v1.9.9.1 • Album and full player navigation fix'
       }
     },
     ios: {
-      version: '1.9.9.0',
-      build: 83,
+      version: '1.9.9.1',
+      build: 84,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.9.0 • إصلاح أزرار المشغل بالكامل (تشغيل، إيقاف، التالي، السابق) • استمرار البلاي ليست تلقائياً • جلب كلمات الأغاني الرسمية وحذف أزرار الترجمة والتقديم'
+      notes: 'تحديث v1.9.9.1 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
     }
   }
 };
@@ -339,7 +339,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
   const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
   if (vMatch) {
     const requestedVersion = vMatch[1];
-    return res.redirect(`https://github.com/mohamedLIOT1/Rivo/releases/download/v${requestedVersion}/${filename}`);
+    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
   const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.9.0';
@@ -390,7 +390,7 @@ app.post('/api/deploy-webhook', (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
-  const deployCmd = 'git config --global --add safe.directory "*" 2>/dev/null || true; git remote set-url origin https://github.com/mohamedLIOT1/Rivo.git 2>/dev/null || true; git fetch origin main --force && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
+  const deployCmd = 'git config --global --add safe.directory "*" 2>/dev/null || true; git remote set-url origin https://github.com/WhooAre-you/Rivo.git 2>/dev/null || true; git fetch origin main --force && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 

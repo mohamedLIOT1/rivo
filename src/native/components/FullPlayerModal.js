@@ -534,7 +534,12 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const isDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(t => String(t._id || t.id) === trackId);
   const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
-  const isVerifiedLyrics = Boolean(currentTrack.isVerified || currentTrack.isVerifiedLyrics);
+  const isVerifiedLyrics = Boolean(
+    currentTrack.isVerified || 
+    currentTrack.lyricsVerified || 
+    currentTrack.isVerifiedLyrics
+  );
+  const lyricsVerifiedBy = currentTrack.verifiedBy || currentTrack.lyricsVerifiedBy || null;
 
   const formatTime = (secs) => {
     if (isNaN(secs) || secs === null || secs < 0) return '0:00';
@@ -548,14 +553,15 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const progressPercent = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+  const progressPercent = effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0;
   const coverUri = normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover, currentTrack);
 
   const handleSeekPress = (e) => {
     const { locationX } = e.nativeEvent;
     const barWidth = width - 64;
     const targetPercent = Math.max(0, Math.min(1, locationX / barWidth));
-    seekTo(targetPercent * duration);
+    seekTo(targetPercent * effectiveDuration);
   };
 
   const handleVolumePress = (e) => {
@@ -740,7 +746,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                   ) : (
                     <>
                       <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-                      <Text style={styles.timeText}>{formatTime(duration)}</Text>
+                      <Text style={styles.timeText}>{formatTime(effectiveDuration || duration)}</Text>
                     </>
                   )}
                 </View>
@@ -862,85 +868,85 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
               <QuranMushafViewer track={currentTrack} globalTheme={isDark ? 'dark' : 'light'} />
             </View>
           ) : (
-            <ScrollView
-              ref={lyricsScrollRef}
-              contentContainerStyle={styles.lyricsBody}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={[styles.lyricsCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
-                <View style={[styles.lyricsCardHeaderRow, { borderBottomColor: isDark ? '#1f2e2a' : '#ded2bb' }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    {isVerifiedLyrics && (
-                      <View style={styles.verifiedTag}>
-                        <CheckCircle2 size={12} color={colors.mint} />
-                        <Text style={styles.verifiedTagText}>VERIFIED</Text>
-                      </View>
-                    )}
-                    <Text style={[styles.lyricsHeader, { color: textSub }]}>OFFICIAL TRANSCRIPT</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {isLoadingLyrics && (
-                      <ActivityIndicator size="small" color={colors.mint} />
-                    )}
-                    <TouchableOpacity
-                      onPress={handleOpenEditLyrics}
-                      style={styles.lyricsActionBtn}
-                      activeOpacity={0.8}
-                    >
-                      <Edit3 size={14} color="#000000" strokeWidth={2.5} />
-                      <Text style={styles.lyricsActionBtnText}>EDIT</Text>
-                    </TouchableOpacity>
-                  </View>
+<ScrollView
+            ref={lyricsScrollRef}
+            contentContainerStyle={styles.lyricsBody}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.lyricsCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
+              <View style={[styles.lyricsCardHeaderRow, { borderBottomColor: isDark ? '#1f2e2a' : '#ded2bb' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {isVerifiedLyrics && (
+                    <View style={styles.verifiedTag}>
+                      <CheckCircle2 size={12} color={colors.mint} />
+                      <Text style={styles.verifiedTagText}>
+                        VERIFIED LYRICS {lyricsVerifiedBy ? (' • BY @' + lyricsVerifiedBy) : ''}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={[styles.lyricsHeader, { color: textSub }]}>OFFICIAL TRANSCRIPT</Text>
                 </View>
-
-                {lyricsList.length > 0 ? (
-                  <View style={styles.lyricsLinesList}>
-                    {lyricsList.map((line, idx) => {
-                      const isActive = idx === activeLyricIndex;
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          onPress={() => seekTo(line.time)}
-                          activeOpacity={0.7}
-                          style={[
-                            styles.lyricLineBox,
-                            isActive && {
-                              backgroundColor: isDark ? 'rgba(23, 163, 152, 0.2)' : 'rgba(23, 163, 152, 0.15)',
-                              borderColor: colors.mint,
-                              borderWidth: 1.5,
-                            }
-                          ]}
-                        >
-                          <Text style={[
-                            styles.lyricLineText,
-                            { color: isActive ? (isDark ? '#ffffff' : colors.ink) : (isDark ? '#9ca3af' : '#4b5563') },
-                            isActive && styles.lyricLineTextActive
-                          ]}>
-                            {line.text}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <View style={styles.emptyLyricsBox}>
-                    <ListMusic size={32} color={colors.mint} style={{ marginBottom: 12 }} />
-                    <Text style={[styles.emptyLyricsTitle, { color: textTitle }]}>No Lyrics Found</Text>
-                    <Text style={styles.emptyLyricsText}>
-                      {isLoadingLyrics ? 'Retrieving synchronized lyrics...' : 'Lyrics could not be loaded for this track.'}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={handleOpenEditLyrics}
-                      style={[styles.lyricsActionBtn, { marginTop: 16, paddingHorizontal: 16 }]}
-                      activeOpacity={0.8}
-                    >
-                      <Plus size={15} color="#000000" strokeWidth={2.5} />
-                      <Text style={styles.lyricsActionBtnText}>ADD / SYNC LYRICS</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {isLoadingLyrics && (
+                    <ActivityIndicator size="small" color={colors.mint} />
+                  )}
+                  <TouchableOpacity
+                    onPress={handleOpenEditLyrics}
+                    style={styles.lyricsActionBtn}
+                    activeOpacity={0.8}
+                  >
+                    <Edit3 size={14} color="#000000" strokeWidth={2.5} />
+                    <Text style={styles.lyricsActionBtnText}>EDIT</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </ScrollView>
+
+              {lyricsList.length > 0 ? (
+                <View style={styles.lyricsLinesList}>
+                  {lyricsList.map((line, idx) => {
+                    const isActive = idx === activeLyricIndex;
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        onPress={() => seekTo(line.time)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.lyricLineBox,
+                          isActive && {
+                            backgroundColor: isDark ? 'rgba(23, 163, 152, 0.2)' : 'rgba(23, 163, 152, 0.15)',
+                            borderColor: colors.mint,
+                            borderWidth: 1.5,
+                          }
+                        ]}
+                      >
+                        <Text style={[
+                          styles.lyricLineText,
+                          { color: isActive ? (isDark ? '#ffffff' : colors.ink) : (isDark ? '#9ca3af' : '#4b5563') },
+                          isActive && styles.lyricLineTextActive
+                        ]}>
+                          {line.text}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.emptyLyricsBox}>
+                  <ListMusic size={32} color={colors.mint} style={{ marginBottom: 12 }} />
+                  <Text style={[styles.emptyLyricsTitle, { color: textTitle }]}>No Lyrics Found</Text>
+                  <Text style={styles.emptyLyricsText}>
+                    {isLoadingLyrics ? 'Retrieving synchronized lyrics...' : 'Lyrics could not be loaded for this track.'}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={handleOpenEditLyrics}
+                    style={[styles.lyricsActionBtn, { marginTop: 16, paddingHorizontal: 16 }]}
+                    activeOpacity={0.8}
+                  >
+                    <Plus size={15} color="#000000" strokeWidth={2.5} />
+                    <Text style={styles.lyricsActionBtnText}>ADD / SYNC LYRICS</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
           )
         )}
 

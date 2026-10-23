@@ -29,6 +29,8 @@ export default function HomeScreen({
   onOpenAddSong,
   onTrackAction,
   onOpenFullPlayer,
+  onSelectAlbum,
+  onSelectArtist,
 }) {
   const { width } = useWindowDimensions();
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
@@ -221,7 +223,7 @@ export default function HomeScreen({
                 <TouchableOpacity
                   key={alb.id || alb._id || alb.name || String(index)}
                   style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
-                  onPress={() => setSelectedAlbum(alb)}
+                  onPress={() => onSelectAlbum ? onSelectAlbum(alb) : setSelectedAlbum(alb)}
                   activeOpacity={0.85}
                 >
                   <View style={styles.albumCoverWrap}>
@@ -373,31 +375,35 @@ export default function HomeScreen({
           />
         }
       />
-      <AlbumDetailModal
-        visible={Boolean(selectedAlbum)}
-        album={selectedAlbum}
-        onClose={() => setSelectedAlbum(null)}
-        allTracks={userTracks}
-        onTrackAction={onTrackAction}
-        onOpenFullPlayer={onOpenFullPlayer}
-        onSelectArtist={(artistName) => {
-          setSelectedAlbum(null);
-          setSelectedArtist({ name: artistName });
-        }}
-      />
-      <ArtistDetailModal
-        visible={Boolean(selectedArtist)}
-        artist={selectedArtist}
-        onClose={() => setSelectedArtist(null)}
-        allTracks={userTracks}
-        allAlbums={albums}
-        onOpenFullPlayer={onOpenFullPlayer}
-        onSelectAlbum={(alb) => {
-          setSelectedArtist(null);
-          setSelectedAlbum(alb);
-        }}
-        onTrackAction={onTrackAction}
-      />
+      {!onSelectAlbum && (
+        <AlbumDetailModal
+          visible={Boolean(selectedAlbum)}
+          album={selectedAlbum}
+          onClose={() => setSelectedAlbum(null)}
+          allTracks={userTracks}
+          onTrackAction={onTrackAction}
+          onOpenFullPlayer={onOpenFullPlayer}
+          onSelectArtist={(artistName) => {
+            setSelectedAlbum(null);
+            setSelectedArtist({ name: artistName });
+          }}
+        />
+      )}
+      {!onSelectArtist && (
+        <ArtistDetailModal
+          visible={Boolean(selectedArtist)}
+          artist={selectedArtist}
+          onClose={() => setSelectedArtist(null)}
+          allTracks={userTracks}
+          allAlbums={albums}
+          onOpenFullPlayer={onOpenFullPlayer}
+          onSelectAlbum={(alb) => {
+            setSelectedArtist(null);
+            setSelectedAlbum(alb);
+          }}
+          onTrackAction={onTrackAction}
+        />
+      )}
     </>
   );
 }

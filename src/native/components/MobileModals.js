@@ -10,10 +10,16 @@ import JamRoomModal from './JamRoomModal';
 import FriendActivityModal from './FriendActivityModal';
 import IntroAuthModal from './IntroAuthModal';
 import UserDetailModal from './UserDetailModal';
+import AlbumDetailModal from './AlbumDetailModal';
+import ArtistDetailModal from './ArtistDetailModal';
 
 export default function MobileModals({
   isFullPlayerOpen,
   setIsFullPlayerOpen,
+  selectedAlbum,
+  setSelectedAlbum,
+  selectedArtist,
+  setSelectedArtist,
   actionTrack,
   setActionTrack,
   playlistTrack,
@@ -41,96 +47,146 @@ export default function MobileModals({
 }) {
   return (
     <>
-      <FullPlayerModal
-        visible={isFullPlayerOpen}
-        onClose={() => setIsFullPlayerOpen(false)}
-        onTrackAction={(track) => setActionTrack(track)}
-      />
+      {Boolean(selectedAlbum) && (
+        <AlbumDetailModal
+          visible={Boolean(selectedAlbum)}
+          album={selectedAlbum}
+          onClose={() => setSelectedAlbum && setSelectedAlbum(null)}
+          onTrackAction={(track) => setActionTrack && setActionTrack(track)}
+          onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
+          onSelectArtist={(artistName) => {
+            if (setSelectedAlbum) setSelectedAlbum(null);
+            if (setSelectedArtist) setSelectedArtist({ name: artistName });
+          }}
+        />
+      )}
 
-      <TrackActionMenuModal
-        visible={!!actionTrack}
-        track={actionTrack}
-        onClose={() => setActionTrack(null)}
-        onOpenAddToPlaylist={(track) => setPlaylistTrack(track)}
-      />
+      {Boolean(selectedArtist) && (
+        <ArtistDetailModal
+          visible={Boolean(selectedArtist)}
+          artist={selectedArtist}
+          onClose={() => setSelectedArtist && setSelectedArtist(null)}
+          onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
+          onSelectAlbum={(alb) => {
+            if (setSelectedArtist) setSelectedArtist(null);
+            if (setSelectedAlbum) setSelectedAlbum(alb);
+          }}
+          onTrackAction={(track) => setActionTrack && setActionTrack(track)}
+        />
+      )}
+      {isFullPlayerOpen && (
+        <FullPlayerModal
+          visible={isFullPlayerOpen}
+          onClose={() => setIsFullPlayerOpen(false)}
+          onTrackAction={(track) => setActionTrack(track)}
+        />
+      )}
 
-      <PlaylistPickerModal
-        visible={!!playlistTrack}
-        track={playlistTrack}
-        onClose={() => setPlaylistTrack(null)}
-      />
+      {Boolean(actionTrack) && (
+        <TrackActionMenuModal
+          visible={!!actionTrack}
+          track={actionTrack}
+          onClose={() => setActionTrack(null)}
+          onOpenAddToPlaylist={(track) => setPlaylistTrack(track)}
+        />
+      )}
 
-      <CreatePlaylistModal
-        visible={isCreatePlaylistOpen}
-        onClose={() => setIsCreatePlaylistOpen(false)}
-        onSuccess={() => setIsCreatePlaylistOpen(false)}
-      />
+      {Boolean(playlistTrack) && (
+        <PlaylistPickerModal
+          visible={!!playlistTrack}
+          track={playlistTrack}
+          onClose={() => setPlaylistTrack(null)}
+        />
+      )}
 
-      <AddSongModal
-        visible={isAddSongOpen}
-        onClose={() => setIsAddSongOpen(false)}
-        onSuccess={() => setIsAddSongOpen(false)}
-      />
+      {isCreatePlaylistOpen && (
+        <CreatePlaylistModal
+          visible={isCreatePlaylistOpen}
+          onClose={() => setIsCreatePlaylistOpen(false)}
+          onSuccess={() => setIsCreatePlaylistOpen(false)}
+        />
+      )}
 
-      <ChatModal
-        visible={isChatOpen}
-        onClose={() => {
-          setIsChatOpen(false);
-          setChatTargetUser(null);
-        }}
-        initialTargetUser={chatTargetUser}
-        onOpenJam={() => {
-          setIsChatOpen(false);
-          setIsJamOpen(true);
-        }}
-        onViewProfile={(target) => {
-          setIsChatOpen(false);
-          const myId = currentUser?._id || currentUser?.id;
-          const targetId = target?._id || target?.id;
-          if (targetId && myId && String(targetId) === String(myId)) {
-            setActiveTab('profile');
-          } else {
-            setViewingUser(target);
-          }
-        }}
-      />
+      {isAddSongOpen && (
+        <AddSongModal
+          visible={isAddSongOpen}
+          onClose={() => setIsAddSongOpen(false)}
+          onSuccess={() => setIsAddSongOpen(false)}
+        />
+      )}
 
-      <UserDetailModal
-        visible={Boolean(viewingUser)}
-        user={viewingUser}
-        userId={viewingUser?._id || viewingUser?.id}
-        onClose={() => setViewingUser(null)}
-        onOpenChat={(target) => {
-          setViewingUser(null);
-          setChatTargetUser(target);
-          setIsChatOpen(true);
-        }}
-        onOpenJam={() => {
-          setViewingUser(null);
-          setIsJamOpen(true);
-        }}
-        onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-      />
+      {isChatOpen && (
+        <ChatModal
+          visible={isChatOpen}
+          onClose={() => {
+            setIsChatOpen(false);
+            setChatTargetUser(null);
+          }}
+          initialTargetUser={chatTargetUser}
+          onOpenJam={() => {
+            setIsChatOpen(false);
+            setIsJamOpen(true);
+          }}
+          onViewProfile={(target) => {
+            setIsChatOpen(false);
+            const myId = currentUser?._id || currentUser?.id;
+            const targetId = target?._id || target?.id;
+            if (targetId && myId && String(targetId) === String(myId)) {
+              setActiveTab('profile');
+            } else {
+              setViewingUser(target);
+            }
+          }}
+        />
+      )}
 
-      <SettingsModal
-        visible={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
+      {Boolean(viewingUser) && (
+        <UserDetailModal
+          visible={Boolean(viewingUser)}
+          user={viewingUser}
+          userId={viewingUser?._id || viewingUser?.id}
+          onClose={() => setViewingUser(null)}
+          onOpenChat={(target) => {
+            setViewingUser(null);
+            setChatTargetUser(target);
+            setIsChatOpen(true);
+          }}
+          onOpenJam={() => {
+            setViewingUser(null);
+            setIsJamOpen(true);
+          }}
+          onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+          onSelectAlbum={(alb) => setSelectedAlbum && setSelectedAlbum(alb)}
+        />
+      )}
 
-      <JamRoomModal
-        visible={isJamOpen}
-        onClose={() => setIsJamOpen(false)}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          visible={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
 
-      <FriendActivityModal
-        visible={isFriendActivityOpen}
-        onClose={() => setIsFriendActivityOpen(false)}
-      />
+      {isJamOpen && (
+        <JamRoomModal
+          visible={isJamOpen}
+          onClose={() => setIsJamOpen(false)}
+        />
+      )}
 
-      <IntroAuthModal
-        visible={isIntroAuthOpen}
-        onClose={() => setIsIntroAuthOpen(false)}
-      />
+      {isFriendActivityOpen && (
+        <FriendActivityModal
+          visible={isFriendActivityOpen}
+          onClose={() => setIsFriendActivityOpen(false)}
+        />
+      )}
+
+      {isIntroAuthOpen && (
+        <IntroAuthModal
+          visible={isIntroAuthOpen}
+          onClose={() => setIsIntroAuthOpen(false)}
+        />
+      )}
     </>
   );
 }

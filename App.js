@@ -448,6 +448,7 @@ function MainAppShell() {
       </View>
 
       {/* ─── IN-APP AUTO-UPDATE MODAL (Global) ─── */}
+      {isUpdateModalOpen && (
       <Modal
         visible={isUpdateModalOpen}
         transparent={true}
@@ -505,19 +506,23 @@ function MainAppShell() {
                   onPress={handleDownloadAndInstall}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.updateDownloadBtnText}>1-CLICK IN-APP UPDATE & INSTALL</Text>
+                  <Text style={styles.updateDownloadBtnText}>
+                    {Platform.OS === 'ios' ? 'OPEN DOWNLOAD IN BROWSER' : '1-CLICK IN-APP UPDATE & INSTALL'}
+                  </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.updateBrowserBtn}
-                  onPress={() => {
-                    if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
-                    setIsUpdateModalOpen(false);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.updateBrowserBtnText}>OPEN DOWNLOAD IN BROWSER</Text>
-                </TouchableOpacity>
+                {Platform.OS !== 'ios' && (
+                  <TouchableOpacity
+                    style={styles.updateBrowserBtn}
+                    onPress={() => {
+                      if (updateInfo?.downloadUrl) Linking.openURL(updateInfo.downloadUrl);
+                      setIsUpdateModalOpen(false);
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.updateBrowserBtnText}>OPEN DOWNLOAD IN BROWSER</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.updateCancelBtn}
@@ -531,8 +536,10 @@ function MainAppShell() {
           </View>
         </View>
       </Modal>
+      )}
 
       {/* ─── IN-APP FAST OTA UPDATE MODAL ─── */}
+      {isOtaModalOpen && (
       <Modal
         visible={isOtaModalOpen}
         transparent={true}
@@ -677,6 +684,7 @@ function MainAppShell() {
           </View>
         </View>
       </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -697,6 +705,8 @@ function NativeAppShell() {
     }).catch(() => {});
   }, []);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
+  const [selectedArtist, setSelectedArtist] = useState(null);
   const [actionTrack, setActionTrack] = useState(null);
   const [playlistTrack, setPlaylistTrack] = useState(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
@@ -831,7 +841,7 @@ function NativeAppShell() {
   useEffect(() => {
     if (isAuthLoaded && !hasPromptedAuthOnLaunchRef.current) {
       hasPromptedAuthOnLaunchRef.current = true;
-      if (!currentUser) {
+      if (!currentUser && !isUpdateModalOpen) {
         setIsIntroAuthOpen(true);
       }
     }
@@ -841,6 +851,8 @@ function NativeAppShell() {
     if (tabId === 'chat') {
       setIsChatOpen(true);
     } else {
+      setSelectedAlbum(null);
+      setSelectedArtist(null);
       setActiveTab(tabId);
     }
   };
@@ -856,6 +868,8 @@ function NativeAppShell() {
               setIsChatOpen(true);
             }}
             onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
           />
         );
       case 'library':
@@ -881,6 +895,8 @@ function NativeAppShell() {
             }}
             onSelectPlaylist={() => setActiveTab('library')}
             onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
           />
         );
       case 'stats':
@@ -895,6 +911,8 @@ function NativeAppShell() {
             onOpenAddSong={() => setIsAddSongOpen(true)}
             onTrackAction={(track) => setActionTrack(track)}
             onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
           />
         );
     }
@@ -1016,6 +1034,7 @@ function NativeAppShell() {
       {/* ─────────────────────────────────────────
           QUICK TOOLS & SHORTCUTS MENU DRAWER
           ───────────────────────────────────────── */}
+      {isMenuOpen && (
       <Modal
         visible={isMenuOpen}
         transparent={true}
@@ -1161,11 +1180,16 @@ function NativeAppShell() {
           </View>
         </TouchableOpacity>
       </Modal>
+      )}
 
       {/* ── Mobile Modals ── */}
       <MobileModals
         isFullPlayerOpen={isFullPlayerOpen}
         setIsFullPlayerOpen={setIsFullPlayerOpen}
+        selectedAlbum={selectedAlbum}
+        setSelectedAlbum={setSelectedAlbum}
+        selectedArtist={selectedArtist}
+        setSelectedArtist={setSelectedArtist}
         actionTrack={actionTrack}
         setActionTrack={setActionTrack}
         playlistTrack={playlistTrack}

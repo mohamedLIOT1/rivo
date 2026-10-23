@@ -1,14 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
   Image,
   Dimensions,
   Platform,
+  Animated,
+  BackHandler,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -185,17 +186,54 @@ export default function ArtistDetailModal({
     return `${m}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
+  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose && onClose();
+    });
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible]);
+
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle={Platform.OS === 'ios' ? 'overFullScreen' : 'fullScreen'}
-      onRequestClose={onClose}
+    <Animated.View
+      style={[
+        styles.fullScreenWrapper,
+        !isDark && styles.containerLight,
+        {
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar matching Image 2 */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.8}>
+          <TouchableOpacity onPress={handleClose} style={styles.backBtn} activeOpacity={0.8}>
             <ArrowLeft size={20} color="#fdfbf7" strokeWidth={2.5} />
             <Text style={styles.backText}>BACK</Text>
           </TouchableOpacity>
@@ -474,11 +512,21 @@ export default function ArtistDetailModal({
           artist={artist}
         />
       </View>
-    </Modal>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  fullScreenWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#0b1110',
+    zIndex: 120,
+    elevation: 20,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0b1110',

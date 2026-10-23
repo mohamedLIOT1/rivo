@@ -1,13 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Play, Pause, Plus, Heart, Search, BookOpen, DownloadCloud, Radio, 
-  Link2, Disc, User, Check, Sparkles, Volume2 
+  Link2, Disc, User, Check, Sparkles, Volume2, ArrowRight, ArrowLeft
 } from 'lucide-react';
 import { 
   isQuranContent, 
   getQuranReciterName, 
   cleanQuranTrackTitle, 
-  normalizeArabicText 
+  normalizeArabicText,
+  sortQuranTracks,
+  getSurahNumber,
+  getSurahName,
+  FAMOUS_RECITERS
 } from '../utils/quranUtils';
 
 export default function QuranScreen({
@@ -26,14 +30,15 @@ export default function QuranScreen({
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
-  const [activeTab, setActiveTab] = useState('surahs'); // 'surahs' | 'playlists' | 'reciters'
+  const [activeTab, setActiveTab] = useState('reciters'); // Default is reciters view per user request
+  const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isRadioOpen, setIsRadioOpen] = useState(false);
-  const [visibleLimit, setVisibleLimit] = useState(40);
+  const [visibleLimit, setVisibleLimit] = useState(50);
 
   React.useEffect(() => {
-    setVisibleLimit(40);
-  }, [searchQuery, activeTab]);
+    setVisibleLimit(50);
+  }, [searchQuery, activeTab, selectedReciter]);
 
   // Strictly filter only Quranic tracks & playlists with robust deduplication
   const quranTracks = useMemo(() => {
@@ -106,13 +111,36 @@ export default function QuranScreen({
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [quranTracks, quranPlaylists]);
 
-  // Search filter
+  // Tracks belonging to the selected reciter, strictly sorted by canonical Quranic order (1 to 114)
+  const reciterTracks = useMemo(() => {
+    if (!selectedReciter) return [];
+    const normSelected = normalizeArabicText(selectedReciter);
+    const famousItem = FAMOUS_RECITERS.find(r => normalizeArabicText(r.name) === normSelected);
+    const aliases = famousItem ? famousItem.aliases.map(normalizeArabicText) : [normSelected];
+
+    const matched = quranTracks.filter((t) => {
+      const rName = getQuranReciterName(t, quranPlaylists);
+      const normR = normalizeArabicText(rName);
+      if (normR === normSelected || normR.includes(normSelected) || normSelected.includes(normR)) {
+        return true;
+      }
+      const textToSearch = normalizeArabicText(`${t.title || ''} ${t.artist || ''} ${t.album || ''} ${rName}`);
+      return aliases.some(a => a.length >= 3 && textToSearch.includes(a));
+    });
+
+    return sortQuranTracks(matched);
+  }, [quranTracks, quranPlaylists, selectedReciter]);
+
+  // Filtered tracks with canonical Quranic sorting (1 to 114)
   const filteredTracks = useMemo(() => {
-    if (!searchQuery.trim()) return quranTracks;
+    if (!searchQuery.trim()) {
+      return selectedReciter ? reciterTracks : sortQuranTracks(quranTracks);
+    }
     const q = searchQuery.toLowerCase().trim();
     const normQ = normalizeArabicText(q);
 
-    return quranTracks.filter(t => {
+    const source = selectedReciter ? reciterTracks : quranTracks;
+    const filtered = source.filter(t => {
       const reciter = getQuranReciterName(t, quranPlaylists);
       const title = t.title || '';
       const artist = t.artist || '';
@@ -123,7 +151,9 @@ export default function QuranScreen({
 
       return normCombined.includes(normQ) || combined.toLowerCase().includes(q);
     });
-  }, [quranTracks, quranPlaylists, searchQuery]);
+
+    return sortQuranTracks(filtered);
+  }, [quranTracks, quranPlaylists, selectedReciter, reciterTracks, searchQuery]);
 
   const filteredPlaylists = useMemo(() => {
     if (!searchQuery.trim()) return quranPlaylists;
@@ -252,9 +282,14 @@ export default function QuranScreen({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           {[
-            { id: 'surahs', label: `السور والتلاوات (${quranTracks.length})` },
-            { id: 'playlists', label: `المصاحف والقوائم (${quranPlaylists.length})` },
             { id: 'reciters', label: `القراء (${reciters.length})` },
+            { id: 'playlists', label: `المصاحف والقوائم (${quranPlaylists.length})` },
+            { 
+              id: 'surahs', 
+              label: selectedReciter 
+                ? `سور الشيخ ${selectedReciter.split(' ')[0]} (${reciterTracks.length})` 
+                : `السور والتلاوات (${quranTracks.length})` 
+            },
           ].map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -295,7 +330,89 @@ export default function QuranScreen({
       {/* ── TAB 1: SURAHS & TRACKS ── */}
       {activeTab === 'surahs' && (
         <div>
-          {filteredTracks.length === 0 ? (
+          {/* If a reciter is selected, show their header & clear button */}
+          {selectedReciter && (
+            <div className={`p-3.5 sm:p-4 mb-4 rounded-xl brutal-border flex flex-wrap items-center justify-between gap-3 ${
+              isDark ? 'bg-[#092b25] border-[#17a398]' : 'bg-[#e0f4f0] border-[#082621]'
+            }`}>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedReciter(null);
+                    setActiveTab('reciters');
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-[#26c4b7] hover:bg-[#17a398] text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
+                  title="العودة لاختيار قارئ آخر"
+                >
+                  <ArrowRight size={14} />
+                  <span>← العودة للقراء</span>
+                </button>
+                <div>
+                  <h3 className="font-display font-black text-sm sm:text-base text-white">
+                    مصحف الشيخ {selectedReciter}
+                  </h3>
+                  <p className="text-[11px] text-emerald-300 font-mono font-medium">
+                    {filteredTracks.length} سورة متوفرة • مرتبة حسب ترتيب المصحف (1 إلى 114)
+                  </p>
+                </div>
+              </div>
+
+              {filteredTracks.length > 0 && (
+                <button
+                  onClick={() => onSelectTrack(filteredTracks[0], filteredTracks)}
+                  className="px-3.5 py-1.5 rounded-lg bg-[#fdfbf7] hover:bg-white text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
+                >
+                  <Play size={13} fill="currentColor" />
+                  <span>تشغيل من سورة {getSurahName(filteredTracks[0]) || 'البداية'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* If no reciter is selected and no search: do NOT dump 457 mixed tracks, show reciters selection! */}
+          {!selectedReciter && !searchQuery.trim() ? (
+            <div className={`p-6 rounded-2xl brutal-border text-center ${
+              isDark ? 'bg-[#0a231f] border-emerald-900' : 'bg-[#fdfbf7] border-[#082621]'
+            }`}>
+              <BookOpen size={42} className="mx-auto mb-3 text-[#26c4b7] opacity-80" />
+              <h3 className="text-base sm:text-lg font-display font-black mb-1.5 text-white">
+                اختر القارئ للاستماع إلى المصحف المرتل
+              </h3>
+              <p className="text-xs text-emerald-200/80 mb-5 max-w-md mx-auto">
+                لتجنب العشوائية، تصفح تلاوات القرآن الكريم مرتبة حسب المصحف الشريف (من سورة الفاتحة إلى سورة الناس) لكل قارئ.
+              </p>
+
+              {/* Reciters Quick Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-w-4xl mx-auto">
+                {reciters.map((reciter, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      setSelectedReciter(reciter.name);
+                    }}
+                    className={`p-3 rounded-xl brutal-border text-center cursor-pointer transition-all hover:scale-[1.03] group ${
+                      isDark ? 'bg-[#0e2c26] border-emerald-800 hover:bg-[#143d35]' : 'bg-white border-[#082621]'
+                    }`}
+                  >
+                    <div className="w-14 h-14 rounded-full mx-auto mb-2 brutal-border overflow-hidden bg-[#041d1a] ring-2 ring-[#26c4b7]/40 group-hover:scale-105 transition-transform">
+                      <img 
+                        src={reciter.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'} 
+                        alt={reciter.name} 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'; }}
+                      />
+                    </div>
+                    <h4 className="text-xs font-display font-black truncate text-white group-hover:text-[#26c4b7]">
+                      {reciter.name}
+                    </h4>
+                    <p className="text-[10px] font-mono font-bold mt-0.5 text-[#26c4b7]">
+                      {reciter.count} سورة
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : filteredTracks.length === 0 ? (
             <div className={`p-8 text-center rounded-xl brutal-border ${
               isDark ? 'bg-[#0f2421] border-emerald-900 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
             }`}>
@@ -317,6 +434,8 @@ export default function QuranScreen({
                 const active = isTrackActive(track);
                 const reciterName = getQuranReciterName(track, quranPlaylists);
                 const cleanTitle = cleanQuranTrackTitle(track.title);
+                const surahNum = getSurahNumber(track);
+                const displayNum = (surahNum >= 1 && surahNum <= 114) ? surahNum : (idx + 1);
 
                 return (
                   <div
@@ -331,7 +450,7 @@ export default function QuranScreen({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className={`w-7 text-center font-mono text-xs font-bold shrink-0 ${
+                      <div className={`w-8 text-center font-mono text-xs font-bold shrink-0 ${
                         active 
                           ? 'text-[#041d1a]' 
                           : isDark 
@@ -341,7 +460,9 @@ export default function QuranScreen({
                         {active && isPlaying ? (
                           <Volume2 size={16} className="animate-pulse text-[#041d1a] mx-auto" />
                         ) : (
-                          <span>{idx + 1}</span>
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 font-mono text-[11px] border border-emerald-800/50">
+                            {displayNum}
+                          </span>
                         )}
                       </div>
 
@@ -377,6 +498,7 @@ export default function QuranScreen({
                               : 'text-[#084c41]'
                         }`}>
                           <span className="font-bold">{reciterName}</span>
+                          {surahNum >= 1 && surahNum <= 114 ? ` • سورة رقم ${surahNum}` : ''}
                           {track.album ? ` • ${cleanQuranTrackTitle(track.album)}` : ''}
                         </p>
                       </div>
@@ -525,7 +647,8 @@ export default function QuranScreen({
             <div
               key={idx}
               onClick={() => {
-                setSearchQuery(reciter.searchKey || reciter.name);
+                setSelectedReciter(reciter.name);
+                setSearchQuery('');
                 setActiveTab('surahs');
               }}
               className={`p-3.5 rounded-xl brutal-border text-center cursor-pointer transition-all hover:scale-[1.02] group ${

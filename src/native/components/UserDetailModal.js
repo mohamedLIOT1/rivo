@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Modal,
   TouchableOpacity,
   ScrollView,
   Image,
   Dimensions,
   Platform,
   ActivityIndicator,
+  Animated,
+  BackHandler,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -45,6 +46,7 @@ export default function UserDetailModal({
   onOpenChat,
   onOpenJam,
   onOpenFullPlayer,
+  onSelectAlbum,
 }) {
   const { token, currentUser } = useUser();
   const { playTrack, currentTrack } = useAudioPlayer();
@@ -144,17 +146,54 @@ export default function UserDetailModal({
     }
   };
 
+  const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      onClose && onClose();
+    });
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleClose();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible]);
+
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
+    <Animated.View
+      style={[
+        styles.fullScreenWrapper,
+        !isDark && styles.containerLight,
+        {
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.8}>
+          <TouchableOpacity onPress={handleClose} style={styles.backBtn} activeOpacity={0.8}>
             <ArrowLeft size={18} color="#fdfbf7" strokeWidth={2.5} />
             <Text style={styles.backText}>RETURN</Text>
           </TouchableOpacity>
@@ -350,7 +389,20 @@ export default function UserDetailModal({
                       key={pl.id || pl._id || idx}
                       style={styles.playlistRow}
                       onPress={() => {
-                        setSelectedPlaylistModal(pl);
+                        if (onSelectAlbum && pl) {
+                          onSelectAlbum({
+                            id: pl.id || pl._id,
+                            _id: pl._id || pl.id,
+                            name: pl.name,
+                            artist: currentProfile.name || 'Listener',
+                            cover: pl.cover || plTracks[0]?.coverUrl || plTracks[0]?.cover,
+                            tracks: pl.tracks || [],
+                            trackIds: pl.trackIds || [],
+                            isPlaylist: true,
+                          });
+                        } else {
+                          setSelectedPlaylistModal(pl);
+                        }
                       }}
                       activeOpacity={0.8}
                     >
@@ -388,28 +440,40 @@ export default function UserDetailModal({
         )}
 
         {/* Playlist Tracks Full View Modal */}
-        <AlbumDetailModal
-          visible={Boolean(selectedPlaylistModal)}
-          album={selectedPlaylistModal ? {
-            id: selectedPlaylistModal.id || selectedPlaylistModal._id,
-            _id: selectedPlaylistModal._id || selectedPlaylistModal.id,
-            name: selectedPlaylistModal.name,
-            artist: currentProfile.name || 'Listener',
-            cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
-            tracks: selectedPlaylistModal.tracks || [],
-            trackIds: selectedPlaylistModal.trackIds || [],
-            isPlaylist: true,
-          } : null}
-          onClose={() => setSelectedPlaylistModal(null)}
-          allTracks={selectedPlaylistModal?.tracks || []}
-          onOpenFullPlayer={onOpenFullPlayer}
-        />
+        {!onSelectAlbum && (
+          <AlbumDetailModal
+            visible={Boolean(selectedPlaylistModal)}
+            album={selectedPlaylistModal ? {
+              id: selectedPlaylistModal.id || selectedPlaylistModal._id,
+              _id: selectedPlaylistModal._id || selectedPlaylistModal.id,
+              name: selectedPlaylistModal.name,
+              artist: currentProfile.name || 'Listener',
+              cover: selectedPlaylistModal.cover || selectedPlaylistModal.tracks?.[0]?.coverUrl || selectedPlaylistModal.tracks?.[0]?.cover,
+              tracks: selectedPlaylistModal.tracks || [],
+              trackIds: selectedPlaylistModal.trackIds || [],
+              isPlaylist: true,
+            } : null}
+            onClose={() => setSelectedPlaylistModal(null)}
+            allTracks={selectedPlaylistModal?.tracks || []}
+            onOpenFullPlayer={onOpenFullPlayer}
+          />
+        )}
       </View>
-    </Modal>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  fullScreenWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#0b1110',
+    zIndex: 110,
+    elevation: 20,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0b1110',

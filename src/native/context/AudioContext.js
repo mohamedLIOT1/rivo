@@ -657,7 +657,9 @@ export const AudioProvider = ({ children }) => {
     }
 
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
-    const newDuration = Math.floor((status.durationMillis || 0) / 1000);
+    const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
+    const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
+    const newDuration = statusDurSec > 1 ? statusDurSec : (knownDur > 0 ? knownDur : 240);
 
     if (playbackStatusRef.current.currentTime !== newCurrentTime) {
       playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: newCurrentTime, duration: newDuration };
@@ -948,22 +950,16 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
-    if (currentTrack.lyrics) {
-      const parsed = parseLrcLyrics(currentTrack.lyrics);
-      if (parsed.length > 0) {
-        setLyrics(parsed);
-        return;
-      }
-    }
-
-    // Check offline vault for saved lyrics
     const dl = (downloadedTracks || []).find(t => String(t._id || t.id) === String(currentTrack._id || currentTrack.id));
-    if (dl?.lyrics) {
-      const parsed = parseLrcLyrics(dl.lyrics);
-      if (parsed.length > 0) {
-        setLyrics(parsed);
-        return;
-      }
+
+    // Immediate local lyrics fallback while fetching verified lyrics
+    let initialParsed = [];
+    if (currentTrack.lyrics) {
+      initialParsed = parseLrcLyrics(currentTrack.lyrics);
+      if (initialParsed.length > 0) setLyrics(initialParsed);
+    } else if (dl?.lyrics) {
+      initialParsed = parseLrcLyrics(dl.lyrics);
+      if (initialParsed.length > 0) setLyrics(initialParsed);
     }
 
     // If offline, do not attempt network fetching
@@ -987,8 +983,16 @@ export const AudioProvider = ({ children }) => {
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data?.success && Array.isArray(data.lyrics) && data.lyrics.length > 0) {
-            setLyrics(data.lyrics);
-            // Cache to local vault for offline use
+            const parsed = parseLrcLyrics(data.lyrics);
+            setLyrics(parsed);
+            if (currentTrackRef.current) {
+              currentTrackRef.current.lyrics = parsed;
+              currentTrackRef.current.isVerified = Boolean(data.isVerified);
+              currentTrackRef.current.lyricsVerified = Boolean(data.isVerified);
+              currentTrackRef.current.isVerifiedLyrics = Boolean(data.isVerified);
+              currentTrackRef.current.lyricsVerifiedBy = data.verifiedBy || null;
+              currentTrackRef.current.verifiedBy = data.verifiedBy || null;
+            }
             if (isLocalTrack) {
               updateDownloadedTrackLyrics(currentTrack._id || currentTrack.id, data.lyrics).catch(() => {});
             }
@@ -1296,11 +1300,13 @@ export const AudioProvider = ({ children }) => {
       const soundSource = { uri };
       const initialPosMs = Math.round(safeTargetSec * 1000);
       const willPlay = Boolean(autoPlay && shouldBePlayingRef.current);
+      const initialVol = volumeRef.current !== undefined ? volumeRef.current : 1.0;
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
-          shouldPlay: false,
+          shouldPlay: willPlay,
           positionMillis: initialPosMs > 0 ? initialPosMs : 0,
+          volume: initialVol,
           progressUpdateIntervalMillis: 250,
         },
         onPlaybackStatusUpdate
@@ -1329,9 +1335,7 @@ export const AudioProvider = ({ children }) => {
 
       soundRef.current = sound;
       loadedTrackIdRef.current = trackId;
-      if (volumeRef.current !== undefined) {
-        await sound.setVolumeAsync(volumeRef.current).catch(() => {});
-      }
+      // Volume was already passed to createAsync directly
 
       // If user/remote paused while sound was creating:
       if (!autoPlay || !shouldBePlayingRef.current || playRequestSeqRef.current !== requestSeq || String(currentTrackRef.current?._id || currentTrackRef.current?.id) !== trackId) {
@@ -1347,10 +1351,7 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
-      // If playing with target time or from remote Jam, seek cleanly without artificial offsets
-      if (safeTargetSec > 0.1) {
-        await sound.setPositionAsync(Math.round(safeTargetSec * 1000)).catch(() => {});
-      }
+      // Position was already set via positionMillis in createAsync
 
       if (playRequestSeqRef.current !== requestSeq || String(currentTrackRef.current?._id || currentTrackRef.current?.id) !== trackId || soundLoadIdRef.current !== currentLoadId) {
         await sound.unloadAsync().catch(() => {});
