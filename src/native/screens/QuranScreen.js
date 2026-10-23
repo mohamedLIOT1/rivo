@@ -344,7 +344,7 @@ export default function QuranScreen({ onTrackAction }) {
           </>
         )}
       </ScrollView>
-      <QuranRadioModal visible={isRadioModalOpen} onClose={() => setIsRadioModalOpen(false)} />
+      <QuranRadioModal isOpen={isRadioModalOpen} visible={isRadioModalOpen} onClose={() => setIsRadioModalOpen(false)} />
     </View>
   );
 }

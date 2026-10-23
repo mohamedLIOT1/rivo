@@ -3,6 +3,7 @@ import {
   Play, Pause, Plus, Heart, Search, BookOpen, DownloadCloud, Radio, 
   Link2, Disc, User, Check, Sparkles, Volume2, ArrowRight, ArrowLeft
 } from 'lucide-react';
+import QuranRadioModal from '../components/QuranRadioModal';
 import { 
   isQuranContent, 
   getQuranReciterName, 

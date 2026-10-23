@@ -143,7 +143,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
             onError={() => { setIsLoading(false); setHasError(true); }}
             className={`max-h-[calc(100vh-230px)] md:max-h-[calc(100vh-260px)] w-auto object-contain transition-all duration-300 rounded shadow-2xl ${
               viewMode === 'dark'
-                ? 'filter invert hue-rotate-180 brightness-[0.96] contrast-[1.12]'
+                ? 'brightness-0 invert contrast-125'
                 : 'bg-[#faf7ee] p-1'
             }`}
             style={{

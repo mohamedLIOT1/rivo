@@ -12,15 +12,43 @@ import {
 } from 'react-native';
 import { X, Radio, Play, Pause, Sparkles } from 'lucide-react-native';
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
+import { useAudioPlayer } from '../context/AudioContext';
 
 const { width, height } = Dimensions.get('window');
 
-export default function QuranRadioModal({ isOpen, onClose, currentTrack, isPlaying, onPlayStation, globalTheme = 'dark' }) {
-  if (!isOpen) return null;
+export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme = 'dark' }) {
+  const isModalVisible = visible !== undefined ? visible : isOpen;
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioPlayer();
+
+  if (!isModalVisible) return null;
+
+  const handlePlayStation = async (station) => {
+    try {
+      const curId = String(currentTrack?._id || currentTrack?.id || '');
+      const isCur = curId === station.id;
+      if (isCur) {
+        if (togglePlay) togglePlay();
+        return;
+      }
+      if (playTrack) {
+        await playTrack({
+          ...station,
+          _id: station.id,
+          id: station.id,
+          isLive: true,
+          isRadio: true,
+          isQuran: true,
+          duration: Infinity,
+        }, [station]);
+      }
+    } catch (err) {
+      console.error('[QuranRadio] play error:', err);
+    }
+  };
 
   return (
     <Modal
-      visible={isOpen}
+      visible={Boolean(isModalVisible)}
       transparent
       animationType="slide"
       onRequestClose={onClose}
@@ -55,12 +83,13 @@ export default function QuranRadioModal({ isOpen, onClose, currentTrack, isPlayi
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
             renderItem={({ item }) => {
-              const isCurrent = currentTrack?.id === item.id;
+              const curId = String(currentTrack?._id || currentTrack?.id || '');
+              const isCurrent = curId === item.id;
               const isCurrentPlaying = isCurrent && isPlaying;
 
               return (
                 <TouchableOpacity
-                  onPress={() => onPlayStation(item)}
+                  onPress={() => handlePlayStation(item)}
                   style={[
                     styles.stationItem,
                     isCurrent && styles.stationItemActive

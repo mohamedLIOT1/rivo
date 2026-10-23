@@ -142,7 +142,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
             source={{ uri: currentImageUrl }}
             style={[
               styles.mushafImage,
-              viewMode === 'dark' && styles.mushafImageDark
+              viewMode === 'dark' ? styles.mushafImageDark : { tintColor: undefined }
             ]}
             resizeMode="contain"
             onLoad={() => setIsLoading(false)}
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   mushafImageDark: {
-    // In React Native, tintColor or contrast styling is applied cleanly
+    tintColor: '#ffffff',
   },
   loadingOverlay: {
     position: 'absolute',

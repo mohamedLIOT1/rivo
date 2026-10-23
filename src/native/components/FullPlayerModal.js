@@ -623,7 +623,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
         <View style={styles.tabsRow}>
           {[
             { id: 'player', label: 'Now Playing' },
-            { id: 'lyrics', label: 'Lyrics' },
+            { id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' },
             { id: 'queue', label: `Queue (${queue.length})` },
           ].map((tab) => {
             const isActive = activeTab === tab.id;

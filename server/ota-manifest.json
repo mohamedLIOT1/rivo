@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.9.2",
+  "version": "1.9.9.3",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "إضافة صفحات المصحف الشريف بدقة عالية مع تصفح السور والوضع المظلم + إذاعة القرآن الكريم بث مباشر 24/7",
-  "notesEn": "High-DPI Medina Mushaf pages for all Surahs with AMOLED Dark Mode + Official 24/7 Live Quran Radio stations.",
-  "bundleSize": 3366215,
+  "notes": "إصلاح قراءة المصحف بالوضع الداكن وتبييض الآيات + تفعيل إذاعة القرآن الكريم على الهاتف مع اختيار القنوات وتسمية الآيات",
+  "notesEn": "Fixed Quran Dark Mode text contrast (white Uthmani text) + enabled 24/7 Live Radio station selector on mobile + renamed Lyrics tab to Ayat.",
+  "bundleSize": 3366719,
   "sizeMb": "3.21 MB",
-  "updatedAt": "2026-10-23T20:26:02.907Z"
+  "updatedAt": "2026-10-23T20:40:47.007Z"
 }

@@ -1379,7 +1379,7 @@ export default function FullPlayerModal({
       <div className="relative z-10 flex lg:hidden justify-center gap-1 px-4 py-2">
         {[
           { id: 'player', label: 'Now Playing' },
-          { id: 'lyrics', label: 'Lyrics' },
+          { id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' },
           { id: 'queue', label: `Queue (${displayQueue.length})` },
         ].map((tab) => (
           <button

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rivo",
     "slug": "rivo",
-    "version": "1.9.9.2",
+    "version": "1.9.9.3",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rivo.app",
-      "buildNumber": "85",
+      "buildNumber": "86",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -31,7 +31,7 @@
         "backgroundColor": "#0b1110"
       },
       "package": "com.rivo.app",
-      "versionCode": 85,
+      "versionCode": 86,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
