@@ -16,8 +16,12 @@ export function sanitizeDuration(val, fallback = 210) {
   if (val === undefined || val === null) return fallback;
   const num = Number(val);
   if (!isFinite(num) || isNaN(num) || num <= 0) return fallback;
-  if (num > 10000) return Math.max(1, Math.round(num / 1000));
-  if (num > 86400) return fallback;
+  // If value is in milliseconds (e.g. 180,000ms), convert to seconds. Only if > 86400 (24h) to avoid breaking long 2-4 hour recitations/tracks!
+  if (num > 86400) {
+    const inSec = Math.round(num / 1000);
+    if (inSec > 0 && inSec <= 86400) return inSec;
+    return fallback;
+  }
   return Math.round(num);
 }
 
@@ -991,7 +995,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const coverSrc = currentTrack.cover || currentTrack.coverUrl || '';
       const safeDuration = sanitizeDuration(duration || currentTrack.duration, 240);
       const safeTime = (currentTime && isFinite(currentTime) && currentTime > 0)
-        ? (currentTime > 10000 ? Math.round(currentTime / 1000) : currentTime)
+        ? (currentTime > 86400 ? Math.round(currentTime / 1000) : currentTime)
         : 0;
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'PLAYBACK_STATE',
@@ -1044,7 +1048,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             const safeDuration = sanitizeDuration(duration || curT.duration, 240);
             const rawT = currentTimeRef.current || 0;
             const safeTime = (rawT && isFinite(rawT) && rawT > 0)
-              ? (rawT > 10000 ? Math.round(rawT / 1000) : rawT)
+              ? (rawT > 86400 ? Math.round(rawT / 1000) : rawT)
               : 0;
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'PLAYBACK_STATE',

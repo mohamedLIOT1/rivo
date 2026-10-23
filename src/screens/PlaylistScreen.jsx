@@ -222,7 +222,8 @@ export default function PlaylistScreen({
     }
   }, [playlist?.id, playlist?.isMix]);
 
-  const playlistTrackIds = (playlist?.trackIds || []).map(String);
+  const rawTrackIds = playlist?.trackIds;
+  const playlistTrackIds = useMemo(() => (rawTrackIds || []).map(String), [rawTrackIds]);
 
   // Dynamically fetch any tracks in playlist that are missing from global tracks state
   useEffect(() => {
@@ -444,15 +445,15 @@ export default function PlaylistScreen({
     setIsSelectMode(false);
   };
 
-  // Debounced auto-fetch AI recommendations on load so page renders with 0ms delay
+  // Debounced auto-fetch AI recommendations on load so page renders with 0ms delay (skip for albums and Quran)
   useEffect(() => {
-    if (!playlist?.isLikedSongs && playlistTracks.length > 0 && aiRecommendations.length === 0 && !isLoadingRecs) {
+    if (!isQuran && !playlist?.isAlbum && !playlist?.isLikedSongs && playlistTracks.length > 0 && aiRecommendations.length === 0 && !isLoadingRecs) {
       const timer = setTimeout(() => {
         handleFetchAiRecommendations();
       }, 600);
       return () => clearTimeout(timer);
     }
-  }, [playlist?.id, playlistTracks.length]);
+  }, [playlist?.id, playlistTracks.length, isQuran, playlist?.isAlbum]);
 
   const formatDurationSum = () => {
     const totalSecs = playlistTracks.reduce((acc, t) => acc + (t.duration || 180), 0);

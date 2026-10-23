@@ -45,15 +45,19 @@ export default function MiniPlayer({
   const openAddToPlaylist = propOpenAddToPlaylist || onOpenAddToPlaylist;
   const repeatMode = propRepeatMode || audio?.repeatMode || (isRepeat ? 'all' : 'off');
   const rawCurrentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
-  const currentTime = rawCurrentTime > 10000 ? Math.round(rawCurrentTime / 1000) : rawCurrentTime;
+  const currentTime = (rawCurrentTime > 86400 && Math.round(rawCurrentTime / 1000) <= 86400) ? Math.round(rawCurrentTime / 1000) : rawCurrentTime;
   const rawDuration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
-  const duration = rawDuration > 10000 ? Math.round(rawDuration / 1000) : rawDuration;
+  const duration = (rawDuration > 86400 && Math.round(rawDuration / 1000) <= 86400) ? Math.round(rawDuration / 1000) : rawDuration;
   const seekTo = propSeekTo || audio?.seekTo;
   const formatTime = (secs) => {
     if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
-    const sVal = secs > 10000 ? Math.round(secs / 1000) : Math.round(secs);
-    const m = Math.floor(sVal / 60);
+    const sVal = (secs > 86400 && Math.round(secs / 1000) <= 86400) ? Math.round(secs / 1000) : Math.round(secs);
+    const h = Math.floor(sVal / 3600);
+    const m = Math.floor((sVal % 3600) / 60);
     const s = Math.floor(sVal % 60);
+    if (h > 0) {
+      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
@@ -68,7 +72,7 @@ export default function MiniPlayer({
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
   const rawActiveDur = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
-  const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
+  const activeDuration = (rawActiveDur > 86400 && Math.round(rawActiveDur / 1000) <= 86400) ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
 

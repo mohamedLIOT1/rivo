@@ -149,7 +149,30 @@ export default function AlbumDetailModal({
   onOpenFullPlayer,
 }) {
   const { playTrack, currentTrack, isPlaying, addMultipleToQueue, downloadedTracks = [], handleDownloadTrack, handleDownloadPlaylist, openFullPlayer: contextOpenFullPlayer } = useAudioPlayer();
-  const handleOpenFull = onOpenFullPlayer || contextOpenFullPlayer;
+  const handleOpenFull = React.useCallback(() => {
+    const trigger = onOpenFullPlayer || contextOpenFullPlayer;
+    if (!trigger) return;
+    if (Platform.OS === 'ios' && typeof onClose === 'function') {
+      onClose();
+      setTimeout(() => {
+        trigger();
+      }, 150);
+    } else {
+      trigger();
+    }
+  }, [onOpenFullPlayer, contextOpenFullPlayer, onClose]);
+
+  const handleTrackAction = React.useCallback((track) => {
+    if (!onTrackAction) return;
+    if (Platform.OS === 'ios' && typeof onClose === 'function') {
+      onClose();
+      setTimeout(() => {
+        onTrackAction(track);
+      }, 150);
+    } else {
+      onTrackAction(track);
+    }
+  }, [onTrackAction, onClose]);
   const { token, syncUserData, playlists = [], likedTrackIds = [], toggleLikeTrack, tracks: contextTracks = [] } = useUser();
   const { showToast } = useToast();
   const { isDark } = useTheme();
@@ -406,8 +429,12 @@ export default function AlbumDetailModal({
 
   const formatDuration = (sec) => {
     const s = parseInt(sec, 10) || 210;
-    const m = Math.floor(s / 60);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
     const rem = s % 60;
+    if (h > 0) {
+      return `${h}:${m < 10 ? '0' : ''}${m}:${rem < 10 ? '0' : ''}${rem}`;
+    }
     return `${m}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
@@ -607,7 +634,7 @@ export default function AlbumDetailModal({
                 onOpenFullPlayer={handleOpenFull}
                 onDownload={(selected) => !isDl && handleDownloadTrack && handleDownloadTrack(selected)}
                 onToggleLike={(id) => toggleLikeTrack && toggleLikeTrack(id)}
-                onTrackAction={(selected) => onTrackAction && onTrackAction(selected)}
+                onTrackAction={handleTrackAction}
                 styles={styles}
                 formatDuration={formatDuration}
               />

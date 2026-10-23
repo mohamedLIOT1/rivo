@@ -965,21 +965,25 @@ const handleTrackStream = async (req, res) => {
 
       const vidCandidate = streamUrl.videoId || (rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
       const targetCover = req.query.cover || (vidCandidate ? `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg` : track?.cover || '');
+      const finalDur = (streamUrl.duration && streamUrl.duration > 0) ? streamUrl.duration : (duration || track?.duration || 210);
+      if (track?._id && finalDur > 0 && Math.abs((track.duration || 0) - finalDur) > 3) {
+        Track.updateOne({ _id: track._id }, { $set: { duration: finalDur } }).catch(() => {});
+      }
       const savedTrack = await autoPersistExternalTrack({
         id: track?._id || id,
         title,
         artist,
         album: req.query.album || track?.album || 'Single',
         cover: targetCover,
-        audioUrl: rawUrl || (vidCandidate ? `https://www.youtube.com/watch?v=${vidCandidate}` : ''),
-        duration: streamUrl.duration || duration || 210
+        audioUrl: rawUrl || (vidCandidate ? `https://www.youtube.com/watch?${vidCandidate}` : ''),
+        duration: finalDur
       });
 
       return res.json({
         success: true,
         url: finalUrl,
         directUrl: resolvedPath,
-        duration: streamUrl.duration || track?.duration || 210,
+        duration: finalDur,
         cover: savedTrack?.cover || track?.cover || targetCover,
         track: savedTrack
       });
@@ -1682,11 +1686,15 @@ const resolveStreamHandler = async (req, res) => {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
             const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            const finalDur = (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210);
+            if (dbTrack._id && finalDur > 0 && Math.abs((dbTrack.duration || 0) - finalDur) > 3) {
+              Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
+            }
             return res.json({
               success: true,
               url: finalUrl,
               directUrl: resolvedPath,
-              duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210),
+              duration: finalDur,
               cover: dbTrack.cover,
               isYouTube: false
             });
@@ -1739,11 +1747,15 @@ const resolveStreamHandler = async (req, res) => {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
             const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            const finalDur = (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210);
+            if (dbTrack._id && finalDur > 0 && Math.abs((dbTrack.duration || 0) - finalDur) > 3) {
+              Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
+            }
             return res.json({
               success: true,
               url: finalUrl,
               directUrl: resolvedPath,
-              duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210),
+              duration: finalDur,
               cover: dbTrack.cover,
               isYouTube: false
             });

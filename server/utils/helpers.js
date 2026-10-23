@@ -1470,7 +1470,15 @@ async function extractDirectStreamUrl(videoId) {
   try {
     const warmUrl = await extractViaWarmWorker(videoId);
     if (warmUrl && warmUrl.startsWith('http')) {
-      return warmUrl;
+      let dur = null;
+      const mDur = warmUrl.match(/[?&]dur=([0-9.]+)/);
+      if (mDur && !isNaN(Number(mDur[1]))) {
+        dur = Math.round(Number(mDur[1]));
+      }
+      const res = new String(warmUrl);
+      res.url = warmUrl;
+      res.duration = dur;
+      return res;
     }
   } catch {}
 
@@ -1481,7 +1489,8 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--js-runtimes', 'node'
+    '--js-runtimes', 'node',
+    '--print', '%(duration)s'
   ];
   if (cp) {
     ytdlpArgs.push('--cookies', cp);
@@ -1495,19 +1504,50 @@ async function extractDirectStreamUrl(videoId) {
   return new Promise((resolve) => {
     execFile(bin, ytdlpArgs, { timeout: 35000, env: execEnv }, (err, stdout) => {
       if (stdout) {
-        const lines = stdout.trim().split(/\r?\n/);
-        const directUrl = lines.find(l => l.startsWith('http'))?.trim() || null;
-        if (directUrl) return resolve(directUrl);
+        const lines = stdout.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const directUrl = lines.find(l => l.startsWith('http')) || null;
+        let duration = null;
+        const durLine = lines.find(l => !l.startsWith('http') && !isNaN(Number(l)));
+        if (durLine && Number(durLine) > 0) {
+          duration = Math.round(Number(durLine));
+        } else if (directUrl) {
+          const mDur = directUrl.match(/[?&]dur=([0-9.]+)/);
+          if (mDur && !isNaN(Number(mDur[1]))) {
+            duration = Math.round(Number(mDur[1]));
+          }
+        }
+        if (directUrl) {
+          const res = new String(directUrl);
+          res.url = directUrl;
+          res.duration = duration;
+          return resolve(res);
+        }
       }
       // Instant fallback without extractor args
-      const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node'];
+      const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--print', '%(duration)s'];
       if (cp) fbArgs.push('--cookies', cp);
       fbArgs.push('-g', '-f', 'ba/b', ytUrl);
       execFile(bin, fbArgs, { timeout: 35000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
-        const lines2 = stdout2.trim().split(/\r?\n/);
-        const directUrl2 = lines2.find(l => l.startsWith('http'))?.trim() || null;
-        resolve(directUrl2);
+        const lines2 = stdout2.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const directUrl2 = lines2.find(l => l.startsWith('http')) || null;
+        let duration2 = null;
+        const durLine2 = lines2.find(l => !l.startsWith('http') && !isNaN(Number(l)));
+        if (durLine2 && Number(durLine2) > 0) {
+          duration2 = Math.round(Number(durLine2));
+        } else if (directUrl2) {
+          const mDur2 = directUrl2.match(/[?&]dur=([0-9.]+)/);
+          if (mDur2 && !isNaN(Number(mDur2[1]))) {
+            duration2 = Math.round(Number(mDur2[1]));
+          }
+        }
+        if (directUrl2) {
+          const res2 = new String(directUrl2);
+          res2.url = directUrl2;
+          res2.duration = duration2;
+          return resolve(res2);
+        }
+        resolve(null);
       });
     });
   });
@@ -1598,7 +1638,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       queueBackgroundAudioCache(videoId, cachedM4a, true);
       const retObj = new String(cachedStream.url);
       retObj.url = cachedStream.url;
-      retObj.duration = defaultDur;
+      retObj.duration = cachedStream.duration || defaultDur;
       retObj.videoId = videoId;
       return retObj;
     }
@@ -1610,7 +1650,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       if (url && !url.includes('.m3u8')) {
         const retObj = new String(url);
         retObj.url = url;
-        retObj.duration = defaultDur;
+        retObj.duration = url.duration || defaultDur;
         retObj.videoId = videoId;
         return retObj;
       }
@@ -1618,7 +1658,9 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
 
   const extractPromise = (async () => {
-    let directUrl = await extractDirectStreamUrl(videoId);
+    let directResult = await extractDirectStreamUrl(videoId);
+    let directUrl = directResult ? (directResult.url || String(directResult)) : null;
+    let authenticDuration = directResult?.duration || null;
     // Never overwrite an explicit videoId with a fuzzy YouTube search fallback
     if (!directUrl && !isExplicitVideoId && (title || artist)) {
       try {
@@ -1627,17 +1669,25 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
           const freshVidStr = String(freshId);
           const freshStream = await extractDirectStreamUrl(freshVidStr);
           if (freshStream) {
-            directStreamCache.set(freshVidStr, { url: freshStream, expireAt: Date.now() + 3 * 3600 * 1000 });
-            return freshStream;
+            const fUrl = freshStream.url || String(freshStream);
+            const fDur = freshStream.duration || null;
+            directStreamCache.set(freshVidStr, { url: fUrl, duration: fDur, expireAt: Date.now() + 3 * 3600 * 1000 });
+            const resObj = new String(fUrl);
+            resObj.url = fUrl;
+            resObj.duration = fDur;
+            return resObj;
           }
         }
       } catch {}
     }
 
     if (directUrl && !directUrl.includes('.m3u8')) {
-      directStreamCache.set(videoId, { url: directUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
+      directStreamCache.set(videoId, { url: directUrl, duration: authenticDuration, expireAt: Date.now() + 3 * 3600 * 1000 });
       queueBackgroundAudioCache(videoId, cachedM4a, true);
-      return directUrl;
+      const resObj = new String(directUrl);
+      resObj.url = directUrl;
+      resObj.duration = authenticDuration;
+      return resObj;
     }
 
     // 1. Direct YouTube download to disk with cookies
@@ -1708,9 +1758,11 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   try {
     const resolvedUrl = await extractPromise;
     if (resolvedUrl) {
-      const retObj = new String(resolvedUrl);
-      retObj.url = resolvedUrl;
-      retObj.duration = defaultDur;
+      const finalUrl = typeof resolvedUrl === 'object' ? (resolvedUrl.url || String(resolvedUrl)) : String(resolvedUrl);
+      const finalDur = (typeof resolvedUrl === 'object' && resolvedUrl.duration) ? resolvedUrl.duration : defaultDur;
+      const retObj = new String(finalUrl);
+      retObj.url = finalUrl;
+      retObj.duration = finalDur;
       retObj.videoId = videoId;
       return retObj;
     }

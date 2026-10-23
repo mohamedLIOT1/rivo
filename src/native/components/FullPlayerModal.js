@@ -534,8 +534,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
   const formatTime = (secs) => {
     if (isNaN(secs) || secs === null || secs < 0) return '0:00';
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
+    const sVal = Math.round(secs);
+    const h = Math.floor(sVal / 3600);
+    const m = Math.floor((sVal % 3600) / 60);
+    const s = Math.floor(sVal % 60);
+    if (h > 0) {
+      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 

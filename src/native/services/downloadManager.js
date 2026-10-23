@@ -18,8 +18,11 @@ const sanitizeDuration = (val, fallback = 210) => {
   if (val === undefined || val === null) return fallback;
   const num = Number(val);
   if (!isFinite(num) || isNaN(num) || num <= 0) return fallback;
-  if (num > 10000) return Math.max(1, Math.round(num / 1000));
-  if (num > 86400) return fallback;
+  if (num > 86400) {
+    const inSec = Math.round(num / 1000);
+    if (inSec > 0 && inSec <= 86400) return inSec;
+    return fallback;
+  }
   return Math.round(num);
 };
 

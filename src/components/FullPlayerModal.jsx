@@ -270,9 +270,9 @@ export default function FullPlayerModal({
   const trackColor = dynamicColor || currentTrack?.color || '#17a398';
 
   const rawActiveTime = currentTime !== undefined ? currentTime : (audioCurrentTime || 0);
-  const activeTime = rawActiveTime > 10000 ? Math.round(rawActiveTime / 1000) : rawActiveTime;
+  const activeTime = (rawActiveTime > 86400 && Math.round(rawActiveTime / 1000) <= 86400) ? Math.round(rawActiveTime / 1000) : rawActiveTime;
   const rawActiveDur = (duration !== undefined && duration > 0) ? duration : (audioDuration || currentTrack?.duration || 210);
-  const activeDuration = rawActiveDur > 10000 ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
+  const activeDuration = (rawActiveDur > 86400 && Math.round(rawActiveDur / 1000) <= 86400) ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
 
 
   const [localLyrics, setLocalLyrics] = useState(null);
@@ -769,9 +769,13 @@ export default function FullPlayerModal({
 
   const formatTime = (secs) => {
     if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
-    const sVal = secs > 10000 ? Math.round(secs / 1000) : Math.round(secs);
-    const m = Math.floor(sVal / 60);
+    const sVal = (secs > 86400 && Math.round(secs / 1000) <= 86400) ? Math.round(secs / 1000) : Math.round(secs);
+    const h = Math.floor(sVal / 3600);
+    const m = Math.floor((sVal % 3600) / 60);
     const s = Math.floor(sVal % 60);
+    if (h > 0) {
+      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+    }
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
