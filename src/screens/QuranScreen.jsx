@@ -681,6 +681,7 @@ export default function QuranScreen({
           ))}
         </div>
       )}
+      <QuranRadioModal isOpen={isRadioOpen} onClose={() => setIsRadioOpen(false)} globalTheme={globalTheme} />
     </div>
   );
 }

@@ -368,7 +368,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const { isDark } = useTheme();
   const { showToast } = useToast();
 
-  const isCurQuran = useMemo(() => isQuranContent(currentTrack?.title || currentTrack?.name, currentTrack?.artist, currentTrack?.album), [currentTrack]);
+  const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
@@ -947,8 +947,10 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                   </TouchableOpacity>
                 </View>
               )}
-          )
-        )}
+            </View>
+          </ScrollView>
+        )
+      )}
 
         {/* ── Queue Tab ── */}
         {activeTab === 'queue' && (

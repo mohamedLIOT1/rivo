@@ -199,10 +199,14 @@ export function normalizeArabicText(text = '') {
     .trim();
 }
 
-export function isQuranContent(item) {
+export function isQuranContent(item, artist = '', album = '') {
   if (!item) return false;
-  if (item.isQuran === true) return true;
-  const str = `${item.title || item.name || ''} ${item.artist || ''} ${item.album || ''} ${item.genre || ''} ${item.description || ''}`;
+  if (typeof item === 'object') {
+    if (item.isQuran === true || item.genre === 'quran-radio') return true;
+    const str = `${item.title || item.name || ''} ${item.artist || ''} ${item.album || ''} ${item.genre || ''} ${item.description || ''}`;
+    return QURAN_REGEX.test(str);
+  }
+  const str = `${item} ${artist} ${album}`;
   return QURAN_REGEX.test(str);
 }
 

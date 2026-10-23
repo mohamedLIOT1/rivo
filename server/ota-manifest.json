@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.9.1",
+  "version": "1.9.9.2",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري v1.9.9.1 • صفحات المصحف الشريف بدقة عالية مع تصفح السور + إذاعة القرآن الكريم بث مباشر 24/7 + إصلاح مشغل الألبوم واستجابة اللمس",
-  "notesEn": "Instant OTA update v1.9.9.1 • High-DPI Medina Mushaf pages + 24/7 Live Quran Radio stations + Album and full player navigation fix & touch freeze resolved",
-  "bundleSize": 3337321,
-  "sizeMb": "3.18 MB",
-  "updatedAt": "2026-10-23T20:11:00.000Z"
+  "notes": "إضافة صفحات المصحف الشريف بدقة عالية مع تصفح السور والوضع المظلم + إذاعة القرآن الكريم بث مباشر 24/7",
+  "notesEn": "High-DPI Medina Mushaf pages for all Surahs with AMOLED Dark Mode + Official 24/7 Live Quran Radio stations.",
+  "bundleSize": 3366215,
+  "sizeMb": "3.21 MB",
+  "updatedAt": "2026-10-23T20:26:02.907Z"
 }

@@ -1,5 +1,5 @@
-// Rivo Service Worker v18 — iOS PWA & Offline Support
-const CACHE_VER = 'rivo-v18';
+// Rivo Service Worker v30 — iOS PWA & Offline Support
+const CACHE_VER = 'rivo-v32';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────
@@ -26,6 +26,18 @@ self.addEventListener('fetch', event => {
 
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+
+  // Bypass downloads, uploads, and binaries completely from Service Worker!
+  if (
+    url.pathname.startsWith('/downloads/') ||
+    url.pathname.startsWith('/uploads/') ||
+    url.pathname.endsWith('.apk') ||
+    url.pathname.endsWith('.ipa') ||
+    url.pathname.endsWith('.exe') ||
+    url.pathname.endsWith('.zip')
+  ) {
+    return;
+  }
 
   // 0. Navigation / HTML requests — Network First, Cache Fallback
   if (request.headers.get('accept')?.includes('text/html') || request.mode === 'navigate') {

@@ -138,6 +138,10 @@ export default function QuranScreen({ onTrackAction }) {
           </View>
 
           <Text style={styles.arabicTitle}>القرآن الكريم</Text>
+          <TouchableOpacity style={styles.radioBannerBtn} onPress={() => setIsRadioModalOpen(true)} activeOpacity={0.85}>
+            <Radio size={16} color="#000000" strokeWidth={2.5} />
+            <Text style={styles.radioBannerBtnText}>إذاعة القرآن الكريم (مباشر 24/7)</Text>
+          </TouchableOpacity>
           <Text style={styles.arabicSub}>
             استمع لتلاوات خاشعة مرتبة حسب المصحف الشريف بدقة صوتية عالية وبدون إعلانات.
           </Text>

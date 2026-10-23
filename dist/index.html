@@ -23,10 +23,14 @@
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" />
 
-    <!-- Fonts -->
+    <!-- Fonts: Preconnect & Preload to prevent render blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    </noscript>
 
     <!-- Splash Screen Style -->
     <style>
@@ -36,11 +40,11 @@
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
         gap: 18px;
-        transition: opacity 0.5s ease;
+        transition: opacity 0.25s ease-out;
       }
       #splash .rivo-logo-wrap {
         position: relative;
-        width: 100px; height: 100px;
+        width: 104px; height: 104px;
       }
       #splash .rivo-shadow-disc {
         position: absolute;
@@ -49,25 +53,26 @@
         background: #17a398;
         border-radius: 9999px;
         border: 3px solid #0b1110;
+        box-shadow: 0 4px 16px rgba(23,163,152,0.5);
       }
       #splash .rivo-front-disc {
         position: absolute;
         inset: 0;
-        background: #fdfbf7;
+        background: #ffffff;
         border-radius: 9999px;
         border: 3px solid #0b1110;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 52px;
+        font-size: 54px;
         font-weight: 900;
         color: #0b1110;
-        font-family: 'Space Grotesk', sans-serif;
+        font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
         text-shadow: 2px 0px 0px rgba(23, 163, 152, 0.7), -1px 0px 0px rgba(220, 38, 38, 0.4);
       }
       #splash h1 {
         color: #fdfbf7; font-size: 34px; font-weight: 900;
-        font-family: 'Space Grotesk', sans-serif;
+        font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
         letter-spacing: -0.5px; margin: 0;
         text-shadow: 2px 2px 0px #0b1110;
       }
@@ -79,8 +84,8 @@
         text-transform: uppercase;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-CcdJL5yC.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-1Ig5esz9.css">
+    <script type="module" crossorigin src="/assets/index-BuBPH64Y.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CPeS365Y.css">
   </head>
   <body class="bg-[#082621] text-[#0b1110] antialiased select-none overflow-hidden" style="font-family:'Plus Jakarta Sans',sans-serif">
 
@@ -97,32 +102,70 @@
     <div id="root"></div>
 
     <script>
-      // Remove splash when app is ready
-      window.addEventListener('load', () => {
-        setTimeout(() => {
-          const splash = document.getElementById('splash');
-          if (splash) {
-            splash.style.opacity = '0';
-            setTimeout(() => splash.remove(), 500);
-          }
-        }, 1000);
-      });
-
-      // Register updated Service Worker
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            reg.addEventListener('updatefound', () => {
-              const newWorker = reg.installing;
-              newWorker?.addEventListener('statechange', () => {
-                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  newWorker.postMessage({ type: 'SKIP_WAITING' });
-                  window.location.reload();
-                }
+      window.addEventListener('error', function(e) {
+        if (e.message && (e.message.includes('310') || e.message.includes('dynamically imported module') || e.message.includes('ChunkLoadError'))) {
+          if (!sessionStorage.getItem('rivo_reloaded_for_err')) {
+            sessionStorage.setItem('rivo_reloaded_for_err', '1');
+            if ('caches' in window) {
+              caches.keys().then(function(keys) {
+                return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+              }).then(function() {
+                window.location.reload();
               });
-            });
+            } else {
+              window.location.reload();
+            }
+          }
+        }
+      });
+    </script>
+    <script>
+      // Fast splash removal
+      window.removeSplash = () => {
+        const splash = document.getElementById('splash');
+        if (splash && splash.style.opacity !== '0') {
+          splash.style.transition = 'opacity 0.25s ease-out';
+          splash.style.opacity = '0';
+          splash.style.pointerEvents = 'none';
+          setTimeout(() => splash.remove(), 260);
+        }
+      };
+      window.addEventListener('load', () => window.removeSplash());
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(window.removeSplash, 150);
+      });
+      setTimeout(window.removeSplash, 1000);
+
+      // Register updated Service Worker (Web only; strictly disabled in Tauri/Desktop to avoid asset stalls)
+      if ('serviceWorker' in navigator) {
+        const isDesktop = Boolean(
+          window.__TAURI_INTERNALS__ ||
+          window.__TAURI__ ||
+          window.location.protocol === 'tauri:' ||
+          window.location.hostname.includes('tauri') ||
+          window.location.hostname.endsWith('.localhost')
+        );
+        if (isDesktop) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            for (const r of regs) r.unregister();
           }).catch(() => {});
-        });
+        } else {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                window.location.reload();
+              });
+              navigator.serviceWorker.register('/sw.js').then(reg => {
+              reg.addEventListener('updatefound', () => {
+                const newWorker = reg.installing;
+                newWorker?.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              });
+            }).catch(() => {});
+          });
+        }
       }
     </script>
   </body>
