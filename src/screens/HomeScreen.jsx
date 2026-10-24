@@ -42,6 +42,7 @@ export default function HomeScreen({
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
+  const { showMusic } = usePreferences();
   const { addToQueue } = useAudioPlayer();
   const [activeFilter, setActiveFilter] = useState('all');
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
@@ -57,9 +58,7 @@ export default function HomeScreen({
 
   // Filtered tracks (Strictly excluding Quran content from Music Home)
   const displayTracks = useMemo(() => {
-    if (!showMusic) return null;
-
-  return (tracks || []).filter(t => !isQuranContent(t));
+    return (tracks || []).filter(t => !isQuranContent(t));
   }, [tracks]);
 
   // Sort tracks by global popularity with intelligent scoring and artist interleaving
@@ -128,6 +127,8 @@ export default function HomeScreen({
   };
 
   const currentMood = getCurrentTimeMood();
+
+  if (!showMusic) return null;
 
   return (
     <div 

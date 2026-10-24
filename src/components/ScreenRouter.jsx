@@ -91,35 +91,53 @@ export default function ScreenRouter({
   return (
     <>
       {currentScreen === 'home' && (
-        <HomeScreen
-          tracks={musicTracks}
-          playlists={musicPlaylists}
-          albums={musicAlbums}
-          onSelectTrack={playTrack}
-          onSelectPlaylist={handleSelectPlaylistView}
-          toggleLike={toggleLike}
-          onSelectArtist={handleSelectArtist}
-          openAddSongModal={() => setIsAddSongOpen(true)}
-          openEditSongModal={openEditSong}
-          openAddToPlaylist={openAddToPlaylist}
-          onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
-          currentTrack={currentTrack}
-          isPlaying={isPlaying}
-          currentUser={currentUser}
-          logout={logout}
-          openAuthModal={() => setIsAuthOpen(true)}
-          openProfileScreen={() => navigateTo('profile')}
-          openJamModal={() => setIsJamOpen(true)}
-          jamSession={jamSession}
-          openChatModal={() => {
-            setChatTargetUser(null);
-            setIsChatOpen(true);
-          }}
-          unreadChatCount={unreadChatCount}
-          isActivityPanelOpen={isActivityPanelOpen}
-          toggleActivityPanel={toggleActivityPanel}
-          globalTheme={globalTheme}
-        />
+        !showMusic ? (
+          <QuranScreen
+            tracks={quranTracks}
+            playlists={quranPlaylists}
+            onSelectTrack={playTrack}
+            onSelectPlaylist={handleSelectPlaylistView}
+            onSelectArtist={handleSelectArtist}
+            toggleLike={toggleLike}
+            openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
+            openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
+            openImportSongModal={() => setIsImportSongOpen(true)}
+            openAddSongModal={() => setIsAddSongOpen(true)}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            globalTheme={globalTheme}
+          />
+        ) : (
+          <HomeScreen
+            tracks={musicTracks}
+            playlists={musicPlaylists}
+            albums={musicAlbums}
+            onSelectTrack={playTrack}
+            onSelectPlaylist={handleSelectPlaylistView}
+            toggleLike={toggleLike}
+            onSelectArtist={handleSelectArtist}
+            openAddSongModal={() => setIsAddSongOpen(true)}
+            openEditSongModal={openEditSong}
+            openAddToPlaylist={openAddToPlaylist}
+            onDeleteTrack={isUserAdmin(currentUser) ? handleDeleteTrack : undefined}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            currentUser={currentUser}
+            logout={logout}
+            openAuthModal={() => setIsAuthOpen(true)}
+            openProfileScreen={() => navigateTo('profile')}
+            openJamModal={() => setIsJamOpen(true)}
+            jamSession={jamSession}
+            openChatModal={() => {
+              setChatTargetUser(null);
+              setIsChatOpen(true);
+            }}
+            unreadChatCount={unreadChatCount}
+            isActivityPanelOpen={isActivityPanelOpen}
+            toggleActivityPanel={toggleActivityPanel}
+            globalTheme={globalTheme}
+          />
+        )
       )}
 
       {currentScreen === 'search' && (
