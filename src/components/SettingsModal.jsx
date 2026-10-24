@@ -208,7 +208,7 @@ export default function SettingsModal({
                   : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
               }`}
             >
-              <span>العربية (افتراضي)</span>
+              <span>العربية</span>
               {language === 'ar' && <Check size={14} />}
             </button>
             <button
@@ -219,7 +219,7 @@ export default function SettingsModal({
                   : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
               }`}
             >
-              <span>English</span>
+              <span>English (Default)</span>
               {language === 'en' && <Check size={14} />}
             </button>
           </div>

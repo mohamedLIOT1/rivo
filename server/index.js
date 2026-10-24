@@ -352,7 +352,7 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
   const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
   if (vMatch) {
     const requestedVersion = vMatch[1];
-    return res.redirect(`https://github.com/WhooAre-you/Rivo/releases/download/v${requestedVersion}/${filename}`);
+    return res.redirect(`https://github.com/mohamedLIOT1/rivo/releases/download/v${requestedVersion}/${filename}`);
   }
 
   const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.9.0';

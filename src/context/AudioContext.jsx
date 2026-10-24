@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 import { initAudioEngine, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
 import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicAnalysis';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
-import { isQuranContent } from '../utils/quranUtils';
+import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
+import { isRadioTrack, isQuranContent } from '../utils/quranUtils';
 import { API_BASE_URL } from '../config';
 import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/listeningTracker';
 import { useUser } from './UserContext';
@@ -765,6 +766,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } catch (e) {}
   }, []);
 
+  const reconnectRadioStream = useCallback(() => {
+    const cur = currentTrackRef.current;
+    if (!cur || (!cur.isLive && !cur.isRadio)) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    const streamUrl = (cur._usedFallback && cur.fallbackUrl) ? cur.fallbackUrl : cur.audioUrl;
+    if (streamUrl) {
+      const sep = streamUrl.includes('?') ? '&' : '?';
+      audio.src = `${streamUrl}${sep}_t=${Date.now()}`;
+      resumeAudioContext();
+      audio.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  }, []);
+
   const setVolume = (val) => {
     volumeRef.current = val;
     setVolumeState(val);
@@ -1352,9 +1367,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
     let trackToPlay = { ...track };
 
     // ── STRICT QUEUE ISOLATION (Quran vs Music) & RELEVANT BATCHING ──
-    const isTargetQuran = isQuranContent(trackToPlay);
+    const isTargetRadio = isRadioTrack(trackToPlay);
+    const isTargetQuran = !isTargetRadio && isQuranContent(trackToPlay);
     let resolvedQueue = currentQueueRef.current;
-    if (newQueue?.length > 0) {
+
+    if (isTargetRadio) {
+      const radioPool = (newQueue && newQueue.length > 0 && newQueue.some(isRadioTrack))
+        ? newQueue.filter(isRadioTrack)
+        : QURAN_LIVE_STATIONS;
+      resolvedQueue = radioPool.length > 0 ? radioPool : [trackToPlay];
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
+    } else if (newQueue?.length > 0) {
       if (newQueue === currentQueueRef.current) {
         resolvedQueue = currentQueueRef.current;
       } else {

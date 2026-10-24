@@ -43,7 +43,7 @@ export default function QuranScreen({
 
   // Strictly filter only Quranic tracks & playlists with robust deduplication
   const quranTracks = useMemo(() => {
-    const raw = (tracks || []).filter(isQuranContent);
+    const raw = (tracks || []).filter(t => isQuranContent(t) && !isRadioTrack(t));
     const seenAudio = new Set();
     const seenMeta = new Set();
     const deduped = [];
@@ -73,7 +73,7 @@ export default function QuranScreen({
   }, [tracks, playlists]);
 
   const quranPlaylists = useMemo(() => {
-    return (playlists || []).filter(isQuranContent);
+    return (playlists || []).filter(p => isQuranContent(p) && !isRadioTrack(p) && !/إذاعة|اذاعة|راديو|بث مباشر/i.test(p.name || ''));
   }, [playlists]);
 
   // Extract unique reciters using smart Arabic name detection

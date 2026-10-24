@@ -1389,7 +1389,7 @@ export default function FullPlayerModal({
         {[
           { id: 'player', label: 'Now Playing' },
           ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
-          { id: 'queue', label: `Queue (${displayQueue.length})` },
+          { id: 'queue', label: isCurRadio ? `الإذاعات (${displayQueue.length})` : `Queue (${displayQueue.length})` },
         ].map((tab) => (
           <button
             key={tab.id}

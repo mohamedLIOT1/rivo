@@ -3,11 +3,9 @@
   "version": "1.9.9.5",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "إصدار v1.9.9.5 • توحيد القراء، إذاعات 24/7 حية، إطار المصحف الزمردي، تنظيم الخزنة، وتخصيص المحتوى",
-  "notesEn": "Enlarged Quran Mushaf pages, removed Ayat on live radio, and added Quran live radio to website",
-  "bundleSize": 3367071,
-  "sizeMb": "3.21 MB",
-  "updatedAt": "2026-10-23T21:05:33.314Z",
-  "build": 88,
-  "releaseDate": "2026-10-24T05:55:06.787Z"
+  "notes": "تحديث هوائي فوري (3.22 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
+  "notesEn": "Instant in-app OTA update (3.22 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 3374012,
+  "sizeMb": "3.22 MB",
+  "updatedAt": "2026-10-24T10:12:42.792Z"
 }

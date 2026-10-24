@@ -39,7 +39,7 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
           isRadio: true,
           isQuran: true,
           duration: Infinity,
-        }, [station]);
+        }, QURAN_LIVE_STATIONS);
       }
     } catch (err) {
       console.error('[QuranRadio] play error:', err);

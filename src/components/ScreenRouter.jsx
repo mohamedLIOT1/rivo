@@ -4,6 +4,7 @@ import { isQuranContent } from '../utils/quranUtils';
 import { useNavigation } from '../context/NavigationContext';
 import { useJam } from '../context/JamContext';
 import { useUI } from '../context/UIContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
@@ -85,6 +86,7 @@ export default function ScreenRouter({
     setChatTargetUser,
     unreadChatCount,
   } = useUI();
+  const { showMusic, showPodcasts } = usePreferences();
 
   return (
     <>

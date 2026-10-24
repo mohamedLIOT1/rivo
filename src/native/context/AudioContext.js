@@ -23,7 +23,8 @@ import { useToast } from './ToastContext';
 import { useUser } from './UserContext';
 import { parseLrcLyrics } from '../../utils/lrcParser';
 import { getSmartTasteAndMoodTracks } from '../utils/tasteAlgorithm';
-import { isQuranContent } from '../../utils/quranUtils';
+import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
+import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
 
 const AudioContext = createContext();
 const AudioProgressContext = createContext();

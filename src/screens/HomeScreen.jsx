@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { usePreferences } from '../context/PreferencesContext';
 import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2, Edit2, MoreVertical } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
@@ -12,7 +13,8 @@ import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAl
 import { normalizeCoverUrl } from '../utils/coverUtils';
 export { getGlobalTrackScore };
 
-export default function HomeScreen({ 
+export default function HomeScreen({
+ 
   tracks = [], 
   playlists = [], 
   albums = [], 
@@ -55,7 +57,9 @@ export default function HomeScreen({
 
   // Filtered tracks (Strictly excluding Quran content from Music Home)
   const displayTracks = useMemo(() => {
-    return (tracks || []).filter(t => !isQuranContent(t));
+    if (!showMusic) return null;
+
+  return (tracks || []).filter(t => !isQuranContent(t));
   }, [tracks]);
 
   // Sort tracks by global popularity with intelligent scoring and artist interleaving

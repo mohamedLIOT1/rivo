@@ -6,13 +6,14 @@ const PreferencesContext = createContext(null);
 const DEFAULT_CONTENT_MODES = {
   music: true,
   quran: true,
-  podcasts: true,
-  audiobooks: true
+  podcasts: false,
+  audiobooks: false
 };
 
 export function PreferencesProvider({ children, currentUser }) {
+  // Default language is English ('en') per user specification
   const [language, setLanguageState] = useState(() => {
-    return localStorage.getItem('rivo_language') || 'ar';
+    return localStorage.getItem('rivo_language') || 'en';
   });
 
   const [contentModes, setContentModesState] = useState(() => {
@@ -58,10 +59,14 @@ export function PreferencesProvider({ children, currentUser }) {
       .catch(() => {});
   }, [currentUser?.id, currentUser?._id]);
 
-  // Update Language
-  const setLanguage = async (newLang) => {
+  // Update Language with instant synchronous DOM direction update
+  const setLanguage = (newLang) => {
     setLanguageState(newLang);
     localStorage.setItem('rivo_language', newLang);
+    if (typeof document !== 'undefined') {
+      document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+      document.documentElement.lang = newLang;
+    }
 
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
     if (token) {
@@ -77,7 +82,7 @@ export function PreferencesProvider({ children, currentUser }) {
   };
 
   // Toggle Content Mode (e.g. disable music for Islamic mode)
-  const toggleContentMode = async (modeKey, isEnabled) => {
+  const toggleContentMode = (modeKey, isEnabled) => {
     const updated = {
       ...contentModes,
       [modeKey]: isEnabled
@@ -101,8 +106,8 @@ export function PreferencesProvider({ children, currentUser }) {
 
   const showMusic = contentModes.music !== false;
   const showQuran = contentModes.quran !== false;
-  const showPodcasts = contentModes.podcasts !== false;
-  const showAudiobooks = contentModes.audiobooks !== false;
+  const showPodcasts = contentModes.podcasts === true;
+  const showAudiobooks = contentModes.audiobooks === true;
 
   return (
     <PreferencesContext.Provider
@@ -127,14 +132,14 @@ export function usePreferences() {
   const ctx = useContext(PreferencesContext);
   if (!ctx) {
     return {
-      language: 'ar',
+      language: 'en',
       setLanguage: () => {},
       contentModes: DEFAULT_CONTENT_MODES,
       toggleContentMode: () => {},
       showMusic: true,
       showQuran: true,
-      showPodcasts: true,
-      showAudiobooks: true,
+      showPodcasts: false,
+      showAudiobooks: false,
       isPureIslamicMode: false
     };
   }

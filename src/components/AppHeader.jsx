@@ -2,6 +2,7 @@ import React from 'react';
 import { Search as SearchIcon, X, Sun, Moon, Users, WifiOff, Menu } from 'lucide-react';
 import { useUI } from '../context/UIContext';
 import { useNavigation } from '../context/NavigationContext';
+import { usePreferences } from '../context/PreferencesContext';
 import RivoLogo from './RivoLogo';
 import { buildUrl } from '../utils/router';
 
@@ -22,13 +23,14 @@ export default function AppHeader({ currentUser, handleUserAvatarClick }) {
     topSearchQuery,
     setTopSearchQuery,
   } = useNavigation();
+  const { showMusic } = usePreferences();
 
   return (
     <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
       {/* Brand identity: RIVO */}
       <div className="flex items-center gap-2 shrink-0 rivo-nav-logo">
         <div 
-          onClick={() => goToScreen('home')} 
+          onClick={() => goToScreen(showMusic ? 'home' : 'quran')} 
           className="cursor-pointer flex items-center shrink-0"
         >
           <RivoLogo size={32} showText={true} textClassName="text-white text-base sm:text-xl font-black" isDark={true} />

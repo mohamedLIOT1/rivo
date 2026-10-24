@@ -10,12 +10,32 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
   useEffect(() => { playlistsRef.current = playlists; }, [playlists]);
   useEffect(() => { albumsRef.current = albums; }, [albums]);
 
+  const getIsMusicDisabled = () => {
+    try {
+      const saved = localStorage.getItem('rivo_content_modes');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.music === false) return true;
+      }
+    } catch {}
+    return false;
+  };
+
   const initialNav = useMemo(() => {
     if (typeof window === 'undefined') return { screen: 'home', params: {} };
-    return parseLocation(window.location.pathname, window.location.search);
+    const loc = parseLocation(window.location.pathname, window.location.search);
+    if (getIsMusicDisabled() && (loc.screen === 'home' || !loc.screen)) {
+      return { screen: 'quran', params: loc.params || {} };
+    }
+    return loc;
   }, []);
 
-  const [currentScreen, setCurrentScreen] = useState(initialNav.screen || 'home');
+  const [currentScreen, setCurrentScreen] = useState(() => {
+    if (getIsMusicDisabled() && (initialNav.screen === 'home' || !initialNav.screen)) {
+      return 'quran';
+    }
+    return initialNav.screen || 'home';
+  });
   const [topSearchQuery, setTopSearchQuery] = useState(initialNav.params?.query || '');
   const [selectedArtist, setSelectedArtist] = useState(() => {
     if (initialNav.screen === 'artist' && initialNav.params?.name) {
@@ -140,6 +160,9 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
   }, [getLikedSongsPlaylist]);
 
   const goToScreen = useCallback((screen, extra = {}) => {
+    if (screen === 'home' && getIsMusicDisabled()) {
+      screen = 'quran';
+    }
     if (screen === 'liked' || screen === 'playlist:liked') {
       navigateTo('playlist', { id: 'liked', playlist: getLikedSongsPlaylist() });
       return;

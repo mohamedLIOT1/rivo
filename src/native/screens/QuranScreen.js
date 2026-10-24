@@ -49,7 +49,7 @@ export default function QuranScreen({ onTrackAction }) {
 
   // Filter strictly Quranic tracks with robust deduplication
   const quranTracks = useMemo(() => {
-    const raw = (allTracks || []).filter(isQuranContent);
+    const raw = (allTracks || []).filter(t => isQuranContent(t) && !isRadioTrack(t));
     const seenAudio = new Set();
     const seenMeta = new Set();
     const deduped = [];

@@ -21,6 +21,7 @@ import CassetteTag from '../ui/CassetteTag';
 import SleepTimerModal from './SleepTimerModal';
 import { parseLrcLyrics } from '../../utils/lrcParser';
 import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
+import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
 import QuranMushafViewer from './QuranMushafViewer';
 
 const { width, height } = Dimensions.get('window');
@@ -370,6 +371,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
   const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
   const isCurRadio = useMemo(() => isRadioTrack(currentTrack), [currentTrack]);
+  const displayQueue = useMemo(() => {
+    if (isCurRadio) {
+      const radioQ = (queue || []).filter(isRadioTrack);
+      return radioQ.length > 0 ? radioQ : QURAN_LIVE_STATIONS;
+    }
+    return (queue || []).filter(t => !isRadioTrack(t));
+  }, [queue, isCurRadio]);
 
   useEffect(() => {
     if (isCurRadio && activeTab === 'lyrics') {
@@ -631,7 +639,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
           {[
             { id: 'player', label: 'Now Playing' },
             ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
-            { id: 'queue', label: `Queue (${queue.length})` },
+            { id: 'queue', label: isCurRadio ? `الإذاعات (${displayQueue.length})` : `Queue (${displayQueue.length})` },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -989,7 +997,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
             )}
 
             <DraggableQueueList
-              queue={queue}
+              queue={displayQueue}
               trackId={trackId}
               isDark={isDark}
               colors={colors}
