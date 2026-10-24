@@ -28,7 +28,7 @@ export default function LibraryScreen({
   libraryTitle = 'Your Library'
 }) {
   const isDark = globalTheme === 'dark';
-  const { showMusic, showQuran, showPodcasts } = usePreferences();
+  const { showMusic, showQuran, showPodcasts, language } = usePreferences();
   
   // Vault Mode selector: 'quran' | 'music' | 'podcasts'
   const defaultSection = !showMusic ? 'quran' : (libraryTitle?.toLowerCase().includes('quran') ? 'quran' : 'music');
@@ -129,15 +129,17 @@ export default function LibraryScreen({
         paddingBottom: 'calc(var(--player-height) + 50px)',
       }}
     >
-      {/* ── TOP SECTION: VAULT CATEGORY SELECTOR (Quran vs Music vs Podcasts) ── */}
+      {/* ── TOP SECTION: LIBRARY CATEGORY SELECTOR (Quran vs Music vs Podcasts) ── */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-black tracking-tight text-white flex items-center gap-2">
-              <span>الخزنة والمكتبة (Vault)</span>
+              <span>{language === 'ar' ? 'المكتبة الشخصية' : 'Your Library'}</span>
             </h1>
             <p className="text-xs text-emerald-300/70 mt-0.5 font-medium">
-              مكتبتك الشخصية المنظمة: تصفح القرآن، الأغاني، والبودكاست في مساحات مستقلة تماماً.
+              {language === 'ar'
+                ? 'مكتبتك الشخصية المنظمة: تصفح القرآن، الأغاني، والبودكاست في مساحات مستقلة تماماً.'
+                : 'Your organized personal library: browse Quran, music, and podcasts in dedicated spaces.'}
             </p>
           </div>
 
@@ -147,10 +149,10 @@ export default function LibraryScreen({
               <button
                 onClick={openImportSongModal}
                 className="px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="إضافة عنصر برابط"
+                title={language === 'ar' ? "إضافة عنصر برابط" : "Import by Link"}
               >
                 <Link2 size={14} />
-                <span>+ رابط</span>
+                <span>{language === 'ar' ? '+ رابط' : '+ Link'}</span>
               </button>
             )}
 
@@ -158,10 +160,10 @@ export default function LibraryScreen({
               <button
                 onClick={openImportPlaylistModal}
                 className="px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="استيراد قائمة"
+                title={language === 'ar' ? "استيراد قائمة" : "Import Playlist"}
               >
                 <DownloadCloud size={14} />
-                <span>استيراد</span>
+                <span>{language === 'ar' ? 'استيراد' : 'Import'}</span>
               </button>
             )}
 
@@ -171,15 +173,15 @@ export default function LibraryScreen({
                 className="px-3.5 py-1.5 rounded-xl text-xs font-display font-black bg-emerald-400 text-black hover:bg-emerald-300 transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md"
               >
                 <Plus size={14} strokeWidth={3} />
-                <span>إنشاء قائمة</span>
+                <span>{language === 'ar' ? 'إنشاء قائمة' : 'New Playlist'}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* ── 3-WAY VAULT MENU TABS ── */}
+        {/* ── 3-WAY LIBRARY MENU TABS ── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-[#050f0d] rounded-2xl border border-emerald-500/25">
-          {/* Quran Vault */}
+          {/* Quran Library */}
           <button
             onClick={() => { setVaultSection('quran'); setFilter('all'); }}
             className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
@@ -189,13 +191,13 @@ export default function LibraryScreen({
             }`}
           >
             <BookOpen size={16} />
-            <span>خزنة القرآن الكريم</span>
+            <span>{language === 'ar' ? 'مكتبة القرآن الكريم' : 'Quran Library'}</span>
             <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${vaultSection === 'quran' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
               {quranTracks.length}
             </span>
           </button>
 
-          {/* Music Vault (if enabled) */}
+          {/* Music Library (if enabled) */}
           {showMusic && (
             <button
               onClick={() => { setVaultSection('music'); setFilter('all'); }}
@@ -206,14 +208,14 @@ export default function LibraryScreen({
               }`}
             >
               <Music size={16} />
-              <span>خزنة الأغاني والموسيقى</span>
+              <span>{language === 'ar' ? 'مكتبة الأغاني والموسيقى' : 'Music Library'}</span>
               <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${vaultSection === 'music' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
                 {musicTracks.length}
               </span>
             </button>
           )}
 
-          {/* Podcasts & Books Vault */}
+          {/* Podcasts & Books */}
           <button
             onClick={() => { setVaultSection('podcasts'); setFilter('all'); }}
             className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
@@ -223,7 +225,7 @@ export default function LibraryScreen({
             }`}
           >
             <Mic size={16} />
-            <span>خزنة البودكاست والكتب</span>
+            <span>{language === 'ar' ? 'البودكاست والكتب' : 'Podcasts & Books'}</span>
             <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${vaultSection === 'podcasts' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
               {podcastItems.length}
             </span>
@@ -235,12 +237,12 @@ export default function LibraryScreen({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           {[
-            { id: 'all', label: 'الكل' },
+            { id: 'all', label: language === 'ar' ? 'الكل' : 'All' },
             ...(vaultSection !== 'podcasts' ? [
-              { id: 'playlists', label: vaultSection === 'quran' ? 'المصاحف والقوائم' : 'قوائم التشغيل' },
-              { id: 'albums', label: vaultSection === 'quran' ? 'السلاسل' : 'الألبومات' },
+              { id: 'playlists', label: vaultSection === 'quran' ? (language === 'ar' ? 'المصاحف والقوائم' : 'Surahs & Playlists') : (language === 'ar' ? 'قوائم التشغيل' : 'Playlists') },
+              { id: 'albums', label: vaultSection === 'quran' ? (language === 'ar' ? 'السلاسل' : 'Series') : (language === 'ar' ? 'الألبومات' : 'Albums') },
             ] : []),
-            { id: 'downloads', label: `التنزيلات (${downloadedTracks.length})` }
+            { id: 'downloads', label: `${language === 'ar' ? 'التنزيلات' : 'Downloads'} (${downloadedTracks.length})` }
           ].map(chip => {
             const active = filter === chip.id;
             return (
@@ -265,7 +267,7 @@ export default function LibraryScreen({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث في الخزنة..."
+            placeholder={language === 'ar' ? "ابحث في المكتبة..." : "Search in library..."}
             className="w-full text-xs font-bold pl-8 pr-3 py-2 rounded-xl bg-[#091714] text-white border border-emerald-900/70 placeholder-emerald-500/40 focus:outline-none focus:border-emerald-500"
           />
         </div>

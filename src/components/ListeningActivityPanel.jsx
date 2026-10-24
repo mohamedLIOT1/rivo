@@ -3,6 +3,7 @@ import { X, Play, Music, Radio, MessageSquare, RefreshCw, Users, Search, Disc } 
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from './VerifiedBadge';
 import { useAudioPlayer } from '../context/AudioContext';
+import { usePreferences } from '../context/PreferencesContext';
 
 export default function ListeningActivityPanel({
   isOpen,
@@ -16,6 +17,7 @@ export default function ListeningActivityPanel({
   socket
 }) {
   const isDark = globalTheme === 'dark';
+  const { language } = usePreferences();
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -161,14 +163,16 @@ export default function ListeningActivityPanel({
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-xs font-mono font-black uppercase tracking-wider">
-                  FRIEND ACTIVITY
+                  {language === 'ar' ? 'نشاط الأصدقاء' : 'FRIEND ACTIVITY'}
                 </h3>
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] rounded">
                   {activities.length}
                 </span>
               </div>
               <span className="text-[9.5px] font-mono text-zinc-400 block mt-0.5">
-                {liveCount > 0 ? `🎧 ${liveCount} live right now` : 'Live listening status'}
+                {liveCount > 0 
+                  ? (language === 'ar' ? `🎧 ${liveCount} يستمعون الآن` : `🎧 ${liveCount} live right now`) 
+                  : (language === 'ar' ? 'حالة الاستماع المباشر' : 'Live listening status')}
               </span>
             </div>
           </div>
@@ -204,7 +208,7 @@ export default function ListeningActivityPanel({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search friend or song..."
+                placeholder={language === 'ar' ? 'بحث عن صديق أو أغنية...' : 'Search friend or song...'}
                 className={`w-full text-xs font-mono pl-7.5 pr-6 py-1.5 rounded-lg border focus:outline-none ${
                   isDark ? 'bg-[#182320] border-zinc-700 text-white placeholder-zinc-500' : 'bg-white border-black text-[#0b1110] placeholder-zinc-400'
                 }`}
@@ -389,12 +393,14 @@ export default function ListeningActivityPanel({
             <div className="text-center py-10 px-3">
               <Users size={30} className={`mx-auto mb-2 ${isDark ? 'text-zinc-600' : 'text-[#082621]/40'}`} />
               <h4 className={`text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>
-                {searchQuery ? 'NO MATCHING FRIENDS' : 'NO FRIEND ACTIVITY'}
+                {searchQuery 
+                  ? (language === 'ar' ? 'لا يوجد أصدقاء مطابقين' : 'NO MATCHING FRIENDS') 
+                  : (language === 'ar' ? 'لا يوجد نشاط للأصدقاء' : 'NO FRIEND ACTIVITY')}
               </h4>
               <p className={`text-[11px] font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
                 {searchQuery
-                  ? `No friends or tracks matching "${searchQuery}".`
-                  : 'Follow other users to see what they are listening to in real-time.'}
+                  ? (language === 'ar' ? `لا توجد نتائج لـ "${searchQuery}".` : `No friends or tracks matching "${searchQuery}".`)
+                  : (language === 'ar' ? 'تابع مستخدمين آخرين لرؤية ما يستمعون إليه مباشرة.' : 'Follow other users to see what they are listening to in real-time.')}
               </p>
             </div>
           )}
@@ -408,7 +414,7 @@ export default function ListeningActivityPanel({
         >
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-[#17a398] animate-ping" />
-            <span className="font-bold">RIVO LIVE SYNC</span>
+            <span className="font-bold">{language === 'ar' ? 'مزامنة مباشرة' : 'RIVO LIVE SYNC'}</span>
           </div>
           <button
             onClick={() => openChatModal?.()}
@@ -417,7 +423,7 @@ export default function ListeningActivityPanel({
             }`}
           >
             <MessageSquare size={11} />
-            <span>MESSAGES</span>
+            <span>{language === 'ar' ? 'الرسائل' : 'MESSAGES'}</span>
           </button>
         </div>
       </div>

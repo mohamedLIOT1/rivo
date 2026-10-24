@@ -43,29 +43,29 @@ export default function Navigation({
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
   );
 
-  const { showMusic, showQuran, showPodcasts } = usePreferences();
+  const { showMusic, showQuran, showPodcasts, language } = usePreferences();
 
   const mainNavItems = [
-    ...(showMusic ? [{ id: 'home', label: 'Home', icon: Home }] : []),
-    { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Vault (الخزنة)', icon: Disc },
-    ...(showQuran ? [{ id: 'quran', label: 'Quran (القرآن)', icon: BookOpen }] : []),
-    ...(showPodcasts ? [{ id: 'podcasts', label: 'Podcasts & Books (بودكاست وكتب)', icon: Music }] : []),
+    ...(showMusic ? [{ id: 'home', label: language === 'ar' ? 'الرئيسية' : 'Home', icon: Home }] : []),
+    { id: 'search', label: language === 'ar' ? 'البحث' : 'Search', icon: Search },
+    { id: 'library', label: language === 'ar' ? 'المكتبة' : 'Library', icon: Disc },
+    ...(showQuran ? [{ id: 'quran', label: language === 'ar' ? 'القرآن' : 'Quran', icon: BookOpen }] : []),
+    ...(showPodcasts ? [{ id: 'podcasts', label: language === 'ar' ? 'بودكاست وكتب' : 'Podcasts & Books', icon: Music }] : []),
     ...(!isInstalledClient ? [
-      { id: 'download', label: 'Download App', icon: DownloadCloud }
+      { id: 'download', label: language === 'ar' ? 'تحميل التطبيق' : 'Download App', icon: DownloadCloud }
     ] : []),
-    { id: 'stats', label: 'Stats & History', icon: Activity },
+    { id: 'stats', label: language === 'ar' ? 'الإحصائيات والسجل' : 'Stats & History', icon: Activity },
     ...(currentUser && isUserAdmin(currentUser) ? [
-      { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
+      { id: 'admin', label: language === 'ar' ? 'لوحة الإدارة' : 'Admin Portal', icon: ShieldCheck }
     ] : [])
   ];
 
   const mobileNavItems = [
-    ...(showMusic ? [{ id: 'home', label: 'الموسيقى', icon: Music }] : []),
-    ...(showQuran ? [{ id: 'quran', label: 'القرآن', icon: BookOpen }] : []),
-    ...(showPodcasts ? [{ id: 'podcasts', label: 'بودكاست وكتب', icon: Disc }] : []),
-    { id: 'library', label: 'الخزنة', icon: Disc },
-    { id: 'search', label: 'البحث', icon: Search },
+    ...(showMusic ? [{ id: 'home', label: language === 'ar' ? 'الموسيقى' : 'Music', icon: Music }] : []),
+    ...(showQuran ? [{ id: 'quran', label: language === 'ar' ? 'القرآن' : 'Quran', icon: BookOpen }] : []),
+    ...(showPodcasts ? [{ id: 'podcasts', label: language === 'ar' ? 'بودكاست' : 'Podcasts', icon: Disc }] : []),
+    { id: 'library', label: language === 'ar' ? 'المكتبة' : 'Library', icon: Disc },
+    { id: 'search', label: language === 'ar' ? 'البحث' : 'Search', icon: Search },
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])
@@ -102,7 +102,7 @@ export default function Navigation({
             <div className={`text-[10px] font-mono font-black uppercase px-2 mb-1 tracking-wider ${
               isDark ? 'text-zinc-500' : 'text-zinc-500'
             }`}>
-              Discover
+              {language === 'ar' ? 'استكشف' : 'Discover'}
             </div>
 
             {mainNavItems.map((item) => {
@@ -148,7 +148,7 @@ export default function Navigation({
           >
             <div className="flex items-center gap-2.5">
               <Radio size={16} className="text-[#17a398] animate-pulse" strokeWidth={2.5} />
-              <span>Live Jam</span>
+              <span>{language === 'ar' ? 'جلسة مباشرة' : 'Live Jam'}</span>
             </div>
             <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
               RADIO
@@ -170,7 +170,11 @@ export default function Navigation({
                 title="View full library"
               >
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>{libraryMode === 'quran' ? 'Quran Library' : 'Your Library'}</span>
+                <span>
+                  {libraryMode === 'quran' 
+                    ? (language === 'ar' ? 'مكتبة القرآن' : 'Quran Library') 
+                    : (language === 'ar' ? 'مكتبتك' : 'Your Library')}
+                </span>
               </button>
 
               <div className="flex items-center gap-1">
@@ -208,12 +212,16 @@ export default function Navigation({
 
             {/* Filter Pills */}
             <div className="flex gap-1 mb-2 px-1">
-              {['All', 'Playlists', 'Artists'].map((f) => {
-                const active = libraryFilter === f.toLowerCase();
+              {[
+                { id: 'all', label: language === 'ar' ? 'الكل' : 'All' },
+                { id: 'playlists', label: language === 'ar' ? 'قوائم التشغيل' : 'Playlists' },
+                { id: 'artists', label: language === 'ar' ? 'الفنانين' : 'Artists' },
+              ].map(({ id: filterId, label: filterLabel }) => {
+                const active = libraryFilter === filterId;
                 return (
                   <button
-                    key={f}
-                    onClick={() => setLibraryFilter(f.toLowerCase())}
+                    key={filterId}
+                    onClick={() => setLibraryFilter(filterId)}
                     className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
                       active
                         ? 'bg-[#17a398] text-[#0b1110] brutal-border font-black'
@@ -222,7 +230,7 @@ export default function Navigation({
                           : 'bg-white text-zinc-700 border border-[#0b1110] hover:bg-[#ede5d3]'
                     }`}
                   >
-                    {f}
+                    {filterLabel}
                   </button>
                 );
               })}
@@ -254,7 +262,9 @@ export default function Navigation({
                     </div>
                     <div className="truncate">
                       <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
-                        {libraryMode === 'quran' ? 'Favorite Surahs' : 'Liked Songs'}
+                        {libraryMode === 'quran' 
+                          ? (language === 'ar' ? 'السور المفضلة' : 'Favorite Surahs') 
+                          : (language === 'ar' ? 'الأغاني المفضلة' : 'Liked Songs')}
                       </div>
                       <span className="text-[10px] font-mono text-zinc-500 font-normal">
                         {likedTrackIds && likedTrackIds.length > 0
@@ -521,7 +531,7 @@ export default function Navigation({
             )}
           </div>
           <span className="text-[9px] font-display font-bold">
-            Chat
+            {language === 'ar' ? 'الدردشة' : 'Chat'}
           </span>
         </button>
       </nav>

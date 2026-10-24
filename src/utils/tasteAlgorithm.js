@@ -13,33 +13,49 @@
 
 import { getListeningStats } from './listeningTracker';
 
-export function getCurrentTimeMood() {
+export function getCurrentTimeMood(lang = 'en') {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) {
+    const labelEn = 'Morning Fresh';
+    const labelAr = 'صباح ونشاط';
     return {
       id: 'morning',
-      label: 'Morning Fresh • صباح ونشاط',
+      labelEn,
+      labelAr,
+      label: lang === 'ar' ? labelAr : labelEn,
       keywords: ['acoustic', 'indie', 'morning', 'fresh', 'light', 'روقان', 'صباح', 'هادي', 'فيروز'],
       energy: 'fresh',
     };
   } else if (hour >= 12 && hour < 17) {
+    const labelEn = 'Afternoon Flow';
+    const labelAr = 'روقان وتركيز';
     return {
       id: 'afternoon',
-      label: 'Afternoon Flow • روقان وتركيز',
+      labelEn,
+      labelAr,
+      label: lang === 'ar' ? labelAr : labelEn,
       keywords: ['chill', 'lofi', 'focus', 'flow', 'smooth', 'موسيقى', 'تركيز', 'عصر', 'رايق'],
       energy: 'chill',
     };
   } else if (hour >= 17 && hour < 23) {
+    const labelEn = 'Evening Hype';
+    const labelAr = 'سهرة وحماس';
     return {
       id: 'evening',
-      label: 'Evening Hype • سهرة وحماس',
+      labelEn,
+      labelAr,
+      label: lang === 'ar' ? labelAr : labelEn,
       keywords: ['rap', 'trap', 'drill', 'hype', 'party', 'حماس', 'راب', 'سهرة', 'مهرجان', 'طاقة', 'ويجز', 'مروان'],
       energy: 'hype',
     };
   } else {
+    const labelEn = 'Night Melancholy';
+    const labelAr = 'روقان الليل وسفر';
     return {
       id: 'night',
-      label: 'Night Melancholy • روقان الليل وسفر',
+      labelEn,
+      labelAr,
+      label: lang === 'ar' ? labelAr : labelEn,
       keywords: ['slowed', 'night', 'deep', 'sad', 'melancholy', 'chill', 'ليل', 'سفر', 'هادية', 'حزين', 'روما', 'دواير'],
       energy: 'deep',
     };

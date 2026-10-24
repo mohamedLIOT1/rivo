@@ -23,7 +23,7 @@ export default function AppHeader({ currentUser, handleUserAvatarClick }) {
     topSearchQuery,
     setTopSearchQuery,
   } = useNavigation();
-  const { showMusic } = usePreferences();
+  const { showMusic, language } = usePreferences();
 
   return (
     <header className="bg-[#0b1110] text-[#fdfbf7] brutal-border-thick border-x-0 border-t-0 px-2 sm:px-5 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-3 z-30 shrink-0">
@@ -56,7 +56,11 @@ export default function AppHeader({ currentUser, handleUserAvatarClick }) {
                 window.history.replaceState({ screen: 'search', params: { query: val } }, '', targetUrl);
               }
             }}
-            placeholder="ابحث عن سورة، قارئ، بودكاست..."
+            placeholder={
+              !showMusic
+                ? (language === 'ar' ? 'ابحث عن سورة، قارئ، إذاعة...' : 'Search Surah, Reciter, Radio...')
+                : (language === 'ar' ? 'ابحث عن أغنية، فنان، ألبوم...' : 'Search songs, artists, albums...')
+            }
             className={`w-full text-[11px] sm:text-xs font-bold py-1.5 sm:py-2 pl-7 sm:pl-9 pr-6 sm:pr-8 rounded-full border focus:outline-none transition-colors ${
               globalTheme === 'dark' 
                 ? 'bg-[#0f1d1a] border-emerald-900/80 text-white placeholder-emerald-400/40 focus:border-emerald-500' 
