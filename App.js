@@ -66,6 +66,8 @@ import OfflineScreen from './src/native/screens/OfflineScreen';
 import AdminScreen from './src/native/screens/AdminScreen';
 
 import MiniPlayer from './src/native/components/MiniPlayer';
+import FloatingNavMenu from './src/native/components/FloatingNavMenu';
+import { NavPreferencesProvider, useNavPreferences } from './src/native/context/NavPreferencesContext';
 import MobileModals from './src/native/components/MobileModals';
 import { styles } from './src/native/theme/appStyles';
 
@@ -696,7 +698,9 @@ function MainAppShell() {
  */
 function NativeAppShell() {
   const { appMode, setAppMode } = useConnectivity();
+  const { navStyle, visibleMenuItems } = useNavPreferences();
   const [activeTab, setActiveTab] = useState('home');
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [activeOtaVersion, setActiveOtaVersion] = useState(null);
 
   useEffect(() => {
@@ -769,6 +773,7 @@ function NativeAppShell() {
       if (chatOpen && activeChatUser && String(activeChatUser._id || activeChatUser.id) === senderId) {
         return;
       }
+      setUnreadChatCount((prev) => prev + 1);
 
       showToast(text, 'chat', {
         title: senderName,
@@ -905,6 +910,17 @@ function NativeAppShell() {
         return <OfflineScreen />;
       case 'admin':
         return <AdminScreen />;
+      case 'music':
+        return (
+          <HomeScreen
+            initialFilter="music"
+            onOpenAddSong={() => setIsAddSongOpen(true)}
+            onTrackAction={(track) => setActionTrack(track)}
+            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
+            onSelectArtist={(art) => setSelectedArtist(art)}
+          />
+        );
       default:
         return (
           <HomeScreen
@@ -921,7 +937,7 @@ function NativeAppShell() {
   return (
     <View style={[styles.offlineShell, !isDark && styles.offlineShellLight]}>
       <View style={[styles.topHeader, !isDark && styles.topHeaderLight]}>
-        {/* Brand Logo: [Icon] RIVO v1.5.0 */}
+        {/* Brand Logo: [Icon] RIVO */}
         <TouchableOpacity
           style={styles.brandingRow}
           onPress={() => setActiveTab('home')}
@@ -933,26 +949,37 @@ function NativeAppShell() {
               <Text style={styles.logoLetter}>R</Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
-            <View style={{ backgroundColor: 'rgba(23,163,152,0.18)', borderWidth: 1, borderColor: '#17a398', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-              <Text style={{ fontFamily: 'monospace', fontSize: 9, fontWeight: '900', color: '#17a398' }}>v{(typeof activeOtaVersion !== 'undefined' && activeOtaVersion) ? activeOtaVersion : APP_VERSION}</Text>
-            </View>
-          </View>
+          <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
         </TouchableOpacity>
 
-        {/* Right Actions: Sun/Moon, Menu (☰), User Avatar */}
+        {/* ── Top Header Search Bar Touchable (Tapping opens Search page) ── */}
+        <TouchableOpacity
+          style={[styles.headerSearchBar, !isDark && styles.headerSearchBarLight]}
+          onPress={() => setActiveTab('search')}
+          activeOpacity={0.8}
+        >
+          <Search size={13} color={isDark ? '#64748b' : '#78716c'} strokeWidth={2.2} />
+          <Text style={[styles.headerSearchText, !isDark && styles.headerSearchTextLight]} numberOfLines={1}>
+            Search songs, artists...
+          </Text>
+        </TouchableOpacity>
+
+        {/* Right Actions: Chat, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
-          {/* Sun / Moon (Theme toggle) */}
+          {/* Chat / Messages Button (replaces theme toggle in header) */}
           <TouchableOpacity
             style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
-            onPress={toggleTheme}
+            onPress={() => {
+              setUnreadChatCount(0);
+              setIsChatOpen(true);
+            }}
             activeOpacity={0.8}
           >
-            {isDark ? (
-              <Sun size={15} color="#f59e0b" strokeWidth={2.5} />
-            ) : (
-              <Moon size={15} color="#0b1110" strokeWidth={2.5} />
+            <MessageSquare size={16} color={isDark ? '#38bdf8' : '#0b1110'} strokeWidth={2.4} />
+            {unreadChatCount > 0 && (
+              <View style={styles.headerChatBadge}>
+                <Text style={styles.headerChatBadgeText}>{unreadChatCount > 9 ? '9+' : unreadChatCount}</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -999,37 +1026,46 @@ function NativeAppShell() {
           FLOATING MINI PLAYER
           ───────────────────────────────────────── */}
       {currentTrack && (
-        <MiniPlayer onOpenFullPlayer={() => setIsFullPlayerOpen(true)} />
+        <MiniPlayer
+          onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+          bottomOffset={navStyle === 'fab' ? (Platform.OS === 'ios' ? 88 : 78) : (Platform.OS === 'ios' ? 70 : 56)}
+        />
       )}
 
       {/* ─────────────────────────────────────────
-          BOTTOM NAVIGATION BAR (5 Tabs)
-          Active tab highlighted with teal pill
+          NAVIGATION (Floating Action Hub or Classic Bar)
           ───────────────────────────────────────── */}
-      <View style={[styles.bottomBar, !isDark && styles.bottomBarLight]}>
-        {TABS.map((tab) => {
-          const active = activeTab === tab.id;
-          const Icon = tab.icon;
+      {navStyle === 'fab' ? (
+        <FloatingNavMenu
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+        />
+      ) : (
+        <View style={[styles.bottomBar, !isDark && styles.bottomBarLight]}>
+          {visibleMenuItems.map((tab) => {
+            const active = activeTab === tab.screen;
+            const Icon = tab.icon;
 
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={[styles.tabBtn, active && styles.tabBtnActive]}
-              onPress={() => handleTabPress(tab.id)}
-              activeOpacity={0.8}
-            >
-              <Icon
-                size={18}
-                color={active ? '#0b1110' : (!isDark ? '#57534e' : '#94a3b8')}
-                strokeWidth={active ? 2.8 : 2}
-              />
-              <Text style={[styles.tabLabel, !isDark && styles.tabLabelLight, active && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.tabBtn, active && styles.tabBtnActive]}
+                onPress={() => handleTabPress(tab.screen)}
+                activeOpacity={0.8}
+              >
+                <Icon
+                  size={18}
+                  color={active ? '#0b1110' : (!isDark ? '#57534e' : '#94a3b8')}
+                  strokeWidth={active ? 2.8 : 2}
+                />
+                <Text style={[styles.tabLabel, !isDark && styles.tabLabelLight, active && styles.tabLabelActive]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
 
       {/* ─────────────────────────────────────────
           QUICK TOOLS & SHORTCUTS MENU DRAWER
@@ -1143,6 +1179,23 @@ function NativeAppShell() {
             {/* Category: System */}
             <View style={styles.menuSection}>
               <Text style={styles.menuSectionHeader}>PREFERENCES</Text>
+              {/* Theme Toggle inside Drawer */}
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  toggleTheme();
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(245,158,11,0.18)' : 'rgba(11,17,16,0.12)' }]}>
+                  {isDark ? (
+                    <Sun size={15} color="#f59e0b" strokeWidth={2.5} />
+                  ) : (
+                    <Moon size={15} color="#0b1110" strokeWidth={2.5} />
+                  )}
+                </View>
+                <Text style={styles.menuItemText}>{isDark ? 'Light Theme' : 'Dark Theme'}</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -1228,7 +1281,9 @@ export default function App() {
             <ToastProvider>
               <AudioProvider>
                 <SocketProvider>
-                  <MainAppShell />
+                  <NavPreferencesProvider>
+                    <MainAppShell />
+                  </NavPreferencesProvider>
                 </SocketProvider>
               </AudioProvider>
             </ToastProvider>

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.9.6",
+  "version": "1.9.9.7",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "Instant OTA update • Pure English interface, library overhaul, and bug fixes.",
-  "notesEn": "Instant OTA update • Pure English interface, library overhaul, and bug fixes.",
-  "bundleSize": 3369485,
-  "sizeMb": "3.21 MB",
-  "updatedAt": "2026-10-24T12:36:41.258Z"
+  "notes": "Floating circular navigation hub, custom nav icon, header search bar, and chat quick button.",
+  "notesEn": "Floating circular navigation hub, custom nav icon, header search bar, and chat quick button.",
+  "bundleSize": 3387453,
+  "sizeMb": "3.23 MB",
+  "updatedAt": "2026-10-24T14:00:35.142Z"
 }

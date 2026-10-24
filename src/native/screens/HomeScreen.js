@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ export default function HomeScreen({
   onOpenFullPlayer,
   onSelectAlbum,
   onSelectArtist,
+  initialFilter = 'all',
 }) {
   const { width } = useWindowDimensions();
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
@@ -43,7 +44,13 @@ export default function HomeScreen({
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'music' | 'downloaded'
+  const [activeFilter, setActiveFilter] = useState(initialFilter);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setActiveFilter(initialFilter);
+    }
+  }, [initialFilter]); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
   const [visibleCount, setVisibleCount] = useState(30);
   const [selectedAlbum, setSelectedAlbum] = useState(null);

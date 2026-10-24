@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
-import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut, HardDrive, FolderPlus, RefreshCw, Radio, Copy, Check, Unlink } from 'lucide-react-native';
+import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut, HardDrive, FolderPlus, RefreshCw, Radio, Copy, Check, Unlink, Sun, Moon, Compass, LayoutGrid } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useNavPreferences } from '../context/NavPreferencesContext';
 import { API_BASE_URL } from '../config';
 import { colors } from '../theme/colors';
 import { FULL_VERSION } from '../version';
@@ -19,7 +20,8 @@ import {
 export default function SettingsModal({ visible, onClose }) {
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
+  const { navStyle, setNavStyle, menuItems, isItemVisible, toggleMenuItemVisibility } = useNavPreferences();
   const { autoDownloadFinished = true, toggleAutoDownloadFinished } = useAudioPlayer();
 
   const [audioQuality, setAudioQuality] = useState('320'); // '320' | '256' | '128'
@@ -234,6 +236,120 @@ export default function SettingsModal({ visible, onClose }) {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              {/* ── Navigation & Interface Style ── */}
+              <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
+                  <Compass size={18} color={colors.mint} />
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>NAVIGATION & INTERFACE</Text>
+                </View>
+
+                {/* Style Selector Buttons */}
+                <View style={{ marginTop: 8 }}>
+                  <Text style={[styles.label, { color: textMuted, marginBottom: 8 }]}>Navigation Menu Layout:</Text>
+                  <View style={styles.navStyleRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.navStyleBtn,
+                        navStyle === 'fab' && styles.navStyleBtnActive,
+                        { borderColor },
+                      ]}
+                      onPress={() => setNavStyle('fab')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.navStyleDot, navStyle === 'fab' && styles.navStyleDotActive]} />
+                      <Text
+                        style={[
+                          styles.navStyleBtnText,
+                          navStyle === 'fab' ? styles.navStyleBtnTextActive : { color: textTitle },
+                        ]}
+                      >
+                        FLOATING HUB (NEW)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.navStyleBtn,
+                        navStyle === 'classic' && styles.navStyleBtnActive,
+                        { borderColor },
+                      ]}
+                      onPress={() => setNavStyle('classic')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.navStyleDot, navStyle === 'classic' && styles.navStyleDotActive]} />
+                      <Text
+                        style={[
+                          styles.navStyleBtnText,
+                          navStyle === 'classic' ? styles.navStyleBtnTextActive : { color: textTitle },
+                        ]}
+                      >
+                        CLASSIC TABS (OLD)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Theme Mode Toggle Row */}
+                <View style={[styles.switchRow, { marginTop: 14 }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>Dark Aesthetic Theme</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>
+                      {isDark ? 'Deep apothecary emerald dark mode' : 'Warm vintage paper light mode'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isDark}
+                    onValueChange={toggleTheme}
+                    trackColor={{ false: '#374151', true: colors.teal }}
+                    thumbColor="#fdfbf7"
+                  />
+                </View>
+
+                {/* Menu Selections Visibility (Show / Hide) */}
+                <View style={{ marginTop: 14 }}>
+                  <Text style={[styles.label, { color: textMuted, marginBottom: 4 }]}>
+                    Active Menu Selections:
+                  </Text>
+                  <Text style={[styles.switchDesc, { color: textMuted, marginBottom: 10 }]}>
+                    Toggle which sections appear in your navigation hub.
+                  </Text>
+
+                  {menuItems.map((item) => {
+                    const visible = isItemVisible(item.id);
+                    const Icon = item.icon;
+
+                    return (
+                      <View key={item.id} style={styles.menuItemRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                          <View
+                            style={[
+                              styles.menuItemIconWrap,
+                              { backgroundColor: visible ? 'rgba(23,163,152,0.18)' : 'rgba(100,116,139,0.12)' },
+                            ]}
+                          >
+                            <Icon
+                              size={15}
+                              color={visible ? colors.mint : textMuted}
+                              strokeWidth={2.4}
+                            />
+                          </View>
+                          <Text style={[styles.switchTitle, { color: visible ? textTitle : textMuted }]}>
+                            {item.label}
+                          </Text>
+                        </View>
+
+                        <Switch
+                          value={visible}
+                          onValueChange={() => toggleMenuItemVisibility(item.id)}
+                          trackColor={{ false: '#374151', true: colors.teal }}
+                          thumbColor="#fdfbf7"
+                        />
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
               {/* ── Discord Rich Presence ── */}
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
@@ -754,5 +870,56 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  navStyleRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  navStyleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+  },
+  navStyleBtnActive: {
+    backgroundColor: colors.teal,
+    borderColor: colors.mint,
+  },
+  navStyleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#6b7280',
+  },
+  navStyleDotActive: {
+    backgroundColor: colors.ink,
+  },
+  navStyleBtnText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+  },
+  navStyleBtnTextActive: {
+    color: colors.ink,
+  },
+  menuItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  menuItemIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
