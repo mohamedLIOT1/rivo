@@ -251,10 +251,6 @@ export default function AppModals({
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        audioQuality={audioQuality}
-        setAudioQuality={setAudioQuality}
-        crossfade={crossfade}
-        setCrossfade={setCrossfade}
         isOfflineMode={isOfflineMode}
         setIsOfflineMode={setIsOfflineMode}
         globalTheme={globalTheme}

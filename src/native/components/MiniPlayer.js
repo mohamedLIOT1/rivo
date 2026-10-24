@@ -75,7 +75,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               </Text>
             ) : (
               <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
-                {isLive ? 'إذاعة القرآن الكريم • 24/7' : (currentTrack.artist || 'Unknown Artist')}
+                {isLive ? 'Holy Quran Radio • 24/7' : (currentTrack.artist || 'Unknown Artist')}
               </Text>
             )}
           </View>

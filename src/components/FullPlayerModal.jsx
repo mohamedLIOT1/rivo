@@ -1389,7 +1389,7 @@ export default function FullPlayerModal({
         {[
           { id: 'player', label: 'Now Playing' },
           ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
-          { id: 'queue', label: isCurRadio ? `الإذاعات (${displayQueue.length})` : `Queue (${displayQueue.length})` },
+          { id: 'queue', label: isCurRadio ? `Radio Stations (${displayQueue.length})` : `Queue (${displayQueue.length})` },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1626,7 +1626,7 @@ export default function FullPlayerModal({
               {currentTrack?.isLive ? (
                 <div className="flex items-center gap-1.5 text-red-500 font-bold">
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                  <span>بث مباشر 24/7 (LIVE)</span>
+                  <span>LIVE 24/7 BROADCAST</span>
                 </div>
               ) : (
                 <>
@@ -1820,7 +1820,7 @@ export default function FullPlayerModal({
                       ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
                       : 'bg-white text-zinc-700 hover:bg-[#ede5d3] brutal-border'
                 }`}
-                title={isCurQuran ? 'المصحف الشريف' : 'Lyrics Display'}
+                title={isCurQuran ? 'Mushaf / Quran Page' : 'Lyrics Display'}
               >
                 {isCurQuran ? <BookOpen size={15} strokeWidth={2.5} /> : <Mic size={15} strokeWidth={2.5} />}
               </button>
@@ -1939,7 +1939,7 @@ export default function FullPlayerModal({
                     : isDark ? 'bg-[#1c2422] text-zinc-400 hover:text-white' : 'bg-white text-[#0b1110] border border-[#0b1110] hover:bg-[#ede5d3]'
                 }`}
               >
-                {isCurQuran ? 'المصحف الشريف' : 'Lyrics'}
+                {isCurQuran ? 'Mushaf' : 'Lyrics'}
               </button>
               )}
               <button

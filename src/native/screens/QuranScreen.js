@@ -133,18 +133,18 @@ export default function QuranScreen({ onTrackAction }) {
           <View style={styles.bannerTopRow}>
             <View style={styles.quranPill}>
               <BookOpen size={13} color={colors.ink} />
-              <Text style={styles.quranPillText}>المصحف المرتل الصوتي</Text>
+              <Text style={styles.quranPillText}>HOLY QURAN AUDIO</Text>
             </View>
             <CassetteTag label="RECITATIONS" bg={colors.ink} textColor={colors.mint} />
           </View>
 
-          <Text style={styles.arabicTitle}>القرآن الكريم</Text>
+          <Text style={styles.arabicTitle}>The Holy Quran</Text>
           <TouchableOpacity style={styles.radioBannerBtn} onPress={() => setIsRadioModalOpen(true)} activeOpacity={0.85}>
             <Radio size={16} color="#000000" strokeWidth={2.5} />
-            <Text style={styles.radioBannerBtnText}>إذاعة القرآن الكريم (مباشر 24/7)</Text>
+            <Text style={styles.radioBannerBtnText}>Holy Quran Radio (Live 24/7)</Text>
           </TouchableOpacity>
           <Text style={styles.arabicSub}>
-            استمع لتلاوات خاشعة مرتبة حسب المصحف الشريف بدقة صوتية عالية وبدون إعلانات.
+            Listen to soulful recitations ordered by the Holy Quran with high audio fidelity.
           </Text>
 
           {/* Search bar inside Quran */}
@@ -152,7 +152,7 @@ export default function QuranScreen({ onTrackAction }) {
             <Search size={16} color={colors.ink} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="ابحث عن سورة أو قارئ..."
+              placeholder="Search surah or reciter..."
               placeholderTextColor={colors.grayText}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -163,7 +163,7 @@ export default function QuranScreen({ onTrackAction }) {
 
       {/* Reciters Horizontal Carousel */}
       <View style={styles.recitersSection}>
-        <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }]}>كبار القراء • RECITERS</Text>
+        <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }]}>RECITERS</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -182,7 +182,7 @@ export default function QuranScreen({ onTrackAction }) {
                 selectedReciter === null && styles.reciterPillTextActive,
               ]}
             >
-              كل القراء ({recitersList.length})
+              All Reciters ({recitersList.length})
             </Text>
           </TouchableOpacity>
 
@@ -218,10 +218,10 @@ export default function QuranScreen({ onTrackAction }) {
           <View style={styles.reciterGridSection}>
             <View style={styles.reciterGridHeader}>
               <Text style={[styles.reciterGridTitle, !isDark && { color: colors.ink }]}>
-                اختر القارئ للاستماع للمصحف كاملاً
+                Select Reciter to Listen to Full Quran
               </Text>
               <Text style={styles.reciterGridSubtitle}>
-                تصفح سور القرآن الكريم مرتبة بالترتيب الشرعي (1 إلى 114)
+                Browse Surahs ordered 1 to 114
               </Text>
             </View>
 
@@ -243,7 +243,7 @@ export default function QuranScreen({ onTrackAction }) {
                     </Text>
                     <View style={styles.reciterCardBadge}>
                       <Text style={styles.reciterCardBadgeText}>
-                        {reciter.count} سورة مرتبة
+                        {reciter.count} Surahs
                       </Text>
                     </View>
                   </View>
@@ -262,15 +262,15 @@ export default function QuranScreen({ onTrackAction }) {
                     onPress={() => setSelectedReciter(null)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.backBtnText}>← كل القراء</Text>
+                    <Text style={styles.backBtnText}>← All Reciters</Text>
                   </TouchableOpacity>
 
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
                     <Text style={[styles.selectedReciterName, !isDark && { color: colors.ink }]} numberOfLines={1}>
-                      مصحف الشيخ {selectedReciter}
+                      Sheikh {selectedReciter}
                     </Text>
                     <Text style={styles.selectedReciterCount}>
-                      {displayedTracks.length} سورة • مرتبة من الفاتحة إلى الناس (1 إلى 114)
+                      {displayedTracks.length} Surahs • Ordered 1 to 114
                     </Text>
                   </View>
                 </View>
@@ -283,7 +283,7 @@ export default function QuranScreen({ onTrackAction }) {
                   >
                     <Play size={14} color={colors.ink} fill={colors.ink} />
                     <Text style={styles.playAllBtnText}>
-                      تشغيل المصحف كاملاً بالترتيب (من سورة {getSurahName(displayedTracks[0]) || 'البداية'})
+                      Play All from Surah {getSurahName(displayedTracks[0]) || 'Start'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -292,11 +292,11 @@ export default function QuranScreen({ onTrackAction }) {
 
             <View style={styles.listHeader}>
               <Text style={styles.listCount}>
-                {displayedTracks.length} سورة متوفرة • مرتبة ترتيب المصحف
+                {displayedTracks.length} Surahs Available
               </Text>
               {(selectedReciter || searchQuery.trim()) && (
                 <TouchableOpacity onPress={() => { setSelectedReciter(null); setSearchQuery(''); }}>
-                  <Text style={styles.clearFilterText}>إلغاء التصفية ✕</Text>
+                  <Text style={styles.clearFilterText}>Clear Filter ✕</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -305,12 +305,12 @@ export default function QuranScreen({ onTrackAction }) {
               <View style={styles.emptyCard}>
                 <BookOpen size={36} color={colors.mint} />
                 <Text style={styles.emptyTitle}>
-                  {isOffline ? 'لا توجد سور قرآنية محملة' : 'لا توجد تلاوات مطابقة'}
+                  {isOffline ? 'No downloaded recitations' : 'No matching recitations'}
                 </Text>
                 <Text style={styles.emptySub}>
                   {isOffline
-                    ? 'لم تقم بتحميل أي سور أو تلاوات بعد. قم بالتحميل في الوضع الأون لاين لتستمع إليها بدون إنترنت.'
-                    : 'جرب البحث باسم سورة أو قارئ آخر.'}
+                    ? 'No recitations downloaded yet. Download tracks online to play them offline.'
+                    : 'Try searching with another surah or reciter name.'}
                 </Text>
               </View>
             ) : (
@@ -336,7 +336,7 @@ export default function QuranScreen({ onTrackAction }) {
                     activeOpacity={0.8}
                   >
                     <Text style={styles.loadMoreText}>
-                      عرض المزيد من التلاوات ({displayedTracks.length - visibleLimit} متبقية) ↓
+                      Show more recitations ({displayedTracks.length - visibleLimit} remaining) ↓
                     </Text>
                   </TouchableOpacity>
                 )}

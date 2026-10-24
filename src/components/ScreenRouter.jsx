@@ -14,7 +14,6 @@ import StatsScreen from '../screens/StatsScreen';
 import PlaylistScreen from '../screens/PlaylistScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QuranScreen from '../screens/QuranScreen';
-import PodcastsScreen from '../screens/PodcastsScreen';
 import AdminScreen from '../screens/AdminScreen';
 import DownloadScreen from '../screens/DownloadScreen';
 
@@ -86,7 +85,7 @@ export default function ScreenRouter({
     setChatTargetUser,
     unreadChatCount,
   } = useUI();
-  const { showMusic, showPodcasts } = usePreferences();
+  const { showMusic } = usePreferences();
 
   return (
     <>
@@ -175,6 +174,7 @@ export default function ScreenRouter({
           openCreatePlaylistModal={() => setIsCreatePlaylistOpen(true)}
           openImportPlaylistModal={() => setIsImportPlaylistOpen(true)}
           openImportSongModal={() => setIsImportSongOpen(true)}
+          openAddSongModal={() => setIsAddSongOpen(true)}
           onDeletePlaylist={handleDeletePlaylist}
           toggleLike={toggleLike}
           globalTheme={globalTheme}
@@ -199,13 +199,6 @@ export default function ScreenRouter({
         />
       )}
 
-      {currentScreen === 'podcasts' && (
-        <PodcastsScreen
-          onSelectTrack={playTrack}
-          toggleLike={toggleLike}
-          globalTheme={globalTheme}
-        />
-      )}
 
       {currentScreen === 'playlist' && selectedPlaylist && (
         <PlaylistScreen

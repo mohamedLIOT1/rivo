@@ -332,38 +332,11 @@ export default function SettingsModal({ visible, onClose }) {
                 )}
               </View>
 
-              {/* ── Audio Streaming Quality ── */}
+              {/* ── App Preferences & Haptics ── */}
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Volume2 size={18} color={colors.teal} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>STREAMING FIDELITY</Text>
-                </View>
-
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-                  {[
-                    { id: '320', label: '320 kbps', sub: 'Lossless Hi-Fi' },
-                    { id: '256', label: '256 kbps', sub: 'High Quality' },
-                    { id: '128', label: '128 kbps', sub: 'Data Saver' },
-                  ].map((tier) => {
-                    const isSelected = audioQuality === tier.id;
-                    return (
-                      <TouchableOpacity
-                        key={tier.id}
-                        style={[
-                          styles.qualityCard,
-                          { borderColor: isSelected ? colors.mint : borderColor },
-                          isSelected && { backgroundColor: isDark ? '#1a2b26' : '#e6f4f1' }
-                        ]}
-                        onPress={() => setAudioQuality(tier.id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={[styles.qualityLabel, { color: isSelected ? colors.mint : textTitle }]}>
-                          {tier.label}
-                        </Text>
-                        <Text style={styles.qualitySub}>{tier.sub}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>APP EXPERIENCE</Text>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 10 }]}>

@@ -22,7 +22,7 @@ export const colors = {
   crimson: '#dc2626',         // Likes, errors, delete
   rust: '#dc2626',            // Danger, error boundary, delete actions
   mint: '#26c4b7',            // Mint highlight / badges
-  sky: '#38bdf8',             // Podcasts & links
+  sky: '#38bdf8',             // Links & badges
   purple: '#a855f7',          // Chill & lofi
   navy: '#1e3a8a',            // Classical & deep vibes
   inkMuted: '#1f2937',        // Muted dark border/fill

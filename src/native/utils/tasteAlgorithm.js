@@ -14,28 +14,28 @@ export function getCurrentTimeMood() {
   if (hour >= 5 && hour < 12) {
     return {
       id: 'morning',
-      label: 'Morning Fresh • صباح ونشاط',
+      label: 'Morning Fresh',
       keywords: ['acoustic', 'indie', 'morning', 'fresh', 'light', 'روقان', 'صباح', 'هادي', 'فيروز'],
       energy: 'fresh',
     };
   } else if (hour >= 12 && hour < 17) {
     return {
       id: 'afternoon',
-      label: 'Afternoon Flow • روقان وتركيز',
+      label: 'Afternoon Flow',
       keywords: ['chill', 'lofi', 'focus', 'flow', 'smooth', 'موسيقى', 'تركيز', 'عصر', 'رايق'],
       energy: 'chill',
     };
   } else if (hour >= 17 && hour < 23) {
     return {
       id: 'evening',
-      label: 'Evening Hype • سهرة وحماس',
+      label: 'Evening Hype',
       keywords: ['rap', 'trap', 'drill', 'hype', 'party', 'حماس', 'راب', 'سهرة', 'مهرجان', 'طاقة', 'ويجز', 'مروان'],
       energy: 'hype',
     };
   } else {
     return {
       id: 'night',
-      label: 'Night Melancholy • روقان الليل وسفر',
+      label: 'Night Melancholy',
       keywords: ['slowed', 'night', 'deep', 'sad', 'melancholy', 'chill', 'ليل', 'سفر', 'هادية', 'حزين', 'روما', 'دواير'],
       energy: 'deep',
     };

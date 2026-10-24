@@ -17,8 +17,8 @@ export default function DeleteAlbumModal({
   const isDark = globalTheme === 'dark';
   const isQuran = Boolean(album.isQuran);
   const count = tracksCount || (album.trackIds || []).length || 0;
-  const itemType = isQuran ? 'سورة' : 'song';
-  const itemTypePlural = isQuran ? 'سورة / تلاوة' : (count === 1 ? 'song' : 'songs');
+  const itemType = isQuran ? 'Surah' : 'song';
+  const itemTypePlural = isQuran ? 'Surah / Recitation' : (count === 1 ? 'song' : 'songs');
 
   const handleExecute = async (deleteTracks) => {
     setIsDeleting(true);

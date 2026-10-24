@@ -8,9 +8,9 @@ export default function ShortcutsModal({ isOpen, onClose }) {
     {
       category: 'Playback Controls',
       items: [
-        { keys: ['F5'], desc: 'Play / Pause (تشغيل / إيقاف مؤقت)', icon: Play },
-        { keys: ['F6'], desc: 'Next Track (الأغنية التالية)', icon: SkipForward },
-        { keys: ['F4'], desc: 'Previous Track (الأغنية السابقة)', icon: SkipBack },
+        { keys: ['F5'], desc: 'Play / Pause', icon: Play },
+        { keys: ['F6'], desc: 'Next Track', icon: SkipForward },
+        { keys: ['F4'], desc: 'Previous Track', icon: SkipBack },
         { keys: ['Space'], desc: 'Play / Pause', icon: Play },
         { keys: ['Ctrl', '→'], desc: 'Next Track', icon: SkipForward },
         { keys: ['Ctrl', '←'], desc: 'Previous Track', icon: SkipBack },

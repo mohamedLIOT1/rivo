@@ -460,7 +460,7 @@ export default function MiniPlayer({
               {currentTrack?.isLive ? (
                 <div className="w-full flex items-center justify-center gap-2 py-1 text-red-500 font-bold">
                   <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                  <span>بث مباشر • إذاعة القرآن الكريم (LIVE)</span>
+                  <span>LIVE 24/7 • Holy Quran Radio</span>
                 </div>
               ) : (
                 <>

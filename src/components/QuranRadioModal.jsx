@@ -40,7 +40,7 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-white tracking-wide font-display">
-                  إذاعة القرآن الكريم • بث مباشر 24/7
+                  Holy Quran Radio • Live 24/7
                 </h2>
                 <span className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/40 text-red-400 font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
@@ -48,7 +48,7 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
                 </span>
               </div>
               <p className="text-xs text-emerald-300/80 font-mono mt-0.5">
-                RIVO RETRO STEREO DECK // محطات رسمية مباشرة بأعلى نقاء صوتي
+                RIVO RETRO STEREO DECK // Official 24/7 Live Broadcasts
               </p>
             </div>
           </div>
@@ -56,7 +56,7 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-700/40 flex items-center justify-center text-zinc-300 hover:text-white transition-colors cursor-pointer"
-            title="إغلاق"
+            title="Close"
           >
             <X size={18} />
           </button>
@@ -107,7 +107,7 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
                       </h4>
                       {isCurrent && (
                         <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
-                          {isCurrentPlaying ? 'يعمل الآن' : 'موقف مؤقتاً'}
+                          {isCurrentPlaying ? 'PLAYING NOW' : 'PAUSED'}
                         </span>
                       )}
                     </div>
@@ -144,7 +144,7 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
         <div className="px-5 py-2.5 border-t border-emerald-500/20 bg-[#040c0a] flex items-center justify-between text-[11px] text-emerald-400/70 font-mono">
           <div className="flex items-center gap-2">
             <RadioTower size={14} className="text-emerald-400" />
-            <span>بث غير منقطع • مزامنة تلقائية مع مشغل ريفو</span>
+            <span>Uninterrupted Broadcast • Auto-synced with Rivo Player</span>
           </div>
           <span className="hidden sm:inline">RIVO STEREO RECEIVER 24/7</span>
         </div>

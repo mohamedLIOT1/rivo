@@ -161,7 +161,7 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
       available: true,
       success: true,
       version: otaManifest.version,
-      notes: otaManifest.notes || 'تحسينات وإصلاحات جديدة',
+      notes: otaManifest.notes || 'New improvements and bug fixes',
       bundleSize: fileInfo.size
     };
   } catch (err) {

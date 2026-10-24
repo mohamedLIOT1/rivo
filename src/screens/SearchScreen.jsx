@@ -28,14 +28,14 @@ const TRENDING_TAGS = [
 ];
 
 const GENRE_CATEGORIES = [
-  { id: 'g-1', name: 'Pop (بوب عربي)', searchQuery: 'أغاني بوب عربي', color: '#ec4899', bgLight: '#fdf2f8', darkBg: '#2a1120', Icon: Music, code: 'POP', desc: 'أفضل أغاني البوب العربي والمصري' },
+  { id: 'g-1', name: 'Pop', searchQuery: 'أغاني بوب عربي', color: '#ec4899', bgLight: '#fdf2f8', darkBg: '#2a1120', Icon: Music, code: 'POP', desc: 'Top Arabic & Egyptian Pop' },
   { id: 'g-2', name: 'Hip-Hop', searchQuery: 'Hip-Hop راب مصري', color: '#f97316', bgLight: '#fff7ed', darkBg: '#2d1606', Icon: Mic, code: 'HIP-HOP', desc: 'Egyptian Rap & Beats' },
   { id: 'g-3', name: 'Electronic', color: '#06b6d4', bgLight: '#ecfeff', darkBg: '#08252a', Icon: Headphones, code: 'SYNTH', desc: 'Club & Deep Bass' },
   { id: 'g-4', name: 'Arab Pop', searchQuery: 'طرب عربي', color: '#eab308', bgLight: '#fefce8', darkBg: '#271f05', Icon: Radio, code: 'TARAB', desc: 'Classic & Modern Eastern' },
   { id: 'g-5', name: 'Rock', color: '#ef4444', bgLight: '#fef2f2', darkBg: '#290c0c', Icon: Flame, code: 'ROCK', desc: 'Alternative & Raw Distortion' },
   { id: 'g-6', name: 'Chill & Lofi', color: '#a855f7', bgLight: '#faf5ff', darkBg: '#200d33', Icon: Coffee, code: 'LO-FI', desc: 'Relaxation & Study Tape' },
   { id: 'g-7', name: 'Workout', color: '#22c55e', bgLight: '#f0fdf4', darkBg: '#092712', Icon: Zap, code: 'ENERGY', desc: 'High Tempo Adrenaline' },
-  { id: 'g-8', name: 'Shaabi (شعبي)', searchQuery: 'شعبي مصري', color: '#3b82f6', bgLight: '#eff6ff', darkBg: '#0a1a33', Icon: Radio, code: 'SHAABI', desc: 'Street Folk & Egyptian Beats' },
+  { id: 'g-8', name: 'Shaabi', searchQuery: 'شعبي مصري', color: '#3b82f6', bgLight: '#eff6ff', darkBg: '#0a1a33', Icon: Radio, code: 'SHAABI', desc: 'Street Folk & Egyptian Beats' },
   { id: 'g-9', name: 'Indie', color: '#14b8a6', bgLight: '#f0fdfa', darkBg: '#062622', Icon: Compass, code: 'INDIE', desc: 'Underground Sound' },
   { id: 'g-10', name: 'Jazz & Soul', color: '#8b5cf6', bgLight: '#f5f3ff', darkBg: '#1c1033', Icon: Disc, code: 'JAZZ', desc: 'Organic Groove Blend' },
   { id: 'g-11', name: 'Ambient', color: '#64748b', bgLight: '#f8fafc', darkBg: '#131b25', Icon: Waves, code: 'ATMOS', desc: 'Atmospheric Frequencies' },
@@ -47,19 +47,17 @@ const ISLAMIC_TRENDING_TAGS = [
   { label: 'المنشاوي مرتل', query: 'محمد صديق المنشاوي مرتل' },
   { label: 'عبد الباسط مجود', query: 'عبد الباسط عبد الصمد مجود' },
   { label: 'الحصري', query: 'محمود خليل الحصري' },
-  { label: 'مشاري العفاسي', query: 'مشاري العفاسي' },
-  { label: 'بودكاست وعي', query: 'بودكاست وعي' },
-  { label: 'كتاب لأنك الله', query: 'كتاب لأنك الله' },
-  { label: 'سورة الكهف', query: 'سورة الكهف' },
+  { label: 'Mishary Alafasy', query: 'Mishary Alafasy' },
+  { label: 'Surah Al-Kahf', query: 'Al-Kahf' },
+  { label: 'Abdul Basit', query: 'Abdul Basit' },
+  { label: 'Al-Minshawi', query: 'Al-Minshawi' },
 ];
 
 const ISLAMIC_GENRE_CATEGORIES = [
-  { id: 'ig-1', name: 'المصحف المرتل', searchQuery: 'المصحف المرتل', color: '#10b981', bgLight: '#ecfdf5', darkBg: '#06261d', Icon: BookOpen, code: 'MURATTAL', desc: 'تلاوات خاشعة مرتلة لكبار القراء' },
-  { id: 'ig-2', name: 'المصحف المجود والتلاوات النادرة', searchQuery: 'المصحف المجود', color: '#14b8a6', bgLight: '#f0fdfa', darkBg: '#062622', Icon: Sparkles, code: 'MOJAWWAD', desc: 'أجمل التلاوات المجودة الخالدة' },
-  { id: 'ig-3', name: 'إذاعات القرآن 24/7', searchQuery: 'إذاعة القرآن الكريم', color: '#eab308', bgLight: '#fefce8', darkBg: '#271f05', Icon: Radio, code: 'LIVE', desc: 'بث مباشر متواصل لإذاعات القرآن' },
-  { id: 'ig-4', name: 'بودكاست ديني ومعرفي', searchQuery: 'بودكاست وعي إسلامي', color: '#3b82f6', bgLight: '#eff6ff', darkBg: '#0a1a33', Icon: Mic, code: 'PODCAST', desc: 'حوارات شبابية وفكرية ملهمة' },
-  { id: 'ig-5', name: 'كتب وروايات صوتية', searchQuery: 'كتاب مسموع', color: '#a855f7', bgLight: '#faf5ff', darkBg: '#200d33', Icon: BookOpen, code: 'AUDIOBOOK', desc: 'ملخصات كتب صوتية وإيمانية' },
-  { id: 'ig-6', name: 'تفسير القرآن والسيرة', searchQuery: 'تفسير القرآن', color: '#f59e0b', bgLight: '#fffbeb', darkBg: '#2a1a05', Icon: Compass, code: 'TAFSEER', desc: 'شرح ميسر لآيات الذكر الحكيم' },
+  { id: 'ig-1', name: 'Murattal Quran', searchQuery: 'Murattal', color: '#10b981', bgLight: '#ecfdf5', darkBg: '#06261d', Icon: BookOpen, code: 'MURATTAL', desc: 'Reverent recitations by renowned scholars' },
+  { id: 'ig-2', name: 'Rare & Mojawwad Recitations', searchQuery: 'Mojawwad', color: '#14b8a6', bgLight: '#f0fdfa', darkBg: '#062622', Icon: Sparkles, code: 'MOJAWWAD', desc: 'Timeless melodic recitations' },
+  { id: 'ig-3', name: '24/7 Quran Radios', searchQuery: 'Quran Radio', color: '#eab308', bgLight: '#fefce8', darkBg: '#271f05', Icon: Radio, code: 'LIVE', desc: 'Non-stop live radio broadcasts' },
+  { id: 'ig-6', name: 'Tafseer & Stories', searchQuery: 'Tafseer', color: '#f59e0b', bgLight: '#fffbeb', darkBg: '#2a1a05', Icon: Compass, code: 'TAFSEER', desc: 'Accessible explanation of verses' },
 ];
 
 export default function SearchScreen({ 
@@ -229,7 +227,7 @@ export default function SearchScreen({
         const filteredOnline = (results || []).filter(t => {
           if (localIds.has(String(t.id || t._id))) return false;
           if (!showMusic) {
-            return isQuranContent(t) || t.isPodcast || t.isAudiobook;
+            return isQuranContent(t);
           }
           return isMusicTrack(t.title, t.artist) && !isQuranContent(t);
         });

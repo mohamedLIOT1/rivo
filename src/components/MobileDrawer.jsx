@@ -1,7 +1,6 @@
 import React from 'react';
 import { X, Plus, Radio, MessageSquare, Users, WifiOff, User, Activity, ShieldCheck, Moon, Sun, Settings } from 'lucide-react';
 import { useUI } from '../context/UIContext';
-import { usePreferences } from '../context/PreferencesContext';
 import RivoLogo from './RivoLogo';
 import { isUserAdmin } from '../utils/adminUtils';
 
@@ -24,7 +23,6 @@ export default function MobileDrawer({
     isActivityPanelOpen,
     toggleActivityPanel,
   } = useUI();
-  const { language } = usePreferences();
 
   if (!isMobileMenuOpen) return null;
 
@@ -60,7 +58,7 @@ export default function MobileDrawer({
           {/* Quick Actions */}
           <div className="space-y-1">
             <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 mb-1 px-1">
-              {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
+              Quick Actions
             </div>
 
             <button
@@ -68,7 +66,7 @@ export default function MobileDrawer({
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer font-black"
             >
               <Plus size={17} strokeWidth={3} />
-              <span>{language === 'ar' ? 'إضافة أغنية / رابط' : 'Add Song / Link'}</span>
+              <span>Add Song / Link</span>
             </button>
 
             <button
@@ -79,7 +77,7 @@ export default function MobileDrawer({
             >
               <div className="flex items-center gap-2.5">
                 <Radio size={16} className="text-[#f59e0b] animate-pulse" strokeWidth={2.5} />
-                <span>{language === 'ar' ? 'جلسة مباشرة' : 'Jam Session'}</span>
+                <span>Jam Session</span>
               </div>
               <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#f59e0b] text-black brutal-border">
                 LIVE
@@ -94,7 +92,7 @@ export default function MobileDrawer({
             >
               <div className="flex items-center gap-2.5">
                 <MessageSquare size={16} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>{language === 'ar' ? 'الرسائل والمحادثات' : 'Messages & Chat'}</span>
+                <span>Messages & Chat</span>
               </div>
               {unreadChatCount > 0 && (
                 <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded-full bg-[#dc2626] text-white">
@@ -114,7 +112,7 @@ export default function MobileDrawer({
             >
               <div className="flex items-center gap-2.5">
                 <Users size={16} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>{language === 'ar' ? 'نشاط الاستماع' : 'Listening Activity'}</span>
+                <span>Listening Activity</span>
               </div>
               {isActivityPanelOpen && (
                 <span className="w-2 h-2 rounded-full bg-[#17a398]" />
@@ -136,7 +134,7 @@ export default function MobileDrawer({
                 }`}
               >
                 <WifiOff size={16} className="text-amber-500" />
-                <span>{language === 'ar' ? 'الخزنة المحلية (بدون إنترنت)' : 'Offline Music Vault'}</span>
+                <span>Offline Music Vault</span>
               </button>
             )}
           </div>
@@ -144,7 +142,7 @@ export default function MobileDrawer({
           {/* Navigation Links */}
           <div className="space-y-1 pt-2 border-t-2 border-dashed border-zinc-800">
             <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 mb-1 px-1">
-              {language === 'ar' ? 'الحساب والتنقل' : 'Account & Navigation'}
+              Account & Navigation
             </div>
 
             <a
@@ -165,7 +163,7 @@ export default function MobileDrawer({
               }`}
             >
               <User size={16} className="text-[#17a398]" strokeWidth={2.5} />
-              <span>{currentUser ? (language === 'ar' ? 'الملف الشخصي' : 'My Profile') : (language === 'ar' ? 'تسجيل الدخول' : 'Sign In')}</span>
+              <span>{currentUser ? 'My Profile' : 'Sign In'}</span>
             </a>
 
             <a
@@ -182,7 +180,7 @@ export default function MobileDrawer({
               }`}
             >
               <Activity size={16} className="text-[#17a398]" strokeWidth={2.5} />
-              <span>{language === 'ar' ? 'الإحصائيات والسجل' : 'Stats & History'}</span>
+              <span>Stats & History</span>
             </a>
 
             {isUserAdmin(currentUser) && (
@@ -201,7 +199,7 @@ export default function MobileDrawer({
               >
                 <div className="flex items-center gap-2">
                   <ShieldCheck size={16} strokeWidth={2.5} />
-                  <span>{language === 'ar' ? 'لوحة الإدارة' : 'Admin Portal'}</span>
+                  <span>Admin Portal</span>
                 </div>
                 <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#f59e0b] text-black">
                   ADMIN
@@ -213,7 +211,7 @@ export default function MobileDrawer({
           {/* Preferences */}
           <div className="space-y-1.5 pt-2 border-t-2 border-dashed border-zinc-800">
             <div className="text-[10px] font-mono font-black uppercase tracking-wider text-zinc-500 px-1">
-              {language === 'ar' ? 'التفضيلات' : 'Preferences'}
+              Preferences
             </div>
 
             <button
@@ -224,7 +222,7 @@ export default function MobileDrawer({
             >
               <div className="flex items-center gap-2">
                 {globalTheme === 'dark' ? <Moon size={15} className="text-amber-400" /> : <Sun size={15} className="text-amber-500" />}
-                <span>{globalTheme === 'dark' ? (language === 'ar' ? 'الوضع الداكن' : 'Dark Theme') : (language === 'ar' ? 'الوضع الفاتح' : 'Light Theme')}</span>
+                <span>{globalTheme === 'dark' ? 'Dark Theme' : 'Light Theme'}</span>
               </div>
               <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-zinc-700/50">
                 {globalTheme === 'dark' ? 'NIGHT' : 'DAY'}
@@ -236,13 +234,14 @@ export default function MobileDrawer({
                 setIsSettingsOpen(true);
                 closeMobileMenu();
               }}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white brutal-border brutal-shadow-sm brutal-btn cursor-pointer font-bold"
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-border brutal-shadow-sm brutal-btn cursor-pointer font-bold ${
+                globalTheme === 'dark' ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-white hover:bg-[#ded2bb] text-[#0b1110] border-black'
+              }`}
             >
               <div className="flex items-center gap-2">
-                <Radio size={15} className="animate-pulse text-[#57F287]" />
-                <span>{language === 'ar' ? 'الإعدادات والربط' : 'Settings & Integrations'}</span>
+                <Settings size={15} className="text-[#17a398]" />
+                <span>Audio & App Settings</span>
               </div>
-              <Settings size={15} />
             </button>
           </div>
         </div>

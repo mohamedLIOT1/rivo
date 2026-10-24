@@ -1,42 +1,40 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Heart, Plus, Download, Grid, List, Search, Disc, Music, 
-  User, Link2, DownloadCloud, Trash2, FolderOpen, BookOpen, Mic, Sparkles 
+  User, Link2, DownloadCloud, Trash2, FolderOpen, BookOpen, ChevronDown, Sparkles 
 } from 'lucide-react';
-import { ArtistLinks } from '../utils/artistUtils';
-import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName } from '../utils/quranUtils';
-import { normalizeCoverUrl } from '../utils/coverUtils';
-import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage';
-import { PODCASTS_AND_AUDIOBOOKS } from '../data/podcastsAndBooks';
+import { isQuranContent } from '../utils/quranUtils';
 import { usePreferences } from '../context/PreferencesContext';
 
 export default function LibraryScreen({ 
   playlists = [], 
-  albums = [],
+  albums = [], 
   tracks = [], 
-  likedTrackIds = [],
-  currentUser,
+  likedTrackIds = [], 
+  currentUser, 
   onSelectPlaylist, 
   onSelectArtist, 
   onSelectTrack, 
   openCreatePlaylistModal, 
   openImportPlaylistModal, 
   openImportSongModal,
-  onDeletePlaylist,
-  toggleLike,
-  globalTheme = 'dark',
-  libraryTitle = 'Your Library'
+  openAddSongModal,
+  onDeletePlaylist, 
+  toggleLike, 
+  globalTheme = 'dark', 
+  libraryTitle = 'Your Library' 
 }) {
   const isDark = globalTheme === 'dark';
-  const { showMusic, showQuran, showPodcasts, language } = usePreferences();
+  const { showMusic, showQuran } = usePreferences();
   
-  // Vault Mode selector: 'quran' | 'music' | 'podcasts'
-  const defaultSection = !showMusic ? 'quran' : (libraryTitle?.toLowerCase().includes('quran') ? 'quran' : 'music');
-  const [vaultSection, setVaultSection] = useState(defaultSection);
+  // Section selector: 'music' | 'quran'
+  const defaultSection = !showMusic ? 'quran' : 'music';
+  const [activeSection, setActiveSection] = useState(defaultSection);
   const [filter, setFilter] = useState('all'); // 'all' | 'playlists' | 'albums' | 'downloads'
   const [search, setSearch] = useState('');
+  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
-  // ── 1. QURAN VAULT DATA ──
+  // ── 1. QURAN DATA ──
   const quranPlaylists = useMemo(() => {
     return (playlists || []).filter(isQuranContent);
   }, [playlists]);
@@ -49,7 +47,7 @@ export default function LibraryScreen({
     return (tracks || []).filter(isQuranContent);
   }, [tracks]);
 
-  // ── 2. MUSIC VAULT DATA ──
+  // ── 2. MUSIC DATA ──
   const musicPlaylists = useMemo(() => {
     const list = (playlists || []).filter(item => {
       if (isQuranContent(item)) return false;
@@ -57,16 +55,21 @@ export default function LibraryScreen({
       return name !== 'liked songs' && name !== 'liked prescriptions' && item.id !== 'liked' && !item.isLikedSongs;
     });
 
+    // First liked song cover if available, otherwise high-quality music favorites artwork
+    const firstLikedTrack = (tracks || []).find(t => (likedTrackIds || []).map(String).includes(String(t.id || t._id)));
+    const likedCover = firstLikedTrack?.cover || 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400';
+
     const likedPl = {
       id: 'liked',
       _id: 'liked',
-      name: 'Liked Songs (المفضلة)',
-      description: 'أغانيك وقوائمك المفضلة في مكان واحد.',
+      name: 'Liked Songs',
+      description: 'Your favorite tracks in one place.',
+      cover: likedCover,
       isLikedSongs: true,
       trackIds: (likedTrackIds || []).map(String),
     };
     return [likedPl, ...list];
-  }, [playlists, likedTrackIds]);
+  }, [playlists, likedTrackIds, tracks]);
 
   const musicAlbums = useMemo(() => {
     return (albums || []).filter(item => !isQuranContent(item));
@@ -76,29 +79,32 @@ export default function LibraryScreen({
     return (tracks || []).filter(item => !isQuranContent(item));
   }, [tracks]);
 
-  // ── 3. PODCASTS & BOOKS VAULT DATA ──
-  const podcastItems = useMemo(() => {
-    return PODCASTS_AND_AUDIOBOOKS;
-  }, []);
+  // Set of all track IDs that actually belong to the user's saved playlists and liked tracks
+  const savedPlaylistTrackIds = useMemo(() => {
+    const ids = new Set();
+    (playlists || []).forEach(pl => {
+      (pl.trackIds || []).forEach(id => ids.add(String(id)));
+    });
+    (likedTrackIds || []).forEach(id => ids.add(String(id)));
+    return ids;
+  }, [playlists, likedTrackIds]);
 
-  // Determine current active datasets based on vaultSection
+  // Determine current active datasets based on activeSection
   const activePlaylists = useMemo(() => {
-    if (vaultSection === 'quran') return quranPlaylists;
-    if (vaultSection === 'podcasts') return [];
+    if (activeSection === 'quran') return quranPlaylists;
     return musicPlaylists;
-  }, [vaultSection, quranPlaylists, musicPlaylists]);
+  }, [activeSection, quranPlaylists, musicPlaylists]);
 
   const activeAlbums = useMemo(() => {
-    if (vaultSection === 'quran') return quranAlbums;
-    if (vaultSection === 'podcasts') return [];
+    if (activeSection === 'quran') return quranAlbums;
     return musicAlbums;
-  }, [vaultSection, quranAlbums, musicAlbums]);
+  }, [activeSection, quranAlbums, musicAlbums]);
 
+  // ONLY show songs that are saved in playlists or liked, NOT the whole database
   const activeTracks = useMemo(() => {
-    if (vaultSection === 'quran') return quranTracks;
-    if (vaultSection === 'podcasts') return podcastItems;
-    return musicTracks;
-  }, [vaultSection, quranTracks, podcastItems, musicTracks]);
+    if (activeSection === 'quran') return quranTracks;
+    return musicTracks.filter(t => savedPlaylistTrackIds.has(String(t.id || t._id)));
+  }, [activeSection, quranTracks, musicTracks, savedPlaylistTrackIds]);
 
   const downloadedTracks = activeTracks.filter((t) => t.downloaded);
 
@@ -129,107 +135,128 @@ export default function LibraryScreen({
         paddingBottom: 'calc(var(--player-height) + 50px)',
       }}
     >
-      {/* ── TOP SECTION: LIBRARY CATEGORY SELECTOR (Quran vs Music vs Podcasts) ── */}
+      {/* ── TOP SECTION: HEADER & ACTIONS ── */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-black tracking-tight text-white flex items-center gap-2">
-              <span>{language === 'ar' ? 'المكتبة الشخصية' : 'Your Library'}</span>
+              <span>Your Library</span>
             </h1>
             <p className="text-xs text-emerald-300/70 mt-0.5 font-medium">
-              {language === 'ar'
-                ? 'مكتبتك الشخصية المنظمة: تصفح القرآن، الأغاني، والبودكاست في مساحات مستقلة تماماً.'
-                : 'Your organized personal library: browse Quran, music, and podcasts in dedicated spaces.'}
+              Your organized personal library: playlists, saved songs, and favorite recitations.
             </p>
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {openImportSongModal && (
-              <button
-                onClick={openImportSongModal}
-                className="px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title={language === 'ar' ? "إضافة عنصر برابط" : "Import by Link"}
-              >
-                <Link2 size={14} />
-                <span>{language === 'ar' ? '+ رابط' : '+ Link'}</span>
-              </button>
-            )}
-
-            {openImportPlaylistModal && (
-              <button
-                onClick={openImportPlaylistModal}
-                className="px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title={language === 'ar' ? "استيراد قائمة" : "Import Playlist"}
-              >
-                <DownloadCloud size={14} />
-                <span>{language === 'ar' ? 'استيراد' : 'Import'}</span>
-              </button>
-            )}
-
-            {openCreatePlaylistModal && vaultSection !== 'podcasts' && (
+          {/* Quick Actions Menu */}
+          <div className="flex items-center gap-2 shrink-0 relative">
+            {openCreatePlaylistModal && (
               <button
                 onClick={openCreatePlaylistModal}
                 className="px-3.5 py-1.5 rounded-xl text-xs font-display font-black bg-emerald-400 text-black hover:bg-emerald-300 transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md"
               >
                 <Plus size={14} strokeWidth={3} />
-                <span>{language === 'ar' ? 'إنشاء قائمة' : 'New Playlist'}</span>
+                <span>New Playlist</span>
               </button>
             )}
+
+            {/* Consolidated "+ Add / Import" Menu */}
+            <div className="relative">
+              <button
+                onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
+                className="px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Add / Import</span>
+                <ChevronDown size={13} className={`transition-transform ${isAddMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isAddMenuOpen && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setIsAddMenuOpen(false)} 
+                  />
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-[#0c1e19] border border-emerald-500/30 shadow-2xl p-1.5 z-50 text-xs font-display font-bold">
+                    {openAddSongModal && (
+                      <button
+                        onClick={() => {
+                          setIsAddMenuOpen(false);
+                          openAddSongModal();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
+                      >
+                        <Search size={14} />
+                        <span>Search & Add Song</span>
+                      </button>
+                    )}
+                    {openImportSongModal && (
+                      <button
+                        onClick={() => {
+                          setIsAddMenuOpen(false);
+                          openImportSongModal();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
+                      >
+                        <Link2 size={14} />
+                        <span>Import Track by Link</span>
+                      </button>
+                    )}
+                    {openImportPlaylistModal && (
+                      <button
+                        onClick={() => {
+                          setIsAddMenuOpen(false);
+                          openImportPlaylistModal();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
+                      >
+                        <DownloadCloud size={14} />
+                        <span>Import Playlist by Link</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* ── 3-WAY LIBRARY MENU TABS ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-[#050f0d] rounded-2xl border border-emerald-500/25">
-          {/* Quran Library */}
-          <button
-            onClick={() => { setVaultSection('quran'); setFilter('all'); }}
-            className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
-              vaultSection === 'quran'
-                ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.02]'
-                : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40'
-            }`}
-          >
-            <BookOpen size={16} />
-            <span>{language === 'ar' ? 'مكتبة القرآن الكريم' : 'Quran Library'}</span>
-            <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${vaultSection === 'quran' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
-              {quranTracks.length}
-            </span>
-          </button>
-
-          {/* Music Library (if enabled) */}
+        {/* ── SECTION TABS (Music Library vs Quran Library) ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-1.5 bg-[#050f0d] rounded-2xl border border-emerald-500/25">
+          {/* Music Library */}
           {showMusic && (
             <button
-              onClick={() => { setVaultSection('music'); setFilter('all'); }}
+              onClick={() => { setActiveSection('music'); setFilter('all'); }}
               className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
-                vaultSection === 'music'
-                  ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.02]'
+                activeSection === 'music'
+                  ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.01]'
                   : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40'
               }`}
             >
               <Music size={16} />
-              <span>{language === 'ar' ? 'مكتبة الأغاني والموسيقى' : 'Music Library'}</span>
-              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${vaultSection === 'music' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
-                {musicTracks.length}
+              <span>Music Library</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${activeSection === 'music' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
+                {activeTracks.length} tracks
               </span>
             </button>
           )}
 
-          {/* Podcasts & Books */}
-          <button
-            onClick={() => { setVaultSection('podcasts'); setFilter('all'); }}
-            className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
-              vaultSection === 'podcasts'
-                ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.02]'
-                : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40'
-            }`}
-          >
-            <Mic size={16} />
-            <span>{language === 'ar' ? 'البودكاست والكتب' : 'Podcasts & Books'}</span>
-            <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${vaultSection === 'podcasts' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
-              {podcastItems.length}
-            </span>
-          </button>
+          {/* Quran Library */}
+          {showQuran && (
+            <button
+              onClick={() => { setActiveSection('quran'); setFilter('all'); }}
+              className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
+                activeSection === 'quran'
+                  ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.01]'
+                  : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40'
+              }`}
+            >
+              <BookOpen size={16} />
+              <span>Quran Library</span>
+              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${activeSection === 'quran' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
+                {quranTracks.length} recitations
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -237,12 +264,12 @@ export default function LibraryScreen({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           {[
-            { id: 'all', label: language === 'ar' ? 'الكل' : 'All' },
-            ...(vaultSection !== 'podcasts' ? [
-              { id: 'playlists', label: vaultSection === 'quran' ? (language === 'ar' ? 'المصاحف والقوائم' : 'Surahs & Playlists') : (language === 'ar' ? 'قوائم التشغيل' : 'Playlists') },
-              { id: 'albums', label: vaultSection === 'quran' ? (language === 'ar' ? 'السلاسل' : 'Series') : (language === 'ar' ? 'الألبومات' : 'Albums') },
+            { id: 'all', label: 'All' },
+            { id: 'playlists', label: activeSection === 'quran' ? 'Surahs & Playlists' : 'Playlists' },
+            ...(activeSection === 'music' ? [
+              { id: 'albums', label: 'Albums' },
             ] : []),
-            { id: 'downloads', label: `${language === 'ar' ? 'التنزيلات' : 'Downloads'} (${downloadedTracks.length})` }
+            { id: 'downloads', label: `Downloads (${downloadedTracks.length})` }
           ].map(chip => {
             const active = filter === chip.id;
             return (
@@ -267,18 +294,18 @@ export default function LibraryScreen({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={language === 'ar' ? "ابحث في المكتبة..." : "Search in library..."}
+            placeholder="Search in library..."
             className="w-full text-xs font-bold pl-8 pr-3 py-2 rounded-xl bg-[#091714] text-white border border-emerald-900/70 placeholder-emerald-500/40 focus:outline-none focus:border-emerald-500"
           />
         </div>
       </div>
 
-      {/* ── VAULT CONTENT DISPLAY ── */}
-      {/* 1. PLAYLISTS & ALBUMS GRID (when in all or playlists/albums) */}
+      {/* ── LIBRARY CONTENT DISPLAY ── */}
+      {/* 1. PLAYLISTS & ALBUMS GRID */}
       {(filter === 'all' || filter === 'playlists') && filteredPlaylists.length > 0 && (
         <div className="mb-7">
           <h2 className="text-sm font-black font-display text-emerald-300 uppercase tracking-wider mb-3">
-            {vaultSection === 'quran' ? 'المصاحف والقوائم القرآنية' : 'قوائم التشغيل'}
+            {activeSection === 'quran' ? 'Quran Playlists & Mushafs' : 'Playlists'}
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5">
             {filteredPlaylists.map(pl => {
@@ -291,19 +318,19 @@ export default function LibraryScreen({
                 >
                   <div className="relative w-full aspect-square rounded-lg overflow-hidden mb-2.5 bg-black/40 border border-emerald-900/40">
                     <img
-                      src={pl.cover || 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=400'}
+                      src={pl.cover || (pl.isLikedSongs ? 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400' : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400')}
                       alt={pl.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                     <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-mono font-bold text-emerald-300">
-                      {count} سورة/مقطع
+                      {count} {count === 1 ? 'track' : 'tracks'}
                     </span>
                   </div>
                   <h3 className="font-bold text-xs truncate text-white group-hover:text-emerald-300">
                     {pl.name}
                   </h3>
                   <p className="text-[10px] text-emerald-300/70 truncate mt-0.5 font-medium">
-                    {pl.isLikedSongs ? 'المفضلة' : pl.description || 'قائمة محفوظة'}
+                    {pl.isLikedSongs ? 'Favorites' : pl.description || 'Saved Playlist'}
                   </p>
                 </div>
               );
@@ -312,18 +339,20 @@ export default function LibraryScreen({
         </div>
       )}
 
-      {/* 2. TRACKS / EPISODES LIST */}
+      {/* 2. TRACKS LIST (Only showing playlist & liked tracks) */}
       {(filter === 'all' || filter === 'downloads') && (
         <div>
           <h2 className="text-sm font-black font-display text-emerald-300 uppercase tracking-wider mb-3">
-            {filter === 'downloads' ? 'الملفات المحملة للتشغيل بدون إنترنت' : (vaultSection === 'quran' ? 'التلاوات والسور' : vaultSection === 'podcasts' ? 'الحلقات والكتب المتاحة' : 'الأغاني والمقاطع')}
+            {filter === 'downloads' 
+              ? 'Offline Downloaded Tracks' 
+              : (activeSection === 'quran' ? 'Saved Recitations' : 'Saved Playlist Tracks')}
           </h2>
 
           {(filter === 'downloads' ? downloadedTracks : filteredTracks).length === 0 ? (
             <div className="p-8 text-center rounded-2xl border border-emerald-900/60 bg-[#091714]">
-              <Disc size={36} className="mx-auto mb-2 text-emerald-400 opacity-60 animate-spin" />
-              <p className="text-xs font-bold text-white mb-1">لا توجد عناصر لعرضها في هذا القسم حالياً</p>
-              <p className="text-[11px] text-emerald-300/70">أضف تلاوات أو قوائم جديدة لحفظها داخل الخزنة</p>
+              <Disc size={36} className="mx-auto mb-2 text-emerald-400 opacity-60" />
+              <p className="text-xs font-bold text-white mb-1">No saved tracks in this section yet</p>
+              <p className="text-[11px] text-emerald-300/70">Like songs or add them to playlists to organize them in your library</p>
             </div>
           ) : (
             <div className="space-y-1.5">

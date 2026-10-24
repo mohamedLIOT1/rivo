@@ -130,35 +130,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.9.5',
+      version: '1.9.9.6',
       name: 'Rivo Web',
-      notes: 'تحديث v1.9.9.5 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '1.9.9.5',
+      version: '1.9.9.6',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.9.5 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '1.9.9.5',
-      build: 88,
+      version: '1.9.9.6',
+      build: 89,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.9.5 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     ios: {
-      version: '1.9.9.5',
-      build: 88,
+      version: '1.9.9.6',
+      build: 89,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.9.5 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     }
   }
 };
@@ -175,44 +175,44 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.9.5',
+      version: '1.9.9.6',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v1.9.9.5 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '1.9.9.5',
+      version: '1.9.9.6',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'تحديث v1.9.9.5 • إصلاح مشغل الألبومات والأغاني والتنقل السلس على كافة المنصات.'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '1.9.9.5',
-      build: 88,
+      version: '1.9.9.6',
+      build: 89,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'تحديث v1.9.9.5 • إصلاح شاشة الألبوم والمشغل السريع واستجابة اللمس الكاملة',
-      notesEn: 'Instant OTA update v1.9.9.5 • Album and full player navigation fix • Touch freeze resolved',
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.',
+      notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '1.9.9.5',
+        version: '1.9.9.6',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v1.9.9.5 • إصلاح شاشة الألبوم والمشغل السريع',
-        notesEn: 'Instant OTA update v1.9.9.5 • Album and full player navigation fix'
+        notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
+        notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.'
       }
     },
     ios: {
-      version: '1.9.9.5',
-      build: 88,
+      version: '1.9.9.6',
+      build: 89,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'تحديث v1.9.9.5 • إصلاح فتح صفحة الأغنية من الميني بلاير داخل الألبومات وحل مشكلة التجميد بعد الرجوع بالكامل'
+      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     }
   }
 };

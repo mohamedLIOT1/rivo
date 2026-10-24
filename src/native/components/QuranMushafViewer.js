@@ -88,14 +88,14 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
       <View style={styles.header}>
         <View style={styles.surahBadge}>
           <BookOpen size={14} color="#d4af37" />
-          <Text style={styles.surahName}>{surahInfo?.name || 'القرآن الكريم'}</Text>
-          <Text style={styles.versesBadge}>{surahInfo?.verses} آية</Text>
+          <Text style={styles.surahName}>{surahInfo?.name || 'The Holy Quran'}</Text>
+          <Text style={styles.versesBadge}>{surahInfo?.verses} Verses</Text>
         </View>
 
         <View style={styles.headerRight}>
           <View style={styles.pagePill}>
             <Text style={styles.pagePillText}>
-              صفحة <Text style={{ color: '#ffffff', fontWeight: '900' }}>{currentPage}</Text> / {endPage}
+              Page <Text style={{ color: '#ffffff', fontWeight: '900' }}>{currentPage}</Text> / {endPage}
             </Text>
           </View>
 
@@ -121,19 +121,19 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="small" color="#d4af37" />
-            <Text style={styles.loadingText}>صفحة {currentPage}...</Text>
+            <Text style={styles.loadingText}>Page {currentPage}...</Text>
           </View>
         )}
 
         {hasError ? (
           <View style={styles.errorContainer}>
             <AlertCircle size={28} color="#f59e0b" />
-            <Text style={styles.errorText}>تعذر تحميل الصفحة</Text>
+            <Text style={styles.errorText}>Failed to load page</Text>
             <TouchableOpacity 
               style={styles.retryBtn}
               onPress={() => { setHasError(false); setIsLoading(true); }}
             >
-              <Text style={styles.retryBtnText}>إعادة المحاولة</Text>
+              <Text style={styles.retryBtnText}>Retry</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -160,7 +160,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
           activeOpacity={0.7}
         >
           <ChevronRight size={18} color={isFirstPage ? '#4b5563' : '#d4af37'} />
-          <Text style={[styles.navBtnText, isFirstPage && styles.navBtnTextDisabled]}>السابق</Text>
+          <Text style={[styles.navBtnText, isFirstPage && styles.navBtnTextDisabled]}>Previous</Text>
         </TouchableOpacity>
 
         <Text style={styles.surahProgressText}>

@@ -344,7 +344,7 @@ export default function JamRoomModal({
                         }`}
                       >
                         <Music size={11} />
-                        <span>SONGS (أغاني)</span>
+                        <span>Songs</span>
                       </button>
                       <button
                         type="button"
@@ -356,7 +356,7 @@ export default function JamRoomModal({
                         }`}
                       >
                         <BookOpen size={11} />
-                        <span>QURAN (قرآن)</span>
+                        <span>Quran</span>
                       </button>
                     </div>
 

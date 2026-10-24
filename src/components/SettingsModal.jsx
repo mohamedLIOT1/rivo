@@ -8,16 +8,12 @@ import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage
 export default function SettingsModal({
   isOpen,
   onClose,
-  audioQuality,
-  setAudioQuality,
-  crossfade,
-  setCrossfade,
   isOfflineMode,
   setIsOfflineMode,
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
-  const { language, setLanguage, contentModes, toggleContentMode } = usePreferences();
+  const { contentModes, toggleContentMode } = usePreferences();
   const [discordStatus, setDiscordStatus] = useState(null);
   const [linkCode, setLinkCode] = useState('');
   const [tokenInput, setTokenInput] = useState('');
@@ -136,13 +132,6 @@ export default function SettingsModal({
 
   if (!isOpen) return null;
 
-  const qualities = [
-    { label: 'Lossless Master (320 kbps Studio)', value: '320' },
-    { label: 'High Fidelity (256 kbps Balanced)', value: '256' },
-    { label: 'Standard Quality (160 kbps Data-Saver)', value: '160' },
-    { label: 'Automatic (Adaptive Network)', value: 'auto' }
-  ];
-
   const isLoggedIn = Boolean(
     localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token')
   );
@@ -183,62 +172,20 @@ export default function SettingsModal({
           </div>
         </div>
 
-        {/* ── Language Selection (اللغة) ── */}
-        <div className={`py-3.5 border-b-2 p-3 brutal-border mb-3 ${
-          isDark ? 'border-zinc-700 bg-zinc-800/40' : 'border-[#0b1110] bg-[#f2ecde]/40'
-        }`}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Globe size={16} className="text-[#17a398]" />
-              <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-                اللغة / Language
-              </span>
-            </div>
-            <span className="text-[10px] font-mono font-bold bg-[#17a398]/20 text-[#26c4b7] px-2 py-0.5 rounded">
-              {language === 'ar' ? 'العربية' : 'English'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <button
-              onClick={() => setLanguage('ar')}
-              className={`p-2 rounded-xl text-xs font-display font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                language === 'ar'
-                  ? 'bg-emerald-500 text-black font-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                  : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
-              }`}
-            >
-              <span>العربية</span>
-              {language === 'ar' && <Check size={14} />}
-            </button>
-            <button
-              onClick={() => setLanguage('en')}
-              className={`p-2 rounded-xl text-xs font-display font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                language === 'en'
-                  ? 'bg-emerald-500 text-black font-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                  : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
-              }`}
-            >
-              <span>English (Default)</span>
-              {language === 'en' && <Check size={14} />}
-            </button>
-          </div>
-        </div>
-
-        {/* ── Content Customization / Pure Mode (تخصيص المحتوى وإخفاء الأغاني) ── */}
+        {/* ── Content Preferences ── */}
         <div className={`py-3.5 border-b-2 p-3 brutal-border mb-3 ${
           isDark ? 'border-zinc-700 bg-zinc-800/40' : 'border-[#0b1110] bg-[#f2ecde]/40'
         }`}>
           <div className="flex items-center justify-between mb-2">
             <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-              تخصيص المحتوى (Content Preferences)
+              Content Preferences
             </span>
             <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
-              مزامنة الحساب ☁️
+              Cloud Synced ☁️
             </span>
           </div>
           <p className={`text-[11px] mb-3 leading-relaxed ${isDark ? 'text-zinc-300' : 'text-[#082621]/70'}`}>
-            يمكنك إخفاء الأغاني تماماً من البرنامج والبحث للمستمعين الراغبين بمحتوى ديني نقي فقط. يتم تطبيق ومزامنة هذا التفضيل عبر السيرفر مع جميع أجهزتك.
+            Customize your listening experience. Toggle music or Quran content to focus on the sound relief you prefer. Changes sync automatically across all your devices.
           </p>
 
           <div className="space-y-2">
@@ -249,9 +196,9 @@ export default function SettingsModal({
               <div className="flex items-center gap-2.5">
                 <Music size={16} className={contentModes.music !== false ? 'text-emerald-400' : 'text-zinc-500'} />
                 <div>
-                  <span className="text-xs font-bold block text-white">قسم الأغاني والموسيقى</span>
+                  <span className="text-xs font-bold block text-white">Music & Songs</span>
                   <span className="text-[10px] text-zinc-400 block">
-                    {contentModes.music !== false ? 'مفعل (تظهر الأغاني في القوائم والبحث)' : 'مخفي تماماً (وضع الاستماع النقي / الديني)'}
+                    {contentModes.music !== false ? 'Enabled (Shows songs in feeds and search)' : 'Hidden (Pure Quran mode)'}
                   </span>
                 </div>
               </div>
@@ -263,7 +210,7 @@ export default function SettingsModal({
                     : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
                 }`}
               >
-                {contentModes.music !== false ? 'مفعل' : 'مخفي'}
+                {contentModes.music !== false ? 'ENABLED' : 'HIDDEN'}
               </button>
             </div>
 
@@ -274,8 +221,8 @@ export default function SettingsModal({
               <div className="flex items-center gap-2.5">
                 <BookOpen size={16} className="text-emerald-400" />
                 <div>
-                  <span className="text-xs font-bold block text-white">قسم القرآن الكريم والتلاوات</span>
-                  <span className="text-[10px] text-zinc-400 block">المصاحف، التلاوات، القراء، وإذاعات 24/7</span>
+                  <span className="text-xs font-bold block text-white">Holy Quran & Recitations</span>
+                  <span className="text-[10px] text-zinc-400 block">Mushaf pages, recitations, reciters, and 24/7 live radios</span>
                 </div>
               </div>
               <button
@@ -286,30 +233,7 @@ export default function SettingsModal({
                     : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
                 }`}
               >
-                {contentModes.quran !== false ? 'مفعل' : 'مخفي'}
-              </button>
-            </div>
-
-            {/* Podcasts & Books Toggle */}
-            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-              isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <Mic size={16} className="text-emerald-400" />
-                <div>
-                  <span className="text-xs font-bold block text-white">قسم البودكاست والكتب الصوتية</span>
-                  <span className="text-[10px] text-zinc-400 block">حلقات البودكاست المعرفية والكتب والروايات المسموعة</span>
-                </div>
-              </div>
-              <button
-                onClick={() => toggleContentMode('podcasts', contentModes.podcasts === false)}
-                className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
-                  contentModes.podcasts !== false
-                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
-                    : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
-                }`}
-              >
-                {contentModes.podcasts !== false ? 'مفعل' : 'مخفي'}
+                {contentModes.quran !== false ? 'ENABLED' : 'HIDDEN'}
               </button>
             </div>
           </div>
@@ -510,61 +434,6 @@ export default function SettingsModal({
           </div>
         )}
 
-        {/* Crossfade Slider */}
-        <div className={`py-4 border-b-2 ${isDark ? 'border-zinc-700' : 'border-[#0b1110]'}`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Crossfade</span>
-            <span className={`text-xs font-mono font-bold px-2 py-0.5 brutal-border ${
-              isDark ? 'bg-zinc-800 text-[#26c4b7] border-zinc-700' : 'bg-[#ede5d3] text-[#17a398] border-[#0b1110]'
-            }`}>
-              {crossfade} SECONDS
-            </span>
-          </div>
-          <div className="relative w-full group h-4 flex items-center cursor-pointer">
-            <div className={`w-full h-2.5 rounded-full overflow-hidden brutal-border ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'}`}>
-              <div 
-                className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75"
-                style={{ width: `${Math.min(100, Math.max(0, (crossfade / 12) * 100))}%` }}
-              />
-            </div>
-            <div 
-              className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
-              style={{ left: `calc(${Math.min(100, Math.max(0, (crossfade / 12) * 100))}% - 8px)` }}
-            />
-            <input
-              type="range"
-              min="0"
-              max="12"
-              step="1"
-              value={crossfade}
-              onChange={(e) => setCrossfade(Number(e.target.value))}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-            />
-          </div>
-        </div>
-
-        {/* Audio Streaming Quality */}
-        <div className="py-4">
-          <label className={`text-[10px] font-mono font-black uppercase block mb-2 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>
-            AUDIO FIDELITY & STREAMING QUALITY
-          </label>
-          <div className="flex flex-col gap-1.5">
-            {qualities.map((q) => (
-              <button
-                key={q.value}
-                onClick={() => setAudioQuality(q.value)}
-                className={`brutal-btn p-2.5 text-left text-xs font-mono font-bold flex items-center justify-between brutal-border ${
-                  audioQuality === q.value 
-                    ? (isDark ? 'bg-[#17a398] text-white border-zinc-700' : 'bg-[#082621] text-[#26c4b7] brutal-shadow-sm') 
-                    : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#082621] hover:bg-white')
-                }`}
-              >
-                <span>{q.label}</span>
-                {audioQuality === q.value && <Check size={16} />}
-              </button>
-            ))}
-          </div>
-        </div>
 
         <a
           href="/download"

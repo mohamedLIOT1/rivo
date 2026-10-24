@@ -62,7 +62,7 @@ export function useKeyboardShortcuts({
       }
 
       // 1.1 Hardware Media Keys & Function Keys:
-      // F5 / MediaPlayPause: Play / Pause (توقيف / تشغيل) - يعمل مع زرار Fn أو بدونه
+      // F5 / MediaPlayPause: Play / Pause
       if (
         e.code === 'F5' || e.key === 'F5' || e.key === 'f5' || e.keyCode === 116 || e.which === 116 ||
         e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' || e.keyCode === 179 || e.which === 179 ||
@@ -75,7 +75,7 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // F6 / MediaTrackNext: Next Track (الأغنية التالية / نيكست) - يعمل مع زرار Fn أو بدونه
+      // F6 / MediaTrackNext: Next Track
       if (
         e.code === 'F6' || e.key === 'F6' || e.key === 'f6' || e.keyCode === 117 || e.which === 117 ||
         e.code === 'MediaTrackNext' || e.key === 'MediaTrackNext' || e.keyCode === 176 || e.which === 176 ||
@@ -88,7 +88,7 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // F4 / MediaTrackPrevious: Previous Track (الأغنية السابقة / بريفيس) - يعمل مع زرار Fn أو بدونه
+      // F4 / MediaTrackPrevious: Previous Track
       if (
         e.code === 'F4' || e.key === 'F4' || e.key === 'f4' || e.keyCode === 115 || e.which === 115 ||
         e.code === 'MediaTrackPrevious' || e.key === 'MediaTrackPrevious' || e.keyCode === 177 || e.which === 177 ||

@@ -58,8 +58,8 @@ export default function AppHeader({ currentUser, handleUserAvatarClick }) {
             }}
             placeholder={
               !showMusic
-                ? (language === 'ar' ? 'ابحث عن سورة، قارئ، إذاعة...' : 'Search Surah, Reciter, Radio...')
-                : (language === 'ar' ? 'ابحث عن أغنية، فنان، ألبوم...' : 'Search songs, artists, albums...')
+                ? 'Search Surah, Reciter, Radio...'
+                : 'Search songs, artists, albums...'
             }
             className={`w-full text-[11px] sm:text-xs font-bold py-1.5 sm:py-2 pl-7 sm:pl-9 pr-6 sm:pr-8 rounded-full border focus:outline-none transition-colors ${
               globalTheme === 'dark' 

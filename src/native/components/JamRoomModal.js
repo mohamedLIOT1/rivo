@@ -685,7 +685,7 @@ export default function JamRoomModal({ visible, onClose }) {
                   jamContentFilter === 'songs' && styles.filterTabTextActive,
                 ]}
               >
-                SONGS (أغاني)
+                Songs
               </Text>
             </TouchableOpacity>
 
@@ -704,7 +704,7 @@ export default function JamRoomModal({ visible, onClose }) {
                   jamContentFilter === 'quran' && styles.filterTabTextActive,
                 ]}
               >
-                QURAN (قرآن)
+                Quran
               </Text>
             </TouchableOpacity>
           </View>

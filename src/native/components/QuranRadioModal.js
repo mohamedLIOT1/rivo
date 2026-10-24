@@ -63,12 +63,12 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
               </View>
               <View>
                 <View style={styles.titleRow}>
-                  <Text style={styles.title}>إذاعة القرآن الكريم</Text>
+                  <Text style={styles.title}>Holy Quran Radio</Text>
                   <View style={styles.liveTag}>
                     <Text style={styles.liveTagText}>🔴 24/7</Text>
                   </View>
                 </View>
-                <Text style={styles.subtitle}>بث مباشر رسمي بأعلى جودة نقاء</Text>
+                <Text style={styles.subtitle}>Official 24/7 Live Broadcast</Text>
               </View>
             </View>
 
@@ -135,7 +135,7 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
           {/* Footer */}
           <View style={styles.footer}>
             <Sparkles size={12} color="#d4af37" />
-            <Text style={styles.footerText}>يعمل في الخلفية وشاشة القفل بدون انقطاع</Text>
+            <Text style={styles.footerText}>Plays in background and lock screen uninterrupted</Text>
           </View>
         </View>
       </View>

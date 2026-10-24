@@ -639,7 +639,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
           {[
             { id: 'player', label: 'Now Playing' },
             ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
-            { id: 'queue', label: isCurRadio ? `الإذاعات (${displayQueue.length})` : `Queue (${displayQueue.length})` },
+            { id: 'queue', label: isCurRadio ? `Radio Stations (${displayQueue.length})` : `Queue (${displayQueue.length})` },
           ].map((tab) => {
             const isActive = activeTab === tab.id;
             return (
@@ -756,7 +756,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                   {currentTrack?.isLive ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#ef4444' }} />
-                      <Text style={[styles.timeText, { color: '#ef4444', fontWeight: 'bold' }]}>بث مباشر 24/7 (LIVE)</Text>
+                      <Text style={[styles.timeText, { color: '#ef4444', fontWeight: 'bold' }]}>LIVE 24/7 BROADCAST</Text>
                     </View>
                   ) : (
                     <>

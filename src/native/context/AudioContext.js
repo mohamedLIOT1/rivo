@@ -1721,7 +1721,7 @@ export const AudioProvider = ({ children }) => {
       i = q.findIndex(t => String(t.title || '').trim().toLowerCase() === currentTitle);
     }
 
-    // Priority 1: Repeat Current Track (لو مشغل الrepeat علي الاغنيه الحاليا ف الrepeat يبقا الاوليه)
+    // Priority 1: Repeat Current Track (if repeat one is active, keep repeating the current track)
     if (repeatModeRef.current === 'one') {
       if (cur) {
         seekTo(0);
@@ -1734,7 +1734,7 @@ export const AudioProvider = ({ children }) => {
       }
     }
 
-    // Priority 2: Repeat Queue (و لو مشغل الrepeat علي الqueue ف يعمل شافل علي الqueue دي بس و يعيد في الاغاني)
+    // Priority 2: Repeat Queue (if repeat queue is active, loop/shuffle within this queue)
     if (repeatModeRef.current === 'all') {
       if (isShuffleRef.current) {
         // User wants to shuffle and repeat ONLY within this existing queue!
@@ -1776,7 +1776,7 @@ export const AudioProvider = ({ children }) => {
       }
     }
 
-    // Priority 3: Shuffle with Repeat OFF (لما الشافل بتبقا شغاله يفضل يشغل اغاني و لو خلصت ف يشغل حسب اقتراحات الai)
+    // Priority 3: Shuffle with Repeat OFF (when queue finishes, queue smart recommendations)
     if (isShuffleRef.current) {
       const remainingQ = q.filter(t => String(t._id || t.id) !== currentId);
       if (remainingQ.length > 0) {

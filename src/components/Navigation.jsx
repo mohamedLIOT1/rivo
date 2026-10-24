@@ -43,29 +43,27 @@ export default function Navigation({
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
   );
 
-  const { showMusic, showQuran, showPodcasts, language } = usePreferences();
+  const { showMusic, showQuran } = usePreferences();
 
   const mainNavItems = [
-    ...(showMusic ? [{ id: 'home', label: language === 'ar' ? 'الرئيسية' : 'Home', icon: Home }] : []),
-    { id: 'search', label: language === 'ar' ? 'البحث' : 'Search', icon: Search },
-    { id: 'library', label: language === 'ar' ? 'المكتبة' : 'Library', icon: Disc },
-    ...(showQuran ? [{ id: 'quran', label: language === 'ar' ? 'القرآن' : 'Quran', icon: BookOpen }] : []),
-    ...(showPodcasts ? [{ id: 'podcasts', label: language === 'ar' ? 'بودكاست وكتب' : 'Podcasts & Books', icon: Music }] : []),
+    ...(showMusic ? [{ id: 'home', label: 'Home', icon: Home }] : []),
+    { id: 'search', label: 'Search', icon: Search },
+    { id: 'library', label: 'Library', icon: Disc },
+    ...(showQuran ? [{ id: 'quran', label: 'Quran', icon: BookOpen }] : []),
     ...(!isInstalledClient ? [
-      { id: 'download', label: language === 'ar' ? 'تحميل التطبيق' : 'Download App', icon: DownloadCloud }
+      { id: 'download', label: 'Download App', icon: DownloadCloud }
     ] : []),
-    { id: 'stats', label: language === 'ar' ? 'الإحصائيات والسجل' : 'Stats & History', icon: Activity },
+    { id: 'stats', label: 'Stats & History', icon: Activity },
     ...(currentUser && isUserAdmin(currentUser) ? [
-      { id: 'admin', label: language === 'ar' ? 'لوحة الإدارة' : 'Admin Portal', icon: ShieldCheck }
+      { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
     ] : [])
   ];
 
   const mobileNavItems = [
-    ...(showMusic ? [{ id: 'home', label: language === 'ar' ? 'الموسيقى' : 'Music', icon: Music }] : []),
-    ...(showQuran ? [{ id: 'quran', label: language === 'ar' ? 'القرآن' : 'Quran', icon: BookOpen }] : []),
-    ...(showPodcasts ? [{ id: 'podcasts', label: language === 'ar' ? 'بودكاست' : 'Podcasts', icon: Disc }] : []),
-    { id: 'library', label: language === 'ar' ? 'المكتبة' : 'Library', icon: Disc },
-    { id: 'search', label: language === 'ar' ? 'البحث' : 'Search', icon: Search },
+    ...(showMusic ? [{ id: 'home', label: 'Music', icon: Music }] : []),
+    ...(showQuran ? [{ id: 'quran', label: 'Quran', icon: BookOpen }] : []),
+    { id: 'library', label: 'Library', icon: Disc },
+    { id: 'search', label: 'Search', icon: Search },
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])
@@ -102,7 +100,7 @@ export default function Navigation({
             <div className={`text-[10px] font-mono font-black uppercase px-2 mb-1 tracking-wider ${
               isDark ? 'text-zinc-500' : 'text-zinc-500'
             }`}>
-              {language === 'ar' ? 'استكشف' : 'Discover'}
+              Discover
             </div>
 
             {mainNavItems.map((item) => {
@@ -148,7 +146,7 @@ export default function Navigation({
           >
             <div className="flex items-center gap-2.5">
               <Radio size={16} className="text-[#17a398] animate-pulse" strokeWidth={2.5} />
-              <span>{language === 'ar' ? 'جلسة مباشرة' : 'Live Jam'}</span>
+              <span>Live Jam</span>
             </div>
             <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
               RADIO
@@ -170,11 +168,7 @@ export default function Navigation({
                 title="View full library"
               >
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>
-                  {libraryMode === 'quran' 
-                    ? (language === 'ar' ? 'مكتبة القرآن' : 'Quran Library') 
-                    : (language === 'ar' ? 'مكتبتك' : 'Your Library')}
-                </span>
+                <span>{libraryMode === 'quran' ? 'Quran Library' : 'Your Library'}</span>
               </button>
 
               <div className="flex items-center gap-1">
@@ -213,9 +207,9 @@ export default function Navigation({
             {/* Filter Pills */}
             <div className="flex gap-1 mb-2 px-1">
               {[
-                { id: 'all', label: language === 'ar' ? 'الكل' : 'All' },
-                { id: 'playlists', label: language === 'ar' ? 'قوائم التشغيل' : 'Playlists' },
-                { id: 'artists', label: language === 'ar' ? 'الفنانين' : 'Artists' },
+                { id: 'all', label: 'All' },
+                { id: 'playlists', label: 'Playlists' },
+                { id: 'artists', label: 'Artists' },
               ].map(({ id: filterId, label: filterLabel }) => {
                 const active = libraryFilter === filterId;
                 return (
@@ -262,9 +256,7 @@ export default function Navigation({
                     </div>
                     <div className="truncate">
                       <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
-                        {libraryMode === 'quran' 
-                          ? (language === 'ar' ? 'السور المفضلة' : 'Favorite Surahs') 
-                          : (language === 'ar' ? 'الأغاني المفضلة' : 'Liked Songs')}
+                        {libraryMode === 'quran' ? 'Favorite Surahs' : 'Liked Songs'}
                       </div>
                       <span className="text-[10px] font-mono text-zinc-500 font-normal">
                         {likedTrackIds && likedTrackIds.length > 0
@@ -447,11 +439,11 @@ export default function Navigation({
 
             <button
               onClick={openSettings}
-              title="Discord Rich Presence & Audio Settings"
+              title="Audio & App Settings"
               className={`w-9 h-9 rounded-lg brutal-border flex items-center justify-center transition shrink-0 cursor-pointer ${
                 isDark 
-                  ? 'bg-zinc-800 border-zinc-700 text-[#5865F2] hover:bg-zinc-700 hover:text-white' 
-                  : 'bg-white border-[#0b1110] text-[#5865F2] hover:bg-[#ded2bb]'
+                  ? 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white' 
+                  : 'bg-white border-[#0b1110] text-[#0b1110] hover:bg-[#ded2bb]'
               }`}
             >
               <Settings size={15} strokeWidth={2.5} />
@@ -531,7 +523,7 @@ export default function Navigation({
             )}
           </div>
           <span className="text-[9px] font-display font-bold">
-            {language === 'ar' ? 'الدردشة' : 'Chat'}
+            Chat
           </span>
         </button>
       </nav>

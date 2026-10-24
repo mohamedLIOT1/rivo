@@ -42,7 +42,7 @@ export default function HomeScreen({
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
-  const { showMusic, language } = usePreferences();
+  const { showMusic } = usePreferences();
   const { addToQueue } = useAudioPlayer();
   const [activeFilter, setActiveFilter] = useState('all');
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
@@ -98,11 +98,6 @@ export default function HomeScreen({
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (language === 'ar') {
-      if (hour < 12) return 'صباح الخير';
-      if (hour < 18) return 'مساء الخير';
-      return 'مساء النور';
-    }
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
@@ -131,7 +126,7 @@ export default function HomeScreen({
     }
   };
 
-  const currentMood = getCurrentTimeMood(language);
+  const currentMood = getCurrentTimeMood();
 
   if (!showMusic) return null;
 
@@ -166,13 +161,11 @@ export default function HomeScreen({
             </div>
 
             <h1 className="font-display text-2xl sm:text-4xl lg:text-5xl font-black leading-tight mb-2 tracking-tight text-white">
-              {getGreeting()}, <span className="text-[#17a398]">{currentUser?.name ? currentUser.name.split(' ')[0] : (language === 'ar' ? 'مستمع' : 'Listener')}</span>.
+              {getGreeting()}, <span className="text-[#17a398]">{currentUser?.name ? currentUser.name.split(' ')[0] : 'Listener'}</span>.
             </h1>
 
             <p className="text-emerald-100/90 text-xs sm:text-sm font-medium leading-relaxed mb-3.5 line-clamp-2 sm:line-clamp-none">
-              {language === 'ar' 
-                ? 'استمع إلى أحدث الأغاني، الألبومات، الكاسيت، ومكس مخصص لذوقك. صوت نقي وبدون إعلانات.'
-                : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.'}
+              Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.
             </p>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -182,7 +175,7 @@ export default function HomeScreen({
                 title="Play 10 personalized songs matching your taste and mood"
               >
                 <Play size={15} fill="currentColor" />
-                <span>{language === 'ar' ? 'تشغيل أفضل الأغاني (10)' : 'PLAY TOP CHARTS (10)'}</span>
+                <span>PLAY TOP CHARTS (10)</span>
               </button>
 
               <button 
@@ -190,7 +183,7 @@ export default function HomeScreen({
                 className="w-full sm:w-auto bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-display font-bold text-xs px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus size={15} strokeWidth={2.5} />
-                <span>{language === 'ar' ? 'إضافة أغنية' : 'Add Track'}</span>
+                <span>Add Track</span>
               </button>
             </div>
           </div>
@@ -213,13 +206,13 @@ export default function HomeScreen({
                     <Disc size={30} className="text-[#0b1110]" strokeWidth={2.2} />
                   </div>
                   <div className="font-display font-black text-lg sm:text-xl text-[#0b1110] leading-tight">
-                    {language === 'ar' ? 'كاسيت ريفو' : 'RIVO CASSETTE'}
+                    RIVO CASSETTE
                   </div>
                   <div className="text-[10px] sm:text-[11px] text-zinc-600 font-bold">{currentMood.label}</div>
                 </div>
 
                 <div className="bg-[#0b1110] text-[#17a398] text-[9px] sm:text-[10px] font-mono py-1 rounded mt-1.5 font-bold">
-                  {language === 'ar' ? 'بث مباشر • بدون إعلانات' : 'NOW STREAMING • ZERO ADS'}
+                  NOW STREAMING • ZERO ADS
                 </div>
               </div>
             </div>
@@ -246,10 +239,10 @@ export default function HomeScreen({
             <div className="flex items-center gap-2">
               <Disc size={20} className="text-amber-400" />
               <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-                {language === 'ar' ? 'الألبومات المميزة' : 'Featured Albums'}
+                Featured Albums
               </h2>
               <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-                {displayAlbums.length} {language === 'ar' ? 'ألبوم' : (displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS')}
+                {displayAlbums.length} {displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS'}
               </span>
             </div>
           </div>
@@ -311,14 +304,14 @@ export default function HomeScreen({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
           <div className="flex items-center gap-2">
             <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-              {language === 'ar' ? 'الأكثر استماعاً وشهرة' : 'Most Popular & Top Listened'}
+              Most Popular & Top Listened
             </h2>
             <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-              {language === 'ar' ? 'أفضل الأغاني • الأكثر طلباً' : 'TOP CHARTS • GLOBAL HITS'}
+              TOP CHARTS • GLOBAL HITS
             </span>
           </div>
           <span className="text-[11px] font-mono font-bold text-emerald-100/70">
-            {popularTracks.length} {language === 'ar' ? 'أغنية' : 'Tracks'}
+            {popularTracks.length} Tracks
           </span>
         </div>
 
