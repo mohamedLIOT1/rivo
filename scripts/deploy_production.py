@@ -51,6 +51,8 @@ def main():
     # 1. Upload server files
     server_files = [
         ("server/models/User.js", f"{REMOTE_DIR}/server/models/User.js"),
+        ("server/models/Track.js", f"{REMOTE_DIR}/server/models/Track.js"),
+        ("server/routes/users.js", f"{REMOTE_DIR}/server/routes/users.js"),
         ("server/middleware/auth.js", f"{REMOTE_DIR}/server/middleware/auth.js"),
         ("server/routes/tracks.js", f"{REMOTE_DIR}/server/routes/tracks.js"),
         ("server/routes/albums.js", f"{REMOTE_DIR}/server/routes/albums.js"),

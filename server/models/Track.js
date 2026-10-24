@@ -13,11 +13,15 @@ const TrackSchema = new mongoose.Schema({
   lyrics: [{ time: Number, text: String }],
   color: String,
   isQuran: { type: Boolean, default: false },
+  contentType: { type: String, enum: ['music', 'quran', 'podcast', 'audiobook'], default: 'music' },
+  isPodcast: { type: Boolean, default: false },
+  isAudiobook: { type: Boolean, default: false },
 }, { timestamps: true, strict: false });
 
 TrackSchema.index({ title: 1, artist: 1 });
 TrackSchema.index({ createdAt: -1 });
 TrackSchema.index({ isQuran: 1 });
+TrackSchema.index({ contentType: 1 });
 TrackSchema.index({ album: 1 });
 TrackSchema.index({ source: 1 });
 

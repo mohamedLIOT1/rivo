@@ -1,3 +1,5 @@
+import { usePreferences } from '../context/PreferencesContext';
+import { BookOpen } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search as SearchIcon, Play, Heart, PlusCircle, X, Trash2, Sparkles, Disc, 
@@ -40,6 +42,26 @@ const GENRE_CATEGORIES = [
   { id: 'g-12', name: 'Club & Dance', color: '#d946ef', bgLight: '#fdf4ff', darkBg: '#270c2d', Icon: Sparkles, code: 'CLUB', desc: 'Peak Midnight BPM' },
 ];
 
+const ISLAMIC_TRENDING_TAGS = [
+  { label: 'سورة البقرة', query: 'سورة البقرة' },
+  { label: 'المنشاوي مرتل', query: 'محمد صديق المنشاوي مرتل' },
+  { label: 'عبد الباسط مجود', query: 'عبد الباسط عبد الصمد مجود' },
+  { label: 'الحصري', query: 'محمود خليل الحصري' },
+  { label: 'مشاري العفاسي', query: 'مشاري العفاسي' },
+  { label: 'بودكاست وعي', query: 'بودكاست وعي' },
+  { label: 'كتاب لأنك الله', query: 'كتاب لأنك الله' },
+  { label: 'سورة الكهف', query: 'سورة الكهف' },
+];
+
+const ISLAMIC_GENRE_CATEGORIES = [
+  { id: 'ig-1', name: 'المصحف المرتل', searchQuery: 'المصحف المرتل', color: '#10b981', bgLight: '#ecfdf5', darkBg: '#06261d', Icon: BookOpen, code: 'MURATTAL', desc: 'تلاوات خاشعة مرتلة لكبار القراء' },
+  { id: 'ig-2', name: 'المصحف المجود والتلاوات النادرة', searchQuery: 'المصحف المجود', color: '#14b8a6', bgLight: '#f0fdfa', darkBg: '#062622', Icon: Sparkles, code: 'MOJAWWAD', desc: 'أجمل التلاوات المجودة الخالدة' },
+  { id: 'ig-3', name: 'إذاعات القرآن 24/7', searchQuery: 'إذاعة القرآن الكريم', color: '#eab308', bgLight: '#fefce8', darkBg: '#271f05', Icon: Radio, code: 'LIVE', desc: 'بث مباشر متواصل لإذاعات القرآن' },
+  { id: 'ig-4', name: 'بودكاست ديني ومعرفي', searchQuery: 'بودكاست وعي إسلامي', color: '#3b82f6', bgLight: '#eff6ff', darkBg: '#0a1a33', Icon: Mic, code: 'PODCAST', desc: 'حوارات شبابية وفكرية ملهمة' },
+  { id: 'ig-5', name: 'كتب وروايات صوتية', searchQuery: 'كتاب مسموع', color: '#a855f7', bgLight: '#faf5ff', darkBg: '#200d33', Icon: BookOpen, code: 'AUDIOBOOK', desc: 'ملخصات كتب صوتية وإيمانية' },
+  { id: 'ig-6', name: 'تفسير القرآن والسيرة', searchQuery: 'تفسير القرآن', color: '#f59e0b', bgLight: '#fffbeb', darkBg: '#2a1a05', Icon: Compass, code: 'TAFSEER', desc: 'شرح ميسر لآيات الذكر الحكيم' },
+];
+
 export default function SearchScreen({ 
   tracks = [], 
   albums = [],
@@ -58,6 +80,9 @@ export default function SearchScreen({
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
+  const { showMusic, isPureIslamicMode } = usePreferences();
+  const currentTags = !showMusic ? ISLAMIC_TRENDING_TAGS : TRENDING_TAGS;
+  const currentGenres = !showMusic ? ISLAMIC_GENRE_CATEGORIES : GENRE_CATEGORIES;
   const { addToQueue } = useAudioPlayer();
   const [query, setQuery] = useState(initialQuery);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
@@ -201,9 +226,13 @@ export default function SearchScreen({
         const results = await searchMusicOnline(cleanQuery);
         // Exclude tracks that already exist locally or are non-music or Quran
         const localIds = new Set(safeTracks.map(t => String(t.id || t._id)));
-        const filteredOnline = (results || []).filter(t => 
-          !localIds.has(String(t.id || t._id)) && isMusicTrack(t.title, t.artist) && !isQuranContent(t)
-        );
+        const filteredOnline = (results || []).filter(t => {
+          if (localIds.has(String(t.id || t._id))) return false;
+          if (!showMusic) {
+            return isQuranContent(t) || t.isPodcast || t.isAudiobook;
+          }
+          return isMusicTrack(t.title, t.artist) && !isQuranContent(t);
+        });
         setOnlineResults(filteredOnline);
       } catch (err) {
         console.warn('Online music search error:', err);
@@ -438,7 +467,7 @@ export default function SearchScreen({
                   }`}>
                     TRENDING:
                   </span>
-                  {TRENDING_TAGS.map((tag) => {
+                  {currentTags.map((tag) => {
                     const isSelected = query.toLowerCase() === tag.query.toLowerCase();
                     return (
                       <button
@@ -1311,7 +1340,7 @@ export default function SearchScreen({
 
                 {/* 2-Column Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {GENRE_CATEGORIES.map((genre) => {
+                  {currentGenres.map((genre) => {
                     const IconComponent = genre.Icon;
                     return (
                       <div

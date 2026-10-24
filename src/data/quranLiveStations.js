@@ -1,14 +1,30 @@
 // Verified 24/7 Official Quran Live Radio Stations
 export const QURAN_LIVE_STATIONS = [
   {
+    id: 'radio-cairo-quran',
+    title: 'إذاعة القرآن الكريم - القاهرة',
+    artist: 'البث الرسمي المباشر 24/7',
+    album: 'إذاعات القرآن الكريم',
+    audioUrl: 'https://stream.zeno.fm/4wtwvw9n7m0uv',
+    fallbackUrl: 'https://live.mp3quran.net:9702/',
+    cover: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=600',
+    description: 'البث المباشر الرسمي لإذاعة القرآن الكريم من القاهرة - جمهورية مصر العربية',
+    isLive: true,
+    isRadio: true,
+    isQuran: true,
+    genre: 'Quran Radio'
+  },
+  {
     id: 'radio-saudi-quran',
     title: 'إذاعة القرآن الكريم - السعودية',
     artist: 'بث مباشر 24/7',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://stream.radiojar.com/0tpy1h0kxtzuv',
-    cover: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=600',
+    fallbackUrl: 'https://qurango.net/radio/quran',
+    cover: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=600',
     description: 'البث المباشر الرسمي لإذاعة القرآن الكريم من مكة المكرمة والرياض',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -18,9 +34,11 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'محمد صديق المنشاوي',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/mohammed_siddiq_alminshawi',
+    fallbackUrl: 'https://qurango.net/radio/mohammed_siddiq_alminshawi',
     cover: 'https://images.unsplash.com/photo-1519817650390-64a93db51149?w=600',
     description: 'تلاوات خاشعة متواصلة 24/7 بالمصحف المرتل برواية حفص عن عاصم',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -30,9 +48,11 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'محمد صديق المنشاوي',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/mohammed_siddiq_alminshawi_mojawwad',
+    fallbackUrl: 'https://qurango.net/radio/mohammed_siddiq_alminshawi_mojawwad',
     cover: 'https://images.unsplash.com/photo-1519817650390-64a93db51149?w=600',
-    description: 'المصحف المجود والتلاوات الخارجية النادرة بجودة أصلية',
+    description: 'المصحف المجود والتلاوات الخارجية النادرة بجودة أصلية نقية',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -42,9 +62,11 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'عبد الباسط عبد الصمد',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/abdulbasit_abdulsamad_mojawwad',
+    fallbackUrl: 'https://qurango.net/radio/abdulbasit_abdulsamad_mojawwad',
     cover: 'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?w=600',
     description: 'أشهر التلاوات المجودة الخالدة لصوت مكة الشيخ عبد الباسط عبد الصمد',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -54,9 +76,11 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'محمود خليل الحصري',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/mahmoud_khalil_alhussary',
+    fallbackUrl: 'https://qurango.net/radio/mahmoud_khalil_alhussary',
     cover: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?w=600',
     description: 'شيخ عموم المقارئ المصرية وأدق تلاوة تعليمية لأحكام التجويد',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -66,9 +90,11 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'مشاري العفاسي',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/mishary_alafasi',
+    fallbackUrl: 'https://qurango.net/radio/mishary_alafasi',
     cover: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600',
     description: 'تلاوات خاشعة ونداوة صوت الشيخ مشاري راشد العفاسي 24/7',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -78,9 +104,25 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'ماهر المعيقلي',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/maher',
+    fallbackUrl: 'https://qurango.net/radio/maher',
     cover: 'https://images.unsplash.com/photo-1590076215667-875d4ef2d7ee?w=600',
     description: 'تلاوات إمام الحرم المكي الشريف الشيخ ماهر المعيقلي',
     isLive: true,
+    isRadio: true,
+    isQuran: true,
+    genre: 'Quran Radio'
+  },
+  {
+    id: 'radio-baqarah',
+    title: 'إذاعة سورة البقرة (بث متواصل)',
+    artist: 'سورة البقرة بأعذب الأصوات',
+    album: 'إذاعات القرآن الكريم',
+    audioUrl: 'https://backup.qurango.net/radio/albaqarah',
+    fallbackUrl: 'https://qurango.net/radio/albaqarah',
+    cover: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=600',
+    description: 'بث متواصل لقراءة سورة البقرة المباركة لبركة البيت والشفاء والتحصين',
+    isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   },
@@ -90,12 +132,12 @@ export const QURAN_LIVE_STATIONS = [
     artist: 'تفسير السعدي والطبري',
     album: 'إذاعات القرآن الكريم',
     audioUrl: 'https://backup.qurango.net/radio/tafseer',
+    fallbackUrl: 'https://qurango.net/radio/tafseer',
     cover: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=600',
     description: 'تفسير معاني آيات الذكر الحكيم وشرح ميسر لأحكام القرآن',
     isLive: true,
+    isRadio: true,
     isQuran: true,
     genre: 'Quran Radio'
   }
 ];
-
-export default QURAN_LIVE_STATIONS;

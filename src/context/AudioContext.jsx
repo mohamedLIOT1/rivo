@@ -606,6 +606,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }).catch(() => {});
         }
       }
+      // Live radio continuous stream handler: never advance or stop, always auto-reconnect!
+      if (finished && (finished.isLive || finished.isRadio)) {
+        setTimeout(() => {
+          if (!currentTrackRef.current) return;
+          const streamUrl = finished.fallbackUrl && finished._usedFallback ? finished.fallbackUrl : finished.audioUrl;
+          if (streamUrl && audio) {
+            const sep = streamUrl.includes('?') ? '&' : '?';
+            audio.src = `${streamUrl}${sep}_t=${Date.now()}`;
+            audio.play().catch(() => {});
+          }
+        }, 800);
+        return;
+      }
+
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => {});
@@ -663,6 +677,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (isChangingTrackRef.current) return;
       if (!isPlayingRef.current && !shouldPlayRef.current) return;
       const cur = currentTrackRef.current;
+
+      // Live radio auto-reconnect & fallback mirror
+      if (cur && (cur.isLive || cur.isRadio)) {
+        setTimeout(() => {
+          if (!currentTrackRef.current) return;
+          const streamUrl = (!cur._usedFallback && cur.fallbackUrl) ? cur.fallbackUrl : cur.audioUrl;
+          cur._usedFallback = !cur._usedFallback;
+          if (streamUrl && audio) {
+            const sep = streamUrl.includes('?') ? '&' : '?';
+            audio.src = `${streamUrl}${sep}_t=${Date.now()}`;
+            audio.play().catch(() => {});
+          }
+        }, 1200);
+        return;
+      }
       if (cur && (cur.title || cur.artist) && !cur._retryDone) {
         cur._retryDone = true;
         fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)

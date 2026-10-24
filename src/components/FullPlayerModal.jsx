@@ -1855,7 +1855,7 @@ export default function FullPlayerModal({
         {/* ─── MOBILE LYRICS / MUSHAF TAB ─── */}
         {activeTab === 'lyrics' && (
           isCurQuran ? (
-            <div className="lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto rounded-2xl border-2 border-[#c29b38]/40 shadow-2xl">
+            <div className="lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto rounded-2xl border border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
               <QuranMushafViewer track={currentTrack} globalTheme={globalTheme} />
             </div>
           ) : (
@@ -1923,7 +1923,7 @@ export default function FullPlayerModal({
       : 'h-[530px] p-6'
   } ${
     isDark 
-      ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700 shadow-2xl' 
+      ? (isCurQuran ? 'bg-[#070e0c] text-white border border-emerald-500/40 shadow-[0_0_40px_rgba(16,185,129,0.15)]' : 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700 shadow-2xl') 
       : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick brutal-shadow-lg paper-texture'
   } rounded-2xl flex-col overflow-hidden`}>
           <div className={`flex items-center justify-between pb-3 border-b-2 ${

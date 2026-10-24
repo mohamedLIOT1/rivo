@@ -1,3 +1,4 @@
+import { PreferencesProvider } from './context/PreferencesContext';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 import Navigation from './components/Navigation';
@@ -595,7 +596,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
 }
 
 export default function App() {
-  const { tracks, setTracks, likedTrackIds, playlists } = useUser();
+  const { tracks, setTracks, likedTrackIds, playlists, currentUser } = useUser();
   const [albums, setAlbums] = useState([]);
 
   useEffect(() => {
@@ -603,14 +604,16 @@ export default function App() {
   }, []);
 
   return (
-    <UIProvider>
-      <AudioProvider tracks={tracks} setTracks={setTracks}>
-        <JamProvider>
-          <NavigationProvider likedTrackIds={likedTrackIds} playlists={playlists} albums={albums}>
-            <MainAppShell albums={albums} setAlbums={setAlbums} />
-          </NavigationProvider>
-        </JamProvider>
-      </AudioProvider>
-    </UIProvider>
+    <PreferencesProvider currentUser={currentUser}>
+      <UIProvider>
+        <AudioProvider tracks={tracks} setTracks={setTracks}>
+          <JamProvider>
+            <NavigationProvider likedTrackIds={likedTrackIds} playlists={playlists} albums={albums}>
+              <MainAppShell albums={albums} setAlbums={setAlbums} />
+            </NavigationProvider>
+          </JamProvider>
+        </AudioProvider>
+      </UIProvider>
+    </PreferencesProvider>
   );
 }

@@ -370,4 +370,51 @@ router.get('/:id/following', optionalAuth, async (req, res) => {
   }
 });
 
+// User Preferences (Language, Content Customization Modes)
+router.get('/preferences', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('preferences');
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const defaultPrefs = {
+      language: 'ar',
+      contentModes: { music: true, quran: true, podcasts: true, audiobooks: true }
+    };
+    res.json({ success: true, preferences: user.preferences || defaultPrefs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/preferences', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (!user.preferences) {
+      user.preferences = {
+        language: 'ar',
+        contentModes: { music: true, quran: true, podcasts: true, audiobooks: true }
+      };
+    }
+
+    if (req.body.language && ['ar', 'en'].includes(req.body.language)) {
+      user.preferences.language = req.body.language;
+    }
+
+    if (req.body.contentModes && typeof req.body.contentModes === 'object') {
+      user.preferences.contentModes = {
+        ...user.preferences.contentModes,
+        ...req.body.contentModes
+      };
+    }
+
+    user.markModified('preferences');
+    await user.save();
+
+    res.json({ success: true, preferences: user.preferences });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

@@ -1,3 +1,4 @@
+import { usePreferences } from '../context/PreferencesContext';
 import React, { useState } from 'react';
 import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff, Settings } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
@@ -42,11 +43,14 @@ export default function Navigation({
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
   );
 
+  const { showMusic, showQuran, showPodcasts } = usePreferences();
+
   const mainNavItems = [
-    { id: 'home', label: 'Home', icon: Home },
+    ...(showMusic ? [{ id: 'home', label: 'Home', icon: Home }] : []),
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Library', icon: Disc },
-    { id: 'quran', label: 'Quran', icon: BookOpen },
+    { id: 'library', label: 'Vault (الخزنة)', icon: Disc },
+    ...(showQuran ? [{ id: 'quran', label: 'Quran (القرآن)', icon: BookOpen }] : []),
+    ...(showPodcasts ? [{ id: 'podcasts', label: 'Podcasts & Books (بودكاست وكتب)', icon: Music }] : []),
     ...(!isInstalledClient ? [
       { id: 'download', label: 'Download App', icon: DownloadCloud }
     ] : []),
@@ -57,13 +61,11 @@ export default function Navigation({
   ];
 
   const mobileNavItems = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Library', icon: Disc },
-    { id: 'quran', label: 'Quran', icon: BookOpen },
-    ...(!isInstalledClient ? [
-      { id: 'download', label: 'Apps', icon: DownloadCloud }
-    ] : []),
+    ...(showMusic ? [{ id: 'home', label: 'الموسيقى', icon: Music }] : []),
+    ...(showQuran ? [{ id: 'quran', label: 'القرآن', icon: BookOpen }] : []),
+    ...(showPodcasts ? [{ id: 'podcasts', label: 'بودكاست وكتب', icon: Disc }] : []),
+    { id: 'library', label: 'الخزنة', icon: Disc },
+    { id: 'search', label: 'البحث', icon: Search },
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])

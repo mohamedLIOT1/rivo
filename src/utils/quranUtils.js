@@ -59,6 +59,44 @@ export const FAMOUS_RECITERS = [
     ],
   },
   {
+    name: 'عبد الرحمن مسعد',
+    aliases: [
+      'عبدالرحمن مسعد', 'عبد الرحمن مسعد', 'مسعد',
+      'abdel rahman musad', 'abdulrhman mosad', 'abdelrahman mosad', 'abdul rahman musad',
+      'abdel rahman mossad', 'abdul rahman mossad', 'abdulrahman mossad', 'abdelrahman mossad',
+      'abdurrahman mosad', 'abdurrahman mossad', 'abdurrahman musad', 'abdelrahman musad',
+      'abdulrhman mosaad', 'abdelrahman mosaad', 'abdel rahman mosaad', 'abdul rahman mosaad',
+      'abdulrahman musad', 'abdulrahman mosad', 'abdulrhman musad', 'abdel rhman musad', 'abdel rhman mosad',
+      'mosad', 'mossad', 'musad', 'mosaad'
+    ],
+    cover: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=600'
+  },
+  {
+    name: 'إسلام صبحي',
+    aliases: ['اسلام صبحي', 'اسلام صبحى', 'إسلام صبحى', 'صبحي', 'صبحى', 'islam sobhi', 'islam sobhy', 'sobhi', 'sobhy'],
+    cover: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600'
+  },
+  {
+    name: 'هزاع البلوشي',
+    aliases: ['هزاع البلوشى', 'البلوشي', 'البلوشى', 'hazza al balushi', 'hazza al-balushi', 'al balushi'],
+  },
+  {
+    name: 'منصور السالمي',
+    aliases: ['منصور السالمى', 'السالمي', 'السالمى', 'mansour al salmi', 'mansoor al-salmi', 'al salmi'],
+  },
+  {
+    name: 'رعد الكردي',
+    aliases: ['رعد الكردى', 'الكردي', 'الكردى', 'raad al kurdi', 'raad al-kurdi', 'al kurdi'],
+  },
+  {
+    name: 'أحمد النفيس',
+    aliases: ['احمد النفيس', 'النفيس', 'ahmed al nafees', 'ahmed al-nafees', 'al nafees'],
+  },
+  {
+    name: 'وديع اليمني',
+    aliases: ['وديع اليمنى', 'اليمني', 'اليمنى', 'wadih al yamani', 'wadi al-yamani', 'al yamani'],
+  },
+  {
     name: 'عبد الرحمن السديس',
     aliases: [
       'عبدالرحمن السديس', 'السديس', 'abdul rahman al-sudais', 'abdul rahman al sudais', 
@@ -298,6 +336,17 @@ export function getQuranReciterName(trackOrItem, playlists = []) {
   const isArtistGeneric = !rawArtist || GENERIC_CHANNEL_NAMES.some(g => normArtist === normalizeArabicText(g) || normArtist.includes(normalizeArabicText(g)) || rawArtist.toLowerCase().includes(g.toLowerCase()));
 
   if (!isArtistGeneric) {
+    for (const reciter of FAMOUS_RECITERS) {
+      for (const alias of reciter.aliases) {
+        const normAlias = normalizeArabicText(alias);
+        if (normArtist === normAlias || normArtist.includes(normAlias) || rawArtist.toLowerCase().includes(alias.toLowerCase())) {
+          return reciter.name;
+        }
+      }
+    }
+    if (/abd(?:el|ul|ur)?\s*r[a-z]*\s*m[ou]s[a-z]+/i.test(rawArtist) || /مسعد/i.test(rawArtist)) {
+      return 'عبد الرحمن مسعد';
+    }
     return rawArtist;
   }
 

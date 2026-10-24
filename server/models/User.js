@@ -43,6 +43,15 @@ const UserSchema = new mongoose.Schema({
     plays: { type: Number, default: 0 },
     seconds: { type: Number, default: 0 }
   },
+  preferences: {
+    language: { type: String, enum: ['ar', 'en'], default: 'ar' },
+    contentModes: {
+      music: { type: Boolean, default: true },
+      quran: { type: Boolean, default: true },
+      podcasts: { type: Boolean, default: true },
+      audiobooks: { type: Boolean, default: true }
+    }
+  },
   discord: {
     id: { type: String, default: '' },
     username: { type: String, default: '' },

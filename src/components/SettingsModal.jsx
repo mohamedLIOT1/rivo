@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Download, FolderOpen } from 'lucide-react';
+import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Download, FolderOpen, Globe, Music, BookOpen, Mic } from 'lucide-react';
+import { usePreferences } from '../context/PreferencesContext';
 import { FULL_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
 import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage';
@@ -16,6 +17,7 @@ export default function SettingsModal({
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
+  const { language, setLanguage, contentModes, toggleContentMode } = usePreferences();
   const [discordStatus, setDiscordStatus] = useState(null);
   const [linkCode, setLinkCode] = useState('');
   const [tokenInput, setTokenInput] = useState('');
@@ -177,6 +179,138 @@ export default function SettingsModal({
             <div>
               <h4 className="font-mono font-black uppercase text-sm text-[#26c4b7]">Rivo Hi-Fi Audio</h4>
               <p className={`text-[11px] ${isDark ? 'text-zinc-300' : 'text-[#ded2bb]'}`}>Unlimited Streaming • 24-Bit Acoustic Fidelity • Zero Loss</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Language Selection (اللغة) ── */}
+        <div className={`py-3.5 border-b-2 p-3 brutal-border mb-3 ${
+          isDark ? 'border-zinc-700 bg-zinc-800/40' : 'border-[#0b1110] bg-[#f2ecde]/40'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Globe size={16} className="text-[#17a398]" />
+              <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                اللغة / Language
+              </span>
+            </div>
+            <span className="text-[10px] font-mono font-bold bg-[#17a398]/20 text-[#26c4b7] px-2 py-0.5 rounded">
+              {language === 'ar' ? 'العربية' : 'English'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <button
+              onClick={() => setLanguage('ar')}
+              className={`p-2 rounded-xl text-xs font-display font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                language === 'ar'
+                  ? 'bg-emerald-500 text-black font-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                  : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+              }`}
+            >
+              <span>العربية (افتراضي)</span>
+              {language === 'ar' && <Check size={14} />}
+            </button>
+            <button
+              onClick={() => setLanguage('en')}
+              className={`p-2 rounded-xl text-xs font-display font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                language === 'en'
+                  ? 'bg-emerald-500 text-black font-black border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                  : 'bg-zinc-800/60 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+              }`}
+            >
+              <span>English</span>
+              {language === 'en' && <Check size={14} />}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Content Customization / Pure Mode (تخصيص المحتوى وإخفاء الأغاني) ── */}
+        <div className={`py-3.5 border-b-2 p-3 brutal-border mb-3 ${
+          isDark ? 'border-zinc-700 bg-zinc-800/40' : 'border-[#0b1110] bg-[#f2ecde]/40'
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+              تخصيص المحتوى (Content Preferences)
+            </span>
+            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
+              مزامنة الحساب ☁️
+            </span>
+          </div>
+          <p className={`text-[11px] mb-3 leading-relaxed ${isDark ? 'text-zinc-300' : 'text-[#082621]/70'}`}>
+            يمكنك إخفاء الأغاني تماماً من البرنامج والبحث للمستمعين الراغبين بمحتوى ديني نقي فقط. يتم تطبيق ومزامنة هذا التفضيل عبر السيرفر مع جميع أجهزتك.
+          </p>
+
+          <div className="space-y-2">
+            {/* Music Toggle */}
+            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <Music size={16} className={contentModes.music !== false ? 'text-emerald-400' : 'text-zinc-500'} />
+                <div>
+                  <span className="text-xs font-bold block text-white">قسم الأغاني والموسيقى</span>
+                  <span className="text-[10px] text-zinc-400 block">
+                    {contentModes.music !== false ? 'مفعل (تظهر الأغاني في القوائم والبحث)' : 'مخفي تماماً (وضع الاستماع النقي / الديني)'}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleContentMode('music', contentModes.music === false)}
+                className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
+                  contentModes.music !== false
+                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
+                }`}
+              >
+                {contentModes.music !== false ? 'مفعل' : 'مخفي'}
+              </button>
+            </div>
+
+            {/* Quran Toggle */}
+            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <BookOpen size={16} className="text-emerald-400" />
+                <div>
+                  <span className="text-xs font-bold block text-white">قسم القرآن الكريم والتلاوات</span>
+                  <span className="text-[10px] text-zinc-400 block">المصاحف، التلاوات، القراء، وإذاعات 24/7</span>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleContentMode('quran', contentModes.quran === false)}
+                className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
+                  contentModes.quran !== false
+                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
+                }`}
+              >
+                {contentModes.quran !== false ? 'مفعل' : 'مخفي'}
+              </button>
+            </div>
+
+            {/* Podcasts & Books Toggle */}
+            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                <Mic size={16} className="text-emerald-400" />
+                <div>
+                  <span className="text-xs font-bold block text-white">قسم البودكاست والكتب الصوتية</span>
+                  <span className="text-[10px] text-zinc-400 block">حلقات البودكاست المعرفية والكتب والروايات المسموعة</span>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleContentMode('podcasts', contentModes.podcasts === false)}
+                className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
+                  contentModes.podcasts !== false
+                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
+                }`}
+              >
+                {contentModes.podcasts !== false ? 'مفعل' : 'مخفي'}
+              </button>
             </div>
           </div>
         </div>

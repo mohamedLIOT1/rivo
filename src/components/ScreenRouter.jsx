@@ -13,6 +13,7 @@ import StatsScreen from '../screens/StatsScreen';
 import PlaylistScreen from '../screens/PlaylistScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QuranScreen from '../screens/QuranScreen';
+import PodcastsScreen from '../screens/PodcastsScreen';
 import AdminScreen from '../screens/AdminScreen';
 import DownloadScreen from '../screens/DownloadScreen';
 
@@ -143,9 +144,9 @@ export default function ScreenRouter({
 
       {currentScreen === 'library' && (
         <LibraryScreen
-          playlists={musicPlaylists}
-          albums={musicAlbums}
-          tracks={musicTracks}
+          playlists={playlists || musicPlaylists}
+          albums={albums || musicAlbums}
+          tracks={tracks || musicTracks}
           likedTrackIds={likedTrackIds}
           currentUser={currentUser}
           onSelectPlaylist={handleSelectPlaylistView}
@@ -174,6 +175,14 @@ export default function ScreenRouter({
           openAddSongModal={() => setIsAddSongOpen(true)}
           currentTrack={currentTrack}
           isPlaying={isPlaying}
+          globalTheme={globalTheme}
+        />
+      )}
+
+      {currentScreen === 'podcasts' && (
+        <PodcastsScreen
+          onSelectTrack={playTrack}
+          toggleLike={toggleLike}
           globalTheme={globalTheme}
         />
       )}
