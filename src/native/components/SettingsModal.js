@@ -16,6 +16,10 @@ import {
   scanOfflineVault,
   getStorageLocationInfo,
 } from '../services/downloadManager';
+import {
+  setLockScreenEnabled,
+  isLockScreenEnabled,
+} from '../services/mediaControls';
 
 export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
   const { currentUser, token, logout } = useUser();
@@ -28,13 +32,28 @@ export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
 
   useEffect(() => {
     AsyncStorage.getItem('@rivo_lockscreen_enabled').then((val) => {
-      if (val !== null) setIsLockscreenEnabled(val === 'true');
+      if (val !== null) {
+        const enabled = val === 'true';
+        setIsLockscreenEnabled(enabled);
+        setLockScreenEnabled(enabled);
+      }
     }).catch(() => {});
+    if (Platform.OS === 'android') {
+      isLockScreenEnabled().then((nativeVal) => {
+        if (typeof nativeVal === 'boolean') {
+          setIsLockscreenEnabled(nativeVal);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const toggleLockscreen = (val) => {
     setIsLockscreenEnabled(val);
     AsyncStorage.setItem('@rivo_lockscreen_enabled', String(val)).catch(() => {});
+    setLockScreenEnabled(val);
+    if (showToast) {
+      showToast(val ? 'Lock Screen Player enabled' : 'Lock Screen Player disabled', 'info');
+    }
   };
 
   const [audioQuality, setAudioQuality] = useState('320'); // '320' | '256' | '128'
@@ -421,6 +440,16 @@ export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
                     PREVIEW LOCKSCREEN PLAYER NOW
                   </Text>
                 </TouchableOpacity>
+
+                {/* Android Launcher Widgets Info */}
+                <View style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: isDark ? '#0b1614' : '#f0fdf4', borderWidth: 1, borderColor }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.mint, marginBottom: 4, letterSpacing: 0.5 }}>
+                    📱 HOME SCREEN APP WIDGETS
+                  </Text>
+                  <Text style={{ fontSize: 11, color: textMuted, lineHeight: 16 }}>
+                    Long-press your phone's home screen, tap "Widgets", and select Rivo (4×1 Compact Bar or 4×2 Full Player) for live background playback controls.
+                  </Text>
+                </View>
               </View>
 
               {/* ── Discord Rich Presence ── */}

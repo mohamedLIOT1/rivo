@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#090e11"
+    android:fitsSystemWindows="true">
+
+    <!-- Ambient blurred background cover -->
+    <ImageView
+        android:id="@+id/lock_bg_art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:alpha="0.32" />
+
+    <!-- Dark gradient overlay scrim -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#99090e11" />
+
+    <!-- Main Foreground Container -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="36dp"
+        android:paddingBottom="24dp"
+        android:weightSum="10">
+
+        <!-- Top Clock & Date Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_weight="1.5">
+
+            <TextClock
+                android:id="@+id/lock_clock"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="h:mm"
+                android:format24Hour="HH:mm"
+                android:textSize="56sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:shadowColor="#80000000"
+                android:shadowRadius="12" />
+
+            <TextClock
+                android:id="@+id/lock_date"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:format12Hour="EEEE, MMMM d"
+                android:format24Hour="EEEE, d MMMM"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#2dd4bf"
+                android:textAllCaps="true"
+                android:letterSpacing="0.05" />
+        </LinearLayout>
+
+        <!-- Center Viewport: High-Resolution Album Artwork -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="4.5"
+            android:layout_gravity="center"
+            android:padding="8dp">
+
+            <ImageView
+                android:id="@+id/lock_cover_art"
+                android:layout_width="230dp"
+                android:layout_height="230dp"
+                android:layout_gravity="center"
+                android:scaleType="centerCrop"
+                android:background="#162329"
+                android:elevation="14dp"
+                android:contentDescription="Album Artwork" />
+        </FrameLayout>
+
+        <!-- Track Title & Artist -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:id="@+id/lock_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Rivo Music"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                android:singleLine="true"
+                android:ellipsize="marquee"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:gravity="center" />
+
+            <TextView
+                android:id="@+id/lock_artist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Playing in Background"
+                android:textSize="13sp"
+                android:textColor="#94a3b8"
+                android:layout_marginTop="3dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:gravity="center" />
+        </LinearLayout>
+
+        <!-- Scrubber Progress Bar & Time Stamps -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="10dp">
+
+            <SeekBar
+                android:id="@+id/lock_seekbar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:progressTint="#2dd4bf"
+                android:thumbTint="#FFFFFF"
+                android:max="1000" />
+
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp">
+
+                <TextView
+                    android:id="@+id/lock_time_current"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0:00"
+                    android:textSize="11sp"
+                    android:textColor="#64748b" />
+
+                <TextView
+                    android:id="@+id/lock_time_total"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_alignParentEnd="true"
+                    android:text="0:00"
+                    android:textSize="11sp"
+                    android:textColor="#64748b" />
+            </RelativeLayout>
+        </LinearLayout>
+
+        <!-- Classic 5-Button Media Row (Shuffle | Prev | Play/Pause | Next | Repeat) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="16dp">
+
+            <ImageButton
+                android:id="@+id/btn_lock_shuffle"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_notification_shuffle"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#94a3b8"
+                android:contentDescription="Shuffle" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btn_lock_prev"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_notification_prev"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF"
+                android:contentDescription="Previous" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btn_lock_play_pause"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:src="@drawable/ic_notification_pause"
+                android:background="@drawable/lock_play_circle"
+                android:tint="#042f2e"
+                android:elevation="6dp"
+                android:contentDescription="Play/Pause" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btn_lock_next"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_notification_next"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#FFFFFF"
+                android:contentDescription="Next" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageButton
+                android:id="@+id/btn_lock_repeat"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@drawable/ic_notification_repeat"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:tint="#94a3b8"
+                android:contentDescription="Repeat" />
+        </LinearLayout>
+
+        <!-- Slide to Unlock Bar (Musicolet StuButton Architecture) -->
+        <FrameLayout
+            android:id="@+id/lock_slide_container"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/lock_slider_track"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="auto">
+
+            <TextView
+                android:id="@+id/lock_slide_hint"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:text="Slide to unlock ➔"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="#80FFFFFF"
+                android:letterSpacing="0.08"
+                android:textAllCaps="true" />
+
+            <SeekBar
+                android:id="@+id/lock_unlock_seekbar"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"
+                android:progressDrawable="@android:color/transparent"
+                android:thumbTint="#2dd4bf"
+                android:max="100"
+                android:progress="0"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp" />
+        </FrameLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

@@ -132,8 +132,8 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
 
     Animated.spring(pan, {
       toValue: { x: targetX, y: targetY },
-      tension: 190,
-      friction: 12,
+      tension: 260,
+      friction: 14,
       useNativeDriver: false,
     }).start();
   }, [pan, SCREEN_WIDTH, SCREEN_HEIGHT]);
@@ -162,22 +162,27 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
         const moveX = gestureState.moveX;
         const moveY = gestureState.moveY;
 
-        // Check 4 edges
-        const isLeft = moveX < SCREEN_WIDTH * 0.18;
-        const isRight = moveX > SCREEN_WIDTH * 0.82;
-        const isTop = moveY < SCREEN_HEIGHT * 0.18;
-        const isBottom = moveY > SCREEN_HEIGHT * 0.88;
+        // Tap without significant drag opens menu immediately
+        if (Math.abs(gestureState.dx) < 10 && Math.abs(gestureState.dy) < 10) {
+          openMenu();
+          return;
+        }
 
-        if (isTop) {
-          dockToEdge('top', moveX, moveY);
-        } else if (isBottom) {
-          dockToEdge('bottom', moveX, moveY);
-        } else if (isLeft) {
+        // Instant 4-Edge Snap: Find closest edge among (Left, Right, Top, Bottom)
+        const distLeft = moveX;
+        const distRight = SCREEN_WIDTH - moveX;
+        const distTop = moveY;
+        const distBottom = SCREEN_HEIGHT - moveY;
+        const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+
+        if (minDist === distLeft) {
           dockToEdge('left', moveX, moveY);
-        } else if (isRight) {
+        } else if (minDist === distRight) {
           dockToEdge('right', moveX, moveY);
+        } else if (minDist === distTop) {
+          dockToEdge('top', moveX, moveY);
         } else {
-          snapBackToCenter();
+          dockToEdge('bottom', moveX, moveY);
         }
       },
       onPanResponderTerminate: () => {
@@ -188,8 +193,13 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
 
   const openMenu = () => {
     if (dockedSide) {
-      snapBackToCenter();
-      return;
+      setDockedSide(null);
+      Animated.spring(pan, {
+        toValue: { x: 0, y: 0 },
+        tension: 260,
+        friction: 14,
+        useNativeDriver: false,
+      }).start();
     }
     setIsOpen(true);
     Animated.parallel([

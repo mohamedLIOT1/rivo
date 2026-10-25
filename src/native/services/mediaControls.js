@@ -216,3 +216,20 @@ export const hasNativeProcessRestart = () => {
   return Boolean(RivoMediaControls && typeof RivoMediaControls.exitAndRemoveTask === 'function');
 };
 
+
+export const setLockScreenEnabled = (enabled) => {
+  if (RivoMediaControls && typeof RivoMediaControls.setLockScreenEnabled === 'function') {
+    try {
+      RivoMediaControls.setLockScreenEnabled(Boolean(enabled));
+    } catch (e) {}
+  }
+};
+
+export const isLockScreenEnabled = async () => {
+  if (RivoMediaControls && typeof RivoMediaControls.isLockScreenEnabled === 'function') {
+    try {
+      return await RivoMediaControls.isLockScreenEnabled();
+    } catch (e) {}
+  }
+  return true;
+};

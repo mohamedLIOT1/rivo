@@ -61,12 +61,18 @@ class MediaNotificationService : Service() {
         var currentDurationMs: Long = 0L
         var currentPositionMs: Long = 0L
         var currentBitmap: Bitmap? = null
+        var instance: MediaNotificationService? = null
+
+        fun dispatchMediaActionStatic(action: String) {
+            instance?.dispatchMediaAction(action)
+        }
         private var lastLoadedCoverUrl: String? = null
         private var lastUserSeekTimeMs: Long = 0L
         private var lastUserLikeTimeMs: Long = 0L
         private var lastUserRepeatTimeMs: Long = 0L
     }
 
+    private var screenReceiver: ScreenLockReceiver? = null
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioManager: AudioManager? = null
@@ -83,8 +89,13 @@ class MediaNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         createNotificationChannel()
         setupMediaSession()
+        try {
+            screenReceiver = ScreenLockReceiver()
+            registerReceiver(screenReceiver, android.content.IntentFilter(Intent.ACTION_SCREEN_ON))
+        } catch (_: Throwable) {}
         try {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Rivo::PlaybackWakeLock").apply {
@@ -94,6 +105,10 @@ class MediaNotificationService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            screenReceiver?.let { unregisterReceiver(it) }
+        } catch (_: Throwable) {}
+        if (instance == this) instance = null
         releaseWakeLock()
         abandonAudioFocus()
         try {
@@ -362,6 +377,10 @@ class MediaNotificationService : Service() {
 
         // Relay event to React Native JS layer
         MediaControlsModule.sendEvent(action)
+        try {
+            LockScreenActivity.notifyPlaybackChanged()
+            RivoWidgetManager.updateAll(this)
+        } catch (_: Throwable) {}
     }
 
     private fun startForegroundWithNotification() {

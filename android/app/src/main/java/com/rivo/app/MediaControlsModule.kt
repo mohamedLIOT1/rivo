@@ -11,6 +11,7 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
+import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -110,6 +111,25 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         try {
             context.startService(intent)
         } catch (e: Throwable) {}
+    }
+
+    @ReactMethod
+    fun setLockScreenEnabled(enabled: Boolean) {
+        try {
+            val prefs = reactContext.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("lockscreen_overlay_enabled", enabled).apply()
+        } catch (_: Throwable) {}
+    }
+
+    @ReactMethod
+    fun isLockScreenEnabled(promise: Promise) {
+        try {
+            val prefs = reactContext.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+            val isEnabled = prefs.getBoolean("lockscreen_overlay_enabled", true)
+            promise.resolve(isEnabled)
+        } catch (e: Throwable) {
+            promise.resolve(true)
+        }
     }
 
     @ReactMethod

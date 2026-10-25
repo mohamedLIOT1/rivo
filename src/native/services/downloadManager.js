@@ -75,7 +75,10 @@ export const deduplicateTrackList = (list) => {
 };
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
-const COVERS_DIR = `${FileSystem.documentDirectory}rivo_covers/`;
+// On iOS, isolate covers in cacheDirectory so loose images never clutter the user's Files app:
+const COVERS_DIR = Platform.OS === 'ios'
+  ? `${FileSystem.cacheDirectory}rivo_covers/`
+  : `${FileSystem.documentDirectory}rivo_covers/`;
 const MANIFEST_FILE = `${TRACKS_DIR}manifest.json`;
 const STORAGE_KEY = '@rivo_offline_tracks_v2';
 
@@ -101,6 +104,17 @@ const ensureDirs = async () => {
 
     const cInfo = await FileSystem.getInfoAsync(COVERS_DIR);
     if (!cInfo.exists) await FileSystem.makeDirectoryAsync(COVERS_DIR, { intermediates: true });
+
+    // iOS Files App Cleanliness: remove any old loose covers folder in DocumentDirectory
+    if (Platform.OS === 'ios') {
+      try {
+        const oldDocCovers = `${FileSystem.documentDirectory}rivo_covers/`;
+        const oInfo = await FileSystem.getInfoAsync(oldDocCovers).catch(() => ({ exists: false }));
+        if (oInfo.exists) {
+          await FileSystem.deleteAsync(oldDocCovers, { idempotent: true }).catch(() => {});
+        }
+      } catch {}
+    }
 
     if (PERSISTENT_DIR) {
       try {
@@ -514,9 +528,143 @@ function cleanMetadataString(str, fallback = '') {
   return cleaned || fallback;
 }
 
+
+function stringToUtf16LeBytes(str) {
+  const bytes = new Uint8Array(str.length * 2);
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    bytes[i * 2] = code & 0xff;
+    bytes[i * 2 + 1] = (code >> 8) & 0xff;
+  }
+  return bytes;
+}
+
+function concatUint8Arrays(arrays) {
+  let total = 0;
+  for (const a of arrays) total += a.length;
+  const res = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) {
+    res.set(a, offset);
+    offset += a.length;
+  }
+  return res;
+}
+
+function makeId3TextFrame(id, text) {
+  if (!text) return null;
+  const strBytes = stringToUtf16LeBytes(text);
+  const payload = concatUint8Arrays([new Uint8Array([0x01, 0xff, 0xfe]), strBytes]);
+  const header = new Uint8Array(10);
+  for (let i = 0; i < 4; i++) header[i] = id.charCodeAt(i);
+  const len = payload.length;
+  header[4] = (len >> 24) & 0xff;
+  header[5] = (len >> 16) & 0xff;
+  header[6] = (len >> 8) & 0xff;
+  header[7] = len & 0xff;
+  return concatUint8Arrays([header, payload]);
+}
+
 /**
- * Fast Base64 encoder for binary chunks in React Native
+ * Embeds ID3v2.3 tags (Title, Artist, Album, Cover Art, Lyrics) directly into the MP3 audio file.
+ * This guarantees the cover art and lyrics travel WITH the song file as a single standalone unit.
  */
+export async function embedId3v2TagsToMp3File(fileUri, { title, artist, album, lyrics, coverBase64, coverMime = 'image/jpeg' }) {
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+    if (!fileInfo.exists || fileInfo.size < 1000) return false;
+
+    const frames = [];
+    const fTitle = makeId3TextFrame('TIT2', title);
+    if (fTitle) frames.push(fTitle);
+
+    const fArtist = makeId3TextFrame('TPE1', artist);
+    if (fArtist) frames.push(fArtist);
+
+    const fAlbum = makeId3TextFrame('TALB', album);
+    if (fAlbum) frames.push(fAlbum);
+
+    if (lyrics && typeof lyrics === 'string' && lyrics.trim().length > 0) {
+      const lyrBytes = stringToUtf16LeBytes(lyrics.trim());
+      const payload = concatUint8Arrays([
+        new Uint8Array([0x01, 0x65, 0x6e, 0x67, 0xff, 0xfe, 0x00, 0x00, 0xff, 0xfe]),
+        lyrBytes
+      ]);
+      const header = new Uint8Array(10);
+      const uslt = 'USLT';
+      for (let i = 0; i < 4; i++) header[i] = uslt.charCodeAt(i);
+      const len = payload.length;
+      header[4] = (len >> 24) & 0xff;
+      header[5] = (len >> 16) & 0xff;
+      header[6] = (len >> 8) & 0xff;
+      header[7] = len & 0xff;
+      frames.push(concatUint8Arrays([header, payload]));
+    }
+
+    if (coverBase64 && typeof coverBase64 === 'string') {
+      const imgBytes = base64ToUint8Array(coverBase64);
+      const mime = coverMime || 'image/jpeg';
+      const mimeBytes = new Uint8Array(mime.length + 1);
+      for (let i = 0; i < mime.length; i++) mimeBytes[i] = mime.charCodeAt(i);
+      mimeBytes[mime.length] = 0; // null terminator
+
+      const payload = concatUint8Arrays([
+        new Uint8Array([0x00]), // Latin-1 encoding for mime & desc
+        mimeBytes,
+        new Uint8Array([0x03, 0x00]), // Picture type 0x03 (Cover Front), empty description (0x00)
+        imgBytes
+      ]);
+
+      const header = new Uint8Array(10);
+      const apic = 'APIC';
+      for (let i = 0; i < 4; i++) header[i] = apic.charCodeAt(i);
+      const len = payload.length;
+      header[4] = (len >> 24) & 0xff;
+      header[5] = (len >> 16) & 0xff;
+      header[6] = (len >> 8) & 0xff;
+      header[7] = len & 0xff;
+      frames.push(concatUint8Arrays([header, payload]));
+    }
+
+    if (frames.length === 0) return false;
+
+    const allFrames = concatUint8Arrays(frames);
+    const tagSize = allFrames.length;
+
+    const b0 = (tagSize >> 21) & 0x7F;
+    const b1 = (tagSize >> 14) & 0x7F;
+    const b2 = (tagSize >> 7) & 0x7F;
+    const b3 = tagSize & 0x7F;
+
+    const id3Header = new Uint8Array([0x49, 0x44, 0x33, 0x03, 0x00, 0x00, b0, b1, b2, b3]);
+    const id3Tag = concatUint8Arrays([id3Header, allFrames]);
+
+    // Read original audio file
+    const origBase64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+    const origBytes = base64ToUint8Array(origBase64);
+
+    let audioStartOffset = 0;
+    // Check if original already has ID3 tag
+    if (origBytes.length > 10 && origBytes[0] === 0x49 && origBytes[1] === 0x44 && origBytes[2] === 0x33) {
+      const oldTagSize = ((origBytes[6] & 0x7F) << 21) |
+                         ((origBytes[7] & 0x7F) << 14) |
+                         ((origBytes[8] & 0x7F) << 7) |
+                         (origBytes[9] & 0x7F);
+      audioStartOffset = oldTagSize + 10;
+    }
+
+    const audioStreamBytes = audioStartOffset > 0 ? origBytes.subarray(audioStartOffset) : origBytes;
+    const taggedAudio = concatUint8Arrays([id3Tag, audioStreamBytes]);
+
+    const finalB64 = fastUint8ToBase64(taggedAudio);
+    await FileSystem.writeAsStringAsync(fileUri, finalB64, { encoding: FileSystem.EncodingType.Base64 });
+    return true;
+  } catch (err) {
+    console.warn('[ID3] embedId3v2TagsToMp3File error:', err.message);
+    return false;
+  }
+}
+
 function fastUint8ToBase64(bytes) {
   if (typeof btoa === 'function') {
     try {
@@ -792,7 +940,36 @@ export const downloadTrack = async (track, onProgress) => {
         } catch {}
       }
 
-      const record = {
+      // Embed ID3 tags directly into MP3 file so image & lyrics are bundled into the audio file itself!
+  if (audioFileUri.endsWith('.mp3')) {
+    try {
+      let coverBase64 = null;
+      let coverMime = 'image/jpeg';
+      if (localCover && localCover.startsWith('file://')) {
+        const cInfo = await FileSystem.getInfoAsync(localCover).catch(() => ({ exists: false }));
+        if (cInfo.exists && cInfo.size > 0 && cInfo.size < 5000000) {
+          coverBase64 = await FileSystem.readAsStringAsync(localCover, { encoding: FileSystem.EncodingType.Base64 });
+          if (localCover.toLowerCase().endsWith('.png')) coverMime = 'image/png';
+        }
+      }
+      const lyricsString = Array.isArray(trackLyrics) && trackLyrics.length > 0
+        ? trackLyrics.map(l => l.text).join('\n')
+        : (typeof rawLyrics === 'string' ? rawLyrics : '');
+
+      await embedId3v2TagsToMp3File(audioFileUri, {
+        title: cleanTitle,
+        artist: cleanArtist,
+        album: cleanAlbum,
+        lyrics: lyricsString,
+        coverBase64,
+        coverMime,
+      });
+    } catch (tagErr) {
+      console.warn('[downloadManager] ID3 tag embedding notice:', tagErr?.message);
+    }
+  }
+
+  const record = {
         ...track,
         id: trackId,
         _id: trackId,
