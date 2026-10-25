@@ -1,0 +1,1114 @@
+﻿2026-10-25T16:25:08.3032578Z ##[group]Run cd android
+2026-10-25T16:25:08.3032824Z [36;1mcd android[0m
+2026-10-25T16:25:08.3033003Z [36;1mchmod +x gradlew[0m
+2026-10-25T16:25:08.3033197Z [36;1m./gradlew assembleRelease[0m
+2026-10-25T16:25:08.3033401Z [36;1mcd ..[0m
+2026-10-25T16:25:08.3033727Z [36;1mcp android/app/build/outputs/apk/release/app-release.apk Rivo-v2.0.2.apk[0m
+2026-10-25T16:25:08.3088754Z shell: /usr/bin/bash -e {0}
+2026-10-25T16:25:08.3088967Z env:
+2026-10-25T16:25:08.3089220Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-25T16:25:08.3089636Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-25T16:25:08.3089930Z ##[endgroup]
+2026-10-25T16:25:09.7862760Z Downloading https://services.gradle.org/distributions/gradle-8.8-all.zip
+2026-10-25T16:25:12.6268170Z .....................10%......................20%......................30%......................40%......................50%......................60%......................70%......................80%......................90%......................100%
+2026-10-25T16:25:15.3237086Z 
+2026-10-25T16:25:15.3238174Z Welcome to Gradle 8.8!
+2026-10-25T16:25:15.3238414Z 
+2026-10-25T16:25:15.3239097Z Here are the highlights of this release:
+2026-10-25T16:25:15.3239895Z  - Running Gradle on Java 22
+2026-10-25T16:25:15.3241032Z  - Configurable Gradle daemon JVM
+2026-10-25T16:25:15.3242095Z  - Improved IDE performance for large projects
+2026-10-25T16:25:15.3242380Z 
+2026-10-25T16:25:15.3243890Z For more details see https://docs.gradle.org/8.8/release-notes.html
+2026-10-25T16:25:15.3244671Z 
+2026-10-25T16:25:15.5234905Z Starting a Gradle Daemon (subsequent builds will be faster)
+2026-10-25T16:25:54.5253172Z > Task :gradle-plugin:settings-plugin:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:25:59.3232324Z > Task :gradle-plugin:settings-plugin:pluginDescriptors
+2026-10-25T16:25:59.4261621Z > Task :gradle-plugin:settings-plugin:processResources
+2026-10-25T16:26:02.4236882Z > Task :gradle-plugin:settings-plugin:compileKotlin
+2026-10-25T16:26:02.4238755Z > Task :gradle-plugin:settings-plugin:compileJava NO-SOURCE
+2026-10-25T16:26:02.4239298Z > Task :gradle-plugin:settings-plugin:classes
+2026-10-25T16:26:02.4239738Z > Task :gradle-plugin:settings-plugin:jar
+2026-10-25T16:26:14.1231833Z > Task :gradle-plugin:react-native-gradle-plugin:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:26:16.0241474Z > Task :gradle-plugin:react-native-gradle-plugin:pluginDescriptors
+2026-10-25T16:26:16.0242287Z > Task :gradle-plugin:react-native-gradle-plugin:processResources
+2026-10-25T16:26:22.5231550Z > Task :gradle-plugin:react-native-gradle-plugin:compileKotlin
+2026-10-25T16:26:22.5232586Z > Task :gradle-plugin:react-native-gradle-plugin:compileJava NO-SOURCE
+2026-10-25T16:26:22.5233425Z > Task :gradle-plugin:react-native-gradle-plugin:classes
+2026-10-25T16:26:22.5234134Z > Task :gradle-plugin:react-native-gradle-plugin:jar
+2026-10-25T16:26:37.6241894Z 
+2026-10-25T16:26:37.6242911Z > Configure project :expo-av
+2026-10-25T16:26:37.6243994Z Checking the license for package NDK (Side by side) 26.1.10909125 in /usr/local/lib/android/sdk/licenses
+2026-10-25T16:26:37.6244952Z License for package NDK (Side by side) 26.1.10909125 accepted.
+2026-10-25T16:26:37.6245788Z Preparing "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125".
+2026-10-25T16:26:57.2233103Z "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" ready.
+2026-10-25T16:26:57.2234340Z Installing NDK (Side by side) 26.1.10909125 in /usr/local/lib/android/sdk/ndk/26.1.10909125
+2026-10-25T16:26:57.2235366Z "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" complete.
+2026-10-25T16:26:57.4232186Z "Install NDK (Side by side) 26.1.10909125 v.26.1.10909125" finished.
+2026-10-25T16:26:58.7234101Z 
+2026-10-25T16:26:58.7235168Z > Configure project :expo
+2026-10-25T16:26:58.7235726Z 
+2026-10-25T16:26:58.7236287Z Using expo modules
+2026-10-25T16:26:58.7237051Z   - [32mexpo-asset[0m (10.0.10)
+2026-10-25T16:26:58.7237603Z   - [32mexpo-av[0m (14.0.7)
+2026-10-25T16:26:58.7238669Z   - [32mexpo-constants[0m (16.0.2)
+2026-10-25T16:26:58.7239284Z   - [32mexpo-document-picker[0m (12.0.2)
+2026-10-25T16:26:58.7239908Z   - [32mexpo-file-system[0m (17.0.1)
+2026-10-25T16:26:58.7240617Z   - [32mexpo-font[0m (12.0.10)
+2026-10-25T16:26:58.7241143Z   - [32mexpo-keep-awake[0m (13.0.2)
+2026-10-25T16:26:58.7241719Z   - [32mexpo-linear-gradient[0m (13.0.2)
+2026-10-25T16:26:58.7242344Z   - [32mexpo-modules-core[0m (1.12.26)
+2026-10-25T16:26:58.7242737Z 
+2026-10-25T16:28:04.0289495Z 
+2026-10-25T16:28:04.0420550Z > Task :expo-asset:preBuild UP-TO-DATE
+2026-10-25T16:28:04.0446778Z > Task :expo-av:preBuild UP-TO-DATE
+2026-10-25T16:28:04.0521029Z > Task :expo-av:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.0565227Z > Task :expo-asset:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.1251305Z > Task :expo-av:writeReleaseAarMetadata
+2026-10-25T16:28:04.1301083Z > Task :expo-asset:writeReleaseAarMetadata
+2026-10-25T16:28:04.1361113Z > Task :expo-document-picker:preBuild UP-TO-DATE
+2026-10-25T16:28:04.1392509Z > Task :expo-document-picker:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.1441188Z > Task :expo-document-picker:writeReleaseAarMetadata
+2026-10-25T16:28:04.1478795Z > Task :expo-file-system:preBuild UP-TO-DATE
+2026-10-25T16:28:04.1500994Z > Task :expo-file-system:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.1527119Z > Task :expo-file-system:writeReleaseAarMetadata
+2026-10-25T16:28:04.1555751Z > Task :expo-font:preBuild UP-TO-DATE
+2026-10-25T16:28:04.1671247Z > Task :expo-font:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.1702042Z > Task :expo-font:writeReleaseAarMetadata
+2026-10-25T16:28:04.1740909Z > Task :expo-keep-awake:preBuild UP-TO-DATE
+2026-10-25T16:28:04.1781077Z > Task :expo-keep-awake:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.1809632Z > Task :app:buildKotlinToolingMetadata
+2026-10-25T16:28:04.1821067Z > Task :app:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:04.1840910Z > Task :expo-keep-awake:writeReleaseAarMetadata
+2026-10-25T16:28:04.1870741Z > Task :expo-linear-gradient:preBuild UP-TO-DATE
+2026-10-25T16:28:04.1899642Z > Task :expo-linear-gradient:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.1920779Z > Task :expo-linear-gradient:writeReleaseAarMetadata
+2026-10-25T16:28:04.1943287Z > Task :expo-modules-core:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2010771Z > Task :expo-modules-core:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2040916Z > Task :expo-modules-core:writeReleaseAarMetadata
+2026-10-25T16:28:04.2070971Z > Task :react-native-async-storage_async-storage:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2100849Z > Task :react-native-async-storage_async-storage:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2117234Z > Task :react-native-async-storage_async-storage:writeReleaseAarMetadata
+2026-10-25T16:28:04.2147117Z > Task :react-native-community_netinfo:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2147819Z > Task :react-native-community_netinfo:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2148484Z > Task :react-native-community_netinfo:writeReleaseAarMetadata
+2026-10-25T16:28:04.2149111Z > Task :react-native-safe-area-context:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2149703Z > Task :react-native-safe-area-context:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2150597Z > Task :react-native-safe-area-context:writeReleaseAarMetadata
+2026-10-25T16:28:04.2151159Z > Task :react-native-screens:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2151709Z > Task :react-native-screens:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2152219Z > Task :react-native-screens:writeReleaseAarMetadata
+2026-10-25T16:28:04.2152705Z > Task :react-native-svg:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2153190Z > Task :react-native-svg:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2153676Z > Task :react-native-svg:writeReleaseAarMetadata
+2026-10-25T16:28:04.2154136Z > Task :react-native-webview:preBuild UP-TO-DATE
+2026-10-25T16:28:04.2154635Z > Task :react-native-webview:preReleaseBuild UP-TO-DATE
+2026-10-25T16:28:04.2155155Z > Task :react-native-webview:writeReleaseAarMetadata
+2026-10-25T16:28:04.2156067Z > Task :expo-asset:generateReleaseResValues
+2026-10-25T16:28:04.2156510Z > Task :expo-asset:generateReleaseResources
+2026-10-25T16:28:04.2250477Z 
+2026-10-25T16:28:04.2274954Z The NODE_ENV environment variable is required but was not specified. Ensure the project is bundled with Expo CLI or NODE_ENV is set.
+2026-10-25T16:28:04.2279200Z > Task :expo-constants:createExpoConfig
+2026-10-25T16:28:04.2300950Z 
+2026-10-25T16:28:04.2311955Z Proceeding without mode-specific .env
+2026-10-25T16:28:04.2390871Z > Task :expo-constants:preBuild
+2026-10-25T16:28:04.2419523Z > Task :expo-constants:preReleaseBuild
+2026-10-25T16:28:04.3251330Z > Task :expo-constants:writeReleaseAarMetadata
+2026-10-25T16:28:04.3341035Z > Task :expo-asset:packageReleaseResources
+2026-10-25T16:28:04.3374682Z > Task :expo-constants:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.3430959Z > Task :expo-constants:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.3460860Z > Task :expo-av:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.3491898Z > Task :expo-av:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.3515230Z > Task :expo-constants:packageReleaseResources
+2026-10-25T16:28:04.3520986Z > Task :expo-document-picker:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.3529994Z > Task :expo-document-picker:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.4270880Z > Task :expo-document-picker:packageReleaseResources
+2026-10-25T16:28:04.4311051Z > Task :expo-file-system:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.4312343Z > Task :expo-file-system:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.4319754Z > Task :expo-file-system:packageReleaseResources
+2026-10-25T16:28:04.4320584Z > Task :expo-font:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.4321282Z > Task :expo-font:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.4350988Z > Task :expo:generateExpoModulesPackageListTask
+2026-10-25T16:28:04.4380724Z > Task :expo:preBuild
+2026-10-25T16:28:04.4410686Z > Task :expo:preReleaseBuild
+2026-10-25T16:28:04.4411401Z > Task :expo:writeReleaseAarMetadata
+2026-10-25T16:28:04.4440769Z > Task :expo:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.4471424Z > Task :expo:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.4500649Z > Task :expo-font:packageReleaseResources
+2026-10-25T16:28:04.4501460Z > Task :expo-keep-awake:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.4530794Z > Task :expo-av:packageReleaseResources
+2026-10-25T16:28:04.4560905Z > Task :expo-keep-awake:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.4572138Z > Task :expo-linear-gradient:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.4590384Z > Task :expo:packageReleaseResources
+2026-10-25T16:28:04.4591142Z > Task :expo-linear-gradient:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.4591963Z > Task :expo-modules-core:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.4592706Z > Task :expo-modules-core:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5268076Z > Task :expo-linear-gradient:packageReleaseResources
+2026-10-25T16:28:04.5301159Z > Task :expo-keep-awake:packageReleaseResources
+2026-10-25T16:28:04.5310981Z > Task :react-native-async-storage_async-storage:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.5341016Z > Task :react-native-async-storage_async-storage:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5370824Z > Task :expo-modules-core:packageReleaseResources
+2026-10-25T16:28:04.5400966Z > Task :react-native-community_netinfo:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.5403184Z > Task :react-native-community_netinfo:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5433898Z > Task :react-native-safe-area-context:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.5461012Z > Task :react-native-safe-area-context:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5490887Z > Task :react-native-community_netinfo:packageReleaseResources
+2026-10-25T16:28:04.5491850Z > Task :react-native-async-storage_async-storage:packageReleaseResources
+2026-10-25T16:28:04.5522541Z > Task :react-native-safe-area-context:packageReleaseResources
+2026-10-25T16:28:04.5550906Z > Task :react-native-svg:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.5580871Z > Task :react-native-svg:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5581655Z > Task :react-native-screens:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.5611056Z > Task :react-native-screens:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5640784Z > Task :react-native-webview:generateReleaseResValues FROM-CACHE
+2026-10-25T16:28:04.5670817Z > Task :react-native-webview:generateReleaseResources UP-TO-DATE
+2026-10-25T16:28:04.5671515Z > Task :react-native-svg:packageReleaseResources
+2026-10-25T16:28:04.6244856Z > Task :react-native-webview:packageReleaseResources
+2026-10-25T16:28:04.6250885Z > Task :expo:extractDeepLinksRelease
+2026-10-25T16:28:04.6251693Z > Task :expo-asset:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.6252435Z > Task :react-native-screens:packageReleaseResources
+2026-10-25T16:28:04.6253156Z > Task :expo-av:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7251346Z > Task :expo-av:processReleaseManifest
+2026-10-25T16:28:04.7252374Z > Task :expo-asset:processReleaseManifest
+2026-10-25T16:28:04.7280937Z > Task :expo:processReleaseManifest
+2026-10-25T16:28:04.7301136Z > Task :expo-document-picker:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7302011Z > Task :expo-constants:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7303115Z > Task :expo-file-system:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7303845Z > Task :expo-document-picker:processReleaseManifest
+2026-10-25T16:28:04.7304497Z > Task :expo-constants:processReleaseManifest
+2026-10-25T16:28:04.7305171Z > Task :expo-font:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7305870Z 
+2026-10-25T16:28:04.7306271Z > Task :expo-file-system:processReleaseManifest
+2026-10-25T16:28:04.7307355Z /home/runner/work/rivo/rivo/node_modules/expo-file-system/android/src/main/AndroidManifest.xml:6:9-8:20 Warning:
+2026-10-25T16:28:04.7316220Z 	provider#expo.modules.filesystem.FileSystemFileProvider@android:authorities was tagged at AndroidManifest.xml:6 to replace other declarations but no other declaration present
+2026-10-25T16:28:04.7317375Z 
+2026-10-25T16:28:04.7317838Z > Task :expo-keep-awake:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7318652Z > Task :expo-linear-gradient:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7319378Z > Task :expo-keep-awake:processReleaseManifest
+2026-10-25T16:28:04.7320287Z > Task :expo-modules-core:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.7320998Z > Task :expo-font:processReleaseManifest
+2026-10-25T16:28:04.7321654Z > Task :expo-linear-gradient:processReleaseManifest
+2026-10-25T16:28:04.7322466Z > Task :react-native-community_netinfo:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.8234297Z > Task :react-native-async-storage_async-storage:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.8235069Z 
+2026-10-25T16:28:04.8235717Z > Task :react-native-async-storage_async-storage:processReleaseManifest
+2026-10-25T16:28:04.8237685Z package="com.reactnativecommunity.asyncstorage" found in source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/@react-native-async-storage/async-storage/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8239587Z Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+2026-10-25T16:28:04.8241939Z Recommendation: remove package="com.reactnativecommunity.asyncstorage" from the source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/@react-native-async-storage/async-storage/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8243237Z 
+2026-10-25T16:28:04.8243644Z > Task :expo-modules-core:processReleaseManifest
+2026-10-25T16:28:04.8244666Z /home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/AndroidManifest.xml:8:9-11:45 Warning:
+2026-10-25T16:28:04.8246558Z 	meta-data#com.facebook.soloader.enabled@android:value was tagged at AndroidManifest.xml:8 to replace other declarations but no other declaration present
+2026-10-25T16:28:04.8247470Z 
+2026-10-25T16:28:04.8247950Z > Task :react-native-community_netinfo:processReleaseManifest
+2026-10-25T16:28:04.8249523Z package="com.reactnativecommunity.netinfo" found in source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/@react-native-community/netinfo/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8251622Z Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+2026-10-25T16:28:04.8253651Z Recommendation: remove package="com.reactnativecommunity.netinfo" from the source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/@react-native-community/netinfo/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8254888Z 
+2026-10-25T16:28:04.8255338Z > Task :react-native-svg:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.8256202Z > Task :react-native-safe-area-context:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.8257065Z > Task :react-native-screens:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.8257551Z 
+2026-10-25T16:28:04.8258019Z > Task :react-native-safe-area-context:processReleaseManifest
+2026-10-25T16:28:04.8259593Z package="com.th3rdwave.safeareacontext" found in source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/react-native-safe-area-context/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8261791Z Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+2026-10-25T16:28:04.8263807Z Recommendation: remove package="com.th3rdwave.safeareacontext" from the source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/react-native-safe-area-context/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8265020Z 
+2026-10-25T16:28:04.8265419Z > Task :react-native-svg:processReleaseManifest
+2026-10-25T16:28:04.8266749Z package="com.horcrux.svg" found in source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/react-native-svg/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8268383Z Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+2026-10-25T16:28:04.8270370Z Recommendation: remove package="com.horcrux.svg" from the source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/react-native-svg/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8271427Z 
+2026-10-25T16:28:04.8271913Z > Task :react-native-webview:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:28:04.8272418Z 
+2026-10-25T16:28:04.8272827Z > Task :react-native-screens:processReleaseManifest
+2026-10-25T16:28:04.8274238Z package="com.swmansion.rnscreens" found in source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8275948Z Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+2026-10-25T16:28:04.8277833Z Recommendation: remove package="com.swmansion.rnscreens" from the source AndroidManifest.xml: /home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/AndroidManifest.xml.
+2026-10-25T16:28:04.8278946Z 
+2026-10-25T16:28:04.8279365Z > Task :react-native-webview:processReleaseManifest
+2026-10-25T16:28:04.9230690Z 
+2026-10-25T16:28:04.9231248Z > Task :app:applyPatches
+2026-10-25T16:28:04.9231633Z patch-package 8.0.1
+2026-10-25T16:28:04.9231909Z Applying patches...
+2026-10-25T16:28:04.9232441Z react-native-webview@14.0.1 ✔
+2026-10-25T16:28:04.9232619Z 
+2026-10-25T16:28:04.9232894Z > Task :app:generateCodegenSchemaFromJavaScript SKIPPED
+2026-10-25T16:28:04.9235206Z > Task :app:generateCodegenArtifactsFromSchema SKIPPED
+2026-10-25T16:28:04.9235552Z > Task :app:generatePackageList
+2026-10-25T16:28:04.9235776Z > Task :app:preBuild
+2026-10-25T16:28:04.9236480Z > Task :app:preReleaseBuild
+2026-10-25T16:28:04.9236822Z > Task :app:generateReleaseBuildConfig
+2026-10-25T16:28:06.6231613Z > Task :expo-asset:compileReleaseLibraryResources
+2026-10-25T16:28:07.5242324Z > Task :expo:compileReleaseLibraryResources
+2026-10-25T16:28:08.1232764Z > Task :expo-asset:parseReleaseLocalResources
+2026-10-25T16:28:08.1250665Z > Task :expo:parseReleaseLocalResources
+2026-10-25T16:28:08.1310837Z > Task :expo-asset:generateReleaseRFile
+2026-10-25T16:28:08.2243659Z > Task :expo:generateReleaseRFile
+2026-10-25T16:28:08.2260949Z > Task :expo-constants:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:08.2290951Z > Task :expo-constants:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:08.8253932Z 
+2026-10-25T16:28:08.8296406Z > Task :app:checkReleaseAarMetadata
+2026-10-25T16:28:08.8302512Z WARNING: [Processor] Library '/home/runner/.gradle/caches/modules-2/files-2.1/com.google.android.exoplayer/exoplayer-ui/2.18.1/eed81d49b8b0e9a365cbec260dafb222d6e5bc67/exoplayer-ui-2.18.1.aar' contains references to both AndroidX and old support library. This seems like the library is partially migrated. Jetifier will try to rewrite the library anyway.
+2026-10-25T16:28:08.8330800Z  Example of androidX reference: 'androidx/core/app/NotificationCompat$Builder'
+2026-10-25T16:28:08.8331704Z  Example of support library reference: 'android/support/v4/media/session/MediaSessionCompat$Token'
+2026-10-25T16:28:09.1231358Z 
+2026-10-25T16:28:09.1241146Z > Task :expo-av:compileReleaseLibraryResources
+2026-10-25T16:28:09.1263084Z > Task :expo-document-picker:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.1270923Z > Task :expo-document-picker:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:09.3271203Z > Task :expo-constants:generateReleaseRFile
+2026-10-25T16:28:09.3329979Z > Task :expo-av:parseReleaseLocalResources
+2026-10-25T16:28:09.4287435Z > Task :expo-av:generateReleaseRFile
+2026-10-25T16:28:09.4321150Z > Task :expo-document-picker:generateReleaseRFile
+2026-10-25T16:28:09.4336639Z > Task :expo-font:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.4380881Z > Task :expo-font:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:09.4396205Z > Task :expo-file-system:parseReleaseLocalResources
+2026-10-25T16:28:09.4435171Z > Task :expo-font:generateReleaseRFile
+2026-10-25T16:28:09.4460896Z > Task :expo-keep-awake:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.4490846Z > Task :expo-keep-awake:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:09.5251298Z > Task :expo-keep-awake:generateReleaseRFile
+2026-10-25T16:28:09.5321244Z > Task :expo-linear-gradient:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.5371085Z > Task :expo-linear-gradient:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:09.5410856Z > Task :expo-file-system:generateReleaseRFile
+2026-10-25T16:28:09.5430969Z > Task :expo-modules-core:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.5460927Z > Task :expo-modules-core:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:09.5490834Z > Task :expo-linear-gradient:generateReleaseRFile
+2026-10-25T16:28:09.5521073Z > Task :react-native-async-storage_async-storage:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.5522020Z > Task :react-native-async-storage_async-storage:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:09.5522708Z > Task :expo-file-system:compileReleaseLibraryResources
+2026-10-25T16:28:09.5524160Z > Task :react-native-community_netinfo:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:09.6271669Z > Task :react-native-community_netinfo:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:10.8236472Z > Task :expo-modules-core:generateReleaseRFile
+2026-10-25T16:28:10.8267699Z > Task :react-native-safe-area-context:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:10.8291382Z > Task :react-native-safe-area-context:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:10.8300097Z > Task :react-native-safe-area-context:generateReleaseRFile
+2026-10-25T16:28:10.8331436Z > Task :react-native-community_netinfo:generateReleaseRFile
+2026-10-25T16:28:10.9232084Z > Task :react-native-async-storage_async-storage:generateReleaseRFile
+2026-10-25T16:28:10.9232781Z > Task :react-native-svg:compileReleaseLibraryResources FROM-CACHE
+2026-10-25T16:28:10.9233509Z > Task :react-native-svg:parseReleaseLocalResources FROM-CACHE
+2026-10-25T16:28:11.0231505Z > Task :react-native-svg:generateReleaseRFile
+2026-10-25T16:28:11.1231427Z > Task :react-native-screens:parseReleaseLocalResources
+2026-10-25T16:28:11.3251220Z > Task :react-native-screens:generateReleaseRFile
+2026-10-25T16:28:11.3280746Z > Task :react-native-screens:compileReleaseLibraryResources
+2026-10-25T16:28:11.3377240Z > Task :expo:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:11.3377942Z > Task :expo:generateReleaseBuildConfig
+2026-10-25T16:28:11.3407449Z > Task :expo-asset:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:11.3448232Z > Task :expo-asset:generateReleaseBuildConfig
+2026-10-25T16:28:11.3449207Z > Task :expo-modules-core:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:11.3450059Z > Task :expo-modules-core:generateReleaseBuildConfig
+2026-10-25T16:28:16.7241217Z > Task :react-native-webview:compileReleaseLibraryResources
+2026-10-25T16:28:16.8230879Z > Task :react-native-webview:parseReleaseLocalResources
+2026-10-25T16:28:16.8260887Z > Task :react-native-webview:generateReleaseRFile
+2026-10-25T16:28:16.8317846Z > Task :expo-av:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:16.8320831Z > Task :expo-av:generateReleaseBuildConfig
+2026-10-25T16:28:17.0251195Z > Task :expo-asset:javaPreCompileRelease
+2026-10-25T16:28:17.0281193Z > Task :expo-constants:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:17.0282154Z > Task :expo-constants:generateReleaseBuildConfig
+2026-10-25T16:28:17.0310916Z > Task :expo-constants:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0311853Z > Task :expo-document-picker:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:17.0341433Z > Task :expo-document-picker:generateReleaseBuildConfig
+2026-10-25T16:28:17.0370892Z > Task :expo-document-picker:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0401018Z > Task :expo-file-system:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:17.0401892Z > Task :expo-file-system:generateReleaseBuildConfig
+2026-10-25T16:28:17.0430863Z > Task :expo-file-system:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0460870Z > Task :expo-font:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:17.0490669Z > Task :expo-font:generateReleaseBuildConfig
+2026-10-25T16:28:17.0491444Z > Task :expo-font:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0520926Z > Task :expo-keep-awake:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:17.0542636Z > Task :expo-keep-awake:generateReleaseBuildConfig
+2026-10-25T16:28:17.0570883Z > Task :expo-keep-awake:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0600731Z > Task :expo-linear-gradient:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:17.0610857Z > Task :expo-linear-gradient:generateReleaseBuildConfig
+2026-10-25T16:28:17.0640856Z > Task :expo-linear-gradient:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0650630Z > Task :expo:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.0671128Z > Task :react-native-async-storage_async-storage:generateReleaseBuildConfig
+2026-10-25T16:28:17.0686243Z > Task :react-native-async-storage_async-storage:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:17.4254938Z > Task :expo-av:javaPreCompileRelease
+2026-10-25T16:28:17.4271013Z > Task :react-native-community_netinfo:generateReleaseBuildConfig
+2026-10-25T16:28:17.4300857Z > Task :react-native-community_netinfo:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:23.8292423Z /home/runner/work/rivo/rivo/node_modules/@react-native-community/netinfo/android/src/main/java/com/reactnativecommunity/netinfo/NetInfoModule.java:45: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+2026-10-25T16:28:23.8294140Z 
+2026-10-25T16:28:23.8320830Z     public void onCatalystInstanceDestroy() {
+2026-10-25T16:28:23.8321499Z > Task :react-native-community_netinfo:compileReleaseJavaWithJavac
+2026-10-25T16:28:23.8359153Z                 ^
+2026-10-25T16:28:24.4271225Z Note: Some input files use or override a deprecated API.
+2026-10-25T16:28:24.4321238Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:28:24.4401040Z 1 warning
+2026-10-25T16:28:29.4261375Z /home/runner/work/rivo/rivo/node_modules/@react-native-async-storage/async-storage/android/src/main/java/com/reactnativecommunity/asyncstorage/AsyncStorageModule.java:84: warning: [removal] onCatalystInstanceDestroy() in NativeModule has been deprecated and marked for removal
+2026-10-25T16:28:29.4262996Z 
+2026-10-25T16:28:29.4321018Z   public void onCatalystInstanceDestroy() {
+2026-10-25T16:28:29.4321729Z > Task :react-native-async-storage_async-storage:compileReleaseJavaWithJavac
+2026-10-25T16:28:29.4340506Z 
+2026-10-25T16:28:29.4370747Z               ^
+2026-10-25T16:28:29.4371350Z > Task :expo-modules-core:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:29.4372323Z Note: Some input files use or override a deprecated API.
+2026-10-25T16:28:29.4372945Z > Task :react-native-community_netinfo:bundleLibCompileToJarRelease
+2026-10-25T16:28:29.4400945Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:28:29.4401711Z > Task :react-native-safe-area-context:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:29.4431927Z Note: /home/runner/work/rivo/rivo/node_modules/@react-native-async-storage/async-storage/android/src/javaPackage/java/com/reactnativecommunity/asyncstorage/AsyncStoragePackage.java uses unchecked or unsafe operations.
+2026-10-25T16:28:29.4433445Z > Task :react-native-async-storage_async-storage:bundleLibCompileToJarRelease
+2026-10-25T16:28:29.4440722Z Note: Recompile with -Xlint:unchecked for details.
+2026-10-25T16:28:29.4460895Z > Task :react-native-screens:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:29.4461684Z 1 warning
+2026-10-25T16:28:29.4462154Z > Task :react-native-safe-area-context:generateReleaseBuildConfig
+2026-10-25T16:28:29.4491161Z > Task :react-native-screens:generateReleaseBuildConfig
+2026-10-25T16:28:31.1286755Z 
+2026-10-25T16:28:31.1327976Z > Task :app:createBundleReleaseJsAndAssets
+2026-10-25T16:28:31.1350655Z Starting Metro Bundler
+2026-10-25T16:28:31.1380761Z warning: Bundler cache is empty, rebuilding (this may take a minute)
+2026-10-25T16:28:36.8231696Z 
+2026-10-25T16:28:36.8250777Z > Task :react-native-safe-area-context:compileReleaseKotlin
+2026-10-25T16:28:36.8278816Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaContextPackage.kt:27:11 'constructor ReactModuleInfo(String!, String!, Boolean, Boolean, Boolean, Boolean, Boolean)' is deprecated. Deprecated in Java
+2026-10-25T16:28:36.8301695Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaContextPackage.kt:33:27 'hasConstants: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:36.8308786Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-safe-area-context/android/src/main/java/com/th3rdwave/safeareacontext/SafeAreaView.kt:59:23 'getter for uiImplementation: UIImplementation!' is deprecated. Deprecated in Java
+2026-10-25T16:28:36.8312412Z 
+2026-10-25T16:28:36.8313015Z > Task :react-native-safe-area-context:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:37.6243686Z Note: /home/runner/work/rivo/rivo/node_modules/react-native-safe-area-context/android/src/paper/java/com/th3rdwave/safeareacontext/NativeSafeAreaContextSpec.java uses or overrides a deprecated API.
+2026-10-25T16:28:37.6244851Z 
+2026-10-25T16:28:37.6261122Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:28:37.6261837Z > Task :react-native-safe-area-context:compileReleaseJavaWithJavac
+2026-10-25T16:28:37.6290602Z 
+2026-10-25T16:28:37.6311149Z > Task :react-native-safe-area-context:bundleLibCompileToJarRelease
+2026-10-25T16:28:37.6341992Z > Task :react-native-screens:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:37.6350852Z > Task :react-native-svg:generateReleaseBuildConfig
+2026-10-25T16:28:37.6352352Z > Task :react-native-svg:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:41.3311745Z > Task :expo-modules-core:compileReleaseKotlin
+2026-10-25T16:28:42.8249011Z Note: Some input files use or override a deprecated API.
+2026-10-25T16:28:42.8249461Z 
+2026-10-25T16:28:42.8281259Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:28:42.8281818Z > Task :react-native-svg:compileReleaseJavaWithJavac
+2026-10-25T16:28:42.8343600Z Note: Some input files use unchecked or unsafe operations.
+2026-10-25T16:28:42.8370836Z Note: Recompile with -Xlint:unchecked for details.
+2026-10-25T16:28:42.9320785Z 
+2026-10-25T16:28:42.9351455Z > Task :react-native-svg:bundleLibCompileToJarRelease
+2026-10-25T16:28:42.9441411Z > Task :react-native-webview:checkKotlinGradlePluginConfigurationErrors
+2026-10-25T16:28:42.9473026Z > Task :react-native-webview:generateReleaseBuildConfig
+2026-10-25T16:28:49.4242363Z 
+2026-10-25T16:28:49.4271560Z > Task :react-native-webview:compileReleaseKotlin
+2026-10-25T16:28:49.4275314Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:40:71 Parameter 'webView' is never used, could be renamed to _
+2026-10-25T16:28:49.4302079Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:82:18 'setter for allowFileAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4332210Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:83:18 'setter for allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4361861Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:94:102 Parameter 'contentLength' is never used, could be renamed to _
+2026-10-25T16:28:49.4370066Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:110:32 Variable 'urlObj' initializer is redundant
+2026-10-25T16:28:49.4391953Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:124:21 'allowScanningByMediaScanner(): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4425018Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:161:36 'setter for systemUiVisibility: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4451793Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:343:25 Unnecessary safe call on a non-null receiver of type ReadableArray
+2026-10-25T16:28:49.4481928Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:343:40 Elvis operator (?:) always returns the left operand of non-nullable type String
+2026-10-25T16:28:49.4500998Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:350:34 Condition 'args != null' is always 'true'
+2026-10-25T16:28:49.4511891Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:369:38 'setter for allowUniversalAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4532573Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:381:19 Parameter 'viewWrapper' is never used
+2026-10-25T16:28:49.4591711Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:430:51 Unchecked cast: Any! to kotlin.collections.HashMap<String, String> /* = java.util.HashMap<String, String> */
+2026-10-25T16:28:49.4621794Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:486:23 'setter for savePassword: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4651921Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:487:23 'setter for saveFormData: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4661780Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:557:23 'setter for allowFileAccessFromFileURLs: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4681783Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:602:52 'FORCE_DARK_ON: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4712069Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:602:89 'FORCE_DARK_OFF: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4741931Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:603:35 'setForceDark(WebSettings!, Int): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4768745Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:612:35 'setForceDarkStrategy(WebSettings!, Int): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4772053Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:614:39 'DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4800669Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:658:65 Unchecked cast: ArrayList<Any!> to List<Map<String, String>>
+2026-10-25T16:28:49.4881985Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:679:23 'setter for saveFormData: Boolean' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.4911762Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt:714:36 Parameter 'viewWrapper' is never used
+2026-10-25T16:28:49.4937897Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/SubResourceErrorEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5002104Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/SubResourceErrorEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5031747Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/SubResourceErrorEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5059844Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/SubResourceErrorEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5074464Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopCustomMenuSelectionEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5077142Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopCustomMenuSelectionEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5079629Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopCustomMenuSelectionEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5082422Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopCustomMenuSelectionEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5084744Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopHttpErrorEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5087473Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopHttpErrorEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5089820Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopHttpErrorEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5092597Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopHttpErrorEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5094964Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingErrorEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5097321Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingErrorEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5099722Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingErrorEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5102393Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingErrorEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5131846Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingFinishEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5162087Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingFinishEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5164696Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingFinishEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5192002Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingFinishEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5257650Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingProgressEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5287353Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingProgressEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5312030Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingProgressEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5344550Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingProgressEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5361684Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingStartEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5401873Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingStartEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5404614Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingStartEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5432081Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopLoadingStartEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5461796Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopMessageEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5492227Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopMessageEvent.kt:10:75 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5494775Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopMessageEvent.kt:21:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5519414Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopMessageEvent.kt:22:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5549258Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopNewWindowEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5551827Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopNewWindowEvent.kt:11:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5554081Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopNewWindowEvent.kt:22:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5556842Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopNewWindowEvent.kt:23:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5559145Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopRenderProcessGoneEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5561640Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopRenderProcessGoneEvent.kt:12:3 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5563911Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopRenderProcessGoneEvent.kt:23:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5566369Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopRenderProcessGoneEvent.kt:24:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5577559Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopShouldStartLoadWithRequestEvent.kt:5:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5580539Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopShouldStartLoadWithRequestEvent.kt:10:89 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5583181Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopShouldStartLoadWithRequestEvent.kt:27:42 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5585816Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-webview/android/src/main/java/com/reactnativecommunity/webview/events/TopShouldStartLoadWithRequestEvent.kt:28:21 'receiveEvent(Int, String!, WritableMap?): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:49.5587195Z 
+2026-10-25T16:28:49.5587655Z > Task :react-native-webview:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:28:51.1257853Z 
+2026-10-25T16:28:51.1271212Z Note: Some input files use or override a deprecated API.
+2026-10-25T16:28:51.1297432Z > Task :react-native-webview:compileReleaseJavaWithJavac
+2026-10-25T16:28:51.1361522Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:28:51.1361928Z 
+2026-10-25T16:28:51.1415344Z > Task :react-native-webview:bundleLibCompileToJarRelease
+2026-10-25T16:28:51.2231375Z > Task :expo:mergeReleaseJniLibFolders
+2026-10-25T16:28:51.2271122Z > Task :expo:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:51.2286151Z > Task :expo:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:51.3251434Z > Task :expo:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:51.3311038Z > Task :expo:extractDeepLinksForAarRelease
+2026-10-25T16:28:51.3341545Z > Task :expo:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:51.3401050Z > Task :expo:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:51.3410782Z > Task :expo:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:51.3501530Z > Task :expo:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:51.3532867Z > Task :expo:prepareLintJarForPublish
+2026-10-25T16:28:51.3561877Z > Task :expo:prepareReleaseArtProfile
+2026-10-25T16:28:51.4301393Z > Task :expo-asset:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:51.4306582Z > Task :expo-asset:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:51.4361095Z > Task :expo-asset:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:51.4401050Z > Task :expo-asset:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:51.4401976Z > Task :expo-asset:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:51.4491051Z > Task :expo-asset:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:51.4545484Z > Task :expo-asset:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:51.4648459Z > Task :expo-asset:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:51.4671030Z > Task :expo-asset:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:51.4700893Z > Task :expo-asset:prepareLintJarForPublish
+2026-10-25T16:28:51.5245392Z > Task :expo-asset:prepareReleaseArtProfile
+2026-10-25T16:28:52.5290690Z 
+2026-10-25T16:28:52.5337483Z > Task :react-native-screens:compileReleaseKotlin
+2026-10-25T16:28:52.5431192Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/RNScreensPackage.kt:42:47 'constructor ReactModuleInfo(String!, String!, Boolean, Boolean, Boolean, Boolean, Boolean)' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.5591951Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContainer.kt:30:53 'FrameCallback' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.5712160Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenContainer.kt:30:98 'FrameCallback' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.5821852Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:65:27 'setter for targetElevation: Float' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.5902827Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackFragment.kt:128:27 'setter for targetElevation: Float' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.5951194Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt:86:34 'getter for systemWindowInsetTop: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6063037Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenStackHeaderConfig.kt:231:37 'setColorFilter(Int, PorterDuff.Mode): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6161996Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenViewManager.kt:47:42 'setStateWrapper(StateWrapper!): Unit' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6245540Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:135:47 'replaceSystemWindowInsets(Int, Int, Int, Int): WindowInsetsCompat' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6314302Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:136:51 'getter for systemWindowInsetLeft: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6392423Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:138:51 'getter for systemWindowInsetRight: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6401904Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/ScreenWindowTraits.kt:139:51 'getter for systemWindowInsetBottom: Int' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6461437Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/SearchBarManager.kt:100:22 Parameter 'view' is never used
+2026-10-25T16:28:52.6521650Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/SearchBarManager.kt:100:43 Parameter 'placeholder' is never used
+2026-10-25T16:28:52.6551568Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/SearchBarView.kt:147:43 Parameter 'flag' is never used
+2026-10-25T16:28:52.6571695Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/events/HeaderHeightChangeEvent.kt:6:44 'RCTEventEmitter' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6611669Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/paper/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt:5:37 'FabricViewStateManager' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6702183Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/paper/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt:9:48 'FabricViewStateManager' is deprecated. Deprecated in Java
+2026-10-25T16:28:52.6781927Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/paper/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt:11:42 Parameter 'width' is never used
+2026-10-25T16:28:52.6852265Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/paper/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt:11:54 Parameter 'height' is never used
+2026-10-25T16:28:52.6881484Z w: file:///home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/paper/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt:11:67 Parameter 'headerHeight' is never used
+2026-10-25T16:28:53.5320572Z 
+2026-10-25T16:28:53.5391409Z > Task :expo-av:configureCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:28:53.5501575Z Checking the license for package CMake 3.22.1 in /usr/local/lib/android/sdk/licenses
+2026-10-25T16:28:53.5581039Z License for package CMake 3.22.1 accepted.
+2026-10-25T16:28:53.5621029Z Preparing "Install CMake 3.22.1 v.3.22.1".
+2026-10-25T16:28:54.5242012Z Note: /home/runner/work/rivo/rivo/node_modules/react-native-screens/android/src/paper/java/com/swmansion/rnscreens/NativeScreensModuleSpec.java uses or overrides a deprecated API.
+2026-10-25T16:28:54.5271210Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:28:54.5271603Z 
+2026-10-25T16:28:54.5300929Z > Task :react-native-screens:compileReleaseJavaWithJavac
+2026-10-25T16:28:54.5301336Z 
+2026-10-25T16:28:54.5301652Z > Task :react-native-screens:bundleLibCompileToJarRelease
+2026-10-25T16:28:54.5302172Z > Task :expo-constants:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:54.5302645Z > Task :expo-constants:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:54.5303127Z > Task :expo-constants:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:54.5303629Z > Task :expo-constants:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:54.5304179Z > Task :expo-constants:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:54.5304686Z > Task :expo-constants:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:54.5305155Z > Task :expo-constants:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:54.5305639Z > Task :expo-constants:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:54.6271492Z > Task :expo-constants:packageReleaseAssets
+2026-10-25T16:28:54.6361241Z > Task :expo-constants:prepareLintJarForPublish
+2026-10-25T16:28:54.6379744Z > Task :expo-constants:prepareReleaseArtProfile
+2026-10-25T16:28:54.6540909Z > Task :expo-document-picker:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:54.6651232Z > Task :expo-document-picker:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:54.6724849Z > Task :expo-document-picker:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:54.6782264Z > Task :expo-document-picker:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:54.6901573Z > Task :expo-document-picker:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:54.6981430Z > Task :expo-document-picker:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:54.7055893Z > Task :expo-document-picker:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:54.7080941Z > Task :expo-document-picker:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:54.7165048Z > Task :expo-document-picker:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:54.7251120Z > Task :expo-document-picker:prepareLintJarForPublish
+2026-10-25T16:28:54.7315770Z > Task :expo-document-picker:prepareReleaseArtProfile
+2026-10-25T16:28:54.7402789Z > Task :expo-file-system:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:54.7481043Z > Task :expo-file-system:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:54.7581141Z > Task :expo-file-system:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:54.7600786Z > Task :expo-file-system:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:54.7668160Z > Task :expo-file-system:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:54.7761061Z > Task :expo-file-system:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:54.7810993Z > Task :expo-file-system:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:54.7855985Z > Task :expo-file-system:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:54.7921365Z > Task :expo-file-system:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:54.8001074Z > Task :expo-file-system:prepareLintJarForPublish
+2026-10-25T16:28:54.8036291Z > Task :expo-file-system:prepareReleaseArtProfile
+2026-10-25T16:28:54.8146309Z > Task :expo-font:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:54.8213784Z > Task :expo-font:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:54.8229060Z > Task :expo-font:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:54.8320950Z > Task :expo-font:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:54.8347524Z > Task :expo-font:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:54.8425390Z > Task :expo-font:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:54.8511102Z > Task :expo-font:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:54.8549282Z > Task :expo-font:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:54.8620904Z > Task :expo-font:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:54.8710865Z > Task :expo-font:prepareLintJarForPublish
+2026-10-25T16:28:54.8770774Z > Task :expo-font:prepareReleaseArtProfile
+2026-10-25T16:28:54.8800905Z > Task :expo-keep-awake:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:54.8890914Z > Task :expo-keep-awake:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:54.8961101Z > Task :expo-keep-awake:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:54.9010986Z > Task :expo-keep-awake:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:54.9051916Z > Task :expo-keep-awake:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:54.9144297Z > Task :expo-keep-awake:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:54.9190886Z > Task :expo-keep-awake:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:54.9241553Z > Task :expo-keep-awake:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:54.9250807Z > Task :expo-keep-awake:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:54.9340890Z > Task :expo-keep-awake:prepareLintJarForPublish
+2026-10-25T16:28:54.9405552Z > Task :expo-keep-awake:prepareReleaseArtProfile
+2026-10-25T16:28:54.9470919Z > Task :expo-linear-gradient:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:28:54.9571032Z > Task :expo-linear-gradient:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:28:54.9650879Z > Task :expo-linear-gradient:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:28:54.9728027Z > Task :expo-linear-gradient:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:28:54.9741784Z > Task :expo-linear-gradient:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:28:54.9742471Z > Task :expo-linear-gradient:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:28:54.9743070Z > Task :expo-linear-gradient:compileReleaseShaders NO-SOURCE
+2026-10-25T16:28:54.9743661Z > Task :expo-linear-gradient:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:28:54.9744266Z > Task :expo-linear-gradient:packageReleaseAssets FROM-CACHE
+2026-10-25T16:28:54.9745146Z > Task :expo-linear-gradient:prepareLintJarForPublish
+2026-10-25T16:28:54.9745674Z > Task :expo-linear-gradient:prepareReleaseArtProfile
+2026-10-25T16:28:55.6230823Z 
+2026-10-25T16:28:55.6271253Z > Task :expo-av:configureCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:28:55.6272023Z "Install CMake 3.22.1 v.3.22.1" ready.
+2026-10-25T16:28:55.6301206Z Installing CMake 3.22.1 in /usr/local/lib/android/sdk/cmake/3.22.1
+2026-10-25T16:28:55.6321122Z "Install CMake 3.22.1 v.3.22.1" complete.
+2026-10-25T16:28:55.6350835Z "Install CMake 3.22.1 v.3.22.1" finished.
+2026-10-25T16:28:58.6255882Z 
+2026-10-25T16:28:58.6341773Z > Task :expo-modules-core:configureCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:29:05.7311366Z > Task :expo-av:buildCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:29:08.1315556Z > Task :expo-av:configureCMakeRelWithDebInfo[armeabi-v7a]
+2026-10-25T16:29:15.7281331Z > Task :expo-av:buildCMakeRelWithDebInfo[armeabi-v7a]
+2026-10-25T16:29:18.0291508Z > Task :expo-av:configureCMakeRelWithDebInfo[x86_64]
+2026-10-25T16:29:22.8260602Z 
+2026-10-25T16:29:22.8321293Z > Task :expo-modules-core:compileReleaseKotlin
+2026-10-25T16:29:22.8401059Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt:20:26 'Promise' is deprecated. AsyncFunction will crash when called. Use expo.modules.kotlin.Promise instead
+2026-10-25T16:29:22.8479945Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt:63:51 'Promise' is deprecated. AsyncFunction will crash when called. Use expo.modules.kotlin.Promise instead
+2026-10-25T16:29:22.8544242Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/adapters/react/permissions/PermissionsService.kt:90:54 'Promise' is deprecated. AsyncFunction will crash when called. Use expo.modules.kotlin.Promise instead
+2026-10-25T16:29:22.8651938Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/defaultmodules/CoreModule.kt:6:34 'ReactFeatureFlags' is deprecated. Deprecated in Java
+2026-10-25T16:29:22.8741938Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/defaultmodules/CoreModule.kt:70:12 'ReactFeatureFlags' is deprecated. Deprecated in Java
+2026-10-25T16:29:22.8825251Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/events/KModuleEventEmitterWrapper.kt:97:7 'constructor Event<T : Event<(raw) Event<*>>!>(Int)' is deprecated. Deprecated in Java
+2026-10-25T16:29:22.8904474Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-modules-core/android/src/main/java/expo/modules/kotlin/types/JSTypeConverterHelper.kt:44:17 'get(String!): Any?' is deprecated. Deprecated in Java
+2026-10-25T16:29:23.9270764Z 
+2026-10-25T16:29:23.9361283Z > Task :expo:extractProguardFiles
+2026-10-25T16:29:23.9433364Z > Task :expo:writeReleaseLintModelMetadata
+2026-10-25T16:29:23.9480947Z > Task :expo-asset:extractProguardFiles
+2026-10-25T16:29:23.9541021Z > Task :expo-asset:writeReleaseLintModelMetadata
+2026-10-25T16:29:23.9621022Z > Task :expo-constants:extractProguardFiles
+2026-10-25T16:29:24.0294864Z > Task :expo-constants:writeReleaseLintModelMetadata
+2026-10-25T16:29:24.0341246Z > Task :expo-document-picker:extractProguardFiles
+2026-10-25T16:29:24.0401378Z > Task :expo-document-picker:writeReleaseLintModelMetadata
+2026-10-25T16:29:24.0431402Z > Task :expo-file-system:extractProguardFiles
+2026-10-25T16:29:24.0491062Z > Task :expo-file-system:writeReleaseLintModelMetadata
+2026-10-25T16:29:24.0549654Z > Task :expo-font:extractProguardFiles
+2026-10-25T16:29:24.0621083Z > Task :expo-font:writeReleaseLintModelMetadata
+2026-10-25T16:29:24.0707495Z > Task :expo-keep-awake:extractProguardFiles
+2026-10-25T16:29:24.1281970Z > Task :expo-keep-awake:writeReleaseLintModelMetadata
+2026-10-25T16:29:24.1341314Z > Task :expo-linear-gradient:extractProguardFiles
+2026-10-25T16:29:24.1361026Z > Task :expo-linear-gradient:writeReleaseLintModelMetadata
+2026-10-25T16:29:24.1411403Z > Task :react-native-async-storage_async-storage:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:24.1460984Z > Task :react-native-async-storage_async-storage:processReleaseJavaRes NO-SOURCE
+2026-10-25T16:29:24.1491199Z > Task :react-native-async-storage_async-storage:createFullJarRelease
+2026-10-25T16:29:24.1541060Z > Task :react-native-async-storage_async-storage:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:29:24.1571016Z > Task :react-native-async-storage_async-storage:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:29:24.1641028Z > Task :react-native-async-storage_async-storage:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:29:24.1642065Z > Task :react-native-async-storage_async-storage:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:29:24.1701095Z > Task :react-native-async-storage_async-storage:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:29:24.4230643Z > Task :expo-av:buildCMakeRelWithDebInfo[x86_64]
+2026-10-25T16:29:24.5240420Z > Task :expo-av:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:29:26.5236089Z > Task :expo-av:mergeReleaseNativeLibs
+2026-10-25T16:29:26.6280989Z > Task :expo-av:stripReleaseDebugSymbols
+2026-10-25T16:29:26.6340923Z > Task :expo-av:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:29:26.6371007Z > Task :expo-av:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:29:26.7241248Z > Task :expo-av:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:29:26.7242205Z > Task :expo-av:compileReleaseShaders NO-SOURCE
+2026-10-25T16:29:26.7242792Z > Task :expo-av:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:29:26.7301128Z > Task :expo-av:packageReleaseAssets FROM-CACHE
+2026-10-25T16:29:26.7356854Z > Task :expo-av:prepareLintJarForPublish
+2026-10-25T16:29:26.8231525Z > Task :expo-av:prepareReleaseArtProfile
+2026-10-25T16:29:26.8290999Z > Task :expo-av:extractProguardFiles
+2026-10-25T16:29:26.8320917Z > Task :expo-av:writeReleaseLintModelMetadata
+2026-10-25T16:29:26.8351048Z > Task :react-native-community_netinfo:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:26.8401044Z > Task :react-native-community_netinfo:processReleaseJavaRes NO-SOURCE
+2026-10-25T16:29:26.8460939Z > Task :react-native-community_netinfo:createFullJarRelease
+2026-10-25T16:29:26.8477555Z > Task :react-native-community_netinfo:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:29:26.8520983Z > Task :react-native-community_netinfo:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:29:26.8578302Z > Task :react-native-community_netinfo:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:29:26.8601081Z > Task :react-native-community_netinfo:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:29:26.8661126Z > Task :react-native-community_netinfo:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:29:28.6261665Z > Task :expo-modules-core:buildCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:29:32.2251523Z > Task :react-native-community_netinfo:extractReleaseAnnotations
+2026-10-25T16:29:32.2301252Z > Task :react-native-async-storage_async-storage:extractReleaseAnnotations
+2026-10-25T16:29:32.2331166Z > Task :react-native-async-storage_async-storage:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:32.2441229Z > Task :react-native-community_netinfo:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:32.2477537Z > Task :react-native-community_netinfo:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:32.2521130Z > Task :react-native-async-storage_async-storage:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:32.2550882Z > Task :react-native-community_netinfo:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:29:32.2591148Z > Task :react-native-async-storage_async-storage:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:29:32.2610696Z > Task :react-native-community_netinfo:compileReleaseShaders NO-SOURCE
+2026-10-25T16:29:32.2650714Z > Task :react-native-community_netinfo:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:29:32.2801100Z > Task :react-native-async-storage_async-storage:compileReleaseShaders NO-SOURCE
+2026-10-25T16:29:32.2921013Z > Task :react-native-async-storage_async-storage:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:29:32.2950805Z > Task :react-native-community_netinfo:packageReleaseAssets FROM-CACHE
+2026-10-25T16:29:32.2981027Z > Task :react-native-async-storage_async-storage:packageReleaseAssets FROM-CACHE
+2026-10-25T16:29:32.3071043Z > Task :react-native-async-storage_async-storage:prepareLintJarForPublish
+2026-10-25T16:29:32.3161065Z > Task :react-native-community_netinfo:prepareLintJarForPublish
+2026-10-25T16:29:32.3191153Z > Task :react-native-async-storage_async-storage:prepareReleaseArtProfile
+2026-10-25T16:29:32.3205041Z > Task :react-native-community_netinfo:prepareReleaseArtProfile
+2026-10-25T16:29:32.3301056Z > Task :react-native-community_netinfo:mergeReleaseJavaResource
+2026-10-25T16:29:32.3367780Z > Task :react-native-async-storage_async-storage:mergeReleaseJavaResource
+2026-10-25T16:29:32.4251663Z > Task :react-native-async-storage_async-storage:extractProguardFiles
+2026-10-25T16:29:32.4280917Z > Task :react-native-community_netinfo:syncReleaseLibJars
+2026-10-25T16:29:32.4310688Z > Task :react-native-async-storage_async-storage:syncReleaseLibJars
+2026-10-25T16:29:32.4311494Z > Task :react-native-community_netinfo:bundleReleaseLocalLintAar
+2026-10-25T16:29:32.4339842Z > Task :react-native-async-storage_async-storage:bundleReleaseLocalLintAar
+2026-10-25T16:29:32.4349092Z > Task :react-native-community_netinfo:extractProguardFiles
+2026-10-25T16:29:32.4373826Z > Task :react-native-async-storage_async-storage:writeReleaseLintModelMetadata
+2026-10-25T16:29:32.4400845Z > Task :react-native-community_netinfo:writeReleaseLintModelMetadata
+2026-10-25T16:29:35.0231457Z Note: Some input files use or override a deprecated API.
+2026-10-25T16:29:35.0231902Z 
+2026-10-25T16:29:35.0280852Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:29:35.0281476Z > Task :expo-modules-core:compileReleaseJavaWithJavac
+2026-10-25T16:29:35.0310677Z Note: Some input files use unchecked or unsafe operations.
+2026-10-25T16:29:35.0340780Z Note: Recompile with -Xlint:unchecked for details.
+2026-10-25T16:29:35.1229637Z 
+2026-10-25T16:29:35.1251173Z > Task :expo-modules-core:bundleLibCompileToJarRelease
+2026-10-25T16:29:36.3241259Z > Task :expo-asset:compileReleaseKotlin
+2026-10-25T16:29:36.6251302Z > Task :expo-asset:compileReleaseJavaWithJavac
+2026-10-25T16:29:36.7251218Z > Task :expo-asset:bundleLibCompileToJarRelease
+2026-10-25T16:29:39.5241379Z > Task :react-native-community_netinfo:generateReleaseLintModel
+2026-10-25T16:29:39.6288485Z > Task :react-native-async-storage_async-storage:generateReleaseLintModel
+2026-10-25T16:29:41.7241240Z > Task :expo-constants:compileReleaseKotlin
+2026-10-25T16:29:42.1268183Z > Task :expo-constants:compileReleaseJavaWithJavac
+2026-10-25T16:29:42.1301774Z > Task :expo-constants:bundleLibCompileToJarRelease
+2026-10-25T16:29:42.2231432Z > Task :expo-document-picker:compileReleaseKotlin
+2026-10-25T16:29:42.5259617Z > Task :expo-document-picker:compileReleaseJavaWithJavac
+2026-10-25T16:29:42.5317159Z > Task :expo-document-picker:bundleLibCompileToJarRelease
+2026-10-25T16:29:43.1273646Z 
+2026-10-25T16:29:43.1301498Z > Task :expo-av:compileReleaseKotlin
+2026-10-25T16:29:43.1351950Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt:10:26 'Promise' is deprecated. AsyncFunction will crash when called. Use expo.modules.kotlin.Promise instead
+2026-10-25T16:29:43.1413668Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt:19:129 'Promise' is deprecated. AsyncFunction will crash when called. Use expo.modules.kotlin.Promise instead
+2026-10-25T16:29:43.1461557Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt:21:78 'resolveView(Int): View?' is deprecated. Deprecated in Java
+2026-10-25T16:29:43.1503215Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt:39:111 'Promise' is deprecated. AsyncFunction will crash when called. Use expo.modules.kotlin.Promise instead
+2026-10-25T16:29:43.1551498Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/ViewUtils.kt:52:78 'resolveView(Int): View?' is deprecated. Deprecated in Java
+2026-10-25T16:29:43.1605791Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/player/datasource/CustomHeadersOkHttpDataSourceFactory.kt:32:12 'constructor OkHttpDataSource(Call.Factory, String?, CacheControl?, HttpDataSource.RequestProperties?)' is deprecated. Deprecated in Java
+2026-10-25T16:29:43.1659626Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/progress/AndroidLooperTimeMachine.kt:8:5 'constructor Handler()' is deprecated. Deprecated in Java
+2026-10-25T16:29:43.1712789Z w: file:///home/runner/work/rivo/rivo/node_modules/expo-av/android/src/main/java/expo/modules/av/video/VideoViewModule.kt:64:17 'tryRunWithVideoView(ModuleRegistry, Int, ViewUtils.VideoViewCallback, Promise): Unit' is deprecated. Use `dispatchCommands` in favor of finding view with imperative calls
+2026-10-25T16:29:43.8250850Z 
+2026-10-25T16:29:43.8291114Z > Task :expo-font:compileReleaseKotlin
+2026-10-25T16:29:44.0251455Z > Task :expo-font:compileReleaseJavaWithJavac
+2026-10-25T16:29:44.1275989Z > Task :expo-font:bundleLibCompileToJarRelease
+2026-10-25T16:29:45.3279468Z Note: Some input files use or override a deprecated API.
+2026-10-25T16:29:45.3280378Z 
+2026-10-25T16:29:45.3311111Z Note: Recompile with -Xlint:deprecation for details.
+2026-10-25T16:29:45.3320881Z > Task :expo-av:compileReleaseJavaWithJavac
+2026-10-25T16:29:45.3350793Z Note: Some input files use unchecked or unsafe operations.
+2026-10-25T16:29:45.3400864Z Note: Recompile with -Xlint:unchecked for details.
+2026-10-25T16:29:45.4230605Z 
+2026-10-25T16:29:45.4316178Z > Task :expo-keep-awake:compileReleaseKotlin
+2026-10-25T16:29:46.1290090Z > Task :expo-keep-awake:compileReleaseJavaWithJavac
+2026-10-25T16:29:46.1361423Z > Task :expo-keep-awake:bundleLibCompileToJarRelease
+2026-10-25T16:29:47.1271242Z > Task :expo-av:bundleLibCompileToJarRelease
+2026-10-25T16:29:47.1320996Z > Task :expo-asset:extractReleaseAnnotations
+2026-10-25T16:29:47.2245549Z > Task :expo-asset:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:47.2321235Z > Task :expo-asset:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:47.2350806Z > Task :expo-asset:processReleaseJavaRes
+2026-10-25T16:29:47.3231146Z > Task :expo-asset:mergeReleaseJavaResource
+2026-10-25T16:29:47.3285483Z > Task :expo-asset:syncReleaseLibJars
+2026-10-25T16:29:47.3371011Z > Task :expo-asset:bundleReleaseLocalLintAar
+2026-10-25T16:29:47.3431087Z > Task :expo-av:extractReleaseAnnotations
+2026-10-25T16:29:47.4241222Z > Task :expo-av:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:47.4270898Z > Task :expo-av:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:47.4300728Z > Task :expo-av:processReleaseJavaRes
+2026-10-25T16:29:47.4360986Z > Task :expo-av:mergeReleaseJavaResource
+2026-10-25T16:29:47.4421097Z > Task :expo-linear-gradient:compileReleaseKotlin
+2026-10-25T16:29:47.5231333Z > Task :expo-av:syncReleaseLibJars
+2026-10-25T16:29:47.6261203Z > Task :expo-av:bundleReleaseLocalLintAar
+2026-10-25T16:29:47.7283675Z > Task :expo-constants:extractReleaseAnnotations
+2026-10-25T16:29:47.7351244Z > Task :expo-constants:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:47.7420057Z > Task :expo-constants:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:47.7473608Z > Task :expo-constants:processReleaseJavaRes
+2026-10-25T16:29:47.7505376Z > Task :expo-constants:mergeReleaseJavaResource
+2026-10-25T16:29:47.8231230Z > Task :expo-constants:syncReleaseLibJars
+2026-10-25T16:29:47.8301194Z > Task :expo-constants:bundleReleaseLocalLintAar
+2026-10-25T16:29:47.8359655Z > Task :expo-linear-gradient:compileReleaseJavaWithJavac
+2026-10-25T16:29:47.8411659Z > Task :expo-document-picker:extractReleaseAnnotations
+2026-10-25T16:29:47.8471075Z > Task :expo-document-picker:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:47.8536566Z > Task :expo-document-picker:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:47.8626672Z > Task :expo-document-picker:processReleaseJavaRes
+2026-10-25T16:29:47.8661151Z > Task :expo-linear-gradient:bundleLibCompileToJarRelease
+2026-10-25T16:29:47.9261232Z > Task :expo-document-picker:mergeReleaseJavaResource
+2026-10-25T16:29:47.9284104Z > Task :expo-font:extractReleaseAnnotations
+2026-10-25T16:29:47.9381880Z > Task :expo-font:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:47.9431008Z > Task :expo-document-picker:syncReleaseLibJars
+2026-10-25T16:29:47.9520965Z > Task :expo-font:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:47.9568337Z > Task :expo-document-picker:bundleReleaseLocalLintAar
+2026-10-25T16:29:47.9620961Z > Task :expo-font:processReleaseJavaRes
+2026-10-25T16:29:47.9702182Z > Task :expo-font:mergeReleaseJavaResource
+2026-10-25T16:29:47.9748042Z > Task :expo-keep-awake:extractReleaseAnnotations
+2026-10-25T16:29:47.9817595Z > Task :expo-keep-awake:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:48.0245723Z > Task :expo-keep-awake:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:48.0291029Z > Task :expo-font:syncReleaseLibJars
+2026-10-25T16:29:48.0393987Z > Task :expo-keep-awake:processReleaseJavaRes
+2026-10-25T16:29:48.0394813Z > Task :expo-font:bundleReleaseLocalLintAar
+2026-10-25T16:29:48.0469267Z > Task :expo-keep-awake:mergeReleaseJavaResource
+2026-10-25T16:29:48.0531025Z > Task :expo-linear-gradient:extractReleaseAnnotations
+2026-10-25T16:29:48.0560903Z > Task :expo-keep-awake:syncReleaseLibJars
+2026-10-25T16:29:48.0580629Z > Task :expo-linear-gradient:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:48.0590932Z > Task :expo-keep-awake:bundleReleaseLocalLintAar
+2026-10-25T16:29:48.0621160Z > Task :expo-linear-gradient:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:48.0650837Z > Task :expo-linear-gradient:processReleaseJavaRes
+2026-10-25T16:29:48.1241857Z > Task :expo-linear-gradient:mergeReleaseJavaResource
+2026-10-25T16:29:48.1296645Z > Task :expo-linear-gradient:syncReleaseLibJars
+2026-10-25T16:29:48.1339114Z > Task :expo-linear-gradient:bundleReleaseLocalLintAar
+2026-10-25T16:29:48.1380803Z > Task :expo-asset:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.1431084Z > Task :expo-asset:createFullJarRelease
+2026-10-25T16:29:48.2242227Z > Task :expo-av:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.2300960Z > Task :expo-av:createFullJarRelease
+2026-10-25T16:29:48.2381687Z > Task :expo-constants:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.2481140Z > Task :expo-constants:createFullJarRelease
+2026-10-25T16:29:48.2552558Z > Task :expo-document-picker:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.2611822Z > Task :expo-document-picker:createFullJarRelease
+2026-10-25T16:29:48.2636486Z > Task :expo-font:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.3241201Z > Task :expo-font:createFullJarRelease
+2026-10-25T16:29:48.3301052Z > Task :expo-keep-awake:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.3368319Z > Task :expo-keep-awake:createFullJarRelease
+2026-10-25T16:29:48.3451138Z > Task :expo-linear-gradient:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.3561157Z > Task :expo-linear-gradient:createFullJarRelease
+2026-10-25T16:29:48.3617159Z > Task :react-native-safe-area-context:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:48.4327614Z > Task :react-native-safe-area-context:processReleaseJavaRes
+2026-10-25T16:29:48.4405521Z > Task :react-native-safe-area-context:createFullJarRelease
+2026-10-25T16:29:48.4501301Z > Task :react-native-safe-area-context:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:29:48.4551360Z > Task :react-native-safe-area-context:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:29:48.4571186Z > Task :react-native-safe-area-context:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:29:48.4661224Z > Task :react-native-safe-area-context:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:29:48.4781296Z > Task :react-native-safe-area-context:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:29:48.4861134Z > Task :react-native-safe-area-context:extractReleaseAnnotations
+2026-10-25T16:29:48.4891168Z > Task :react-native-safe-area-context:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:48.5262243Z > Task :react-native-safe-area-context:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:48.5289896Z > Task :react-native-safe-area-context:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:29:48.5290943Z > Task :react-native-safe-area-context:compileReleaseShaders NO-SOURCE
+2026-10-25T16:29:48.5321244Z > Task :react-native-safe-area-context:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:29:48.5351022Z > Task :react-native-safe-area-context:packageReleaseAssets FROM-CACHE
+2026-10-25T16:29:48.5355869Z > Task :react-native-safe-area-context:prepareLintJarForPublish
+2026-10-25T16:29:48.5410883Z > Task :react-native-safe-area-context:prepareReleaseArtProfile
+2026-10-25T16:29:48.5411854Z > Task :react-native-safe-area-context:mergeReleaseJavaResource
+2026-10-25T16:29:48.6281538Z > Task :react-native-safe-area-context:syncReleaseLibJars
+2026-10-25T16:29:48.6282596Z > Task :react-native-safe-area-context:bundleReleaseLocalLintAar
+2026-10-25T16:29:48.6311152Z > Task :react-native-safe-area-context:extractProguardFiles
+2026-10-25T16:29:48.6331134Z > Task :react-native-safe-area-context:writeReleaseLintModelMetadata
+2026-10-25T16:29:48.7231184Z > Task :expo-file-system:compileReleaseKotlin
+2026-10-25T16:29:49.1231073Z > Task :react-native-safe-area-context:generateReleaseLintModel
+2026-10-25T16:29:49.3244769Z > Task :react-native-screens:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:49.3321160Z > Task :react-native-screens:processReleaseJavaRes
+2026-10-25T16:29:49.3351013Z > Task :react-native-screens:createFullJarRelease
+2026-10-25T16:29:49.3361672Z > Task :expo-file-system:compileReleaseJavaWithJavac
+2026-10-25T16:29:49.4241231Z > Task :expo-file-system:bundleLibCompileToJarRelease
+2026-10-25T16:29:49.8241379Z > Task :expo-modules-core:configureCMakeRelWithDebInfo[armeabi-v7a]
+2026-10-25T16:29:49.8301025Z > Task :expo-file-system:extractReleaseAnnotations
+2026-10-25T16:29:49.8363386Z > Task :expo-file-system:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:49.8413185Z > Task :expo-file-system:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:49.8441003Z > Task :expo-file-system:processReleaseJavaRes
+2026-10-25T16:29:49.8470864Z > Task :expo-file-system:mergeReleaseJavaResource
+2026-10-25T16:29:49.9300673Z > Task :expo-file-system:syncReleaseLibJars
+2026-10-25T16:29:49.9301669Z > Task :expo-file-system:bundleReleaseLocalLintAar
+2026-10-25T16:29:51.1267128Z > Task :react-native-screens:configureCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:29:51.2361314Z > Task :expo-file-system:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:51.2448031Z > Task :expo-file-system:createFullJarRelease
+2026-10-25T16:29:54.1240730Z 
+2026-10-25T16:29:54.1317994Z > Task :expo:compileReleaseKotlin
+2026-10-25T16:29:54.1374847Z w: file:///home/runner/work/rivo/rivo/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:20:34 'ReactFeatureFlags' is deprecated. Deprecated in Java
+2026-10-25T16:29:54.1461656Z w: file:///home/runner/work/rivo/rivo/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:153:11 'ReactFeatureFlags' is deprecated. Deprecated in Java
+2026-10-25T16:29:54.1522198Z w: file:///home/runner/work/rivo/rivo/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:161:34 'constructor ReactDelegate(Activity!, ReactNativeHost!, String?, Bundle?)' is deprecated. Deprecated in Java
+2026-10-25T16:29:54.1591775Z w: file:///home/runner/work/rivo/rivo/node_modules/expo/android/src/main/java/expo/modules/ReactActivityDelegateWrapper.kt:231:10 'ReactFeatureFlags' is deprecated. Deprecated in Java
+2026-10-25T16:29:54.9233088Z 
+2026-10-25T16:29:54.9283627Z > Task :expo:compileReleaseJavaWithJavac
+2026-10-25T16:29:54.9362847Z > Task :expo:bundleLibCompileToJarRelease
+2026-10-25T16:29:54.9390857Z > Task :expo:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:54.9432447Z > Task :expo:processReleaseJavaRes
+2026-10-25T16:29:54.9503100Z > Task :expo:createFullJarRelease
+2026-10-25T16:29:54.9553169Z > Task :expo:extractReleaseAnnotations
+2026-10-25T16:29:54.9636240Z > Task :expo:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:55.0231020Z > Task :expo:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:55.0273876Z > Task :expo:mergeReleaseJavaResource
+2026-10-25T16:29:55.0320972Z > Task :expo:syncReleaseLibJars
+2026-10-25T16:29:55.0384250Z > Task :expo:bundleReleaseLocalLintAar
+2026-10-25T16:29:55.1249931Z > Task :react-native-svg:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:55.1291481Z > Task :react-native-svg:processReleaseJavaRes NO-SOURCE
+2026-10-25T16:29:55.2238518Z > Task :react-native-svg:createFullJarRelease
+2026-10-25T16:29:55.2275728Z > Task :react-native-svg:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:29:55.2331544Z > Task :react-native-svg:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:29:55.2411174Z > Task :react-native-svg:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:29:55.2472684Z > Task :react-native-svg:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:29:55.2531029Z > Task :react-native-svg:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:29:55.2551313Z > Task :react-native-svg:extractReleaseAnnotations
+2026-10-25T16:29:55.2551949Z > Task :react-native-svg:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:55.2552587Z > Task :react-native-screens:buildCMakeRelWithDebInfo[arm64-v8a]
+2026-10-25T16:29:55.3301614Z > Task :react-native-svg:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:55.3420867Z > Task :react-native-svg:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:29:55.3581339Z > Task :react-native-svg:compileReleaseShaders NO-SOURCE
+2026-10-25T16:29:55.3622368Z > Task :react-native-svg:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:29:55.3651824Z > Task :react-native-svg:packageReleaseAssets FROM-CACHE
+2026-10-25T16:29:55.3710864Z > Task :react-native-svg:prepareLintJarForPublish
+2026-10-25T16:29:55.3741003Z > Task :react-native-svg:prepareReleaseArtProfile
+2026-10-25T16:29:55.3771005Z > Task :react-native-svg:mergeReleaseJavaResource
+2026-10-25T16:29:55.5281177Z > Task :react-native-svg:syncReleaseLibJars
+2026-10-25T16:29:55.5332382Z > Task :react-native-svg:bundleReleaseLocalLintAar
+2026-10-25T16:29:55.6261255Z > Task :react-native-svg:extractProguardFiles
+2026-10-25T16:29:55.6291185Z > Task :react-native-svg:writeReleaseLintModelMetadata
+2026-10-25T16:29:56.1241214Z > Task :react-native-svg:generateReleaseLintModel
+2026-10-25T16:29:56.3251333Z > Task :react-native-webview:bundleLibRuntimeToJarRelease
+2026-10-25T16:29:56.3311125Z > Task :react-native-webview:processReleaseJavaRes
+2026-10-25T16:29:56.3366912Z > Task :react-native-webview:createFullJarRelease
+2026-10-25T16:29:56.3425757Z > Task :react-native-webview:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:29:56.3491013Z > Task :react-native-webview:mergeReleaseNativeLibs NO-SOURCE
+2026-10-25T16:29:56.3551366Z > Task :react-native-webview:stripReleaseDebugSymbols NO-SOURCE
+2026-10-25T16:29:56.3611370Z > Task :react-native-webview:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:29:56.3634736Z > Task :react-native-webview:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:29:56.4271331Z > Task :react-native-webview:extractReleaseAnnotations
+2026-10-25T16:29:56.4371362Z > Task :react-native-webview:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:29:56.4425629Z > Task :react-native-webview:mergeReleaseConsumerProguardFiles
+2026-10-25T16:29:56.4561133Z > Task :react-native-webview:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:29:56.4600998Z > Task :react-native-webview:compileReleaseShaders NO-SOURCE
+2026-10-25T16:29:56.4652638Z > Task :react-native-webview:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:29:56.4761206Z > Task :react-native-webview:packageReleaseAssets FROM-CACHE
+2026-10-25T16:29:56.4821056Z > Task :react-native-webview:prepareLintJarForPublish
+2026-10-25T16:29:56.4842643Z > Task :react-native-webview:prepareReleaseArtProfile
+2026-10-25T16:29:56.4931015Z > Task :react-native-webview:mergeReleaseJavaResource
+2026-10-25T16:29:56.5251447Z > Task :react-native-webview:syncReleaseLibJars
+2026-10-25T16:29:56.5321131Z > Task :react-native-webview:bundleReleaseLocalLintAar
+2026-10-25T16:29:56.6251364Z > Task :react-native-webview:extractProguardFiles
+2026-10-25T16:29:56.6301306Z > Task :react-native-webview:writeReleaseLintModelMetadata
+2026-10-25T16:29:56.9230798Z > Task :react-native-webview:generateReleaseLintModel
+2026-10-25T16:29:57.2241441Z > Task :react-native-async-storage_async-storage:generateReleaseLintVitalModel
+2026-10-25T16:29:57.3231378Z > Task :react-native-screens:configureCMakeRelWithDebInfo[armeabi-v7a]
+2026-10-25T16:30:00.3251358Z > Task :react-native-screens:buildCMakeRelWithDebInfo[armeabi-v7a]
+2026-10-25T16:30:02.0242101Z 
+2026-10-25T16:30:02.0301157Z > Task :app:createBundleReleaseJsAndAssets
+2026-10-25T16:30:02.0360954Z Android Bundled 84684ms index.js (2173 modules)
+2026-10-25T16:30:02.0372746Z Writing bundle output to: /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle
+2026-10-25T16:30:02.0421247Z Writing sourcemap output to: /home/runner/work/rivo/rivo/android/app/build/intermediates/sourcemaps/react/release/index.android.bundle.packager.map
+2026-10-25T16:30:02.1270652Z 
+2026-10-25T16:30:02.1281377Z > Task :react-native-screens:configureCMakeRelWithDebInfo[x86_64]
+2026-10-25T16:30:04.1272110Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:767:63: warning: Direct call to eval(), but lexical scope is not supported.
+2026-10-25T16:30:04.1273573Z 
+2026-10-25T16:30:04.1381307Z > Task :app:createBundleReleaseJsAndAssets
+2026-10-25T16:30:04.1401005Z ...typeof expo === "undefined" ? eval("require") : function (moduleId) {
+2026-10-25T16:30:04.1401546Z Copying 1 asset files
+2026-10-25T16:30:04.1429124Z                                  ^~~~~~~~~~~~~~~
+2026-10-25T16:30:04.1467358Z Done writing bundle output
+2026-10-25T16:30:04.1522059Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:3412:16: warning: the variable "SharedArrayBuffer" was not declared in function "from"
+2026-10-25T16:30:04.1540948Z     if (typeof SharedArrayBuffer !== 'undefined' && (isInstance(value, Shared...
+2026-10-25T16:30:04.1580802Z Done writing sourcemap output
+2026-10-25T16:30:04.1581367Z                ^~~~~~~~~~~~~~~~~
+2026-10-25T16:30:04.2262521Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:7404:18: warning: the variable "DebuggerInternal" was not declared in function "__shouldPauseOnThrow"
+2026-10-25T16:30:04.2270906Z           typeof DebuggerInternal !== 'undefined' &&
+2026-10-25T16:30:04.2321016Z                  ^~~~~~~~~~~~~~~~
+2026-10-25T16:30:04.2382002Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:19610:7: warning: the variable "setTimeout" was not declared in function "logCapturedError"
+2026-10-25T16:30:04.2440856Z       setTimeout(function () {
+2026-10-25T16:30:04.2470805Z       ^~~~~~~~~~
+2026-10-25T16:30:04.3231600Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:17720:31: warning: the variable "nativeFabricUIManager" was not declared in anonymous function " 377#"
+2026-10-25T16:30:04.3261312Z   var _nativeFabricUIManage = nativeFabricUIManager,
+2026-10-25T16:30:04.3321148Z                               ^~~~~~~~~~~~~~~~~~~~~
+2026-10-25T16:30:04.3382105Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:17748:21: warning: the variable "clearTimeout" was not declared in anonymous function " 377#"
+2026-10-25T16:30:04.3410917Z     cancelTimeout = clearTimeout;
+2026-10-25T16:30:04.3530900Z                     ^~~~~~~~~~~~
+2026-10-25T16:30:04.3561955Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:22378:30: warning: the variable "__REACT_DEVTOOLS_GLOBAL_HOOK__" was not declared in anonymous function " 377#"
+2026-10-25T16:30:04.3640967Z   if ("undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__) {
+2026-10-25T16:30:04.3771066Z                              ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2026-10-25T16:30:04.3852071Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:23933:5: warning: the variable "setImmediate" was not declared in function "handleResolved"
+2026-10-25T16:30:04.3910843Z     setImmediate(function () {
+2026-10-25T16:30:04.3971035Z     ^~~~~~~~~~~~
+2026-10-25T16:30:04.4032066Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:27966:5: warning: the variable "fetch" was not declared in anonymous function " 591#"
+2026-10-25T16:30:04.4070975Z     fetch,
+2026-10-25T16:30:04.4093358Z     ^~~~~
+2026-10-25T16:30:04.4151961Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:27967:5: warning: the variable "Headers" was not declared in anonymous function " 591#"
+2026-10-25T16:30:04.4190813Z     Headers,
+2026-10-25T16:30:04.4240916Z     ^~~~~~~
+2026-10-25T16:30:04.4276626Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:27968:5: warning: the variable "Request" was not declared in anonymous function " 591#"
+2026-10-25T16:30:04.4330734Z     Request,
+2026-10-25T16:30:04.4380651Z     ^~~~~~~
+2026-10-25T16:30:04.4421727Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:27969:5: warning: the variable "Response" was not declared in anonymous function " 591#"
+2026-10-25T16:30:04.4450789Z     Response
+2026-10-25T16:30:04.4490765Z     ^~~~~~~~
+2026-10-25T16:30:04.4533305Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:28126:24: warning: the variable "FileReader" was not declared in function "readBlobAsArrayBuffer"
+2026-10-25T16:30:04.4590892Z       var reader = new FileReader();
+2026-10-25T16:30:04.4630659Z                        ^~~~~~~~~~
+2026-10-25T16:30:04.4670716Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:28177:36: warning: the variable "Blob" was not declared in anonymous function " 602#"
+2026-10-25T16:30:04.4740933Z         } else if (support.blob && Blob.prototype.isPrototypeOf(body)) {
+2026-10-25T16:30:04.4825610Z                                    ^~~~
+2026-10-25T16:30:04.4911892Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:28179:40: warning: the variable "FormData" was not declared in anonymous function " 602#"
+2026-10-25T16:30:04.4991054Z         } else if (support.formData && FormData.prototype.isPrototypeOf(body)) {
+2026-10-25T16:30:04.5100970Z                                        ^~~~~~~~
+2026-10-25T16:30:04.5131895Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:28181:44: warning: the variable "URLSearchParams" was not declared in anonymous function " 602#"
+2026-10-25T16:30:04.5133390Z ...e if (support.searchParams && URLSearchParams.prototype.isPrototypeOf(body...
+2026-10-25T16:30:04.5133993Z                                  ^~~~~~~~~~~~~~~
+2026-10-25T16:30:04.5135405Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:28300:26: warning: the variable "AbortController" was not declared in anonymous function " 608#"
+2026-10-25T16:30:04.5136505Z           var ctrl = new AbortController();
+2026-10-25T16:30:04.5136863Z                          ^~~~~~~~~~~~~~~
+2026-10-25T16:30:04.5138191Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:28434:23: warning: the variable "XMLHttpRequest" was not declared in anonymous function " 612#"
+2026-10-25T16:30:04.5139707Z         var xhr = new XMLHttpRequest();
+2026-10-25T16:30:04.5140041Z                       ^~~~~~~~~~~~~~
+2026-10-25T16:30:04.5141374Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:27979:71: warning: the variable "self" was not declared in anonymous function " 594#"
+2026-10-25T16:30:04.5142596Z ...undefined' && globalThis || typeof self !== 'undefined' && self ||
+2026-10-25T16:30:04.5143069Z                                       ^~~~
+2026-10-25T16:30:04.5144470Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:31969:27: warning: the variable "performance" was not declared in anonymous function " 769#"
+2026-10-25T16:30:04.5221267Z   if ("object" === typeof performance && "function" === typeof performance.no...
+2026-10-25T16:30:04.5260822Z                           ^~~~~~~~~~~
+2026-10-25T16:30:04.5321861Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:31992:26: warning: the variable "navigator" was not declared in anonymous function " 769#"
+2026-10-25T16:30:04.5351110Z   "undefined" !== typeof navigator && undefined !== navigator.scheduling && u...
+2026-10-25T16:30:04.5410923Z                          ^~~~~~~~~
+2026-10-25T16:30:04.5441750Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:32102:37: warning: the variable "MessageChannel" was not declared in anonymous function " 769#"
+2026-10-25T16:30:04.5470933Z   };else if ("undefined" !== typeof MessageChannel) {
+2026-10-25T16:30:04.5530937Z                                     ^~~~~~~~~~~~~~
+2026-10-25T16:30:04.5591914Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:32117:34: warning: the variable "nativeRuntimeScheduler" was not declared in anonymous function " 769#"
+2026-10-25T16:30:04.5621111Z ... = "undefined" !== typeof nativeRuntimeScheduler ? nativeRuntimeScheduler....
+2026-10-25T16:30:04.5650894Z                              ^~~~~~~~~~~~~~~~~~~~~~
+2026-10-25T16:30:04.5711894Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:43883:34: warning: the variable "requestAnimationFrame" was not declared in function "start 9#"
+2026-10-25T16:30:04.5741001Z ...    this._animationFrame = requestAnimationFrame(this.onUpdate.bind(this));
+2026-10-25T16:30:04.5800927Z                               ^~~~~~~~~~~~~~~~~~~~~
+2026-10-25T16:30:05.0252447Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:162228:9: warning: the property "isShuffle" was set multiple times in the object definition.
+2026-10-25T16:30:05.0290991Z         isShuffle,
+2026-10-25T16:30:05.0341073Z         ^~~~~~~~~
+2026-10-25T16:30:05.0371652Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:162210:9: note: The first definition was here.
+2026-10-25T16:30:05.0372622Z         isShuffle,
+2026-10-25T16:30:05.0372877Z         ^~~~~~~~~
+2026-10-25T16:30:05.0374071Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:167318:25: warning: the variable "location" was not declared in function "url"
+2026-10-25T16:30:05.0375241Z     loc = loc || typeof location !== "undefined" && location;
+2026-10-25T16:30:05.0375687Z                         ^~~~~~~~
+2026-10-25T16:30:05.0377065Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:167502:35: warning: the variable "addEventListener" was not declared in anonymous function " 4067#"
+2026-10-25T16:30:05.0378443Z ... withEventListeners = typeof addEventListener === "function" && typeof rem...
+2026-10-25T16:30:05.0379482Z                                 ^~~~~~~~~~~~~~~~
+2026-10-25T16:30:05.0381093Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:167502:77: warning: the variable "removeEventListener" was not declared in anonymous function " 4067#"
+2026-10-25T16:30:05.0382302Z ...er === "function" && typeof removeEventListener === "function";
+2026-10-25T16:30:05.0382721Z                                ^~~~~~~~~~~~~~~~~~~
+2026-10-25T16:30:05.0383907Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:168473:20: warning: the variable "document" was not declared in function "_create"
+2026-10-25T16:30:05.0384891Z         if (typeof document !== "undefined") {
+2026-10-25T16:30:05.0385213Z                    ^~~~~~~~
+2026-10-25T16:30:05.0386407Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:168548:16: warning: the variable "attachEvent" was not declared in anonymous function " 4090#"
+2026-10-25T16:30:05.0387439Z     if (typeof attachEvent === "function") {
+2026-10-25T16:30:05.0387742Z                ^~~~~~~~~~~
+2026-10-25T16:30:05.0388990Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:169072:16: warning: the variable "TransformStream" was not declared in function "createPacketEncoderStream"
+2026-10-25T16:30:05.0390069Z     return new TransformStream({
+2026-10-25T16:30:05.0390732Z                ^~~~~~~~~~~~~~~
+2026-10-25T16:30:05.0391954Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:169252:28: warning: the variable "TextEncoder" was not declared in anonymous function " 4122#"
+2026-10-25T16:30:05.0393016Z         TEXT_ENCODER = new TextEncoder();
+2026-10-25T16:30:05.0393361Z                            ^~~~~~~~~~~
+2026-10-25T16:30:05.0394552Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:170584:33: warning: the variable "WebTransport" was not declared in function "doOpen 2#"
+2026-10-25T16:30:05.0395708Z           this._transport = new WebTransport(this.createUri("https"), this.op...
+2026-10-25T16:30:05.0396168Z                                 ^~~~~~~~~~~~
+2026-10-25T16:30:05.0397345Z /home/runner/work/rivo/rivo/android/app/build/generated/assets/createBundleReleaseJsAndAssets/index.android.bundle:172829:158: warning: the variable "File" was not declared in function "isBinary"
+2026-10-25T16:30:05.0398360Z ...| withNativeFile && obj instanceof File;
+2026-10-25T16:30:05.0398696Z                                       ^~~~
+2026-10-25T16:30:05.8270637Z 
+2026-10-25T16:30:05.8271498Z > Task :react-native-screens:buildCMakeRelWithDebInfo[x86_64]
+2026-10-25T16:30:05.8371175Z > Task :react-native-screens:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:30:05.9292412Z > Task :react-native-screens:mergeReleaseNativeLibs
+2026-10-25T16:30:06.0231245Z > Task :react-native-screens:stripReleaseDebugSymbols
+2026-10-25T16:30:06.0371227Z > Task :react-native-screens:copyReleaseJniLibsProjectAndLocalJars
+2026-10-25T16:30:06.0381301Z > Task :react-native-screens:extractDeepLinksForAarRelease FROM-CACHE
+2026-10-25T16:30:06.0458606Z > Task :react-native-screens:extractReleaseAnnotations
+2026-10-25T16:30:06.0511012Z > Task :react-native-screens:mergeReleaseGeneratedProguardFiles
+2026-10-25T16:30:06.0570977Z > Task :react-native-screens:mergeReleaseConsumerProguardFiles
+2026-10-25T16:30:06.0631067Z > Task :react-native-screens:mergeReleaseShaders FROM-CACHE
+2026-10-25T16:30:06.0710954Z > Task :react-native-screens:compileReleaseShaders NO-SOURCE
+2026-10-25T16:30:06.0800972Z > Task :react-native-screens:generateReleaseAssets UP-TO-DATE
+2026-10-25T16:30:06.0830976Z > Task :react-native-screens:packageReleaseAssets FROM-CACHE
+2026-10-25T16:30:06.0831615Z > Task :react-native-screens:prepareLintJarForPublish
+2026-10-25T16:30:06.0832512Z > Task :react-native-screens:prepareReleaseArtProfile
+2026-10-25T16:30:06.1251310Z > Task :react-native-screens:mergeReleaseJavaResource
+2026-10-25T16:30:06.2241200Z > Task :react-native-screens:syncReleaseLibJars
+2026-10-25T16:30:06.2277512Z > Task :react-native-screens:bundleReleaseLocalLintAar
+2026-10-25T16:30:06.2340986Z > Task :react-native-screens:extractProguardFiles
+2026-10-25T16:30:06.2401060Z > Task :react-native-screens:writeReleaseLintModelMetadata
+2026-10-25T16:30:07.1241440Z > Task :react-native-screens:generateReleaseLintModel
+2026-10-25T16:30:07.4251641Z > Task :react-native-community_netinfo:generateReleaseLintVitalModel
+2026-10-25T16:30:13.1241545Z > Task :react-native-community_netinfo:lintVitalAnalyzeRelease
+2026-10-25T16:30:13.5231376Z > Task :react-native-safe-area-context:generateReleaseLintVitalModel
+2026-10-25T16:30:16.9251522Z > Task :react-native-async-storage_async-storage:lintVitalAnalyzeRelease
+2026-10-25T16:30:17.2291363Z > Task :react-native-screens:generateReleaseLintVitalModel
+2026-10-25T16:30:19.8233965Z > Task :app:generateReleaseResValues
+2026-10-25T16:30:20.0241553Z > Task :expo-modules-core:buildCMakeRelWithDebInfo[armeabi-v7a]
+2026-10-25T16:30:20.2261232Z > Task :app:mapReleaseSourceSetPaths
+2026-10-25T16:30:20.2296306Z > Task :app:generateReleaseResources
+2026-10-25T16:30:22.8241698Z > Task :expo-modules-core:configureCMakeRelWithDebInfo[x86_64]
+2026-10-25T16:30:22.9231630Z > Task :app:packageReleaseResources
+2026-10-25T16:30:24.4231179Z > Task :app:parseReleaseLocalResources
+2026-10-25T16:30:24.4262821Z > Task :app:createReleaseCompatibleScreenManifests
+2026-10-25T16:30:24.4280785Z > Task :app:extractDeepLinksRelease FROM-CACHE
+2026-10-25T16:30:24.6262197Z > Task :react-native-safe-area-context:lintVitalAnalyzeRelease
+2026-10-25T16:30:25.4260610Z 
+2026-10-25T16:30:25.4290747Z > Task :app:processReleaseMainManifest
+2026-10-25T16:30:25.4381243Z /home/runner/work/rivo/rivo/android/app/src/main/AndroidManifest.xml Warning:
+2026-10-25T16:30:25.4471727Z 	provider#expo.modules.filesystem.FileSystemFileProvider@android:authorities was tagged at AndroidManifest.xml:0 to replace other declarations but no other declaration present
+2026-10-25T16:30:25.7290605Z 
+2026-10-25T16:30:25.7361932Z > Task :app:mergeReleaseResources
+2026-10-25T16:30:25.7461057Z > Task :app:processReleaseManifest
+2026-10-25T16:30:25.7500967Z > Task :app:processReleaseManifestForPackage
+2026-10-25T16:30:25.9261282Z > Task :react-native-svg:generateReleaseLintVitalModel
+2026-10-25T16:30:33.0230840Z > Task :app:processReleaseResources
+2026-10-25T16:30:40.5261352Z > Task :react-native-screens:lintVitalAnalyzeRelease
+2026-10-25T16:30:40.6241304Z > Task :app:javaPreCompileRelease FROM-CACHE
+2026-10-25T16:30:40.6281330Z > Task :app:extractProguardFiles
+2026-10-25T16:30:40.8272635Z > Task :react-native-svg:lintVitalAnalyzeRelease
+2026-10-25T16:30:40.9261451Z > Task :react-native-webview:generateReleaseLintVitalModel
+2026-10-25T16:30:40.9271173Z > Task :app:mergeReleaseJniLibFolders FROM-CACHE
+2026-10-25T16:30:40.9399606Z > Task :expo:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.0231106Z > Task :expo-asset:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.0271086Z > Task :expo-av:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.0271674Z > Task :expo-constants:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.0272201Z > Task :expo-document-picker:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.0272709Z > Task :expo-file-system:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1239360Z > Task :expo-font:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1301126Z > Task :expo-keep-awake:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1331052Z > Task :expo-linear-gradient:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1391816Z > Task :react-native-async-storage_async-storage:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1481340Z > Task :react-native-community_netinfo:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1492914Z > Task :react-native-safe-area-context:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1510917Z > Task :react-native-screens:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.1600992Z > Task :react-native-svg:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:41.2261500Z > Task :react-native-async-storage_async-storage:bundleLibRuntimeToDirRelease
+2026-10-25T16:30:41.2290989Z > Task :react-native-webview:copyReleaseJniLibsProjectOnly
+2026-10-25T16:30:42.2231983Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:76:33 Unresolved reference: BroadcastReceiver
+2026-10-25T16:30:42.2232926Z 
+2026-10-25T16:30:42.2249851Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:97:39 Unresolved reference: BroadcastReceiver
+2026-10-25T16:30:42.2270758Z > Task :app:compileReleaseKotlin FAILED
+2026-10-25T16:30:42.2281385Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:98:17 'onReceive' overrides nothing
+2026-10-25T16:30:42.2341364Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:131:54 Unresolved reference: it
+2026-10-25T16:30:42.2381073Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:426:64 Unresolved reference: withFullScreenLock
+2026-10-25T16:30:42.2471589Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:543:9 'if' must have both main and 'else' branches if used as an expression
+2026-10-25T16:30:42.2531694Z e: file:///home/runner/work/rivo/rivo/android/app/src/main/java/com/rivo/app/MediaNotificationService.kt:557:14 Unresolved reference: addAction
+2026-10-25T16:30:49.0250613Z 
+2026-10-25T16:30:49.0311193Z > Task :react-native-webview:lintVitalAnalyzeRelease
+2026-10-25T16:30:52.7230968Z > Task :expo-modules-core:buildCMakeRelWithDebInfo[x86_64]
+2026-10-25T16:30:52.8230518Z 
+2026-10-25T16:30:52.8231291Z 575 actionable tasks: 451 executed, 124 from cache
+2026-10-25T16:30:52.8249614Z FAILURE: Build failed with an exception.
+2026-10-25T16:30:52.8250444Z 
+2026-10-25T16:30:52.8250810Z * What went wrong:
+2026-10-25T16:30:52.8251379Z Execution failed for task ':app:compileReleaseKotlin'.
+2026-10-25T16:30:52.8267514Z > A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+2026-10-25T16:30:52.8268171Z    > Compilation error. See log for more details
+2026-10-25T16:30:52.8268357Z 
+2026-10-25T16:30:52.8268431Z * Try:
+2026-10-25T16:30:52.8268707Z > Run with --stacktrace option to get the stack trace.
+2026-10-25T16:30:52.8269052Z > Run with --info or --debug option to get more log output.
+2026-10-25T16:30:52.8269358Z > Run with --scan to get full insights.
+2026-10-25T16:30:52.8269643Z > Get more help at https://help.gradle.org.
+2026-10-25T16:30:52.8269806Z 
+2026-10-25T16:30:52.8269902Z BUILD FAILED in 5m 43s
+2026-10-25T16:30:53.2265937Z ##[error]Process completed with exit code 1.

@@ -1,0 +1,16 @@
+﻿2026-10-25T16:24:34.1508663Z ##[group]Run npm run bundle-android
+2026-10-25T16:24:34.1508942Z [36;1mnpm run bundle-android[0m
+2026-10-25T16:24:34.1564410Z shell: /usr/bin/bash -e {0}
+2026-10-25T16:24:34.1564620Z env:
+2026-10-25T16:24:34.1564875Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-25T16:24:34.1565267Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.20-1/x64
+2026-10-25T16:24:34.1565559Z ##[endgroup]
+2026-10-25T16:24:34.2511074Z 
+2026-10-25T16:24:34.2511623Z > rivo@2.0.2 bundle-android
+2026-10-25T16:24:34.2512676Z > node node_modules/@expo/cli/build/bin/cli export:embed --entry-file index.js --platform android --dev false --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res
+2026-10-25T16:24:34.2513308Z 
+2026-10-25T16:24:34.6707678Z Starting Metro Bundler
+2026-10-25T16:25:07.2351401Z Android Bundled 30403ms index.js (2173 modules)
+2026-10-25T16:25:07.2381336Z Writing bundle output to: android/app/src/main/assets/index.android.bundle
+2026-10-25T16:25:07.2500869Z Copying 1 asset files
+2026-10-25T16:25:07.2698064Z Done writing bundle output

@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -423,14 +424,14 @@ class MediaNotificationService : Service() {
         } catch (e: Throwable) {
             try {
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildMediaNotification(withFullScreenLock))
+        manager.notify(NOTIFICATION_ID, buildMediaNotification(false))
             } catch (_: Throwable) {}
         }
     }
 
     private fun updateNotification(withFullScreenLock: Boolean = false) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildMediaNotification(withFullScreenLock))
+        manager.notify(NOTIFICATION_ID, buildMediaNotification(false))
     }
 
     private fun buildMediaNotification(withFullScreenLock: Boolean = false): Notification {
@@ -540,6 +541,12 @@ class MediaNotificationService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setOngoing(isPlaying)
+            .addAction(likeIconRes, likeLabel, likeIntent)
+            .addAction(R.drawable.ic_notification_prev, "Previous", prevIntent)
+            .addAction(playPauseIcon, playPauseLabel, playPauseIntent)
+            .addAction(R.drawable.ic_notification_next, "Next", nextIntent)
+            .addAction(repeatIconRes, repeatLabel, repeatIntent)
+
         if (withFullScreenLock) {
             val lockIntent = Intent(this, LockScreenActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -548,17 +555,6 @@ class MediaNotificationService : Service() {
             builder.setFullScreenIntent(lockPendingIntent, true)
             builder.setPriority(NotificationCompat.PRIORITY_HIGH)
         }
-            // Actions order:
-            // 0: Like
-            // 1: Previous
-            // 2: Play/Pause
-            // 3: Next
-            // 4: Repeat / Loop
-            .addAction(likeIconRes, likeLabel, likeIntent)                           // 0
-            .addAction(R.drawable.ic_notification_prev, "Previous", prevIntent)       // 1
-            .addAction(playPauseIcon, playPauseLabel, playPauseIntent)                 // 2
-            .addAction(R.drawable.ic_notification_next, "Next", nextIntent)           // 3
-            .addAction(repeatIconRes, repeatLabel, repeatIntent)                     // 4
 
         builder.setLargeIcon(currentBitmap)
 
