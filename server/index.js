@@ -261,27 +261,30 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
     : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
-    if (pkg && pkg.version) {
-      if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
-      if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = pkg.version;
-      if (manifest.platforms && manifest.platforms.android) manifest.platforms.android.version = pkg.version;
-      if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
-    }
-  } catch (e) {}
+  // Only apply dynamic beta updates and OTA bundle if client is in beta channel
+  if (isBetaClient) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+      if (pkg && pkg.version) {
+        if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
+        if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = pkg.version;
+        if (manifest.platforms && manifest.platforms.android) manifest.platforms.android.version = pkg.version;
+        if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
+      }
+    } catch (e) {}
 
-  const dynamicOta = getOtaManifest();
-  if (dynamicOta && dynamicOta.version && manifest.platforms && manifest.platforms.android) {
-    manifest.platforms.android.version = dynamicOta.version;
-  }
-  if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
-    manifest.platforms.android.ota = {
-      ...(manifest.platforms.android.ota || {}),
-      ...dynamicOta,
-      bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
-      minAppVersion: dynamicOta.minAppVersion || '1.9.0'
-    };
+    const dynamicOta = getOtaManifest();
+    if (dynamicOta && dynamicOta.version && manifest.platforms && manifest.platforms.android) {
+      manifest.platforms.android.version = dynamicOta.version;
+    }
+    if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
+      manifest.platforms.android.ota = {
+        ...(manifest.platforms.android.ota || {}),
+        ...dynamicOta,
+        bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
+        minAppVersion: dynamicOta.minAppVersion || '1.9.0'
+      };
+    }
   }
 
   res.json(manifest);
