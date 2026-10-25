@@ -58,15 +58,21 @@ app.use('/api/auth/register', authLimiter);
 
 app.use(express.json({ limit: '15mb' }));
 
-// Static serving for web dist
+// Static serving for web dist with robust multi-directory lookup
 app.use((req, res, next) => {
   if (req.path.includes('/assets/')) {
     const assetPart = req.path.substring(req.path.indexOf('/assets/'));
-    const safePath = path.join(__dirname, '../dist', assetPart);
-    if (fs.existsSync(safePath)) {
-      if (assetPart.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-      if (assetPart.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
-      return res.sendFile(safePath);
+    const candidatePaths = [
+      path.join('/home/ubuntu/dist', assetPart),
+      path.join(__dirname, '../dist', assetPart),
+      path.join('/home/ubuntu/rivo/dist', assetPart)
+    ];
+    for (const safePath of candidatePaths) {
+      if (fs.existsSync(safePath)) {
+        if (assetPart.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        if (assetPart.endsWith('.css')) res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        return res.sendFile(safePath);
+      }
     }
   }
   next();
@@ -593,10 +599,35 @@ app.get(['/api/soundcloud/fallback', '/api/tracks/fallback-stream'], (req, res) 
   res.status(404).json({ success: false, error: 'SoundCloud fallback disabled' });
 });
 
-// Fallback SPA routing
+// Fallback SPA routing with fallback search paths and error safety
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/downloads')) return next();
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
+  const candidates = [
+    '/home/ubuntu/dist/index.html',
+    path.join(__dirname, '../dist/index.html'),
+    '/home/ubuntu/rivo/dist/index.html'
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return res.sendFile(c, (err) => {
+        if (err && !res.headersSent) {
+          next(err);
+        }
+      });
+    }
+  }
+  res.status(503).send('Application bundle is currently syncing. Please refresh in a moment.');
+});
+
+// Global Express error handler to prevent 502/crashes on ENOENT
+app.use((err, req, res, next) => {
+  if (err && err.code === 'ENOENT') {
+    return res.status(404).send('Resource not found');
+  }
+  console.error('[Express Error]', err);
+  if (!res.headersSent) {
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 // Socket.IO

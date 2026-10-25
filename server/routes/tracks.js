@@ -1074,7 +1074,8 @@ router.get('/debug-stream', async (req, res) => {
     distIndexHtml = fs.readFileSync(path.join(__dirname, '../../dist/index.html'), 'utf8');
   } catch (e) { distIndexHtml = e.message; }
   try {
-    ubuntuIndexHtml = fs.readFileSync('/home/ubuntu/dist/index.html', 'utf8');
+    const uPath = '/home/ubuntu/dist/index.html';
+    if (fs.existsSync(uPath)) ubuntuIndexHtml = fs.readFileSync(uPath, 'utf8');
   } catch (e) { ubuntuIndexHtml = e.message; }
 
   try {
