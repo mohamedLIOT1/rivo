@@ -149,8 +149,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.0.0',
-      build: 93,
+      version: '2.0.1',
+      build: 94,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -158,8 +158,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     ios: {
-      version: '2.0.0',
-      build: 93,
+      version: '2.0.1',
+      build: 94,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
@@ -194,8 +194,8 @@ const BETA_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.0.0',
-      build: 93,
+      version: '2.0.1',
+      build: 94,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -204,7 +204,7 @@ const BETA_VERSIONS_DATA = {
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '2.0.0',
+        version: '2.0.1',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -212,8 +212,8 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '2.0.0',
-      build: 93,
+      version: '2.0.1',
+      build: 94,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
