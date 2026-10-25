@@ -240,7 +240,7 @@
             android:layout_height="48dp"
             android:background="@drawable/lock_slider_track"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="auto">
+            android:layout_marginTop="8dp">
 
             <TextView
                 android:id="@+id/lock_slide_hint"
