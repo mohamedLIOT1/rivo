@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.9.9",
+  "version": "2.0.2",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "Beta v1.9.9.9 • Classic bottom tabs default, 4-edge draggable nav hub & lockscreen settings toggle",
-  "notesEn": "Beta v1.9.9.9 • Classic bottom tabs default, 4-edge draggable nav hub & lockscreen settings toggle",
-  "bundleSize": 3411667,
-  "sizeMb": "3.25 MB",
-  "updatedAt": "2026-10-25T05:54:20.964Z"
+  "notes": "Fix app recovery crash on startup",
+  "notesEn": "Fix app recovery crash on startup",
+  "bundleSize": 3395286,
+  "sizeMb": "3.24 MB",
+  "updatedAt": "2026-10-25T16:18:20.322Z"
 }

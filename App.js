@@ -709,7 +709,6 @@ function NativeAppShell() {
     }).catch(() => {});
   }, []);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
-  const [isLockscreenOpen, setIsLockscreenOpen] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [actionTrack, setActionTrack] = useState(null);
@@ -858,7 +857,7 @@ function NativeAppShell() {
   useEffect(() => {
     if (isAuthLoaded && !hasPromptedAuthOnLaunchRef.current) {
       hasPromptedAuthOnLaunchRef.current = true;
-      if (!currentUser && !isUpdateModalOpen) {
+      if (!currentUser) {
         setIsIntroAuthOpen(true);
       }
     }
@@ -1251,8 +1250,6 @@ function NativeAppShell() {
       <MobileModals
         isFullPlayerOpen={isFullPlayerOpen}
         setIsFullPlayerOpen={setIsFullPlayerOpen}
-        isLockscreenOpen={isLockscreenOpen}
-        setIsLockscreenOpen={setIsLockscreenOpen}
         selectedAlbum={selectedAlbum}
         setSelectedAlbum={setSelectedAlbum}
         selectedArtist={selectedArtist}

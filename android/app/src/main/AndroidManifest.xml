@@ -46,7 +46,6 @@
         android:excludeFromRecents="true"
         android:noHistory="true"
         android:showWhenLocked="true"
-        android:showOnLockScreen="true"
         android:turnScreenOn="true"
         android:theme="@style/Theme.Rivo.LockScreen" />
 

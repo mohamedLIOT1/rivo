@@ -106,11 +106,40 @@ object RivoWidgetManager {
             else R.drawable.ic_notification_play
         )
 
+        // Visual states for Shuffle, Repeat, and Like
+        views.setInt(
+            R.id.widget_42_btn_shuffle,
+            "setColorFilter",
+            if (MediaNotificationService.isShuffle) 0xFF17A398.toInt() else 0xFF94A3B8.toInt()
+        )
+
+        val repeatRes = when (MediaNotificationService.repeatMode) {
+            "one" -> R.drawable.ic_notification_repeat_on
+            "all" -> R.drawable.ic_notification_repeat_all
+            else -> R.drawable.ic_notification_repeat
+        }
+        views.setImageViewResource(R.id.widget_42_btn_repeat, repeatRes)
+        views.setInt(
+            R.id.widget_42_btn_repeat,
+            "setColorFilter",
+            if (MediaNotificationService.repeatMode != "off") 0xFF17A398.toInt() else 0xFF94A3B8.toInt()
+        )
+
+        views.setImageViewResource(
+            R.id.widget_42_btn_like,
+            if (MediaNotificationService.isLiked) R.drawable.ic_notification_liked else R.drawable.ic_notification_like
+        )
+        views.setInt(
+            R.id.widget_42_btn_like,
+            "setColorFilter",
+            if (MediaNotificationService.isLiked) 0xFFE11D48.toInt() else 0xFF94A3B8.toInt()
+        )
+
         views.setOnClickPendingIntent(R.id.widget_42_art, getOpenAppIntent(context))
         views.setOnClickPendingIntent(R.id.widget_42_btn_play_pause, getPendingServiceIntent(context, MediaNotificationService.ACTION_PLAY_PAUSE, 201))
         views.setOnClickPendingIntent(R.id.widget_42_btn_next, getPendingServiceIntent(context, MediaNotificationService.ACTION_NEXT, 202))
         views.setOnClickPendingIntent(R.id.widget_42_btn_prev, getPendingServiceIntent(context, MediaNotificationService.ACTION_PREV, 203))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_shuffle, getPendingServiceIntent(context, MediaNotificationService.ACTION_FORWARD, 204))
+        views.setOnClickPendingIntent(R.id.widget_42_btn_shuffle, getPendingServiceIntent(context, MediaNotificationService.ACTION_SHUFFLE, 204))
         views.setOnClickPendingIntent(R.id.widget_42_btn_repeat, getPendingServiceIntent(context, MediaNotificationService.ACTION_REPEAT, 205))
         views.setOnClickPendingIntent(R.id.widget_42_btn_like, getPendingServiceIntent(context, MediaNotificationService.ACTION_LIKE, 206))
 

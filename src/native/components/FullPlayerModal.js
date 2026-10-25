@@ -336,7 +336,7 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
   );
 });
 
-export default function FullPlayerModal({ visible, onClose, onTrackAction, onOpenLockscreen }) {
+export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const {
     currentTrack,
     isPlaying,
@@ -627,18 +627,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction, onOpe
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            {Boolean(onOpenLockscreen) && (
-              <TouchableOpacity
-                onPress={onOpenLockscreen}
-                style={styles.topWhiteBtn}
-                activeOpacity={0.8}
-                accessibilityLabel="Lockscreen Controls"
-              >
-                <Lock size={18} color="#000000" strokeWidth={2.5} />
-              </TouchableOpacity>
-            )}
             <TouchableOpacity
-              onPress={() => onTrackAction && onTrackAction(currentTrack)}
               style={styles.topWhiteBtn}
               activeOpacity={0.8}
             >

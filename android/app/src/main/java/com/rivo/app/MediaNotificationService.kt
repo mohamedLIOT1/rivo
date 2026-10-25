@@ -48,6 +48,7 @@ class MediaNotificationService : Service() {
         const val ACTION_PREV = "com.rivo.app.ACTION_PREV"
         const val ACTION_NEXT = "com.rivo.app.ACTION_NEXT"
         const val ACTION_REPEAT = "com.rivo.app.ACTION_REPEAT"
+        const val ACTION_SHUFFLE = "com.rivo.app.ACTION_SHUFFLE"
         const val ACTION_LIKE = "com.rivo.app.ACTION_LIKE"
         const val ACTION_FORWARD = "com.rivo.app.ACTION_FORWARD"
 
@@ -72,7 +73,7 @@ class MediaNotificationService : Service() {
         private var lastUserRepeatTimeMs: Long = 0L
     }
 
-    private var screenReceiver: ScreenLockReceiver? = null
+    private var screenReceiver: BroadcastReceiver? = null
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioManager: AudioManager? = null
@@ -93,8 +94,29 @@ class MediaNotificationService : Service() {
         createNotificationChannel()
         setupMediaSession()
         try {
-            screenReceiver = ScreenLockReceiver()
-            registerReceiver(screenReceiver, android.content.IntentFilter(Intent.ACTION_SCREEN_ON))
+            screenReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    when (intent?.action) {
+                        Intent.ACTION_SCREEN_OFF -> {
+                            val prefs = getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
+                            val isLockscreenEnabled = prefs.getBoolean("lockscreen_overlay_enabled", true)
+                            if (isPlaying && isLockscreenEnabled) {
+                                updateNotification(withFullScreenLock = true)
+                            }
+                        }
+                        Intent.ACTION_USER_PRESENT -> {
+                            LockScreenActivity.dismissIfShowing()
+                            updateNotification(withFullScreenLock = false)
+                        }
+                    }
+                }
+            }
+            val filter = android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            registerReceiver(screenReceiver, filter)
         } catch (_: Throwable) {}
         try {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -342,6 +364,7 @@ class MediaNotificationService : Service() {
             ACTION_PREV -> dispatchMediaAction("prev")
             ACTION_NEXT -> dispatchMediaAction("next")
             ACTION_REPEAT -> dispatchMediaAction("repeat")
+            ACTION_SHUFFLE -> dispatchMediaAction("shuffle")
             ACTION_LIKE -> dispatchMediaAction("like")
             ACTION_FORWARD -> dispatchMediaAction("forward")
         }
@@ -368,6 +391,8 @@ class MediaNotificationService : Service() {
                 else -> "off"
             }
             lastUserRepeatTimeMs = now
+        } else if (action == "shuffle") {
+            isShuffle = !isShuffle
         } else if (action == "like") {
             isLiked = !isLiked
             lastUserLikeTimeMs = now
@@ -398,17 +423,17 @@ class MediaNotificationService : Service() {
         } catch (e: Throwable) {
             try {
                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                manager.notify(NOTIFICATION_ID, buildMediaNotification())
+        manager.notify(NOTIFICATION_ID, buildMediaNotification(withFullScreenLock))
             } catch (_: Throwable) {}
         }
     }
 
-    private fun updateNotification() {
+    private fun updateNotification(withFullScreenLock: Boolean = false) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, buildMediaNotification())
+        manager.notify(NOTIFICATION_ID, buildMediaNotification(withFullScreenLock))
     }
 
-    private fun buildMediaNotification(): Notification {
+    private fun buildMediaNotification(withFullScreenLock: Boolean = false): Notification {
         val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         } else {
@@ -515,6 +540,14 @@ class MediaNotificationService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOnlyAlertOnce(true)
             .setOngoing(isPlaying)
+        if (withFullScreenLock) {
+            val lockIntent = Intent(this, LockScreenActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val lockPendingIntent = PendingIntent.getActivity(this, 199, lockIntent, pendingIntentFlags)
+            builder.setFullScreenIntent(lockPendingIntent, true)
+            builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        }
             // Actions order:
             // 0: Like
             // 1: Previous

@@ -1,6 +1,5 @@
 import React from 'react';
 import FullPlayerModal from './FullPlayerModal';
-import LockscreenPlayerModal from './LockscreenPlayerModal';
 import TrackActionMenuModal from './TrackActionMenuModal';
 import PlaylistPickerModal from './PlaylistPickerModal';
 import CreatePlaylistModal from './CreatePlaylistModal';
@@ -17,8 +16,6 @@ import ArtistDetailModal from './ArtistDetailModal';
 export default function MobileModals({
   isFullPlayerOpen,
   setIsFullPlayerOpen,
-  isLockscreenOpen,
-  setIsLockscreenOpen,
   selectedAlbum,
   setSelectedAlbum,
   selectedArtist,
@@ -82,14 +79,6 @@ export default function MobileModals({
           visible={isFullPlayerOpen}
           onClose={() => setIsFullPlayerOpen(false)}
           onTrackAction={(track) => setActionTrack(track)}
-          onOpenLockscreen={() => setIsLockscreenOpen && setIsLockscreenOpen(true)}
-        />
-      )}
-
-      {Boolean(isLockscreenOpen) && (
-        <LockscreenPlayerModal
-          visible={Boolean(isLockscreenOpen)}
-          onClose={() => setIsLockscreenOpen && setIsLockscreenOpen(false)}
         />
       )}
 
@@ -175,7 +164,6 @@ export default function MobileModals({
         <SettingsModal
           visible={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
-          onOpenLockscreen={() => setIsLockscreenOpen && setIsLockscreenOpen(true)}
         />
       )}
 

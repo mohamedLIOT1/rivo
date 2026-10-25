@@ -21,7 +21,7 @@ import {
   isLockScreenEnabled,
 } from '../services/mediaControls';
 
-export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
+export default function SettingsModal({ visible, onClose }) {
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
   const { isDark, toggleTheme } = useTheme();
@@ -410,7 +410,7 @@ export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={[styles.switchTitle, { color: textTitle }]}>Lockscreen Controls & Overlay</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
-                      Full-screen lockscreen player with dynamic ambient artwork, Quran Surah pages & synced lyrics
+                      Displays native immersive lockscreen playback controls when device is locked
                     </Text>
                   </View>
                   <Switch
@@ -420,26 +420,6 @@ export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
                     thumbColor="#ffffff"
                   />
                 </View>
-
-                {/* Preview Lockscreen Button */}
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    { borderColor: colors.mint, backgroundColor: isDark ? '#0d231e' : '#e8f7f4', marginTop: 12 }
-                  ]}
-                  onPress={() => {
-                    onClose();
-                    if (onOpenLockscreen) {
-                      setTimeout(() => onOpenLockscreen(), 150);
-                    }
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Maximize2 size={16} color={colors.mint} />
-                  <Text style={[styles.actionBtnText, { color: colors.mint }]}>
-                    PREVIEW LOCKSCREEN PLAYER NOW
-                  </Text>
-                </TouchableOpacity>
 
                 {/* Android Launcher Widgets Info */}
                 <View style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: isDark ? '#0b1614' : '#f0fdf4', borderWidth: 1, borderColor }}>

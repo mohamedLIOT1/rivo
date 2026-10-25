@@ -149,8 +149,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.0.1',
-      build: 94,
+      version: '2.0.2',
+      build: 95,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -158,8 +158,8 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     ios: {
-      version: '2.0.1',
-      build: 94,
+      version: '2.0.2',
+      build: 95,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
@@ -194,8 +194,8 @@ const BETA_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.0.1',
-      build: 94,
+      version: '2.0.2',
+      build: 95,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -204,7 +204,7 @@ const BETA_VERSIONS_DATA = {
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '2.0.1',
+        version: '2.0.2',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -212,8 +212,8 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '2.0.1',
-      build: 94,
+      version: '2.0.2',
+      build: 95,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
@@ -267,7 +267,7 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
     : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
-  // Only apply dynamic beta updates and OTA bundle if client is in beta channel
+  // Apply dynamic beta updates
   if (isBetaClient) {
     try {
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
@@ -278,19 +278,20 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
         if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
       }
     } catch (e) {}
+  }
 
-    const dynamicOta = getOtaManifest();
-    if (dynamicOta && dynamicOta.version && manifest.platforms && manifest.platforms.android) {
+  // Always apply dynamic fast OTA bundle to all mobile users if enabled
+  const dynamicOta = getOtaManifest();
+  if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
+    if (dynamicOta.version) {
       manifest.platforms.android.version = dynamicOta.version;
     }
-    if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
-      manifest.platforms.android.ota = {
-        ...(manifest.platforms.android.ota || {}),
-        ...dynamicOta,
-        bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
-        minAppVersion: dynamicOta.minAppVersion || '1.9.0'
-      };
-    }
+    manifest.platforms.android.ota = {
+      ...(manifest.platforms.android.ota || {}),
+      ...dynamicOta,
+      bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
+      minAppVersion: dynamicOta.minAppVersion || '1.9.0'
+    };
   }
 
   res.json(manifest);
