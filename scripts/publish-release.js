@@ -4,7 +4,7 @@ const cp = require('child_process');
 
 function getGitHubToken() {
   if (process.env.GITHUB_TOKEN) return Promise.resolve(process.env.GITHUB_TOKEN);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const p = cp.spawn('git', ['credential', 'fill']);
     p.stdin.write('protocol=https\nhost=github.com\n\n');
     let out = '';
@@ -24,19 +24,30 @@ function getGitHubToken() {
 async function publish() {
   const token = await getGitHubToken();
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
-  const version = pkg.version || '1.6.0';
+  const version = pkg.version || '1.9.9.8';
   const tag = `v${version}`;
-  const releaseName = `Rivo v${version}`;
-  const releaseBody = `## Rivo v${version} Release Notes
+  const releaseName = `Rivo v${version} (Beta)`;
+  const releaseBody = `## Rivo v${version} (Beta Release)
 
-### 📖 Authentic Medina Mushaf Quran Pages (Ayat)
-- High-DPI Medina Mushaf pages (1-604) for all 114 Surahs replacing plain lyrics during Quran recitation.
-- AMOLED Dark Mode with crystal-clear King Fahd Medina Mushaf aesthetic.
-- Touch swipe navigation bounded strictly to each Surah's page range with instant prefetching.
+### 📱 Draggable Edge-Docking Navigation Menu
+- Floating navigation FAB is now smoothly draggable across the screen.
+- Dragging toward left (<18%) or right (>82%) screen edges collapses it into a sleek docked handle.
+- Single tap on docked handle springs it right back to bottom-center with spring physics.
+- Fixed duplicate 'X' close button when expanded, and expanded radial spacing with frosted pill backdrops.
 
-### 📻 Official 24/7 Live Quran Radio
-- Uninterrupted 24/7 broadcasts: Saudi Quran Radio, Sheikh Al-Minshawi, Sheikh Abdul Basit, Sheikh Al-Hussary, Sheikh Mishary Al-Afasy, Sheikh Maher Al-Muaiqly, and Tafseer.
-- Dedicated player indicators across Web, Android, and iOS.
+### 🔒 Full-Screen Lockscreen Player & Quran Surah Pages
+- Full-screen edge-to-edge lockscreen playback mode with ambient dynamic blurred cover art backdrop.
+- Centered floating switcher for Art (default), Synced Lyrics, Surah Mushaf Pages, and Up Next Queue.
+- Medina Mushaf Quran Surah Pages with live Ayah audio highlighting and page navigation.
+- Dedicated 100% full-width unclipped song title and artist row.
+- Restored classic 5-button bottom media controls: \`[Shuffle] [Previous] [Play/Pause] [Next] [Repeat]\`.
+
+### 💾 Desktop MP3 Download Fix & Embedded Lyrics
+- Fixed yt-dlp downloading 24MB video files instead of pure 2-4MB MP3 audio.
+- Automatically embeds ID3v2.3/v2.4 synchronized lyrics directly into MP3 tags and cleans up loose .lrc files.
+
+### 🚀 Instant OTA Update Engine
+- OTA bundle published directly to Android devices for instant seamless updates without APK reinstall.
 `;
 
   const searchDirs = [
@@ -79,7 +90,7 @@ async function publish() {
     console.log(`\n=== Processing repo: ${repo} ===`);
     const headers = {
       'User-Agent': 'Rivo-Release-Uploader',
-      'Authorization': `Bearer ${token}`,
+      'Authorization': `token ${token}`,
       'Accept': 'application/vnd.github.v3+json'
     };
 
@@ -99,7 +110,7 @@ async function publish() {
           name: releaseName,
           body: releaseBody,
           draft: false,
-          prerelease: false
+          prerelease: true
         })
       });
       if (!createRes.ok) {
