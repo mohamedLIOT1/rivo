@@ -188,8 +188,8 @@ const BETA_VERSIONS_DATA = {
       notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '1.9.9.8',
-      build: 91,
+      version: '1.9.9.9',
+      build: 92,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
@@ -198,7 +198,7 @@ const BETA_VERSIONS_DATA = {
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '1.9.9.8',
+        version: '1.9.9.9',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',

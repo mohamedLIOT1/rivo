@@ -175,6 +175,7 @@ export default function MobileModals({
         <SettingsModal
           visible={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
+          onOpenLockscreen={() => setIsLockscreenOpen && setIsLockscreenOpen(true)}
         />
       )}
 

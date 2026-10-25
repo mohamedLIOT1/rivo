@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.9.8",
+  "version": "1.9.9.9",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "Beta v1.9.9.8 • Edge-docking nav menu, lockscreen with Quran Surah pages & embedded desktop audio downloads",
-  "notesEn": "Beta v1.9.9.8 • Edge-docking nav menu, lockscreen with Quran Surah pages & embedded desktop audio downloads",
-  "bundleSize": 3409036,
+  "notes": "Beta v1.9.9.9 • Classic bottom tabs default, 4-edge draggable nav hub & lockscreen settings toggle",
+  "notesEn": "Beta v1.9.9.9 • Classic bottom tabs default, 4-edge draggable nav hub & lockscreen settings toggle",
+  "bundleSize": 3411667,
   "sizeMb": "3.25 MB",
-  "updatedAt": "2026-10-25T05:19:18.296Z"
+  "updatedAt": "2026-10-25T05:54:20.964Z"
 }

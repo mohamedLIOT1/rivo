@@ -14,7 +14,7 @@ export const NAV_MENU_ITEMS = [
 ];
 
 const NavPreferencesContext = createContext({
-  navStyle: 'fab', // 'fab' | 'classic'
+  navStyle: 'classic', // 'classic' (default) | 'fab'
   setNavStyle: () => {},
   hiddenMenuItems: [],
   toggleMenuItemVisibility: () => {},
@@ -24,7 +24,7 @@ const NavPreferencesContext = createContext({
 });
 
 export const NavPreferencesProvider = ({ children }) => {
-  const [navStyle, setNavStyleState] = useState('fab');
+  const [navStyle, setNavStyleState] = useState('classic');
   const [hiddenMenuItems, setHiddenMenuItems] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -39,6 +39,8 @@ export const NavPreferencesProvider = ({ children }) => {
 
         if (savedStyle === 'fab' || savedStyle === 'classic') {
           setNavStyleState(savedStyle);
+        } else {
+          setNavStyleState('classic');
         }
 
         if (savedHidden) {

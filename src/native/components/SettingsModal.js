@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
-import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut, HardDrive, FolderPlus, RefreshCw, Radio, Copy, Check, Unlink, Sun, Moon, Compass, LayoutGrid } from 'lucide-react-native';
+import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut, HardDrive, FolderPlus, RefreshCw, Radio, Copy, Check, Unlink, Sun, Moon, Compass, LayoutGrid, Smartphone, Maximize2 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
@@ -17,12 +17,25 @@ import {
   getStorageLocationInfo,
 } from '../services/downloadManager';
 
-export default function SettingsModal({ visible, onClose }) {
+export default function SettingsModal({ visible, onClose, onOpenLockscreen }) {
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
   const { isDark, toggleTheme } = useTheme();
   const { navStyle, setNavStyle, menuItems, isItemVisible, toggleMenuItemVisibility } = useNavPreferences();
   const { autoDownloadFinished = true, toggleAutoDownloadFinished } = useAudioPlayer();
+
+  const [isLockscreenEnabled, setIsLockscreenEnabled] = useState(true);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@rivo_lockscreen_enabled').then((val) => {
+      if (val !== null) setIsLockscreenEnabled(val === 'true');
+    }).catch(() => {});
+  }, []);
+
+  const toggleLockscreen = (val) => {
+    setIsLockscreenEnabled(val);
+    AsyncStorage.setItem('@rivo_lockscreen_enabled', String(val)).catch(() => {});
+  };
 
   const [audioQuality, setAudioQuality] = useState('320'); // '320' | '256' | '128'
   const [hapticFeedback, setHapticFeedback] = useState(true);
@@ -243,30 +256,26 @@ export default function SettingsModal({ visible, onClose }) {
                   <Text style={[styles.sectionTitle, { color: textTitle }]}>NAVIGATION & INTERFACE</Text>
                 </View>
 
+                {/* Navigation Style Toggle Switch */}
+                <View style={[styles.switchRow, { marginTop: 8 }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>Floating Navigation Button</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>
+                      Enable draggable floating hub with 4-edge hiding instead of classic bottom bar
+                    </Text>
+                  </View>
+                  <Switch
+                    value={navStyle === 'fab'}
+                    onValueChange={(val) => setNavStyle(val ? 'fab' : 'classic')}
+                    trackColor={{ false: isDark ? '#1a2624' : '#e2e8f0', true: colors.mint }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+
                 {/* Style Selector Buttons */}
-                <View style={{ marginTop: 8 }}>
+                <View style={{ marginTop: 12 }}>
                   <Text style={[styles.label, { color: textMuted, marginBottom: 8 }]}>Navigation Menu Layout:</Text>
                   <View style={styles.navStyleRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.navStyleBtn,
-                        navStyle === 'fab' && styles.navStyleBtnActive,
-                        { borderColor },
-                      ]}
-                      onPress={() => setNavStyle('fab')}
-                      activeOpacity={0.8}
-                    >
-                      <View style={[styles.navStyleDot, navStyle === 'fab' && styles.navStyleDotActive]} />
-                      <Text
-                        style={[
-                          styles.navStyleBtnText,
-                          navStyle === 'fab' ? styles.navStyleBtnTextActive : { color: textTitle },
-                        ]}
-                      >
-                        FLOATING HUB (NEW)
-                      </Text>
-                    </TouchableOpacity>
-
                     <TouchableOpacity
                       style={[
                         styles.navStyleBtn,
@@ -283,7 +292,27 @@ export default function SettingsModal({ visible, onClose }) {
                           navStyle === 'classic' ? styles.navStyleBtnTextActive : { color: textTitle },
                         ]}
                       >
-                        CLASSIC TABS (OLD)
+                        CLASSIC TABS (DEFAULT)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.navStyleBtn,
+                        navStyle === 'fab' && styles.navStyleBtnActive,
+                        { borderColor },
+                      ]}
+                      onPress={() => setNavStyle('fab')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.navStyleDot, navStyle === 'fab' && styles.navStyleDotActive]} />
+                      <Text
+                        style={[
+                          styles.navStyleBtnText,
+                          navStyle === 'fab' ? styles.navStyleBtnTextActive : { color: textTitle },
+                        ]}
+                      >
+                        FLOATING HUB (DRAGGABLE)
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -348,6 +377,50 @@ export default function SettingsModal({ visible, onClose }) {
                     );
                   })}
                 </View>
+              </View>
+
+              {/* ── Lockscreen & Media Widget Controls ── */}
+              <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
+                  <Smartphone size={18} color={colors.mint} />
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>LOCKSCREEN & MEDIA WIDGET</Text>
+                </View>
+
+                {/* Enable Lockscreen Player Toggle */}
+                <View style={[styles.switchRow, { marginTop: 8 }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>Lockscreen Controls & Overlay</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>
+                      Full-screen lockscreen player with dynamic ambient artwork, Quran Surah pages & synced lyrics
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isLockscreenEnabled}
+                    onValueChange={toggleLockscreen}
+                    trackColor={{ false: isDark ? '#1a2624' : '#e2e8f0', true: colors.mint }}
+                    thumbColor="#ffffff"
+                  />
+                </View>
+
+                {/* Preview Lockscreen Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    { borderColor: colors.mint, backgroundColor: isDark ? '#0d231e' : '#e8f7f4', marginTop: 12 }
+                  ]}
+                  onPress={() => {
+                    onClose();
+                    if (onOpenLockscreen) {
+                      setTimeout(() => onOpenLockscreen(), 150);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Maximize2 size={16} color={colors.mint} />
+                  <Text style={[styles.actionBtnText, { color: colors.mint }]}>
+                    PREVIEW LOCKSCREEN PLAYER NOW
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {/* ── Discord Rich Presence ── */}

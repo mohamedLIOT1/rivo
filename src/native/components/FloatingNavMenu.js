@@ -25,11 +25,12 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
   const { isDark } = useTheme();
   const { visibleMenuItems } = useNavPreferences();
   const [isOpen, setIsOpen] = useState(false);
-  const [dockedSide, setDockedSide] = useState(null); // null | 'left' | 'right'
+  const [dockedSide, setDockedSide] = useState(null); // null | 'left' | 'right' | 'top' | 'bottom'
+
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
   // Gesture dragging values
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const screenWidth = Dimensions.get('window').width;
 
   // Animation values
   const menuAnim = useRef(new Animated.Value(0)).current;
@@ -94,39 +95,56 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
     });
   }, [visibleMenuItems]);
 
+  // Instant snap back to center
   const snapBackToCenter = useCallback(() => {
+    setDockedSide(null);
     Animated.spring(pan, {
       toValue: { x: 0, y: 0 },
-      friction: 7,
-      tension: 65,
+      tension: 190,
+      friction: 12,
       useNativeDriver: false,
-    }).start(() => {
-      setDockedSide(null);
-    });
+    }).start();
   }, [pan]);
 
-  const dockToEdge = useCallback((side, releaseY) => {
-    const targetX = side === 'left' ? -(screenWidth / 2 - 14) : (screenWidth / 2 - 14);
-    // Clamp Y to safe screen bounds
-    const clampedY = Math.max(-300, Math.min(60, pan.y._value || 0));
+  // Instant dock to one of the 4 edges
+  const dockToEdge = useCallback((side, releaseX, releaseY) => {
+    setDockedSide(side);
+
+    let targetX = 0;
+    let targetY = 0;
+
+    const halfW = SCREEN_WIDTH / 2;
+    const halfBtn = BUTTON_SIZE / 2;
+
+    if (side === 'left') {
+      targetX = -(halfW - 12);
+      targetY = Math.max(-(SCREEN_HEIGHT - 180), Math.min(20, releaseY - (SCREEN_HEIGHT - 80)));
+    } else if (side === 'right') {
+      targetX = halfW - 12;
+      targetY = Math.max(-(SCREEN_HEIGHT - 180), Math.min(20, releaseY - (SCREEN_HEIGHT - 80)));
+    } else if (side === 'top') {
+      targetX = Math.max(-(halfW - 40), Math.min(halfW - 40, releaseX - halfW));
+      targetY = -(SCREEN_HEIGHT - 100);
+    } else if (side === 'bottom') {
+      targetX = Math.max(-(halfW - 40), Math.min(halfW - 40, releaseX - halfW));
+      targetY = 28;
+    }
 
     Animated.spring(pan, {
-      toValue: { x: targetX, y: clampedY },
-      friction: 7,
-      tension: 70,
+      toValue: { x: targetX, y: targetY },
+      tension: 190,
+      friction: 12,
       useNativeDriver: false,
-    }).start(() => {
-      setDockedSide(side);
-    });
-  }, [pan, screenWidth]);
+    }).start();
+  }, [pan, SCREEN_WIDTH, SCREEN_HEIGHT]);
 
-  // PanResponder for drag-to-edge docking and return-to-center
+  // PanResponder for drag-to-edge docking across all 4 edges (instant feel)
   const panResponder = useMemo(() => {
     return PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gestureState) => {
         if (isOpen) return false;
-        return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
+        return Math.abs(gestureState.dx) > 8 || Math.abs(gestureState.dy) > 8;
       },
       onPanResponderGrant: () => {
         pan.setOffset({
@@ -141,56 +159,70 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
       ),
       onPanResponderRelease: (_, gestureState) => {
         pan.flattenOffset();
-        const finalX = gestureState.moveX;
-        if (finalX < screenWidth * 0.18) {
-          dockToEdge('left', gestureState.moveY);
-        } else if (finalX > screenWidth * 0.82) {
-          dockToEdge('right', gestureState.moveY);
+        const moveX = gestureState.moveX;
+        const moveY = gestureState.moveY;
+
+        // Check 4 edges
+        const isLeft = moveX < SCREEN_WIDTH * 0.18;
+        const isRight = moveX > SCREEN_WIDTH * 0.82;
+        const isTop = moveY < SCREEN_HEIGHT * 0.18;
+        const isBottom = moveY > SCREEN_HEIGHT * 0.88;
+
+        if (isTop) {
+          dockToEdge('top', moveX, moveY);
+        } else if (isBottom) {
+          dockToEdge('bottom', moveX, moveY);
+        } else if (isLeft) {
+          dockToEdge('left', moveX, moveY);
+        } else if (isRight) {
+          dockToEdge('right', moveX, moveY);
         } else {
           snapBackToCenter();
         }
       },
+      onPanResponderTerminate: () => {
+        snapBackToCenter();
+      },
     });
-  }, [isOpen, screenWidth, dockToEdge, snapBackToCenter, pan]);
+  }, [isOpen, pan, dockToEdge, snapBackToCenter, SCREEN_WIDTH, SCREEN_HEIGHT]);
 
-  const openMenu = useCallback(() => {
+  const openMenu = () => {
     if (dockedSide) {
       snapBackToCenter();
       return;
     }
     setIsOpen(true);
-
     Animated.parallel([
-      Animated.timing(menuAnim, {
+      Animated.spring(menuAnim, {
         toValue: 1,
-        duration: 250,
+        tension: 120,
+        friction: 8,
         useNativeDriver: true,
       }),
-      Animated.spring(rotateAnim, {
+      Animated.timing(rotateAnim, {
         toValue: 1,
-        friction: 6,
-        tension: 80,
+        duration: 220,
         useNativeDriver: true,
       }),
       Animated.stagger(
-        35,
-        itemAnims.slice(0, visibleMenuItems.length).map((anim) =>
+        40,
+        itemAnims.map((anim) =>
           Animated.spring(anim, {
             toValue: 1,
-            friction: 6,
-            tension: 75,
+            tension: 110,
+            friction: 7,
             useNativeDriver: true,
           })
         )
       ),
     ]).start();
-  }, [dockedSide, snapBackToCenter, menuAnim, rotateAnim, itemAnims, visibleMenuItems.length]);
+  };
 
-  const closeMenu = useCallback((callback) => {
+  const closeMenu = (callback) => {
     Animated.parallel([
       Animated.timing(menuAnim, {
         toValue: 0,
-        duration: 200,
+        duration: 180,
         useNativeDriver: true,
       }),
       Animated.timing(rotateAnim, {
@@ -198,127 +230,110 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
         duration: 180,
         useNativeDriver: true,
       }),
-      Animated.parallel(
-        itemAnims.slice(0, visibleMenuItems.length).map((anim) =>
-          Animated.timing(anim, {
-            toValue: 0,
-            duration: 160,
-            useNativeDriver: true,
-          })
-        )
+      ...itemAnims.map((anim) =>
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 140,
+          useNativeDriver: true,
+        })
       ),
     ]).start(() => {
       setIsOpen(false);
-      if (typeof callback === 'function') callback();
+      if (callback) callback();
     });
-  }, [menuAnim, rotateAnim, itemAnims, visibleMenuItems.length]);
+  };
 
-  const handleToggle = useCallback(() => {
-    if (dockedSide) {
-      snapBackToCenter();
-      return;
-    }
-    if (isOpen) {
-      closeMenu();
-    } else {
-      openMenu();
-    }
-  }, [dockedSide, snapBackToCenter, isOpen, openMenu, closeMenu]);
-
-  const handleSelectTab = useCallback((screen) => {
+  const handleItemPress = (screen) => {
     closeMenu(() => {
-      onTabPress(screen);
+      if (onTabPress) {
+        onTabPress(screen);
+      }
     });
-  }, [closeMenu, onTabPress]);
+  };
 
-  // Rotations & fades for icons
-  const rLogoRotate = rotateAnim.interpolate({
+  // Interpolations
+  const spin = rotateAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '90deg'],
   });
 
-  const rLogoOpacity = rotateAnim.interpolate({
-    inputRange: [0, 0.4, 1],
-    outputRange: [1, 0, 0],
+  const fabScale = pulseAnim.interpolate({
+    inputRange: [1, 1.14],
+    outputRange: [1, 1.05],
   });
 
-  const overlayOpacity = menuAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  // Check if item is currently active screen
-  const isItemActive = (screen) => {
-    if (screen === 'home' || screen === 'music') return activeTab === 'music' || activeTab === 'home';
-    return activeTab === screen;
-  };
+  const isDocked = Boolean(dockedSide);
 
   return (
     <>
-      {/* ── Fixed Floating Button At Bottom Center (with Pan drag-to-edge) ── */}
+      {/* ── Floating Draggable Button ── */}
       <Animated.View
+        {...panResponder.panHandlers}
         style={[
           styles.fabWrapper,
           {
-            bottom: Platform.OS === 'ios' ? 24 : 16,
-            transform: [{ translateX: pan.x }, { translateY: pan.y }],
-            opacity: isOpen ? 0 : 1, // Fix Item 3: Hide background FAB when open so no double X!
+            bottom: Platform.OS === 'ios' ? 24 : 14,
+            transform: [
+              { translateX: pan.x },
+              { translateY: pan.y },
+            ],
+            opacity: isOpen ? 0 : 1, // Single X: hidden while modal menu is open
           },
         ]}
-        pointerEvents={isOpen ? 'none' : 'box-none'}
-        {...panResponder.panHandlers}
       >
-        {/* Glow / Pulse Ring */}
-        {!isOpen && !dockedSide && (
+        {/* Breathing glow ring (only when dockedSide is null) */}
+        {!isOpen && !isDocked && (
           <Animated.View
+            pointerEvents="none"
             style={[
               styles.fabPulseRing,
               {
-                borderColor: isDark ? colors.teal : colors.ink,
+                borderColor: colors.mint,
                 transform: [{ scale: pulseAnim }],
                 opacity: pulseAnim.interpolate({
                   inputRange: [1, 1.14],
-                  outputRange: [0.4, 0],
+                  outputRange: [0.45, 0],
                 }),
               },
             ]}
           />
         )}
 
-        {/* Center Circular Trigger Button */}
+        {/* The Action Button or Docked Handle */}
         <TouchableOpacity
           style={[
             styles.fabButton,
             isDark ? styles.fabButtonDark : styles.fabButtonLight,
-            dockedSide && (dockedSide === 'left' ? styles.fabDockedLeft : styles.fabDockedRight),
+            dockedSide === 'left' && styles.fabDockedLeft,
+            dockedSide === 'right' && styles.fabDockedRight,
+            dockedSide === 'top' && styles.fabDockedTop,
+            dockedSide === 'bottom' && styles.fabDockedBottom,
           ]}
-          onPress={handleToggle}
-          activeOpacity={0.88}
+          onPress={() => (isDocked ? snapBackToCenter() : openMenu())}
+          activeOpacity={0.85}
         >
-          {dockedSide ? (
-            /* Docked Pill Handle */
-            <View style={styles.dockedHandleBar} />
+          {isDocked ? (
+            <View
+              style={
+                dockedSide === 'top' || dockedSide === 'bottom'
+                  ? styles.dockedHandleBarH
+                  : styles.dockedHandleBarV
+              }
+            />
           ) : (
-            /* Normal Hub Grid Icon */
             <Animated.View
               style={[
                 styles.fabIconContainer,
-                {
-                  opacity: rLogoOpacity,
-                  transform: [{ rotate: rLogoRotate }],
-                },
+                { transform: [{ rotate: spin }, { scale: fabScale }] },
               ]}
             >
-              <NavHubIcon
-                size={26}
-                color={isDark ? '#0b1110' : '#26c4b7'}
-              />
+              <NavHubIcon size={24} color={isDark ? '#0b1110' : '#ffffff'} strokeWidth={2.4} />
             </Animated.View>
           )}
         </TouchableOpacity>
       </Animated.View>
 
-      {/* ── Modal Overlay + Radial Menu Items ── */}
+      {/* ── Expanded Radial Arc Menu in Modal ── */}
       {isOpen && (
         <Modal
           visible={isOpen}
@@ -330,40 +345,41 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
             <Animated.View
               style={[
                 styles.overlay,
-                { opacity: overlayOpacity },
+                {
+                  opacity: menuAnim,
+                },
               ]}
             >
-              {/* Radial Arc Items Container - Anchored to center bottom */}
+              {/* Radial Items Arc Container */}
               <View
                 style={[
                   styles.arcContainer,
-                  { bottom: (Platform.OS === 'ios' ? 24 : 16) + BUTTON_SIZE / 2 },
+                  {
+                    bottom: (Platform.OS === 'ios' ? 24 : 14),
+                  },
                 ]}
               >
                 {visibleMenuItems.map((item, index) => {
-                  const anim = itemAnims[index] || new Animated.Value(0);
-                  const pos = itemPositions[index] || { dX: 0, dY: -ARC_RADIUS };
-                  const active = isItemActive(item.screen);
                   const Icon = item.icon;
+                  const active = activeTab === item.screen;
+                  const pos = itemPositions[index] || { dX: 0, dY: -ARC_RADIUS };
+                  const itemAnim = itemAnims[index] || menuAnim;
 
-                  const translateX = anim.interpolate({
+                  const translateX = itemAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [0, pos.dX],
                   });
-
-                  const translateY = anim.interpolate({
+                  const translateY = itemAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [0, pos.dY],
                   });
-
-                  const scale = anim.interpolate({
-                    inputRange: [0, 0.4, 1],
-                    outputRange: [0.1, 0.7, 1],
+                  const scale = itemAnim.interpolate({
+                    inputRange: [0, 0.6, 1],
+                    outputRange: [0, 1.15, 1],
                   });
-
-                  const opacity = anim.interpolate({
+                  const opacity = itemAnim.interpolate({
                     inputRange: [0, 0.3, 1],
-                    outputRange: [0, 0.8, 1],
+                    outputRange: [0, 0.7, 1],
                   });
 
                   return (
@@ -372,8 +388,12 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
                       style={[
                         styles.arcItemWrapper,
                         {
-                          transform: [{ translateX }, { translateY }, { scale }],
                           opacity,
+                          transform: [
+                            { translateX },
+                            { translateY },
+                            { scale },
+                          ],
                         },
                       ]}
                     >
@@ -383,7 +403,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
                           isDark ? styles.arcCircleDark : styles.arcCircleLight,
                           active && styles.arcCircleActive,
                         ]}
-                        onPress={() => handleSelectTab(item.screen)}
+                        onPress={() => handleItemPress(item.screen)}
                         activeOpacity={0.8}
                       >
                         <Icon
@@ -391,12 +411,9 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
                           color={active ? '#0b1110' : (isDark ? colors.mint : '#0b1110')}
                           strokeWidth={active ? 2.8 : 2.2}
                         />
-
-                        {/* Active Indicator Glow Ring */}
                         {active && <View style={styles.activeGlowRing} />}
                       </TouchableOpacity>
 
-                      {/* Monospace Brutalist Label with pill backdrop for zero overlapping */}
                       <Text
                         style={[
                           styles.arcLabel,
@@ -469,32 +486,62 @@ const styles = StyleSheet.create({
     backgroundColor: '#0b1110',
     borderColor: '#26c4b7',
   },
+
+  /* 4-Edge Docked Handles */
   fabDockedLeft: {
-    width: 22,
-    height: 56,
+    width: 20,
+    height: 54,
     borderRadius: 0,
-    borderTopRightRadius: 14,
-    borderBottomRightRadius: 14,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
     borderLeftWidth: 0,
     backgroundColor: '#082621',
     borderColor: colors.teal,
   },
   fabDockedRight: {
-    width: 22,
-    height: 56,
+    width: 20,
+    height: 54,
     borderRadius: 0,
-    borderTopLeftRadius: 14,
-    borderBottomLeftRadius: 14,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
     borderRightWidth: 0,
     backgroundColor: '#082621',
     borderColor: colors.teal,
   },
-  dockedHandleBar: {
-    width: 4,
-    height: 22,
+  fabDockedTop: {
+    width: 54,
+    height: 20,
+    borderRadius: 0,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+    borderTopWidth: 0,
+    backgroundColor: '#082621',
+    borderColor: colors.teal,
+  },
+  fabDockedBottom: {
+    width: 54,
+    height: 20,
+    borderRadius: 0,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    borderBottomWidth: 0,
+    backgroundColor: '#082621',
+    borderColor: colors.teal,
+  },
+
+  dockedHandleBarV: {
+    width: 3.5,
+    height: 20,
     borderRadius: 2,
     backgroundColor: colors.mint,
   },
+  dockedHandleBarH: {
+    width: 20,
+    height: 3.5,
+    borderRadius: 2,
+    backgroundColor: colors.mint,
+  },
+
   fabButtonOpen: {
     backgroundColor: '#ff4757',
     borderColor: '#ffffff',
