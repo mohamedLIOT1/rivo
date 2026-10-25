@@ -113,7 +113,14 @@ def main():
         f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /var/www/html/downloads/ 2>/dev/null || true"
     )
 
-    # 3. Create dist archive and upload (excluding heavy downloads directory)
+    # 3. Build fresh web bundle, create dist archive and upload (excluding heavy downloads directory)
+    print("Building fresh web bundle with Vite...", flush=True)
+    build_cmd = "npm.cmd run build" if sys.platform == "win32" else "npm run build"
+    b_res = subprocess.run(build_cmd, shell=True, cwd=BASE_DIR)
+    if b_res.returncode != 0:
+        print("Web build failed! Aborting deployment.", flush=True)
+        sys.exit(1)
+
     dist_dir = os.path.join(BASE_DIR, 'dist')
     tar_path = os.path.join(BASE_DIR, f'dist_v{version.replace(".", "")}.tar.gz')
     print("Archiving web dist (excluding downloads)...", flush=True)
@@ -130,7 +137,7 @@ def main():
     tar_filename = os.path.basename(tar_path)
     print(f"Uploading dist archive ({os.path.getsize(tar_path)} bytes)...")
     upload_file(tar_path, f"{REMOTE_DIR}/{tar_filename}")
-    run_ssh(f"cd {REMOTE_DIR} && tar -xzf {tar_filename} && rm {tar_filename} && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true)")
+    run_ssh(f"cd {REMOTE_DIR} && tar -xzf {tar_filename} && rm {tar_filename} && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /home/ubuntu/rivo/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true)")
     if os.path.exists(tar_path):
         os.remove(tar_path)
 
