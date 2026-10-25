@@ -96,7 +96,7 @@ export default function UserDetailModal({
     };
   }, [visible, targetId, token]);
 
-  if (!visible) return null;
+// removed early return that violated React Rules of Hooks
 
   const currentProfile = profile || user || {};
   const displayName = currentProfile.name || 'Anonymous Listener';

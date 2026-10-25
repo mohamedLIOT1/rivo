@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.0.2",
+  "version": "2.0.3",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "Fix app recovery crash on startup",
-  "notesEn": "Fix app recovery crash on startup",
-  "bundleSize": 3395286,
+  "notes": "Fix User Profile React Hook order crash",
+  "notesEn": "Fix User Profile React Hook order crash",
+  "bundleSize": 3395268,
   "sizeMb": "3.24 MB",
-  "updatedAt": "2026-10-25T16:18:20.322Z"
+  "updatedAt": "2026-10-25T16:52:55.554Z"
 }
