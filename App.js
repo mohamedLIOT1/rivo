@@ -698,7 +698,7 @@ function MainAppShell() {
  */
 function NativeAppShell() {
   const { appMode, setAppMode } = useConnectivity();
-  const { navStyle, visibleMenuItems } = useNavPreferences();
+  const { navStyle, visibleMenuItems, firstVisibleTab, hiddenMenuItems, isLoaded: isNavLoaded } = useNavPreferences();
   const [activeTab, setActiveTab] = useState('home');
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [activeOtaVersion, setActiveOtaVersion] = useState(null);
@@ -709,6 +709,7 @@ function NativeAppShell() {
     }).catch(() => {});
   }, []);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [isLockscreenOpen, setIsLockscreenOpen] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [actionTrack, setActionTrack] = useState(null);
@@ -840,6 +841,17 @@ function NativeAppShell() {
       appStateSub.remove();
     };
   }, [handleOpenChatFromNotification]);
+
+  // Auto-switch to first visible tab if activeTab is hidden on startup
+  useEffect(() => {
+    if (isNavLoaded && visibleMenuItems.length > 0) {
+      const isCurrentHidden = hiddenMenuItems.includes(activeTab) ||
+        ((activeTab === 'home' || activeTab === 'music') && hiddenMenuItems.includes('music'));
+      if (isCurrentHidden) {
+        setActiveTab(firstVisibleTab);
+      }
+    }
+  }, [isNavLoaded, hiddenMenuItems, firstVisibleTab, activeTab]);
 
   // Launch login / register prompt for unauthenticated users, exactly matching the iOS IPA
   const hasPromptedAuthOnLaunchRef = useRef(false);
@@ -1239,6 +1251,8 @@ function NativeAppShell() {
       <MobileModals
         isFullPlayerOpen={isFullPlayerOpen}
         setIsFullPlayerOpen={setIsFullPlayerOpen}
+        isLockscreenOpen={isLockscreenOpen}
+        setIsLockscreenOpen={setIsLockscreenOpen}
         selectedAlbum={selectedAlbum}
         setSelectedAlbum={setSelectedAlbum}
         selectedArtist={selectedArtist}

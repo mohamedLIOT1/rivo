@@ -184,7 +184,15 @@ fn save_desktop_downloaded_track(
         }
     }
 
-    let _ = tag.write_to_path(&mp3_path, Version::Id3v24);
+    if let Err(_) = tag.write_to_path(&mp3_path, Version::Id3v24) {
+        let _ = tag.write_to_path(&mp3_path, Version::Id3v23);
+    }
+
+    // Ensure no loose .lrc file remains on disk so lyrics stay strictly embedded
+    let loose_lrc = downloads_dir.join(format!("{}.lrc", base_filename));
+    if loose_lrc.exists() {
+        let _ = fs::remove_file(loose_lrc);
+    }
 
     let now_ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

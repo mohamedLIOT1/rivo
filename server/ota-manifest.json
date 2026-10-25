@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "1.9.9.7",
+  "version": "1.9.9.8",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "Floating circular navigation hub, custom nav icon, header search bar, and chat quick button.",
-  "notesEn": "Floating circular navigation hub, custom nav icon, header search bar, and chat quick button.",
-  "bundleSize": 3387453,
-  "sizeMb": "3.23 MB",
-  "updatedAt": "2026-10-24T14:00:35.142Z"
+  "notes": "Beta v1.9.9.8 • Edge-docking nav menu, lockscreen with Quran Surah pages & embedded desktop audio downloads",
+  "notesEn": "Beta v1.9.9.8 • Edge-docking nav menu, lockscreen with Quran Surah pages & embedded desktop audio downloads",
+  "bundleSize": 3409036,
+  "sizeMb": "3.25 MB",
+  "updatedAt": "2026-10-25T05:19:18.296Z"
 }

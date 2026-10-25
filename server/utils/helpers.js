@@ -1497,7 +1497,7 @@ async function extractDirectStreamUrl(videoId) {
   } else {
     ytdlpArgs.push('--extractor-args', 'youtube:player_client=android,ios,mweb');
   }
-  ytdlpArgs.push('-g', '-f', 'ba/b', ytUrl);
+  ytdlpArgs.push('-g', '-f', 'ba/bestaudio', ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
@@ -1526,7 +1526,7 @@ async function extractDirectStreamUrl(videoId) {
       // Instant fallback without extractor args
       const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--print', '%(duration)s'];
       if (cp) fbArgs.push('--cookies', cp);
-      fbArgs.push('-g', '-f', 'ba/b', ytUrl);
+      fbArgs.push('-g', '-f', 'ba/bestaudio', ytUrl);
       execFile(bin, fbArgs, { timeout: 35000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1699,7 +1699,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       '--no-playlist',
       '--no-warnings',
       '--js-runtimes', 'node',
-      '-f', 'ba[ext=m4a]/ba/b',
+      '-f', 'ba[ext=m4a]/ba/bestaudio',
       '-o', cachedM4a
     ];
     if (cp) {
@@ -1737,7 +1737,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
           } else {
             const scSource = scResult.webpageUrl || scUrl;
             await new Promise((resolve) => {
-              execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba/b', '-o', cachedM4a, scSource], { timeout: 25000, env: execEnv }, () => resolve());
+              execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba/bestaudio', '-o', cachedM4a, scSource], { timeout: 25000, env: execEnv }, () => resolve());
             });
             if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
               return `/uploads/audio-cache/${videoId}.m4a`;

@@ -7,7 +7,6 @@ const NAV_STYLE_STORAGE_KEY = '@rivo_native_nav_style_v1';
 const HIDDEN_ITEMS_STORAGE_KEY = '@rivo_native_hidden_items_v1';
 
 export const NAV_MENU_ITEMS = [
-  { id: 'home', label: 'Homepage', icon: Home, screen: 'home' },
   { id: 'music', label: 'Music', icon: Music, screen: 'music' },
   { id: 'quran', label: 'Quran', icon: BookOpen, screen: 'quran' },
   { id: 'library', label: 'Playlists', icon: Disc, screen: 'library' },
@@ -45,7 +44,9 @@ export const NavPreferencesProvider = ({ children }) => {
         if (savedHidden) {
           const parsed = JSON.parse(savedHidden);
           if (Array.isArray(parsed)) {
-            setHiddenMenuItems(parsed);
+            // Migrate legacy 'home' hidden item to 'music'
+            const cleaned = parsed.map(id => id === 'home' ? 'music' : id).filter(id => id !== 'home');
+            setHiddenMenuItems(Array.from(new Set(cleaned)));
           }
         }
       } catch (err) {
@@ -139,6 +140,10 @@ export const NavPreferencesProvider = ({ children }) => {
     return NAV_MENU_ITEMS.filter((item) => !hiddenMenuItems.includes(item.id));
   }, [hiddenMenuItems]);
 
+  const firstVisibleTab = useMemo(() => {
+    return visibleMenuItems[0]?.screen || 'music';
+  }, [visibleMenuItems]);
+
   return (
     <NavPreferencesContext.Provider
       value={{
@@ -148,6 +153,7 @@ export const NavPreferencesProvider = ({ children }) => {
         toggleMenuItemVisibility,
         isItemVisible,
         visibleMenuItems,
+        firstVisibleTab,
         menuItems: NAV_MENU_ITEMS,
         isLoaded,
       }}

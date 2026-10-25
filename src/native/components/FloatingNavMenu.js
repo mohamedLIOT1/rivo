@@ -9,6 +9,7 @@ import {
   TouchableWithoutFeedback,
   Modal,
   Dimensions,
+  PanResponder,
 } from 'react-native';
 import { X } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -18,12 +19,17 @@ import NavHubIcon from '../ui/NavHubIcon';
 
 const BUTTON_SIZE = 58;
 const ITEM_CIRCLE_SIZE = 50;
-const ARC_RADIUS = 106;
+const ARC_RADIUS = 124; // Expanded radial distance for comfortable spacing
 
 export default function FloatingNavMenu({ activeTab, onTabPress }) {
   const { isDark } = useTheme();
   const { visibleMenuItems } = useNavPreferences();
   const [isOpen, setIsOpen] = useState(false);
+  const [dockedSide, setDockedSide] = useState(null); // null | 'left' | 'right'
+
+  // Gesture dragging values
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const screenWidth = Dimensions.get('window').width;
 
   // Animation values
   const menuAnim = useRef(new Animated.Value(0)).current;
@@ -45,7 +51,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
 
   // Subtle breathing pulse for closed FAB
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen && !dockedSide) {
       const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -65,7 +71,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
     } else {
       pulseAnim.setValue(1);
     }
-  }, [isOpen, pulseAnim]);
+  }, [isOpen, dockedSide, pulseAnim]);
 
   // Calculate arc offsets (dX, dY) for N items
   const itemPositions = useMemo(() => {
@@ -75,8 +81,8 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
       return [{ dX: 0, dY: -ARC_RADIUS }];
     }
 
-    const minAngle = 155; // Leftmost angle in degrees
-    const maxAngle = 25;  // Rightmost angle in degrees
+    const minAngle = 160; // Leftmost angle in degrees
+    const maxAngle = 20;  // Rightmost angle in degrees
     const step = (minAngle - maxAngle) / (N - 1);
 
     return visibleMenuItems.map((_, i) => {
@@ -88,7 +94,70 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
     });
   }, [visibleMenuItems]);
 
+  const snapBackToCenter = useCallback(() => {
+    Animated.spring(pan, {
+      toValue: { x: 0, y: 0 },
+      friction: 7,
+      tension: 65,
+      useNativeDriver: false,
+    }).start(() => {
+      setDockedSide(null);
+    });
+  }, [pan]);
+
+  const dockToEdge = useCallback((side, releaseY) => {
+    const targetX = side === 'left' ? -(screenWidth / 2 - 14) : (screenWidth / 2 - 14);
+    // Clamp Y to safe screen bounds
+    const clampedY = Math.max(-300, Math.min(60, pan.y._value || 0));
+
+    Animated.spring(pan, {
+      toValue: { x: targetX, y: clampedY },
+      friction: 7,
+      tension: 70,
+      useNativeDriver: false,
+    }).start(() => {
+      setDockedSide(side);
+    });
+  }, [pan, screenWidth]);
+
+  // PanResponder for drag-to-edge docking and return-to-center
+  const panResponder = useMemo(() => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        if (isOpen) return false;
+        return Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: pan.x._value,
+          y: pan.y._value,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pan.x, dy: pan.y }],
+        { useNativeDriver: false }
+      ),
+      onPanResponderRelease: (_, gestureState) => {
+        pan.flattenOffset();
+        const finalX = gestureState.moveX;
+        if (finalX < screenWidth * 0.18) {
+          dockToEdge('left', gestureState.moveY);
+        } else if (finalX > screenWidth * 0.82) {
+          dockToEdge('right', gestureState.moveY);
+        } else {
+          snapBackToCenter();
+        }
+      },
+    });
+  }, [isOpen, screenWidth, dockToEdge, snapBackToCenter, pan]);
+
   const openMenu = useCallback(() => {
+    if (dockedSide) {
+      snapBackToCenter();
+      return;
+    }
     setIsOpen(true);
 
     Animated.parallel([
@@ -115,7 +184,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
         )
       ),
     ]).start();
-  }, [menuAnim, rotateAnim, itemAnims, visibleMenuItems.length]);
+  }, [dockedSide, snapBackToCenter, menuAnim, rotateAnim, itemAnims, visibleMenuItems.length]);
 
   const closeMenu = useCallback((callback) => {
     Animated.parallel([
@@ -145,12 +214,16 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
   }, [menuAnim, rotateAnim, itemAnims, visibleMenuItems.length]);
 
   const handleToggle = useCallback(() => {
+    if (dockedSide) {
+      snapBackToCenter();
+      return;
+    }
     if (isOpen) {
       closeMenu();
     } else {
       openMenu();
     }
-  }, [isOpen, openMenu, closeMenu]);
+  }, [dockedSide, snapBackToCenter, isOpen, openMenu, closeMenu]);
 
   const handleSelectTab = useCallback((screen) => {
     closeMenu(() => {
@@ -169,16 +242,6 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
     outputRange: [1, 0, 0],
   });
 
-  const xIconRotate = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['-90deg', '0deg'],
-  });
-
-  const xIconOpacity = rotateAnim.interpolate({
-    inputRange: [0, 0.6, 1],
-    outputRange: [0, 0.4, 1],
-  });
-
   const overlayOpacity = menuAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -186,23 +249,27 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
 
   // Check if item is currently active screen
   const isItemActive = (screen) => {
-    if (screen === 'home') return activeTab === 'home';
-    if (screen === 'music') return activeTab === 'music' || (activeTab === 'home');
+    if (screen === 'home' || screen === 'music') return activeTab === 'music' || activeTab === 'home';
     return activeTab === screen;
   };
 
   return (
     <>
-      {/* ── Fixed Floating Button At Bottom Center ── */}
-      <View
+      {/* ── Fixed Floating Button At Bottom Center (with Pan drag-to-edge) ── */}
+      <Animated.View
         style={[
           styles.fabWrapper,
-          { bottom: Platform.OS === 'ios' ? 24 : 16 },
+          {
+            bottom: Platform.OS === 'ios' ? 24 : 16,
+            transform: [{ translateX: pan.x }, { translateY: pan.y }],
+            opacity: isOpen ? 0 : 1, // Fix Item 3: Hide background FAB when open so no double X!
+          },
         ]}
-        pointerEvents="box-none"
+        pointerEvents={isOpen ? 'none' : 'box-none'}
+        {...panResponder.panHandlers}
       >
         {/* Glow / Pulse Ring */}
-        {!isOpen && (
+        {!isOpen && !dockedSide && (
           <Animated.View
             style={[
               styles.fabPulseRing,
@@ -223,41 +290,33 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
           style={[
             styles.fabButton,
             isDark ? styles.fabButtonDark : styles.fabButtonLight,
-            isOpen && styles.fabButtonOpen,
+            dockedSide && (dockedSide === 'left' ? styles.fabDockedLeft : styles.fabDockedRight),
           ]}
           onPress={handleToggle}
           activeOpacity={0.88}
         >
-          {/* Closed State: Custom Nav Grid Hub Icon */}
-          <Animated.View
-            style={[
-              styles.fabIconContainer,
-              {
-                opacity: rLogoOpacity,
-                transform: [{ rotate: rLogoRotate }],
-              },
-            ]}
-          >
-            <NavHubIcon
-              size={26}
-              color={isDark ? '#0b1110' : '#26c4b7'}
-            />
-          </Animated.View>
-
-          {/* Open State: Close "X" Icon */}
-          <Animated.View
-            style={[
-              styles.fabIconContainer,
-              {
-                opacity: xIconOpacity,
-                transform: [{ rotate: xIconRotate }],
-              },
-            ]}
-          >
-            <X size={24} color="#ffffff" strokeWidth={2.8} />
-          </Animated.View>
+          {dockedSide ? (
+            /* Docked Pill Handle */
+            <View style={styles.dockedHandleBar} />
+          ) : (
+            /* Normal Hub Grid Icon */
+            <Animated.View
+              style={[
+                styles.fabIconContainer,
+                {
+                  opacity: rLogoOpacity,
+                  transform: [{ rotate: rLogoRotate }],
+                },
+              ]}
+            >
+              <NavHubIcon
+                size={26}
+                color={isDark ? '#0b1110' : '#26c4b7'}
+              />
+            </Animated.View>
+          )}
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* ── Modal Overlay + Radial Menu Items ── */}
       {isOpen && (
@@ -337,7 +396,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
                         {active && <View style={styles.activeGlowRing} />}
                       </TouchableOpacity>
 
-                      {/* Monospace Brutalist Label */}
+                      {/* Monospace Brutalist Label with pill backdrop for zero overlapping */}
                       <Text
                         style={[
                           styles.arcLabel,
@@ -352,7 +411,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
                   );
                 })}
 
-                {/* Clone of FAB in Modal so it remains clickable to close */}
+                {/* Single Clean Close Button in Modal */}
                 <TouchableOpacity
                   style={[
                     styles.fabButtonInModal,
@@ -395,69 +454,57 @@ const styles = StyleSheet.create({
     borderRadius: BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    elevation: 10,
+    borderWidth: 2.5,
+    elevation: 8,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
   },
   fabButtonDark: {
-    backgroundColor: '#17a398',
-    borderColor: '#26c4b7',
-    shadowColor: '#17a398',
+    backgroundColor: colors.mint,
+    borderColor: '#0b1110',
   },
   fabButtonLight: {
     backgroundColor: '#0b1110',
-    borderColor: '#334155',
-    shadowColor: '#000000',
+    borderColor: '#26c4b7',
+  },
+  fabDockedLeft: {
+    width: 22,
+    height: 56,
+    borderRadius: 0,
+    borderTopRightRadius: 14,
+    borderBottomRightRadius: 14,
+    borderLeftWidth: 0,
+    backgroundColor: '#082621',
+    borderColor: colors.teal,
+  },
+  fabDockedRight: {
+    width: 22,
+    height: 56,
+    borderRadius: 0,
+    borderTopLeftRadius: 14,
+    borderBottomLeftRadius: 14,
+    borderRightWidth: 0,
+    backgroundColor: '#082621',
+    borderColor: colors.teal,
+  },
+  dockedHandleBar: {
+    width: 4,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: colors.mint,
   },
   fabButtonOpen: {
-    backgroundColor: '#dc2626',
-    borderColor: '#ef4444',
-    shadowColor: '#dc2626',
+    backgroundColor: '#ff4757',
+    borderColor: '#ffffff',
   },
   fabIconContainer: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /* Rivo "R" Logo Badge inside FAB */
-  rBadgeTealOffset: {
-    position: 'absolute',
-    top: 2,
-    left: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#0f756d',
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
-  },
-  rBadgeWhiteDisc: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rBadgeWhiteDiscLight: {
-    backgroundColor: '#17a398',
-    borderColor: '#fdfbf7',
-  },
-  rBadgeLetter: {
-    fontWeight: '900',
-    fontSize: 16,
-    color: '#0b1110',
-    textAlign: 'center',
-    includeFontPadding: false,
-    lineHeight: 18,
-  },
-  rBadgeLetterLight: {
-    color: '#ffffff',
-  },
+
   /* Modal Overlay */
   overlay: {
     flex: 1,
@@ -467,7 +514,6 @@ const styles = StyleSheet.create({
   },
   arcContainer: {
     position: 'absolute',
-    alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
     width: BUTTON_SIZE,
@@ -475,11 +521,10 @@ const styles = StyleSheet.create({
   },
   arcItemWrapper: {
     position: 'absolute',
+    width: 72,
     alignItems: 'center',
     justifyContent: 'center',
-    width: ITEM_CIRCLE_SIZE + 24,
-    marginLeft: -(ITEM_CIRCLE_SIZE + 24) / 2 + BUTTON_SIZE / 2,
-    marginTop: -(ITEM_CIRCLE_SIZE + 24) / 2 + BUTTON_SIZE / 2,
+    zIndex: 10,
   },
   arcCircle: {
     width: ITEM_CIRCLE_SIZE,
@@ -488,53 +533,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
   },
   arcCircleDark: {
-    backgroundColor: '#162220',
-    borderColor: '#263330',
+    backgroundColor: '#082621',
+    borderColor: colors.teal,
   },
   arcCircleLight: {
-    backgroundColor: '#f4ede1',
-    borderColor: '#d6c8b0',
+    backgroundColor: '#e6f7f4',
+    borderColor: '#0b1110',
   },
   arcCircleActive: {
-    backgroundColor: '#17a398',
-    borderColor: '#26c4b7',
-    shadowColor: '#17a398',
-    shadowOpacity: 0.8,
+    backgroundColor: colors.mint,
+    borderColor: '#ffffff',
   },
   activeGlowRing: {
     position: 'absolute',
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
+    width: ITEM_CIRCLE_SIZE + 8,
+    height: ITEM_CIRCLE_SIZE + 8,
     borderRadius: (ITEM_CIRCLE_SIZE + 8) / 2,
     borderWidth: 1.5,
-    borderColor: '#26c4b7',
+    borderColor: colors.mint,
+    opacity: 0.6,
   },
   arcLabel: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 9.5,
-    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 10,
+    fontWeight: '700',
     letterSpacing: 0.8,
     marginTop: 5,
     textAlign: 'center',
     textTransform: 'uppercase',
+    backgroundColor: 'rgba(5, 10, 9, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   arcLabelDark: {
-    color: '#cbd5e1',
+    color: '#e6f7f4',
   },
   arcLabelLight: {
-    color: '#292524',
+    color: '#ffffff',
   },
   arcLabelActive: {
-    color: '#26c4b7',
+    color: colors.mint,
     fontWeight: '900',
   },
   fabButtonInModal: {
@@ -543,7 +590,11 @@ const styles = StyleSheet.create({
     borderRadius: BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    elevation: 12,
+    borderWidth: 2.5,
+    elevation: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
   },
 });

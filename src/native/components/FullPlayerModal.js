@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView, PanResponder
 } from 'react-native';
 import {
+  Lock,
   ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
   Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw,
   MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical, BookOpen
@@ -335,7 +336,7 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
   );
 });
 
-export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
+export default function FullPlayerModal({ visible, onClose, onTrackAction, onOpenLockscreen }) {
   const {
     currentTrack,
     isPlaying,
@@ -625,13 +626,25 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
             </Text>
           </View>
 
-          <TouchableOpacity
-            onPress={() => onTrackAction && onTrackAction(currentTrack)}
-            style={styles.topWhiteBtn}
-            activeOpacity={0.8}
-          >
-            <MoreHorizontal size={20} color="#000000" strokeWidth={3} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {Boolean(onOpenLockscreen) && (
+              <TouchableOpacity
+                onPress={onOpenLockscreen}
+                style={styles.topWhiteBtn}
+                activeOpacity={0.8}
+                accessibilityLabel="Lockscreen Controls"
+              >
+                <Lock size={18} color="#000000" strokeWidth={2.5} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              onPress={() => onTrackAction && onTrackAction(currentTrack)}
+              style={styles.topWhiteBtn}
+              activeOpacity={0.8}
+            >
+              <MoreHorizontal size={20} color="#000000" strokeWidth={3} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ── Tab Switcher: Now Playing / Lyrics / Queue ── */}
