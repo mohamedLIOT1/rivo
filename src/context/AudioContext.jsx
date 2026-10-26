@@ -245,11 +245,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const userCtx = useUser();
   const { currentUser = null, likedTrackIds = [], toggleLike } = userCtx || {};
 
-  const [currentTrack, setCurrentTrack] = useState(null);
-  const [currentQueue, setCurrentQueue] = useState([]);
-  const [currentQueueIndex, setCurrentQueueIndex] = useState(-1);
+    const [currentTrack, setCurrentTrack] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rivo_last_played_track') || localStorage.getItem('liofy_last_played_track');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+  const [currentQueue, setCurrentQueue] = useState(() => {
+    try {
+      const savedQ = localStorage.getItem('rivo_last_played_queue');
+      if (savedQ) return JSON.parse(savedQ);
+    } catch {}
+    return [];
+  });
+  const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => {
+    try {
+      const savedTime = localStorage.getItem('rivo_last_played_time');
+      if (savedTime) return Number(savedTime) || 0;
+    } catch {}
+    return 0;
+  });
   const [duration, setDuration] = useState(210);
   const [volume, setVolumeState] = useState(0.8);
   const [isShuffle, setIsShuffle] = useState(false); // false | 'shuffle' | 'smart'
@@ -357,7 +375,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { currentQueueRef.current = currentQueue;}, [currentQueue]);
   useEffect(() => { currentQueueIndexRef.current = currentQueueIndex; }, [currentQueueIndex]);
   useEffect(() => { tracksRef.current       = tracks;      }, [tracks]);
-  useEffect(() => { currentTrackRef.current = currentTrack;}, [currentTrack]);
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+    if (currentTrack) {
+      try {
+        localStorage.setItem('rivo_last_played_track', JSON.stringify(currentTrack));
+      } catch {}
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (currentQueue && currentQueue.length > 0) {
+      try {
+        localStorage.setItem('rivo_last_played_queue', JSON.stringify(currentQueue.slice(0, 30)));
+      } catch {}
+    }
+  }, [currentQueue]);
   useEffect(() => { isPlayingRef.current    = isPlaying;   }, [isPlaying]);
   useEffect(() => { currentTimeRef.current = currentTime;  }, [currentTime]);
   useEffect(() => { durationRef.current    = duration;     }, [duration]);

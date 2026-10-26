@@ -141,7 +141,7 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '2.0.3',
+      version: '1.9.9.7',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -149,7 +149,7 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.0.3',
+      version: '2.0.4',
       build: 96,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
@@ -158,7 +158,7 @@ const APP_VERSIONS_DATA = {
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     ios: {
-      version: '2.0.3',
+      version: '2.0.4',
       build: 96,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',

@@ -23,6 +23,14 @@ export default function ListeningActivityPanel({
   const [searchQuery, setSearchQuery] = useState('');
   const { currentTrack, isPlaying } = useAudioPlayer();
 
+  const handleOpenUserProfile = (user) => {
+    if (onViewProfile) {
+      onViewProfile(user);
+    } else if (openProfileScreen) {
+      openProfileScreen(user);
+    }
+  };
+
   const fetchActivity = async () => {
     setIsLoading(true);
     try {
@@ -247,7 +255,7 @@ export default function ListeningActivityPanel({
                   <div
                     onClick={(e) => {
                       e.stopPropagation();
-                      openProfileScreen?.(friend);
+                      handleOpenUserProfile(friend);
                     }}
                     className="relative shrink-0 cursor-pointer hover:scale-105 transition-transform"
                     title={`View ${friend.name}'s profile`}
@@ -276,7 +284,7 @@ export default function ListeningActivityPanel({
                     <div
                       onClick={(e) => {
                         e.stopPropagation();
-                        openProfileScreen?.(friend);
+                        handleOpenUserProfile(friend);
                       }}
                       className="flex items-center gap-1.5 mb-0.5 cursor-pointer"
                     >

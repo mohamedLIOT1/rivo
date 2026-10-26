@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.0.3",
+  "version": "2.0.4",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث 2.0.3: إصلاح صفحة الفنان والبروفايل ومزامنة التفضيلات والتحميل",
-  "notesEn": "Update v2.0.3: Artist page, profile, preference sync and download improvements",
+  "notes": "تحديث 2.0.4: إصلاحات شاملة وتحسين الأداء واستعادة التشغيل",
+  "notesEn": "Update v2.0.4: Comprehensive fixes, performance, radio artwork and playback restore",
   "bundleSize": 3396500,
   "sizeMb": "3.24 MB",
-  "updatedAt": "2026-10-26T18:50:17.429Z"
+  "updatedAt": "2026-10-26T19:00:14.178Z"
 }

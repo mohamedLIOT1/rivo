@@ -1,47 +1,47 @@
 {
-    "expo":  {
-                 "name":  "Rivo",
-                 "slug":  "rivo",
-                 "version":  "2.0.3",
-                 "orientation":  "default",
-                 "icon":  "./assets/icon.png",
-                 "userInterfaceStyle":  "dark",
-                 "splash":  {
-                                "resizeMode":  "contain",
-                                "backgroundColor":  "#0b1110"
-                            },
-                 "ios":  {
-                             "supportsTablet":  true,
-                             "bundleIdentifier":  "com.rivo.app",
-                             "buildNumber":  "94",
-                             "infoPlist":  {
-                                               "UIBackgroundModes":  [
-                                                                         "audio"
-                                                                     ],
-                                               "UIFileSharingEnabled":  true,
-                                               "LSSupportsOpeningDocumentsInPlace":  true,
-                                               "NSAppTransportSecurity":  {
-                                                                              "NSAllowsArbitraryLoads":  true
-                                                                          }
-                                           }
-                         },
-                 "android":  {
-                                 "adaptiveIcon":  {
-                                                      "foregroundImage":  "./assets/adaptive-icon.png",
-                                                      "backgroundColor":  "#0b1110"
-                                                  },
-                                 "package":  "com.rivo.app",
-                                 "versionCode":  96,
-                                 "permissions":  [
-                                                     "android.permission.INTERNET",
-                                                     "android.permission.ACCESS_NETWORK_STATE",
-                                                     "android.permission.FOREGROUND_SERVICE",
-                                                     "android.permission.WAKE_LOCK",
-                                                     "android.permission.MODIFY_AUDIO_SETTINGS",
-                                                     "android.permission.READ_EXTERNAL_STORAGE",
-                                                     "android.permission.WRITE_EXTERNAL_STORAGE",
-                                                     "android.permission.READ_MEDIA_AUDIO"
-                                                 ]
-                             }
-             }
+  "expo": {
+    "name": "Rivo",
+    "slug": "rivo",
+    "version": "2.0.4",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0b1110"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rivo.app",
+      "buildNumber": "94",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "UIFileSharingEnabled": true,
+        "LSSupportsOpeningDocumentsInPlace": true,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0b1110"
+      },
+      "package": "com.rivo.app",
+      "versionCode": 96,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_AUDIO"
+      ]
+    }
+  }
 }
