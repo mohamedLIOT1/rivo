@@ -54,6 +54,9 @@ export default function UserDetailModal({
   const { showToast } = useToast();
 
   const [profile, setProfile] = useState(user || null);
+  useEffect(() => {
+    if (user) setProfile(user);
+  }, [user, userId]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isTogglingFollow, setIsTogglingFollow] = useState(false);

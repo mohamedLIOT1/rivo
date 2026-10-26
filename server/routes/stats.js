@@ -84,7 +84,7 @@ router.get('/leaderboard', optionalAuth, async (req, res) => {
       const isCurWeek = u.weeklyWeek === currentWeek;
       const weeklySec = isCurWeek ? (u.weeklyListeningSeconds || 0) : 0;
       const totalSec = u.totalListeningSeconds || 0;
-      const effectiveSec = weeklySec > 0 ? weeklySec : (totalSec > 0 ? totalSec : 0);
+            const effectiveSec = weeklySec;
       const minutes = Math.floor(effectiveSec / 60);
 
       return {
@@ -93,13 +93,18 @@ router.get('/leaderboard', optionalAuth, async (req, res) => {
         avatar: u.avatar || '',
         minutes,
         seconds: effectiveSec,
+        totalSeconds: totalSec,
+        totalMinutes: Math.floor(totalSec / 60),
         topSong: u.topTrack?.title ? `${u.topTrack.title} - ${u.topTrack.artist}` : 'Various Tracks',
         isVerified: isVerifiedUser(u.name) || Boolean(u.isVerified),
         isCurrentUser: Boolean(currentUserId && String(u._id) === currentUserId)
       };
     });
 
-    leaderboard.sort((a, b) => b.seconds - a.seconds);
+    leaderboard.sort((a, b) => {
+      if (b.seconds !== a.seconds) return b.seconds - a.seconds;
+      return b.totalSeconds - a.totalSeconds;
+    });
 
     const ranked = leaderboard.map((item, idx) => ({
       ...item,

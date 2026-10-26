@@ -1156,7 +1156,7 @@ router.get('/stream-proxy', async (req, res) => {
       url: targetUrl,
       responseType: 'stream',
       headers,
-      timeout: 25000,
+      timeout: 180000,
       maxRedirects: 5,
       beforeRedirect: (options) => {
         const nextUrl = options.href || (options.protocol + '//' + options.host + options.path);
@@ -1302,6 +1302,35 @@ router.get('/download', async (req, res) => {
           'Content-Disposition': `attachment; filename="${safeAscii}${ext}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}${ext}`
         });
         return fs.createReadStream(localCachedFile).pipe(res);
+      } else {
+        try {
+          const directAudio = await resolveOfficialYouTubeAudioStream(videoId, cleanTitle, cleanArtist, { duration });
+          if (directAudio) {
+            const streamTarget = directAudio.url || String(directAudio);
+            if (streamTarget.startsWith('http')) {
+              const safeStream = await validateSafeUrl(streamTarget);
+              if (safeStream && safeStream.valid) {
+                const streamRes = await axios({
+                  method: 'get',
+                  url: safeStream.parsed.href,
+                  responseType: 'stream',
+                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+                  timeout: 180000
+                });
+                const ext = streamTarget.includes('.m4a') ? '.m4a' : '.mp3';
+                const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+                res.set({
+                  'Content-Type': ext === '.m4a' ? 'audio/mp4' : 'audio/mpeg',
+                  'Content-Disposition': `attachment; filename="${safeAscii}${ext}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}${ext}`,
+                  'Access-Control-Allow-Origin': '*'
+                });
+                return streamRes.data.pipe(res);
+              }
+            }
+          }
+        } catch (streamErr) {
+          console.warn('Direct stream resolution in /download failed:', streamErr.message);
+        }
       }
     }
 

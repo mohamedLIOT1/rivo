@@ -197,13 +197,11 @@ export default function ArtistDetailModal({
   }, [allAlbums, artistTracks, artistName, allTracks]);
 
   const finalAlbums = useMemo(() => {
-    if (finalAlbums.length > 0) return finalAlbums;
+    if (artistAlbums.length > 0) return artistAlbums;
     return remoteAlbums;
-  }, [finalAlbums, remoteAlbums]);
+  }, [artistAlbums, remoteAlbums]);
 
-  if (!visible || !artistName) return null;
 
-  // Resolve artist avatar
   const artistCover = (typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl))
     ? (artist.avatar || artist.cover || artist.coverUrl)
     : (finalTracks[0]?.coverUrl || finalTracks[0]?.cover || '');
@@ -259,8 +257,7 @@ export default function ArtistDetailModal({
     });
     return () => sub.remove();
   }, [visible]);
-
-  if (!visible) return null;
+  if (!visible || !artistName) return null;
 
   return (
     <Animated.View

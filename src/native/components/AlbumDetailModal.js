@@ -352,12 +352,10 @@ export default function AlbumDetailModal({
     return Math.round(totalSec / 60);
   }, [effectiveAlbumTracks]);
 
-  if (!visible || !album) return null;
-
-  const isPlaylist = Boolean(album.isPlaylist);
-  const coverUri = album.cover || album.coverUrl || effectiveAlbumTracks[0]?.cover || effectiveAlbumTracks[0]?.coverUrl;
-  const albumTitle = album.name || (isPlaylist ? 'Untitled Playlist' : 'Untitled Album');
-  const albumArtist = album.artist || effectiveAlbumTracks[0]?.artist || (isPlaylist ? 'Curator' : 'Various Artists');
+  const isPlaylist = Boolean(album?.isPlaylist);
+  const coverUri = album?.cover || album?.coverUrl || effectiveAlbumTracks[0]?.cover || effectiveAlbumTracks[0]?.coverUrl;
+  const albumTitle = album?.name || (isPlaylist ? 'Untitled Playlist' : 'Untitled Album');
+  const albumArtist = album?.artist || effectiveAlbumTracks[0]?.artist || (isPlaylist ? 'Curator' : 'Various Artists');
   const batchNumber = Math.abs(albumTitle.split('').reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)) % 9000 + 1000;
 
   const handlePlayAll = (shuffle = false) => {
@@ -472,8 +470,7 @@ export default function AlbumDetailModal({
     });
     return () => sub.remove();
   }, [visible]);
-
-  if (!visible) return null;
+  if (!visible || !album) return null;
 
   return (
     <Animated.View

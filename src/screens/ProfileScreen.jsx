@@ -51,6 +51,7 @@ export default function ProfileScreen({
   const avatarInputRef = useRef(null);
 
   const [viewingProfile, setViewingProfile] = useState(null);
+  const [viewingLoading, setViewingLoading] = useState(false);
 
   // Social Followers / Following Modal State
   const [socialModal, setSocialModal] = useState({

@@ -1,6 +1,6 @@
 // Centralized Versioning for Web & Desktop (Tauri)
 export const WEB_VERSION = '2.0.3';
-export const DESKTOP_VERSION = '1.9.9.7';
+export const DESKTOP_VERSION = '1.9.9.8';
 
 export const isDesktopApp = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__);
 
@@ -8,7 +8,7 @@ export const APP_PLATFORM = isDesktopApp ? 'windows' : 'web';
 export const APP_VERSION = isDesktopApp ? DESKTOP_VERSION : WEB_VERSION;
 export const PLATFORM_NAME = isDesktopApp ? 'Rivo Desktop (Windows)' : 'Rivo Web';
 export const FULL_VERSION = `v${APP_VERSION} [${isDesktopApp ? 'Desktop' : 'Web'}]`;
-export const BUILD_DATE = '2026-10-25';
+export const BUILD_DATE = '2026-10-26';
 
 export default {
   version: APP_VERSION,

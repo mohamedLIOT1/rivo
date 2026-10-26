@@ -1,7 +1,7 @@
 {
-  "version": "1.9.9.7",
-  "notes": "Rivo Desktop v2.0.3 - Audio pre-buffering, download speed meter, library export, and playlist fixes",
-  "pub_date": "2026-10-26T21:45:00.000Z",
+  "version": "1.9.9.8",
+  "notes": "Rivo Desktop v1.9.9.8 - Fix artist album length, profile hooks stability, listening stats sync and fast download speeds",
+  "pub_date": "2026-10-26T20:15:42.104Z",
   "platforms": {
     "windows-x86_64": {
       "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe"
