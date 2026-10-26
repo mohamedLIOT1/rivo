@@ -136,17 +136,17 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '1.9.9.6',
+      version: '2.0.3',
       name: 'Rivo Web',
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '1.9.9.6',
+      version: '2.0.3',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
       version: '2.0.3',
@@ -155,7 +155,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     ios: {
       version: '2.0.3',
@@ -164,7 +164,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     }
   }
 };
@@ -181,17 +181,17 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '1.9.9.6',
+      version: '2.0.3',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '1.9.9.6',
+      version: '2.0.3',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
       mandatory: false,
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
       version: '2.0.3',
@@ -200,7 +200,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo.apk',
       mandatory: false,
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.',
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.',
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
@@ -218,7 +218,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo.ipa',
       mandatory: false,
-      notes: 'Update v1.9.9.6 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     }
   }
 };

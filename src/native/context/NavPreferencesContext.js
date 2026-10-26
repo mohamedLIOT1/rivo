@@ -63,7 +63,7 @@ export const NavPreferencesProvider = ({ children }) => {
   useEffect(() => {
     (async () => {
       try {
-        const token = (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token'));
+        const token = (await AsyncStorage.getItem('@rivo_auth_token_v2')) || (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || (await AsyncStorage.getItem('liofy_token'));
         if (!token) return;
 
         const res = await fetch(`${API_BASE_URL}/api/users/preferences`, {
@@ -112,7 +112,7 @@ export const NavPreferencesProvider = ({ children }) => {
       // Sync content modes to server if logged in
       (async () => {
         try {
-          const token = (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token'));
+          const token = (await AsyncStorage.getItem('@rivo_auth_token_v2')) || (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || (await AsyncStorage.getItem('liofy_token'));
           if (token) {
             const contentModes = {
               music: !next.includes('music'),

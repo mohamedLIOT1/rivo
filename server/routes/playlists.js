@@ -425,6 +425,33 @@ router.post('/:id/update', auth, async (req, res) => {
   }
 });
 
+
+// Toggle hide playlist (archive / hide from library)
+router.post('/:id/toggle-hide', auth, async (req, res) => {
+  try {
+    let u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ success: false, error: 'User not found' });
+    let pl = u.playlists.find(p => String(p.id) === String(req.params.id) || String(p._id) === String(req.params.id));
+    if (!pl && isAdminUser(req.user)) {
+      const isReqObjId = mongoose.isValidObjectId(req.params.id);
+      u = await User.findOne(isReqObjId
+        ? { $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': new mongoose.Types.ObjectId(req.params.id) }] }
+        : { 'playlists.id': req.params.id }
+      );
+      if (u) {
+        pl = u.playlists.find(p => String(p.id) === String(req.params.id) || String(p._id) === String(req.params.id));
+      }
+    }
+    if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
+    pl.isHidden = !Boolean(pl.isHidden);
+    u.markModified('playlists');
+    await u.save();
+    res.json({ success: true, isHidden: pl.isHidden, playlist: pl, playlists: u.playlists });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Toggle visibility (public / private)
 router.post('/:id/toggle-visibility', auth, async (req, res) => {
   try {

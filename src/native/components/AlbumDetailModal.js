@@ -211,9 +211,11 @@ export default function AlbumDetailModal({
 
     if (rawIds.length > 0) {
       const idMatches = rawIds.map(item => {
-        if (item && typeof item === 'object' && item.title) return item;
-        const id = typeof item === 'object' ? String(item._id || item.id) : String(item);
-        return pool.find(t => String(t._id || t.id) === id);
+        if (!item) return null;
+        if (typeof item === 'object' && item.title) return item;
+        const id = (typeof item === 'object' && item !== null) ? String(item._id || item.id || '') : String(item || '');
+        if (!id) return null;
+        return (pool || []).find(t => t && String(t._id || t.id) === id);
       }).filter(Boolean);
 
       if (idMatches.length > 0) {

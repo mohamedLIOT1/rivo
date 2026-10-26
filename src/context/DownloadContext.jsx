@@ -9,6 +9,7 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
   const [queuedTrackIds, setQueuedTrackIds] = useState([]);
   const [isBatchDownloading, setIsBatchDownloading] = useState(false);
   const [batchStats, setBatchStats] = useState({ current: 0, total: 0, playlistName: '' });
+  const [downloadProgress, setDownloadProgress] = useState({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
 
   const activeAbortControllerRef = useRef(null);
   const isCancelledRef = useRef(false);
@@ -28,6 +29,7 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
         activeAbortControllerRef.current = null;
       }
       setDownloadingTrackId(null);
+    setDownloadProgress({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
       showToast?.('Cancelled download for this track');
       return;
     }
@@ -80,7 +82,10 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
     activeAbortControllerRef.current = abortController;
 
     try {
-      const result = await saveTrackOffline(nextTrack, { signal: abortController.signal });
+      const result = await saveTrackOffline(nextTrack, {
+        signal: abortController.signal,
+        onProgress: (p) => setDownloadProgress(p)
+      });
 
       if (result && !abortController.signal.aborted && !isCancelledRef.current) {
         const freshAudioUrl = await getOfflineTrackAudioUrl(cleanId);

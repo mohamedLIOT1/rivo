@@ -19,6 +19,7 @@ import { dataService } from './services/dataService';
 import { UserProvider, useUser } from './context/UserContext';
 import { AudioProvider, useAudioPlayer } from './context/AudioContext';
 import { DownloadProvider } from './context/DownloadContext';
+import DownloadProgressWidget from './components/DownloadProgressWidget';
 import { UIProvider, useUI } from './context/UIContext';
 import { NavigationProvider, useNavigation } from './context/NavigationContext';
 import { JamProvider, useJam } from './context/JamContext';
@@ -583,6 +584,8 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
           onOpenChat={() => setIsChatOpen(true)}
           onOpenAddSong={() => setIsAddSongOpen(true)}
         />
+
+        <DownloadProgressWidget tracks={tracks} />
 
         {/* Toast Notifications */}
         <Toast

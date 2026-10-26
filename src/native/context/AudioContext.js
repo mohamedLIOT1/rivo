@@ -1298,7 +1298,7 @@ export const AudioProvider = ({ children }) => {
         });
       }
 
-      const soundSource = { uri };
+      const soundSource = uri && uri.startsWith('http') ? { uri, downloadFirst: true } : { uri };
       const initialPosMs = Math.round(safeTargetSec * 1000);
       const willPlay = Boolean(autoPlay && shouldBePlayingRef.current);
       const initialVol = volumeRef.current !== undefined ? volumeRef.current : 1.0;

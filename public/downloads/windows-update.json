@@ -1,10 +1,10 @@
 {
-  "version": "1.9.9.5",
-  "notes": "Rivo Desktop Stable v1.9.9.5 - Quran, Radios, Vault & Content Customization",
-  "pub_date": "2026-10-24T05:55:21.459Z",
+  "version": "2.0.3",
+  "notes": "Rivo Desktop v2.0.3 - Audio pre-buffering, download speed meter, library export, and playlist fixes",
+  "pub_date": "2026-10-26T21:45:00.000Z",
   "platforms": {
     "windows-x86_64": {
-      "url": "https://github.com/mohamedLIOT1/Rivo/releases/download/v1.9.9.5/Rivo_Setup.exe"
+      "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe"
     }
   }
 }

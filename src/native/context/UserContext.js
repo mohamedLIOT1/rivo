@@ -236,6 +236,7 @@ export const UserProvider = ({ children }) => {
       setLikedTrackIds(data.user?.likedTrackIds || []);
       setPlaylists(normalized);
       await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      await AsyncStorage.setItem('rivo_token', data.token).catch(() => {});
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user));
       await AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(normalized));
       return data.user;
@@ -273,6 +274,7 @@ export const UserProvider = ({ children }) => {
     setLikedTrackIds([]);
     setPlaylists([]);
     await AsyncStorage.removeItem(TOKEN_KEY);
+    await AsyncStorage.removeItem('rivo_token').catch(() => {});
     await AsyncStorage.removeItem(USER_KEY);
   };
 

@@ -51,6 +51,7 @@ export function shuffleArray(array) {
 
 // ── Client-side Stream Cache (Instant 0ms repeated playbacks) ──
 const clientStreamCache = new Map();
+const activeFullTrackCache = new Map();
 const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
 export async function resolvePlayableAudioStream(track, signal = null) {
@@ -660,6 +661,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
     // Automatically re-establish Range connection at exact current second without freezing or requiring manual seek!
     const handleStalledOrWaiting = () => {
       if (!isPlayingRef.current || isChangingTrackRef.current) return;
+      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+      const cachedBlob = activeFullTrackCache.get(curId);
+      if (cachedBlob && audio && audio.src !== cachedBlob) {
+        const cur = audio.currentTime || currentTimeRef.current || 0;
+        audio.src = cachedBlob;
+        audio.currentTime = cur;
+        resumeAudioContext();
+        audio.play().catch(() => {});
+        return;
+      }
       if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
       stallRecoveryTimerRef.current = setTimeout(() => {
         if (!isPlayingRef.current || isChangingTrackRef.current) return;
@@ -905,10 +916,24 @@ export function AudioProvider({ children, tracks, setTracks }) {
       // Re-verify that no newer request came in while resolving
       if (effectSeq !== playRequestSeqRef.current || String(currentTrackRef.current?.id || currentTrackRef.current?._id) !== newId) return;
 
-      if (lastLoadedStreamUrlRef.current !== playableUrl) {
+            if (lastLoadedStreamUrlRef.current !== playableUrl) {
         lastLoadedStreamUrlRef.current = playableUrl;
         audio.src = playableUrl;
         audio.currentTime = 0;
+
+        // Full-track pre-buffering: download entire song into local memory Blob in background
+        if (playableUrl.startsWith('http') && typeof fetch !== 'undefined') {
+          const bufferKey = newId;
+          fetch(playableUrl)
+            .then(res => res.ok ? res.blob() : null)
+            .then(blob => {
+              if (blob && String(currentTrackRef.current?.id || currentTrackRef.current?._id) === bufferKey) {
+                const blobUrl = URL.createObjectURL(blob);
+                activeFullTrackCache.set(bufferKey, blobUrl);
+              }
+            })
+            .catch(() => {});
+        }
       }
       audio.volume = volumeRef.current;
       isChangingTrackRef.current = false;

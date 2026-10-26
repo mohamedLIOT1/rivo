@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
+import ExportModal from '../components/ExportModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -189,6 +190,7 @@ export default function PlaylistScreen({
   // Duplicate Track Confirmation State
   const [duplicateConfirmTrack, setDuplicateConfirmTrack] = useState(null);
   const [isDeleteAlbumModalOpen, setIsDeleteAlbumModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const handleAddTrackWithCheck = (trackToAdd) => {
     if (!trackToAdd) return;
@@ -1679,6 +1681,14 @@ export default function PlaylistScreen({
           </button>
         </div>
       )}
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        playlist={playlist}
+        allTracks={tracks}
+        globalTheme={globalTheme}
+      />
     </div>
   );
 }

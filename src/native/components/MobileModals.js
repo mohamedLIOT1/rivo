@@ -12,8 +12,11 @@ import IntroAuthModal from './IntroAuthModal';
 import UserDetailModal from './UserDetailModal';
 import AlbumDetailModal from './AlbumDetailModal';
 import ArtistDetailModal from './ArtistDetailModal';
+import { useUser } from '../context/UserContext';
 
 export default function MobileModals({
+  tracks: propTracks,
+  albums: propAlbums,
   isFullPlayerOpen,
   setIsFullPlayerOpen,
   selectedAlbum,

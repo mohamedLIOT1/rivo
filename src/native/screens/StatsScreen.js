@@ -37,7 +37,7 @@ function formatSeconds(secs) {
   return `${minutes}m`;
 }
 
-export default function StatsScreen() {
+export default function StatsScreen({ onBack }) {
   const { currentUser, token, likedTrackIds = [] } = useUser();
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentWeek, setCurrentWeek] = useState('');

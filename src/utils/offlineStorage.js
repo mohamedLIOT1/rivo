@@ -231,6 +231,49 @@ async function resolveYouTubeAudioClientSide(videoId) {
   return null;
 }
 
+
+export async function readResponseWithProgress(response, signal, onProgress) {
+  if (!response || !response.body) return null;
+  const contentLength = Number(response.headers.get('content-length')) || 0;
+  const reader = response.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+  const startTime = Date.now();
+  let lastReportTime = startTime;
+
+  while (true) {
+    if (signal?.aborted) {
+      try { reader.cancel(); } catch {}
+      return null;
+    }
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    loaded += value.length;
+
+    const now = Date.now();
+    if (now - lastReportTime >= 200 || done) {
+      const elapsedSec = Math.max(0.1, (now - startTime) / 1000);
+      const speedBps = loaded / elapsedSec;
+      const speedText = speedBps >= 1048576 
+        ? `${(speedBps / 1048576).toFixed(1)} MB/s`
+        : `${Math.round(speedBps / 1024)} KB/s`;
+      const percent = contentLength > 0 ? Math.min(100, Math.round((loaded / contentLength) * 100)) : 0;
+      onProgress?.({
+        loaded,
+        total: contentLength,
+        percent,
+        speedText,
+        loadedMb: (loaded / 1048576).toFixed(1),
+        totalMb: contentLength > 0 ? (contentLength / 1048576).toFixed(1) : '?'
+      });
+      lastReportTime = now;
+    }
+  }
+
+  return new Blob(chunks, { type: response.headers.get('content-type') || 'audio/mpeg' });
+}
+
 // Save downloaded audio blob & track info locally in browser storage (IndexedDB)
 export async function saveTrackOffline(track, options = {}) {
   if (!track || (!track.id && !track._id)) return null;

@@ -85,6 +85,38 @@ export default function ArtistDetailModal({
   const isAdmin = Boolean(currentUser?.role === 'admin' || currentUser?.isAdmin);
 
 
+  const [remoteTracks, setRemoteTracks] = useState([]);
+  const [remoteAlbums, setRemoteAlbums] = useState([]);
+
+  useEffect(() => {
+    if (!visible || !artistName) {
+      setRemoteTracks([]);
+      setRemoteAlbums([]);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const cleanName = encodeURIComponent(artistName);
+        const [trRes, albRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/tracks?artist=${cleanName}`),
+          fetch(`${API_BASE_URL}/api/albums?artist=${cleanName}`)
+        ]);
+        if (trRes.ok) {
+          const trData = await trRes.json();
+          const list = Array.isArray(trData) ? trData : (trData.tracks || []);
+          if (isMounted && list.length > 0) setRemoteTracks(list);
+        }
+        if (albRes.ok) {
+          const albData = await albRes.json();
+          const list = Array.isArray(albData) ? albData : (albData.albums || []);
+          if (isMounted && list.length > 0) setRemoteAlbums(list);
+        }
+      } catch {}
+    })();
+    return () => { isMounted = false; };
+  }, [visible, artistName]);
+
   // Normalize artist name
   const artistName = useMemo(() => {
     if (!artist) return '';
@@ -100,6 +132,11 @@ export default function ArtistDetailModal({
       return matchesArtist(t, artistName) || t.artist.toLowerCase().includes(artistName.toLowerCase());
     });
   }, [allTracks, artistName]);
+
+  const finalTracks = useMemo(() => {
+    if (artistTracks.length > 0) return artistTracks;
+    return remoteTracks;
+  }, [artistTracks, remoteTracks]);
 
   // Discography Albums for this artist
   const artistAlbums = useMemo(() => {
@@ -159,16 +196,21 @@ export default function ArtistDetailModal({
     return Array.from(map.values());
   }, [allAlbums, artistTracks, artistName, allTracks]);
 
+  const finalAlbums = useMemo(() => {
+    if (finalAlbums.length > 0) return finalAlbums;
+    return remoteAlbums;
+  }, [finalAlbums, remoteAlbums]);
+
   if (!visible || !artistName) return null;
 
   // Resolve artist avatar
   const artistCover = (typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl))
     ? (artist.avatar || artist.cover || artist.coverUrl)
-    : (artistTracks[0]?.coverUrl || artistTracks[0]?.cover || '');
+    : (finalTracks[0]?.coverUrl || finalTracks[0]?.cover || '');
 
   const handlePlayAll = (shuffle = false) => {
-    if (artistTracks.length === 0) return;
-    let queue = [...artistTracks];
+    if (finalTracks.length === 0) return;
+    let queue = [...finalTracks];
     if (shuffle) {
       queue.sort(() => Math.random() - 0.5);
     }
@@ -268,9 +310,9 @@ export default function ArtistDetailModal({
 
             {/* Counter Pills */}
             <View style={styles.metaPill}>
-              <Text style={styles.metaPillText}>{artistTracks.length} Tracks</Text>
+              <Text style={styles.metaPillText}>{finalTracks.length} Tracks</Text>
               <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaPillText}>{artistAlbums.length} Albums</Text>
+              <Text style={styles.metaPillText}>{finalAlbums.length} Albums</Text>
             </View>
 
             {/* Action Buttons Row */}
@@ -288,7 +330,7 @@ export default function ArtistDetailModal({
               <TouchableOpacity
                 style={styles.queueBtn}
                 onPress={() => {
-                  if (addToQueue && artistTracks.length > 0) addToQueue(artistTracks);
+                  if (addToQueue && finalTracks.length > 0) addToQueue(finalTracks);
                 }}
                 activeOpacity={0.8}
               >
@@ -338,7 +380,7 @@ export default function ArtistDetailModal({
           </View>
 
           {/* Discography / Albums Section matching Image 2 */}
-          {(artistAlbums.length > 0 || isAdmin) && (
+          {(finalAlbums.length > 0 || isAdmin) && (
             <View style={styles.sectionContainer}>
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -346,7 +388,7 @@ export default function ArtistDetailModal({
                   <Text style={styles.sectionTitle}>DISCOGRAPHY / ALBUMS</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.sectionCounter}>{artistAlbums.length} ALBUMS</Text>
+                  <Text style={styles.sectionCounter}>{finalAlbums.length} ALBUMS</Text>
                   {isAdmin && (
                     <TouchableOpacity
                       style={styles.headerAddBtn}
@@ -360,9 +402,9 @@ export default function ArtistDetailModal({
                 </View>
               </View>
 
-              {artistAlbums.length > 0 ? (
+              {finalAlbums.length > 0 ? (
                 <View style={styles.albumGrid}>
-                  {artistAlbums.map((album, idx) => {
+                  {finalAlbums.map((album, idx) => {
                     const albumKey = album.id || album.name || idx;
                     const albCover = normalizeCoverUri(album.cover || album.coverUrl || artistCover);
                     const songCount = (album.tracks && album.tracks.length) || (album.trackIds && album.trackIds.length) || 0;
@@ -408,10 +450,10 @@ export default function ArtistDetailModal({
                 <Music size={16} color="#17a398" />
                 <Text style={styles.sectionTitle}>POPULAR TRACKS</Text>
               </View>
-              <Text style={styles.sectionCounter}>{artistTracks.length} SONGS</Text>
+              <Text style={styles.sectionCounter}>{finalTracks.length} SONGS</Text>
             </View>
 
-            {artistTracks.map((t, index) => {
+            {finalTracks.map((t, index) => {
               const trackId = String(t._id || t.id || '');
               const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
               const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
@@ -431,10 +473,10 @@ export default function ArtistDetailModal({
                       if (handleOpenFull) {
                         handleOpenFull();
                       } else {
-                        playTrack(t, artistTracks);
+                        playTrack(t, finalTracks);
                       }
                     } else {
-                      playTrack(t, artistTracks);
+                      playTrack(t, finalTracks);
                     }
                   }}
                   activeOpacity={0.8}
@@ -502,7 +544,7 @@ export default function ArtistDetailModal({
           visible={isAddAlbumOpen}
           onClose={() => setIsAddAlbumOpen(false)}
           initialArtistName={artistName}
-          artistTracks={artistTracks}
+          finalTracks={finalTracks}
           artistAvatar={artistCover}
         />
 
