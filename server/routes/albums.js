@@ -35,13 +35,7 @@ router.get('/', async (req, res) => {
     let filter = {};
     if (req.query.artist) {
       const rawArt = req.query.artist.trim();
-      const escaped = rawArt.replace(/[.*+?^${}()|[\]\\]/g, '\\router.get('/', async (req, res) => {
-  try {
-    if (cachedAlbumsJson && (Date.now() - cachedAlbumsTime < ALBUMS_CACHE_TTL)) {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-      return res.send(cachedAlbumsJson);
-    }
-    const albums = await Album.find().sort({ updatedAt: -1 }).lean();');
+      const escaped = rawArt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const flexible = escaped.replace(/[-_\s]+/g, '[-_\\s]*');
       filter = {
         $or: [
