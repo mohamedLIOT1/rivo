@@ -33,6 +33,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { INITIAL_TRACKS } from '../data/initialTracks';
 import { matchesArtist } from '../../utils/artistUtils.jsx';
 import MiniPlayer from './MiniPlayer';
 import AddAlbumModal from './AddAlbumModal';
@@ -85,6 +86,13 @@ export default function ArtistDetailModal({
   const isAdmin = Boolean(currentUser?.role === 'admin' || currentUser?.isAdmin);
 
 
+  // Normalize artist name
+  const artistName = useMemo(() => {
+    if (!artist) return '';
+    if (typeof artist === 'string') return artist.trim();
+    return (artist.name || artist.artist || '').trim();
+  }, [artist]);
+
   const [remoteTracks, setRemoteTracks] = useState([]);
   const [remoteAlbums, setRemoteAlbums] = useState([]);
 
@@ -117,25 +125,27 @@ export default function ArtistDetailModal({
     return () => { isMounted = false; };
   }, [visible, artistName]);
 
-  // Normalize artist name
-  const artistName = useMemo(() => {
-    if (!artist) return '';
-    if (typeof artist === 'string') return artist.trim();
-    return (artist.name || artist.artist || '').trim();
-  }, [artist]);
-
   // Filter artist tracks
+  const effectiveAllTracks = (allTracks && allTracks.length > 0) ? allTracks : INITIAL_TRACKS;
   const artistTracks = useMemo(() => {
     if (!artistName) return [];
-    return (allTracks || []).filter((t) => {
+    return (effectiveAllTracks || []).filter((t) => {
       if (!t || !t.artist) return false;
       return matchesArtist(t, artistName) || t.artist.toLowerCase().includes(artistName.toLowerCase());
     });
-  }, [allTracks, artistName]);
+  }, [effectiveAllTracks, artistName]);
 
   const finalTracks = useMemo(() => {
-    if (artistTracks.length > 0) return artistTracks;
-    return remoteTracks;
+    const map = new Map();
+    artistTracks.forEach(t => {
+      const id = String(t.id || t._id || t.title);
+      map.set(id, t);
+    });
+    remoteTracks.forEach(t => {
+      const id = String(t.id || t._id || t.title);
+      if (!map.has(id)) map.set(id, t);
+    });
+    return Array.from(map.values());
   }, [artistTracks, remoteTracks]);
 
   // Discography Albums for this artist
@@ -197,8 +207,16 @@ export default function ArtistDetailModal({
   }, [allAlbums, artistTracks, artistName, allTracks]);
 
   const finalAlbums = useMemo(() => {
-    if (artistAlbums.length > 0) return artistAlbums;
-    return remoteAlbums;
+    const map = new Map();
+    artistAlbums.forEach(a => {
+      const key = (a.name || a.title || '').toLowerCase().trim();
+      if (key) map.set(key, a);
+    });
+    remoteAlbums.forEach(a => {
+      const key = (a.name || a.title || '').toLowerCase().trim();
+      if (key && !map.has(key)) map.set(key, a);
+    });
+    return Array.from(map.values());
   }, [artistAlbums, remoteAlbums]);
 
 

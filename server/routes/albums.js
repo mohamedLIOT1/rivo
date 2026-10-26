@@ -27,11 +27,30 @@ function invalidateAlbumsCache() {
 // Get all albums
 router.get('/', async (req, res) => {
   try {
+    const isDefault = !req.query.artist;
+    if (isDefault && cachedAlbumsJson && (Date.now() - cachedAlbumsTime < ALBUMS_CACHE_TTL)) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.send(cachedAlbumsJson);
+    }
+    let filter = {};
+    if (req.query.artist) {
+      const rawArt = req.query.artist.trim();
+      const escaped = rawArt.replace(/[.*+?^${}()|[\]\\]/g, '\\router.get('/', async (req, res) => {
+  try {
     if (cachedAlbumsJson && (Date.now() - cachedAlbumsTime < ALBUMS_CACHE_TTL)) {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.send(cachedAlbumsJson);
     }
-    const albums = await Album.find().sort({ updatedAt: -1 }).lean();
+    const albums = await Album.find().sort({ updatedAt: -1 }).lean();');
+      const flexible = escaped.replace(/[-_\s]+/g, '[-_\\s]*');
+      filter = {
+        $or: [
+          { artist: new RegExp(flexible, 'i') },
+          { name: new RegExp(flexible, 'i') }
+        ]
+      };
+    }
+    const albums = await Album.find(filter).sort({ updatedAt: -1 }).lean();
     const formatted = albums.map(a => {
       const trackCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
       return {

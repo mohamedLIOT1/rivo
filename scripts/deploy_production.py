@@ -55,6 +55,7 @@ def main():
         ("server/routes/users.js", f"{REMOTE_DIR}/server/routes/users.js"),
         ("server/middleware/auth.js", f"{REMOTE_DIR}/server/middleware/auth.js"),
         ("server/routes/tracks.js", f"{REMOTE_DIR}/server/routes/tracks.js"),
+        ("server/routes/stats.js", f"{REMOTE_DIR}/server/routes/stats.js"),
         ("server/routes/albums.js", f"{REMOTE_DIR}/server/routes/albums.js"),
         ("server/routes/artists.js", f"{REMOTE_DIR}/server/routes/artists.js"),
         ("server/routes/playlists.js", f"{REMOTE_DIR}/server/routes/playlists.js"),
@@ -115,7 +116,7 @@ def main():
 
     # 3. Build fresh web bundle, create dist archive and upload (excluding heavy downloads directory)
     print("Building fresh web bundle with Vite...", flush=True)
-    build_cmd = "npm.cmd run build" if sys.platform == "win32" else "npm run build"
+    build_cmd = "node ./node_modules/vite/bin/vite.js build"
     b_res = subprocess.run(build_cmd, shell=True, cwd=BASE_DIR)
     if b_res.returncode != 0:
         print("Web build failed! Aborting deployment.", flush=True)

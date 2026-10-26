@@ -2,6 +2,7 @@ import { LOGO_BASE64 } from './src/native/assets/logoBase64';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   SafeAreaView,
+  TextInput,
   View,
   Text,
   StyleSheet,
@@ -733,7 +734,8 @@ function NativeAppShell() {
       registerFullPlayerHandler(() => setIsFullPlayerOpen(true));
     }
   }, [registerFullPlayerHandler]);
-  const { currentUser, isAuthLoaded } = useUser();
+  const { currentUser, isAuthLoaded, tracks: userTracks = [], albums: userAlbums = [] } = useUser();
+  const [headerSearchText, setHeaderSearchText] = useState('');
   const { isDark, toggleTheme } = useTheme();
   const { socket } = useSocket();
   const { showToast } = useToast();

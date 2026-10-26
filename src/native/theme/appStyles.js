@@ -144,6 +144,17 @@ export const styles = StyleSheet.create({
   headerSearchTextLight: {
     color: '#78716c',
   },
+  headerSearchInput: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#f8fafc',
+    flex: 1,
+    paddingVertical: 0,
+    height: '100%',
+  },
+  headerSearchInputLight: {
+    color: '#0b1110',
+  },
   headerChatBadge: {
     position: 'absolute',
     top: -3,

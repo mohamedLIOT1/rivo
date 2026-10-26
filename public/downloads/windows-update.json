@@ -1,7 +1,7 @@
 {
-  "version": "1.9.9.8",
-  "notes": "Rivo Desktop v1.9.9.8 - Fix artist album length, profile hooks stability, listening stats sync and fast download speeds",
-  "pub_date": "2026-10-26T20:15:42.104Z",
+  "version": "1.9.9.9",
+  "notes": "Rivo Desktop v1.9.9.9 - Interactive search bar, full artist discography & track discovery, instant user profile viewing",
+  "pub_date": "2026-10-26T20:48:21.738Z",
   "platforms": {
     "windows-x86_64": {
       "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe"

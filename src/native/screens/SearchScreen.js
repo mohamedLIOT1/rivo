@@ -52,7 +52,7 @@ const DISPENSARY_GENRES = [
   { id: 'ambient', label: 'NIGHT AMBIENT', color: '#6366f1', tag: 'FOCUS DEEP' },
 ];
 
-export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist }) {
+export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', onQueryChange }) {
   const { width } = useWindowDimensions();
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
   const albumGap = 10;
@@ -78,7 +78,19 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
 
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery || '');
+
+  useEffect(() => {
+    if (initialQuery !== undefined && initialQuery !== query) {
+      setQuery(initialQuery);
+    }
+  }, [initialQuery]);
+
+  const handleQueryChange = (txt) => {
+    setQuery(txt);
+    if (onQueryChange) onQueryChange(txt);
+    if (activeFilter !== 'all' && !txt.trim()) setActiveFilter('all');
+  };
   const [selectedGenre, setSelectedGenre] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [remoteResults, setRemoteResults] = useState([]);
@@ -344,7 +356,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
             <ActivityIndicator size="small" color={colors.teal} style={{ marginRight: 6 }} />
           )}
           {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')} style={styles.clearBtn}>
+            <TouchableOpacity onPress={() => handleQueryChange('')} style={styles.clearBtn}>
               <X size={16} color={colors.ink} />
             </TouchableOpacity>
           )}
