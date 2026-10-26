@@ -54,6 +54,8 @@ export default function MobileModals({
         <AlbumDetailModal
           visible={Boolean(selectedAlbum)}
           album={selectedAlbum}
+          allTracks={propTracks || []}
+          allAlbums={propAlbums || []}
           onClose={() => setSelectedAlbum && setSelectedAlbum(null)}
           onTrackAction={(track) => setActionTrack && setActionTrack(track)}
           onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
@@ -68,6 +70,8 @@ export default function MobileModals({
         <ArtistDetailModal
           visible={Boolean(selectedArtist)}
           artist={selectedArtist}
+          allTracks={propTracks || []}
+          allAlbums={propAlbums || []}
           onClose={() => setSelectedArtist && setSelectedArtist(null)}
           onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
           onSelectAlbum={(alb) => {

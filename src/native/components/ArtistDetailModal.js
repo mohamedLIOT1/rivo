@@ -34,7 +34,8 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { INITIAL_TRACKS } from '../data/initialTracks';
-import { matchesArtist } from '../../utils/artistUtils.jsx';
+import { API_BASE_URL } from '../config';
+import { matchesArtist, getCanonicalArtistName, getArtistAliasNote } from '../../utils/artistUtils.jsx';
 import MiniPlayer from './MiniPlayer';
 import AddAlbumModal from './AddAlbumModal';
 import EditArtistModal from './EditArtistModal';
@@ -86,12 +87,17 @@ export default function ArtistDetailModal({
   const isAdmin = Boolean(currentUser?.role === 'admin' || currentUser?.isAdmin);
 
 
-  // Normalize artist name
-  const artistName = useMemo(() => {
+  // Normalize artist name and resolve canonical group (matches Web ArtistScreen)
+  const rawArtistName = useMemo(() => {
     if (!artist) return '';
     if (typeof artist === 'string') return artist.trim();
     return (artist.name || artist.artist || '').trim();
   }, [artist]);
+
+  const canonicalName = useMemo(() => getCanonicalArtistName(rawArtistName), [rawArtistName]);
+  const artistName = canonicalName || rawArtistName;
+  const artistKey = artistName.toLowerCase();
+  const aliasNote = useMemo(() => getArtistAliasNote(artistName), [artistName]);
 
   const [remoteTracks, setRemoteTracks] = useState([]);
   const [remoteAlbums, setRemoteAlbums] = useState([]);
@@ -120,21 +126,24 @@ export default function ArtistDetailModal({
           const list = Array.isArray(albData) ? albData : (albData.albums || []);
           if (isMounted && list.length > 0) setRemoteAlbums(list);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('ArtistDetailModal fetch error:', err);
+      }
     })();
     return () => { isMounted = false; };
   }, [visible, artistName]);
 
-  // Filter artist tracks
+  // Filter local artist tracks (supporting aliases, multiple artists per track)
   const effectiveAllTracks = (allTracks && allTracks.length > 0) ? allTracks : INITIAL_TRACKS;
   const artistTracks = useMemo(() => {
     if (!artistName) return [];
     return (effectiveAllTracks || []).filter((t) => {
       if (!t || !t.artist) return false;
-      return matchesArtist(t, artistName) || t.artist.toLowerCase().includes(artistName.toLowerCase());
+      return matchesArtist(t, artist) || matchesArtist(t, artistName) || matchesArtist(t, rawArtistName) || t.artist.toLowerCase().includes(artistKey);
     });
-  }, [effectiveAllTracks, artistName]);
+  }, [effectiveAllTracks, artist, artistName, rawArtistName, artistKey]);
 
+  // Merge local tracks + remote database tracks deduplicated
   const finalTracks = useMemo(() => {
     const map = new Map();
     artistTracks.forEach(t => {
@@ -143,84 +152,83 @@ export default function ArtistDetailModal({
     });
     remoteTracks.forEach(t => {
       const id = String(t.id || t._id || t.title);
-      if (!map.has(id)) map.set(id, t);
+      if (!map.has(id)) {
+        map.set(id, t);
+      } else {
+        map.set(id, { ...map.get(id), ...t });
+      }
     });
     return Array.from(map.values());
   }, [artistTracks, remoteTracks]);
 
-  // Discography Albums for this artist
-  const artistAlbums = useMemo(() => {
-    if (!artistName) return [];
-    const lower = artistName.toLowerCase().trim();
+  // Discography Albums for this artist strictly like Web ArtistScreen.jsx
+  const combinedAlbums = useMemo(() => {
     const map = new Map();
-
-    (allAlbums || []).forEach((alb) => {
-      if (alb && alb.artist && (matchesArtist(alb, artistName) || alb.artist.toLowerCase().includes(lower))) {
-        const key = (alb.name || '').toLowerCase().trim();
-        if (key && !map.has(key)) {
-          const albTracks = (Array.isArray(alb.tracks) && alb.tracks.length > 0)
-            ? alb.tracks
-            : (allTracks || []).filter(t => {
-                if (!t) return false;
-                const tAlb = (t.album || '').trim().toLowerCase();
-                const tId = String(t.id || t._id || '');
-                const inIds = Array.isArray(alb.trackIds) && alb.trackIds.map(String).includes(tId);
-                return (tAlb && tAlb === key) || inIds;
-              });
-          map.set(key, {
-            ...alb,
-            name: alb.name || key,
-            artist: alb.artist || artistName,
-            cover: alb.cover || alb.coverUrl || albTracks[0]?.coverUrl || albTracks[0]?.cover,
-            tracks: albTracks,
-          });
-        }
-      }
-    });
-
-    // Also collect and merge from artistTracks
-    artistTracks.forEach((t) => {
-      if (t.album && t.album.trim()) {
-        const key = t.album.toLowerCase().trim();
-        const tCover = t.coverUrl || t.cover;
-        if (!map.has(key)) {
-          map.set(key, {
-            id: `album-${key}`,
-            name: t.album.trim(),
-            artist: artistName,
-            cover: tCover,
-            tracks: [t],
-          });
-        } else {
-          const existing = map.get(key);
-          if (!existing.cover && tCover) existing.cover = tCover;
-          if (!existing.tracks) existing.tracks = [];
-          const tId = String(t.id || t._id || '');
-          if (!existing.tracks.some(x => String(x.id || x._id || '') === tId)) {
-            existing.tracks.push(t);
-          }
-        }
-      }
-    });
-
-    return Array.from(map.values());
-  }, [allAlbums, artistTracks, artistName, allTracks]);
-
-  const finalAlbums = useMemo(() => {
-    const map = new Map();
-    artistAlbums.forEach(a => {
+    (remoteAlbums || []).forEach(a => {
+      if (!a) return;
       const key = (a.name || a.title || '').toLowerCase().trim();
       if (key) map.set(key, a);
     });
-    remoteAlbums.forEach(a => {
+    (allAlbums || []).forEach(a => {
+      if (!a) return;
       const key = (a.name || a.title || '').toLowerCase().trim();
       if (key && !map.has(key)) map.set(key, a);
     });
     return Array.from(map.values());
-  }, [artistAlbums, remoteAlbums]);
+  }, [remoteAlbums, allAlbums]);
 
+  const finalAlbums = useMemo(() => {
+    if (!artistName) return [];
+    const albumMap = new Map();
 
-  const artistCover = (typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl))
+    combinedAlbums.forEach(a => {
+      if (!a || !a.artist) return;
+      if (
+        matchesArtist(a, artist) ||
+        matchesArtist(a, artistName) ||
+        matchesArtist(a, rawArtistName) ||
+        a.artist.trim().toLowerCase() === artistKey ||
+        a.artist.toLowerCase().includes(artistKey)
+      ) {
+        // Collect all tracks belonging to this album from finalTracks
+        const matchingTracks = finalTracks.filter(t => {
+          if (!t) return false;
+          const tId = String(t.id || t._id || '');
+          const inIds = Array.isArray(a.trackIds) && a.trackIds.map(String).includes(tId);
+          const tAlb = (t.album || '').trim().toLowerCase();
+          const aName = (a.name || a.title || '').trim().toLowerCase();
+          return inIds || (tAlb && aName && tAlb === aName);
+        });
+
+        const allTrackIds = Array.from(new Set([
+          ...(Array.isArray(a.trackIds) ? a.trackIds.map(String) : []),
+          ...matchingTracks.map(t => String(t.id || t._id))
+        ]));
+
+        const resolvedCover = a.cover || a.coverUrl || matchingTracks[0]?.cover || matchingTracks[0]?.coverUrl;
+        const key = (a.name || a.title || '').toLowerCase().trim();
+
+        if (key && !albumMap.has(key)) {
+          albumMap.set(key, {
+            ...a,
+            id: a.id || a._id,
+            name: a.name || a.title,
+            artist: a.artist || artistName,
+            tracks: matchingTracks,
+            trackIds: allTrackIds,
+            trackCount: Math.max(allTrackIds.length, matchingTracks.length, a.trackCount || 0, a.songsCount || 0),
+            cover: resolvedCover,
+            isAlbum: true,
+            isPublic: true,
+          });
+        }
+      }
+    });
+
+    return Array.from(albumMap.values());
+  }, [combinedAlbums, finalTracks, artistKey, artistName, rawArtistName, artist]);
+
+    const artistCover = (typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl))
     ? (artist.avatar || artist.cover || artist.coverUrl)
     : (finalTracks[0]?.coverUrl || finalTracks[0]?.cover || '');
 

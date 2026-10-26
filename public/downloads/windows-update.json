@@ -1,7 +1,7 @@
 {
-  "version": "1.9.9.9",
-  "notes": "Rivo Desktop v1.9.9.9 - Interactive search bar, full artist discography & track discovery, instant user profile viewing",
-  "pub_date": "2026-10-26T20:48:21.738Z",
+  "version": "2.0.0",
+  "notes": "Rivo Desktop v2.0.0 - Major milestone release with interactive search bar, full artist discography discovery, instant user profile viewing, and performance optimizations.",
+  "pub_date": "2026-10-26T21:15:28.494Z",
   "platforms": {
     "windows-x86_64": {
       "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe"

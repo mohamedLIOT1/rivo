@@ -880,6 +880,8 @@ function NativeAppShell() {
       case 'search':
         return (
           <SearchScreen
+            initialQuery={headerSearchText}
+            onQueryChange={(txt) => setHeaderSearchText(txt)}
             onTrackAction={(track) => setActionTrack(track)}
             onOpenChat={(target) => {
               if (target) setChatTargetUser(target);
@@ -965,17 +967,35 @@ function NativeAppShell() {
           <Text style={[styles.brandTitle, !isDark && styles.brandTitleLight]}>RIVO</Text>
         </TouchableOpacity>
 
-        {/* ── Top Header Search Bar Touchable (Tapping opens Search page) ── */}
-        <TouchableOpacity
-          style={[styles.headerSearchBar, !isDark && styles.headerSearchBarLight]}
-          onPress={() => setActiveTab('search')}
-          activeOpacity={0.8}
-        >
+        {/* ── Top Header Search Bar (Interactive input with live query sync) ── */}
+        <View style={[styles.headerSearchBar, !isDark && styles.headerSearchBarLight]}>
           <Search size={13} color={isDark ? '#64748b' : '#78716c'} strokeWidth={2.2} />
-          <Text style={[styles.headerSearchText, !isDark && styles.headerSearchTextLight]} numberOfLines={1}>
-            Search songs, artists...
-          </Text>
-        </TouchableOpacity>
+          <TextInput
+            style={[styles.headerSearchInput, !isDark && styles.headerSearchInputLight]}
+            placeholder="Search songs, artists..."
+            placeholderTextColor={isDark ? '#64748b' : '#78716c'}
+            value={headerSearchText}
+            onChangeText={(txt) => {
+              setHeaderSearchText(txt);
+              if (activeTab !== 'search') setActiveTab('search');
+            }}
+            onFocus={() => {
+              if (activeTab !== 'search') setActiveTab('search');
+            }}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {Boolean(headerSearchText) && (
+            <TouchableOpacity
+              onPress={() => setHeaderSearchText('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ padding: 2 }}
+            >
+              <X size={13} color={isDark ? '#94a3b8' : '#78716c'} strokeWidth={2.2} />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Right Actions: Chat, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
@@ -1250,6 +1270,8 @@ function NativeAppShell() {
 
       {/* ── Mobile Modals ── */}
       <MobileModals
+        tracks={userTracks}
+        albums={userAlbums}
         isFullPlayerOpen={isFullPlayerOpen}
         setIsFullPlayerOpen={setIsFullPlayerOpen}
         selectedAlbum={selectedAlbum}
