@@ -186,7 +186,7 @@ const BETA_VERSIONS_DATA = {
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '2.0.3',
+      version: '1.9.9.7',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo.exe',
@@ -194,7 +194,7 @@ const BETA_VERSIONS_DATA = {
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.0.3',
+      version: '2.0.4',
       build: 96,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
@@ -204,7 +204,7 @@ const BETA_VERSIONS_DATA = {
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '2.0.3',
+        version: '2.0.4',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -212,7 +212,7 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '2.0.3',
+      version: '2.0.4',
       build: 96,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
@@ -273,7 +273,7 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
       if (pkg && pkg.version) {
         if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
-        if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = pkg.version;
+        if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = '1.9.9.7';
         if (manifest.platforms && manifest.platforms.android) manifest.platforms.android.version = pkg.version;
         if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
       }

@@ -14,7 +14,8 @@ export default function ListeningActivityPanel({
   onStartJamWithUser,
   currentUser,
   globalTheme = 'dark',
-  socket
+  socket,
+  onViewProfile
 }) {
   const isDark = globalTheme === 'dark';
   const { language } = usePreferences();
@@ -310,7 +311,7 @@ export default function ListeningActivityPanel({
 
                     {isLive && listening ? (
                       <div
-                        onClick={() => handlePlayFriendTrack(friend)}
+                        onClick={(e) => { e.stopPropagation(); handlePlayFriendTrack(friend); }}
                         className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
                         title={`Listening now: ${listening.title}`}
                       >
@@ -321,7 +322,7 @@ export default function ListeningActivityPanel({
                       </div>
                     ) : listening && isOnline ? (
                       <div
-                        onClick={() => handlePlayFriendTrack(friend)}
+                        onClick={(e) => { e.stopPropagation(); handlePlayFriendTrack(friend); }}
                         className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
                         title={`Last played: ${listening.title}`}
                       >
@@ -332,7 +333,7 @@ export default function ListeningActivityPanel({
                       </div>
                     ) : listening && !isOnline ? (
                       <div
-                        onClick={() => handlePlayFriendTrack(friend)}
+                        onClick={(e) => { e.stopPropagation(); handlePlayFriendTrack(friend); }}
                         className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
                         title={`Last played before disconnect: ${listening.title}`}
                       >
