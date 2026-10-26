@@ -3,9 +3,9 @@
   "version": "2.0.4",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث 2.0.4: إصلاحات شاملة وتحسين الأداء واستعادة التشغيل",
-  "notesEn": "Update v2.0.4: Comprehensive fixes, performance, radio artwork and playback restore",
+  "notes": "تحديث 2.0.4: إصلاحات شاملة وتحسين الأداء واستعادة التشغيل وتصحيح أغلفة الإذاعات",
+  "notesEn": "Instant in-app OTA update (3.24 MB) • No reinstall required • Performance improvements and bug fixes.",
   "bundleSize": 3396500,
   "sizeMb": "3.24 MB",
-  "updatedAt": "2026-10-26T19:00:14.178Z"
+  "updatedAt": "2026-10-26T19:08:08.701Z"
 }

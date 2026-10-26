@@ -74,7 +74,7 @@ export const FAMOUS_RECITERS = [
   {
     name: 'إسلام صبحي',
     aliases: ['اسلام صبحي', 'اسلام صبحى', 'إسلام صبحى', 'صبحي', 'صبحى', 'islam sobhi', 'islam sobhy', 'sobhi', 'sobhy'],
-    cover: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=600'
+    cover: 'https://images.unsplash.com/photo-1585036156171-384164a8c675?w=600'
   },
   {
     name: 'هزاع البلوشي',
