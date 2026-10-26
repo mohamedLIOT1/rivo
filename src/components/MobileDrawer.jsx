@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Plus, Radio, MessageSquare, Users, WifiOff, User, Activity, ShieldCheck, Moon, Sun, Settings } from 'lucide-react';
+import { X, Plus, Radio, MessageSquare, Users, WifiOff, User, Activity, ShieldCheck, Moon, Sun, Settings, Download } from 'lucide-react';
 import { useUI } from '../context/UIContext';
 import RivoLogo from './RivoLogo';
 import { isUserAdmin } from '../utils/adminUtils';
@@ -164,6 +164,28 @@ export default function MobileDrawer({
             >
               <User size={16} className="text-[#17a398]" strokeWidth={2.5} />
               <span>{currentUser ? 'My Profile' : 'Sign In'}</span>
+            </a>
+
+            <a
+              href="/download"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigate('download');
+                closeMobileMenu();
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg brutal-btn cursor-pointer ${
+                currentScreen === 'download'
+                  ? 'bg-[#17a398] text-[#0b1110] font-black brutal-border'
+                  : globalTheme === 'dark' ? 'text-zinc-300 hover:bg-zinc-800/80' : 'text-[#0b1110] hover:bg-[#ede5d3]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Download size={16} className="text-[#17a398]" strokeWidth={2.5} />
+                <span>Download App</span>
+              </div>
+              <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-black">
+                APK / IOS
+              </span>
             </a>
 
             <a
