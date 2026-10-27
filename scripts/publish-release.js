@@ -4,7 +4,7 @@ const cp = require('child_process');
 
 function getGitHubToken() {
   if (process.env.GITHUB_TOKEN) return Promise.resolve(process.env.GITHUB_TOKEN);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const p = cp.spawn('git', ['credential', 'fill']);
     p.stdin.write('protocol=https\nhost=github.com\n\n');
     let out = '';
@@ -24,31 +24,26 @@ function getGitHubToken() {
 async function publish() {
   const token = await getGitHubToken();
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
-  const version = pkg.version || '1.9.9.8';
+  const version = pkg.version || '2.0.9';
   const tag = `v${version}`;
-  const releaseName = `Rivo v${version} (Beta)`;
-    const releaseBody = `## Rivo v${version} (Mobile v2.0.8 • Desktop v2.0.1)
+  const releaseName = `Rivo v${version} (Mobile & Desktop)`;
+  const releaseBody = `## Rivo v${version} (Mobile v2.0.9 • Desktop v2.0.2)
 
-### 🎛️ Spotify-Grade DJ Mix Engine
-- Dual-buffer sample-accurate Web Audio API playback engine with hardware clock synchronization.
-- Equal Power volume curves & BiquadFilter sweeps (High-pass bass cutoff on track A, Low-pass open on track B).
-- Seamless playback from IndexedDB Blob URLs completely resolving CORS & network latency.
+### 🎛️ Interactive DJ Mix Playlist Creation & Local Songs Recommendations
+- **Two-Step Playlist Creation**: Choosing between **Standard Playlist** and **DJ Mix Playlist** when creating a playlist.
+- **Recommended Device Songs**: Automatically surfaces and recommends locally stored/downloaded tracks on the device.
+- **Multi-select track picker**: Search, filter, select-all, and attach local tracks upon playlist creation for immediate zero-latency crossfading.
+- **Dedicated for Downloadable Apps**: Exclusively built for Windows Desktop (.exe), Android (.apk), and iOS (.ipa).
 
-### 🛡️ Mix Download Gate & Auto-Sync
-- Smart Download Gate modal detecting un-downloaded tracks in Mix playlists.
-- Instant estimation of download size and batch download trigger before playback.
-- Consent-based auto-sync: newly added songs to consented mix playlists are automatically downloaded offline.
+### ⚡ Seamless Dual-Buffer Audio Engine
+- Sample-accurate Web Audio API crossfading with Equal Power volume sweeps and Biquad filters.
+- Native mobile and desktop hardware acceleration.
+- Offline download gate and consent-based auto sync.
 
-### 📱 Library & Player Mix Indicators
-- Dedicated "YOUR MIXES" section in Library with status badges and un-downloaded song counters.
-- MiniPlayer "MIX MODE" pill and upcoming track countdown timer.
-- FullPlayer "COMING UP NEXT (DJ MIX)" widget with one-tap instant 8s crossfade preview.
-
-### 🚀 Instant OTA & Cross-Platform Releases
-- Instant OTA fast update published for Android devices.
-- Re-signed genuine Android APK (v2.0.8, Build 102) with v1/v2/v3/v4 signature schemes.
-- Hermes-compiled iOS IPA (v2.0.8, Build 102).
-- Desktop Release (v2.0.1).
+### 📱 Release Assets
+- **Android APK**: \`Rivo-v2.0.9.apk\` (Build 103, genuine signed v1/v2/v3/v4).
+- **iOS IPA**: \`Rivo-v2.0.9.ipa\` (Build 103, Hermes-compiled).
+- **Windows EXE**: \`Rivo-v2.0.2.exe\`.
 `;
 
   const searchDirs = [
@@ -75,7 +70,7 @@ async function publish() {
       if (match) ipaPath = path.join(dir, match);
     }
     if (!exePath) {
-      const match = files.find(f => f.endsWith('.exe') && (f.includes('2.0.1') || f.includes(version))) ||
+      const match = files.find(f => f.endsWith('.exe') && (f.includes('2.0.2') || f.includes(version))) ||
                     files.find(f => f === 'Rivo.exe');
       if (match) exePath = path.join(dir, match);
     }
@@ -134,7 +129,7 @@ async function publish() {
       console.log(`Created release ID: ${release.id}`);
     }
 
-    // 2. Upload assets: APK and IPA
+    // 2. Upload assets: APK, IPA, EXE
     const assetsToUpload = [];
     if (apkBytes) {
       assetsToUpload.push({ name: `Rivo-v${version}.apk`, data: apkBytes, mime: 'application/vnd.android.package-archive' });
@@ -143,7 +138,7 @@ async function publish() {
       assetsToUpload.push({ name: `Rivo-v${version}.ipa`, data: ipaBytes, mime: 'application/octet-stream' });
     }
     if (exeBytes) {
-      assetsToUpload.push({ name: `Rivo-v2.0.1.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
+      assetsToUpload.push({ name: `Rivo-v2.0.2.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
     }
 
     for (const asset of assetsToUpload) {
