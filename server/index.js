@@ -138,7 +138,7 @@ const APP_VERSIONS_DATA = {
     web: {
       version: '2.1.4',
       name: 'Rivo Web',
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     windows: {
       version: '2.1.4',
@@ -146,7 +146,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo-v2.1.4.exe',
       mandatory: false,
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     android: {
       version: '2.1.4',
@@ -155,7 +155,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo-v2.1.4.apk',
       mandatory: false,
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     ios: {
       version: '2.1.4',
@@ -164,7 +164,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo-v2.1.4.ipa',
       mandatory: false,
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     }
   }
 };
@@ -183,7 +183,7 @@ const BETA_VERSIONS_DATA = {
     web: {
       version: '2.1.4',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     windows: {
       version: '2.1.4',
@@ -191,7 +191,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo-v2.1.4.exe',
       mandatory: false,
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     android: {
       version: '2.1.4',
@@ -200,7 +200,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo-v2.1.4.apk',
       mandatory: false,
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.',
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.',
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
@@ -218,7 +218,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo-v2.1.4.ipa',
       mandatory: false,
-      notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
+      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     }
   }
 };
