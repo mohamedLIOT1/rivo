@@ -10,9 +10,9 @@ const TRANSITION_STYLES = [
   {
     id: 'auto',
     name: 'Auto (Smart Mix)',
-    desc: 'Spotify Auto: analyzes BPM & Camelot harmony to pick optimal transition',
+    desc: 'Rivo Auto: analyzes BPM & Camelot harmony to pick optimal transition',
     icon: Wand2,
-    badge: 'Spotify Auto',
+    badge: 'Rivo Auto',
     color: 'emerald'
   },
   {
@@ -457,7 +457,7 @@ export default function MiniMixerModal({
                   <span className="text-sm font-extrabold text-[#17a398]">{duration}s</span>
                 </div>
 
-                {/* Spotify 4/4 Bars Quick Selector */}
+                {/* Rivo 4/4 Bars Quick Selector */}
                 <div className="grid grid-cols-4 gap-2 mb-3">
                   {[2, 4, 8, 12].map((b) => {
                     const sec = Math.round((b * 240) / (dataA.bpm || 120));
@@ -483,7 +483,7 @@ export default function MiniMixerModal({
                 <div className="relative flex items-center h-7 group my-1">
                   {/* Visible Track Background */}
                   <div className="w-full h-2 rounded-full bg-zinc-800 border border-zinc-700/80 overflow-hidden relative shadow-inner">
-                    {/* Spotify Green Active Fill */}
+                    {/* Rivo Teal Active Fill */}
                     <div 
                       className="h-full bg-gradient-to-r from-emerald-500 to-[#17a398] rounded-full transition-all duration-75"
                       style={{ width: `${((duration - 2) / (16 - 2)) * 100}%` }}

@@ -1010,7 +1010,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     </View>
                   </View>
 
-                  {/* Transition Length Selector (Spotify 4/4 Bars) */}
+                  {/* Transition Length Selector (Rivo 4/4 Bars) */}
                   <View style={styles.djParamSection}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <Text style={styles.djParamLabel}>TRANSITION LENGTH</Text>
@@ -1040,9 +1040,9 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     </View>
                   </View>
 
-                  {/* Transition Style Selector (5 Spotify Presets) */}
+                  {/* Transition Style Selector (5 Rivo Presets) */}
                   <View style={styles.djParamSection}>
-                    <Text style={styles.djParamLabel}>SPOTIFY TRANSITION STYLE</Text>
+                    <Text style={styles.djParamLabel}>RIVO TRANSITION STYLE</Text>
                     <View style={styles.djPillRow}>
                       {[
                         { id: 'auto', label: 'Auto' },

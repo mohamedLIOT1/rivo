@@ -259,7 +259,7 @@ export default function SettingsModal({
           <p className={`text-[11px] mb-3 ${
             isDark ? 'text-zinc-300' : 'text-[#082621]/70'
           }`}>
-            Displays your live listening track, cover &amp; progress on your Discord profile like Spotify.
+            Displays your live listening track, cover &amp; progress on your Discord profile with Rivo.
           </p>
 
           {!isLoggedIn ? (

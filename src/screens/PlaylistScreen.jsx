@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Play, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
+  Play, Shuffle, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
   Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical,
   Download, CheckCircle2, CheckSquare, Square, ListPlus, FolderPlus
@@ -11,7 +11,7 @@ import MixDownloadGate from '../components/MixDownloadGate';
 import ExportModal from '../components/ExportModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, getCamelotColor, calculateBarsDuration } from '../utils/musicAnalysis';
-import { useAudioPlayer } from '../context/AudioContext';
+import { useAudioPlayer, shuffleArray } from '../context/AudioContext';
 import { useDownloadManager } from '../context/DownloadContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
@@ -1091,12 +1091,32 @@ export default function PlaylistScreen({
             onClick={() => filteredPlaylistTracks.length > 0 && handlePlayPlaylistTrack(filteredPlaylistTracks[0])}
             className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
               filteredPlaylistTracks.length > 0
-                ? 'bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] cursor-pointer'
+                ? 'bg-[#10b981] hover:bg-emerald-400 text-[#0b1110] cursor-pointer'
                 : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
             }`}
             title="Play playlist"
           >
             <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />
+          </button>
+
+          <button
+            disabled={filteredPlaylistTracks.length === 0}
+            onClick={() => {
+              if (filteredPlaylistTracks.length === 0) return;
+              setIsMixMode?.(true);
+              setIsMixActive(true);
+              const shuffled = shuffleArray(filteredPlaylistTracks);
+              shuffled._transitions = transitions;
+              onSelectTrack(shuffled[0], shuffled);
+            }}
+            className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
+              filteredPlaylistTracks.length > 0
+                ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] cursor-pointer'
+                : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
+            }`}
+            title="Shuffle playlist"
+          >
+            <Shuffle size={18} className="text-[#0b1110] sm:w-5 sm:h-5" />
           </button>
 
           {/* Add entire playlist to queue or jam queue */}
@@ -1287,21 +1307,21 @@ export default function PlaylistScreen({
                   '#'
                 )}
               </span>
-              <span className={(isMixActive || isMixMode) && !isQuran ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? 'SURAH & RECITER' : 'TITLE & ARTIST'}</span>
-              {(isMixActive || isMixMode) && !isQuran && (
-                <span className="hidden sm:flex col-span-2 items-center gap-1 text-[#17a398]">
-                  <span>BPM</span>
-                  <span>/</span>
-                  <span>KEY</span>
-                </span>
+              <span className={(isMixActive || isMixMode || isMixView) && !isQuran ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? 'SURAH & RECITER' : 'TITLE'}</span>
+              {(isMixActive || isMixMode || isMixView) && !isQuran && (
+                <>
+                  <span className="hidden sm:block col-span-1 text-center text-[#17a398]">BPM</span>
+                  <span className="hidden sm:block col-span-1 text-center text-[#17a398]">KEY</span>
+                </>
               )}
               <span className="hidden md:block col-span-2">{isQuran ? 'COLLECTION' : 'ALBUM'}</span>
-              <span className={(isMixActive || isMixMode) && !isQuran ? "col-span-5 md:col-span-3 text-right pr-2" : "col-span-5 md:col-span-4 text-right pr-2"}>ACTIONS</span>
+              <span className="hidden lg:block col-span-2 font-mono text-zinc-400">DATE ADDED</span>
+              <span className={(isMixActive || isMixMode || isMixView) && !isQuran ? "col-span-5 md:col-span-1 text-right pr-2" : "col-span-5 md:col-span-2 text-right pr-2"}>ACTIONS</span>
             </div>
 
             {filteredPlaylistTracks.map((track, i) => {
               const isSelected = selectedTrackIds.has(String(track.id || track._id));
-              const isMixOn = Boolean(isMixActive || isMixMode) && !isQuran;
+              const isMixOn = Boolean(isMixActive || isMixMode || isMixView) && !isQuran;
               const musical = isMixOn ? getTrackMusicalData(track) : null;
               const camelotCol = isMixOn && musical ? getCamelotColor(musical.key) : null;
 
@@ -1343,15 +1363,15 @@ export default function PlaylistScreen({
                       )}
                     </span>
                     
-                    {/* Title & Artist */}
+                    {/* Title & Artist & DJ Transition Tag */}
                     <div className={`${isMixOn ? 'col-span-6 md:col-span-4' : 'col-span-6 md:col-span-5'} flex items-center gap-2 sm:gap-3 truncate pr-1 sm:pr-2`}>
                       <img 
                         src={normalizeCoverUrl(track.cover, track)} 
                         alt={track.title} 
-                        className="w-9 h-9 sm:w-10 sm:h-10 brutal-border object-cover shrink-0 bg-[#ede5d3]" 
+                        className="w-10 h-10 sm:w-12 sm:h-12 brutal-border object-cover shrink-0 bg-[#ede5d3]" 
                         onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7`; }}
                       />
-                      <div className="truncate">
+                      <div className="truncate flex-1">
                         <h4 className={`text-xs sm:text-sm font-bold truncate group-hover:text-[#17a398] transition-colors ${
                           isDark ? 'text-white' : 'text-[#0b1110]'
                         }`}>
@@ -1367,20 +1387,62 @@ export default function PlaylistScreen({
                             linkClassName="hover:underline cursor-pointer"
                           />
                         </div>
+
+                        {/* Per-track Transition Tag (Rise / Blend / Custom / Auto) for Rivo */}
+                        {isMixOn && i < filteredPlaylistTracks.length - 1 && (() => {
+                          const nextTrack = filteredPlaylistTracks[i + 1];
+                          const tAId = String(track.id || track._id || '');
+                          const tBId = String(nextTrack.id || nextTrack._id || '');
+                          const pairKey = `${tAId}___${tBId}`;
+                          const pairKeyAlt = `${tAId}_${tBId}`;
+                          const trans = transitions[pairKey] || transitions[pairKeyAlt] || { style: (i === 0 ? 'rise' : i === 1 ? 'blend' : i === 2 ? 'custom' : 'auto'), duration: 8, bars: 4 };
+                          const mA = musical;
+                          const mB = getTrackMusicalData(nextTrack);
+                          const compat = checkHarmonicCompatibility(mA?.key, mB?.key, mA?.bpm, mB?.bpm);
+
+                          const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
+                                             trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
+                                             trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' :
+                                             trans.style === 'cut' ? '✂️ Cut' :
+                                             trans.style === 'custom' ? '🎛️ Custom' : '✨ Auto';
+
+                          return (
+                            <div className="mt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMixerPair({ trackA: track, trackB: nextTrack, pairKey });
+                                }}
+                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-bold brutal-border brutal-shadow-xs transition-transform hover:scale-105 cursor-pointer ${
+                                  isDark ? 'bg-zinc-900/90 text-zinc-300 border-zinc-700 hover:border-[#17a398]' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:border-[#17a398]'
+                                }`}
+                                title={`Customize transition into "${nextTrack.title}"`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: compat.color || '#10b981' }} />
+                                <span>{styleLabel}</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
-                    {/* Spotify BPM & Camelot Key Badge */}
+                    {/* Rivo BPM & Camelot Key Columns */}
                     {isMixOn && musical && (
-                      <div className="hidden sm:flex col-span-2 items-center gap-1.5 font-mono text-[11px]">
-                        <span className="text-zinc-300 font-bold">{musical.bpm} <span className="text-[9px] text-zinc-500">BPM</span></span>
-                        <span 
-                          className="px-1.5 py-0.5 rounded text-[10px] font-black border"
-                          style={{ backgroundColor: camelotCol.bg, color: camelotCol.text, borderColor: camelotCol.border }}
-                        >
-                          {musical.key}
-                        </span>
-                      </div>
+                      <>
+                        <div className="hidden sm:flex col-span-1 items-center justify-center font-mono text-[11px] text-zinc-300 font-bold">
+                          {musical.bpm}
+                        </div>
+                        <div className="hidden sm:flex col-span-1 items-center justify-center font-mono text-[11px]">
+                          <span 
+                            className="px-1.5 py-0.5 rounded text-[10px] font-black border"
+                            style={{ backgroundColor: camelotCol.bg, color: camelotCol.text, borderColor: camelotCol.border }}
+                          >
+                            {musical.key}
+                          </span>
+                        </div>
+                      </>
                     )}
 
                     {/* Album */}
@@ -1388,8 +1450,13 @@ export default function PlaylistScreen({
                       {track.album || playlist.name}
                     </div>
 
+                    {/* Date added */}
+                    <div className="hidden lg:block col-span-2 text-[11px] font-mono text-zinc-500 truncate">
+                      {track.createdAt ? new Date(track.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Dec 31, 2025'}
+                    </div>
+
                     {/* Action & Duration */}
-                    <div className={`${isMixOn ? 'col-span-5 md:col-span-3' : 'col-span-5 md:col-span-4'} flex items-center justify-end gap-1 sm:gap-2 text-xs`}>
+                    <div className={`${isMixOn ? 'col-span-5 md:col-span-1' : 'col-span-5 md:col-span-2'} flex items-center justify-end gap-1 sm:gap-2 text-xs`}>
                       {/* Track download / cancel button */}
                       {isTrackDownloading?.(track.id || track._id) ? (
                         <div className="flex items-center gap-0.5 sm:gap-1">
@@ -1476,7 +1543,7 @@ export default function PlaylistScreen({
                     </div>
                   </div>
 
-                  {/* ── Spotify Mixed Playlists Transition Chip ── */}
+                  {/* ── Rivo Mixed Playlists Transition Chip ── */}
                   {isMixOn && i < filteredPlaylistTracks.length - 1 && (() => {
                     const nextTrack = filteredPlaylistTracks[i + 1];
                     const tAId = String(track.id || track._id || '');

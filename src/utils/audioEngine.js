@@ -100,7 +100,7 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
   }
 
   if (style === 'fade' || style === 'equal_power' || style === 'auto') {
-    // Standard Spotify Equal-Power Crossfade: cos & sin curve (preserves constant acoustic energy)
+    // Standard Rivo Equal-Power Crossfade: cos & sin curve (preserves constant acoustic energy)
     const angle = p * (Math.PI / 2);
     return {
       gainA: Math.cos(angle),

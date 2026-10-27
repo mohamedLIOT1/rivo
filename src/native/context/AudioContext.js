@@ -169,7 +169,7 @@ export const AudioProvider = ({ children }) => {
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
 
-  // ── DJ Mix Mode & Crossfade State (Spotify-style 0-12s) ──
+  // ── DJ Mix Mode & Crossfade State (Rivo-style 0-12s) ──
   const [isMixMode, setIsMixModeState] = useState(true);
   const isMixModeRef = useRef(true);
   const [mixDuration, setMixDurationState] = useState(6);
@@ -432,7 +432,7 @@ export const AudioProvider = ({ children }) => {
           }
         });
 
-        // Cross-device connect sync (Spotify Connect: Auto-pause this device if other device plays)
+        // Cross-device connect sync (Rivo Connect: Auto-pause this device if other device plays)
         socket.off('device:force_pause');
         socket.on('device:force_pause', async () => {
           shouldBePlayingRef.current = false;
@@ -969,7 +969,7 @@ export const AudioProvider = ({ children }) => {
             factorA = remainingSec <= 0.5 ? 0 : 1;
             factorB = remainingSec <= 0.5 ? 1 : 0;
           } else {
-            // 'auto': Spotify intelligent curve
+            // 'auto': Rivo intelligent curve
             factorA = Math.cos(((1 - ratio) * Math.PI) / 2);
             factorB = Math.sin(((1 - ratio) * Math.PI) / 2);
           }
@@ -1003,7 +1003,7 @@ export const AudioProvider = ({ children }) => {
         }
       }
 
-      // Periodically sync live playback time with other devices (Spotify Connect)
+      // Periodically sync live playback time with other devices (Rivo Connect)
       // Strictly skip if currently inside an active Jam room
       if (isPlayingRef.current && !jamSyncRef.current?.jamSession && Math.abs(newCurrentTime - (playbackStatusRef.current._lastDeviceSync || 0)) >= 3) {
         playbackStatusRef.current._lastDeviceSync = newCurrentTime;

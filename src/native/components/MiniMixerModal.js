@@ -36,13 +36,13 @@ import { normalizeCoverUri } from '../utils/coverUtils';
 
 const { width } = Dimensions.get('window');
 
-const SPOTIFY_TRANSITION_STYLES = [
+const RIVO_TRANSITION_STYLES = [
   {
     id: 'auto',
     name: 'Auto (Smart Mix)',
     desc: 'Analyzes BPM & Camelot harmony to pick optimal transition',
     icon: Wand2,
-    badge: 'Spotify Auto',
+    badge: 'Rivo Auto',
     color: '#10b981',
   },
   {
@@ -79,7 +79,7 @@ const SPOTIFY_TRANSITION_STYLES = [
   },
 ];
 
-const SPOTIFY_BAR_OPTIONS = [2, 4, 8, 12];
+const RIVO_BAR_OPTIONS = [2, 4, 8, 12];
 
 export default function MiniMixerModal({
   visible,
@@ -160,7 +160,7 @@ export default function MiniMixerModal({
                 <Sliders size={18} color="#10b981" />
               </View>
               <View>
-                <Text style={styles.sheetTitle}>Spotify Transition Editor</Text>
+                <Text style={styles.sheetTitle}>Rivo Transition Editor</Text>
                 <Text style={styles.sheetSubtitle}>Mixed Playlists DJ Engine</Text>
               </View>
             </View>
@@ -232,7 +232,7 @@ export default function MiniMixerModal({
                 </Text>
               </View>
               <View style={styles.pillRow}>
-                {SPOTIFY_BAR_OPTIONS.map((bars) => {
+                {RIVO_BAR_OPTIONS.map((bars) => {
                   const bSec = calculateBarsDuration(bars, avgBpm);
                   const isSel = selectedBars === bars;
                   return (
@@ -257,7 +257,7 @@ export default function MiniMixerModal({
             {/* Transition Style Presets */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>TRANSITION STYLE</Text>
-              {SPOTIFY_TRANSITION_STYLES.map((st) => {
+              {RIVO_TRANSITION_STYLES.map((st) => {
                 const IconComponent = st.icon;
                 const isSel = selectedStyle === st.id;
                 return (

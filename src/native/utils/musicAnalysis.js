@@ -175,7 +175,7 @@ export function checkHarmonicCompatibility(keyA, keyB, bpmA, bpmB) {
 }
 
 /**
- * Recommend optimal DJ transition preset based on Spotify Mixed Playlists rules
+ * Recommend optimal DJ transition preset based on Rivo Mixed Playlists rules
  */
 export function getRecommendedTransition(trackA, trackB) {
   const dataA = getTrackMusicalData(trackA);

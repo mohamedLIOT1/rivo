@@ -202,7 +202,7 @@ body {
 }
 
 /* =============================================
-   Scrollbar — Spotify Style (thin, dark)
+   Scrollbar — Rivo Style (thin, dark)
    ============================================= */
 ::-webkit-scrollbar {
   width: 6px;
@@ -239,7 +239,7 @@ body {
 }
 
 /* =============================================
-   Spotify Buttons
+   Rivo Buttons
    ============================================= */
 .sp-btn-primary {
   background-color: var(--sp-green);
@@ -281,7 +281,7 @@ body {
 }
 
 /* =============================================
-   Cards — Spotify Style
+   Cards — Rivo Style
    ============================================= */
 .sp-card {
   background-color: var(--sp-surface);
@@ -475,7 +475,7 @@ body {
 }
 
 /* =============================================
-   Spotify Now Playing Bar (MiniPlayer)
+   Rivo Now Playing Bar (MiniPlayer)
    ============================================= */
 .sp-now-playing-bar {
   position: fixed;
@@ -494,7 +494,7 @@ body {
 }
 
 /* =============================================
-   Sidebar — Spotify Desktop
+   Sidebar — Rivo Desktop
    ============================================= */
 .sp-sidebar {
   width: var(--nav-width);
@@ -551,7 +551,7 @@ body {
 }
 
 /* =============================================
-   Range Inputs (Spotify style)
+   Range Inputs (Rivo style)
    ============================================= */
 input[type=range] {
   -webkit-appearance: none;
@@ -700,7 +700,7 @@ input[type=range].opacity-0::-moz-range-thumb {
 }
 
 /* =============================================
-   Mobile Bottom Nav (Spotify Mobile)
+   Mobile Bottom Nav (Rivo Mobile)
    ============================================= */
 .sp-mobile-nav {
   position: fixed;

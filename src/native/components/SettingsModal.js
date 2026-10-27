@@ -539,7 +539,7 @@ export default function SettingsModal({ visible, onClose }) {
                 )}
               </View>
 
-              {/* ── Playback & Rivo DJ Engine (Spotify-Style Crossfade & Automix) ── */}
+              {/* ── Playback & Rivo DJ Engine (Rivo-Style Crossfade & Automix) ── */}
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Radio size={18} color={colors.teal} />
@@ -562,7 +562,7 @@ export default function SettingsModal({ visible, onClose }) {
                   />
                 </View>
 
-                {/* Crossfade Duration Selector (0s - 12s Spotify style) */}
+                {/* Crossfade Duration Selector (0s - 12s Rivo style) */}
                 <View style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: borderColor }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <Text style={[styles.switchTitle, { color: textTitle }]}>Crossfade</Text>

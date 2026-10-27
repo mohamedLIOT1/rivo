@@ -29,17 +29,17 @@ async function publish() {
   const releaseName = `Rivo v${version} (Mobile & Desktop)`;
   const releaseBody = `## Rivo v${version} (Mobile & Desktop)
 
-### 🎛️ Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine
+### 🎛️ Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine
 - **True Dual-Deck Engine**: Seamless real-time overlap crossfading between songs on both online streaming and offline downloads without memory freeze or decode delays.
-- **5 Spotify Transition Styles**: Support for Auto, Fade, Rise, Blend (with Bass Swap), and Instant Cut.
+- **5 Rivo Transition Styles**: Support for Auto, Fade, Rise, Blend (with Bass Swap), and Instant Cut.
 - **Camelot Wheel Harmony & BPM Columns**: Color-coded Camelot Key badges (1A-12B) and authentic BPM display in playlists.
 - **Interactive Transition Chips**: Clickable transition chips between playlist rows to inspect, configure bars (2, 4, 8, 12 bars), and audition with live real-time preview.
 - **Non-blocking Playback**: Removed mandatory download gating; playlists with Mix enabled play immediately.
 
 ### 📱 Release Assets
-- **Android APK**: \`Rivo-v${version}.apk\` (Build 108, signed v1/v2/v3).
-- **iOS IPA**: \`Rivo-v${version}.ipa\` (Build 108).
-- **Windows EXE**: \`Rivo-v${version}.exe\` (v2.1.4).
+- **Android APK**: \`Rivo-v${version}.apk\` (Build 110, signed v1/v2/v3).
+- **iOS IPA**: \`Rivo-v${version}.ipa\` (Build 110).
+- **Windows EXE**: \`Rivo-v${version}.exe\` (v2.1.6).
 `;
 
   const searchDirs = [

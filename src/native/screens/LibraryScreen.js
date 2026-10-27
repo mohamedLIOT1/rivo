@@ -1297,7 +1297,7 @@ export default function LibraryScreen({
           </View>
         </View>
       </Modal>
-      {/* Spotify MiniMixer Sheet Modal */}
+      {/* Rivo MiniMixer Sheet Modal */}
       <MiniMixerModal
         visible={Boolean(activeMixerPair)}
         onClose={() => setActiveMixerPair(null)}

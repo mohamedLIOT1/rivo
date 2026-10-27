@@ -14,6 +14,9 @@ src-tauri/*.key
 dist/
 build/
 bin/
+obj/
+desktop-app/bin/
+desktop-app/obj/
 publish/
 dist_ios/
 expo_ios_dist/
