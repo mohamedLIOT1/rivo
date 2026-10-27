@@ -169,25 +169,85 @@ export const AudioProvider = ({ children }) => {
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
 
-  // ── DJ Mix Mode & Crossfade State ──
-  const [isMixMode, setIsMixModeState] = useState(false);
-  const isMixModeRef = useRef(false);
-  const setIsMixMode = (val) => {
-    isMixModeRef.current = Boolean(val);
-    setIsMixModeState(Boolean(val));
-  };
-  const [mixDuration, setMixDurationState] = useState(8);
-  const mixDurationRef = useRef(8);
-  const setMixDuration = (sec) => {
-    const s = Math.max(2, Math.min(30, Number(sec) || 8));
-    mixDurationRef.current = s;
-    setMixDurationState(s);
-  };
+  // ── DJ Mix Mode & Crossfade State (Spotify-style 0-12s) ──
+  const [isMixMode, setIsMixModeState] = useState(true);
+  const isMixModeRef = useRef(true);
+  const [mixDuration, setMixDurationState] = useState(6);
+  const mixDurationRef = useRef(6);
   const [mixStyle, setMixStyleState] = useState('equal_power');
   const mixStyleRef = useRef('equal_power');
+  const nextSoundPlayingRef = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@rivo_mix_mode').then((val) => {
+      if (val !== null) {
+        const b = val === 'true';
+        isMixModeRef.current = b;
+        setIsMixModeState(b);
+      }
+    }).catch(() => {});
+    AsyncStorage.getItem('@rivo_crossfade_duration').then((val) => {
+      if (val !== null) {
+        const num = Number(val);
+        if (!isNaN(num)) {
+          mixDurationRef.current = num;
+          setMixDurationState(num);
+          if (num === 0) {
+            isMixModeRef.current = false;
+            setIsMixModeState(false);
+          }
+        }
+      }
+    }).catch(() => {});
+    AsyncStorage.getItem('@rivo_mix_style').then((val) => {
+      if (val) {
+        mixStyleRef.current = val;
+        setMixStyleState(val);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const setIsMixMode = (val) => {
+    const b = Boolean(val);
+    isMixModeRef.current = b;
+    setIsMixModeState(b);
+    AsyncStorage.setItem('@rivo_mix_mode', String(b)).catch(() => {});
+    if (!b) {
+      if (nextSoundRef.current) {
+        try { nextSoundRef.current.unloadAsync().catch(() => {}); } catch {}
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        nextSoundPlayingRef.current = false;
+      }
+    }
+  };
+
+  const setMixDuration = (sec) => {
+    const num = Math.max(0, Math.min(12, Number(sec) || 0));
+    mixDurationRef.current = num;
+    setMixDurationState(num);
+    AsyncStorage.setItem('@rivo_crossfade_duration', String(num)).catch(() => {});
+    if (num === 0) {
+      isMixModeRef.current = false;
+      setIsMixModeState(false);
+      AsyncStorage.setItem('@rivo_mix_mode', 'false').catch(() => {});
+      if (nextSoundRef.current) {
+        try { nextSoundRef.current.unloadAsync().catch(() => {}); } catch {}
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        nextSoundPlayingRef.current = false;
+      }
+    } else {
+      isMixModeRef.current = true;
+      setIsMixModeState(true);
+      AsyncStorage.setItem('@rivo_mix_mode', 'true').catch(() => {});
+    }
+  };
+
   const setMixStyle = (style) => {
     mixStyleRef.current = style;
     setMixStyleState(style);
+    AsyncStorage.setItem('@rivo_mix_style', style).catch(() => {});
   };
 
   const preloadNextTrackForDjMix = async () => {
@@ -225,7 +285,7 @@ export const AudioProvider = ({ children }) => {
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
-          shouldPlay: true,
+          shouldPlay: false,
           positionMillis: 0,
           volume: 0,
           progressUpdateIntervalMillis: 250,
@@ -233,6 +293,7 @@ export const AudioProvider = ({ children }) => {
       );
       nextSoundRef.current = sound;
       nextTrackRef.current = nTrack;
+      nextSoundPlayingRef.current = false;
       console.log(`[RivoDJ] ✅ Successfully cued "${nTrack.title}" for seamless crossfade`);
     } catch (err) {
       console.warn('[RivoDJ] Preload next track notice:', err?.message);
@@ -271,18 +332,33 @@ export const AudioProvider = ({ children }) => {
       const prevSound = soundRef.current;
       const newActiveSound = nextSoundRef.current;
       const newActiveTrack = nextTrackRef.current;
-      soundRef.current = newActiveSound;
-      nextSoundRef.current = null;
-      nextTrackRef.current = null;
-      currentTrackRef.current = newActiveTrack;
-      setCurrentTrack(newActiveTrack);
-      newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-      newActiveSound.setVolumeAsync(masterVol).catch(() => {});
+      const newActiveId = String(newActiveTrack._id || newActiveTrack.id || '');
+
       if (prevSound) {
         try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
         prevSound.stopAsync().catch(() => {});
         prevSound.unloadAsync().catch(() => {});
       }
+
+      soundRef.current = newActiveSound;
+      nextSoundRef.current = null;
+      nextTrackRef.current = null;
+      nextSoundPlayingRef.current = false;
+      loadedTrackIdRef.current = newActiveId;
+      currentTrackRef.current = newActiveTrack;
+      setCurrentTrack(newActiveTrack);
+
+      shouldBePlayingRef.current = true;
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      isLoadingRef.current = false;
+      setIsLoading(false);
+
+      newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+      newActiveSound.setVolumeAsync(masterVol).catch(() => {});
+
+      const isLiked = likedTrackIds.some(id => String(id) === newActiveId);
+      updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLiked, newActiveTrack);
     } else if (playNextTrackRef.current) {
       playNextTrackRef.current();
     }
@@ -732,18 +808,34 @@ export const AudioProvider = ({ children }) => {
         const prevSound = soundRef.current;
         const newActiveSound = nextSoundRef.current;
         const newActiveTrack = nextTrackRef.current;
-        soundRef.current = newActiveSound;
-        nextSoundRef.current = null;
-        nextTrackRef.current = null;
-        currentTrackRef.current = newActiveTrack;
-        setCurrentTrack(newActiveTrack);
-        newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-        newActiveSound.setVolumeAsync(volumeRef.current || 0.8).catch(() => {});
+        const newActiveId = String(newActiveTrack._id || newActiveTrack.id || '');
+
         if (prevSound) {
           try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
           prevSound.stopAsync().catch(() => {});
           prevSound.unloadAsync().catch(() => {});
         }
+
+        soundRef.current = newActiveSound;
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        nextSoundPlayingRef.current = false;
+        loadedTrackIdRef.current = newActiveId; // CRITICAL: keeps active sound alive!
+        currentTrackRef.current = newActiveTrack;
+        setCurrentTrack(newActiveTrack);
+
+        shouldBePlayingRef.current = true;
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        isLoadingRef.current = false;
+        setIsLoading(false);
+
+        newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+        const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
+        newActiveSound.setVolumeAsync(targetVol).catch(() => {});
+
+        const isLiked = likedTrackIds.some(id => String(id) === newActiveId);
+        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLiked, newActiveTrack);
         return;
       }
 
@@ -761,7 +853,15 @@ export const AudioProvider = ({ children }) => {
         return;
       }
 
-      // In Jam Session: ONLY the Host auto-advances when track finishes!
+      // Detach completed sound listener so its trailing events don't pause playback
+      if (soundRef.current) {
+        try { soundRef.current.setOnPlaybackStatusUpdate(null); } catch {}
+      }
+
+      shouldBePlayingRef.current = true;
+      isPlayingRef.current = true;
+
+      // Advance to next track
       if (jamSyncRef.current?.jamSession) {
         if (isJamHost() && playNextTrackRef.current) {
           playNextTrackRef.current();
@@ -788,7 +888,7 @@ export const AudioProvider = ({ children }) => {
       if (isPlayingRef.current !== status.isPlaying) {
         setIsPlaying(status.isPlaying);
         isPlayingRef.current = status.isPlaying;
-        if (!isLoadingRef.current) {
+        if (!isLoadingRef.current && !status.didJustFinish) {
           shouldBePlayingRef.current = status.isPlaying;
         }
         const isLikedTrack = currentTrackRef.current ? likedTrackIds.some(id => String(id) === String(currentTrackRef.current._id || currentTrackRef.current.id)) : false;
@@ -829,6 +929,10 @@ export const AudioProvider = ({ children }) => {
 
         // 2. Active Crossfade volume curves
         if (remainingSec <= mixSec && remainingSec > 0) {
+          if (nextSoundRef.current && !nextSoundPlayingRef.current) {
+            nextSoundPlayingRef.current = true;
+            nextSoundRef.current.playAsync().catch(() => {});
+          }
           const ratio = Math.max(0.01, remainingSec / mixSec);
           let factorA = ratio;
           let factorB = 1 - ratio;
@@ -905,37 +1009,7 @@ export const AudioProvider = ({ children }) => {
       }
     }
 
-    if (status.didJustFinish && ((status.positionMillis || 0) > 1000 || (status.durationMillis || 0) > 1000)) {
-      const finishedTrack = currentTrackRef.current;
-      if (finishedTrack && !isOfflineRef.current && autoDownloadFinishedRef.current) {
-        const fId = String(finishedTrack._id || finishedTrack.id || '');
-        const isAlreadyDl = (downloadedTracksRef.current || []).some(d => String(d._id || d.id) === fId);
-        if (!isAlreadyDl && !downloadingIdsRef.current[fId]) {
-          downloadTrack(finishedTrack)
-            .then((rec) => {
-              if (rec) {
-                setDownloadedTracks(prev => [rec, ...(prev || []).filter(t => String(t._id || t.id) !== fId)]);
-                showToast(`Auto-cached "${finishedTrack.title || 'Track'}" to Vault`, 'success');
-              }
-            })
-            .catch(() => {});
-        }
-      }
 
-      if (repeatModeRef.current === 'one') {
-        if (soundRef.current) soundRef.current.replayAsync().catch(() => {});
-      } else {
-        // In Jam Session: ONLY the Host auto-advances when track finishes!
-        // Listeners wait for the host's sync to prevent multiple queue pops / skips.
-        if (jamSyncRef.current?.jamSession) {
-          if (isJamHost() && playNextTrackRef.current) {
-            playNextTrackRef.current();
-          }
-        } else {
-          if (playNextTrackRef.current) playNextTrackRef.current();
-        }
-      }
-    }
   };
 
   // Keep state refs updated for lock screen actions
@@ -2035,8 +2109,13 @@ export const AudioProvider = ({ children }) => {
 
     if (i >= 0 && i < q.length - 1) {
       playTrack(q[i + 1], q);
-    } else if (repeatModeRef.current === 'all' && q.length > 0) {
-      playTrack(q[0], q);
+    } else if (q.length > 0) {
+      // Reached the end of playlist: loop back or trigger smart autoplay so music NEVER stops
+      if (repeatModeRef.current === 'all' || isMixModeRef.current) {
+        playTrack(q[0], q);
+      } else {
+        triggerAutoQueue();
+      }
     } else {
       triggerAutoQueue();
     }

@@ -1001,11 +1001,16 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     </View>
                   </View>
 
-                  {/* Crossfade Duration Selector */}
+                  {/* Crossfade Duration Selector (0-12s Spotify range) */}
                   <View style={styles.djParamSection}>
-                    <Text style={styles.djParamLabel}>CROSSFADE DURATION</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={styles.djParamLabel}>CROSSFADE DURATION</Text>
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#10b981', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                        {mixDuration === 0 ? 'OFF' : `${mixDuration}s CROSSFADE`}
+                      </Text>
+                    </View>
                     <View style={styles.djPillRow}>
-                      {[4, 8, 12, 16].map((sec) => (
+                      {[0, 2, 4, 6, 8, 10, 12].map((sec) => (
                         <TouchableOpacity
                           key={sec}
                           style={[styles.djPill, mixDuration === sec && styles.djPillActive]}
@@ -1013,7 +1018,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                           activeOpacity={0.7}
                         >
                           <Text style={[styles.djPillText, mixDuration === sec && styles.djPillTextActive]}>
-                            {sec}s
+                            {sec === 0 ? 'Off' : `${sec}s`}
                           </Text>
                         </TouchableOpacity>
                       ))}

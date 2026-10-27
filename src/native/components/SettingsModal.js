@@ -26,7 +26,16 @@ export default function SettingsModal({ visible, onClose }) {
   const { showToast } = useToast();
   const { isDark, toggleTheme } = useTheme();
   const { navStyle, setNavStyle, menuItems, isItemVisible, toggleMenuItemVisibility } = useNavPreferences();
-  const { autoDownloadFinished = true, toggleAutoDownloadFinished } = useAudioPlayer();
+  const { 
+    autoDownloadFinished = true, 
+    toggleAutoDownloadFinished,
+    isMixMode = true,
+    setIsMixMode,
+    mixDuration = 6,
+    setMixDuration,
+    mixStyle = 'equal_power',
+    setMixStyle
+  } = useAudioPlayer();
 
   const [isLockscreenEnabled, setIsLockscreenEnabled] = useState(true);
 
@@ -528,6 +537,111 @@ export default function SettingsModal({ visible, onClose }) {
                     )}
                   </View>
                 )}
+              </View>
+
+              {/* ── Playback & Rivo DJ Engine (Spotify-Style Crossfade & Automix) ── */}
+              <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
+                  <Radio size={18} color={colors.teal} />
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>PLAYBACK & RIVO DJ ENGINE</Text>
+                </View>
+
+                {/* Automix Switch */}
+                <View style={[styles.switchRow, { borderBottomColor: borderColor }]}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>Rivo DJ Automix</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>
+                      Allows seamless transitions between songs on playlists
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isMixMode}
+                    onValueChange={setIsMixMode}
+                    trackColor={{ false: '#374151', true: colors.mint }}
+                    thumbColor="#fdfbf7"
+                  />
+                </View>
+
+                {/* Crossfade Duration Selector (0s - 12s Spotify style) */}
+                <View style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: borderColor }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>Crossfade</Text>
+                    <Text style={[styles.valueMono, { color: colors.teal, fontWeight: 'bold' }]}>
+                      {mixDuration === 0 ? 'Off' : `${mixDuration}s`}
+                    </Text>
+                  </View>
+                  <Text style={[styles.switchDesc, { color: textMuted, marginBottom: 10 }]}>
+                    Blends consecutive tracks with professional curve transitions
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {[0, 2, 4, 6, 8, 10, 12].map((sec) => (
+                      <TouchableOpacity
+                        key={sec}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 6,
+                          borderWidth: 1.5,
+                          borderColor: mixDuration === sec ? colors.mint : borderColor,
+                          backgroundColor: mixDuration === sec ? 'rgba(23,163,152,0.2)' : 'transparent',
+                        }}
+                        onPress={() => setMixDuration?.(sec)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                            fontWeight: mixDuration === sec ? 'bold' : 'normal',
+                            color: mixDuration === sec ? colors.mint : textMuted,
+                          }}
+                        >
+                          {sec === 0 ? 'Off' : `${sec}s`}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* Transition Style Selector */}
+                <View style={{ paddingTop: 12 }}>
+                  <Text style={[styles.switchTitle, { color: textTitle, marginBottom: 4 }]}>Mix Transition Curve</Text>
+                  <Text style={[styles.switchDesc, { color: textMuted, marginBottom: 8 }]}>
+                    Equal Power (smooth club blend), Linear, or Bass Cut
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {[
+                      { id: 'equal_power', label: 'Equal Power' },
+                      { id: 'linear', label: 'Linear' },
+                      { id: 'bass_cut', label: 'Bass Cut' },
+                    ].map((st) => (
+                      <TouchableOpacity
+                        key={st.id}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 7,
+                          borderRadius: 6,
+                          borderWidth: 1.5,
+                          borderColor: mixStyle === st.id ? colors.mint : borderColor,
+                          backgroundColor: mixStyle === st.id ? 'rgba(23,163,152,0.2)' : 'transparent',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => setMixStyle?.(st.id)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: mixStyle === st.id ? 'bold' : 'normal',
+                            color: mixStyle === st.id ? colors.mint : textMuted,
+                          }}
+                        >
+                          {st.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
               </View>
 
               {/* ── App Preferences & Haptics ── */}
