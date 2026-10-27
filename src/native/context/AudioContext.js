@@ -281,7 +281,7 @@ export const AudioProvider = ({ children }) => {
       }
       if (nextUri.startsWith('/')) nextUri = `${API_BASE_URL}${nextUri}`;
 
-      const soundSource = nextUri.startsWith('http') ? { uri: nextUri, downloadFirst: true } : { uri: nextUri };
+      const soundSource = { uri: nextUri };
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
@@ -319,10 +319,28 @@ export const AudioProvider = ({ children }) => {
     const steps = 8;
     const stepMs = 120;
 
+    // Start playing nextSound immediately before fading in
+    if (nextSoundRef.current) {
+      nextSoundPlayingRef.current = true;
+      await nextSoundRef.current.setVolumeAsync(0.01).catch(() => {});
+      await nextSoundRef.current.playAsync().catch(() => {});
+    }
+
     for (let i = 1; i <= steps; i++) {
       const p = i / steps;
       let factorA = Math.cos((p * Math.PI) / 2);
       let factorB = Math.sin((p * Math.PI) / 2);
+      const style = mixStyleRef.current || 'auto';
+      if (style === 'rise') {
+        factorA = Math.pow(1 - p, 2);
+        factorB = Math.pow(p, 0.5);
+      } else if (style === 'blend' || style === 'bass_cut') {
+        factorA = Math.pow(1 - p, 1.5);
+        factorB = Math.pow(p, 0.7);
+      } else if (style === 'cut') {
+        factorA = p >= 0.5 ? 0 : 1;
+        factorB = p >= 0.5 ? 1 : 0;
+      }
       if (soundRef.current) soundRef.current.setVolumeAsync(Math.max(0.01, masterVol * factorA)).catch(() => {});
       if (nextSoundRef.current) nextSoundRef.current.setVolumeAsync(Math.max(0.01, masterVol * factorB)).catch(() => {});
       await new Promise(r => setTimeout(r, stepMs));
@@ -355,7 +373,8 @@ export const AudioProvider = ({ children }) => {
       setIsLoading(false);
 
       newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-      newActiveSound.setVolumeAsync(masterVol).catch(() => {});
+      await newActiveSound.setVolumeAsync(masterVol).catch(() => {});
+      await newActiveSound.playAsync().catch(() => {}); // GUARANTEES next song plays continuously
 
       const isLiked = likedTrackIds.some(id => String(id) === newActiveId);
       updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLiked, newActiveTrack);
@@ -903,7 +922,7 @@ export const AudioProvider = ({ children }) => {
     }
 
     // If user is currently seeking or just sought, protect against time jumps
-    if (isSeekingRef.current || (Date.now() - (lastSeekTimestampRef.current || 0) < 600)) {
+    if (isSeekingRef.current || (Date.now() - (lastSeekTimestampRef.current || 0) < 1200)) {
       return;
     }
 
@@ -936,12 +955,23 @@ export const AudioProvider = ({ children }) => {
           const ratio = Math.max(0.01, remainingSec / mixSec);
           let factorA = ratio;
           let factorB = 1 - ratio;
-          if (mixStyleRef.current === 'equal_power') {
+          const style = mixStyleRef.current || 'auto';
+          if (style === 'fade' || style === 'equal_power') {
             factorA = Math.cos(((1 - ratio) * Math.PI) / 2);
             factorB = Math.sin(((1 - ratio) * Math.PI) / 2);
-          } else if (mixStyleRef.current === 'bass_cut') {
-            factorA = Math.pow(ratio, 1.4);
+          } else if (style === 'rise') {
+            factorA = Math.pow(ratio, 2);
+            factorB = Math.pow(1 - ratio, 0.5);
+          } else if (style === 'blend' || style === 'bass_cut') {
+            factorA = Math.pow(ratio, 1.5);
             factorB = Math.pow(1 - ratio, 0.7);
+          } else if (style === 'cut') {
+            factorA = remainingSec <= 0.5 ? 0 : 1;
+            factorB = remainingSec <= 0.5 ? 1 : 0;
+          } else {
+            // 'auto': Spotify intelligent curve
+            factorA = Math.cos(((1 - ratio) * Math.PI) / 2);
+            factorB = Math.sin(((1 - ratio) * Math.PI) / 2);
           }
           const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
           if (soundRef.current) {
@@ -1562,7 +1592,7 @@ export const AudioProvider = ({ children }) => {
         });
       }
 
-      const soundSource = uri && uri.startsWith('http') ? { uri, downloadFirst: true } : { uri };
+      const soundSource = { uri };
       const initialPosMs = Math.round(safeTargetSec * 1000);
       const willPlay = Boolean(autoPlay && shouldBePlayingRef.current);
       const initialVol = volumeRef.current !== undefined ? volumeRef.current : 1.0;
@@ -1880,13 +1910,22 @@ export const AudioProvider = ({ children }) => {
     }
 
     try {
-      await soundRef.current.setPositionAsync(Math.round(safeSecs * 1000));
+      await soundRef.current.setPositionAsync(Math.round(safeSecs * 1000), {
+        toleranceMillisBefore: 0,
+        toleranceMillisAfter: 0,
+      });
+      if (wasPlaying) {
+        await soundRef.current.playAsync().catch(() => {});
+        shouldBePlayingRef.current = true;
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+      }
     } catch (err) {
       console.warn('[AudioContext] seekTo setPositionAsync failed:', err?.message);
     } finally {
       setTimeout(() => {
         isSeekingRef.current = false;
-      }, 500);
+      }, 1000);
     }
 
     if (wasPlaying) {
@@ -2425,7 +2464,8 @@ export const AudioProvider = ({ children }) => {
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress: progressRef.current,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
-    sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
+    sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
+
     isMixMode, setIsMixMode, mixDuration, setMixDuration, mixStyle, setMixStyle, triggerManualMix,
     playTrack, playPlaylist, togglePlay, seekTo, isShuffle, setIsShuffle, toggleShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, reorderQueue, clearQueue,

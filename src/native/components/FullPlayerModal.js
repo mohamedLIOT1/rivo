@@ -592,6 +592,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPercent, setScrubPercent] = useState(0);
   const [scrubTime, setScrubTime] = useState(0);
+  const seekbarViewRef = useRef(null);
   const seekbarLayoutRef = useRef({ x: 32, width: width - 64 });
 
   const seekPanResponder = useMemo(() => PanResponder.create({
@@ -601,7 +602,11 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
       const pageX = evt.nativeEvent.pageX;
       const barX = seekbarLayoutRef.current.x;
       const barW = Math.max(1, seekbarLayoutRef.current.width);
-      const touchX = Math.max(0, Math.min(barW, pageX - barX));
+      let touchX = pageX - barX;
+      if (evt.nativeEvent.locationX !== undefined && evt.nativeEvent.locationX >= 0 && evt.nativeEvent.locationX <= barW) {
+        touchX = evt.nativeEvent.locationX;
+      }
+      touchX = Math.max(0, Math.min(barW, touchX));
       const pct = Math.max(0, Math.min(1, touchX / barW));
       const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
       setIsScrubbing(true);
@@ -625,9 +630,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
       const touchX = Math.max(0, Math.min(barW, pageX - barX));
       const pct = Math.max(0, Math.min(1, touchX / barW));
       const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-      const targetSec = pct * effDur;
-      setIsScrubbing(false);
+      const targetSec = Math.max(0, Math.min(effDur, Math.round(pct * effDur)));
+      setScrubPercent(pct * 100);
+      setScrubTime(targetSec);
       seekTo(targetSec);
+      setTimeout(() => {
+        setIsScrubbing(false);
+      }, 350);
     },
     onPanResponderTerminate: () => {
       setIsScrubbing(false);
@@ -1001,46 +1010,54 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     </View>
                   </View>
 
-                  {/* Crossfade Duration Selector (0-12s Spotify range) */}
+                  {/* Transition Length Selector (Spotify 4/4 Bars) */}
                   <View style={styles.djParamSection}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <Text style={styles.djParamLabel}>CROSSFADE DURATION</Text>
+                      <Text style={styles.djParamLabel}>TRANSITION LENGTH</Text>
                       <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#10b981', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                        {mixDuration === 0 ? 'OFF' : `${mixDuration}s CROSSFADE`}
+                        {mixDuration === 0 ? 'OFF' : (mixDuration + 's')}
                       </Text>
                     </View>
                     <View style={styles.djPillRow}>
-                      {[0, 2, 4, 6, 8, 10, 12].map((sec) => (
+                      {[
+                        { sec: 0, label: 'Off' },
+                        { sec: 4, label: '2 bars' },
+                        { sec: 8, label: '4 bars' },
+                        { sec: 16, label: '8 bars' },
+                        { sec: 24, label: '12 bars' },
+                      ].map((item) => (
                         <TouchableOpacity
-                          key={sec}
-                          style={[styles.djPill, mixDuration === sec && styles.djPillActive]}
-                          onPress={() => setMixDuration(sec)}
+                          key={item.sec}
+                          style={[styles.djPill, mixDuration === item.sec && styles.djPillActive]}
+                          onPress={() => setMixDuration(item.sec)}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.djPillText, mixDuration === sec && styles.djPillTextActive]}>
-                            {sec === 0 ? 'Off' : `${sec}s`}
+                          <Text style={[styles.djPillText, mixDuration === item.sec && styles.djPillTextActive]}>
+                            {item.label}
                           </Text>
                         </TouchableOpacity>
                       ))}
                     </View>
                   </View>
 
-                  {/* Transition Style Selector */}
+                  {/* Transition Style Selector (5 Spotify Presets) */}
                   <View style={styles.djParamSection}>
-                    <Text style={styles.djParamLabel}>TRANSITION STYLE</Text>
+                    <Text style={styles.djParamLabel}>SPOTIFY TRANSITION STYLE</Text>
                     <View style={styles.djPillRow}>
                       {[
-                        { id: 'equal_power', label: 'Equal Power' },
-                        { id: 'linear', label: 'Linear' },
-                        { id: 'bass_cut', label: 'Bass Cut' },
+                        { id: 'auto', label: 'Auto' },
+                        { id: 'fade', label: 'Fade' },
+                        { id: 'rise', label: 'Rise' },
+                        { id: 'blend', label: 'Blend' },
+                        { id: 'cut', label: 'Cut' },
                       ].map((st) => (
                         <TouchableOpacity
                           key={st.id}
-                          style={[styles.djPill, mixStyle === st.id && styles.djPillActive]}
+                          style={[styles.djPill, (mixStyle || 'auto') === st.id && styles.djPillActive]}
                           onPress={() => setMixStyle(st.id)}
                           activeOpacity={0.7}
                         >
-                          <Text style={[styles.djPillText, mixStyle === st.id && styles.djPillTextActive]}>
+                          <Text style={[styles.djPillText, (mixStyle || 'auto') === st.id && styles.djPillTextActive]}>
                             {st.label}
                           </Text>
                         </TouchableOpacity>
@@ -1054,7 +1071,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     onPress={triggerManualMix}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.djTriggerBtnText}>⚡ TRIGGER CROSSFADE NOW</Text>
+                    <Text style={styles.djTriggerBtnText}>⚡ TRIGGER TRANSITION NOW</Text>
                   </TouchableOpacity>
                 </>
               )}

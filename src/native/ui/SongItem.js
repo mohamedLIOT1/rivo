@@ -6,17 +6,19 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { getTrackMusicalData, getCamelotColor } from '../utils/musicAnalysis';
 
-export default React.memo(function SongItem({ 
-  track, 
-  onPlay, 
-  onOpenActionMenu, 
+export default React.memo(function SongItem({
+  track,
+  onPlay,
+  onOpenActionMenu,
   onMorePress,
   isCurrent: propIsCurrent,
-  isLiked: propIsLiked
+  isLiked: propIsLiked,
+  showBpmKey: propShowBpmKey,
 }) {
   const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [], isMixMode } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
 
@@ -40,6 +42,10 @@ export default React.memo(function SongItem({
     const curArtist = (track.artist || '').trim().toLowerCase();
     return Boolean(curTitle && tTitle && curTitle === tTitle && (!curArtist || !tArtist || curArtist === tArtist));
   });
+
+  const shouldShowBpmKey = propShowBpmKey !== undefined ? propShowBpmKey : isMixMode;
+  const musicalData = React.useMemo(() => shouldShowBpmKey ? getTrackMusicalData(track) : null, [shouldShowBpmKey, track]);
+  const camelotColor = React.useMemo(() => musicalData ? getCamelotColor(musicalData.key) : null, [musicalData]);
 
   const rawCover = track.coverUrl || track.cover || track.coverImage || '';
   const coverSourceUri = imageError ? normalizeCoverUri(null, track) : normalizeCoverUri(rawCover, track);
@@ -77,13 +83,21 @@ export default React.memo(function SongItem({
         <Text style={[styles.title, !isDark && styles.titleLight, isCurrent && styles.activeTitle]} numberOfLines={1}>
           {track.title || 'Untitled'}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
           <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
             {track.artist || 'Unknown Artist'}
           </Text>
           {isDownloaded && (
             <View style={[styles.localBadge, !isDark && styles.localBadgeLight]}>
               <Text style={[styles.localBadgeText, !isDark && styles.localBadgeTextLight]}>OFFLINE</Text>
+            </View>
+          )}
+          {shouldShowBpmKey && musicalData && camelotColor && (
+            <View style={styles.bpmKeyRow}>
+              <View style={[styles.camelotBadge, { backgroundColor: camelotColor.bg, borderColor: camelotColor.border }]}>
+                <Text style={[styles.camelotBadgeText, { color: camelotColor.text }]}>{musicalData.key}</Text>
+              </View>
+              <Text style={styles.bpmBadgeText}>{musicalData.bpm} BPM</Text>
             </View>
           )}
         </View>
@@ -142,50 +156,45 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#141d1b',
-    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    marginBottom: 4,
+    backgroundColor: '#0c1815',
     borderWidth: 1,
-    borderColor: '#263330',
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    marginBottom: 8,
+    borderColor: '#152b24',
   },
   containerLight: {
     backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
   },
   activeContainer: {
-    borderColor: '#17a398',
-    backgroundColor: '#1a2623',
+    backgroundColor: '#122621',
+    borderColor: '#10b981',
   },
   activeContainerLight: {
-    borderColor: '#17a398',
-    backgroundColor: '#f0fdf9',
+    backgroundColor: '#f0fdf4',
+    borderColor: '#10b981',
   },
   coverBox: {
     width: 44,
     height: 44,
     borderRadius: 8,
     overflow: 'hidden',
-    backgroundColor: '#0b1110',
     position: 'relative',
+    backgroundColor: '#152b24',
   },
   coverBoxLight: {
     backgroundColor: '#f1f5f9',
   },
   coverPlaceholder: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0f1c19',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#152b24',
   },
   coverPlaceholderLight: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
   },
   cover: {
     width: '100%',
@@ -194,63 +203,88 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
     marginLeft: 10,
-    marginRight: 8,
+    marginRight: 6,
+    justifyContent: 'center',
   },
   title: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#ffffff',
+    fontWeight: '700',
+    color: '#e2e8f0',
+    letterSpacing: -0.2,
   },
   titleLight: {
-    color: '#0b1110',
+    color: '#0f172a',
   },
   activeTitle: {
-    color: '#26c4b7',
+    color: '#10b981',
   },
   artist: {
     fontSize: 11,
-    fontWeight: '600',
     color: '#94a3b8',
+    maxWidth: 140,
   },
   artistLight: {
     color: '#64748b',
   },
   localBadge: {
-    backgroundColor: '#0b1110',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#17a398',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 0.8,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   localBadgeLight: {
-    backgroundColor: '#f0fdf9',
-    borderColor: '#17a398',
+    backgroundColor: '#dcfce7',
+    borderColor: '#86efac',
   },
   localBadgeText: {
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
     fontSize: 8,
-    fontWeight: '900',
-    color: '#26c4b7',
+    fontWeight: '800',
+    color: '#10b981',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   localBadgeTextLight: {
-    color: '#0d9488',
+    color: '#15803d',
+  },
+  bpmKeyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 2,
+  },
+  camelotBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    borderWidth: 0.8,
+  },
+  camelotBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  bpmBadgeText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#94a3b8',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   iconBtn: {
     padding: 6,
   },
   playBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#17a398',
-    justifyContent: 'center',
+    width: 30,
+    height: 30,
+    borderRadius: 7,
+    backgroundColor: '#10b981',
     alignItems: 'center',
-    marginLeft: 4,
+    justifyContent: 'center',
+    marginLeft: 2,
   },
 });

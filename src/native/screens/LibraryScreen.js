@@ -56,6 +56,7 @@ import { isQuranContent } from '../../utils/quranUtils';
 import { deduplicateTrackList, getDownloadedTracks } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
+import MiniMixerModal from '../components/MiniMixerModal';
 
 const { width } = Dimensions.get('window');
 
@@ -78,6 +79,8 @@ export default function LibraryScreen({
     handleDownloadPlaylist,
     addMultipleToQueue,
     setQueue,
+    isMixMode,
+    setIsMixMode,
   } = useAudioPlayer();
   const {
     currentUser,
@@ -99,6 +102,8 @@ export default function LibraryScreen({
   const isOffline = appMode === 'offline';
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
   const [isReordering, setIsReordering] = useState(false);
+  const [activeMixerPair, setActiveMixerPair] = useState(null);
+  const [playlistTransitions, setPlaylistTransitions] = useState({});
 
   useEffect(() => {
     setIsReordering(false);
@@ -271,7 +276,14 @@ export default function LibraryScreen({
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
     setIsLoadingAi(true);
 
-    if (selectedView.isMix) {
+    const isMixPlaylist = Boolean(
+      selectedView.isMix ||
+      selectedView.mixed ||
+      (selectedView.name && selectedView.name.toLowerCase().includes('mix')) ||
+      isMixMode ||
+      isOffline
+    );
+    if (isMixPlaylist) {
       // 🎛️ DJ Mix: Only suggest local device-vault tracks that are already downloaded
       try {
         const offlineList = await getDownloadedTracks().catch(() => []);
@@ -360,7 +372,14 @@ export default function LibraryScreen({
     const q = songSearchQuery.toLowerCase().trim();
     const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
     let pool = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
-    if (selectedView?.isMix) {
+    const isMixPlaylist = Boolean(
+      selectedView?.isMix ||
+      selectedView?.mixed ||
+      (selectedView?.name && selectedView.name.toLowerCase().includes('mix')) ||
+      isMixMode ||
+      isOffline
+    );
+    if (isMixPlaylist) {
       pool = deduplicateTrackList([...(downloadedTracks || [])]);
     }
     return pool
@@ -864,7 +883,9 @@ export default function LibraryScreen({
                     <Text style={styles.playlistAddTitle} numberOfLines={1}>
                       {songSearchQuery.trim()
                         ? `SEARCH RESULTS (${searchResultsForAdd.length})`
-                        : `AI RECOMMENDATIONS FOR "${selectedView.name}"`}
+                        : ((selectedView?.isMix || isMixMode || (selectedView?.name && selectedView.name.toLowerCase().includes('mix')) || isOffline)
+                  ? `VAULT DOWNLOADS FOR "${selectedView.name}"`
+                  : `AI RECOMMENDATIONS FOR "${selectedView.name}"`)}
                     </Text>
                   </View>
                   {!songSearchQuery.trim() && (
@@ -1276,6 +1297,20 @@ export default function LibraryScreen({
           </View>
         </View>
       </Modal>
+      {/* Spotify MiniMixer Sheet Modal */}
+      <MiniMixerModal
+        visible={Boolean(activeMixerPair)}
+        onClose={() => setActiveMixerPair(null)}
+        fromTrack={activeMixerPair?.from}
+        toTrack={activeMixerPair?.to}
+        transition={activeMixerPair ? playlistTransitions[activeMixerPair.index] : null}
+        onSaveTransition={(newTrans) => {
+          if (activeMixerPair) {
+            setPlaylistTransitions(prev => ({ ...prev, [activeMixerPair.index]: newTrans }));
+            showToast(`Applied ${newTrans.style.toUpperCase()} (${newTrans.bars} bars) transition`, 'success');
+          }
+        }}
+      />
     </View>
   );
 }
@@ -1944,5 +1979,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  transitionChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingHorizontal: 12,
+  },
+  transitionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  transitionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#0c1d18',
+    borderWidth: 1,
+    borderColor: '#10b981',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    marginHorizontal: 8,
+  },
+  transitionChipText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#10b981',
+    letterSpacing: 0.3,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });

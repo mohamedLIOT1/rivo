@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.1.4',
+      version: '2.1.5',
       name: 'Rivo Web',
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     windows: {
-      version: '2.1.4',
+      version: '2.1.5',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.1.4.exe',
+      directFile: 'Rivo-v2.1.5.exe',
       mandatory: false,
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     android: {
-      version: '2.1.4',
-      build: 108,
+      version: '2.1.5',
+      build: 109,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.1.4.apk',
+      directFile: 'Rivo-v2.1.5.apk',
       mandatory: false,
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     ios: {
-      version: '2.1.4',
-      build: 108,
+      version: '2.1.5',
+      build: 109,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.1.4.ipa',
+      directFile: 'Rivo-v2.1.5.ipa',
       mandatory: false,
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     }
   }
 };
@@ -181,30 +181,30 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.1.4',
+      version: '2.1.5',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     windows: {
-      version: '2.1.4',
+      version: '2.1.5',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.1.4.exe',
+      directFile: 'Rivo-v2.1.5.exe',
       mandatory: false,
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     },
     android: {
-      version: '2.1.4',
-      build: 108,
+      version: '2.1.5',
+      build: 109,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.1.4.apk',
+      directFile: 'Rivo-v2.1.5.apk',
       mandatory: false,
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.',
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.',
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '2.1.4',
+        version: '2.1.5',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -212,13 +212,13 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '2.1.4',
-      build: 108,
+      version: '2.1.5',
+      build: 109,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.1.4.ipa',
+      directFile: 'Rivo-v2.1.5.ipa',
       mandatory: false,
-      notes: 'Update v2.1.4 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.5 • Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     }
   }
 };
