@@ -1,5 +1,5 @@
 /**
- * Spotify-Grade Web Audio API Engine & DJ Transition DSP
+ * Rivo DJ Web Audio API Engine & DJ Transition DSP
  */
 
 let audioCtx = null;
@@ -41,7 +41,7 @@ export function initAudioEngine(audioElement) {
   }
 
   isInitialized = true;
-  console.log('✅ Spotify-Grade Audio Engine Initialized');
+  console.log('✅ Rivo DJ Audio Engine Initialized');
 }
 
 /**
@@ -177,7 +177,7 @@ export function getAudioContext() {
 }
 
 /**
- * True Spotify Mix Web Audio API Engine
+ * True Rivo Mix Web Audio API Engine
  * Dual-buffer overlapping player with Equal Power crossfade curves,
  * dynamic BiquadFilter sweeps (High-pass bass cutoff on A, Low-pass open on B),
  * running on the sample-accurate hardware audio clock.
@@ -193,7 +193,7 @@ async function fetchAudioBuffer(ctx, url) {
   return ctx.decodeAudioData(ab);
 }
 
-export async function playTrueSpotifyMix({
+export async function playTrueRivoMix({
   songUrl1,
   songUrl2,
   transitionDuration = 16,
@@ -302,7 +302,9 @@ export async function playTrueSpotifyMix({
       }
     };
   } catch (err) {
-    console.warn('[SpotifyMix] Engine playback error:', err);
+    console.warn('[RivoDJ] Engine playback error:', err);
     return null;
   }
 }
+
+export const playTrueSpotifyMix = playTrueRivoMix;

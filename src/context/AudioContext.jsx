@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { initAudioEngine, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueSpotifyMix, getAudioContext } from '../utils/audioEngine';
+import { initAudioEngine, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueRivoMix, getAudioContext } from '../utils/audioEngine';
 import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicAnalysis';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
@@ -286,7 +286,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [isYtTrack, setIsYtTrack] = useState(false); // exposed for RAF-based lyrics sync
   const isYtTrackRef = useRef(false);
 
-  // Spotify Mix DJ Mode
+  // Rivo DJ Mix DJ Mode
   const [isMixMode, setIsMixMode] = useState(false);
   const [activeTransitions, setActiveTransitions] = useState(() => {
     try {
@@ -682,7 +682,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                                  activeTransRef.current?.[transKeyAlt];
               const transDuration = savedTrans?.duration || 8;
               const transStyle = savedTrans?.style || 'equal_power';
-              playTrueSpotifyMix({
+              playTrueRivoMix({
                 songUrl1: blobA,
                 songUrl2: blobB,
                 transitionDuration: transDuration,
@@ -2348,9 +2348,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     if (audioRef.current) {
       try {
-        audioRef.current.currentTime = s;
+        const dur = audioRef.current.duration;
+        if (isFinite(dur) && dur > 0) {
+          audioRef.current.currentTime = Math.min(s, Math.max(0, dur - 0.2));
+        } else {
+          audioRef.current.currentTime = s;
+        }
         audioRef.current.volume = volumeRef.current;
-      } catch {}
+      } catch (err) {
+        console.warn('[WebAudio] seekTo error:', err);
+      }
     }
 
     if (!isRemote && jamSessionRef.current && socketRef.current && canControlJam()) {
@@ -2641,7 +2648,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } catch {}
   }, []);
 
-  // ── Spotify Mix: Real Preview = seek current track near its end ──────────
+  // ── Rivo DJ Mix: Real Preview = seek current track near its end ──────────
   const previewDjTransition = useCallback(async (tA, tB, transConfig = null) => {
     if (!tA || !tB) return;
     resumeAudioContext();

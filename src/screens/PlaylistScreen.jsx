@@ -182,7 +182,7 @@ export default function PlaylistScreen({
     setIsSavingPlaylist(false);
   };
 
-  // Spotify Mix & DJ Transitions State
+  // Rivo Mix & DJ Transitions State
   const [isMixActive, setIsMixActive] = useState(Boolean(playlist?.isMix));
   const [transitions, setTransitions] = useState(playlist?.transitions || {});
   const [activeMixerPair, setActiveMixerPair] = useState(null); // { trackA, trackB, pairKey }

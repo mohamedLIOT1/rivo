@@ -59,6 +59,11 @@ export const AudioProvider = ({ children }) => {
   const playAbortControllerRef = useRef(null);
   const lastRemoteSeekRef = useRef(0);
   const lastSyncPayloadRef = useRef({ time: 0, trackId: '', timestamp: 0 });
+  const lastSeekTimestampRef = useRef(0);
+  const nextSoundRef = useRef(null);
+  const nextTrackRef = useRef(null);
+  const isMixPreloadingRef = useRef(false);
+  const isMixTransitioningRef = useRef(false);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -185,21 +190,100 @@ export const AudioProvider = ({ children }) => {
     setMixStyleState(style);
   };
 
+  const preloadNextTrackForDjMix = async () => {
+    if (isMixPreloadingRef.current || nextSoundRef.current || !isMixModeRef.current) return;
+    const q = queueRef.current;
+    if (!q || q.length <= 1) return;
+
+    const curId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+    const curIdx = q.findIndex(t => String(t._id || t.id) === curId);
+    const nextIdx = (curIdx >= 0) ? (curIdx + 1) % q.length : 0;
+    const nTrack = q[nextIdx];
+    if (!nTrack) return;
+
+    isMixPreloadingRef.current = true;
+    try {
+      const nId = String(nTrack._id || nTrack.id || '');
+      const local = (downloadedTracksRef.current || []).find(t => String(t._id || t.id) === nId);
+      let nextUri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || nTrack.nativeAudioUri || nTrack.localAudioUri;
+
+      if (!nextUri && !isOfflineRef.current) {
+        if (nTrack.resolvedAudioUrl && nTrack.resolvedAudioUrl.startsWith('http')) {
+          nextUri = nTrack.resolvedAudioUrl;
+        } else {
+          nextUri = await resolveAudioStream(nTrack).catch(() => null);
+        }
+      }
+
+      if (!nextUri) {
+        isMixPreloadingRef.current = false;
+        return;
+      }
+      if (nextUri.startsWith('/')) nextUri = `${API_BASE_URL}${nextUri}`;
+
+      const soundSource = nextUri.startsWith('http') ? { uri: nextUri, downloadFirst: true } : { uri: nextUri };
+      const { sound } = await Audio.Sound.createAsync(
+        soundSource,
+        {
+          shouldPlay: true,
+          positionMillis: 0,
+          volume: 0,
+          progressUpdateIntervalMillis: 250,
+        }
+      );
+      nextSoundRef.current = sound;
+      nextTrackRef.current = nTrack;
+      console.log(`[RivoDJ] ✅ Successfully cued "${nTrack.title}" for seamless crossfade`);
+    } catch (err) {
+      console.warn('[RivoDJ] Preload next track notice:', err?.message);
+      if (nextSoundRef.current) {
+        try { nextSoundRef.current.unloadAsync().catch(() => {}); } catch {}
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+      }
+    } finally {
+      isMixPreloadingRef.current = false;
+    }
+  };
+
   const triggerManualMix = async () => {
     if (!isPlayingRef.current || !soundRef.current) {
       if (playNextTrackRef.current) playNextTrackRef.current();
       return;
     }
-    try {
-      const curVol = volumeRef.current || 0.8;
-      const steps = 6;
-      for (let i = 1; i <= steps; i++) {
-        await new Promise(r => setTimeout(r, 70));
-        const v = curVol * (1 - i / steps);
-        if (soundRef.current) await soundRef.current.setVolumeAsync(Math.max(0, v)).catch(() => {});
+    if (!nextSoundRef.current) {
+      await preloadNextTrackForDjMix();
+    }
+    const masterVol = volumeRef.current || 0.8;
+    const steps = 8;
+    const stepMs = 120;
+
+    for (let i = 1; i <= steps; i++) {
+      const p = i / steps;
+      let factorA = Math.cos((p * Math.PI) / 2);
+      let factorB = Math.sin((p * Math.PI) / 2);
+      if (soundRef.current) soundRef.current.setVolumeAsync(Math.max(0.01, masterVol * factorA)).catch(() => {});
+      if (nextSoundRef.current) nextSoundRef.current.setVolumeAsync(Math.max(0.01, masterVol * factorB)).catch(() => {});
+      await new Promise(r => setTimeout(r, stepMs));
+    }
+
+    if (nextSoundRef.current && nextTrackRef.current) {
+      const prevSound = soundRef.current;
+      const newActiveSound = nextSoundRef.current;
+      const newActiveTrack = nextTrackRef.current;
+      soundRef.current = newActiveSound;
+      nextSoundRef.current = null;
+      nextTrackRef.current = null;
+      currentTrackRef.current = newActiveTrack;
+      setCurrentTrack(newActiveTrack);
+      newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+      newActiveSound.setVolumeAsync(masterVol).catch(() => {});
+      if (prevSound) {
+        try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
+        prevSound.stopAsync().catch(() => {});
+        prevSound.unloadAsync().catch(() => {});
       }
-    } catch {}
-    if (playNextTrackRef.current) {
+    } else if (playNextTrackRef.current) {
       playNextTrackRef.current();
     }
   };
@@ -642,6 +726,27 @@ export const AudioProvider = ({ children }) => {
         }
       }
 
+      // RIVO DJ ENGINE: Seamless handoff if next sound is already running
+      if (isMixModeRef.current && nextSoundRef.current && nextTrackRef.current) {
+        console.log('[RivoDJ] ⚡ Completing seamless crossfade to next track');
+        const prevSound = soundRef.current;
+        const newActiveSound = nextSoundRef.current;
+        const newActiveTrack = nextTrackRef.current;
+        soundRef.current = newActiveSound;
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        currentTrackRef.current = newActiveTrack;
+        setCurrentTrack(newActiveTrack);
+        newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+        newActiveSound.setVolumeAsync(volumeRef.current || 0.8).catch(() => {});
+        if (prevSound) {
+          try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
+          prevSound.stopAsync().catch(() => {});
+          prevSound.unloadAsync().catch(() => {});
+        }
+        return;
+      }
+
       if (repeatModeRef.current === 'one') {
         shouldBePlayingRef.current = true;
         isPlayingRef.current = true;
@@ -697,6 +802,11 @@ export const AudioProvider = ({ children }) => {
       }
     }
 
+    // If user is currently seeking or just sought, protect against time jumps
+    if (isSeekingRef.current || (Date.now() - (lastSeekTimestampRef.current || 0) < 600)) {
+      return;
+    }
+
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
     const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
     const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
@@ -707,21 +817,34 @@ export const AudioProvider = ({ children }) => {
       progressRef.current = { currentTime: newCurrentTime, duration: newDuration };
       setProgress({ currentTime: newCurrentTime, duration: newDuration });
 
-      // Smooth DJ crossfade volume ramp down during final mixDuration seconds
+      // RIVO DJ ENGINE: Dual-Player Seamless Auto-Crossfade
       if (isMixModeRef.current && status.isPlaying && statusDurSec > 12) {
         const remainingSec = statusDurSec - newCurrentTime;
         const mixSec = mixDurationRef.current || 8;
+
+        // 1. Cue next track 4 seconds before the transition zone
+        if (remainingSec <= (mixSec + 4) && remainingSec > 0 && !nextSoundRef.current && !isMixPreloadingRef.current) {
+          preloadNextTrackForDjMix();
+        }
+
+        // 2. Active Crossfade volume curves
         if (remainingSec <= mixSec && remainingSec > 0) {
-          const ratio = Math.max(0.05, remainingSec / mixSec);
-          let factor = ratio;
+          const ratio = Math.max(0.01, remainingSec / mixSec);
+          let factorA = ratio;
+          let factorB = 1 - ratio;
           if (mixStyleRef.current === 'equal_power') {
-            factor = Math.sin((ratio * Math.PI) / 2);
+            factorA = Math.cos(((1 - ratio) * Math.PI) / 2);
+            factorB = Math.sin(((1 - ratio) * Math.PI) / 2);
           } else if (mixStyleRef.current === 'bass_cut') {
-            factor = Math.pow(ratio, 1.4);
+            factorA = Math.pow(ratio, 1.4);
+            factorB = Math.pow(1 - ratio, 0.7);
           }
-          const targetVol = (volumeRef.current || 0.8) * factor;
+          const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
           if (soundRef.current) {
-            soundRef.current.setVolumeAsync(Math.max(0.02, Math.min(1, targetVol))).catch(() => {});
+            soundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1, targetVol * factorA))).catch(() => {});
+          }
+          if (nextSoundRef.current) {
+            nextSoundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1, targetVol * factorB))).catch(() => {});
           }
         }
       }
@@ -1196,6 +1319,14 @@ export const AudioProvider = ({ children }) => {
         }
       }
 
+      if (nextSoundRef.current) {
+        const prevNext = nextSoundRef.current;
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        try { prevNext.setOnPlaybackStatusUpdate(null); } catch {}
+        prevNext.stopAsync().catch(() => {});
+        prevNext.unloadAsync().catch(() => {});
+      }
       if (soundRef.current) {
         const prevSound = soundRef.current;
         soundRef.current = null;
@@ -1640,7 +1771,10 @@ export const AudioProvider = ({ children }) => {
     }
     const safeSecs = Math.max(0, Number(secs) || 0);
     const wasPlaying = isPlayingRef.current;
+
     isSeekingRef.current = true;
+    lastSeekTimestampRef.current = Date.now();
+
     progressRef.current = { ...progressRef.current, currentTime: safeSecs };
     setProgress(p => ({ ...p, currentTime: safeSecs }));
     if (playbackStatusRef.current) {
@@ -1673,10 +1807,12 @@ export const AudioProvider = ({ children }) => {
 
     try {
       await soundRef.current.setPositionAsync(Math.round(safeSecs * 1000));
-    } catch {} finally {
+    } catch (err) {
+      console.warn('[AudioContext] seekTo setPositionAsync failed:', err?.message);
+    } finally {
       setTimeout(() => {
         isSeekingRef.current = false;
-      }, 200);
+      }, 500);
     }
 
     if (wasPlaying) {

@@ -574,6 +574,28 @@ export async function embedId3v2TagsToMp3File(fileUri, { title, artist, album, l
     const fileInfo = await FileSystem.getInfoAsync(fileUri);
     if (!fileInfo.exists || fileInfo.size < 1000) return false;
 
+    // CRITICAL: NEVER embed ID3 tags into an MP4/M4A or WebM file!
+    // Prepending an ID3 header corrupts MP4 atom offsets (stco/stts tables), breaking seekability completely.
+    const headSample = await FileSystem.readAsStringAsync(fileUri, {
+      encoding: FileSystem.EncodingType.Base64,
+      length: 64,
+      position: 0,
+    }).catch(() => null);
+
+    if (headSample) {
+      const bytes = base64ToUint8Array(headSample);
+      // MP4 / M4A begins with 'ftyp' atom at bytes 4..7
+      if (bytes.length >= 8 && bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+        console.log('[ID3] Skipping ID3 embedding: file is an MP4/M4A container, preserving seek table.');
+        return false;
+      }
+      // WebM / Matroska begins with 0x1A 0x45 0xDF 0xA3
+      if (bytes.length >= 4 && bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) {
+        console.log('[ID3] Skipping ID3 embedding: file is a WebM container, preserving seekability.');
+        return false;
+      }
+    }
+
     const frames = [];
     const fTitle = makeId3TextFrame('TIT2', title);
     if (fTitle) frames.push(fTitle);
@@ -1048,7 +1070,8 @@ export const downloadTrack = async (track, onProgress) => {
 
   // If activeStream was resolved:
   if (activeStream && typeof activeStream === 'string' && activeStream.startsWith('http') && !activeStream.includes('youtube.com/watch') && !activeStream.includes('youtu.be/')) {
-    const ext = activeStream.includes('.m4a') ? 'm4a' : 'mp3';
+    const isM4a = activeStream.includes('.m4a') || activeStream.includes('mime=audio%2Fmp4') || activeStream.includes('mime=audio/mp4') || activeStream.includes('itag=140');
+    const ext = isM4a ? 'm4a' : 'mp3';
     rawCandidates.push({ url: activeStream, ext, source: 'active-online-stream' });
     if (activeStream.includes('googlevideo.com')) {
       directGoogleStream = activeStream;

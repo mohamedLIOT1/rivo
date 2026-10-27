@@ -1,5 +1,5 @@
 /**
- * Spotify Mix & DJ Intelligence Engine:
+ * Rivo DJ Engine & Music Intelligence:
  * - BPM Estimation & Beat Alignment
  * - Camelot Wheel Harmonic Key Detection & Compatibility
  * - Transition Curve & Filter Parameter Calculator

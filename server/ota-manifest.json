@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.1.1",
+  "version": "2.1.2",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
   "notes": "تحديث هوائي فوري (3.27 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
   "notesEn": "Instant in-app OTA update (3.27 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3424351,
+  "bundleSize": 3428976,
   "sizeMb": "3.27 MB",
-  "updatedAt": "2026-10-27T10:36:38.975Z"
+  "updatedAt": "2026-10-27T11:36:02.496Z"
 }

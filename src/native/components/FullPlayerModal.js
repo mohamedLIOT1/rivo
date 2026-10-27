@@ -589,12 +589,50 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const progressPercent = effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0;
   const coverUri = normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover, currentTrack);
 
-  const handleSeekPress = (e) => {
-    const { locationX } = e.nativeEvent;
-    const barWidth = width - 64;
-    const targetPercent = Math.max(0, Math.min(1, locationX / barWidth));
-    seekTo(targetPercent * effectiveDuration);
-  };
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubPercent, setScrubPercent] = useState(0);
+  const [scrubTime, setScrubTime] = useState(0);
+  const seekbarLayoutRef = useRef({ x: 32, width: width - 64 });
+
+  const seekPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => !currentTrack?.isLive,
+    onMoveShouldSetPanResponder: () => !currentTrack?.isLive,
+    onPanResponderGrant: (evt) => {
+      const pageX = evt.nativeEvent.pageX;
+      const barX = seekbarLayoutRef.current.x;
+      const barW = Math.max(1, seekbarLayoutRef.current.width);
+      const touchX = Math.max(0, Math.min(barW, pageX - barX));
+      const pct = Math.max(0, Math.min(1, touchX / barW));
+      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+      setIsScrubbing(true);
+      setScrubPercent(pct * 100);
+      setScrubTime(Math.round(pct * effDur));
+    },
+    onPanResponderMove: (evt) => {
+      const pageX = evt.nativeEvent.pageX;
+      const barX = seekbarLayoutRef.current.x;
+      const barW = Math.max(1, seekbarLayoutRef.current.width);
+      const touchX = Math.max(0, Math.min(barW, pageX - barX));
+      const pct = Math.max(0, Math.min(1, touchX / barW));
+      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+      setScrubPercent(pct * 100);
+      setScrubTime(Math.round(pct * effDur));
+    },
+    onPanResponderRelease: (evt) => {
+      const pageX = evt.nativeEvent.pageX;
+      const barX = seekbarLayoutRef.current.x;
+      const barW = Math.max(1, seekbarLayoutRef.current.width);
+      const touchX = Math.max(0, Math.min(barW, pageX - barX));
+      const pct = Math.max(0, Math.min(1, touchX / barW));
+      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+      const targetSec = pct * effDur;
+      setIsScrubbing(false);
+      seekTo(targetSec);
+    },
+    onPanResponderTerminate: () => {
+      setIsScrubbing(false);
+    }
+  }), [currentTrack?.isLive, duration, currentTrack?.duration, seekTo]);
 
   const handleVolumePress = (e) => {
     try {
@@ -763,14 +801,23 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
               {/* ── Seekbar with White Circular Thumb Indicator ── */}
               <View style={styles.seekSection}>
-                <TouchableOpacity activeOpacity={1} onPress={currentTrack?.isLive ? undefined : handleSeekPress} style={styles.seekTouchArea}>
-                  <View style={styles.seekTrack}>
-                    <View style={[styles.seekFill, { width: currentTrack?.isLive ? '100%' : `${progressPercent}%`, backgroundColor: currentTrack?.isLive ? '#ef4444' : colors.mint }]} />
+                <View
+                  {...seekPanResponder.panHandlers}
+                  onLayout={(e) => {
+                    const { width: layoutW, x: layoutX } = e.nativeEvent.layout;
+                    if (layoutW > 0) {
+                      seekbarLayoutRef.current = { x: layoutX || 32, width: layoutW };
+                    }
+                  }}
+                  style={styles.seekTouchArea}
+                >
+                  <View style={styles.seekTrack} pointerEvents="none">
+                    <View style={[styles.seekFill, { width: currentTrack?.isLive ? '100%' : `${isScrubbing ? scrubPercent : progressPercent}%`, backgroundColor: currentTrack?.isLive ? '#ef4444' : colors.mint }]} pointerEvents="none" />
                     {!currentTrack?.isLive && (
-                      <View style={[styles.seekThumb, { left: `${Math.max(0, Math.min(100, progressPercent))}%` }]} />
+                      <View style={[styles.seekThumb, { left: `${Math.max(0, Math.min(100, isScrubbing ? scrubPercent : progressPercent))}%` }]} pointerEvents="none" />
                     )}
                   </View>
-                </TouchableOpacity>
+                </View>
                 <View style={styles.timeRow}>
                   {currentTrack?.isLive ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -779,7 +826,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                     </View>
                   ) : (
                     <>
-                      <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
+                      <Text style={[styles.timeText, isScrubbing && { color: colors.mint, fontWeight: 'bold' }]}>{formatTime(isScrubbing ? scrubTime : currentTime)}</Text>
                       <Text style={styles.timeText}>{formatTime(effectiveDuration || duration)}</Text>
                     </>
                   )}
@@ -895,13 +942,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
               </View>
             </View>
 
-            {/* ── Spotify DJ Engine & Mix Controller Card ── */}
+            {/* ── Rivo DJ Engine & Mix Controller Card ── */}
             <View style={[styles.djDeckCard, isMixMode && styles.djDeckCardActive]}>
               <View style={styles.djHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                   <Sliders size={18} color={isMixMode ? '#10b981' : '#94a3b8'} strokeWidth={2.5} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.djTitle}>SPOTIFY DJ ENGINE</Text>
+                    <Text style={styles.djTitle}>RIVO DJ ENGINE</Text>
                     <Text style={styles.djSubtitle} numberOfLines={1}>
                       {isMixMode ? 'AUTO BEATMATCH & SEAMLESS CROSSFADE ACTIVE' : 'DJ MIX MODE OFF'}
                     </Text>
