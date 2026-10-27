@@ -618,7 +618,7 @@ export default function LibraryScreen({
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <CassetteTag label="CRATE PLAYLIST" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+                          <CassetteTag label={selectedView.isMix ? "🎛️ DJ MIX" : "CRATE PLAYLIST"} bg={!isDark ? '#0b1110' : colors.ink} textColor={selectedView.isMix ? '#f59e0b' : colors.tealLight} />
                           <TouchableOpacity
                             style={[
                               styles.visibilityHeroPill,
@@ -663,7 +663,7 @@ export default function LibraryScreen({
                           onPress={() => handlePlayPlaylist(selectedView, false)}
                         >
                           <Play size={14} color={colors.ink} fill={colors.ink} />
-                          <Text style={styles.playHeroBtnText}>PLAY</Text>
+                          <Text style={styles.playHeroBtnText}>{selectedView.isMix ? "PLAY DJ MIX" : "PLAY"}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.shuffleHeroBtn}
@@ -929,6 +929,11 @@ export default function LibraryScreen({
                         {(playlist.tracks || playlist.trackIds || []).length} TRACKS
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        {playlist.isMix && (
+                          <View style={{ backgroundColor: '#17a398', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 2 }}>
+                            <Text style={{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }}>🎛️ MIX</Text>
+                          </View>
+                        )}
                         {playlist.isPublic !== false ? (
                           <>
                             <Globe size={10} color="#17a398" />

@@ -1,6 +1,6 @@
 {
-  "version": "2.0.1",
-  "notes": "Rivo Desktop v2.0.1 - DJ Mix Engine with Web Audio API sample-accurate crossfading, Biquad filter sweeps, offline mix download gate, and auto-sync.",
+  "version": "2.0.2",
+  "notes": "Rivo Desktop v2.0.2 - Interactive DJ Mix Creator with device track recommendations and dual-buffer zero latency mixing.",
   "pub_date": "2026-10-27T08:46:50.194Z",
   "platforms": {
     "windows-x86_64": {

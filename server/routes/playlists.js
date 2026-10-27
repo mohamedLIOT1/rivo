@@ -316,14 +316,17 @@ router.post('/create', auth, async (req, res) => {
     if (cleanCover.toLowerCase().startsWith('javascript:') || cleanCover.toLowerCase().startsWith('data:text/html')) {
       cleanCover = '';
     }
+    const isMix = Boolean(req.body.isMix || (cleanName && cleanName.toUpperCase().includes('MIX')));
+    const trackIds = Array.isArray(req.body.trackIds) ? req.body.trackIds.map(String) : [];
     const newPl = {
       id: `pl-${Date.now()}`,
       name: cleanName,
       cover: cleanCover,
-      trackIds: [],
+      trackIds: trackIds,
       isLikedSongs: false,
       isPublic: req.body.isPublic !== false,
-      isQuran: Boolean(req.body.isQuran)
+      isQuran: Boolean(req.body.isQuran),
+      isMix: isMix
     };
     u.playlists.push(newPl);
     await u.save();

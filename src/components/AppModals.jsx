@@ -207,6 +207,7 @@ export default function AppModals({
         onClose={() => setIsCreatePlaylistOpen(false)}
         onCreatePlaylist={handleCreatePlaylist}
         isQuran={currentScreen === 'quran' || libraryMode === 'quran'}
+        allTracks={tracks}
       />
 
       <AddToPlaylistModal

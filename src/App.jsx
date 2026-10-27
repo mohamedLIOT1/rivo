@@ -264,9 +264,10 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     } catch {}
   };
 
-  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true, isQuranExplicit = false, isMixExplicit = false) => {
+  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true, isQuranExplicit = false, isMixExplicit = false, initialTrackIds = []) => {
     const isQ = isQuranExplicit || currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent({ title: name, description });
     const isMix = Boolean(isMixExplicit || (name && name.toUpperCase().includes('MIX')));
+    const trackIds = Array.isArray(initialTrackIds) ? initialTrackIds.map(String) : [];
     const newPl = {
       id: `pl-${Date.now()}`,
       name,
@@ -275,14 +276,14 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
       isPublic: isPublic !== false,
       isQuran: isQ,
       isMix: isMix,
-      trackIds: [],
+      trackIds: trackIds,
     };
     setPlaylists(prev => [...prev, newPl]);
     setSelectedPlaylist(newPl);
     navigateTo('playlist');
 
     try {
-      await dataService.createPlaylist(name, description, cover, isPublic, isQ);
+      await dataService.createPlaylist(name, description, cover, isPublic, isQ, isMix, trackIds);
     } catch {}
   };
 

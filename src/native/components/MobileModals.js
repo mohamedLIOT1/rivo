@@ -111,6 +111,7 @@ export default function MobileModals({
           visible={isCreatePlaylistOpen}
           onClose={() => setIsCreatePlaylistOpen(false)}
           onSuccess={() => setIsCreatePlaylistOpen(false)}
+          allTracks={propTracks}
         />
       )}
 

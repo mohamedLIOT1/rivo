@@ -72,11 +72,11 @@ export const dataService = {
   },
 
   // ── Playlists ───────────────────────────────────────────────────────
-  async createPlaylist(name, description, cover = '', isPublic = true, isQuran = false) {
+  async createPlaylist(name, description, cover = '', isPublic = true, isQuran = false, isMix = false, trackIds = []) {
     const res = await fetch(`${API_BASE_URL}/api/playlists/create`, {
       method: 'POST',
       headers: getHeaders(),
-      body: JSON.stringify({ name, description, cover, isPublic, isQuran }),
+      body: JSON.stringify({ name, description, cover, isPublic, isQuran, isMix, trackIds }),
     });
     return await res.json();
   },
