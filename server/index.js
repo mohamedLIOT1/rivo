@@ -138,7 +138,7 @@ const APP_VERSIONS_DATA = {
     web: {
       version: '2.1.2',
       name: 'Rivo Web',
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     },
     windows: {
       version: '2.1.2',
@@ -146,7 +146,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo-v2.1.2.exe',
       mandatory: false,
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     },
     android: {
       version: '2.1.2',
@@ -155,7 +155,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo-v2.1.2.apk',
       mandatory: false,
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     },
     ios: {
       version: '2.1.2',
@@ -164,7 +164,7 @@ const APP_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo-v2.1.2.ipa',
       mandatory: false,
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     }
   }
 };
@@ -183,7 +183,7 @@ const BETA_VERSIONS_DATA = {
     web: {
       version: '2.1.2',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     },
     windows: {
       version: '2.1.2',
@@ -191,7 +191,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo-v2.1.2.exe',
       mandatory: false,
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     },
     android: {
       version: '2.1.2',
@@ -200,11 +200,11 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
       directFile: 'Rivo-v2.1.2.apk',
       mandatory: false,
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.',
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.',
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '2.1.1',
+        version: '2.1.2',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -218,7 +218,7 @@ const BETA_VERSIONS_DATA = {
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
       directFile: 'Rivo-v2.1.2.ipa',
       mandatory: false,
-      notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
+      notes: 'Update v2.1.2 • Rivo DJ Engine, true dual-deck crossfade mix, offline scrubbing & seeking fix, and performance improvements.'
     }
   }
 };
