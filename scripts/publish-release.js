@@ -66,7 +66,7 @@ async function publish() {
       if (match) ipaPath = path.join(dir, match);
     }
     if (!exePath) {
-      const match = files.find(f => f.endsWith('.exe') && (f.includes('2.0.4') || f.includes(version))) ||
+      const match = files.find(f => f.endsWith('.exe') && f.includes(version)) ||
                     files.find(f => f === 'Rivo.exe');
       if (match) exePath = path.join(dir, match);
     }
@@ -135,7 +135,7 @@ async function publish() {
     }
     if (exeBytes) {
       assetsToUpload.push({ name: `Rivo-v${version}.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
-      assetsToUpload.push({ name: `Rivo-v2.0.4.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
+      assetsToUpload.push({ name: `Rivo.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
     }
 
     for (const asset of assetsToUpload) {
