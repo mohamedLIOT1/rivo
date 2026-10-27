@@ -264,8 +264,9 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     } catch {}
   };
 
-  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true, isQuranExplicit = false) => {
+  const handleCreatePlaylist = async (name, description, cover = '', isPublic = true, isQuranExplicit = false, isMixExplicit = false) => {
     const isQ = isQuranExplicit || currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent({ title: name, description });
+    const isMix = Boolean(isMixExplicit || (name && name.toUpperCase().includes('MIX')));
     const newPl = {
       id: `pl-${Date.now()}`,
       name,
@@ -273,6 +274,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
       cover: cover || '',
       isPublic: isPublic !== false,
       isQuran: isQ,
+      isMix: isMix,
       trackIds: [],
     };
     setPlaylists(prev => [...prev, newPl]);

@@ -214,6 +214,7 @@ export default function PlaylistScreen({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editName, setEditName] = useState(playlist?.name || '');
   const [editDesc, setEditDesc] = useState(playlist?.description || '');
+  const [editIsMix, setEditIsMix] = useState(Boolean(playlist?.isMix || playlist?.name?.toUpperCase()?.includes('MIX')));
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -657,14 +658,31 @@ export default function PlaylistScreen({
     setIsLoadingRecs(false);
   };
 
-  const handleSaveDetails = () => {
+  const handleSaveDetails = async () => {
     if (!editName.trim()) return;
-    onUpdatePlaylist({
+    const isM = Boolean(editIsMix || editName.toUpperCase().includes('MIX'));
+    const updated = {
       ...playlist,
       name: editName.trim(),
       description: editDesc.trim(),
-    });
+      isMix: isM
+    };
+    onUpdatePlaylist(updated);
+    setIsMixActive(isM);
+    setIsMixMode?.(isM);
     setIsEditModalOpen(false);
+
+    try {
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ isMix: isM, transitions })
+      });
+    } catch {}
   };
 
   const handleDelete = () => {
@@ -1015,6 +1033,31 @@ export default function PlaylistScreen({
                 />
               </div>
 
+              {!isQuran && (
+                <div
+                  onClick={() => setEditIsMix(!editIsMix)}
+                  className={`p-3 brutal-border flex items-center justify-between cursor-pointer transition-colors ${
+                    editIsMix ? 'bg-[#17a398]/20 border-[#17a398]' : 'bg-[#ede5d3]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🎛️</span>
+                    <div>
+                      <div className="text-xs font-mono font-black text-[#082621]">DJ MIX PLAYLIST</div>
+                      <div className="text-[10px] text-[#082621]/70">Seamless dual-buffer crossfading</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`brutal-btn px-2.5 py-1 brutal-border text-[10px] font-mono font-black uppercase ${
+                      editIsMix ? 'bg-[#17a398] text-[#0b1110]' : 'bg-[#fdfbf7] text-[#082621]'
+                    }`}
+                  >
+                    {editIsMix ? 'MIX ON' : 'OFF'}
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   onClick={() => setIsEditModalOpen(false)}
@@ -1150,6 +1193,24 @@ export default function PlaylistScreen({
                 </button>
               )}
             </div>
+          )}
+
+          {/* DJ Mix Mode Toggle Button */}
+          {!isQuran && playlistTracks.length > 0 && (
+            <button
+              onClick={handleToggleMix}
+              className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
+                isMixActive
+                  ? 'bg-[#17a398] text-[#0b1110] shadow-[0_0_12px_rgba(23,163,152,0.4)]'
+                  : isDark 
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' 
+                    : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] border-black'
+              }`}
+              title={isMixActive ? "DJ Mix Mode is active (click to disable)" : "Enable DJ Mix Mode for this playlist"}
+            >
+              <span>🎛️</span>
+              <span>{isMixActive ? 'DJ MIX: ON' : 'DJ MIX: OFF'}</span>
+            </button>
           )}
 
           {playlistTracks.length > 0 && (

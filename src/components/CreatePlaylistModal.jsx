@@ -7,6 +7,7 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist,
   const [cover, setCover] = useState('');
   const [coverPreview, setCoverPreview] = useState('');
   const [isPublic, setIsPublic] = useState(true);
+  const [isMix, setIsMix] = useState(false);
 
   if (!isOpen) return null;
 
@@ -25,12 +26,13 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist,
     e.preventDefault();
     if (!title.trim()) return;
     const defaultCover = `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
-    onCreatePlaylist(title.trim(), description.trim(), cover || defaultCover, isPublic, isQuran);
+    onCreatePlaylist(title.trim(), description.trim(), cover || defaultCover, isPublic, isQuran, isMix);
     setTitle('');
     setDescription('');
     setCover('');
     setCoverPreview('');
     setIsPublic(true);
+    setIsMix(false);
     onClose();
   };
 
@@ -112,6 +114,36 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist,
               {isPublic ? 'PUBLIC' : 'PRIVATE'}
             </button>
           </div>
+
+          {/* DJ Mix Mode Toggle */}
+          {!isQuran && (
+            <div 
+              onClick={() => setIsMix(!isMix)}
+              className={`p-3 brutal-border flex items-center justify-between cursor-pointer transition-colors ${
+                isMix ? 'bg-[#17a398]/20 border-[#17a398]' : 'bg-[#ede5d3]'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="text-lg">🎛️</span>
+                <div>
+                  <p className="text-xs font-mono font-black text-[#082621]">
+                    DJ MIX PLAYLIST
+                  </p>
+                  <p className="text-[10px] text-[#082621]/70">
+                    {isMix ? 'Dual-buffer seamless crossfading enabled' : 'Regular audio playlist'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`brutal-btn px-3 py-1 brutal-border text-[10px] font-mono font-black uppercase ${
+                  isMix ? 'bg-[#17a398] text-[#0b1110]' : 'bg-[#fdfbf7] text-[#082621]'
+                }`}
+              >
+                {isMix ? 'MIX ON' : 'OFF'}
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
