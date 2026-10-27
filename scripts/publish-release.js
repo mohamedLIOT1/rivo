@@ -27,27 +27,28 @@ async function publish() {
   const version = pkg.version || '1.9.9.8';
   const tag = `v${version}`;
   const releaseName = `Rivo v${version} (Beta)`;
-  const releaseBody = `## Rivo v${version} (Beta Release)
+    const releaseBody = `## Rivo v${version} (Mobile v2.0.8 • Desktop v2.0.1)
 
-### 📱 Draggable Edge-Docking Navigation Menu
-- Floating navigation FAB is now smoothly draggable across the screen.
-- Dragging toward left (<18%) or right (>82%) screen edges collapses it into a sleek docked handle.
-- Single tap on docked handle springs it right back to bottom-center with spring physics.
-- Fixed duplicate 'X' close button when expanded, and expanded radial spacing with frosted pill backdrops.
+### 🎛️ Spotify-Grade DJ Mix Engine
+- Dual-buffer sample-accurate Web Audio API playback engine with hardware clock synchronization.
+- Equal Power volume curves & BiquadFilter sweeps (High-pass bass cutoff on track A, Low-pass open on track B).
+- Seamless playback from IndexedDB Blob URLs completely resolving CORS & network latency.
 
-### 🔒 Full-Screen Lockscreen Player & Quran Surah Pages
-- Full-screen edge-to-edge lockscreen playback mode with ambient dynamic blurred cover art backdrop.
-- Centered floating switcher for Art (default), Synced Lyrics, Surah Mushaf Pages, and Up Next Queue.
-- Medina Mushaf Quran Surah Pages with live Ayah audio highlighting and page navigation.
-- Dedicated 100% full-width unclipped song title and artist row.
-- Restored classic 5-button bottom media controls: \`[Shuffle] [Previous] [Play/Pause] [Next] [Repeat]\`.
+### 🛡️ Mix Download Gate & Auto-Sync
+- Smart Download Gate modal detecting un-downloaded tracks in Mix playlists.
+- Instant estimation of download size and batch download trigger before playback.
+- Consent-based auto-sync: newly added songs to consented mix playlists are automatically downloaded offline.
 
-### 💾 Desktop MP3 Download Fix & Embedded Lyrics
-- Fixed yt-dlp downloading 24MB video files instead of pure 2-4MB MP3 audio.
-- Automatically embeds ID3v2.3/v2.4 synchronized lyrics directly into MP3 tags and cleans up loose .lrc files.
+### 📱 Library & Player Mix Indicators
+- Dedicated "YOUR MIXES" section in Library with status badges and un-downloaded song counters.
+- MiniPlayer "MIX MODE" pill and upcoming track countdown timer.
+- FullPlayer "COMING UP NEXT (DJ MIX)" widget with one-tap instant 8s crossfade preview.
 
-### 🚀 Instant OTA Update Engine
-- OTA bundle published directly to Android devices for instant seamless updates without APK reinstall.
+### 🚀 Instant OTA & Cross-Platform Releases
+- Instant OTA fast update published for Android devices.
+- Re-signed genuine Android APK (v2.0.8, Build 102) with v1/v2/v3/v4 signature schemes.
+- Hermes-compiled iOS IPA (v2.0.8, Build 102).
+- Desktop Release (v2.0.1).
 `;
 
   const searchDirs = [
@@ -58,6 +59,7 @@ async function publish() {
 
   let apkPath = null;
   let ipaPath = null;
+  let exePath = null;
 
   for (const dir of searchDirs) {
     if (!fs.existsSync(dir)) continue;
@@ -72,6 +74,11 @@ async function publish() {
                     files.find(f => f === 'Rivo.ipa');
       if (match) ipaPath = path.join(dir, match);
     }
+    if (!exePath) {
+      const match = files.find(f => f.endsWith('.exe') && (f.includes('2.0.1') || f.includes(version))) ||
+                    files.find(f => f === 'Rivo.exe');
+      if (match) exePath = path.join(dir, match);
+    }
   }
 
   const apkBytes = apkPath && fs.existsSync(apkPath) ? fs.readFileSync(apkPath) : null;
@@ -82,6 +89,11 @@ async function publish() {
   const ipaBytes = ipaPath && fs.existsSync(ipaPath) ? fs.readFileSync(ipaPath) : null;
   if (ipaBytes) {
     console.log(`Loaded IPA from ${ipaPath} (${ipaBytes.length} bytes)`);
+  }
+
+  const exeBytes = exePath && fs.existsSync(exePath) ? fs.readFileSync(exePath) : null;
+  if (exeBytes) {
+    console.log(`Loaded EXE from ${exePath} (${exeBytes.length} bytes)`);
   }
 
   const repos = ['mohamedLIOT1/Rivo'];
@@ -129,6 +141,9 @@ async function publish() {
     }
     if (ipaBytes) {
       assetsToUpload.push({ name: `Rivo-v${version}.ipa`, data: ipaBytes, mime: 'application/octet-stream' });
+    }
+    if (exeBytes) {
+      assetsToUpload.push({ name: `Rivo-v2.0.1.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
     }
 
     for (const asset of assetsToUpload) {
