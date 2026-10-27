@@ -80,7 +80,7 @@ def main():
         ("public/downloads/Rivo_Setup.exe.sig", f"{REMOTE_DIR}/public/downloads/Rivo_Setup.exe.sig"),
         (f"public/downloads/Rivo-v{version}.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.apk"),
         (f"public/downloads/Rivo-v{version}.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa"),
-        ("public/downloads/Rivo-v{version}.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.exe"),
+        (f"public/downloads/Rivo-v{version}.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.exe"),
         ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
         ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
         ("public/downloads/Rivo.exe", f"{REMOTE_DIR}/public/downloads/Rivo.exe"),
