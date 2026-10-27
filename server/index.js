@@ -136,33 +136,33 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.0.4',
+      version: '2.1.2',
       name: 'Rivo Web',
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '2.0.4',
+      version: '2.1.2',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo.exe',
+      directFile: 'Rivo-v2.1.2.exe',
       mandatory: false,
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.1.1',
+      version: '2.1.2',
       build: 105,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo.apk',
+      directFile: 'Rivo-v2.1.2.apk',
       mandatory: false,
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     ios: {
-      version: '2.1.1',
+      version: '2.1.2',
       build: 105,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo.ipa',
+      directFile: 'Rivo-v2.1.2.ipa',
       mandatory: false,
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     }
@@ -181,24 +181,24 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.0.4',
+      version: '2.1.2',
       name: 'Rivo Web (Beta)',
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     windows: {
-      version: '2.0.4',
+      version: '2.1.2',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo.exe',
+      directFile: 'Rivo-v2.1.2.exe',
       mandatory: false,
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     },
     android: {
-      version: '2.1.1',
+      version: '2.1.2',
       build: 105,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo.apk',
+      directFile: 'Rivo-v2.1.2.apk',
       mandatory: false,
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.',
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -212,11 +212,11 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '2.1.1',
+      version: '2.1.2',
       build: 105,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo.ipa',
+      directFile: 'Rivo-v2.1.2.ipa',
       mandatory: false,
       notes: 'Update v2.0.3 • Pure English interface, library overhaul, and audio streaming enhancements.'
     }
@@ -273,7 +273,7 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
       if (pkg && pkg.version) {
         if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
-        if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = '2.0.4';
+        if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = pkg.version;
         if (manifest.platforms && manifest.platforms.android) manifest.platforms.android.version = pkg.version;
         if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
       }
