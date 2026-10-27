@@ -498,9 +498,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
   }, []);
 
-  // ── Regular HTML Audio element (for uploaded tracks) ──
-  const audioRef = useRef(null);
-  const secondaryAudioRef = useRef(null);
+  // ── Regular HTML Audio elements for True Dual-Deck DJ Mixing ──
+  const audioRef = useRef(null); // Active Primary Deck
+  const secondaryAudioRef = useRef(null); // Standby / Transition Deck
+  const isTransitionRunningRef = useRef(false);
+  const transitionAnimFrameRef = useRef(null);
+  const standbyPreloadedIdRef = useRef(null);
   const transitionActiveTrackIdRef = useRef(null);
   const activeWebAudioMixRef = useRef(null);
 
@@ -508,25 +511,130 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const stopYouTube = useCallback(() => {}, []);
 
   const stopHtmlAudio = useCallback(() => {
+    if (transitionAnimFrameRef.current) {
+      cancelAnimationFrame(transitionAnimFrameRef.current);
+      transitionAnimFrameRef.current = null;
+    }
+    isTransitionRunningRef.current = false;
+    isTransitionTriggeredRef.current = false;
     const audio = audioRef.current;
     if (audio) {
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
     }
+    const sec = secondaryAudioRef.current;
+    if (sec) {
+      sec.pause();
+      sec.removeAttribute('src');
+      sec.load();
+    }
   }, []);
 
-  // Create Audio element + EQ
+  // Create Dual-Deck Audio elements + DJ Transition Engine
   useEffect(() => {
-    const audio = new Audio();
-    audioRef.current = audio;
-    audio.volume = volumeRef.current;
-    initAudioEngine(audio);
+    const audioA = new Audio();
+    const audioB = new Audio();
+    audioA.preload = 'auto';
+    audioB.preload = 'auto';
+    audioRef.current = audioA;
+    secondaryAudioRef.current = audioB;
+    audioA.volume = volumeRef.current;
+    audioB.volume = 0;
+    initAudioEngine(audioA);
 
     let lastTimeUpdate = 0;
-    const handleTimeUpdate = () => {
-      if (audio && !isNaN(audio.currentTime)) {
-        // Clear any stall recovery timer because playback is actively advancing!
+
+    // ── Unified Dual-Deck Crossfade Execution ──
+    const triggerDualDeckTransition = (fromTrack, toTrack, nextIdx, transDur, transStyle) => {
+      if (isTransitionRunningRef.current) return;
+      isTransitionRunningRef.current = true;
+      isTransitionTriggeredRef.current = true;
+
+      const fromDeck = audioRef.current;
+      const toDeck = secondaryAudioRef.current;
+      if (!fromDeck || !toDeck) {
+        isTransitionRunningRef.current = false;
+        return;
+      }
+
+      resolvePlayableAudioStream(toTrack).then((res) => {
+        if (!isTransitionRunningRef.current) return;
+        if (!res?.url) {
+          isTransitionRunningRef.current = false;
+          return;
+        }
+
+        const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
+        if (toDeck.src !== fullUrl) {
+          toDeck.src = fullUrl;
+          toDeck.currentTime = 0;
+        }
+        toDeck.volume = 0;
+        toDeck.play().catch((e) => console.warn('[MixEngine] Standby play error:', e));
+
+        const startTime = performance.now();
+        const totalMs = transDur * 1000;
+        const masterVol = volumeRef.current;
+
+        const runFrame = () => {
+          if (!isTransitionRunningRef.current) return;
+          const elapsed = performance.now() - startTime;
+          const progress = Math.min(1, Math.max(0, elapsed / totalMs));
+
+          const { gainA, gainB } = calculateCrossfadeGains(progress, transStyle);
+          if (fromDeck) fromDeck.volume = Math.max(0, Math.min(1, masterVol * gainA));
+          if (toDeck) toDeck.volume = Math.max(0, Math.min(1, masterVol * gainB));
+
+          if (progress < 1 && fromDeck && !fromDeck.paused && !isChangingTrackRef.current) {
+            transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
+          } else {
+            // Finish Transition: Swap Decks!
+            if (fromDeck) {
+              fromDeck.pause();
+              fromDeck.currentTime = 0;
+              fromDeck.volume = masterVol;
+            }
+            if (toDeck) {
+              toDeck.volume = masterVol;
+            }
+
+            // Reference swap: audioRef.current always points to active playing deck!
+            const temp = audioRef.current;
+            audioRef.current = secondaryAudioRef.current;
+            secondaryAudioRef.current = temp;
+
+            isTransitionRunningRef.current = false;
+            isTransitionTriggeredRef.current = false;
+            standbyPreloadedIdRef.current = null;
+
+            currentQueueIndexRef.current = nextIdx;
+            currentTrackRef.current = toTrack;
+            lastLoadedIdRef.current = String(toTrack.id || toTrack._id || '');
+            lastLoadedStreamUrlRef.current = fullUrl;
+            setCurrentQueueIndex(nextIdx);
+            setCurrentTrack(toTrack);
+            const targetDur = toDeck.duration && !isNaN(toDeck.duration)
+              ? Math.round(toDeck.duration)
+              : (toTrack.duration || 210);
+            setDuration(targetDur);
+            durationRef.current = targetDur;
+          }
+        };
+
+        transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
+      }).catch((err) => {
+        console.warn('[MixEngine] Stream resolve error:', err);
+        isTransitionRunningRef.current = false;
+      });
+    };
+
+    const attachDeckListeners = (deck) => {
+      const handleTimeUpdate = () => {
+        // Only active primary deck triggers UI and scheduling
+        if (deck !== audioRef.current) return;
+        if (!deck || isNaN(deck.currentTime)) return;
+
         if (stallRecoveryTimerRef.current) {
           clearTimeout(stallRecoveryTimerRef.current);
           stallRecoveryTimerRef.current = null;
@@ -535,17 +643,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const now = Date.now();
         if (now - lastTimeUpdate > 100) {
           lastTimeUpdate = now;
-          setCurrentTime(audio.currentTime);
-          currentTimeRef.current = audio.currentTime;
+          setCurrentTime(deck.currentTime);
+          currentTimeRef.current = deck.currentTime;
 
           // Periodically sync live playback time with other devices (Spotify Connect) every 2.5s
-          if (isPlayingRef.current && (!audio._lastDeviceSync || now - audio._lastDeviceSync >= 2500)) {
-            audio._lastDeviceSync = now;
+          if (isPlayingRef.current && (!deck._lastDeviceSync || now - deck._lastDeviceSync >= 2500)) {
+            deck._lastDeviceSync = now;
             if (socketRef.current && currentTrackRef.current) {
               socketRef.current.emit('device:playback_state', {
                 isPlaying: true,
                 track: currentTrackRef.current,
-                currentTime: Math.floor(audio.currentTime),
+                currentTime: Math.floor(deck.currentTime),
                 deviceType: 'web',
                 deviceName: 'Web Browser'
               });
@@ -554,8 +662,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
           // Periodically emit Jam Room sync every 3.5s when Jam room is active (HOST ONLY)
           if (isPlayingRef.current && jamSessionRef.current && socketRef.current && isJamHost()) {
-            if (!audio._lastJamSync || now - audio._lastJamSync >= 3500) {
-              audio._lastJamSync = now;
+            if (!deck._lastJamSync || now - deck._lastJamSync >= 3500) {
+              deck._lastJamSync = now;
               const roomCode = String(jamSessionRef.current.code || jamSessionRef.current.roomCode || '').trim().toUpperCase();
               if (roomCode) {
                 const curUser = currentUserRef.current;
@@ -563,7 +671,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   roomCode,
                   isPlaying: true,
                   currentTrack: currentTrackRef.current,
-                  currentTime: audio.currentTime,
+                  currentTime: deck.currentTime,
                   updatedAt: Date.now(),
                   initiatorId: socketRef.current.id,
                   userId: curUser ? (curUser.id || curUser._id) : undefined,
@@ -574,229 +682,266 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }
 
           // Always accurately sync authentic duration from the audio stream itself!
-          if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
-            const rounded = Math.round(audio.duration);
+          if (!isNaN(deck.duration) && isFinite(deck.duration) && deck.duration > 5 && deck.duration < 86400) {
+            const rounded = Math.round(deck.duration);
             if (rounded !== durationRef.current) {
               setDuration(rounded);
               durationRef.current = rounded;
               if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
             }
 
-            // Seamless prefetch: When within 15s of track completion, ensure next track is resolved & buffered
-            if (audio.currentTime >= rounded - 15) {
+            // ── DJ MIX MODE Lookahead check & Dual-Deck transition ──
+            if (isMixModeRef.current && isPlayingRef.current && !isTransitionRunningRef.current && !isChangingTrackRef.current) {
               const q = currentQueueRef.current;
               const curIdx = currentQueueIndexRef.current;
               if (q && q.length > 1 && curIdx >= 0) {
-                const nextIdx = (curIdx + 1) % q.length;
-                const nextTrack = q[nextIdx];
-                const nextId = String(nextTrack?.id || nextTrack?._id || '');
-                if (nextId && !clientStreamCache.has(nextId)) {
-                  resolvePlayableAudioStream(nextTrack).catch(() => {});
+                const isLast = curIdx === q.length - 1;
+                if (!isLast || repeatModeRef.current !== 'off') {
+                  const nextIdx = (curIdx + 1) % q.length;
+                  const curTrack = currentTrackRef.current;
+                  const nextTrack = q[nextIdx];
+                  const curId = String(curTrack?.id || curTrack?._id || '');
+                  const nextId = String(nextTrack?.id || nextTrack?._id || '');
+
+                  if (curId && nextId && curId !== nextId) {
+                    const pairKey = `${curId}___${nextId}`;
+                    const pairKeyAlt = `${curId}_${nextId}`;
+                    const trans = activeTransRef.current?.[pairKey] ||
+                                  activeTransRef.current?.[pairKeyAlt] ||
+                                  q?._transitions?.[pairKey] ||
+                                  q?._transitions?.[pairKeyAlt];
+
+                    let transDur = 8;
+                    if (trans?.bars) {
+                      const bpm = Number(curTrack?.bpm) || 120;
+                      transDur = Math.round((trans.bars * 240) / bpm);
+                    } else if (trans?.duration) {
+                      transDur = Number(trans.duration);
+                    }
+                    transDur = Math.min(24, Math.max(2, transDur));
+                    const transStyle = trans?.style || 'auto';
+
+                    const remaining = rounded - deck.currentTime;
+
+                    // 1. Preload standby deck 5 seconds ahead of transition
+                    if (remaining <= transDur + 5 && standbyPreloadedIdRef.current !== nextId) {
+                      standbyPreloadedIdRef.current = nextId;
+                      const standby = secondaryAudioRef.current;
+                      if (standby) {
+                        resolvePlayableAudioStream(nextTrack).then((res) => {
+                          if (res?.url && standbyPreloadedIdRef.current === nextId) {
+                            const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
+                            if (standby.src !== fullUrl) {
+                              standby.src = fullUrl;
+                              standby.currentTime = 0;
+                              standby.volume = 0;
+                              standby.load();
+                            }
+                          }
+                        }).catch(() => {});
+                      }
+                    }
+
+                    // 2. Launch DJ Crossfade right at the transition trigger point!
+                    if (remaining <= transDur && remaining > 0.1) {
+                      triggerDualDeckTransition(curTrack, nextTrack, nextIdx, transDur, transStyle);
+                    }
+                  }
+                }
+              }
+            } else {
+              // Seamless prefetch: When within 15s of track completion, ensure next track is resolved & buffered
+              if (deck.currentTime >= rounded - 15) {
+                const q = currentQueueRef.current;
+                const curIdx = currentQueueIndexRef.current;
+                if (q && q.length > 1 && curIdx >= 0) {
+                  const nextIdx = (curIdx + 1) % q.length;
+                  const nextTrack = q[nextIdx];
+                  const nextId = String(nextTrack?.id || nextTrack?._id || '');
+                  if (nextId && !clientStreamCache.has(nextId)) {
+                    resolvePlayableAudioStream(nextTrack).catch(() => {});
+                  }
                 }
               }
             }
           }
         }
-      }
-    };
-    const handleLoadedMetadata = () => {
-      // Establish authentic audio duration from media container
-      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
-        const rounded = Math.round(audio.duration);
-        setDuration(rounded);
-        durationRef.current = rounded;
-        if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
-      }
-    };
-    const handleDurationChange = () => {
-      if (!isNaN(audio.duration) && isFinite(audio.duration) && audio.duration > 5 && audio.duration < 86400) {
-        const rounded = Math.round(audio.duration);
-        setDuration(rounded);
-        durationRef.current = rounded;
-        if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
-      }
-    };
-        const handleEnded = () => {
-      if (isChangingTrackRef.current) return;
-      onTrackEnded(currentTrackRef.current);
-      const finished = currentTrackRef.current;
-      if (finished && finished.title) {
-        const tid = String(finished._id || finished.id || '');
-        const isMongo = /^[a-f0-9]{24}$/i.test(tid);
-        if (!isMongo || finished.source === 'YouTube' || finished.isExternal) {
-          fetch(`${API_BASE_URL}/api/tracks/auto-persist`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: tid,
-              title: finished.title,
-              artist: finished.artist,
-              album: finished.album,
-              cover: finished.cover || finished.coverUrl,
-              audioUrl: finished.audioUrl,
-              duration: finished.duration,
-              youtubeId: finished.youtubeId,
-              source: finished.source || 'YouTube'
-            })
-          }).catch(() => {});
+      };
+
+      const handleLoadedMetadata = () => {
+        if (deck !== audioRef.current) return;
+        if (!isNaN(deck.duration) && isFinite(deck.duration) && deck.duration > 5 && deck.duration < 86400) {
+          const rounded = Math.round(deck.duration);
+          setDuration(rounded);
+          durationRef.current = rounded;
+          if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
         }
-      }
-      // Live radio continuous stream handler: never advance or stop, always auto-reconnect!
-      if (finished && (finished.isLive || finished.isRadio)) {
-        setTimeout(() => {
-          if (!currentTrackRef.current) return;
-          const streamUrl = finished.fallbackUrl && finished._usedFallback ? finished.fallbackUrl : finished.audioUrl;
-          if (streamUrl && audio) {
-            const sep = streamUrl.includes('?') ? '&' : '?';
-            audio.src = `${streamUrl}${sep}_t=${Date.now()}`;
-            audio.play().catch(() => {});
+      };
+
+      const handleDurationChange = () => {
+        if (deck !== audioRef.current) return;
+        if (!isNaN(deck.duration) && isFinite(deck.duration) && deck.duration > 5 && deck.duration < 86400) {
+          const rounded = Math.round(deck.duration);
+          setDuration(rounded);
+          durationRef.current = rounded;
+          if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
+        }
+      };
+
+      const handleEnded = () => {
+        if (deck !== audioRef.current) return;
+        if (isChangingTrackRef.current) return;
+        // If DJ transition was already running or handled, ignore ended event
+        if (isTransitionRunningRef.current || isTransitionTriggeredRef.current) return;
+
+        onTrackEnded(currentTrackRef.current);
+        const finished = currentTrackRef.current;
+        if (finished && finished.title) {
+          const tid = String(finished._id || finished.id || '');
+          const isMongo = /^[a-f0-9]{24}$/i.test(tid);
+          if (!isMongo || finished.source === 'YouTube' || finished.isExternal) {
+            fetch(`${API_BASE_URL}/api/tracks/auto-persist`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: tid,
+                title: finished.title,
+                artist: finished.artist,
+                album: finished.album,
+                cover: finished.cover || finished.coverUrl,
+                audioUrl: finished.audioUrl,
+                duration: finished.duration,
+                youtubeId: finished.youtubeId,
+                source: finished.source || 'YouTube'
+              })
+            }).catch(() => {});
           }
-        }, 800);
-        return;
-      }
-
-      if (repeatModeRef.current === 'one') {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-      } else if (isMixModeRef.current) {
-        // DJ MIX MODE — Seamless crossfade
-        const queue = currentQueueRef.current;
-        const curIdx = currentQueueIndexRef.current;
-        if (queue && queue.length > 1) {
-          const nextIdx = (curIdx + 1) % queue.length;
-          const nextTrack = queue[nextIdx];
-          const curTrack = currentTrackRef.current;
-          const curId = String(curTrack?.id || curTrack?._id || '');
-          const nextId = String(nextTrack?.id || nextTrack?._id || '');
-
-          Promise.all([
-            getOfflineTrackAudioUrl(curId, curTrack?.title, curTrack?.artist),
-            getOfflineTrackAudioUrl(nextId, nextTrack?.title, nextTrack?.artist)
-          ]).then(([blobA, blobB]) => {
-            if (blobA && blobB) {
-              const transKey = `${curId}_${nextId}`;
-              const transKeyAlt = `${curId}___${nextId}`;
-              const savedTrans = queue?._transitions?.[transKey] ||
-                                 queue?._transitions?.[transKeyAlt] ||
-                                 activeTransRef.current?.[transKey] ||
-                                 activeTransRef.current?.[transKeyAlt];
-              const transDuration = savedTrans?.duration || 8;
-              const transStyle = savedTrans?.style || 'equal_power';
-              playTrueRivoMix({
-                songUrl1: blobA,
-                songUrl2: blobB,
-                transitionDuration: transDuration,
-                style: transStyle,
-                startOffsetA: Math.max(0, (durationRef.current || 180) - transDuration - 0.5),
-                onEnd: () => {
-                  currentQueueIndexRef.current = nextIdx;
-                  currentTrackRef.current = nextTrack;
-                  setCurrentQueueIndex(nextIdx);
-                  setCurrentTrack(nextTrack);
-                }
-              });
-            } else {
-              playNextTrackRef.current?.();
-            }
-          }).catch(() => {
-            playNextTrackRef.current?.();
-          });
-        } else {
-          playNextTrackRef.current?.();
         }
-      } else {
-        // In Jam Session: ONLY the Host auto-advances when track finishes!
-        if (jamSessionRef.current) {
-          if (isJamHost() && playNextTrackRef.current) {
+
+        // Live radio continuous stream handler: never advance or stop, always auto-reconnect!
+        if (finished && (finished.isLive || finished.isRadio)) {
+          setTimeout(() => {
+            if (!currentTrackRef.current) return;
+            const streamUrl = finished.fallbackUrl && finished._usedFallback ? finished.fallbackUrl : finished.audioUrl;
+            if (streamUrl && deck) {
+              const sep = streamUrl.includes('?') ? '&' : '?';
+              deck.src = `${streamUrl}${sep}_t=${Date.now()}`;
+              deck.play().catch(() => {});
+            }
+          }, 800);
+          return;
+        }
+
+        if (repeatModeRef.current === 'one') {
+          deck.currentTime = 0;
+          deck.play().catch(() => {});
+        } else {
+          // In Jam Session: ONLY the Host auto-advances when track finishes!
+          if (jamSessionRef.current) {
+            if (isJamHost() && playNextTrackRef.current) {
+              playNextTrackRef.current();
+            }
+          } else if (playNextTrackRef.current) {
             playNextTrackRef.current();
           }
-        } else if (playNextTrackRef.current) {
-          playNextTrackRef.current();
         }
-      }
-    };
-    const handlePlaying = () => {
-      if (stallRecoveryTimerRef.current) {
-        clearTimeout(stallRecoveryTimerRef.current);
-        stallRecoveryTimerRef.current = null;
-      }
-      resumeAudioContext();
-      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-      if (token && currentTrackRef.current) {
-        const curDur = (durationRef.current > 0 ? durationRef.current : currentTrackRef.current.duration) || 0;
-        const curSec = audio.currentTime || 0;
-        const pTrack = { ...currentTrackRef.current, duration: curDur };
-        if (socketRef.current) {
-          socketRef.current.emit('activity:listening', { track: pTrack, isPlaying: true, currentTime: curSec });
-        }
-        fetch(`${API_BASE_URL}/api/users/listening-activity`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ track: pTrack, isPlaying: true, currentTime: curSec })
-        }).catch(() => {});
-      }
-    };
-    // If audio stream stalls or connection was dropped by server while paused:
-    // Automatically re-establish Range connection at exact current second without freezing or requiring manual seek!
-    const handleStalledOrWaiting = () => {
-      if (!isPlayingRef.current || isChangingTrackRef.current) return;
-      const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
-      const cachedBlob = activeFullTrackCache.get(curId);
-      if (cachedBlob && audio && audio.src !== cachedBlob) {
-        const cur = audio.currentTime || currentTimeRef.current || 0;
-        audio.src = cachedBlob;
-        audio.currentTime = cur;
-        resumeAudioContext();
-        audio.play().catch(() => {});
-        return;
-      }
-      if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
-      stallRecoveryTimerRef.current = setTimeout(() => {
-        if (!isPlayingRef.current || isChangingTrackRef.current) return;
-        const cur = audio.currentTime || currentTimeRef.current || 0;
-        if (audio && audio.src && cur > 0) {
-          const s = audio.src;
-          audio.src = s;
-          audio.currentTime = cur;
-          resumeAudioContext();
-          audio.play().catch(() => {});
-        }
-      }, 1500);
-    };
-    const handleError = () => {
-      audio.crossOrigin = null;
-      if (isChangingTrackRef.current) return;
-      if (!isPlayingRef.current && !shouldPlayRef.current) return;
-      const cur = currentTrackRef.current;
+      };
 
-      // Live radio auto-reconnect & fallback mirror
-      if (cur && (cur.isLive || cur.isRadio)) {
-        setTimeout(() => {
-          if (!currentTrackRef.current) return;
-          const streamUrl = (!cur._usedFallback && cur.fallbackUrl) ? cur.fallbackUrl : cur.audioUrl;
-          cur._usedFallback = !cur._usedFallback;
-          if (streamUrl && audio) {
-            const sep = streamUrl.includes('?') ? '&' : '?';
-            audio.src = `${streamUrl}${sep}_t=${Date.now()}`;
-            audio.play().catch(() => {});
+      const handlePlaying = () => {
+        if (deck !== audioRef.current) return;
+        if (stallRecoveryTimerRef.current) {
+          clearTimeout(stallRecoveryTimerRef.current);
+          stallRecoveryTimerRef.current = null;
+        }
+        resumeAudioContext();
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        if (token && currentTrackRef.current) {
+          const curDur = (durationRef.current > 0 ? durationRef.current : currentTrackRef.current.duration) || 0;
+          const curSec = deck.currentTime || 0;
+          const pTrack = { ...currentTrackRef.current, duration: curDur };
+          if (socketRef.current) {
+            socketRef.current.emit('activity:listening', { track: pTrack, isPlaying: true, currentTime: curSec });
           }
-        }, 1200);
-        return;
-      }
-      if (cur && (cur.title || cur.artist) && !cur._retryDone) {
-        cur._retryDone = true;
-        fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
-          .then(r => r.json())
-          .then(d => {
-            if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
-            const latestCur = currentTrackRef.current;
-            if (latestCur && String(latestCur.id || latestCur._id) === String(cur.id || cur._id) && d.success && d.url && audio) {
-              stopYouTube();
-              const fullUrl = d.url.startsWith('/') ? `${API_BASE_URL}${d.url}` : d.url;
-              audio.src = fullUrl;
-              resumeAudioContext();
-              audio.play().catch(() => {});
-            } else {
+          fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ track: pTrack, isPlaying: true, currentTime: curSec })
+          }).catch(() => {});
+        }
+      };
+
+      const handleStalledOrWaiting = () => {
+        if (deck !== audioRef.current) return;
+        if (!isPlayingRef.current || isChangingTrackRef.current) return;
+        const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+        const cachedBlob = activeFullTrackCache.get(curId);
+        if (cachedBlob && deck && deck.src !== cachedBlob) {
+          const cur = deck.currentTime || currentTimeRef.current || 0;
+          deck.src = cachedBlob;
+          deck.currentTime = cur;
+          resumeAudioContext();
+          deck.play().catch(() => {});
+          return;
+        }
+        if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = setTimeout(() => {
+          if (!isPlayingRef.current || isChangingTrackRef.current) return;
+          const cur = deck.currentTime || currentTimeRef.current || 0;
+          if (deck && deck.src && cur > 0) {
+            const s = deck.src;
+            deck.src = s;
+            deck.currentTime = cur;
+            resumeAudioContext();
+            deck.play().catch(() => {});
+          }
+        }, 1500);
+      };
+
+      const handleError = () => {
+        if (deck !== audioRef.current) return;
+        deck.crossOrigin = null;
+        if (isChangingTrackRef.current) return;
+        if (!isPlayingRef.current && !shouldPlayRef.current) return;
+        const cur = currentTrackRef.current;
+
+        // Live radio auto-reconnect & fallback mirror
+        if (cur && (cur.isLive || cur.isRadio)) {
+          setTimeout(() => {
+            if (!currentTrackRef.current) return;
+            const streamUrl = (!cur._usedFallback && cur.fallbackUrl) ? cur.fallbackUrl : cur.audioUrl;
+            cur._usedFallback = !cur._usedFallback;
+            if (streamUrl && deck) {
+              const sep = streamUrl.includes('?') ? '&' : '?';
+              deck.src = `${streamUrl}${sep}_t=${Date.now()}`;
+              deck.play().catch(() => {});
+            }
+          }, 1200);
+          return;
+        }
+        if (cur && (cur.title || cur.artist) && !cur._retryDone) {
+          cur._retryDone = true;
+          fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
+            .then(r => r.json())
+            .then(d => {
+              if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
+              const latestCur = currentTrackRef.current;
+              if (latestCur && String(latestCur.id || latestCur._id) === String(cur.id || cur._id) && d.success && d.url && deck) {
+                stopYouTube();
+                const fullUrl = d.url.startsWith('/') ? `${API_BASE_URL}${d.url}` : d.url;
+                deck.src = fullUrl;
+                resumeAudioContext();
+                deck.play().catch(() => {});
+              } else {
+                if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+                errorAdvanceTimerRef.current = setTimeout(() => {
+                  if (isChangingTrackRef.current) return;
+                  if (playNextTrackRef.current && isPlayingRef.current) {
+                    playNextTrackRef.current();
+                  }
+                }, 1500);
+              }
+            })
+            .catch(() => {
               if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
               errorAdvanceTimerRef.current = setTimeout(() => {
                 if (isChangingTrackRef.current) return;
@@ -804,40 +949,41 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   playNextTrackRef.current();
                 }
               }, 1500);
-            }
-          })
-          .catch(() => {
-            if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-            errorAdvanceTimerRef.current = setTimeout(() => {
-              if (isChangingTrackRef.current) return;
-              if (playNextTrackRef.current && isPlayingRef.current) {
-                playNextTrackRef.current();
-              }
-            }, 1500);
-          });
-      }
+            });
+        }
+      };
+
+      deck.addEventListener('timeupdate', handleTimeUpdate);
+      deck.addEventListener('loadedmetadata', handleLoadedMetadata);
+      deck.addEventListener('durationchange', handleDurationChange);
+      deck.addEventListener('ended', handleEnded);
+      deck.addEventListener('playing', handlePlaying);
+      deck.addEventListener('stalled', handleStalledOrWaiting);
+      deck.addEventListener('waiting', handleStalledOrWaiting);
+      deck.addEventListener('error', handleError);
+
+      return () => {
+        deck.removeEventListener('timeupdate', handleTimeUpdate);
+        deck.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        deck.removeEventListener('durationchange', handleDurationChange);
+        deck.removeEventListener('ended', handleEnded);
+        deck.removeEventListener('playing', handlePlaying);
+        deck.removeEventListener('stalled', handleStalledOrWaiting);
+        deck.removeEventListener('waiting', handleStalledOrWaiting);
+        deck.removeEventListener('error', handleError);
+        deck.pause();
+      };
     };
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('durationchange', handleDurationChange);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('playing', handlePlaying);
-    audio.addEventListener('stalled', handleStalledOrWaiting);
-    audio.addEventListener('waiting', handleStalledOrWaiting);
-    audio.addEventListener('error', handleError);
+
+    const cleanupA = attachDeckListeners(audioA);
+    const cleanupB = attachDeckListeners(audioB);
 
     return () => {
       if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
       if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('durationchange', handleDurationChange);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('playing', handlePlaying);
-      audio.removeEventListener('stalled', handleStalledOrWaiting);
-      audio.removeEventListener('waiting', handleStalledOrWaiting);
-      audio.removeEventListener('error', handleError);
-      audio.pause();
+      if (transitionAnimFrameRef.current) cancelAnimationFrame(transitionAnimFrameRef.current);
+      cleanupA();
+      cleanupB();
     };
   }, [stopYouTube]);
 
@@ -2648,32 +2794,54 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } catch {}
   }, []);
 
-  // ── Rivo DJ Mix: Real Preview = seek current track near its end ──────────
+  // ── Rivo DJ Mix: Real Dual-Deck Preview = seek track A near its end into track B ──────────
   const previewDjTransition = useCallback(async (tA, tB, transConfig = null) => {
     if (!tA || !tB) return;
     resumeAudioContext();
 
-    const dur = Math.min(30, Math.max(2, Number(transConfig?.duration) || 8));
-    const style = transConfig?.style || 'equal_power';
+    const bpmA = Number(tA.bpm) || 120;
+    let dur = 8;
+    if (transConfig?.bars) {
+      dur = Math.round((transConfig.bars * 240) / bpmA);
+    } else if (transConfig?.duration) {
+      dur = Number(transConfig.duration);
+    }
+    dur = Math.min(24, Math.max(2, dur));
+    const style = transConfig?.style || 'auto';
     const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
 
-    // 1. Save transition config so checkAndRunDjTransition picks it up
-    const nextTrans = { ...activeTransRef.current, [pairKey]: { style, duration: dur } };
+    // 1. Save transition config
+    const nextTrans = { ...activeTransRef.current, [pairKey]: { ...transConfig, style, duration: dur } };
     setActiveTransitions(nextTrans);
     activeTransRef.current = nextTrans;
     setIsMixMode(true);
     isMixModeRef.current = true;
     isTransitionTriggeredRef.current = false;
-    transitionActiveTrackIdRef.current = null;
+    isTransitionRunningRef.current = false;
+    standbyPreloadedIdRef.current = null;
 
-    // 2. Make sure tA is the currently playing track
-    const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+    // 2. Ensure queue contains tA and tB sequentially so lookahead transitions into tB
     const tAId = String(tA.id || tA._id || '');
+    const tBId = String(tB.id || tB._id || '');
+    const q = currentQueueRef.current || [];
+    const idxA = q.findIndex(t => String(t.id || t._id) === tAId);
+    if (idxA >= 0 && q[idxA + 1] && String(q[idxA + 1].id || q[idxA + 1]._id) === tBId) {
+      currentQueueIndexRef.current = idxA;
+      setCurrentQueueIndex(idxA);
+    } else {
+      const previewQueue = [tA, tB];
+      currentQueueRef.current = previewQueue;
+      setCurrentQueue(previewQueue);
+      currentQueueIndexRef.current = 0;
+      setCurrentQueueIndex(0);
+    }
+
+    const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
 
     const doSeek = () => {
-      // Seek to 3s before the transition starts so user hears it immediately
+      // Seek to 2.5s before the transition starts so user immediately hears the buildup and crossfade
       const trackDur = audioRef.current?.duration || duration || 180;
-      const seekPoint = Math.max(0, trackDur - dur - 3);
+      const seekPoint = Math.max(0, trackDur - dur - 2.5);
 
       if (audioRef.current) {
         audioRef.current.currentTime = seekPoint;
@@ -2685,12 +2853,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
 
     if (curId !== tAId) {
-      // Play tA first, then seek after load
       shouldPlayRef.current = true;
       setCurrentTrack(tA);
       currentTrackRef.current = tA;
       setIsPlaying(true);
-      setTimeout(doSeek, 3000); // wait for track to load
+      setTimeout(doSeek, 1500);
     } else {
       doSeek();
     }

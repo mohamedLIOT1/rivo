@@ -74,7 +74,17 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
     };
   }
 
-  if (style === 'bass_swap') {
+  if (style === 'rise') {
+    // Dramatic buildup tension & drop: Track A stays loud and ducks sharply after 75%, Track B swells dynamically
+    const gainA = p < 0.75 ? 1.0 : Math.max(0, 1 - Math.pow((p - 0.75) / 0.25, 2));
+    const gainB = Math.pow(p, 1.5);
+    return { 
+      gainA: Math.max(0, Math.min(1, gainA)), 
+      gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
+  if (style === 'blend' || style === 'bass_swap') {
     // Club DJ Bass Swap: Track A stays dominant and loud until swap point (~45-50%), then ducks sharply.
     // Track B begins subtle and punches in hard to take over the low-end & beat.
     const gainA = p < 0.45 
@@ -86,6 +96,15 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
     return { 
       gainA: Math.max(0, Math.min(1, gainA)), 
       gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
+  if (style === 'fade' || style === 'equal_power' || style === 'auto') {
+    // Standard Spotify Equal-Power Crossfade: cos & sin curve (preserves constant acoustic energy)
+    const angle = p * (Math.PI / 2);
+    return {
+      gainA: Math.cos(angle),
+      gainB: Math.sin(angle)
     };
   }
 

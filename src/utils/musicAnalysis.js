@@ -27,6 +27,36 @@ export const KEY_NAMES = {
   '12A': 'Db minor','12B': 'E major'
 };
 
+// Official DJ Camelot Wheel Color Spectrum (1-12)
+export const CAMELOT_COLORS = {
+  1:  { bg: 'rgba(0, 168, 150, 0.25)',  text: '#2dd4bf', border: '#00a896' },
+  2:  { bg: 'rgba(16, 185, 129, 0.25)', text: '#34d399', border: '#10b981' },
+  3:  { bg: 'rgba(132, 204, 22, 0.25)', text: '#a3e635', border: '#84cc16' },
+  4:  { bg: 'rgba(234, 179, 8, 0.25)',  text: '#fde047', border: '#eab308' },
+  5:  { bg: 'rgba(250, 204, 21, 0.25)', text: '#fef08a', border: '#facc15' },
+  6:  { bg: 'rgba(249, 115, 22, 0.25)', text: '#fb923c', border: '#f97316' },
+  7:  { bg: 'rgba(239, 68, 68, 0.25)',  text: '#f87171', border: '#ef4444' },
+  8:  { bg: 'rgba(225, 29, 72, 0.25)',  text: '#fb7185', border: '#e11d48' },
+  9:  { bg: 'rgba(236, 72, 153, 0.25)', text: '#f472b6', border: '#ec4899' },
+  10: { bg: 'rgba(168, 85, 247, 0.25)', text: '#c084fc', border: '#a855f7' },
+  11: { bg: 'rgba(99, 102, 241, 0.25)', text: '#818cf8', border: '#6366f1' },
+  12: { bg: 'rgba(6, 182, 212, 0.25)',  text: '#22d3ee', border: '#06b6d4' }
+};
+
+export function getCamelotColor(key) {
+  if (!key) return { bg: 'rgba(120, 120, 120, 0.2)', text: '#9ca3af', border: '#4b5563' };
+  const num = parseInt(key, 10);
+  return CAMELOT_COLORS[num] || { bg: 'rgba(120, 120, 120, 0.2)', text: '#9ca3af', border: '#4b5563' };
+}
+
+/**
+ * Calculate bar duration in seconds: (bars * 4 beats * 60) / BPM = (bars * 240) / BPM
+ */
+export function calculateBarsDuration(bars = 4, bpm = 120) {
+  const safeBpm = Math.max(60, Math.min(220, Number(bpm) || 120));
+  return Math.round(((bars * 240) / safeBpm) * 10) / 10;
+}
+
 /**
  * Generate stable, realistic musical metadata (BPM & Key) based on track fingerprint
  */
@@ -145,7 +175,7 @@ export function checkHarmonicCompatibility(keyA, keyB, bpmA, bpmB) {
 }
 
 /**
- * Recommend optimal DJ transition preset based on music analysis
+ * Recommend optimal DJ transition preset based on Spotify Mixed Playlists rules
  */
 export function getRecommendedTransition(trackA, trackB) {
   const dataA = getTrackMusicalData(trackA);
@@ -154,30 +184,39 @@ export function getRecommendedTransition(trackA, trackB) {
   const bpmDiff = Math.abs(dataA.bpm - dataB.bpm);
 
   if (compat.score >= 90 && bpmDiff <= 6) {
+    const bars = 8;
+    const dur = Math.round(calculateBarsDuration(bars, dataA.bpm));
     return {
-      style: 'equal_power',
-      duration: 8,
-      name: 'Equal Power Blend',
-      filterSweep: 'none',
-      reason: 'Harmonically compatible tracks blend best with an 8-second equal-power volume curve.'
+      style: 'blend',
+      bars,
+      duration: dur,
+      name: `Blend (${bars} bars)`,
+      filterSweep: 'bass_swap',
+      reason: 'Harmonically compatible tracks blend best with an 8-bar club blend with bass swap.'
     };
   }
 
   if (bpmDiff > 8) {
+    const bars = 4;
+    const dur = Math.round(calculateBarsDuration(bars, dataA.bpm));
     return {
-      style: 'low_pass',
-      duration: 6,
-      name: 'Low-Pass Sweep Drop',
-      filterSweep: 'lowpass',
-      reason: 'BPM gap smoothed by sweeping high frequencies out before the beat drop.'
+      style: 'rise',
+      bars,
+      duration: dur,
+      name: `Rise (${bars} bars)`,
+      filterSweep: 'low_pass',
+      reason: 'BPM gap smoothed by dramatic rise build-up and drop.'
     };
   }
 
+  const bars = 4;
+  const dur = Math.round(calculateBarsDuration(bars, dataA.bpm));
   return {
-    style: 'bass_swap',
-    duration: 8,
-    name: 'Bass Swap (High-Pass)',
-    filterSweep: 'highpass',
-    reason: 'Removes bass from track A to prevent low-end mud while track B kicks in.'
+    style: 'fade',
+    bars,
+    duration: dur,
+    name: `Fade (${bars} bars)`,
+    filterSweep: 'none',
+    reason: 'Equal-power smooth fade over 4 bars.'
   };
 }

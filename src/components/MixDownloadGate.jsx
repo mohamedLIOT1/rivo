@@ -99,10 +99,10 @@ export default function MixDownloadGate({
             <Sparkles size={16} className="text-[#17a398] shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="font-bold text-white text-[11px] sm:text-xs">
-                لماذا التحميل ضروري لوضع DJ Mix؟
+                استماع Offline DJ Mix بدون إنترنت
               </p>
               <p className="text-[10px] sm:text-[11px] leading-relaxed text-zinc-400">
-                محرك الـ Mix يعمل عبر Web Audio API مع فلاتر Biquad و Equal Power curves. يتطلب ذلك ملفات محملة مسبقاً (Blob URLs) لتجنب قيود CORS وتأخير البث وضمان دمج سلس بدون أي ثانية صمت.
+                يعمل محرك الـ Dual-Deck Mix فوراً سواء عبر الستريمنج المباشر أو أوفلاين. يمكنك تحميل الأغاني الآن للاستمتاع بالميكس والانتقالات في أي وقت بدون استهلاك للإنترنت وبأعلى جودة صوتية.
               </p>
             </div>
           </div>

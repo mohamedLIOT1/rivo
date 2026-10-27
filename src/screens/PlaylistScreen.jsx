@@ -10,7 +10,7 @@ import MiniMixerModal from '../components/MiniMixerModal';
 import MixDownloadGate from '../components/MixDownloadGate';
 import ExportModal from '../components/ExportModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
-import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
+import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, getCamelotColor, calculateBarsDuration } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useDownloadManager } from '../context/DownloadContext';
 import { ArtistLinks } from '../utils/artistUtils';
@@ -539,7 +539,12 @@ export default function PlaylistScreen({
     setIsMixActive(nextState);
     setIsMixMode?.(nextState);
     if (nextState) {
-      setActiveTransitions?.(transitions);
+      if (Object.keys(transitions).length === 0 && playlistTracks.length > 1) {
+        handleAutoMixAll();
+        return;
+      } else {
+        setActiveTransitions?.(transitions);
+      }
     }
 
     try {
@@ -711,18 +716,17 @@ export default function PlaylistScreen({
   };
 
   const handlePlayPlaylistTrack = (track) => {
-    if ((playlist?.isMix || isMixActive) && playlistTracks.length > 0) {
-      const notDownloaded = playlistTracks.filter(t => !t.downloaded);
-      if (notDownloaded.length > 0) {
-        setPendingMixTrack(track);
-        setShowMixGate(true);
-        return;
+    if (playlist?.isMix || isMixActive) {
+      setIsMixMode?.(true);
+      if (Object.keys(transitions).length > 0) {
+        setActiveTransitions?.(transitions);
       }
     }
     const baseQueue = filteredPlaylistTracks;
     const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
     const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
     const fullQueue = [...baseQueue, ...extraRecs];
+    fullQueue._transitions = transitions;
     onSelectTrack(track, fullQueue);
   };
 
@@ -1283,13 +1287,24 @@ export default function PlaylistScreen({
                   '#'
                 )}
               </span>
-              <span className="col-span-6 md:col-span-5">{isQuran ? 'SURAH & RECITER' : 'TITLE & ARTIST'}</span>
-              <span className="hidden md:block col-span-3">{isQuran ? 'COLLECTION' : 'ALBUM'}</span>
-              <span className="col-span-5 md:col-span-3 text-right pr-2">ACTIONS</span>
+              <span className={(isMixActive || isMixMode) && !isQuran ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? 'SURAH & RECITER' : 'TITLE & ARTIST'}</span>
+              {(isMixActive || isMixMode) && !isQuran && (
+                <span className="hidden sm:flex col-span-2 items-center gap-1 text-[#17a398]">
+                  <span>BPM</span>
+                  <span>/</span>
+                  <span>KEY</span>
+                </span>
+              )}
+              <span className="hidden md:block col-span-2">{isQuran ? 'COLLECTION' : 'ALBUM'}</span>
+              <span className={(isMixActive || isMixMode) && !isQuran ? "col-span-5 md:col-span-3 text-right pr-2" : "col-span-5 md:col-span-4 text-right pr-2"}>ACTIONS</span>
             </div>
 
             {filteredPlaylistTracks.map((track, i) => {
               const isSelected = selectedTrackIds.has(String(track.id || track._id));
+              const isMixOn = Boolean(isMixActive || isMixMode) && !isQuran;
+              const musical = isMixOn ? getTrackMusicalData(track) : null;
+              const camelotCol = isMixOn && musical ? getCamelotColor(musical.key) : null;
+
               return (
                 <React.Fragment key={track.id || track._id || i}>
                   <div
@@ -1329,7 +1344,7 @@ export default function PlaylistScreen({
                     </span>
                     
                     {/* Title & Artist */}
-                    <div className="col-span-6 md:col-span-5 flex items-center gap-2 sm:gap-3 truncate pr-1 sm:pr-2">
+                    <div className={`${isMixOn ? 'col-span-6 md:col-span-4' : 'col-span-6 md:col-span-5'} flex items-center gap-2 sm:gap-3 truncate pr-1 sm:pr-2`}>
                       <img 
                         src={normalizeCoverUrl(track.cover, track)} 
                         alt={track.title} 
@@ -1355,13 +1370,26 @@ export default function PlaylistScreen({
                       </div>
                     </div>
 
+                    {/* Spotify BPM & Camelot Key Badge */}
+                    {isMixOn && musical && (
+                      <div className="hidden sm:flex col-span-2 items-center gap-1.5 font-mono text-[11px]">
+                        <span className="text-zinc-300 font-bold">{musical.bpm} <span className="text-[9px] text-zinc-500">BPM</span></span>
+                        <span 
+                          className="px-1.5 py-0.5 rounded text-[10px] font-black border"
+                          style={{ backgroundColor: camelotCol.bg, color: camelotCol.text, borderColor: camelotCol.border }}
+                        >
+                          {musical.key}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Album */}
-                    <div className="hidden md:block col-span-3 text-xs text-zinc-400 truncate pr-2 font-medium">
+                    <div className="hidden md:block col-span-2 text-xs text-zinc-400 truncate pr-2 font-medium">
                       {track.album || playlist.name}
                     </div>
 
                     {/* Action & Duration */}
-                    <div className="col-span-5 md:col-span-3 flex items-center justify-end gap-1 sm:gap-2 text-xs">
+                    <div className={`${isMixOn ? 'col-span-5 md:col-span-3' : 'col-span-5 md:col-span-4'} flex items-center justify-end gap-1 sm:gap-2 text-xs`}>
                       {/* Track download / cancel button */}
                       {isTrackDownloading?.(track.id || track._id) ? (
                         <div className="flex items-center gap-0.5 sm:gap-1">
@@ -1447,6 +1475,51 @@ export default function PlaylistScreen({
                       </button>
                     </div>
                   </div>
+
+                  {/* ── Spotify Mixed Playlists Transition Chip ── */}
+                  {isMixOn && i < filteredPlaylistTracks.length - 1 && (() => {
+                    const nextTrack = filteredPlaylistTracks[i + 1];
+                    const tAId = String(track.id || track._id || '');
+                    const tBId = String(nextTrack.id || nextTrack._id || '');
+                    const pairKey = `${tAId}___${tBId}`;
+                    const pairKeyAlt = `${tAId}_${tBId}`;
+                    const trans = transitions[pairKey] || transitions[pairKeyAlt] || { style: 'auto', duration: 8, bars: 4 };
+                    const mA = musical;
+                    const mB = getTrackMusicalData(nextTrack);
+                    const compat = checkHarmonicCompatibility(mA.key, mB.key, mA.bpm, mB.bpm);
+
+                    const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
+                                       trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
+                                       trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' :
+                                       trans.style === 'cut' ? '✂️ Cut' :
+                                       trans.style === 'custom' ? '🎛️ Custom' : '✨ Auto';
+
+                    const lengthLabel = trans.bars ? `${trans.bars} bars` : `${trans.duration || 8}s`;
+
+                    return (
+                      <div className="py-1 px-2 flex items-center justify-center relative my-0.5 group/trans">
+                        <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 h-[1px] border-t border-dashed border-zinc-700/60 group-hover/trans:border-[#17a398]/60 transition-colors pointer-events-none" />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMixerPair({ trackA: track, trackB: nextTrack, pairKey });
+                          }}
+                          className={`relative z-10 px-3 py-1 rounded-full text-[10px] font-mono font-black border brutal-shadow-sm flex items-center gap-1.5 transition-all cursor-pointer hover:scale-105 ${
+                            isDark 
+                              ? 'bg-[#101716] hover:bg-[#182320] text-zinc-200 border-zinc-700 hover:border-[#17a398]' 
+                              : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] border-black hover:border-[#17a398]'
+                          }`}
+                          title={`Click to customize transition between "${track.title}" and "${nextTrack.title}"`}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: compat.color || '#10b981' }} />
+                          <span>{styleLabel}</span>
+                          <span className="text-zinc-500">•</span>
+                          <span className="text-zinc-400">{lengthLabel}</span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </React.Fragment>
               );
             })}
@@ -1800,6 +1873,20 @@ export default function PlaylistScreen({
         allTracks={tracks}
         globalTheme={globalTheme}
       />
+
+      {activeMixerPair && (
+        <MiniMixerModal
+          isOpen={Boolean(activeMixerPair)}
+          onClose={() => setActiveMixerPair(null)}
+          trackA={activeMixerPair.trackA}
+          trackB={activeMixerPair.trackB}
+          initialTransition={
+            transitions[activeMixerPair.pairKey] ||
+            transitions[`${activeMixerPair.trackA.id || activeMixerPair.trackA._id}_${activeMixerPair.trackB.id || activeMixerPair.trackB._id}`]
+          }
+          onSaveTransition={handleSaveTransitionSettings}
+        />
+      )}
 
       <MixDownloadGate
         isOpen={showMixGate}

@@ -136,33 +136,33 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.1.3',
+      version: '2.1.4',
       name: 'Rivo Web',
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     },
     windows: {
-      version: '2.1.3',
+      version: '2.1.4',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.1.3.exe',
+      directFile: 'Rivo-v2.1.4.exe',
       mandatory: false,
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     },
     android: {
-      version: '2.1.3',
-      build: 107,
+      version: '2.1.4',
+      build: 108,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.1.3.apk',
+      directFile: 'Rivo-v2.1.4.apk',
       mandatory: false,
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     },
     ios: {
-      version: '2.1.3',
-      build: 107,
+      version: '2.1.4',
+      build: 108,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.1.3.ipa',
+      directFile: 'Rivo-v2.1.4.ipa',
       mandatory: false,
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     }
@@ -181,30 +181,30 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.1.3',
+      version: '2.1.4',
       name: 'Rivo Web (Beta)',
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     },
     windows: {
-      version: '2.1.3',
+      version: '2.1.4',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.1.3.exe',
+      directFile: 'Rivo-v2.1.4.exe',
       mandatory: false,
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     },
     android: {
-      version: '2.1.3',
-      build: 107,
+      version: '2.1.4',
+      build: 108,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.1.3.apk',
+      directFile: 'Rivo-v2.1.4.apk',
       mandatory: false,
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.',
       notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
       ota: {
         enabled: true,
-        version: '2.1.3',
+        version: '2.1.4',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
         notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
@@ -212,11 +212,11 @@ const BETA_VERSIONS_DATA = {
       }
     },
     ios: {
-      version: '2.1.3',
-      build: 107,
+      version: '2.1.4',
+      build: 108,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.1.3.ipa',
+      directFile: 'Rivo-v2.1.4.ipa',
       mandatory: false,
       notes: 'Update v2.1.3 • Spotify-style Crossfade control (0-12s), Rivo DJ Automix toggle, gapless continuous playback, and offline seeking enhancements.'
     }

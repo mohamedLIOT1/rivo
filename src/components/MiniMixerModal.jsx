@@ -8,28 +8,36 @@ import { useAudioPlayer } from '../context/AudioContext';
 
 const TRANSITION_STYLES = [
   {
-    id: 'equal_power',
-    name: 'Equal Power Blend',
-    desc: 'Smooth continuous volume blend with zero perceived volume dip',
-    icon: Volume2,
-    badge: 'Studio Standard',
+    id: 'auto',
+    name: 'Auto (Smart Mix)',
+    desc: 'Spotify Auto: analyzes BPM & Camelot harmony to pick optimal transition',
+    icon: Wand2,
+    badge: 'Spotify Auto',
     color: 'emerald'
   },
   {
-    id: 'bass_swap',
-    name: 'Bass Swap (High-Pass)',
+    id: 'fade',
+    name: 'Fade',
+    desc: 'Smooth equal-power crossfade without abrupt frequency changes',
+    icon: Volume2,
+    badge: 'Clean Crossfade',
+    color: 'emerald'
+  },
+  {
+    id: 'rise',
+    name: 'Rise',
+    desc: 'Dramatic high-pass sweep and buildup tension before the drop',
+    icon: Zap,
+    badge: 'Dramatic Drop',
+    color: 'amber'
+  },
+  {
+    id: 'blend',
+    name: 'Blend (Bass Swap)',
     desc: 'Sweeps out Track A low-end so Track B kick & bass drop clean',
     icon: Activity,
     badge: 'Club DJ',
     color: 'purple'
-  },
-  {
-    id: 'low_pass',
-    name: 'Filter Sweep (Low-Pass)',
-    desc: 'Muffles highs & vocals before the drop for massive buildup tension',
-    icon: Sliders,
-    badge: 'Festival EDM',
-    color: 'amber'
   },
   {
     id: 'cut',
@@ -46,14 +54,6 @@ const TRANSITION_STYLES = [
     icon: Disc,
     badge: 'Turntablist',
     color: 'cyan'
-  },
-  {
-    id: 'echo_out',
-    name: 'Echo Out (Dub Reverb)',
-    desc: 'Outgoing track dissolves into an atmospheric reverb tail as Track B hits',
-    icon: Radio,
-    badge: 'Spacious Drop',
-    color: 'indigo'
   }
 ];
 
@@ -226,13 +226,16 @@ export default function MiniMixerModal({
     const x = i * 15;
     const p = i / 20;
     let gA, gB;
-    if (style === 'equal_power') {
+    if (style === 'equal_power' || style === 'fade' || style === 'auto') {
       gA = Math.cos(p * Math.PI / 2);
       gB = Math.sin(p * Math.PI / 2);
     } else if (style === 'cut') {
       gA = p < 0.85 ? 1 : 0;
       gB = p >= 0.85 ? 1 : 0;
-    } else if (style === 'bass_swap') {
+    } else if (style === 'rise') {
+      gA = p < 0.75 ? 1.0 : Math.max(0, 1 - Math.pow((p - 0.75) / 0.25, 2));
+      gB = Math.pow(p, 1.5);
+    } else if (style === 'blend' || style === 'bass_swap') {
       gA = p < 0.45 ? 1 - 0.15 * Math.pow(p / 0.45, 2) : 0.85 * Math.pow((1 - p) / 0.55, 3);
       gB = p < 0.45 ? 0.35 * Math.pow(p / 0.45, 1.8) : 0.35 + 0.65 * Math.pow((p - 0.45) / 0.55, 0.6);
     } else if (style === 'low_pass') {
@@ -449,9 +452,32 @@ export default function MiniMixerModal({
               <div className="p-3.5 bg-zinc-900/40 rounded-2xl border border-zinc-800/80">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                    Transition Overlap Length
+                    Transition Overlap Length (Bars & Seconds)
                   </label>
                   <span className="text-sm font-extrabold text-[#17a398]">{duration}s</span>
+                </div>
+
+                {/* Spotify 4/4 Bars Quick Selector */}
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {[2, 4, 8, 12].map((b) => {
+                    const sec = Math.round((b * 240) / (dataA.bpm || 120));
+                    const isSelected = Math.abs(duration - sec) <= 1;
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setDuration(sec)}
+                        className={`py-1.5 px-2 rounded-xl text-center border font-mono transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#17a398] text-[#0b1110] border-[#17a398] font-black shadow-sm'
+                            : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:border-zinc-500 font-bold'
+                        }`}
+                      >
+                        <div className="text-xs">{b} Bars</div>
+                        <div className={`text-[9px] ${isSelected ? 'text-black/80' : 'text-zinc-400'}`}>~{sec}s</div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="relative flex items-center h-7 group my-1">
