@@ -27,18 +27,19 @@ async function publish() {
   const version = pkg.version || '2.1.1';
   const tag = `v${version}`;
   const releaseName = `Rivo v${version} (Mobile & Desktop)`;
-  const releaseBody = `## Rivo v${version} (Mobile v2.1.1 • Desktop v2.0.4)
+  const releaseBody = `## Rivo v${version} (Mobile & Desktop)
 
-### 🎛️ Fix DJ Mix Playlist Creation & Modal Viewport Expansion
-- **Fixed Bottom Sheet Collapse**: Fixed height computation and flex layout on iOS/Android bottom sheet modal so the DJ Mix form, inputs, search bar, and device tracks list expand completely to 86% of the screen.
-- **Fixed Bottom Button Bar**: Cancel and "CREATE DJ MIX (X)" buttons are permanently docked at the bottom of the modal for immediate one-tap creation.
-- **Nested Scrolling**: Added smooth nested scrolling for device tracks list allowing seamless selection of all downloaded vault tracks.
-- **Offline / Guest Mode Support**: Enables instant local playlist creation even when offline or unauthenticated.
+### 🎛️ Spotify-style Mixed Playlists with Dual-Deck Lookahead Engine
+- **True Dual-Deck Engine**: Seamless real-time overlap crossfading between songs on both online streaming and offline downloads without memory freeze or decode delays.
+- **5 Spotify Transition Styles**: Support for Auto, Fade, Rise, Blend (with Bass Swap), and Instant Cut.
+- **Camelot Wheel Harmony & BPM Columns**: Color-coded Camelot Key badges (1A-12B) and authentic BPM display in playlists.
+- **Interactive Transition Chips**: Clickable transition chips between playlist rows to inspect, configure bars (2, 4, 8, 12 bars), and audition with live real-time preview.
+- **Non-blocking Playback**: Removed mandatory download gating; playlists with Mix enabled play immediately.
 
 ### 📱 Release Assets
-- **Android APK**: \`Rivo-v2.1.1.apk\` (Build 105, genuine signed v1/v2/v3/v4).
-- **iOS IPA**: \`Rivo-v2.1.1.ipa\` (Build 105, Hermes-compiled).
-- **Windows EXE**: \`Rivo-v2.0.4.exe\`.
+- **Android APK**: \`Rivo-v${version}.apk\` (Build 108, signed v1/v2/v3).
+- **iOS IPA**: \`Rivo-v${version}.ipa\` (Build 108).
+- **Windows EXE**: \`Rivo-v${version}.exe\` (v2.1.4).
 `;
 
   const searchDirs = [
@@ -133,6 +134,7 @@ async function publish() {
       assetsToUpload.push({ name: `Rivo-v${version}.ipa`, data: ipaBytes, mime: 'application/octet-stream' });
     }
     if (exeBytes) {
+      assetsToUpload.push({ name: `Rivo-v${version}.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
       assetsToUpload.push({ name: `Rivo-v2.0.4.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
     }
 
