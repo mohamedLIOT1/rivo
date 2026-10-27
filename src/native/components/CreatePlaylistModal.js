@@ -17,8 +17,6 @@ import {
   X,
   Plus,
   DownloadCloud,
-  Link2,
-  Music,
   Disc,
   ArrowLeft,
   Sliders,
@@ -26,7 +24,6 @@ import {
   Square,
   Search,
   HardDrive,
-  Sparkles,
 } from 'lucide-react-native';
 import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
@@ -37,7 +34,7 @@ import { getDownloadedTracks, deduplicateTrackList } from '../services/downloadM
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTracks = [] }) {
-  const { token, syncUserData } = useUser();
+  const { token, syncUserData, setPlaylists } = useUser();
   const { showToast } = useToast();
 
   // 'select_type' | 'form'
@@ -136,6 +133,28 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
     }
     setLoading(true);
     try {
+      if (!token) {
+        const localPl = {
+          id: `pl-${Date.now()}`,
+          name: name.trim(),
+          description: desc.trim(),
+          isPublic: Boolean(isPublic),
+          isQuran: false,
+          isMix: false,
+          trackIds: [],
+          tracks: [],
+        };
+        if (typeof setPlaylists === 'function') {
+          setPlaylists((prev) => [localPl, ...(prev || [])]);
+        }
+        showToast(`Playlist "${name.trim()}" created!`, 'success');
+        setName('');
+        setDesc('');
+        if (onSuccess) onSuccess(localPl);
+        onClose();
+        return;
+      }
+
       const res = await fetch(`${API_BASE_URL}/api/playlists/create`, {
         method: 'POST',
         headers: {
@@ -177,6 +196,29 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
     }
     setLoading(true);
     try {
+      if (!token) {
+        const localPl = {
+          id: `pl-${Date.now()}`,
+          name: name.trim(),
+          description: desc.trim(),
+          isPublic: Boolean(isPublic),
+          isQuran: false,
+          isMix: true,
+          trackIds: selectedTrackIds,
+          tracks: selectedTrackIds,
+        };
+        if (typeof setPlaylists === 'function') {
+          setPlaylists((prev) => [localPl, ...(prev || [])]);
+        }
+        showToast(`DJ Mix "${name.trim()}" created!`, 'success');
+        setName('');
+        setDesc('');
+        setSelectedTrackIds([]);
+        if (onSuccess) onSuccess(localPl);
+        onClose();
+        return;
+      }
+
       const res = await fetch(`${API_BASE_URL}/api/playlists/create`, {
         method: 'POST',
         headers: {
@@ -311,76 +353,82 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
 
             {/* ── STEP 1: CHOOSE PLAYLIST TYPE ───────────────────────────────── */}
             {step === 'select_type' ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 12 }}>
-                <Text style={styles.sectionSubtitle}>
-                  Select what type of playlist you want to create:
-                </Text>
+              <View style={{ flex: 1, paddingTop: 12 }}>
+                <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                  <Text style={styles.sectionSubtitle}>
+                    Select what type of playlist you want to create:
+                  </Text>
 
-                {/* Standard Playlist Option */}
-                <TouchableOpacity
-                  style={styles.typeCard}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setPlaylistType('standard');
-                    setName('');
-                    setStep('form');
-                  }}
-                >
-                  <View style={styles.typeIconBox}>
-                    <Disc size={26} color={colors.mint} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.typeHeaderRow}>
-                      <Text style={styles.typeTitle}>Standard Playlist</Text>
-                      <View style={styles.typeTag}>
-                        <Text style={styles.typeTagText}>STREAMING</Text>
+                  {/* Standard Playlist Option */}
+                  <TouchableOpacity
+                    style={styles.typeCard}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setPlaylistType('standard');
+                      setName('');
+                      setStep('form');
+                    }}
+                  >
+                    <View style={styles.typeIconBox}>
+                      <Disc size={26} color={colors.mint} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.typeHeaderRow}>
+                        <Text style={styles.typeTitle}>Standard Playlist</Text>
+                        <View style={styles.typeTag}>
+                          <Text style={styles.typeTagText}>STREAMING</Text>
+                        </View>
                       </View>
-                    </View>
-                    <Text style={styles.typeDesc}>
-                      Classic playlist for streaming and organizing your favorite songs and albums in custom order.
-                    </Text>
-                    <View style={styles.selectTypeActionRow}>
-                      <Text style={styles.selectTypeActionText}>SELECT STANDARD →</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-
-                {/* DJ Mix Playlist Option */}
-                <TouchableOpacity
-                  style={[styles.typeCard, styles.typeCardMix]}
-                  activeOpacity={0.8}
-                  onPress={() => {
-                    setPlaylistType('mix');
-                    setName('My DJ Mix');
-                    setStep('form');
-                  }}
-                >
-                  <View style={[styles.typeIconBox, styles.typeIconBoxMix]}>
-                    <Sliders size={26} color={colors.ink} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.typeHeaderRow}>
-                      <Text style={styles.typeTitle}>🎛️ DJ Mix Playlist</Text>
-                      <View style={[styles.typeTag, styles.typeTagMix]}>
-                        <Text style={styles.typeTagTextMix}>OFFLINE ENGINE</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.typeDesc}>
-                      Continuous seamless mix with sample-accurate crossfades using local songs stored on your device.
-                    </Text>
-                    <View style={styles.selectTypeActionRow}>
-                      <Text style={[styles.selectTypeActionText, { color: '#082621' }]}>
-                        CREATE DJ MIX →
+                      <Text style={styles.typeDesc}>
+                        Classic playlist for streaming and organizing your favorite songs and albums in custom order.
                       </Text>
+                      <View style={styles.selectTypeActionRow}>
+                        <Text style={styles.selectTypeActionText}>SELECT STANDARD →</Text>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
+
+                  {/* DJ Mix Playlist Option */}
+                  <TouchableOpacity
+                    style={[styles.typeCard, styles.typeCardMix]}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      setPlaylistType('mix');
+                      setName('My DJ Mix');
+                      setStep('form');
+                    }}
+                  >
+                    <View style={[styles.typeIconBox, styles.typeIconBoxMix]}>
+                      <Sliders size={26} color={colors.ink} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.typeHeaderRow}>
+                        <Text style={styles.typeTitle}>🎛️ DJ Mix Playlist</Text>
+                        <View style={[styles.typeTag, styles.typeTagMix]}>
+                          <Text style={styles.typeTagTextMix}>OFFLINE ENGINE</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.typeDesc}>
+                        Continuous seamless mix with sample-accurate crossfades using local songs stored on your device.
+                      </Text>
+                      <View style={styles.selectTypeActionRow}>
+                        <Text style={[styles.selectTypeActionText, { color: '#082621' }]}>
+                          CREATE DJ MIX →
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                </ScrollView>
+
+                <TouchableOpacity style={styles.cancelBtnFull} onPress={onClose}>
+                  <Text style={styles.cancelText}>CANCEL</Text>
                 </TouchableOpacity>
-              </ScrollView>
+              </View>
             ) : (
               /* ── STEP 2: CREATION FORM ──────────────────────────────────────── */
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, paddingTop: 6 }}>
                 {playlistType === 'standard' ? (
-                  <>
+                  <View style={{ flex: 1 }}>
                     {/* Tab Switcher for Standard */}
                     <View style={styles.tabBar}>
                       <TouchableOpacity
@@ -405,7 +453,7 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                       </TouchableOpacity>
                     </View>
 
-                    <ScrollView showsVerticalScrollIndicator={false}>
+                    <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
                       {activeTab === 'create' ? (
                         <View style={styles.formContent}>
                           <Text style={styles.label}>PLAYLIST NAME *</Text>
@@ -442,23 +490,6 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                               thumbColor="#ffffff"
                             />
                           </View>
-
-                          <View style={styles.btnRow}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                              <Text style={styles.cancelText}>CANCEL</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.submitBtn, (!name.trim() || loading) && { opacity: 0.6 }]}
-                              onPress={handleCreateStandard}
-                              disabled={!name.trim() || loading}
-                            >
-                              {loading ? (
-                                <ActivityIndicator size="small" color={colors.ink} />
-                              ) : (
-                                <Text style={styles.submitText}>CREATE PLAYLIST</Text>
-                              )}
-                            </TouchableOpacity>
-                          </View>
                         </View>
                       ) : (
                         <View style={styles.formContent}>
@@ -476,210 +507,228 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                             autoCapitalize="none"
                             autoCorrect={false}
                           />
-
-                          <View style={styles.btnRow}>
-                            <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                              <Text style={styles.cancelText}>CANCEL</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.submitBtn, (!importUrl.trim() || loading) && { opacity: 0.6 }]}
-                              onPress={handleImport}
-                              disabled={!importUrl.trim() || loading}
-                            >
-                              {loading ? (
-                                <ActivityIndicator size="small" color={colors.ink} />
-                              ) : (
-                                <Text style={styles.submitText}>IMPORT PLAYLIST</Text>
-                              )}
-                            </TouchableOpacity>
-                          </View>
                         </View>
                       )}
                     </ScrollView>
-                  </>
+
+                    {/* Bottom Action Bar */}
+                    <View style={styles.btnRow}>
+                      <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                        <Text style={styles.cancelText}>CANCEL</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.submitBtn,
+                          ((activeTab === 'create' ? !name.trim() : !importUrl.trim()) || loading) && { opacity: 0.6 },
+                        ]}
+                        onPress={activeTab === 'create' ? handleCreateStandard : handleImport}
+                        disabled={(activeTab === 'create' ? !name.trim() : !importUrl.trim()) || loading}
+                      >
+                        {loading ? (
+                          <ActivityIndicator size="small" color={colors.ink} />
+                        ) : (
+                          <Text style={styles.submitText}>
+                            {activeTab === 'create' ? 'CREATE PLAYLIST' : 'IMPORT PLAYLIST'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 ) : (
                   /* ── DJ MIX FORM WITH DEVICE TRACK PICKER ────────────────── */
-                  <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-                    <View style={styles.formContent}>
-                      <Text style={styles.label}>DJ MIX NAME *</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Weekend Club Mix, High-Energy Mix..."
-                        placeholderTextColor="#9ca3af"
-                        value={name}
-                        onChangeText={setName}
-                        autoCapitalize="words"
-                      />
-
-                      <Text style={styles.label}>DESCRIPTION (OPTIONAL)</Text>
-                      <TextInput
-                        style={[styles.input, { height: 50, textAlignVertical: 'top' }]}
-                        placeholder="Continuous seamless crossfades with zero buffer latency..."
-                        placeholderTextColor="#9ca3af"
-                        value={desc}
-                        onChangeText={setDesc}
-                        multiline
-                      />
-
-                      <View style={styles.switchRow}>
-                        <View style={{ flex: 1, paddingRight: 8 }}>
-                          <Text style={styles.switchTitle}>Make DJ Mix Public</Text>
-                          <Text style={styles.switchDesc}>
-                            Visible on your profile and accessible to other listeners.
-                          </Text>
-                        </View>
-                        <Switch
-                          value={isPublic}
-                          onValueChange={setIsPublic}
-                          trackColor={{ false: '#27272a', true: colors.mint }}
-                          thumbColor="#ffffff"
+                  <View style={{ flex: 1 }}>
+                    <ScrollView
+                      showsVerticalScrollIndicator={false}
+                      style={{ flex: 1 }}
+                      contentContainerStyle={{ paddingBottom: 10 }}
+                    >
+                      <View style={styles.formContent}>
+                        <Text style={styles.label}>DJ MIX NAME *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. Weekend Club Mix, High-Energy Mix..."
+                          placeholderTextColor="#9ca3af"
+                          value={name}
+                          onChangeText={setName}
+                          autoCapitalize="words"
                         />
-                      </View>
 
-                      {/* Device Tracks Recommendation Section */}
-                      <View style={styles.deviceTracksSection}>
-                        <View style={styles.deviceTracksHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <HardDrive size={15} color={colors.teal} />
-                            <Text style={styles.deviceTracksTitle}>
-                              DEVICE TRACKS ({filteredDeviceTracks.length})
+                        <Text style={styles.label}>DESCRIPTION (OPTIONAL)</Text>
+                        <TextInput
+                          style={[styles.input, { height: 46, textAlignVertical: 'top' }]}
+                          placeholder="Continuous seamless crossfades with zero buffer latency..."
+                          placeholderTextColor="#9ca3af"
+                          value={desc}
+                          onChangeText={setDesc}
+                          multiline
+                        />
+
+                        <View style={styles.switchRow}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <Text style={styles.switchTitle}>Make DJ Mix Public</Text>
+                            <Text style={styles.switchDesc}>
+                              Visible on your profile and accessible to other listeners.
                             </Text>
                           </View>
-                          <View style={styles.deviceTrackCountBadge}>
-                            <Text style={styles.deviceTrackCountText}>
-                              {selectedTrackIds.length} SELECTED
-                            </Text>
-                          </View>
+                          <Switch
+                            value={isPublic}
+                            onValueChange={setIsPublic}
+                            trackColor={{ false: '#27272a', true: colors.mint }}
+                            thumbColor="#ffffff"
+                          />
                         </View>
 
-                        <Text style={styles.deviceTracksDesc}>
-                          Select songs saved on this device to include in your DJ mix. Local files enable zero-latency sample crossfades.
-                        </Text>
-
-                        {/* Search Bar & Action Buttons */}
-                        <View style={styles.searchRow}>
-                          <View style={styles.searchBox}>
-                            <Search size={14} color="#9ca3af" style={{ marginRight: 6 }} />
-                            <TextInput
-                              style={styles.searchInput}
-                              placeholder="Search device tracks..."
-                              placeholderTextColor="#9ca3af"
-                              value={trackSearch}
-                              onChangeText={setTrackSearch}
-                            />
-                          </View>
-                          <TouchableOpacity style={styles.miniBtn} onPress={selectAllFiltered}>
-                            <Text style={styles.miniBtnText}>ALL</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity style={styles.miniBtn} onPress={deselectAllFiltered}>
-                            <Text style={styles.miniBtnText}>CLEAR</Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        {/* Scrollable Track List */}
-                        <View style={styles.deviceTracksList}>
-                          {loadingDeviceTracks ? (
-                            <View style={styles.emptyDeviceBox}>
-                              <ActivityIndicator size="small" color={colors.teal} />
-                              <Text style={styles.emptyDeviceText}>Scanning device Vault...</Text>
-                            </View>
-                          ) : filteredDeviceTracks.length === 0 ? (
-                            <View style={styles.emptyDeviceBox}>
-                              <Disc size={24} color="#9ca3af" />
-                              <Text style={styles.emptyDeviceTitle}>
-                                {deviceTracks.length === 0
-                                  ? 'No downloaded tracks on this device'
-                                  : 'No matching tracks found'}
-                              </Text>
-                              <Text style={styles.emptyDeviceText}>
-                                {deviceTracks.length === 0
-                                  ? 'Download tracks to your Vault first so the DJ engine can mix them.'
-                                  : 'Try another search keyword.'}
+                        {/* Device Tracks Recommendation Section */}
+                        <View style={styles.deviceTracksSection}>
+                          <View style={styles.deviceTracksHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <HardDrive size={15} color={colors.teal} />
+                              <Text style={styles.deviceTracksTitle}>
+                                DEVICE TRACKS ({filteredDeviceTracks.length})
                               </Text>
                             </View>
-                          ) : (
-                            filteredDeviceTracks.map((t) => {
-                              const id = String(t._id || t.id);
-                              const isChecked = selectedTrackIds.includes(id);
-                              return (
-                                <TouchableOpacity
-                                  key={id}
-                                  style={[
-                                    styles.deviceTrackItem,
-                                    isChecked && styles.deviceTrackItemChecked,
-                                  ]}
-                                  activeOpacity={0.7}
-                                  onPress={() => toggleTrack(id)}
-                                >
-                                  <View style={{ marginRight: 8 }}>
-                                    {isChecked ? (
-                                      <CheckSquare size={18} color={colors.teal} />
-                                    ) : (
-                                      <Square size={18} color="#9ca3af" />
-                                    )}
-                                  </View>
+                            <View style={styles.deviceTrackCountBadge}>
+                              <Text style={styles.deviceTrackCountText}>
+                                {selectedTrackIds.length} SELECTED
+                              </Text>
+                            </View>
+                          </View>
 
-                                  <View style={styles.trackThumbBox}>
-                                    {t.cover || t.coverUrl ? (
-                                      <Image
-                                        source={{ uri: normalizeCoverUri(t.cover || t.coverUrl) }}
-                                        style={styles.trackThumb}
-                                        resizeMode="cover"
-                                      />
-                                    ) : (
-                                      <Disc size={16} color={colors.mint} />
-                                    )}
-                                  </View>
+                          <Text style={styles.deviceTracksDesc}>
+                            Select songs saved on this device to include in your DJ mix. Local files enable zero-latency sample crossfades.
+                          </Text>
 
-                                  <View style={{ flex: 1, paddingRight: 6 }}>
-                                    <Text style={styles.trackTitle} numberOfLines={1}>
-                                      {t.title}
-                                    </Text>
-                                    <Text style={styles.trackArtist} numberOfLines={1}>
-                                      {t.artist || 'Unknown Artist'}
-                                    </Text>
-                                  </View>
+                          {/* Search Bar & Action Buttons */}
+                          <View style={styles.searchRow}>
+                            <View style={styles.searchBox}>
+                              <Search size={14} color="#9ca3af" style={{ marginRight: 6 }} />
+                              <TextInput
+                                style={styles.searchInput}
+                                placeholder="Search device tracks..."
+                                placeholderTextColor="#9ca3af"
+                                value={trackSearch}
+                                onChangeText={setTrackSearch}
+                              />
+                            </View>
+                            <TouchableOpacity style={styles.miniBtn} onPress={selectAllFiltered}>
+                              <Text style={styles.miniBtnText}>ALL</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.miniBtn} onPress={deselectAllFiltered}>
+                              <Text style={styles.miniBtnText}>CLEAR</Text>
+                            </TouchableOpacity>
+                          </View>
 
-                                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                                    <Text style={styles.trackDuration}>
-                                      {formatDuration(t.duration)}
-                                    </Text>
-                                    <View style={styles.vaultTag}>
-                                      <Text style={styles.vaultTagText}>VAULT</Text>
-                                    </View>
-                                  </View>
-                                </TouchableOpacity>
-                              );
-                            })
-                          )}
+                          {/* Scrollable Track List */}
+                          <View style={styles.deviceTracksList}>
+                            {loadingDeviceTracks ? (
+                              <View style={styles.emptyDeviceBox}>
+                                <ActivityIndicator size="small" color={colors.teal} />
+                                <Text style={styles.emptyDeviceText}>Scanning device Vault...</Text>
+                              </View>
+                            ) : filteredDeviceTracks.length === 0 ? (
+                              <View style={styles.emptyDeviceBox}>
+                                <Disc size={24} color="#9ca3af" />
+                                <Text style={styles.emptyDeviceTitle}>
+                                  {deviceTracks.length === 0
+                                    ? 'No downloaded tracks on this device'
+                                    : 'No matching tracks found'}
+                                </Text>
+                                <Text style={styles.emptyDeviceText}>
+                                  {deviceTracks.length === 0
+                                    ? 'Download tracks to your Vault first so the DJ engine can mix them.'
+                                    : 'Try another search keyword.'}
+                                </Text>
+                              </View>
+                            ) : (
+                              <ScrollView
+                                nestedScrollEnabled={true}
+                                style={{ maxHeight: 200 }}
+                                showsVerticalScrollIndicator={true}
+                              >
+                                {filteredDeviceTracks.map((t) => {
+                                  const id = String(t._id || t.id);
+                                  const isChecked = selectedTrackIds.includes(id);
+                                  return (
+                                    <TouchableOpacity
+                                      key={id}
+                                      style={[
+                                        styles.deviceTrackItem,
+                                        isChecked && styles.deviceTrackItemChecked,
+                                      ]}
+                                      activeOpacity={0.7}
+                                      onPress={() => toggleTrack(id)}
+                                    >
+                                      <View style={{ marginRight: 8 }}>
+                                        {isChecked ? (
+                                          <CheckSquare size={18} color={colors.teal} />
+                                        ) : (
+                                          <Square size={18} color="#9ca3af" />
+                                        )}
+                                      </View>
+
+                                      <View style={styles.trackThumbBox}>
+                                        {t.cover || t.coverUrl ? (
+                                          <Image
+                                            source={{ uri: normalizeCoverUri(t.cover || t.coverUrl) }}
+                                            style={styles.trackThumb}
+                                            resizeMode="cover"
+                                          />
+                                        ) : (
+                                          <Disc size={16} color={colors.mint} />
+                                        )}
+                                      </View>
+
+                                      <View style={{ flex: 1, paddingRight: 6 }}>
+                                        <Text style={styles.trackTitle} numberOfLines={1}>
+                                          {t.title}
+                                        </Text>
+                                        <Text style={styles.trackArtist} numberOfLines={1}>
+                                          {t.artist || 'Unknown Artist'}
+                                        </Text>
+                                      </View>
+
+                                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                                        <Text style={styles.trackDuration}>
+                                          {formatDuration(t.duration)}
+                                        </Text>
+                                        <View style={styles.vaultTag}>
+                                          <Text style={styles.vaultTagText}>VAULT</Text>
+                                        </View>
+                                      </View>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </ScrollView>
+                            )}
+                          </View>
                         </View>
                       </View>
+                    </ScrollView>
 
-                      {/* Submit DJ Mix */}
-                      <View style={styles.btnRow}>
-                        <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                          <Text style={styles.cancelText}>CANCEL</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.submitBtn,
-                            styles.submitBtnMix,
-                            (!name.trim() || loading) && { opacity: 0.6 },
-                          ]}
-                          onPress={handleCreateMix}
-                          disabled={!name.trim() || loading}
-                        >
-                          {loading ? (
-                            <ActivityIndicator size="small" color={colors.ink} />
-                          ) : (
-                            <Text style={styles.submitText}>
-                              CREATE DJ MIX ({selectedTrackIds.length})
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      </View>
+                    {/* Fixed Bottom Action Bar */}
+                    <View style={styles.btnRow}>
+                      <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+                        <Text style={styles.cancelText}>CANCEL</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.submitBtn,
+                          styles.submitBtnMix,
+                          (!name.trim() || loading) && { opacity: 0.6 },
+                        ]}
+                        onPress={handleCreateMix}
+                        disabled={!name.trim() || loading}
+                      >
+                        {loading ? (
+                          <ActivityIndicator size="small" color={colors.ink} />
+                        ) : (
+                          <Text style={styles.submitText}>
+                            CREATE DJ MIX ({selectedTrackIds.length})
+                          </Text>
+                        )}
+                      </TouchableOpacity>
                     </View>
-                  </ScrollView>
+                  </View>
                 )}
               </View>
             )}
@@ -693,12 +742,16 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'flex-end',
+    paddingHorizontal: 8,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
   },
   sheetOuter: {
     position: 'relative',
-    maxHeight: '90%',
+    height: '86%',
+    maxHeight: '92%',
+    width: '100%',
   },
   hardShadow: {
     position: 'absolute',
@@ -707,23 +760,22 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: -4,
     backgroundColor: colors.ink,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderRadius: 16,
   },
   sheet: {
+    flex: 1,
     backgroundColor: colors.paper,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 2,
+    borderRadius: 16,
+    borderWidth: 2.5,
     borderColor: colors.ink,
     padding: 16,
-    maxHeight: '100%',
+    overflow: 'hidden',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 2,
     borderBottomColor: colors.ink,
   },
@@ -747,7 +799,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'monospace',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 13,
     color: colors.ink,
     letterSpacing: 0.5,
   },
@@ -781,8 +833,8 @@ const styles = StyleSheet.create({
     borderColor: colors.teal,
   },
   typeIconBox: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     backgroundColor: colors.ink,
     borderWidth: 1.5,
     borderColor: colors.ink,
@@ -852,8 +904,7 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     borderRadius: 8,
     padding: 3,
-    marginTop: 10,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   tabBtn: {
     flex: 1,
@@ -874,7 +925,7 @@ const styles = StyleSheet.create({
     color: colors.mint,
   },
   formContent: {
-    paddingVertical: 10,
+    paddingVertical: 6,
     gap: 8,
   },
   label: {
@@ -909,7 +960,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.ink,
     borderRadius: 8,
-    padding: 10,
+    padding: 8,
   },
   switchTitle: {
     fontFamily: 'monospace',
@@ -928,7 +979,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.ink,
     borderRadius: 8,
-    padding: 10,
+    padding: 8,
     gap: 6,
   },
   deviceTracksHeader: {
@@ -1001,11 +1052,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   deviceTracksList: {
-    maxHeight: 180,
+    maxHeight: 200,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: colors.ink,
     borderRadius: 6,
+    overflow: 'hidden',
   },
   deviceTrackItem: {
     flexDirection: 'row',
@@ -1095,6 +1147,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
+  },
+  cancelBtnFull: {
+    backgroundColor: '#ede5d3',
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 8,
   },
   cancelText: {
     fontFamily: 'monospace',
