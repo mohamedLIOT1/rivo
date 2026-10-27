@@ -8,7 +8,7 @@ import {
   Lock,
   ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
   Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw,
-  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical, BookOpen
+  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical, BookOpen, Sliders
 } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -363,6 +363,13 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
     handleDownloadTrack,
     volume = 0.8,
     setVolume,
+    isMixMode,
+    setIsMixMode,
+    mixDuration,
+    setMixDuration,
+    mixStyle,
+    setMixStyle,
+    triggerManualMix,
   } = useAudioPlayer();
 
   const { currentTime, duration } = useAudioProgress();
@@ -372,6 +379,15 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
   const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
   const isCurRadio = useMemo(() => isRadioTrack(currentTrack), [currentTrack]);
+  const nextTrackInQueue = useMemo(() => {
+    if (!displayQueue || displayQueue.length <= 1) return null;
+    const curIdx = displayQueue.findIndex(t => String(t._id || t.id) === String(trackId));
+    if (curIdx >= 0 && curIdx + 1 < displayQueue.length) {
+      return displayQueue[curIdx + 1];
+    }
+    return displayQueue[0];
+  }, [displayQueue, trackId]);
+
   const displayQueue = useMemo(() => {
     if (isCurRadio) {
       const radioQ = (queue || []).filter(isRadioTrack);
@@ -630,6 +646,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
             <TouchableOpacity
               style={styles.topWhiteBtn}
               activeOpacity={0.8}
+              onPress={() => onTrackAction && onTrackAction(currentTrack)}
             >
               <MoreHorizontal size={20} color="#000000" strokeWidth={3} />
             </TouchableOpacity>
@@ -876,6 +893,119 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                   </TouchableOpacity>
                 </View>
               </View>
+            </View>
+
+            {/* ── Spotify DJ Engine & Mix Controller Card ── */}
+            <View style={[styles.djDeckCard, isMixMode && styles.djDeckCardActive]}>
+              <View style={styles.djHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <Sliders size={18} color={isMixMode ? '#10b981' : '#94a3b8'} strokeWidth={2.5} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.djTitle}>SPOTIFY DJ ENGINE</Text>
+                    <Text style={styles.djSubtitle} numberOfLines={1}>
+                      {isMixMode ? 'AUTO BEATMATCH & SEAMLESS CROSSFADE ACTIVE' : 'DJ MIX MODE OFF'}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.djToggleBtn, isMixMode ? styles.djToggleBtnActive : styles.djToggleBtnInactive]}
+                  onPress={() => setIsMixMode(!isMixMode)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.djIndicatorDot, { backgroundColor: isMixMode ? '#10b981' : '#64748b' }]} />
+                  <Text style={[styles.djToggleText, { color: isMixMode ? '#10b981' : '#94a3b8' }]}>
+                    {isMixMode ? 'MIX ON' : 'MIX OFF'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {isMixMode && (
+                <>
+                  {/* Next Up Cue Bar */}
+                  <View style={styles.djNextUpBox}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={styles.djNextUpLabel}>UPCOMING CUE</Text>
+                      <Text style={styles.djCountdownText}>
+                        {(effectiveDuration || duration) > currentTime
+                          ? `Mix in ${Math.max(0, Math.round((effectiveDuration || duration) - currentTime))}s`
+                          : 'Cue ready'}
+                      </Text>
+                    </View>
+                    <View style={styles.djNextSongRow}>
+                      {nextTrackInQueue ? (
+                        <>
+                          <Image
+                            source={{ uri: normalizeCoverUri(nextTrackInQueue.cover || nextTrackInQueue.coverUrl) }}
+                            style={styles.djNextCover}
+                          />
+                          <View style={{ flex: 1, marginLeft: 8 }}>
+                            <Text style={styles.djNextTitle} numberOfLines={1}>
+                              {nextTrackInQueue.title || 'Next Track'}
+                            </Text>
+                            <Text style={styles.djNextArtist} numberOfLines={1}>
+                              {nextTrackInQueue.artist || 'Unknown Artist'}
+                            </Text>
+                          </View>
+                        </>
+                      ) : (
+                        <Text style={styles.djNoNextText}>End of queue — loops back to track 1</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Crossfade Duration Selector */}
+                  <View style={styles.djParamSection}>
+                    <Text style={styles.djParamLabel}>CROSSFADE DURATION</Text>
+                    <View style={styles.djPillRow}>
+                      {[4, 8, 12, 16].map((sec) => (
+                        <TouchableOpacity
+                          key={sec}
+                          style={[styles.djPill, mixDuration === sec && styles.djPillActive]}
+                          onPress={() => setMixDuration(sec)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.djPillText, mixDuration === sec && styles.djPillTextActive]}>
+                            {sec}s
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Transition Style Selector */}
+                  <View style={styles.djParamSection}>
+                    <Text style={styles.djParamLabel}>TRANSITION STYLE</Text>
+                    <View style={styles.djPillRow}>
+                      {[
+                        { id: 'equal_power', label: 'Equal Power' },
+                        { id: 'linear', label: 'Linear' },
+                        { id: 'bass_cut', label: 'Bass Cut' },
+                      ].map((st) => (
+                        <TouchableOpacity
+                          key={st.id}
+                          style={[styles.djPill, mixStyle === st.id && styles.djPillActive]}
+                          onPress={() => setMixStyle(st.id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.djPillText, mixStyle === st.id && styles.djPillTextActive]}>
+                            {st.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  {/* Trigger Crossfade Button */}
+                  <TouchableOpacity
+                    style={styles.djTriggerBtn}
+                    onPress={triggerManualMix}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.djTriggerBtnText}>⚡ TRIGGER CROSSFADE NOW</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </ScrollView>
         )}
@@ -1812,5 +1942,161 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '900',
     color: '#000000',
+  },
+  djDeckCard: {
+    backgroundColor: '#0c1815',
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#1f2e2a',
+    padding: 16,
+    marginTop: 14,
+    marginBottom: 20,
+  },
+  djDeckCardActive: {
+    borderColor: '#10b981',
+    backgroundColor: '#0e1f1a',
+  },
+  djHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  djTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.8,
+  },
+  djSubtitle: {
+    fontSize: 9,
+    color: '#94a3b8',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  djToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  djToggleBtnActive: {
+    backgroundColor: '#064e3b',
+    borderColor: '#10b981',
+  },
+  djToggleBtnInactive: {
+    backgroundColor: '#1e293b',
+    borderColor: '#334155',
+  },
+  djIndicatorDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  djToggleText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  djNextUpBox: {
+    marginTop: 14,
+    backgroundColor: '#07110e',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#162822',
+    padding: 10,
+  },
+  djNextUpLabel: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#10b981',
+    letterSpacing: 0.8,
+  },
+  djCountdownText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#f59e0b',
+  },
+  djNextSongRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  djNextCover: {
+    width: 34,
+    height: 34,
+    borderRadius: 6,
+    backgroundColor: '#1f2e2a',
+  },
+  djNextTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  djNextArtist: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 1,
+  },
+  djNoNextText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontStyle: 'italic',
+  },
+  djParamSection: {
+    marginTop: 12,
+  },
+  djParamLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.6,
+    marginBottom: 6,
+  },
+  djPillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  djPill: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1f2e2a',
+    backgroundColor: '#13231f',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  djPillActive: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  djPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#cbd5e1',
+  },
+  djPillTextActive: {
+    color: '#0b1110',
+    fontWeight: '900',
+  },
+  djTriggerBtn: {
+    marginTop: 14,
+    backgroundColor: '#f59e0b',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#000000',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  djTriggerBtnText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0b1110',
+    letterSpacing: 0.6,
   },
 });

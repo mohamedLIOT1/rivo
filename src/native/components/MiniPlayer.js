@@ -9,7 +9,7 @@ import { normalizeCoverUri } from '../utils/coverUtils';
 
 export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
@@ -63,6 +63,11 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               {isLive && (
                 <View style={{ backgroundColor: '#ef4444', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                   <Text style={{ color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text>
+                </View>
+              )}
+              {isMixMode && (
+                <View style={{ backgroundColor: '#f59e0b', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                  <Text style={{ color: '#0b1110', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>🎛️ MIX</Text>
                 </View>
               )}
               <Text style={[styles.title, !isDark && styles.titleLight, { flex: 1 }]} numberOfLines={1}>

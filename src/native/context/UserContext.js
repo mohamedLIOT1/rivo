@@ -333,36 +333,62 @@ export const UserProvider = ({ children }) => {
   };
 
   const removeTrackFromPlaylist = async (playlistId, trackId) => {
-    if (!token) return;
-    const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/remove-track`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ trackId }),
+    const plIdStr = String(playlistId);
+    const tIdStr = String(trackId);
+    setPlaylists(prev => {
+      const next = prev.map(p => {
+        if (String(p.id || p._id) === plIdStr) {
+          const nextTrackIds = (p.trackIds || []).filter(id => String(id) !== tIdStr);
+          const nextTracks = Array.isArray(p.tracks)
+            ? p.tracks.filter(t => String(typeof t === 'object' ? (t._id || t.id) : t) !== tIdStr)
+            : [];
+          return { ...p, trackIds: nextTrackIds, tracks: nextTracks };
+        }
+        return p;
+      });
+      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
     });
-    if (res.ok) await syncUserData();
+
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/remove-track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ trackId }),
+      });
+      if (res.ok) await syncUserData();
+    } catch {}
   };
 
-  const updatePlaylist = async (playlistId, { name, description, cover }) => {
-    if (!token) return { success: false, error: 'Not authenticated' };
+  const updatePlaylist = async (playlistId, { name, description, cover, trackIds }) => {
+    const plIdStr = String(playlistId);
+    setPlaylists(prev => {
+      const next = prev.map(p => {
+        if (String(p.id || p._id) === plIdStr) {
+          return {
+            ...p,
+            ...(name !== undefined ? { name } : {}),
+            ...(description !== undefined ? { description } : {}),
+            ...(cover !== undefined ? { cover } : {}),
+            ...(trackIds !== undefined ? { trackIds, tracks: trackIds } : {}),
+          };
+        }
+        return p;
+      });
+      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+
+    if (!token) return { success: true };
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name, description, cover }),
+        body: JSON.stringify({ name, description, cover, trackIds }),
       });
       const data = await res.json().catch(() => ({ success: false }));
       if (res.ok && data.success) {
-        setPlaylists(prev => prev.map(p => {
-          if (String(p.id || p._id) === String(playlistId)) {
-            return {
-              ...p,
-              name: name !== undefined ? name : p.name,
-              description: description !== undefined ? description : p.description,
-              cover: cover !== undefined ? cover : p.cover,
-            };
-          }
-          return p;
-        }));
         await syncUserData();
       }
       return data;

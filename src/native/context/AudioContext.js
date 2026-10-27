@@ -164,6 +164,46 @@ export const AudioProvider = ({ children }) => {
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
 
+  // ── DJ Mix Mode & Crossfade State ──
+  const [isMixMode, setIsMixModeState] = useState(false);
+  const isMixModeRef = useRef(false);
+  const setIsMixMode = (val) => {
+    isMixModeRef.current = Boolean(val);
+    setIsMixModeState(Boolean(val));
+  };
+  const [mixDuration, setMixDurationState] = useState(8);
+  const mixDurationRef = useRef(8);
+  const setMixDuration = (sec) => {
+    const s = Math.max(2, Math.min(30, Number(sec) || 8));
+    mixDurationRef.current = s;
+    setMixDurationState(s);
+  };
+  const [mixStyle, setMixStyleState] = useState('equal_power');
+  const mixStyleRef = useRef('equal_power');
+  const setMixStyle = (style) => {
+    mixStyleRef.current = style;
+    setMixStyleState(style);
+  };
+
+  const triggerManualMix = async () => {
+    if (!isPlayingRef.current || !soundRef.current) {
+      if (playNextTrackRef.current) playNextTrackRef.current();
+      return;
+    }
+    try {
+      const curVol = volumeRef.current || 0.8;
+      const steps = 6;
+      for (let i = 1; i <= steps; i++) {
+        await new Promise(r => setTimeout(r, 70));
+        const v = curVol * (1 - i / steps);
+        if (soundRef.current) await soundRef.current.setVolumeAsync(Math.max(0, v)).catch(() => {});
+      }
+    } catch {}
+    if (playNextTrackRef.current) {
+      playNextTrackRef.current();
+    }
+  };
+
   const jamSyncRef = useRef({ socket: null, jamSession: null });
   const [jamSession, setJamSessionState] = useState(null);
   const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
@@ -666,6 +706,25 @@ export const AudioProvider = ({ children }) => {
       playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: newCurrentTime, duration: newDuration };
       progressRef.current = { currentTime: newCurrentTime, duration: newDuration };
       setProgress({ currentTime: newCurrentTime, duration: newDuration });
+
+      // Smooth DJ crossfade volume ramp down during final mixDuration seconds
+      if (isMixModeRef.current && status.isPlaying && statusDurSec > 12) {
+        const remainingSec = statusDurSec - newCurrentTime;
+        const mixSec = mixDurationRef.current || 8;
+        if (remainingSec <= mixSec && remainingSec > 0) {
+          const ratio = Math.max(0.05, remainingSec / mixSec);
+          let factor = ratio;
+          if (mixStyleRef.current === 'equal_power') {
+            factor = Math.sin((ratio * Math.PI) / 2);
+          } else if (mixStyleRef.current === 'bass_cut') {
+            factor = Math.pow(ratio, 1.4);
+          }
+          const targetVol = (volumeRef.current || 0.8) * factor;
+          if (soundRef.current) {
+            soundRef.current.setVolumeAsync(Math.max(0.02, Math.min(1, targetVol))).catch(() => {});
+          }
+        }
+      }
 
       // Periodically sync elapsed playback time with lockscreen / drawer notification
       if (isPlayingRef.current && Math.abs(newCurrentTime - (playbackStatusRef.current._lastNotifSync || 0)) >= 3) {
@@ -1427,6 +1486,13 @@ export const AudioProvider = ({ children }) => {
   };
 
   const playPlaylist = async (playlistOrTracks, startIndex = 0) => {
+    const isMixPl = Boolean(
+      playlistOrTracks &&
+      (playlistOrTracks.isMix || (playlistOrTracks.name && String(playlistOrTracks.name).toUpperCase().includes('MIX')))
+    );
+    if (isMixPl) {
+      setIsMixMode(true);
+    }
     let list = [];
     if (Array.isArray(playlistOrTracks)) {
       list = playlistOrTracks;
@@ -2144,7 +2210,8 @@ export const AudioProvider = ({ children }) => {
   const controls = useMemo(() => ({
     currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadingIds, queue, progress: progressRef.current,
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
-    sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
+    sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
+    isMixMode, setIsMixMode, mixDuration, setMixDuration, mixStyle, setMixStyle, triggerManualMix,
     playTrack, playPlaylist, togglePlay, seekTo, isShuffle, setIsShuffle, toggleShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, reorderQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
@@ -2155,7 +2222,7 @@ export const AudioProvider = ({ children }) => {
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
     jamSession, setJamSync,
     remoteDevicePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, isMixMode, mixDuration, mixStyle, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
 
   return (
     <AudioContext.Provider value={controls}>

@@ -1,6 +1,6 @@
 {
-  "version": "2.0.3",
-  "notes": "Rivo Desktop v2.0.3 - Fixed DJ Mix modal viewport expansion and device tracks picker.",
+  "version": "2.0.4",
+  "notes": "Rivo Desktop v2.0.4 - Full Spotify DJ Mix Engine integration, playlist reordering & removal, and offline vault track suggestions.",
   "pub_date": "2026-10-27T08:46:50.194Z",
   "platforms": {
     "windows-x86_64": {

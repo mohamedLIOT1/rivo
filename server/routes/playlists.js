@@ -419,6 +419,9 @@ router.post('/:id/update', auth, async (req, res) => {
         pl.cover = cov.slice(0, 2048);
       }
     }
+    if (Array.isArray(req.body.trackIds)) {
+      pl.trackIds = req.body.trackIds.map(String);
+    }
     if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
     u.markModified('playlists');
     await u.save();

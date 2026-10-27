@@ -39,6 +39,10 @@ import {
   Search,
   Sparkles,
   RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Sliders,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -49,7 +53,7 @@ import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isQuranContent } from '../../utils/quranUtils';
-import { deduplicateTrackList } from '../services/downloadManager';
+import { deduplicateTrackList, getDownloadedTracks } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 
@@ -82,6 +86,7 @@ export default function LibraryScreen({
     tracks: userTracks = [],
     fetchPublicTracks,
     updatePlaylist,
+    removeTrackFromPlaylist,
     uploadPlaylistCover,
     togglePlaylistVisibility,
     syncUserData,
@@ -93,6 +98,39 @@ export default function LibraryScreen({
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
+  const [isReordering, setIsReordering] = useState(false);
+
+  useEffect(() => {
+    setIsReordering(false);
+  }, [selectedView]);
+
+  const handleMoveTrack = async (index, direction) => {
+    if (!selectedView || selectedView === 'liked') return;
+    const plId = String(selectedView.id || selectedView._id);
+    const currentTracks = [...activePlaylistTracks];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= currentTracks.length) return;
+
+    const temp = currentTracks[index];
+    currentTracks[index] = currentTracks[targetIndex];
+    currentTracks[targetIndex] = temp;
+
+    const newTrackIds = currentTracks.map(t => String(t._id || t.id));
+    if (updatePlaylist) {
+      await updatePlaylist(plId, { trackIds: newTrackIds });
+    }
+    showToast('Playlist reordered ✨', 'success');
+  };
+
+  const handleRemoveTrackDirect = async (track, index) => {
+    if (!selectedView || selectedView === 'liked' || !track) return;
+    const plId = String(selectedView.id || selectedView._id);
+    const trackId = String(track._id || track.id);
+    if (removeTrackFromPlaylist) {
+      await removeTrackFromPlaylist(plId, trackId);
+    }
+    showToast(`Removed "${track.title}" from playlist`, 'info');
+  };
   const [fetchedTracks, setFetchedTracks] = useState([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -232,6 +270,25 @@ export default function LibraryScreen({
   const fetchAiRecommendations = async () => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
     setIsLoadingAi(true);
+
+    if (selectedView.isMix) {
+      // 🎛️ DJ Mix: Only suggest local device-vault tracks that are already downloaded
+      try {
+        const offlineList = await getDownloadedTracks().catch(() => []);
+        const pool = [...(offlineList || []), ...(downloadedTracks || [])];
+        const deduplicated = deduplicateTrackList(pool);
+        const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
+        const candidates = deduplicated.filter(t => !existingIds.has(String(t._id || t.id)));
+        const shuffled = [...candidates].sort(() => 0.5 - Math.random()).slice(0, 15);
+        setAiRecommendations(shuffled);
+      } catch (e) {
+        setAiRecommendations([]);
+      } finally {
+        setIsLoadingAi(false);
+      }
+      return;
+    }
+
     try {
       const plId = String(selectedView.id || selectedView._id || '');
       const currentPl = (playlists || []).find(p => String(p.id || p._id) === plId) || selectedView;
@@ -302,7 +359,10 @@ export default function LibraryScreen({
     if (!songSearchQuery.trim()) return [];
     const q = songSearchQuery.toLowerCase().trim();
     const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
-    const pool = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
+    let pool = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
+    if (selectedView?.isMix) {
+      pool = deduplicateTrackList([...(downloadedTracks || [])]);
+    }
     return pool
       .filter(t => {
         if (existingIds.has(String(t._id || t.id))) return false;
@@ -528,29 +588,87 @@ export default function LibraryScreen({
         <FlatList
           data={selectedView === 'liked' ? likedTracks : activePlaylistTracks}
           keyExtractor={(item, idx) => String(item._id || item.id || idx)}
-          renderItem={({ item, index }) => (
-            <SongItem
-              key={item._id || item.id || String(index)}
-              track={item}
-              index={index + 1}
-              onPlay={() => {
-                if (selectedView === 'liked') {
-                  if (typeof playPlaylist === 'function') {
-                    playPlaylist(likedTracks, index);
-                  } else if (typeof playTrack === 'function') {
-                    playTrack(item, likedTracks);
+          renderItem={({ item, index }) => {
+            if (isReordering && selectedView !== 'liked') {
+              return (
+                <View style={[styles.reorderRow, !isDark && styles.reorderRowLight]}>
+                  <View style={{ width: 26, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#94a3b8' }}>{index + 1}</Text>
+                  </View>
+                  <Image
+                    source={{ uri: normalizeCoverUri(item.cover || item.coverUrl) }}
+                    style={{ width: 40, height: 40, borderRadius: 6, marginHorizontal: 8, backgroundColor: '#1f2e2a' }}
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#ffffff' : '#0b1110' }} numberOfLines={1}>
+                      {item.title || 'Untitled'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }} numberOfLines={1}>
+                      {item.artist || 'Unknown Artist'}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => handleMoveTrack(index, -1)}
+                      disabled={index === 0}
+                      style={[styles.reorderBtn, index === 0 && { opacity: 0.25 }]}
+                      activeOpacity={0.7}
+                    >
+                      <ArrowUp size={16} color={isDark ? '#ffffff' : '#000000'} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleMoveTrack(index, 1)}
+                      disabled={index === activePlaylistTracks.length - 1}
+                      style={[styles.reorderBtn, index === activePlaylistTracks.length - 1 && { opacity: 0.25 }]}
+                      activeOpacity={0.7}
+                    >
+                      <ArrowDown size={16} color={isDark ? '#ffffff' : '#000000'} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleRemoveTrackDirect(item, index)}
+                      style={[styles.reorderBtn, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}
+                      activeOpacity={0.7}
+                    >
+                      <Trash2 size={16} color="#dc2626" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+            return (
+              <SongItem
+                key={item._id || item.id || String(index)}
+                track={item}
+                index={index + 1}
+                onPlay={() => {
+                  if (selectedView === 'liked') {
+                    if (typeof playPlaylist === 'function') {
+                      playPlaylist(likedTracks, index);
+                    } else if (typeof playTrack === 'function') {
+                      playTrack(item, likedTracks);
+                    }
+                  } else {
+                    if (typeof playPlaylist === 'function') {
+                      playPlaylist(activePlaylistTracks, index);
+                    } else if (typeof playTrack === 'function') {
+                      playTrack(item, activePlaylistTracks);
+                    }
                   }
-                } else {
-                  if (typeof playPlaylist === 'function') {
-                    playPlaylist(activePlaylistTracks, index);
-                  } else if (typeof playTrack === 'function') {
-                    playTrack(item, activePlaylistTracks);
+                }}
+                onMorePress={() => {
+                  if (onTrackAction) {
+                    const plObj = selectedView && selectedView !== 'liked' ? selectedView : null;
+                    const plId = plObj ? String(plObj.id || plObj._id) : undefined;
+                    onTrackAction({
+                      ...item,
+                      playlistId: plId,
+                      playlist: plObj,
+                    });
                   }
-                }
-              }}
-              onMorePress={() => onTrackAction && onTrackAction(item)}
-            />
-          )}
+                }}
+              />
+            );
+          }}
           ListHeaderComponent={
             selectedView === 'liked' ? (
               <View>
@@ -651,6 +769,27 @@ export default function LibraryScreen({
                         >
                           <Edit3 size={11} color={colors.mint} />
                           <Text style={styles.editHeroPillText}>EDIT</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[
+                            styles.editHeroPill,
+                            isReordering && { backgroundColor: '#f59e0b', borderColor: '#000000' }
+                          ]}
+                          onPress={() => setIsReordering(!isReordering)}
+                          activeOpacity={0.7}
+                        >
+                          {isReordering ? (
+                            <>
+                              <Check size={11} color="#000000" />
+                              <Text style={[styles.editHeroPillText, { color: '#000000', fontWeight: 'bold' }]}>DONE</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Sliders size={11} color={colors.mint} />
+                              <Text style={styles.editHeroPillText}>REORDER</Text>
+                            </>
+                          )}
                         </TouchableOpacity>
                       </View>
                       <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }]}>{selectedView.name}</Text>
@@ -1782,5 +1921,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     color: '#082621',
+  },
+  reorderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1f2e2a',
+    backgroundColor: '#0c1815',
+  },
+  reorderRowLight: {
+    backgroundColor: '#f8fafc',
+    borderBottomColor: '#e2e8f0',
+  },
+  reorderBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    backgroundColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

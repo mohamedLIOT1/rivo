@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share, ActivityIndicator } from 'react-native';
-import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2 } from 'lucide-react-native';
+import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2, Trash2 } from 'lucide-react-native';
+import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
@@ -9,7 +10,8 @@ import CassetteTag from '../ui/CassetteTag';
 
 export default function TrackActionMenuModal({ visible, track, onClose, onOpenAddToPlaylist }) {
   const { playTrack, addToQueue, handleDownloadTrack, downloadedTracks = [], downloadingIds = {} } = useAudioPlayer();
-  const { likedTrackIds = [], toggleLikeTrack } = useUser();
+  const { likedTrackIds = [], toggleLikeTrack, removeTrackFromPlaylist } = useUser();
+  const { showToast } = useToast();
 
   if (!visible || !track) return null;
 
@@ -138,6 +140,23 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                 <Share2 size={18} color={colors.ink} />
                 <Text style={styles.actionText}>Share Tape</Text>
               </TouchableOpacity>
+
+              {Boolean(track.playlistId || track.playlist) && (
+                <TouchableOpacity
+                  style={[styles.actionRow, { borderTopWidth: 1.5, borderTopColor: '#ede5d3', marginTop: 4 }]}
+                  onPress={() => {
+                    const plId = track.playlistId || track.playlist?.id || track.playlist?._id;
+                    if (removeTrackFromPlaylist) removeTrackFromPlaylist(plId, trackId);
+                    if (showToast) showToast(`Removed "${track.title}" from playlist`, 'info');
+                    onClose();
+                  }}
+                >
+                  <Trash2 size={18} color="#dc2626" />
+                  <Text style={[styles.actionText, { color: '#dc2626', fontWeight: 'bold' }]}>
+                    Remove from Playlist
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>

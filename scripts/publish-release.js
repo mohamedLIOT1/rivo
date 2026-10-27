@@ -24,10 +24,10 @@ function getGitHubToken() {
 async function publish() {
   const token = await getGitHubToken();
   const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8'));
-  const version = pkg.version || '2.1.0';
+  const version = pkg.version || '2.1.1';
   const tag = `v${version}`;
   const releaseName = `Rivo v${version} (Mobile & Desktop)`;
-  const releaseBody = `## Rivo v${version} (Mobile v2.1.0 • Desktop v2.0.3)
+  const releaseBody = `## Rivo v${version} (Mobile v2.1.1 • Desktop v2.0.4)
 
 ### 🎛️ Fix DJ Mix Playlist Creation & Modal Viewport Expansion
 - **Fixed Bottom Sheet Collapse**: Fixed height computation and flex layout on iOS/Android bottom sheet modal so the DJ Mix form, inputs, search bar, and device tracks list expand completely to 86% of the screen.
@@ -36,9 +36,9 @@ async function publish() {
 - **Offline / Guest Mode Support**: Enables instant local playlist creation even when offline or unauthenticated.
 
 ### 📱 Release Assets
-- **Android APK**: \`Rivo-v2.1.0.apk\` (Build 104, genuine signed v1/v2/v3/v4).
-- **iOS IPA**: \`Rivo-v2.1.0.ipa\` (Build 104, Hermes-compiled).
-- **Windows EXE**: \`Rivo-v2.0.3.exe\`.
+- **Android APK**: \`Rivo-v2.1.1.apk\` (Build 105, genuine signed v1/v2/v3/v4).
+- **iOS IPA**: \`Rivo-v2.1.1.ipa\` (Build 105, Hermes-compiled).
+- **Windows EXE**: \`Rivo-v2.0.4.exe\`.
 `;
 
   const searchDirs = [
@@ -65,7 +65,7 @@ async function publish() {
       if (match) ipaPath = path.join(dir, match);
     }
     if (!exePath) {
-      const match = files.find(f => f.endsWith('.exe') && (f.includes('2.0.3') || f.includes(version))) ||
+      const match = files.find(f => f.endsWith('.exe') && (f.includes('2.0.4') || f.includes(version))) ||
                     files.find(f => f === 'Rivo.exe');
       if (match) exePath = path.join(dir, match);
     }
@@ -133,7 +133,7 @@ async function publish() {
       assetsToUpload.push({ name: `Rivo-v${version}.ipa`, data: ipaBytes, mime: 'application/octet-stream' });
     }
     if (exeBytes) {
-      assetsToUpload.push({ name: `Rivo-v2.0.3.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
+      assetsToUpload.push({ name: `Rivo-v2.0.4.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });
     }
 
     for (const asset of assetsToUpload) {

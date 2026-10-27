@@ -80,7 +80,7 @@ def main():
         ("public/downloads/Rivo_Setup.exe.sig", f"{REMOTE_DIR}/public/downloads/Rivo_Setup.exe.sig"),
         (f"public/downloads/Rivo-v{version}.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.apk"),
         (f"public/downloads/Rivo-v{version}.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa"),
-        ("public/downloads/Rivo-v2.0.3.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v2.0.3.exe"),
+        ("public/downloads/Rivo-v2.0.4.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v2.0.4.exe"),
         ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
         ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
         ("public/downloads/Rivo.exe", f"{REMOTE_DIR}/public/downloads/Rivo.exe"),
@@ -96,19 +96,19 @@ def main():
     run_ssh(
         f"cd {REMOTE_DIR}/public/downloads && "
         f"([ -f Rivo-v{version}.apk ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk 2>/dev/null || true) && "
-        f"([ -f Rivo-v2.0.3.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v2.0.3.exe -o Rivo-v2.0.3.exe 2>/dev/null || true) && "
+        f"([ -f Rivo-v2.0.4.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v2.0.4.exe -o Rivo-v2.0.4.exe 2>/dev/null || true) && "
         f"([ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa 2>/dev/null || true) && "
         f"([ -f Rivo_Setup.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe 2>/dev/null || true) && "
         f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/public/downloads/Rivo.apk 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
-        f"cp -f Rivo-v2.0.3.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
+        f"cp -f Rivo-v2.0.4.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
         f"mkdir -p {REMOTE_DIR}/dist/downloads && "
         f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/Rivo-v{version}.apk 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/Rivo-v{version}.ipa 2>/dev/null || true && "
-        f"cp -f Rivo-v2.0.3.exe {REMOTE_DIR}/dist/downloads/Rivo-v2.0.3.exe 2>/dev/null || true && "
+        f"cp -f Rivo-v2.0.4.exe {REMOTE_DIR}/dist/downloads/Rivo-v2.0.4.exe 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/Rivo.apk 2>/dev/null || true && "
         f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa 2>/dev/null || true && "
-        f"cp -f Rivo-v2.0.3.exe {REMOTE_DIR}/dist/downloads/Rivo.exe 2>/dev/null || true && "
+        f"cp -f Rivo-v2.0.4.exe {REMOTE_DIR}/dist/downloads/Rivo.exe 2>/dev/null || true && "
         f"mkdir -p /home/ubuntu/dist/downloads /var/www/html/downloads && "
         f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /home/ubuntu/dist/downloads/ 2>/dev/null || true && "
         f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /var/www/html/downloads/ 2>/dev/null || true"
