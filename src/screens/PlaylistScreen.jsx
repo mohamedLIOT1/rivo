@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
+import MixDownloadGate from '../components/MixDownloadGate';
 import ExportModal from '../components/ExportModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition } from '../utils/musicAnalysis';
@@ -191,6 +192,8 @@ export default function PlaylistScreen({
   const [duplicateConfirmTrack, setDuplicateConfirmTrack] = useState(null);
   const [isDeleteAlbumModalOpen, setIsDeleteAlbumModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [showMixGate, setShowMixGate] = useState(false);
+  const [pendingMixTrack, setPendingMixTrack] = useState(null);
 
   const handleAddTrackWithCheck = (trackToAdd) => {
     if (!trackToAdd) return;
@@ -690,11 +693,58 @@ export default function PlaylistScreen({
   };
 
   const handlePlayPlaylistTrack = (track) => {
+    if ((playlist?.isMix || isMixActive) && playlistTracks.length > 0) {
+      const notDownloaded = playlistTracks.filter(t => !t.downloaded);
+      if (notDownloaded.length > 0) {
+        setPendingMixTrack(track);
+        setShowMixGate(true);
+        return;
+      }
+    }
     const baseQueue = filteredPlaylistTracks;
     const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
     const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
     const fullQueue = [...baseQueue, ...extraRecs];
     onSelectTrack(track, fullQueue);
+  };
+
+  const handleConfirmDownloadAndMix = () => {
+    const notDownloaded = playlistTracks.filter(t => !t.downloaded);
+    if (notDownloaded.length > 0 && downloadAllTracks) {
+      downloadAllTracks(notDownloaded, playlist?.name || 'DJ Mix');
+    }
+    setShowMixGate(false);
+    setIsMixActive(true);
+    setIsMixMode?.(true);
+    if (playlist?.id || playlist?._id) {
+      try {
+        localStorage.setItem('rivo_mix_consented_' + (playlist.id || playlist._id), 'true');
+      } catch {}
+    }
+    const trackToPlay = pendingMixTrack || filteredPlaylistTracks[0];
+    if (trackToPlay) {
+      const baseQueue = filteredPlaylistTracks;
+      const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
+      const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
+      const fullQueue = [...baseQueue, ...extraRecs];
+      onSelectTrack(trackToPlay, fullQueue);
+    }
+    setPendingMixTrack(null);
+  };
+
+  const handlePlayWithoutMixMode = () => {
+    setShowMixGate(false);
+    setIsMixActive(false);
+    setIsMixMode?.(false);
+    const trackToPlay = pendingMixTrack || filteredPlaylistTracks[0];
+    if (trackToPlay) {
+      const baseQueue = filteredPlaylistTracks;
+      const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
+      const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
+      const fullQueue = [...baseQueue, ...extraRecs];
+      onSelectTrack(trackToPlay, fullQueue);
+    }
+    setPendingMixTrack(null);
   };
 
   return (
@@ -1687,6 +1737,16 @@ export default function PlaylistScreen({
         onClose={() => setIsExportModalOpen(false)}
         playlist={playlist}
         allTracks={tracks}
+        globalTheme={globalTheme}
+      />
+
+      <MixDownloadGate
+        isOpen={showMixGate}
+        onClose={() => { setShowMixGate(false); setPendingMixTrack(null); }}
+        playlist={playlist}
+        tracks={playlistTracks}
+        onDownloadAndMix={handleConfirmDownloadAndMix}
+        onPlayWithoutMix={handlePlayWithoutMixMode}
         globalTheme={globalTheme}
       />
     </div>

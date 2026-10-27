@@ -76,6 +76,14 @@ export default function MiniPlayer({
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
 
+  const isMixMode = Boolean(audio?.isMixMode);
+  const currentQueue = audio?.currentQueue || [];
+  const currentQueueIndex = audio?.currentQueueIndex ?? -1;
+  const nextMixTrack = isMixMode && currentQueue.length > 1 && currentQueueIndex >= 0
+    ? currentQueue[(currentQueueIndex + 1) % currentQueue.length]
+    : null;
+  const timeToNext = Math.max(0, Math.round(activeDuration - currentTime));
+
   const seekFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;
     const clickX = clientX - targetRect.left;
@@ -244,11 +252,18 @@ export default function MiniPlayer({
             </div>
 
             <div className="min-w-0 flex-1">
-              <h4 className={`font-display font-black text-xs truncate leading-tight ${
-                isDark ? 'text-zinc-100' : 'text-[#0b1110]'
-              }`}>
-                {currentTrack.title}
-              </h4>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h4 className={`font-display font-black text-xs truncate leading-tight flex-1 ${
+                  isDark ? 'text-zinc-100' : 'text-[#0b1110]'
+                }`}>
+                  {currentTrack.title}
+                </h4>
+                {isMixMode && (
+                  <span className="text-[8px] font-mono font-black bg-[#17a398] text-[#0b1110] px-1 py-0.2 rounded shrink-0">
+                    MIX
+                  </span>
+                )}
+              </div>
               <ArtistLinks
                 track={currentTrack}
                 onSelectArtist={onSelectArtist}
@@ -380,6 +395,18 @@ export default function MiniPlayer({
 
           {/* CENTER: Cassette Controls & Progress Scrubber */}
           <div className="w-5/12 flex flex-col items-center gap-1">
+            {isMixMode && (
+              <div className="flex items-center gap-2 -mt-1 mb-0.5">
+                <span className="text-[8px] font-mono font-black bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded">
+                  🎛️ MIX MODE
+                </span>
+                {nextMixTrack && (
+                  <span className="text-[9px] font-mono text-[#17a398] truncate max-w-[200px]">
+                    → {nextMixTrack.title} in {timeToNext}s
+                  </span>
+                )}
+              </div>
+            )}
             {/* Control buttons */}
             <div className="flex items-center gap-2 sm:gap-3">
               <button 

@@ -132,8 +132,12 @@ export default function FullPlayerModal({
     isRepeat: ctxIsRepeat, repeatMode: ctxRepeatMode, toggleRepeat: ctxToggleRepeat, setIsRepeat,
     currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue,
     togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
-    isPlaying: ctxIsPlaying
+    isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition
   } = useAudioPlayer();
+
+  const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
+    ? currentQueue[((ctxQueueIndex >= 0 ? ctxQueueIndex : 0) + 1) % currentQueue.length]
+    : null;
 
   const { toggleLike: ctxToggleLike } = useUser() || {};
   const isPlaying = propIsPlaying !== undefined ? propIsPlaying : ctxIsPlaying;
@@ -1724,6 +1728,46 @@ export default function FullPlayerModal({
               )}
             </button>
           </div>
+
+          {/* ── DJ Mix Mode: Coming Up Next Widget ── */}
+          {isMixMode && nextMixTrack && (
+            <div className={`p-2.5 sm:p-3 my-2 rounded-xl border-2 border-[#17a398] w-full ${
+              isDark ? 'bg-[#141d1b]' : 'bg-[#eef8f6]'
+            }`}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="text-[10px] font-mono font-black text-[#17a398] uppercase tracking-wider flex items-center gap-1.5">
+                  <span>🎛️</span>
+                  <span>COMING UP NEXT</span>
+                </div>
+                <div className="text-[9px] font-mono font-bold text-[#17a398] border border-[#17a398] px-1.5 py-0.2 rounded">
+                  EQUAL POWER • 8s
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <img 
+                  src={normalizeCoverUrl(nextMixTrack.cover, nextMixTrack)} 
+                  alt={nextMixTrack.title}
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border-2 border-[#17a398]/40 shrink-0" 
+                />
+                <div className="flex-1 min-w-0">
+                  <div className={`text-xs sm:text-sm font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                    {nextMixTrack.title}
+                  </div>
+                  <div className="text-[10px] text-zinc-400 truncate">
+                    {nextMixTrack.artist}
+                  </div>
+                </div>
+                <button 
+                  onClick={() => previewDjTransition?.(currentTrack, nextMixTrack, { style: 'equal_power', duration: 8 })}
+                  className="bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] text-[10px] font-mono font-black px-2.5 py-1.5 rounded-lg brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer shrink-0"
+                  title="Preview transition"
+                >
+                  <Play size={11} fill="currentColor" />
+                  <span>PREVIEW</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ── Audio Console Level Fader (Tactile Brutalist Volume Console) ── */}
           <div className={`pt-2 border-t-2 border-dashed ${isDark ? 'border-[#1f2e2a]' : 'border-[#ded2bb]'} flex items-center justify-between gap-2 shrink-0`}>

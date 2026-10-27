@@ -658,6 +658,52 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => {});
+      } else if (isMixModeRef.current) {
+        // DJ MIX MODE — Seamless crossfade
+        const queue = currentQueueRef.current;
+        const curIdx = currentQueueIndexRef.current;
+        if (queue && queue.length > 1) {
+          const nextIdx = (curIdx + 1) % queue.length;
+          const nextTrack = queue[nextIdx];
+          const curTrack = currentTrackRef.current;
+          const curId = String(curTrack?.id || curTrack?._id || '');
+          const nextId = String(nextTrack?.id || nextTrack?._id || '');
+
+          Promise.all([
+            getOfflineTrackAudioUrl(curId, curTrack?.title, curTrack?.artist),
+            getOfflineTrackAudioUrl(nextId, nextTrack?.title, nextTrack?.artist)
+          ]).then(([blobA, blobB]) => {
+            if (blobA && blobB) {
+              const transKey = `${curId}_${nextId}`;
+              const transKeyAlt = `${curId}___${nextId}`;
+              const savedTrans = queue?._transitions?.[transKey] ||
+                                 queue?._transitions?.[transKeyAlt] ||
+                                 activeTransRef.current?.[transKey] ||
+                                 activeTransRef.current?.[transKeyAlt];
+              const transDuration = savedTrans?.duration || 8;
+              const transStyle = savedTrans?.style || 'equal_power';
+              playTrueSpotifyMix({
+                songUrl1: blobA,
+                songUrl2: blobB,
+                transitionDuration: transDuration,
+                style: transStyle,
+                startOffsetA: Math.max(0, (durationRef.current || 180) - transDuration - 0.5),
+                onEnd: () => {
+                  currentQueueIndexRef.current = nextIdx;
+                  currentTrackRef.current = nextTrack;
+                  setCurrentQueueIndex(nextIdx);
+                  setCurrentTrack(nextTrack);
+                }
+              });
+            } else {
+              playNextTrackRef.current?.();
+            }
+          }).catch(() => {
+            playNextTrackRef.current?.();
+          });
+        } else {
+          playNextTrackRef.current?.();
+        }
       } else {
         // In Jam Session: ONLY the Host auto-advances when track finishes!
         if (jamSessionRef.current) {

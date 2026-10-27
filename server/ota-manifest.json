@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.0.7",
+  "version": "2.0.8",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري (3.24 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (3.24 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "notes": "تحديث هوائي فوري (v2.0.8) • محرك DJ Mix المتطور • دمج تلقائي للأغاني • واجهة وأداء أسرع",
+  "notesEn": "Instant OTA update (v2.0.8) • Advanced DJ Mix Engine • Seamless crossfading • Faster UI and performance.",
   "bundleSize": 3398215,
   "sizeMb": "3.24 MB",
-  "updatedAt": "2026-10-26T21:16:19.453Z"
+  "updatedAt": "2026-10-27T08:48:07.187Z"
 }

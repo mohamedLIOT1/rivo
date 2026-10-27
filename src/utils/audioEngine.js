@@ -182,6 +182,17 @@ export function getAudioContext() {
  * dynamic BiquadFilter sweeps (High-pass bass cutoff on A, Low-pass open on B),
  * running on the sample-accurate hardware audio clock.
  */
+async function fetchAudioBuffer(ctx, url) {
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    const res = await fetch(url);
+    const ab = await res.arrayBuffer();
+    return ctx.decodeAudioData(ab);
+  }
+  const res = await fetch(url);
+  const ab = await res.arrayBuffer();
+  return ctx.decodeAudioData(ab);
+}
+
 export async function playTrueSpotifyMix({
   songUrl1,
   songUrl2,
@@ -196,17 +207,9 @@ export async function playTrueSpotifyMix({
   resumeAudioContext();
 
   try {
-    const [res1, res2] = await Promise.all([
-      fetch(songUrl1),
-      fetch(songUrl2)
-    ]);
-    const [ab1, ab2] = await Promise.all([
-      res1.arrayBuffer(),
-      res2.arrayBuffer()
-    ]);
     const [buffer1, buffer2] = await Promise.all([
-      ctx.decodeAudioData(ab1),
-      ctx.decodeAudioData(ab2)
+      fetchAudioBuffer(ctx, songUrl1),
+      fetchAudioBuffer(ctx, songUrl2)
     ]);
 
     const duration1 = buffer1.duration;
