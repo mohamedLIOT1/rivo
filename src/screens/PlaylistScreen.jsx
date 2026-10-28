@@ -626,16 +626,23 @@ export default function PlaylistScreen({
     const idB = String(trackB?.id || trackB?._id || '');
     const k1 = `${idA}___${idB}`;
     const k2 = `${idA}_${idB}`;
+    const kTitle = `${trackA?.title}___${trackB?.title}`;
     const updated = { 
       ...transitions, 
       [pairKey]: settings,
       ...(k1 ? { [k1]: settings } : {}),
-      ...(k2 ? { [k2]: settings } : {})
+      ...(k2 ? { [k2]: settings } : {}),
+      ...(kTitle ? { [kTitle]: settings } : {})
     };
     setTransitions(updated);
     setActiveTransitions?.(updated);
     setIsMixActive(true);
     setIsMixMode?.(true);
+
+    if (playlist) {
+      playlist.transitions = updated;
+      playlist.isMix = true;
+    }
 
     try {
       localStorage.setItem('rivo_active_transitions', JSON.stringify(updated));

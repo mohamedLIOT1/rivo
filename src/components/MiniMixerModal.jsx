@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   X, Sliders, Volume2, Wand2, Play, Square, Check, Sparkles, Activity, Music2, 
-  Zap, Radio, Layers, Plus, Minus, Loader2, MoveHorizontal
+  Zap, Radio, Layers, Plus, Minus, Loader2, MoveHorizontal, Gauge
 } from 'lucide-react';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, calculateBarsDuration } from '../utils/musicAnalysis';
 import { calculateCrossfadeGains } from '../utils/audioEngine';
@@ -133,8 +133,15 @@ export default function MiniMixerModal({
     return initialTransition?.mixInPoint ? Math.min(durB, Number(initialTransition.mixInPoint)) : 0;
   });
 
+  // Volume Trim & Speed Controls for Deck A & Deck B
+  const [volA, setVolA] = useState(initialTransition?.volA !== undefined ? Number(initialTransition.volA) : 100);
+  const [volB, setVolB] = useState(initialTransition?.volB !== undefined ? Number(initialTransition.volB) : 100);
+  const [speedA, setSpeedA] = useState(initialTransition?.speedA !== undefined ? Number(initialTransition.speedA) : 1.0);
+  const [speedB, setSpeedB] = useState(initialTransition?.speedB !== undefined ? Number(initialTransition.speedB) : 1.0);
+
   const [autoMatchBpm, setAutoMatchBpm] = useState(initialTransition?.autoMatchBpm !== false);
   const [bassKill, setBassKill] = useState(Boolean(initialTransition?.bassKill));
+  const [isSavedNotice, setIsSavedNotice] = useState(false);
 
   // Dragging states
   const [isDraggingDeckA, setIsDraggingDeckA] = useState(false);
@@ -171,6 +178,10 @@ export default function MiniMixerModal({
       setCrossoverBias(Number(initialTransition.crossoverBias) || 0.5);
       if (initialTransition.mixOutPoint) setMixOutPoint(Math.min(durA, Number(initialTransition.mixOutPoint)));
       if (initialTransition.mixInPoint) setMixInPoint(Math.min(durB, Number(initialTransition.mixInPoint)));
+      setVolA(initialTransition.volA !== undefined ? Number(initialTransition.volA) : 100);
+      setVolB(initialTransition.volB !== undefined ? Number(initialTransition.volB) : 100);
+      setSpeedA(initialTransition.speedA !== undefined ? Number(initialTransition.speedA) : 1.0);
+      setSpeedB(initialTransition.speedB !== undefined ? Number(initialTransition.speedB) : 1.0);
       setAutoMatchBpm(initialTransition.autoMatchBpm !== false);
       setBassKill(Boolean(initialTransition.bassKill));
     } else {
@@ -181,7 +192,12 @@ export default function MiniMixerModal({
       setCrossoverBias(0.5);
       setMixOutPoint(defaultMixOut);
       setMixInPoint(0);
+      setVolA(100);
+      setVolB(100);
+      setSpeedA(1.0);
+      setSpeedB(1.0);
     }
+    setIsSavedNotice(false);
   }, [trackAId, trackBId, isOpen]);
 
   // Clean stop for audition & solo previews
@@ -221,7 +237,7 @@ export default function MiniMixerModal({
 
   if (!isOpen || !trackA || !trackB) return null;
 
-  const maxAllowedSec = 32;
+  const maxAllowedSec = 48;
   const thumbPct = Math.max(0, Math.min(100, ((duration - 1) / (maxAllowedSec - 1)) * 100));
 
   const handleSelectBars = (numBars) => {
@@ -335,13 +351,14 @@ export default function MiniMixerModal({
       const previewDuration = Math.min(duration, 8);
       const startSec = Math.max(0, mixOutPoint - previewDuration);
       audioA.currentTime = startSec;
-      audioA.volume = 1.0;
+      audioA.volume = Math.max(0, Math.min(1, (volA / 100)));
+      audioA.playbackRate = speedA;
 
       setSoloPlayingDeck('A');
       await audioA.play();
 
       const startTime = performance.now();
-      const totalMs = previewDuration * 1000;
+      const totalMs = (previewDuration / speedA) * 1000;
 
       const tick = () => {
         const elapsed = performance.now() - startTime;
@@ -382,13 +399,14 @@ export default function MiniMixerModal({
 
       const previewDuration = Math.min(duration, 8);
       audioB.currentTime = mixInPoint;
-      audioB.volume = 1.0;
+      audioB.volume = Math.max(0, Math.min(1, (volB / 100)));
+      audioB.playbackRate = speedB;
 
       setSoloPlayingDeck('B');
       await audioB.play();
 
       const startTime = performance.now();
-      const totalMs = previewDuration * 1000;
+      const totalMs = (previewDuration / speedB) * 1000;
 
       const tick = () => {
         const elapsed = performance.now() - startTime;
@@ -434,22 +452,27 @@ export default function MiniMixerModal({
       auditionDeckARef.current = audioA;
       auditionDeckBRef.current = audioB;
 
+      const multA = (Number(volA) || 100) / 100;
+      const multB = (Number(volB) || 100) / 100;
+
       const leadInSec = 2.0;
       const seekA = Math.max(0, mixOutPoint - duration - leadInSec);
       audioA.currentTime = seekA;
       audioB.currentTime = mixInPoint;
-      audioA.volume = 1.0;
+      audioA.playbackRate = speedA;
+      audioB.playbackRate = speedB;
+      audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
       audioB.volume = 0.0;
 
       setIsPreviewing(true);
       setPreviewProgress(0);
-      setLiveGainA(100);
+      setLiveGainA(Math.round(100 * multA));
       setLiveGainB(0);
 
       await audioA.play();
 
       const startTime = performance.now();
-      const leadInMs = leadInSec * 1000;
+      const leadInMs = (leadInSec / speedA) * 1000;
       const transMs = Math.max(1, duration) * 1000;
       const tailMs = 2000;
       const totalMs = leadInMs + transMs + tailMs;
@@ -461,9 +484,9 @@ export default function MiniMixerModal({
 
         if (elapsed < leadInMs) {
           setPreviewProgress(0);
-          audioA.volume = 1.0;
+          audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
           audioB.volume = 0.0;
-          setLiveGainA(100);
+          setLiveGainA(Math.round(100 * multA));
           setLiveGainB(0);
         } else if (elapsed <= leadInMs + transMs) {
           if (!deckBStarted) {
@@ -475,17 +498,17 @@ export default function MiniMixerModal({
           const rawP = (elapsed - leadInMs) / transMs;
           const { gainA, gainB } = calculateCrossfadeGains(rawP, style, crossoverBias);
 
-          audioA.volume = Math.max(0, Math.min(1, gainA));
-          audioB.volume = Math.max(0, Math.min(1, gainB));
+          audioA.volume = Math.max(0, Math.min(1, gainA * multA));
+          audioB.volume = Math.max(0, Math.min(1, gainB * multB));
           setPreviewProgress(rawP);
-          setLiveGainA(Math.round(gainA * 100));
-          setLiveGainB(Math.round(gainB * 100));
+          setLiveGainA(Math.round(gainA * multA * 100));
+          setLiveGainB(Math.round(gainB * multB * 100));
         } else {
           setPreviewProgress(1);
           audioA.volume = 0.0;
-          audioB.volume = 1.0;
+          audioB.volume = Math.max(0, Math.min(1, 1.0 * multB));
           setLiveGainA(0);
-          setLiveGainB(100);
+          setLiveGainB(Math.round(100 * multB));
           if (!audioA.paused) audioA.pause();
         }
 
@@ -505,6 +528,7 @@ export default function MiniMixerModal({
 
   const handleSave = () => {
     stopAudition();
+    setIsSavedNotice(true);
     setIsMixMode?.(true);
     onSaveTransition({
       style,
@@ -513,6 +537,10 @@ export default function MiniMixerModal({
       crossoverBias,
       mixOutPoint,
       mixInPoint,
+      volA,
+      volB,
+      speedA,
+      speedB,
       autoMatchBpm,
       bassKill,
       keyA: dataA.key,
@@ -520,7 +548,9 @@ export default function MiniMixerModal({
       bpmA: dataA.bpm,
       bpmB: dataB.bpm
     });
-    onClose();
+    setTimeout(() => {
+      onClose();
+    }, 200);
   };
 
   // Waveform zone percentages
@@ -743,6 +773,55 @@ export default function MiniMixerModal({
                 )}
               </div>
 
+              {/* Deck A Level & Speed Tweaks */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-white/5 text-[10px] font-mono">
+                {/* Volume Level */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-zinc-400">
+                    <span className="flex items-center gap-1 text-red-400 font-bold">
+                      <Volume2 size={12} />
+                      Volume: {volA}%
+                    </span>
+                    <span className="text-zinc-500">{volA === 100 ? '100% (Default)' : volA > 100 ? `+${volA - 100}% Boost` : `${volA - 100}% Cut`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="50"
+                    max="140"
+                    step="5"
+                    value={volA}
+                    onChange={(e) => setVolA(Number(e.target.value))}
+                    className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-red-500"
+                  />
+                </div>
+
+                {/* Speed / Tempo */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-zinc-400">
+                    <span className="flex items-center gap-1 text-amber-400 font-bold">
+                      <Gauge size={12} />
+                      Speed: {speedA.toFixed(2)}x
+                    </span>
+                    <button 
+                      type="button" 
+                      onClick={() => setSpeedA(1.0)} 
+                      className="text-[9px] text-zinc-400 hover:text-white underline cursor-pointer"
+                    >
+                      Reset (1.0x)
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.85"
+                    max="1.15"
+                    step="0.01"
+                    value={speedA}
+                    onChange={(e) => setSpeedA(Number(e.target.value))}
+                    className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-amber-500"
+                  />
+                </div>
+              </div>
+
               {/* Quick Jump Cue Point Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[10px] font-mono">
                 <div className="flex flex-wrap items-center gap-1 text-zinc-400">
@@ -843,7 +922,7 @@ export default function MiniMixerModal({
                   <span className="text-emerald-400 font-bold">
                     Mix-In: {formatTime(mixInPoint)} / {formatTime(durB)} ({Math.round((mixInPoint / durB) * 100)}%)
                   </span>
-                  <span>Skips Intro: {formatTime(mixInPoint)}</span>
+                  <span>Starts exactly at: {formatTime(mixInPoint)} (Skips intro)</span>
                 </div>
                 <input
                   type="range"
@@ -914,6 +993,68 @@ export default function MiniMixerModal({
                     style={{ left: `${mixInPctB + soloProgress * (overlapEndPctB - mixInPctB)}%` }}
                   />
                 )}
+              </div>
+
+              {/* Deck B Level & Speed Tweaks */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-white/5 text-[10px] font-mono">
+                {/* Volume Level */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-zinc-400">
+                    <span className="flex items-center gap-1 text-emerald-400 font-bold">
+                      <Volume2 size={12} />
+                      Volume: {volB}%
+                    </span>
+                    <span className="text-zinc-500">{volB === 100 ? '100% (Default)' : volB > 100 ? `+${volB - 100}% Boost` : `${volB - 100}% Cut`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="50"
+                    max="140"
+                    step="5"
+                    value={volB}
+                    onChange={(e) => setVolB(Number(e.target.value))}
+                    className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-emerald-500"
+                  />
+                </div>
+
+                {/* Speed / Tempo + BPM Sync */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-zinc-400">
+                    <span className="flex items-center gap-1 text-teal-400 font-bold">
+                      <Gauge size={12} />
+                      Speed: {speedB.toFixed(2)}x
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const ratio = Number((dataA.bpm / dataB.bpm).toFixed(2));
+                          setSpeedB(Math.max(0.85, Math.min(1.15, ratio)));
+                        }} 
+                        className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30"
+                        title={`Match Deck B speed to Deck A tempo (${dataA.bpm} BPM)`}
+                      >
+                        ⚡ Sync BPM ({dataA.bpm})
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={() => setSpeedB(1.0)} 
+                        className="text-[9px] text-zinc-400 hover:text-white underline cursor-pointer"
+                      >
+                        1.0x
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.85"
+                    max="1.15"
+                    step="0.01"
+                    value={speedB}
+                    onChange={(e) => setSpeedB(Number(e.target.value))}
+                    className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-teal-400"
+                  />
+                </div>
               </div>
 
               {/* Quick Jump Cue Point Buttons */}
@@ -1273,10 +1414,14 @@ export default function MiniMixerModal({
             <button
               type="button"
               onClick={handleSave}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer font-sans"
+              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer font-sans shadow-lg ${
+                isSavedNotice
+                  ? 'bg-emerald-400 text-black shadow-emerald-400/40 scale-105'
+                  : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/20'
+              }`}
             >
               <Check size={14} />
-              <span>Save Transition</span>
+              <span>{isSavedNotice ? 'Saved!' : 'Save Transition'}</span>
             </button>
           </div>
         </div>
