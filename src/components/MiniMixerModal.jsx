@@ -4,7 +4,7 @@ import {
   Zap, Radio, Layers, Plus, Minus, Loader2, MoveHorizontal, Gauge
 } from 'lucide-react';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, calculateBarsDuration } from '../utils/musicAnalysis';
-import { calculateCrossfadeGains } from '../utils/audioEngine';
+import { calculateCrossfadeGains, resumeAudioContext } from '../utils/audioEngine';
 import { useAudioPlayer, resolvePlayableAudioStream } from '../context/AudioContext';
 import { API_BASE_URL } from '../config';
 
@@ -329,6 +329,44 @@ export default function MiniMixerModal({
     setIsDraggingCurve(false);
   };
 
+  // Helper to safely prepare, seek, and play HTML5 audio across browsers without dropping currentTime
+  const safePlayAudio = async (audio, startTime, volume, speed) => {
+    resumeAudioContext();
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.playbackRate = Number(speed) || 1.0;
+
+    if (audio.readyState < 1) {
+      await new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (!done) {
+            done = true;
+            resolve();
+          }
+        };
+        audio.addEventListener('loadedmetadata', finish, { once: true });
+        audio.addEventListener('canplay', finish, { once: true });
+        audio.addEventListener('error', finish, { once: true });
+        setTimeout(finish, 3500);
+      });
+    }
+
+    try {
+      if (startTime > 0) {
+        audio.currentTime = startTime;
+      }
+    } catch (e) {}
+
+    await audio.play();
+
+    // Verify currentTime after play begins in case browser reset it
+    try {
+      if (startTime > 0 && Math.abs(audio.currentTime - startTime) > 1.5) {
+        audio.currentTime = startTime;
+      }
+    } catch (e) {}
+  };
+
   // ── Solo Deck A Audition (Mix-Out Point alone) ──
   const handlePreviewSoloA = async () => {
     if (soloPlayingDeck === 'A') {
@@ -336,36 +374,40 @@ export default function MiniMixerModal({
       return;
     }
     stopAudition();
-    if (isPlaying && togglePlay) togglePlay();
+    resumeAudioContext();
 
+    setSoloPlayingDeck('A');
     setIsLoadingAudio(true);
     try {
       const resA = await resolvePlayableAudioStream(trackA);
-      setIsLoadingAudio(false);
       const urlA = resA?.url ? (resA.url.startsWith('/') ? `${API_BASE_URL}${resA.url}` : resA.url) : '';
-      if (!urlA) return;
+      if (!urlA) {
+        stopAudition();
+        return;
+      }
 
       const audioA = new Audio(urlA);
+      audioA.preload = 'auto';
       auditionDeckARef.current = audioA;
 
       const previewDuration = Math.min(duration, 8);
       const startSec = Math.max(0, mixOutPoint - previewDuration);
-      audioA.currentTime = startSec;
-      audioA.volume = Math.max(0, Math.min(1, (volA / 100)));
-      audioA.playbackRate = speedA;
+      const targetVol = Math.max(0, Math.min(1, (Number(volA) || 100) / 100));
+      const spd = Number(speedA) || 1.0;
 
-      setSoloPlayingDeck('A');
-      await audioA.play();
+      await safePlayAudio(audioA, startSec, targetVol, spd);
+      setIsLoadingAudio(false);
 
       const startTime = performance.now();
-      const totalMs = (previewDuration / speedA) * 1000;
+      const totalMs = (previewDuration / spd) * 1000;
 
       const tick = () => {
+        if (!auditionDeckARef.current) return;
         const elapsed = performance.now() - startTime;
         const p = Math.min(1, elapsed / totalMs);
         setSoloProgress(p);
 
-        if (p < 1 && audioA && !audioA.paused) {
+        if (p < 1 && !audioA.ended) {
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
           stopAudition();
@@ -385,35 +427,40 @@ export default function MiniMixerModal({
       return;
     }
     stopAudition();
-    if (isPlaying && togglePlay) togglePlay();
+    resumeAudioContext();
 
+    setSoloPlayingDeck('B');
     setIsLoadingAudio(true);
     try {
       const resB = await resolvePlayableAudioStream(trackB);
-      setIsLoadingAudio(false);
       const urlB = resB?.url ? (resB.url.startsWith('/') ? `${API_BASE_URL}${resB.url}` : resB.url) : '';
-      if (!urlB) return;
+      if (!urlB) {
+        stopAudition();
+        return;
+      }
 
       const audioB = new Audio(urlB);
+      audioB.preload = 'auto';
       auditionDeckBRef.current = audioB;
 
       const previewDuration = Math.min(duration, 8);
-      audioB.currentTime = mixInPoint;
-      audioB.volume = Math.max(0, Math.min(1, (volB / 100)));
-      audioB.playbackRate = speedB;
+      const startSec = Math.max(0, mixInPoint);
+      const targetVol = Math.max(0, Math.min(1, (Number(volB) || 100) / 100));
+      const spd = Number(speedB) || 1.0;
 
-      setSoloPlayingDeck('B');
-      await audioB.play();
+      await safePlayAudio(audioB, startSec, targetVol, spd);
+      setIsLoadingAudio(false);
 
       const startTime = performance.now();
-      const totalMs = (previewDuration / speedB) * 1000;
+      const totalMs = (previewDuration / spd) * 1000;
 
       const tick = () => {
+        if (!auditionDeckBRef.current) return;
         const elapsed = performance.now() - startTime;
         const p = Math.min(1, elapsed / totalMs);
         setSoloProgress(p);
 
-        if (p < 1 && audioB && !audioB.paused) {
+        if (p < 1 && !audioB.ended) {
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
           stopAudition();
@@ -433,53 +480,78 @@ export default function MiniMixerModal({
       return;
     }
     stopAudition();
-    if (isPlaying && togglePlay) togglePlay();
+    resumeAudioContext();
 
+    setIsPreviewing(true);
     setIsLoadingAudio(true);
     try {
       const [resA, resB] = await Promise.all([
         resolvePlayableAudioStream(trackA),
         resolvePlayableAudioStream(trackB)
       ]);
-      setIsLoadingAudio(false);
 
       const urlA = resA?.url ? (resA.url.startsWith('/') ? `${API_BASE_URL}${resA.url}` : resA.url) : '';
       const urlB = resB?.url ? (resB.url.startsWith('/') ? `${API_BASE_URL}${resB.url}` : resB.url) : '';
-      if (!urlA || !urlB) return;
+      if (!urlA || !urlB) {
+        stopAudition();
+        return;
+      }
 
       const audioA = new Audio(urlA);
       const audioB = new Audio(urlB);
+      audioA.preload = 'auto';
+      audioB.preload = 'auto';
       auditionDeckARef.current = audioA;
       auditionDeckBRef.current = audioB;
 
       const multA = (Number(volA) || 100) / 100;
       const multB = (Number(volB) || 100) / 100;
+      const spdA = Number(speedA) || 1.0;
+      const spdB = Number(speedB) || 1.0;
 
       const leadInSec = 2.0;
       const seekA = Math.max(0, mixOutPoint - duration - leadInSec);
-      audioA.currentTime = seekA;
-      audioB.currentTime = mixInPoint;
-      audioA.playbackRate = speedA;
-      audioB.playbackRate = speedB;
-      audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
-      audioB.volume = 0.0;
+      const seekB = Math.max(0, mixInPoint);
 
-      setIsPreviewing(true);
+      // Pre-warm Deck B in parallel
+      audioB.playbackRate = spdB;
+      audioB.volume = 0.0;
+      const prepDeckBPromise = new Promise((resolve) => {
+        if (audioB.readyState >= 1) {
+          try { audioB.currentTime = seekB; } catch {}
+          resolve();
+        } else {
+          const onMeta = () => {
+            try { audioB.currentTime = seekB; } catch {}
+            resolve();
+          };
+          audioB.addEventListener('loadedmetadata', onMeta, { once: true });
+          setTimeout(resolve, 3500);
+        }
+        audioB.load();
+      });
+
+      // Play Deck A
+      await Promise.all([
+        safePlayAudio(audioA, seekA, 1.0 * multA, spdA),
+        prepDeckBPromise
+      ]);
+
+      setIsLoadingAudio(false);
       setPreviewProgress(0);
       setLiveGainA(Math.round(100 * multA));
       setLiveGainB(0);
 
-      await audioA.play();
-
       const startTime = performance.now();
-      const leadInMs = (leadInSec / speedA) * 1000;
+      const leadInMs = (leadInSec / spdA) * 1000;
       const transMs = Math.max(1, duration) * 1000;
-      const tailMs = 2000;
+      const tailMs = 2500;
       const totalMs = leadInMs + transMs + tailMs;
 
       let deckBStarted = false;
 
       const tick = () => {
+        if (!auditionDeckARef.current && !auditionDeckBRef.current) return;
         const elapsed = performance.now() - startTime;
 
         if (elapsed < leadInMs) {
@@ -491,7 +563,11 @@ export default function MiniMixerModal({
         } else if (elapsed <= leadInMs + transMs) {
           if (!deckBStarted) {
             deckBStarted = true;
-            audioB.currentTime = mixInPoint;
+            try {
+              if (Math.abs(audioB.currentTime - seekB) > 1.0) {
+                audioB.currentTime = seekB;
+              }
+            } catch {}
             audioB.play().catch(() => {});
           }
 
