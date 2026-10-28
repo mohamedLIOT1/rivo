@@ -397,6 +397,39 @@ export const UserProvider = ({ children }) => {
     }
   };
 
+  const updatePlaylistTransitions = async (playlistId, { isMix, transitions }) => {
+    const plIdStr = String(playlistId);
+    setPlaylists(prev => {
+      const next = prev.map(p => {
+        if (String(p.id || p._id) === plIdStr) {
+          return {
+            ...p,
+            ...(isMix !== undefined ? { isMix } : {}),
+            ...(transitions !== undefined ? { transitions } : {}),
+          };
+        }
+        return p;
+      });
+      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+
+    if (!token) return { success: true };
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/transitions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ isMix, transitions }),
+      });
+      return await res.json().catch(() => ({ success: false }));
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  };
+
   const uploadPlaylistCover = async (playlistId, fileUri) => {
     if (!token) return { success: false, error: 'Not authenticated' };
     try {
@@ -518,6 +551,7 @@ export const UserProvider = ({ children }) => {
         syncUserData,
         createPlaylist,
         updatePlaylist,
+        updatePlaylistTransitions,
         uploadPlaylistCover,
         togglePlaylistVisibility,
         addToPlaylist,

@@ -3,9 +3,9 @@
   "version": "2.1.9",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري v2.1.9 • دعم زرار الميكس في القوائم ومودات الانتقال المربعة",
-  "notesEn": "Instant OTA v2.1.9 • Playlist DJ Mix toggle parity and 2-column transition grid.",
-  "bundleSize": 3485711,
-  "sizeMb": "3.32 MB",
-  "updatedAt": "2026-10-28T12:53:46.097Z"
+  "notes": "تحديث هوائي فوري v2.1.9 • إصلاح زرار الميكس وإضافة ميزة تصدير الأغاني للملفات",
+  "notesEn": "Instant OTA v2.1.9 • Mix toggle fix and native audio export to Files.",
+  "bundleSize": 3489634,
+  "sizeMb": "3.33 MB",
+  "updatedAt": "2026-10-28T13:45:14.409Z"
 }

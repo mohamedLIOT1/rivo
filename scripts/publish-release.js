@@ -129,9 +129,11 @@ async function publish() {
     const assetsToUpload = [];
     if (apkBytes) {
       assetsToUpload.push({ name: `Rivo-v${version}.apk`, data: apkBytes, mime: 'application/vnd.android.package-archive' });
+      assetsToUpload.push({ name: 'Rivo.apk', data: apkBytes, mime: 'application/vnd.android.package-archive' });
     }
     if (ipaBytes) {
       assetsToUpload.push({ name: `Rivo-v${version}.ipa`, data: ipaBytes, mime: 'application/octet-stream' });
+      assetsToUpload.push({ name: 'Rivo.ipa', data: ipaBytes, mime: 'application/octet-stream' });
     }
     if (exeBytes) {
       assetsToUpload.push({ name: `Rivo-v${version}.exe`, data: exeBytes, mime: 'application/vnd.microsoft.portable-executable' });

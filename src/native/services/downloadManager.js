@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import { Platform, Share } from 'react-native';
 import {
   resolveAudioStream,
   resolveClientSideYouTubeStream,
@@ -1988,7 +1988,9 @@ export const importAudioFolderFromDevice = async () => {
 export const importLocalAudioFiles = async () => {
   try {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ['audio/*'],
+      type: Platform.OS === 'ios'
+        ? ['public.audio', 'public.mp3', 'com.apple.m4a-audio', 'audio/*']
+        : ['audio/*'],
       multiple: true,
       copyToCacheDirectory: true,
     });
@@ -2399,4 +2401,107 @@ export const updateDownloadedTrackLyrics = async (trackIdOrObj, lyrics) => {
     const cleaned = deduplicateTrackList(updated);
     await saveToStorageAndManifest(cleaned);
   }
+};
+
+export const exportTrackAudioFile = async (track) => {
+  if (!track) throw new Error('No track provided');
+  const trackId = String(track._id || track.id || '');
+
+  // 1. Locate the physical audio file
+  let sourceUri = track.localAudioUri;
+  if (sourceUri && typeof sourceUri === 'string' && sourceUri.startsWith('file://')) {
+    const info = await FileSystem.getInfoAsync(sourceUri).catch(() => null);
+    if (!info || !info.exists) {
+      sourceUri = null;
+    }
+  } else {
+    sourceUri = null;
+  }
+
+  if (!sourceUri) {
+    const candidates = [
+      `${TRACKS_DIR}${trackId}.mp3`,
+      `${TRACKS_DIR}${trackId}.m4a`,
+      `${TRACKS_DIR}${trackId}.wav`,
+      `${TRACKS_DIR}${trackId}.aac`,
+      `${TRACKS_DIR}${trackId}`,
+    ];
+    for (const cand of candidates) {
+      const info = await FileSystem.getInfoAsync(cand).catch(() => null);
+      if (info && info.exists && info.size > 1000) {
+        sourceUri = cand;
+        break;
+      }
+    }
+  }
+
+  if (!sourceUri) {
+    const all = await getDownloadedTracks();
+    const found = all.find(t => String(t._id || t.id) === trackId);
+    if (found && found.localAudioUri) {
+      sourceUri = found.localAudioUri;
+    }
+  }
+
+  if (!sourceUri) {
+    throw new Error('Audio file not found on disk. Please ensure track is downloaded.');
+  }
+
+  // 2. Prepare a clean human-friendly filename
+  const cleanStr = (s) => (s || '').replace(/[/\\?%*:|"<>]/g, '_').trim();
+  const rawTitle = cleanStr(track.title) || 'Track';
+  const rawArtist = cleanStr(track.artist) || 'Rivo';
+  const extMatch = sourceUri.match(/\.(mp3|m4a|wav|aac|flac|ogg)$/i);
+  const ext = extMatch ? extMatch[1].toLowerCase() : 'mp3';
+  const cleanFileName = `${rawTitle} - ${rawArtist}.${ext}`;
+
+  // 3. Create a clean file in cacheDirectory
+  const targetUri = `${FileSystem.cacheDirectory}${cleanFileName}`;
+  try {
+    await FileSystem.copyAsync({
+      from: sourceUri,
+      to: targetUri,
+    });
+  } catch (e) {
+    await FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => {});
+    await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
+  }
+
+  // 4. Share / Export natively
+  if (Platform.OS === 'ios') {
+    await Share.share({
+      url: targetUri,
+      title: `${rawTitle} - ${rawArtist}`,
+    });
+  } else {
+    try {
+      if (FileSystem.StorageAccessFramework) {
+        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+        if (permissions && permissions.granted) {
+          const mimeType = ext === 'm4a' ? 'audio/mp4' : 'audio/mpeg';
+          const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+            permissions.directoryUri,
+            cleanFileName,
+            mimeType
+          );
+          const base64 = await FileSystem.readAsStringAsync(targetUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          await FileSystem.writeAsStringAsync(newFileUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          return { success: true, uri: newFileUri, method: 'saf' };
+        }
+      }
+    } catch (safErr) {
+      console.warn('SAF export fallback:', safErr);
+    }
+
+    await Share.share({
+      url: targetUri,
+      title: `${rawTitle} - ${rawArtist}`,
+    });
+  }
+
+  return { success: true, uri: targetUri };
 };

@@ -94,6 +94,7 @@ export default function LibraryScreen({
     tracks: userTracks = [],
     fetchPublicTracks,
     updatePlaylist,
+    updatePlaylistTransitions,
     removeTrackFromPlaylist,
     uploadPlaylistCover,
     togglePlaylistVisibility,
@@ -131,13 +132,8 @@ export default function LibraryScreen({
   useEffect(() => {
     if (selectedView && typeof selectedView === 'object' && selectedView !== 'liked') {
       const current = (playlists || []).find(p => String(p._id || p.id) === String(selectedView._id || selectedView.id));
-      if (current) {
-        if (current.transitions) {
-          setPlaylistTransitions(current.transitions);
-        }
-        if (typeof current.isMix === 'boolean') {
-          setIsMixActive(Boolean(current.isMix));
-        }
+      if (current && current.transitions) {
+        setPlaylistTransitions(current.transitions);
       }
     }
   }, [playlists]);
@@ -495,6 +491,11 @@ export default function LibraryScreen({
     const nextState = !isMixActive;
     setIsMixActive(nextState);
 
+    if (selectedView && typeof selectedView === 'object') {
+      selectedView.isMix = nextState;
+      setSelectedView(prev => (prev && typeof prev === 'object') ? { ...prev, isMix: nextState } : prev);
+    }
+
     if (nextState) {
       if (typeof setIsMixMode === 'function') setIsMixMode(true);
       if (Object.keys(playlistTransitions || {}).length === 0 && activePlaylistTracks.length > 1) {
@@ -512,12 +513,13 @@ export default function LibraryScreen({
       }
     }
 
+    showToast(nextState ? 'Mix Mode activated!' : 'Mix Mode turned off', 'info');
+
     try {
       if (selectedView && selectedView !== 'liked') {
         const plId = String(selectedView.id || selectedView._id);
-        selectedView.isMix = nextState;
-        if (typeof updatePlaylist === 'function') {
-          await updatePlaylist(plId, { isMix: nextState, transitions: playlistTransitions });
+        if (typeof updatePlaylistTransitions === 'function') {
+          await updatePlaylistTransitions(plId, { isMix: nextState, transitions: playlistTransitions });
         } else {
           const authTok = token || '';
           await fetch(`${API_BASE_URL}/api/playlists/${plId}/transitions`, {
@@ -529,7 +531,6 @@ export default function LibraryScreen({
             body: JSON.stringify({ isMix: nextState, transitions: playlistTransitions })
           });
         }
-        showToast(nextState ? 'Mix Mode activated!' : 'Mix Mode turned off', 'info');
       }
     } catch (e) {
       console.warn('Failed to update playlist mix state:', e);
@@ -559,16 +560,21 @@ export default function LibraryScreen({
 
     setPlaylistTransitions(updatedTransitions);
     setIsMixActive(true);
+    if (selectedView && typeof selectedView === 'object') {
+      selectedView.isMix = true;
+      selectedView.transitions = updatedTransitions;
+      setSelectedView(prev => (prev && typeof prev === 'object') ? { ...prev, isMix: true, transitions: updatedTransitions } : prev);
+    }
     if (typeof setIsMixMode === 'function') setIsMixMode(true);
     if (typeof setActiveTransitions === 'function') setActiveTransitions(updatedTransitions);
+
+    showToast('Generated smart transitions for all tracks!', 'success');
 
     try {
       if (selectedView && selectedView !== 'liked') {
         const plId = String(selectedView.id || selectedView._id);
-        selectedView.isMix = true;
-        selectedView.transitions = updatedTransitions;
-        if (typeof updatePlaylist === 'function') {
-          await updatePlaylist(plId, { isMix: true, transitions: updatedTransitions });
+        if (typeof updatePlaylistTransitions === 'function') {
+          await updatePlaylistTransitions(plId, { isMix: true, transitions: updatedTransitions });
         } else {
           const authTok = token || '';
           await fetch(`${API_BASE_URL}/api/playlists/${plId}/transitions`, {
@@ -581,7 +587,6 @@ export default function LibraryScreen({
           });
         }
       }
-      showToast('Generated smart transitions for all tracks!', 'success');
     } catch (e) {
       console.warn('Failed to auto-mix all:', e);
     } finally {
@@ -1561,11 +1566,23 @@ export default function LibraryScreen({
             if (typeof setIsMixMode === 'function') setIsMixMode(true);
             if (selectedView && selectedView !== 'liked') {
               selectedView.isMix = true;
-              if (updatePlaylist) {
-                const plId = String(selectedView.id || selectedView._id);
-                updatePlaylist(plId, { isMix: true, transitions: updated }).catch(err => {
+              selectedView.transitions = updated;
+              setSelectedView(prev => (prev && typeof prev === 'object') ? { ...prev, isMix: true, transitions: updated } : prev);
+              const plId = String(selectedView.id || selectedView._id);
+              if (typeof updatePlaylistTransitions === 'function') {
+                updatePlaylistTransitions(plId, { isMix: true, transitions: updated }).catch(err => {
                   console.warn('Failed to sync transitions to playlist:', err);
                 });
+              } else {
+                const authTok = token || '';
+                fetch(`${API_BASE_URL}/api/playlists/${plId}/transitions`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    ...(authTok ? { Authorization: `Bearer ${authTok}` } : {})
+                  },
+                  body: JSON.stringify({ isMix: true, transitions: updated })
+                }).catch(() => {});
               }
             }
 

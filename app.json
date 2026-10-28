@@ -13,7 +13,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rivo.app",
-      "buildNumber": "112",
+      "buildNumber": "114",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -31,7 +31,7 @@
         "backgroundColor": "#0b1110"
       },
       "package": "com.rivo.app",
-      "versionCode": 112,
+      "versionCode": 114,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",

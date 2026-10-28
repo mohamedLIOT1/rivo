@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share, ActivityIndicator } from 'react-native';
-import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2, Trash2 } from 'lucide-react-native';
+import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2, Trash2, FolderDown } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { exportTrackAudioFile } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 
 export default function TrackActionMenuModal({ visible, track, onClose, onOpenAddToPlaylist }) {
@@ -140,6 +141,27 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                 <Share2 size={18} color={colors.ink} />
                 <Text style={styles.actionText}>Share Tape</Text>
               </TouchableOpacity>
+
+              {isDownloaded && (
+                <TouchableOpacity
+                  style={styles.actionRow}
+                  onPress={async () => {
+                    try {
+                      onClose();
+                      if (showToast) showToast('Preparing audio file for export...', 'info');
+                      await exportTrackAudioFile(track);
+                      if (showToast) showToast('Export dialog opened!', 'success');
+                    } catch (e) {
+                      if (showToast) showToast(e.message || 'Export failed', 'error');
+                    }
+                  }}
+                >
+                  <FolderDown size={18} color="#10b981" />
+                  <Text style={[styles.actionText, { color: '#10b981', fontWeight: 'bold' }]}>
+                    Export Audio File (حفظ في الملفات)
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {Boolean(track.playlistId || track.playlist) && (
                 <TouchableOpacity

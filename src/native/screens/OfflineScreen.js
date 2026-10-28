@@ -11,7 +11,7 @@ import {
   TextInput,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw, CheckSquare, Square, Check, ListPlus, X, Search } from 'lucide-react-native';
+import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPlus, RefreshCw, FolderDown, CheckSquare, Square, Check, ListPlus, X, Search } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -24,6 +24,7 @@ import {
   removeDownloadedTracksBatch,
   importLocalAudioFiles,
   importAudioFolderFromDevice,
+  exportTrackAudioFile,
   scanOfflineVault,
   getStorageLocationInfo,
   deduplicateTrackList,
@@ -488,6 +489,21 @@ export default function OfflineScreen() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
+                          style={styles.exportBtn}
+                          onPress={async () => {
+                            try {
+                              showToast('Preparing audio export...', 'info');
+                              await exportTrackAudioFile(track);
+                              showToast('Export dialog opened!', 'success');
+                            } catch (e) {
+                              showToast(e.message || 'Export failed', 'error');
+                            }
+                          }}
+                        >
+                          <FolderDown size={15} color="#10b981" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
                           style={styles.deleteBtn}
                           onPress={() => handleDelete(track)}
                         >
@@ -780,6 +796,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.mint,
     borderWidth: 1.5,
     borderColor: colors.ink,
+    borderRadius: 6,
+  },
+  exportBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1.5,
+    borderColor: '#10b981',
     borderRadius: 6,
   },
   deleteBtn: {
