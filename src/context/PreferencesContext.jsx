@@ -11,6 +11,24 @@ const DEFAULT_CONTENT_MODES = {
 export function PreferencesProvider({ children, currentUser }) {
   const language = 'en';
 
+  const [vocalOnlyMode, setVocalOnlyModeState] = useState(() => {
+    try {
+      return localStorage.getItem('rivo_vocal_only') === 'true';
+    } catch {}
+    return false;
+  });
+
+  const toggleVocalOnlyMode = (overrideVal) => {
+    const next = typeof overrideVal === 'boolean' ? overrideVal : !vocalOnlyMode;
+    setVocalOnlyModeState(next);
+    try {
+      localStorage.setItem('rivo_vocal_only', next ? 'true' : 'false');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('rivo-vocal-mode-changed', { detail: { enabled: next } }));
+      }
+    } catch {}
+  };
+
   const [contentModes, setContentModesState] = useState(() => {
     try {
       const saved = localStorage.getItem('rivo_content_modes');
@@ -88,7 +106,9 @@ export function PreferencesProvider({ children, currentUser }) {
         showQuran,
         showPodcasts: false,
         showAudiobooks: false,
-        isPureIslamicMode: !showMusic
+        isPureIslamicMode: !showMusic,
+        vocalOnlyMode,
+        toggleVocalOnlyMode
       }}
     >
       {children}
@@ -108,7 +128,9 @@ export function usePreferences() {
       showQuran: true,
       showPodcasts: false,
       showAudiobooks: false,
-      isPureIslamicMode: false
+      isPureIslamicMode: false,
+      vocalOnlyMode: false,
+      toggleVocalOnlyMode: () => {}
     };
   }
   return ctx;

@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
 const rateLimit = require('express-rate-limit');
 const { Track, Album, User, SongLyrics } = require('../models');
@@ -1187,6 +1188,95 @@ router.get('/stream-proxy', async (req, res) => {
     response.data.pipe(res);
   } catch (err) {
     res.status(500).send('Proxy streaming failed');
+  }
+});
+
+// Vocal-Only Stream (Music-Free) with Stems Caching
+router.get('/vocal-stream', async (req, res) => {
+  try {
+    let { id, trackId, url, title, artist, duration, json } = req.query;
+    trackId = trackId || id;
+
+    let dbTrack = null;
+    if (trackId && mongoose.isValidObjectId(trackId)) {
+      try { dbTrack = await Track.findById(trackId).lean(); } catch {}
+    }
+    if (!dbTrack && (title || artist)) {
+      try {
+        const query = {};
+        if (title && artist) {
+          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+          query.artist = new RegExp(`^${escapeRegex(artist)}$`, 'i');
+        } else if (title) {
+          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+        }
+        dbTrack = await Track.findOne(query).lean();
+      } catch {}
+    }
+    if (dbTrack) {
+      trackId = trackId || String(dbTrack._id);
+      url = url || dbTrack.audioUrl;
+      title = title || dbTrack.title;
+      artist = artist || dbTrack.artist;
+      duration = duration || dbTrack.duration;
+    }
+
+    const { isVocalStemReady, getVocalStemPath, processVocalIsolation } = require('../utils/vocalSeparator');
+
+    // Generate consistent cache key
+    let stemKey = trackId || '';
+    if (!stemKey && url) {
+      const vidMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      stemKey = vidMatch ? `yt_${vidMatch[1]}` : crypto.createHash('md5').update(url).digest('hex');
+    }
+    if (!stemKey && (title || artist)) {
+      stemKey = crypto.createHash('md5').update(`${title}_${artist}`).digest('hex');
+    }
+    if (!stemKey) return res.status(400).json({ error: 'Track identifier, URL, or Title/Artist required' });
+
+    // 1. Check if stem is already cached
+    if (isVocalStemReady(stemKey)) {
+      const stemFilePath = getVocalStemPath(stemKey);
+      if (json === 'true' || json === '1') {
+        const baseName = path.basename(stemFilePath);
+        return res.json({ success: true, url: `/uploads/stems/${baseName}`, cached: true });
+      }
+      return res.sendFile(stemFilePath);
+    }
+
+    // 2. Resolve playable source audio if needed
+    let sourceAudioPath = url || '';
+    if (sourceAudioPath.startsWith('/uploads/') || sourceAudioPath.startsWith('uploads/')) {
+      const resolvedUpload = safeResolveUpload(sourceAudioPath, uploadsDir);
+      if (resolvedUpload && fs.existsSync(resolvedUpload)) {
+        sourceAudioPath = resolvedUpload;
+      }
+    } else if (sourceAudioPath.includes('/api/tracks/stream-proxy?url=')) {
+      const mUrl = sourceAudioPath.split('/api/tracks/stream-proxy?url=')[1];
+      if (mUrl) sourceAudioPath = decodeURIComponent(mUrl);
+    }
+
+    // If sourceAudioPath is still empty or a youtube page url, resolve direct stream
+    if (!sourceAudioPath || sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/')) {
+      const directStream = await resolveOfficialYouTubeAudioStream(url || trackId || '', title || '', artist || '', { duration });
+      if (directStream?.url) {
+        sourceAudioPath = directStream.url.startsWith('/') ? safeResolveUpload(directStream.url, uploadsDir) || directStream.url : directStream.url;
+      }
+    }
+
+    if (!sourceAudioPath) {
+      return res.status(404).json({ error: 'Could not resolve source audio to isolate' });
+    }
+
+    // 3. Process vocal isolation
+    const result = await processVocalIsolation(sourceAudioPath, stemKey);
+    if (json === 'true' || json === '1') {
+      return res.json({ success: true, url: result.url, cached: result.cached });
+    }
+    return res.sendFile(result.path);
+  } catch (err) {
+    console.error('[VocalStream] Error:', err);
+    res.status(500).json({ error: 'Vocal separation failed: ' + err.message });
   }
 });
 

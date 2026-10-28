@@ -56,6 +56,36 @@ const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
 export async function resolvePlayableAudioStream(track, signal = null) {
   if (!track) return null;
+  const isVocalOnly = typeof window !== 'undefined' && localStorage.getItem('rivo_vocal_only') === 'true';
+  const trackId = String(track.id || track._id || '');
+  const cacheKey = isVocalOnly ? `${trackId}_vocal` : trackId;
+  if (cacheKey && clientStreamCache.has(cacheKey)) {
+    const cached = clientStreamCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
+      return cached.data;
+    } else {
+      clientStreamCache.delete(cacheKey);
+    }
+  }
+
+  const result = await doResolvePlayableAudioStream(track, signal, isVocalOnly);
+  if (cacheKey && result?.url) {
+    clientStreamCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    try {
+      if (typeof window !== 'undefined' && result.url.startsWith('http')) {
+        const preloader = new Audio();
+        preloader.preload = 'auto';
+        preloader.src = result.url;
+      }
+    } catch {}
+  }
+  return result;
+}
+
+/* removed legacy duplicate */
+function _unused_fn() { return null; }
+async function _skip_rest() {
+  if (!track) return null;
   const trackId = String(track.id || track._id || '');
   if (trackId && clientStreamCache.has(trackId)) {
     const cached = clientStreamCache.get(trackId);
@@ -82,10 +112,37 @@ export async function resolvePlayableAudioStream(track, signal = null) {
 }
 
 // ── Direct Audio Stream Resolver (HTML5 <audio> & Web Audio API) ──
-async function doResolvePlayableAudioStream(track, signal = null) {
+async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = false) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
   let targetUrl = track.resolvedAudioUrl || track.audioUrl || '';
+
+  // Vocal-Only Mode: check and stream isolated vocal stem
+  const isQuran = isQuranContent(track);
+  if (isVocalOnly && !isQuran) {
+    try {
+      const qTitle = encodeURIComponent(track.title || '');
+      const qArtist = encodeURIComponent(track.artist || '');
+      const qDur = encodeURIComponent(track.duration || '');
+      const qUrl = encodeURIComponent(targetUrl || '');
+      const vRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1`, { signal });
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        if (vData.success && vData.url) {
+          const fullVocalUrl = vData.url.startsWith('/') ? `${API_BASE_URL}${vData.url}` : vData.url;
+          return {
+            url: fullVocalUrl,
+            duration: sanitizeDuration(track.duration, 210),
+            cover: normalizeCoverUrl(track.cover || track.coverUrl),
+            isVocalOnly: true
+          };
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      console.warn('[AudioContext] Vocal stream resolve notice:', e.message);
+    }
+  }
 
   // 1. Prioritize offline storage / IndexedDB
   try {
@@ -384,6 +441,44 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { tracksRef.current       = tracks;      }, [tracks]);
   useEffect(() => {
     currentTrackRef.current = currentTrack;
+    if (currentTrack) {
+      try {
+        localStorage.setItem('rivo_last_played_track', JSON.stringify(currentTrack));
+      } catch {}
+    }
+  }, [currentTrack]);
+
+  // Handle runtime toggle of Vocal-Only Mode: seamlessly reload active track with or without vocals
+  useEffect(() => {
+    const handleVocalModeToggle = () => {
+      const activeTrack = currentTrackRef.current;
+      if (!activeTrack || !audioRef.current) return;
+      const tid = String(activeTrack.id || activeTrack._id || '');
+      clientStreamCache.delete(tid);
+      clientStreamCache.delete(`${tid}_vocal`);
+
+      const curPos = audioRef.current.currentTime || 0;
+      const wasPlaying = isPlayingRef.current && !audioRef.current.paused;
+
+      resolvePlayableAudioStream(activeTrack).then((res) => {
+        if (res?.url && audioRef.current) {
+          audioRef.current.src = res.url;
+          audioRef.current.currentTime = curPos;
+          if (wasPlaying) {
+            audioRef.current.play().catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('rivo-vocal-mode-changed', handleVocalModeToggle);
+      return () => window.removeEventListener('rivo-vocal-mode-changed', handleVocalModeToggle);
+    }
+  }, []);
+
+  useEffect(() => {
+    // sync track state
     if (currentTrack) {
       try {
         localStorage.setItem('rivo_last_played_track', JSON.stringify(currentTrack));

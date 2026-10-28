@@ -13,7 +13,7 @@ export default function SettingsModal({
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
-  const { contentModes, toggleContentMode } = usePreferences();
+  const { contentModes, toggleContentMode, vocalOnlyMode, toggleVocalOnlyMode } = usePreferences();
   const [discordStatus, setDiscordStatus] = useState(null);
   const [linkCode, setLinkCode] = useState('');
   const [tokenInput, setTokenInput] = useState('');
@@ -405,6 +405,30 @@ export default function SettingsModal({
             }`}
           >
             {isOfflineMode ? 'ACTIVE' : 'DISABLED'}
+          </button>
+        </div>
+
+        {/* Vocal-Only Mode Toggle (Music-Free) */}
+        <div className={`flex items-center justify-between py-3 border-b-2 ${
+          isDark ? 'border-zinc-700' : 'border-[#0b1110]'
+        }`}>
+          <div>
+            <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+              Vocal-Only Mode
+            </span>
+            <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              Automatically remove instrumental music from songs
+            </p>
+          </div>
+          <button
+            onClick={() => toggleVocalOnlyMode()}
+            className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer ${
+              vocalOnlyMode 
+                ? (isDark ? 'bg-[#17a398] text-white' : 'bg-[#082621] text-[#26c4b7]') 
+                : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621]')
+            }`}
+          >
+            {vocalOnlyMode ? 'ACTIVE' : 'DISABLED'}
           </button>
         </div>
 
