@@ -1259,8 +1259,46 @@ router.get('/vocal-stream', async (req, res) => {
     // If sourceAudioPath is still empty or a youtube page url, resolve direct stream
     if (!sourceAudioPath || sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/')) {
       const directStream = await resolveOfficialYouTubeAudioStream(url || trackId || '', title || '', artist || '', { duration });
-      if (directStream?.url) {
-        sourceAudioPath = directStream.url.startsWith('/') ? safeResolveUpload(directStream.url, uploadsDir) || directStream.url : directStream.url;
+      const resolvedUrl = typeof directStream === 'object' && directStream?.url ? directStream.url : (typeof directStream === 'string' ? directStream : (directStream ? String(directStream) : ''));
+      if (resolvedUrl) {
+        if (resolvedUrl.startsWith('/uploads/') || resolvedUrl.startsWith('uploads/')) {
+          sourceAudioPath = safeResolveUpload(resolvedUrl, uploadsDir) || path.join(__dirname, '../..', resolvedUrl);
+        } else {
+          sourceAudioPath = resolvedUrl;
+        }
+      }
+    }
+
+    // Guarantee sourceAudioPath is not a raw watch URL that ffmpeg cannot download
+    if (sourceAudioPath && (sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/'))) {
+      const vidMatch = sourceAudioPath.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      if (vidMatch && vidMatch[1]) {
+        const vid = vidMatch[1];
+        const cacheDir = path.join(uploadsDir, 'audio-cache');
+        if (!fs.existsSync(cacheDir)) {
+          try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
+        }
+        const localTarget = path.join(cacheDir, `${vid}.m4a`);
+        if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
+          sourceAudioPath = localTarget;
+        } else {
+          try {
+            const { getYtDlpBin, getCookiesPath } = require('../utils/helpers');
+            const bin = getYtDlpBin();
+            const cp = getCookiesPath();
+            const ytdlpArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba[ext=m4a]/ba/bestaudio', '-o', localTarget];
+            if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
+            ytdlpArgs.push(`https://www.youtube.com/watch?v=${vid}`);
+            await new Promise((resolve) => {
+              execFile(bin, ytdlpArgs, { timeout: 45000 }, () => resolve());
+            });
+            if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
+              sourceAudioPath = localTarget;
+            }
+          } catch (dlErr) {
+            console.error('[VocalStream] Direct yt-dlp download fallback error:', dlErr.message);
+          }
+        }
       }
     }
 

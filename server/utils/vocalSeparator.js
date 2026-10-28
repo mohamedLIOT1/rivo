@@ -64,28 +64,27 @@ async function processVocalIsolation(inputSource, stemKey) {
     }
 
     let inputAudioPath = inputSource;
-    let tempDownloadedAudio = null;
+    let tempWavAudio = path.join(tempDir, 'clean_input.wav');
 
     try {
-      // If remote HTTP URL, download cleanly with ffmpeg first to avoid network jitter during separation
-      if (inputSource.startsWith('http://') || inputSource.startsWith('https://')) {
-        tempDownloadedAudio = path.join(tempDir, 'source.mp3');
-        await new Promise((resolve, reject) => {
-          const dlCmd = `ffmpeg -y -i "${inputSource}" -vn -c:a libmp3lame -q:a 2 "${tempDownloadedAudio}"`;
-          exec(dlCmd, { timeout: 180000 }, (err) => {
-            if (err) return reject(new Error(`Failed to download audio for stem separation: ${err.message}`));
-            resolve();
-          });
+      // 1. Convert any input (local .m4a, .mp3, or remote stream) into clean standard 16-bit PCM WAV.
+      // This is crucial because libsndfile/librosa on Linux cannot decode m4a/aac natively without WAV conversion.
+      console.log(`[VocalSeparator] Pre-processing input audio with ffmpeg to standard WAV for: ${safe}`);
+      await new Promise((resolve, reject) => {
+        const convertCmd = `ffmpeg -y -i "${inputSource}" -vn -ar 44100 -ac 2 -c:a pcm_s16le "${tempWavAudio}"`;
+        exec(convertCmd, { timeout: 180000 }, (err, stdout, stderr) => {
+          if (err) return reject(new Error(`Failed to decode audio into WAV for stem separation: ${stderr || err.message}`));
+          resolve();
         });
-        inputAudioPath = tempDownloadedAudio;
+      });
+
+      if (!fs.existsSync(tempWavAudio) || fs.statSync(tempWavAudio).size < 1000) {
+        throw new Error('Converted WAV audio file is empty or missing');
       }
 
-      if (!fs.existsSync(inputAudioPath)) {
-        throw new Error('Input audio file does not exist for separation');
-      }
-
-      // Execute AI vocal separation using Kim_Vocal_2 or UVR-MDX-NET model
-      const cmd = `audio-separator "${inputAudioPath}" --model_filename Kim_Vocal_2.onnx --single_stem Vocals --mdx_enable_denoise --output_dir "${tempDir}" --output_format MP3 --mdx_overlap 0.2 --mdx_batch_size 2 --model_file_dir "${modelDir}"`;
+      // 2. Execute AI vocal separation using Kim_Vocal_2 model
+      // Using --mdx_batch_size 1 and conservative overlap to keep memory low and prevent swap thrashing on CPU
+      const cmd = `audio-separator "${tempWavAudio}" --model_filename Kim_Vocal_2.onnx --single_stem Vocals --output_dir "${tempDir}" --output_format MP3 --mdx_batch_size 1 --mdx_overlap 0.2 --model_file_dir "${modelDir}"`;
 
       console.log(`[VocalSeparator] Starting AI vocal separation for: ${safe}`);
       await new Promise((resolve, reject) => {

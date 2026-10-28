@@ -46,7 +46,7 @@ def main():
     print(f"=== Deploying v{version} to Production Server ===")
     
     # Pre-create remote directories
-    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server/middleware {REMOTE_DIR}/server/models")
+    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server/middleware {REMOTE_DIR}/server/models {REMOTE_DIR}/server/utils {REMOTE_DIR}/uploads/stems")
 
     # 1. Upload server files
     server_files = [
@@ -62,6 +62,7 @@ def main():
         ("server/routes/chat.js", f"{REMOTE_DIR}/server/routes/chat.js"),
         ("server/routes/ai.js", f"{REMOTE_DIR}/server/routes/ai.js"),
         ("server/utils/helpers.js", f"{REMOTE_DIR}/server/utils/helpers.js"),
+        ("server/utils/vocalSeparator.js", f"{REMOTE_DIR}/server/utils/vocalSeparator.js"),
         ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
         ("package.json", f"{REMOTE_DIR}/package.json"),
         ("server/sockets/index.js", f"{REMOTE_DIR}/server/sockets/index.js"),

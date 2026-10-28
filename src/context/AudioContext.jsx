@@ -138,10 +138,13 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
           };
         }
       }
+      console.warn('[AudioContext] Vocal stream resolve non-OK status:', vRes.status);
     } catch (e) {
       if (e.name === 'AbortError') throw e;
       console.warn('[AudioContext] Vocal stream resolve notice:', e.message);
     }
+    // Strictly prevent fallback to playing with background music when user enabled Vocal-Only mode
+    return null;
   }
 
   // 1. Prioritize offline storage / IndexedDB
