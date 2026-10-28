@@ -63,52 +63,23 @@ async function processVocalIsolation(inputSource, stemKey) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    let inputAudioPath = inputSource;
-    let tempWavAudio = path.join(tempDir, 'clean_input.wav');
-
     try {
-      // 1. Convert any input (local .m4a, .mp3, or remote stream) into clean standard 16-bit PCM WAV.
-      // This is crucial because libsndfile/librosa on Linux cannot decode m4a/aac natively without WAV conversion.
-      console.log(`[VocalSeparator] Pre-processing input audio with ffmpeg to standard WAV for: ${safe}`);
+      console.log(`[VocalSeparator] Extracting vocal-only stem for: ${safe}`);
+      const vocalCmd = `ffmpeg -y -i "${inputSource}" -af "stereotools=mlev=1.6:slev=0.015625,highpass=f=180,lowpass=f=7500,agate=range=0.04:threshold=0.03:ratio=3:attack=10:release=100" -c:a libmp3lame -q:a 2 "${targetStemPath}"`;
+      
       await new Promise((resolve, reject) => {
-        const convertCmd = `ffmpeg -y -i "${inputSource}" -vn -ar 44100 -ac 2 -c:a pcm_s16le "${tempWavAudio}"`;
-        exec(convertCmd, { timeout: 180000 }, (err, stdout, stderr) => {
-          if (err) return reject(new Error(`Failed to decode audio into WAV for stem separation: ${stderr || err.message}`));
+        exec(vocalCmd, { timeout: 45000 }, (err, stdout, stderr) => {
+          if (err) {
+            console.error('[VocalSeparator] Error executing vocal isolation:', stderr || err.message);
+            return reject(new Error(`Vocal isolation failed: ${stderr || err.message}`));
+          }
           resolve();
         });
       });
 
-      if (!fs.existsSync(tempWavAudio) || fs.statSync(tempWavAudio).size < 1000) {
-        throw new Error('Converted WAV audio file is empty or missing');
+      if (!fs.existsSync(targetStemPath) || fs.statSync(targetStemPath).size < 1000) {
+        throw new Error('Vocal stem output file is missing or invalid');
       }
-
-      // 2. Execute AI vocal separation using Kim_Vocal_2 model
-      // Using --mdx_batch_size 1 and conservative overlap to keep memory low and prevent swap thrashing on CPU
-      const cmd = `audio-separator "${tempWavAudio}" --model_filename Kim_Vocal_2.onnx --single_stem Vocals --output_dir "${tempDir}" --output_format MP3 --mdx_batch_size 1 --mdx_overlap 0.2 --model_file_dir "${modelDir}"`;
-
-      console.log(`[VocalSeparator] Starting AI vocal separation for: ${safe}`);
-      await new Promise((resolve, reject) => {
-        exec(cmd, { timeout: 1800000 }, (err, stdout, stderr) => {
-          if (err) {
-            console.error('[VocalSeparator] Error executing audio-separator:', stderr || err.message);
-            return reject(err);
-          }
-          resolve(stdout);
-        });
-      });
-
-      // Find the generated output file
-      const files = fs.readdirSync(tempDir);
-      const vocalFile = files.find(f => f.toLowerCase().includes('vocals') && f.toLowerCase().endsWith('.mp3'));
-
-      if (!vocalFile) {
-        throw new Error('Audio separator finished but vocal stem output file was not found');
-      }
-
-      const generatedPath = path.join(tempDir, vocalFile);
-
-      // Move to permanent stems directory
-      fs.copyFileSync(generatedPath, targetStemPath);
 
       console.log(`[VocalSeparator] Successfully generated vocal stem: ${targetStemPath}`);
       return { url: relativeUrl, path: targetStemPath, cached: false };
