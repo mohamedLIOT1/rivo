@@ -119,7 +119,7 @@ async function doResolvePlayableAudioStream(track, signal = null) {
   }
 
   // 2b. Direct server-uploaded audio files
-  if (track.source === 'Upload' || (targetUrl && (targetUrl.startsWith('/uploads/') || targetUrl.includes('/uploads/')))) {
+  if (track.source === 'Upload' || (targetUrl && (targetUrl.startsWith('/uploads/') || targetUrl.includes('/uploads/') || targetUrl.startsWith('/mix-demo/')))) {
     const fullUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : (targetUrl.startsWith('http') ? targetUrl : `${API_BASE_URL}/${targetUrl}`);
     return {
       url: fullUrl,
@@ -288,6 +288,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   // Rivo DJ Mix DJ Mode
   const [isMixMode, setIsMixMode] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [activeTransitions, setActiveTransitions] = useState(() => {
     try {
       localStorage.removeItem('rivo_active_transitions');
@@ -515,6 +516,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       cancelAnimationFrame(transitionAnimFrameRef.current);
       transitionAnimFrameRef.current = null;
     }
+    setIsTransitioning(false);
     isTransitionRunningRef.current = false;
     isTransitionTriggeredRef.current = false;
     const audio = audioRef.current;
@@ -546,15 +548,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
     let lastTimeUpdate = 0;
 
     // ── Unified Dual-Deck Crossfade Execution ──
-    const triggerDualDeckTransition = (fromTrack, toTrack, nextIdx, transDur, transStyle) => {
+    const triggerDualDeckTransition = (fromTrack, toTrack, nextIdx, transDur, transStyle, mixInPoint = 0) => {
       if (isTransitionRunningRef.current) return;
       isTransitionRunningRef.current = true;
       isTransitionTriggeredRef.current = true;
+      setIsTransitioning(true);
 
       const fromDeck = audioRef.current;
       const toDeck = secondaryAudioRef.current;
       if (!fromDeck || !toDeck) {
         isTransitionRunningRef.current = false;
+        setIsTransitioning(false);
         return;
       }
 
@@ -564,13 +568,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (!isTransitionRunningRef.current) return;
         if (!res?.url) {
           isTransitionRunningRef.current = false;
+          setIsTransitioning(false);
           return;
         }
 
         const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
         if (toDeck.src !== fullUrl) {
           toDeck.src = fullUrl;
-          toDeck.currentTime = 0;
+          toDeck.currentTime = Math.max(0, Number(mixInPoint) || 0);
+        } else if (Math.abs(toDeck.currentTime - (Number(mixInPoint) || 0)) > 2) {
+          toDeck.currentTime = Math.max(0, Number(mixInPoint) || 0);
         }
         toDeck.volume = 0;
 
@@ -579,17 +586,31 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
         const startCrossfade = () => {
           const startTime = performance.now();
+          let totalPausedMs = 0;
+          let pauseStart = 0;
 
           const runFrame = () => {
             if (!isTransitionRunningRef.current) return;
-            const elapsed = performance.now() - startTime;
+
+            // Preserve crossfade if user paused, without premature abort
+            if (!isPlayingRef.current) {
+              if (pauseStart === 0) pauseStart = performance.now();
+              transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
+              return;
+            }
+            if (pauseStart > 0) {
+              totalPausedMs += (performance.now() - pauseStart);
+              pauseStart = 0;
+            }
+
+            const elapsed = performance.now() - startTime - totalPausedMs;
             const progress = Math.min(1, Math.max(0, elapsed / totalMs));
 
             const { gainA, gainB } = calculateCrossfadeGains(progress, transStyle);
             if (fromDeck) fromDeck.volume = Math.max(0, Math.min(1, masterVol * gainA));
             if (toDeck) toDeck.volume = Math.max(0, Math.min(1, masterVol * gainB));
 
-            if (progress < 1 && fromDeck && !fromDeck.paused && !isChangingTrackRef.current) {
+            if (progress < 1 && !isChangingTrackRef.current) {
               transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
             } else {
               // Finish Transition: Swap Decks!
@@ -609,6 +630,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
               isTransitionRunningRef.current = false;
               isTransitionTriggeredRef.current = false;
+              setIsTransitioning(false);
               standbyPreloadedIdRef.current = null;
 
               currentQueueIndexRef.current = nextIdx;
@@ -634,7 +656,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
             startCrossfade();
           }).catch((e) => {
             console.warn('[RivoMix] Standby play error:', e);
-            // Even if play failed on first try, attempt crossfade and unlock
             startCrossfade();
           });
         } else {
@@ -643,6 +664,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }).catch((err) => {
         console.warn('[RivoMix] Stream resolve error:', err);
         isTransitionRunningRef.current = false;
+        setIsTransitioning(false);
       });
     };
 
@@ -741,10 +763,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   transDur = Math.min(24, Math.max(2, transDur));
                   const transStyle = trans?.style || 'auto';
 
-                  const remaining = rounded - deck.currentTime;
+                  const mixOutPoint = (trans?.mixOutPoint !== undefined && Number(trans.mixOutPoint) > 5 && Number(trans.mixOutPoint) <= rounded)
+                    ? Number(trans.mixOutPoint)
+                    : Math.max(5, rounded - 2);
+                  const mixInPoint = Number(trans?.mixInPoint) || 0;
+                  const remaining = mixOutPoint - deck.currentTime;
 
-                  // 1. Preload standby deck 8 seconds ahead of transition
-                  if (remaining <= transDur + 8 && standbyPreloadedIdRef.current !== nextId) {
+                  // 1. Preload standby deck 15 seconds ahead of transition
+                  if (remaining <= transDur + 15 && standbyPreloadedIdRef.current !== nextId) {
                     standbyPreloadedIdRef.current = nextId;
                     const standby = secondaryAudioRef.current;
                     if (standby) {
@@ -753,7 +779,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                           const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
                           if (standby.src !== fullUrl) {
                             standby.src = fullUrl;
-                            standby.currentTime = 0;
+                            standby.currentTime = Math.max(0, mixInPoint);
                             standby.volume = 0;
                             standby.load();
                           }
@@ -764,7 +790,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
                   // 2. Launch DJ Crossfade right at the transition trigger point!
                   if (remaining <= transDur && remaining > 0.05) {
-                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, transDur, transStyle);
+                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, transDur, transStyle, mixInPoint);
+                  } else if (remaining <= 0.05 && !isTransitionRunningRef.current && deck.currentTime >= mixOutPoint) {
+                    // Reached or passed Mix-Out point: immediately force transition into next track!
+                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, Math.min(2, transDur), transStyle, mixInPoint);
                   }
                 }
               }
@@ -1449,6 +1478,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     const audio = audioRef.current;
+    const sec = secondaryAudioRef.current;
     if (audio) {
       if (nextPlaying) {
         resumeAudioContext();
@@ -1464,10 +1494,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
             console.warn('[Audio] synchronous play rejected on phone:', e);
           });
         }
+        if (isTransitionRunningRef.current && sec && sec.src) {
+          sec.play().catch(() => {});
+        }
       } else {
         lastPauseTimeRef.current = Date.now();
         audio.pause();
+        if (sec) sec.pause();
       }
+    } else if (sec && !nextPlaying) {
+      sec.pause();
     }
   }, []);
 
@@ -1665,6 +1701,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
         currentQueueRef.current = resolvedQueue;
         setCurrentQueue(resolvedQueue);
       }
+    }
+
+    // Strict Mix Mode Isolation: Only enable dual-deck mix transitions when playing from a designated Mix Playlist
+    if (newQueue && (newQueue._isMix || (newQueue._transitions && Object.keys(newQueue._transitions).length > 0))) {
+      setIsMixMode(true);
+      isMixModeRef.current = true;
+      if (newQueue._transitions) {
+        setActiveTransitions(newQueue._transitions);
+        activeTransRef.current = newQueue._transitions;
+      }
+    } else if (newQueue) {
+      setIsMixMode(false);
+      isMixModeRef.current = false;
+      setActiveTransitions({});
+      activeTransRef.current = {};
     }
 
     if (isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue) {
@@ -2863,7 +2914,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         ? Math.round(deck.duration)
         : (durationRef.current > 0 ? durationRef.current : (tA.duration || 180));
       const trackDur = Math.max(10, rawDur);
-      const seekPoint = Math.max(0, trackDur - dur - 3);
+      const mixOutPoint = (transConfig?.mixOutPoint !== undefined && Number(transConfig.mixOutPoint) > 5 && Number(transConfig.mixOutPoint) <= trackDur)
+        ? Number(transConfig.mixOutPoint)
+        : trackDur;
+      const mixInPoint = Number(transConfig?.mixInPoint) || 0;
+      const seekPoint = Math.max(0, mixOutPoint - dur - 3);
 
       // Preload standby deck immediately with tB so it's instantly ready
       resolvePlayableAudioStream(tB).then((res) => {
@@ -2908,6 +2963,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     isOfflineMode, setIsOfflineMode,
     isYtTrack,
     isMixMode, setIsMixMode,
+    isTransitioning,
     activeTransitions, setActiveTransitions,
     previewDjTransition,
     startDjMode, stopDjMode,

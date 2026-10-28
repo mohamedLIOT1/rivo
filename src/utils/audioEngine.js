@@ -66,7 +66,7 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
     return { gainA: 1 - p, gainB: p };
   }
 
-  if (style === 'cut') {
+  if (style === 'cut' || style === 'slam') {
     // Sharp DJ Drop Cut: Track A stays at full volume until the drop (85%), then instantly cuts to 0, Track B drops at 100%
     return { 
       gainA: p < 0.85 ? 1 : 0, 
@@ -96,6 +96,26 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
     return { 
       gainA: Math.max(0, Math.min(1, gainA)), 
       gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
+  if (style === 'wave') {
+    // Wave roll: low-pass wave sweep where both dip in mid and swap smoothly
+    const gainA = p < 0.5 ? 1 - 0.25 * Math.sin(p * Math.PI) : Math.pow((1 - p) / 0.5, 2.2);
+    const gainB = p < 0.5 ? Math.pow(p / 0.5, 2.2) : 0.75 + 0.25 * Math.sin((p - 0.5) * Math.PI);
+    return {
+      gainA: Math.max(0, Math.min(1, gainA)),
+      gainB: Math.max(0, Math.min(1, gainB))
+    };
+  }
+
+  if (style === 'melt') {
+    // Warm filtered crossfade where both tracks softly melt into each other
+    const gainA = Math.pow(1 - p, 1.8);
+    const gainB = Math.pow(p, 1.8);
+    return {
+      gainA: Math.max(0, Math.min(1, gainA)),
+      gainB: Math.max(0, Math.min(1, gainB))
     };
   }
 

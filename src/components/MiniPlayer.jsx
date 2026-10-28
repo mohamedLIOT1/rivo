@@ -82,7 +82,12 @@ export default function MiniPlayer({
   const nextMixTrack = isMixMode && currentQueue.length > 1 && currentQueueIndex >= 0
     ? currentQueue[(currentQueueIndex + 1) % currentQueue.length]
     : null;
-  const timeToNext = Math.max(0, Math.round(activeDuration - currentTime));
+  const curTrack = audio?.currentTrack;
+  const nextTrack = nextMixTrack;
+  const pairKey = curTrack && nextTrack ? `${String(curTrack.id || curTrack._id)}___${String(nextTrack.id || nextTrack._id)}` : '';
+  const transConfig = (pairKey && (audio?.activeTransitions?.[pairKey] || audio?.currentQueue?._transitions?.[pairKey])) || null;
+  const targetMixOut = transConfig?.mixOutPoint ? Number(transConfig.mixOutPoint) : activeDuration;
+  const timeToNext = Math.max(0, Math.round(targetMixOut - currentTime));
 
   const seekFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;
@@ -396,15 +401,14 @@ export default function MiniPlayer({
           {/* CENTER: Cassette Controls & Progress Scrubber */}
           <div className="w-5/12 flex flex-col items-center gap-1">
             {isMixMode && (
-              <div className="flex items-center gap-2 -mt-1 mb-0.5">
-                <span className="text-[8px] font-mono font-black bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded">
-                  🎛️ MIX MODE
+              <div 
+                className="flex items-center gap-1.5 -mt-1 mb-0.5 select-none" 
+                title={nextMixTrack ? `DJ Mix Active • Up next: ${nextMixTrack.title}` : 'DJ Mix Mode'}
+              >
+                <span className="inline-flex items-center gap-1.5 text-[9px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30 px-2 py-0.5 rounded-full shadow-xs">
+                  <span className={`w-1.5 h-1.5 rounded-full bg-[#17a398] ${audio?.isTransitioning ? 'animate-ping' : 'animate-pulse'}`} />
+                  <span>{audio?.isTransitioning ? `Blending → ${nextMixTrack?.title || 'Next'}` : 'DJ AUTOMIX'}</span>
                 </span>
-                {nextMixTrack && (
-                  <span className="text-[9px] font-mono text-[#17a398] truncate max-w-[200px]">
-                    → {nextMixTrack.title} in {timeToNext}s
-                  </span>
-                )}
               </div>
             )}
             {/* Control buttons */}

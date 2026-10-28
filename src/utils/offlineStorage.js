@@ -252,24 +252,36 @@ export async function readResponseWithProgress(response, signal, onProgress) {
     loaded += value.length;
 
     const now = Date.now();
-    if (now - lastReportTime >= 200 || done) {
+    if (now - lastReportTime >= 150 || done) {
       const elapsedSec = Math.max(0.1, (now - startTime) / 1000);
       const speedBps = loaded / elapsedSec;
       const speedText = speedBps >= 1048576 
         ? `${(speedBps / 1048576).toFixed(1)} MB/s`
         : `${Math.round(speedBps / 1024)} KB/s`;
-      const percent = contentLength > 0 ? Math.min(100, Math.round((loaded / contentLength) * 100)) : 0;
+      const estTotal = contentLength > 0 ? contentLength : (4.2 * 1048576);
+      const percent = contentLength > 0 
+        ? Math.min(100, Math.round((loaded / contentLength) * 100))
+        : Math.min(95, Math.round((loaded / estTotal) * 100));
       onProgress?.({
         loaded,
-        total: contentLength,
-        percent,
+        total: contentLength || Math.max(loaded, estTotal),
+        percent: done ? 100 : Math.max(5, percent),
         speedText,
         loadedMb: (loaded / 1048576).toFixed(1),
-        totalMb: contentLength > 0 ? (contentLength / 1048576).toFixed(1) : '?'
+        totalMb: contentLength > 0 ? (contentLength / 1048576).toFixed(1) : (loaded > 4.2 * 1048576 ? (loaded / 1048576).toFixed(1) : '4.2')
       });
       lastReportTime = now;
     }
   }
+
+  onProgress?.({
+    loaded,
+    total: loaded,
+    percent: 100,
+    speedText: 'Complete',
+    loadedMb: (loaded / 1048576).toFixed(1),
+    totalMb: (loaded / 1048576).toFixed(1)
+  });
 
   return new Blob(chunks, { type: response.headers.get('content-type') || 'audio/mpeg' });
 }
@@ -395,7 +407,7 @@ export async function saveTrackOffline(track, options = {}) {
         if (directRes && directRes.ok) {
           const ct = directRes.headers.get('content-type') || '';
           if (!ct.includes('html') && !ct.includes('json')) {
-            const b = await directRes.blob();
+            const b = await readResponseWithProgress(directRes, signal, options?.onProgress);
             if (b && b.size > 20000) audioBlob = b;
           }
         }
@@ -416,7 +428,7 @@ export async function saveTrackOffline(track, options = {}) {
           if (streamRes && streamRes.ok) {
             const ct = streamRes.headers.get('content-type') || '';
             if (!ct.includes('html') && !ct.includes('json')) {
-              const b = await streamRes.blob();
+              const b = await readResponseWithProgress(streamRes, signal, options?.onProgress);
               if (b && b.size > 20000) audioBlob = b;
             }
           }
@@ -435,7 +447,7 @@ export async function saveTrackOffline(track, options = {}) {
         if (serverRes && serverRes.ok) {
           const ct = serverRes.headers.get('content-type') || '';
           if (!ct.includes('html') && !ct.includes('json')) {
-            const b = await serverRes.blob();
+            const b = await readResponseWithProgress(serverRes, signal, options?.onProgress);
             if (b && b.size > 20000) audioBlob = b;
           }
         }

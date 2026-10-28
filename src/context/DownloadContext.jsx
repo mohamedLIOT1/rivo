@@ -29,6 +29,7 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
         activeAbortControllerRef.current = null;
       }
       setDownloadingTrackId(null);
+      setDownloadProgress({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
     setDownloadProgress({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
       showToast?.('Cancelled download for this track');
       return;

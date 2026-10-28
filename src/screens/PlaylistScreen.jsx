@@ -221,12 +221,14 @@ export default function PlaylistScreen({
     if (playlist) {
       setEditName(playlist.name || '');
       setEditDesc(playlist.description || '');
-      const mixOn = Boolean(playlist.isMix);
+      const isAlb = Boolean(playlist.isAlbum || String(playlist.id || '').startsWith('album-'));
+      const isLk = Boolean(playlist.id === 'liked' || playlist.isLikedSongs);
+      const mixOn = !isAlb && !isLk && Boolean(playlist.isMix);
       setIsMixActive(mixOn);
       const t = playlist.transitions || {};
       setTransitions(t);
     }
-  }, [playlist?.id, playlist?.isMix]);
+  }, [playlist?.id, playlist?.isMix, playlist?.isAlbum]);
 
   const rawTrackIds = playlist?.trackIds;
   const playlistTrackIds = useMemo(() => (rawTrackIds || []).map(String), [rawTrackIds]);
@@ -350,6 +352,11 @@ export default function PlaylistScreen({
     isQuranContent(playlist) ||
     (playlistTracks.length > 0 && playlistTracks.some(isQuranContent))
   );
+
+  const isAlbum = Boolean(playlist?.isAlbum || String(playlist?.id || '').startsWith('album-'));
+  const isLiked = Boolean(isLikedPlaylist || playlist?.id === 'liked');
+  const canBeMix = !isQuran && !isAlbum && !isLiked;
+  const isPlaylistMixActive = canBeMix && Boolean(isMixActive);
 
   const [availableLimit, setAvailableLimit] = useState(30);
   const [availableSearch, setAvailableSearch] = useState('');
@@ -535,28 +542,35 @@ export default function PlaylistScreen({
   };
 
   const handleToggleMix = async () => {
+    if (!canBeMix) return;
     const nextState = !isMixActive;
     setIsMixActive(nextState);
-    setIsMixMode?.(nextState);
     if (nextState) {
+      setIsMixMode?.(true);
       if (Object.keys(transitions).length === 0 && playlistTracks.length > 1) {
         handleAutoMixAll();
         return;
       } else {
         setActiveTransitions?.(transitions);
       }
+    } else {
+      setIsMixMode?.(false);
+      setActiveTransitions?.({});
     }
 
     try {
-      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-      await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ isMix: nextState, transitions })
-      });
+      if (playlist?.id && playlist.id !== 'liked') {
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ isMix: nextState, transitions })
+        });
+        if (playlist) playlist.isMix = nextState;
+      }
     } catch {}
   };
   const handleToggleMixMode = handleToggleMix;
@@ -570,9 +584,13 @@ export default function PlaylistScreen({
       const tB = playlistTracks[i + 1];
       const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
       const rec = getRecommendedTransition(tA, tB);
+      const bpmA = tA.bpm || 120;
+      const bars = rec.style === 'slam' || rec.style === 'cut' ? 2 : 4;
+      const calcDur = calculateBarsDuration(bars, bpmA);
       updatedTransitions[pairKey] = {
         style: rec.style,
-        duration: rec.duration,
+        duration: calcDur || rec.duration || 8,
+        bars: bars,
         autoMatchBpm: true
       };
     }
@@ -603,8 +621,17 @@ export default function PlaylistScreen({
 
   const handleSaveTransitionSettings = async (settings) => {
     if (!activeMixerPair) return;
-    const { pairKey } = activeMixerPair;
-    const updated = { ...transitions, [pairKey]: settings };
+    const { pairKey, trackA, trackB } = activeMixerPair;
+    const idA = String(trackA?.id || trackA?._id || '');
+    const idB = String(trackB?.id || trackB?._id || '');
+    const k1 = `${idA}___${idB}`;
+    const k2 = `${idA}_${idB}`;
+    const updated = { 
+      ...transitions, 
+      [pairKey]: settings,
+      ...(k1 ? { [k1]: settings } : {}),
+      ...(k2 ? { [k2]: settings } : {})
+    };
     setTransitions(updated);
     setActiveTransitions?.(updated);
     setIsMixActive(true);
@@ -716,17 +743,25 @@ export default function PlaylistScreen({
   };
 
   const handlePlayPlaylistTrack = (track) => {
-    if (playlist?.isMix || isMixActive) {
-      setIsMixMode?.(true);
-      if (Object.keys(transitions).length > 0) {
-        setActiveTransitions?.(transitions);
-      }
-    }
     const baseQueue = filteredPlaylistTracks;
     const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
     const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
     const fullQueue = [...baseQueue, ...extraRecs];
-    fullQueue._transitions = transitions;
+
+    if (isPlaylistMixActive) {
+      setIsMixMode?.(true);
+      if (Object.keys(transitions).length > 0) {
+        setActiveTransitions?.(transitions);
+      }
+      fullQueue._isMix = true;
+      fullQueue._transitions = transitions;
+    } else {
+      setIsMixMode?.(false);
+      setActiveTransitions?.({});
+      fullQueue._isMix = false;
+      fullQueue._transitions = {};
+    }
+
     onSelectTrack(track, fullQueue);
   };
 
@@ -1103,11 +1138,15 @@ export default function PlaylistScreen({
             disabled={filteredPlaylistTracks.length === 0}
             onClick={() => {
               if (filteredPlaylistTracks.length === 0) return;
-              setIsMixMode?.(true);
-              setIsMixActive(true);
               const shuffled = shuffleArray(filteredPlaylistTracks);
-              shuffled._transitions = transitions;
-              onSelectTrack(shuffled[0], shuffled);
+              if (isPlaylistMixActive) {
+                shuffled._isMix = true;
+                shuffled._transitions = transitions;
+              } else {
+                shuffled._isMix = false;
+                shuffled._transitions = {};
+              }
+              handlePlayPlaylistTrack(shuffled[0]);
             }}
             className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
               filteredPlaylistTracks.length > 0
@@ -1219,22 +1258,42 @@ export default function PlaylistScreen({
             </div>
           )}
 
-          {/* DJ Mix Mode Toggle Button */}
-          {!isQuran && playlistTracks.length > 0 && (
-            <button
-              onClick={handleToggleMix}
-              className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
-                isMixActive
-                  ? 'bg-[#17a398] text-[#0b1110] shadow-[0_0_12px_rgba(23,163,152,0.4)]'
-                  : isDark 
-                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' 
-                    : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] border-black'
-              }`}
-              title={isMixActive ? "DJ Mix Mode is active (click to disable)" : "Enable DJ Mix Mode for this playlist"}
-            >
-              <span>🎛️</span>
-              <span>{isMixActive ? 'DJ MIX: ON' : 'DJ MIX: OFF'}</span>
-            </button>
+          {/* Rivo Mix Mode Toggle Button */}
+          {canBeMix && playlistTracks.length > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleToggleMix}
+                className={`px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
+                  isMixActive
+                    ? 'bg-[#10b981] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)]'
+                    : isDark 
+                      ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' 
+                      : 'bg-white hover:bg-[#ede5d3] text-[#0b1110] border-black'
+                }`}
+                title={isMixActive ? "Mix Mode is active - click to return to normal playlist" : "Turn on Mix Mode for continuous DJ transitions"}
+              >
+                <span>🎛️</span>
+                <span>{isMixActive ? 'Mix: ON' : 'Mix'}</span>
+              </button>
+
+              {isMixActive && (
+                <>
+                  <button
+                    onClick={handleAutoMixAll}
+                    disabled={isAutoMixingAll}
+                    className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono font-bold brutal-border brutal-shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                      isDark
+                        ? 'bg-zinc-900 hover:bg-zinc-800 text-emerald-400 border-zinc-700'
+                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-black'
+                    }`}
+                    title="Auto-mix all songs in this playlist with smart transitions"
+                  >
+                    <Wand2 size={13} className={isAutoMixingAll ? 'animate-spin' : ''} />
+                    <span>{isAutoMixingAll ? 'Mixing...' : 'Auto-Mix All'}</span>
+                  </button>
+                </>
+              )}
+            </div>
           )}
 
           {playlistTracks.length > 0 && (
@@ -1307,21 +1366,21 @@ export default function PlaylistScreen({
                   '#'
                 )}
               </span>
-              <span className={(isMixActive || isMixMode || isMixView) && !isQuran ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? 'SURAH & RECITER' : 'TITLE'}</span>
-              {(isMixActive || isMixMode || isMixView) && !isQuran && (
+              <span className={isPlaylistMixActive ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? 'SURAH & RECITER' : 'TITLE'}</span>
+              {isPlaylistMixActive && (
                 <>
-                  <span className="hidden sm:block col-span-1 text-center text-[#17a398]">BPM</span>
-                  <span className="hidden sm:block col-span-1 text-center text-[#17a398]">KEY</span>
+                  <span className="hidden sm:block col-span-1 text-center text-emerald-400 font-mono font-bold">BPM</span>
+                  <span className="hidden sm:block col-span-1 text-center text-emerald-400 font-mono font-bold">KEY</span>
                 </>
               )}
               <span className="hidden md:block col-span-2">{isQuran ? 'COLLECTION' : 'ALBUM'}</span>
               <span className="hidden lg:block col-span-2 font-mono text-zinc-400">DATE ADDED</span>
-              <span className={(isMixActive || isMixMode || isMixView) && !isQuran ? "col-span-5 md:col-span-1 text-right pr-2" : "col-span-5 md:col-span-2 text-right pr-2"}>ACTIONS</span>
+              <span className={isPlaylistMixActive ? "col-span-5 md:col-span-1 text-right pr-2" : "col-span-5 md:col-span-2 text-right pr-2"}>ACTIONS</span>
             </div>
 
             {filteredPlaylistTracks.map((track, i) => {
               const isSelected = selectedTrackIds.has(String(track.id || track._id));
-              const isMixOn = Boolean(isMixActive || isMixMode || isMixView) && !isQuran;
+              const isMixOn = isPlaylistMixActive;
               const musical = isMixOn ? getTrackMusicalData(track) : null;
               const camelotCol = isMixOn && musical ? getCamelotColor(musical.key) : null;
 
@@ -1387,44 +1446,6 @@ export default function PlaylistScreen({
                             linkClassName="hover:underline cursor-pointer"
                           />
                         </div>
-
-                        {/* Per-track Transition Tag (Rise / Blend / Custom / Auto) for Rivo */}
-                        {isMixOn && i < filteredPlaylistTracks.length - 1 && (() => {
-                          const nextTrack = filteredPlaylistTracks[i + 1];
-                          const tAId = String(track.id || track._id || '');
-                          const tBId = String(nextTrack.id || nextTrack._id || '');
-                          const pairKey = `${tAId}___${tBId}`;
-                          const pairKeyAlt = `${tAId}_${tBId}`;
-                          const trans = transitions[pairKey] || transitions[pairKeyAlt] || { style: (i === 0 ? 'rise' : i === 1 ? 'blend' : i === 2 ? 'custom' : 'auto'), duration: 8, bars: 4 };
-                          const mA = musical;
-                          const mB = getTrackMusicalData(nextTrack);
-                          const compat = checkHarmonicCompatibility(mA?.key, mB?.key, mA?.bpm, mB?.bpm);
-
-                          const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
-                                             trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
-                                             trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' :
-                                             trans.style === 'cut' ? '✂️ Cut' :
-                                             trans.style === 'custom' ? '🎛️ Custom' : '✨ Auto';
-
-                          return (
-                            <div className="mt-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveMixerPair({ trackA: track, trackB: nextTrack, pairKey });
-                                }}
-                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-mono font-bold brutal-border brutal-shadow-xs transition-transform hover:scale-105 cursor-pointer ${
-                                  isDark ? 'bg-zinc-900/90 text-zinc-300 border-zinc-700 hover:border-[#17a398]' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:border-[#17a398]'
-                                }`}
-                                title={`Customize transition into "${nextTrack.title}"`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: compat.color || '#10b981' }} />
-                                <span>{styleLabel}</span>
-                              </button>
-                            </div>
-                          );
-                        })()}
                       </div>
                     </div>
 
@@ -1557,11 +1578,15 @@ export default function PlaylistScreen({
 
                     const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
                                        trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
+                                       trans.style === 'wave' ? '〰️ Wave' :
+                                       trans.style === 'melt' ? '🧊 Melt' :
+                                       trans.style === 'slam' ? '💥 Slam' :
                                        trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' :
                                        trans.style === 'cut' ? '✂️ Cut' :
                                        trans.style === 'custom' ? '🎛️ Custom' : '✨ Auto';
 
                     const lengthLabel = trans.bars ? `${trans.bars} bars` : `${trans.duration || 8}s`;
+                    const cueLabel = trans.mixOutPoint ? ` • at ${Math.floor(trans.mixOutPoint / 60)}:${String(trans.mixOutPoint % 60).padStart(2, '0')}` : '';
 
                     return (
                       <div className="py-1 px-2 flex items-center justify-center relative my-0.5 group/trans">
@@ -1582,7 +1607,7 @@ export default function PlaylistScreen({
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: compat.color || '#10b981' }} />
                           <span>{styleLabel}</span>
                           <span className="text-zinc-500">•</span>
-                          <span className="text-zinc-400">{lengthLabel}</span>
+                          <span className="text-zinc-400">{lengthLabel}{cueLabel}</span>
                         </button>
                       </div>
                     );
