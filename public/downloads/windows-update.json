@@ -1,6 +1,6 @@
 {
-  "version": "2.1.8",
+  "version": "2.1.9",
   "pub_date": "2026-10-28T12:00:00Z",
-  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.1.8.exe",
-  "notes": "Rivo v2.1.8: Real-time Jam Room synchronization fixes, Rivo DJ Automix grid layout, and seamless cross-platform improvements."
+  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.1.9.exe",
+  "notes": "Update v2.1.9 \u2022 Rivo DJ Automix parity, 2-column transition presets grid, and live mix playlist toggles."
 }

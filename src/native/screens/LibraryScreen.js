@@ -44,7 +44,9 @@ import {
   Trash2,
   Sliders,
   Zap,
+  Wand2,
 } from 'lucide-react-native';
+import { getRecommendedTransition, calculateBarsDuration } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -107,25 +109,35 @@ export default function LibraryScreen({
   const [isReordering, setIsReordering] = useState(false);
   const [activeMixerPair, setActiveMixerPair] = useState(null);
   const [playlistTransitions, setPlaylistTransitions] = useState({});
+  const [isMixActive, setIsMixActive] = useState(false);
+  const [isAutoMixingAll, setIsAutoMixingAll] = useState(false);
 
   useEffect(() => {
     setIsReordering(false);
     if (selectedView && typeof selectedView === 'object' && selectedView !== 'liked') {
       const trans = selectedView.transitions || {};
+      const mixActive = Boolean(selectedView.isMix);
       setPlaylistTransitions(trans);
-      if (selectedView.isMix && setActiveTransitions) {
+      setIsMixActive(mixActive);
+      if (mixActive && setActiveTransitions) {
         setActiveTransitions(trans);
       }
     } else {
       setPlaylistTransitions({});
+      setIsMixActive(false);
     }
   }, [selectedView]);
 
   useEffect(() => {
     if (selectedView && typeof selectedView === 'object' && selectedView !== 'liked') {
       const current = (playlists || []).find(p => String(p._id || p.id) === String(selectedView._id || selectedView.id));
-      if (current && current.transitions) {
-        setPlaylistTransitions(current.transitions);
+      if (current) {
+        if (current.transitions) {
+          setPlaylistTransitions(current.transitions);
+        }
+        if (typeof current.isMix === 'boolean') {
+          setIsMixActive(Boolean(current.isMix));
+        }
       }
     }
   }, [playlists]);
@@ -423,7 +435,7 @@ export default function LibraryScreen({
     const list = [...activePlaylistTracks];
     if (list.length === 0) return;
     const isPlQuran = Boolean(isSelectedPlQuran || isQuranContent(playlist) || list.some(isQuranContent));
-    if (!isPlQuran && (playlist.isMix || isMixMode)) {
+    if (!isPlQuran && isMixActive) {
       if (typeof setIsMixMode === 'function') setIsMixMode(true);
       if (typeof setActiveTransitions === 'function' && playlistTransitions) {
         setActiveTransitions(playlistTransitions);
@@ -476,6 +488,105 @@ export default function LibraryScreen({
 
     setIsDownloadingAll(false);
     showToast(`Saved all ${toDownload.length} track(s) to Offline Vault!`, 'success');
+  };
+
+  const handleToggleMix = async () => {
+    if (isSelectedPlQuran || activePlaylistTracks.length <= 1) return;
+    const nextState = !isMixActive;
+    setIsMixActive(nextState);
+
+    if (nextState) {
+      if (typeof setIsMixMode === 'function') setIsMixMode(true);
+      if (Object.keys(playlistTransitions || {}).length === 0 && activePlaylistTracks.length > 1) {
+        await handleAutoMixAll();
+        return;
+      } else {
+        if (typeof setActiveTransitions === 'function') {
+          setActiveTransitions(playlistTransitions);
+        }
+      }
+    } else {
+      if (typeof setIsMixMode === 'function') setIsMixMode(false);
+      if (typeof setActiveTransitions === 'function') {
+        setActiveTransitions({});
+      }
+    }
+
+    try {
+      if (selectedView && selectedView !== 'liked') {
+        const plId = String(selectedView.id || selectedView._id);
+        selectedView.isMix = nextState;
+        if (typeof updatePlaylist === 'function') {
+          await updatePlaylist(plId, { isMix: nextState, transitions: playlistTransitions });
+        } else {
+          const authTok = token || '';
+          await fetch(`${API_BASE_URL}/api/playlists/${plId}/transitions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authTok ? { Authorization: `Bearer ${authTok}` } : {})
+            },
+            body: JSON.stringify({ isMix: nextState, transitions: playlistTransitions })
+          });
+        }
+        showToast(nextState ? 'Mix Mode activated!' : 'Mix Mode turned off', 'info');
+      }
+    } catch (e) {
+      console.warn('Failed to update playlist mix state:', e);
+    }
+  };
+
+  const handleAutoMixAll = async () => {
+    if (isSelectedPlQuran || activePlaylistTracks.length <= 1) return;
+    setIsAutoMixingAll(true);
+    const updatedTransitions = { ...(playlistTransitions || {}) };
+
+    for (let i = 0; i < activePlaylistTracks.length - 1; i++) {
+      const tA = activePlaylistTracks[i];
+      const tB = activePlaylistTracks[i + 1];
+      const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
+      const rec = getRecommendedTransition(tA, tB);
+      const bpmA = tA.bpm || 120;
+      const bars = rec.style === 'slam' || rec.style === 'cut' ? 2 : 4;
+      const calcDur = calculateBarsDuration(bars, bpmA);
+      updatedTransitions[pairKey] = {
+        style: rec.style,
+        duration: calcDur || rec.duration || 8,
+        bars: bars,
+        autoMatchBpm: true
+      };
+    }
+
+    setPlaylistTransitions(updatedTransitions);
+    setIsMixActive(true);
+    if (typeof setIsMixMode === 'function') setIsMixMode(true);
+    if (typeof setActiveTransitions === 'function') setActiveTransitions(updatedTransitions);
+
+    try {
+      if (selectedView && selectedView !== 'liked') {
+        const plId = String(selectedView.id || selectedView._id);
+        selectedView.isMix = true;
+        selectedView.transitions = updatedTransitions;
+        if (typeof updatePlaylist === 'function') {
+          await updatePlaylist(plId, { isMix: true, transitions: updatedTransitions });
+        } else {
+          const authTok = token || '';
+          await fetch(`${API_BASE_URL}/api/playlists/${plId}/transitions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(authTok ? { Authorization: `Bearer ${authTok}` } : {})
+            },
+            body: JSON.stringify({ isMix: true, transitions: updatedTransitions })
+          });
+        }
+      }
+      showToast('Generated smart transitions for all tracks!', 'success');
+    } catch (e) {
+      console.warn('Failed to auto-mix all:', e);
+    } finally {
+      setTimeout(() => setIsAutoMixingAll(false), 500);
+    }
   };
 
   const openEditPlaylist = (pl) => {
@@ -703,7 +814,7 @@ export default function LibraryScreen({
                       }
                     } else {
                       const isItemQuran = Boolean(isSelectedPlQuran || isQuranContent(item));
-                      if (!isItemQuran && (selectedView?.isMix || isMixMode)) {
+                      if (!isItemQuran && isMixActive) {
                         if (typeof setIsMixMode === 'function') setIsMixMode(true);
                         if (typeof setActiveTransitions === 'function' && playlistTransitions) {
                           setActiveTransitions(playlistTransitions);
@@ -731,7 +842,7 @@ export default function LibraryScreen({
                     }
                   }}
                 />
-                {hasNext && (
+                {isMixActive && hasNext && !isSelectedPlQuran && (
                   <View style={styles.transitionChipRow}>
                     <View style={styles.transitionLine} />
                     <TouchableOpacity
@@ -824,7 +935,7 @@ export default function LibraryScreen({
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <CassetteTag label={(!isSelectedPlQuran && selectedView.isMix) ? "🎛️ DJ MIX" : (isSelectedPlQuran ? "QURAN PLAYLIST" : "CRATE PLAYLIST")} bg={!isDark ? '#0b1110' : colors.ink} textColor={(!isSelectedPlQuran && selectedView.isMix) ? '#f59e0b' : colors.tealLight} />
+                          <CassetteTag label={(!isSelectedPlQuran && isMixActive) ? "🎛️ DJ MIX" : (isSelectedPlQuran ? "QURAN PLAYLIST" : "CRATE PLAYLIST")} bg={!isDark ? '#0b1110' : colors.ink} textColor={(!isSelectedPlQuran && isMixActive) ? '#f59e0b' : colors.tealLight} />
                           <TouchableOpacity
                             style={[
                               styles.visibilityHeroPill,
@@ -921,6 +1032,45 @@ export default function LibraryScreen({
                             {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : 'DOWNLOAD ALL'}
                           </Text>
                         </TouchableOpacity>
+
+                        {/* Mix Toggle Button (Web Parity) */}
+                        {!isSelectedPlQuran && activePlaylistTracks.length > 1 && (
+                          <TouchableOpacity
+                            style={[
+                              styles.mixHeroBtn,
+                              isMixActive ? styles.mixHeroBtnActive : styles.mixHeroBtnInactive
+                            ]}
+                            onPress={handleToggleMix}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontSize: 11 }}>🎛️</Text>
+                            <Text style={[
+                              styles.mixHeroBtnText,
+                              isMixActive ? styles.mixHeroBtnTextActive : styles.mixHeroBtnTextInactive
+                            ]}>
+                              {isMixActive ? 'Mix: ON' : 'Mix'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {/* Auto-Mix All Button (Web Parity) */}
+                        {!isSelectedPlQuran && isMixActive && activePlaylistTracks.length > 1 && (
+                          <TouchableOpacity
+                            style={styles.autoMixHeroBtn}
+                            onPress={handleAutoMixAll}
+                            disabled={isAutoMixingAll}
+                            activeOpacity={0.8}
+                          >
+                            {isAutoMixingAll ? (
+                              <ActivityIndicator size="small" color="#10b981" />
+                            ) : (
+                              <Wand2 size={11} color="#10b981" />
+                            )}
+                            <Text style={styles.autoMixHeroBtnText}>
+                              {isAutoMixingAll ? 'Mixing...' : 'Auto-Mix All'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   </View>
@@ -1407,11 +1557,16 @@ export default function LibraryScreen({
               }));
             }
 
-            if (selectedView && selectedView !== 'liked' && updatePlaylist) {
-              const plId = String(selectedView.id || selectedView._id);
-              updatePlaylist(plId, { transitions: updated }).catch(err => {
-                console.warn('Failed to sync transitions to playlist:', err);
-              });
+            setIsMixActive(true);
+            if (typeof setIsMixMode === 'function') setIsMixMode(true);
+            if (selectedView && selectedView !== 'liked') {
+              selectedView.isMix = true;
+              if (updatePlaylist) {
+                const plId = String(selectedView.id || selectedView._id);
+                updatePlaylist(plId, { isMix: true, transitions: updated }).catch(err => {
+                  console.warn('Failed to sync transitions to playlist:', err);
+                });
+              }
             }
 
             showToast(`Applied ${newTrans.style.toUpperCase()} (${newTrans.bars || 4} bars) transition`, 'success');
@@ -1822,6 +1977,51 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 10,
     color: colors.ink,
+  },
+  mixHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  mixHeroBtnActive: {
+    backgroundColor: '#10b981',
+    borderColor: '#059669',
+  },
+  mixHeroBtnInactive: {
+    backgroundColor: colors.surfaceDark,
+    borderColor: colors.paperMuted,
+  },
+  mixHeroBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+  },
+  mixHeroBtnTextActive: {
+    color: '#000000',
+  },
+  mixHeroBtnTextInactive: {
+    color: '#94a3b8',
+  },
+  autoMixHeroBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1.5,
+    borderColor: '#10b981',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  autoMixHeroBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#10b981',
   },
   modalOverlay: {
     flex: 1,

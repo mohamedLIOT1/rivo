@@ -717,7 +717,6 @@ export default function MiniMixerModal({
   const crossoverHandleY = 62 - Math.max(0, Math.min(1, (crossA + crossB) / 2)) * 52;
 
   const activeStyleObj = TRANSITION_STYLES.find(t => t.id === style) || TRANSITION_STYLES[0];
-  const cardWidth = (SCREEN_WIDTH - 44) / 2;
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -1070,7 +1069,6 @@ export default function MiniMixerModal({
                       key={st.id}
                       style={[
                         styles.styleCard2Col,
-                        { width: cardWidth },
                         isSel && {
                           borderColor: st.color,
                           backgroundColor: 'rgba(255,255,255,0.08)',
@@ -1679,14 +1677,18 @@ const styles = StyleSheet.create({
   styleGrid2Col: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    rowGap: 10,
   },
   styleCard2Col: {
-    backgroundColor: 'rgba(24, 24, 27, 0.7)',
-    borderRadius: 12,
-    padding: 9,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    width: '48.5%',
+    backgroundColor: 'rgba(24, 24, 27, 0.75)',
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    minHeight: 84,
+    justifyContent: 'space-between',
   },
   styleCardTop: {
     flexDirection: 'row',
@@ -1695,21 +1697,21 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   styleIconBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   styleName: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
     color: '#ffffff',
   },
   styleDesc: {
-    fontSize: 9,
+    fontSize: 9.5,
     color: '#94a3b8',
-    lineHeight: 12,
+    lineHeight: 13,
   },
   barsValText: {
     fontSize: 11,
