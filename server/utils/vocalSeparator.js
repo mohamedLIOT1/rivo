@@ -9,7 +9,7 @@ if (!fs.existsSync(stemsDir)) {
   try { fs.mkdirSync(stemsDir, { recursive: true }); } catch {}
 }
 
-const modelDir = process.env.AUDIO_SEPARATOR_MODEL_DIR || 'C:/tmp/audio-separator-models';
+const modelDir = process.env.AUDIO_SEPARATOR_MODEL_DIR || (process.platform === 'win32' ? 'C:/tmp/audio-separator-models' : '/tmp/audio-separator-models');
 
 // Active in-flight processing jobs to prevent duplicate separation tasks
 const activeJobs = new Map();
