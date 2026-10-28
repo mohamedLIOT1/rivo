@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.1.6',
+      version: '2.1.7',
       name: 'Rivo Web',
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
     },
     windows: {
-      version: '2.1.6',
+      version: '2.1.7',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.1.6.exe',
+      directFile: 'Rivo-v2.1.7.exe',
       mandatory: false,
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
     },
     android: {
-      version: '2.1.6',
-      build: 110,
+      version: '2.1.7',
+      build: 111,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.1.6.apk',
+      directFile: 'Rivo-v2.1.7.apk',
       mandatory: false,
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
     },
     ios: {
-      version: '2.1.6',
-      build: 110,
+      version: '2.1.7',
+      build: 111,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.1.6.ipa',
+      directFile: 'Rivo-v2.1.7.ipa',
       mandatory: false,
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
     }
   }
 };
@@ -181,43 +181,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.1.6',
+      version: '2.1.7',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
     },
     windows: {
-      version: '2.1.6',
+      version: '2.1.7',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.1.6.exe',
+      directFile: 'Rivo-v2.1.7.exe',
       mandatory: false,
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
     },
     android: {
-      version: '2.1.6',
-      build: 110,
+      version: '2.1.7',
+      build: 111,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.1.6.apk',
+      directFile: 'Rivo-v2.1.7.apk',
       mandatory: false,
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.',
-      notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).',
+      notesEn: 'Instant OTA update v2.1.7 • Full Automix & Holy Quran protection.',
       ota: {
         enabled: true,
-        version: '2.1.6',
+        version: '2.1.7',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.',
-        notesEn: 'Instant OTA update v1.9.9.6 • Pure English interface and library overhaul.'
+        notes: 'Instant OTA update v2.1.7 • Full Automix & Holy Quran protection.',
+        notesEn: 'Instant OTA update v2.1.7 • Full Automix & Holy Quran protection.'
       }
     },
     ios: {
-      version: '2.1.6',
-      build: 110,
+      version: '2.1.7',
+      build: 111,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.1.6.ipa',
+      directFile: 'Rivo-v2.1.7.ipa',
       mandatory: false,
+      notes: 'Update v2.1.7 • Spotify-style Automix (7 DJ curves, volume trim & speed sync, exact cue in/out, and Holy Quran mix safeguards).'
+    }
+  }
+};
       notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
     }
   }
@@ -267,18 +271,25 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
     ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
     : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
 
-  // Apply dynamic beta updates
-  if (isBetaClient) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
-      if (pkg && pkg.version) {
-        if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
-        if (manifest.platforms && manifest.platforms.windows) manifest.platforms.windows.version = pkg.version;
-        if (manifest.platforms && manifest.platforms.android) manifest.platforms.android.version = pkg.version;
-        if (manifest.platforms && manifest.platforms.ios) manifest.platforms.ios.version = pkg.version;
+  // Always dynamically ensure versions match package.json
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
+    if (pkg && pkg.version) {
+      if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
+      if (manifest.platforms && manifest.platforms.windows) {
+        manifest.platforms.windows.version = pkg.version;
+        manifest.platforms.windows.directFile = `Rivo-v${pkg.version}.exe`;
       }
-    } catch (e) {}
-  }
+      if (manifest.platforms && manifest.platforms.android) {
+        manifest.platforms.android.version = pkg.version;
+        manifest.platforms.android.directFile = `Rivo-v${pkg.version}.apk`;
+      }
+      if (manifest.platforms && manifest.platforms.ios) {
+        manifest.platforms.ios.version = pkg.version;
+        manifest.platforms.ios.directFile = `Rivo-v${pkg.version}.ipa`;
+      }
+    }
+  } catch (e) {}
 
   // Always apply dynamic fast OTA bundle to all mobile users if enabled
   const dynamicOta = getOtaManifest();
