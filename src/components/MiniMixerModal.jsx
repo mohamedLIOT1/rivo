@@ -676,7 +676,7 @@ export default function MiniMixerModal({
                   Edit Transition
                 </h3>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Spotify Automix
+                  Rivo Automix
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 truncate max-w-[280px] sm:max-w-md">
@@ -1163,18 +1163,18 @@ export default function MiniMixerModal({
             </div>
           </div>
 
-          {/* 2. SPOTIFY TRANSITION PRESETS */}
+          {/* 2. RIVO TRANSITION PRESETS */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-                Transition Style • Spotify Presets
+                Transition Style • Rivo Presets
               </label>
               <span className="text-[11px] font-mono text-emerald-400 font-bold">
                 {TRANSITION_STYLES.find(t => t.id === style)?.badge || 'Custom'}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {TRANSITION_STYLES.map((st) => {
                 const Icon = st.icon;
                 const isSelected = style === st.id;
@@ -1182,32 +1182,30 @@ export default function MiniMixerModal({
                   <button
                     key={st.id}
                     onClick={() => handleSelectStyle(st.id)}
-                    className={`p-3 rounded-2xl text-left border transition-all flex items-start gap-3 cursor-pointer group ${
+                    className={`p-2.5 rounded-2xl text-left border transition-all flex flex-col justify-between cursor-pointer group min-h-[96px] ${
                       isSelected
                         ? 'bg-zinc-800/95 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] ring-1 ring-emerald-500/50'
                         : 'bg-zinc-900/50 border-white/5 hover:border-white/20 hover:bg-zinc-900/80'
                     }`}
                   >
-                    <div 
-                      className="p-2 rounded-xl shrink-0 transition-transform group-hover:scale-105"
-                      style={{ 
-                        backgroundColor: isSelected ? st.color : 'rgba(255,255,255,0.06)', 
-                        color: isSelected ? '#000' : st.color 
-                      }}
-                    >
-                      <Icon size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-bold text-white">{st.name}</span>
-                        {isSelected && (
-                          <Check size={14} className="text-emerald-400 shrink-0" />
-                        )}
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div 
+                        className="p-1.5 rounded-lg shrink-0 transition-transform group-hover:scale-105"
+                        style={{ 
+                          backgroundColor: isSelected ? st.color : 'rgba(255,255,255,0.06)', 
+                          color: isSelected ? '#000' : st.color 
+                        }}
+                      >
+                        <Icon size={14} />
                       </div>
-                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-snug line-clamp-2">
-                        {st.desc}
-                      </p>
+                      <span className="text-xs font-bold text-white truncate flex-1 ml-2">{st.name}</span>
+                      {isSelected && (
+                        <Check size={13} className="text-emerald-400 shrink-0 ml-1" />
+                      )}
                     </div>
+                    <p className="text-[10px] text-zinc-400 leading-tight line-clamp-2 mt-auto">
+                      {st.desc}
+                    </p>
                   </button>
                 );
               })}

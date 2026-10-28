@@ -410,10 +410,10 @@ module.exports = function (io, updateConfig = {}) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
       if (room) {
-        const effUid = socket.userId || userId;
+        const effUid = socket.userId ? String(socket.userId) : null;
         const isHost = (room.hostId === socket.id) ||
-          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
-          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+          (room.hostUserId && effUid && String(room.hostUserId) === effUid) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === effUid)) && m.isHost);
 
         // ONLY the Host may emit periodic playback time / clock synchronization!
         // Non-host members are never allowed to push lagging periodic time updates into the room.
@@ -447,7 +447,8 @@ module.exports = function (io, updateConfig = {}) {
           const cleanTrack = { ...currentTrack };
           if (cleanTrack.localAudioUri && cleanTrack.localAudioUri.startsWith('file://')) delete cleanTrack.localAudioUri;
           if (cleanTrack.nativeAudioUri && cleanTrack.nativeAudioUri.startsWith('file://')) delete cleanTrack.nativeAudioUri;
-          if (cleanTrack.audioUrl && cleanTrack.audioUrl.startsWith('file://')) delete cleanTrack.audioUrl;
+          if (cleanTrack.audioUrl && (cleanTrack.audioUrl.startsWith('file://') || cleanTrack.audioUrl.includes('googlevideo.com'))) delete cleanTrack.audioUrl;
+          if (cleanTrack.streamUrl && cleanTrack.streamUrl.includes('googlevideo.com')) delete cleanTrack.streamUrl;
           cleanTrack.isDownloaded = false;
           cleanTrack.downloaded = false;
 
@@ -476,9 +477,11 @@ module.exports = function (io, updateConfig = {}) {
           userAction: userAction || (isSeek ? 'seek' : (isPlaying === false ? 'pause' : 'play'))
         };
 
-        // Consolidated clean emission: jam:sync_play_state + jam:room_updated
+        // Consolidated clean emission: jam:sync_play_state (only emit room_updated when non-periodic)
         io.to(cleanCode).emit('jam:sync_play_state', syncPayload);
-        io.to(cleanCode).emit('jam:room_updated', room);
+        if (!isPeriodic) {
+          io.to(cleanCode).emit('jam:room_updated', room);
+        }
       }
     });
 
@@ -553,10 +556,10 @@ module.exports = function (io, updateConfig = {}) {
         const validList = rawList.filter(Boolean);
         if (validList.length === 0) return;
 
-        const effUid = socket.userId || userId;
+        const effUid = socket.userId ? String(socket.userId) : null;
         const isHost = (room.hostId === socket.id) ||
-          (room.hostUserId && effUid && String(room.hostUserId) === String(effUid)) ||
-          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === String(effUid))) && m.isHost);
+          (room.hostUserId && effUid && String(room.hostUserId) === effUid) ||
+          (room.members || []).some(m => (m.socketId === socket.id || (effUid && String(m.id || m._id) === effUid)) && m.isHost);
 
         const canControl = isHost || !room.hostOnlyControl;
 

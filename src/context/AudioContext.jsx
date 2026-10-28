@@ -129,7 +129,7 @@ async function doResolvePlayableAudioStream(track, signal = null) {
   }
 
   // 2c. Direct HTTP audio stream URL (e.g. from Jam host or pre-resolved stream)
-  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.includes('youtube.com/watch') && !targetUrl.includes('youtu.be/')) {
+  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.includes('youtube.com/watch') && !targetUrl.includes('youtu.be/') && !targetUrl.includes('googlevideo.com')) {
     return {
       url: targetUrl,
       duration: sanitizeDuration(track.duration, 210),
@@ -2822,12 +2822,28 @@ export function AudioProvider({ children, tracks, setTracks }) {
         return;
       }
 
-      // Guest: sync drift only if severe drift > 3.5s and not sought recently (> 4.5s)
+      // Guest: intelligent smooth drift compensation (Micro-rate adjustment between 0.3s-2.0s, hard seek > 2.0s)
       const localCur = audioRef.current?.currentTime || currentTimeRef.current || 0;
-      if (targetTime !== undefined && Math.abs(targetTime - localCur) > 3.5 && (nowTime - (lastRemoteSeekRef.current || 0) > 4500)) {
+      const drift = targetTime - localCur;
+      const absDrift = Math.abs(drift);
+
+      if (audioRef.current && !audioRef.current.paused) {
+        if (absDrift > 2.0 && (nowTime - (lastRemoteSeekRef.current || 0) > 4000)) {
+          lastRemoteSeekRef.current = nowTime;
+          seekTo(targetTime, true /* isRemote */);
+          audioRef.current.playbackRate = 1.0;
+        } else if (absDrift >= 0.3 && absDrift <= 2.0) {
+          // Micro-tempo shift: catch up smoothly without popping or buffering
+          audioRef.current.playbackRate = drift > 0 ? 1.05 : 0.95;
+        } else if (absDrift < 0.2 && audioRef.current.playbackRate !== 1.0) {
+          // Drift aligned within 200ms: restore normal speed
+          audioRef.current.playbackRate = 1.0;
+        }
+      } else if (absDrift > 2.0 && (nowTime - (lastRemoteSeekRef.current || 0) > 4000)) {
         lastRemoteSeekRef.current = nowTime;
         seekTo(targetTime, true /* isRemote */);
       }
+
       if (audioRef.current) {
         resumeAudioContext();
         audioRef.current.play().then(() => {

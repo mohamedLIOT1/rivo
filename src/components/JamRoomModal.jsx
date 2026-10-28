@@ -51,8 +51,9 @@ export default function JamRoomModal({
   const handleTuneIn = () => {
     resumeAudioContext();
     const activeTrack = jamSession?.currentTrack || currentTrack;
+    const initialTime = Number(jamSession?.currentTime) || 0;
     if (activeTrack && onPlayTrack) {
-      onPlayTrack(activeTrack, null, true);
+      onPlayTrack(activeTrack, null, true, null, false, initialTime);
     }
     if (jamSession && socket) {
       socket.emit('jam:request_sync', { roomCode: jamSession.code });

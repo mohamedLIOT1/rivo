@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.1.7",
+  "version": "2.1.8",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري (3.31 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (3.31 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3470571,
-  "sizeMb": "3.31 MB",
-  "updatedAt": "2026-10-28T10:48:47.666Z"
+  "notes": "تحديث هوائي فوري v2.1.8 • إصلاحات مزامنة غرف الاستماع الجماعي Jam وتحديث واجهة ريفو أوتمكس",
+  "notesEn": "Instant in-app OTA update v2.1.8 • Real-time Jam session synchronization and Rivo Automix updates.",
+  "bundleSize": 3482120,
+  "sizeMb": "3.32 MB",
+  "updatedAt": "2026-10-28T12:02:34.131Z"
 }

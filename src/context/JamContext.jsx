@@ -45,7 +45,8 @@ export function JamProvider({ children }) {
   const startJam = useCallback((openModal = true) => {
     resumeAudioContext();
     const cur = currentUserRef.current;
-    const code = jamSessionRef.current?.code || `JAM-${Math.floor(1000 + Math.random() * 9000)}`;
+    const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const code = jamSessionRef.current?.code || `JAM-${randomCode}`;
     const userPayload = cur 
       ? { id: cur.id || cur._id, name: cur.name, avatar: cur.avatar }
       : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
@@ -139,15 +140,27 @@ export function JamProvider({ children }) {
     }
   }, [socket, setJamSync, showToast]);
 
-  const transferHost = useCallback((memberSocketId) => {
-    if (jamSessionRef.current && socket && memberSocketId) {
-      socket.emit('jam:transfer_host', { roomCode: jamSessionRef.current.code, newHostSocketId: memberSocketId });
+  const transferHost = useCallback((memberOrId) => {
+    if (jamSessionRef.current && socket && memberOrId) {
+      const targetSocketId = typeof memberOrId === 'object' ? memberOrId.socketId : memberOrId;
+      const targetUserId = typeof memberOrId === 'object' ? (memberOrId.id || memberOrId._id) : undefined;
+      socket.emit('jam:transfer_host', {
+        roomCode: jamSessionRef.current.code,
+        targetSocketId,
+        targetUserId
+      });
     }
   }, [socket]);
 
-  const kickMember = useCallback((memberSocketId) => {
-    if (jamSessionRef.current && socket && memberSocketId) {
-      socket.emit('jam:kick_member', { roomCode: jamSessionRef.current.code, targetSocketId: memberSocketId });
+  const kickMember = useCallback((memberOrId) => {
+    if (jamSessionRef.current && socket && memberOrId) {
+      const memberSocketId = typeof memberOrId === 'object' ? memberOrId.socketId : memberOrId;
+      const memberId = typeof memberOrId === 'object' ? (memberOrId.id || memberOrId._id) : undefined;
+      socket.emit('jam:kick_member', {
+        roomCode: jamSessionRef.current.code,
+        memberSocketId,
+        memberId
+      });
     }
   }, [socket]);
 
@@ -174,9 +187,10 @@ export function JamProvider({ children }) {
     });
 
     s.on('jam:room_updated', (room) => {
+      const isFirstJoin = !jamSessionRef.current;
       setJamSession(room);
       setJamSync({ socket: s, jamSession: room });
-      if (room?.currentTrack && syncRemotePlayStateRef.current && room.initiatorId !== s.id) {
+      if (isFirstJoin && room?.currentTrack && syncRemotePlayStateRef.current && room.initiatorId !== s.id) {
         syncRemotePlayStateRef.current({
           isPlaying: Boolean(room.isPlaying),
           currentTrack: room.currentTrack,
@@ -191,7 +205,10 @@ export function JamProvider({ children }) {
     });
 
     s.on('jam:kicked', (data) => {
-      alert(data?.reason || 'You were kicked from the Jam room by the host.');
+      showToast({
+        type: 'error',
+        message: data?.reason || 'You were kicked from the Jam room by the host.'
+      });
       setJamSession(null);
       setJamSync({ jamSession: null });
       setIsJamOpen(false);
@@ -211,7 +228,10 @@ export function JamProvider({ children }) {
     });
 
     s.on('jam:invite_received', (data) => {
-      const hostName = data?.host?.name || 'Someone';
+      const hostObj = data?.host || {};
+      const hostName = hostObj.name || data?.name || 'Friend';
+      const hostAvatar = hostObj.avatar || data?.avatar || '';
+      const hostId = hostObj.id || data?.id || data?.senderId;
       const roomCode = data?.roomCode;
       if (!roomCode) return;
 
@@ -220,7 +240,7 @@ export function JamProvider({ children }) {
         title: `📻 Jam Invite from ${hostName}`,
         body: `Invited you to listen together in sync! Tap to join (${roomCode})`,
         roomCode,
-        sender: { id: data?.host?.id, name: hostName, avatar: data?.host?.avatar || '' }
+        sender: { id: hostId, name: hostName, avatar: hostAvatar }
       });
     });
 

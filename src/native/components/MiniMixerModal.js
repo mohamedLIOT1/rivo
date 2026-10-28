@@ -732,8 +732,8 @@ export default function MiniMixerModal({
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.sheetTitle}>Edit Transition</Text>
-                  <View style={styles.spotifyBadge}>
-                    <Text style={styles.spotifyBadgeText}>Spotify Automix</Text>
+                  <View style={styles.rivoBadge}>
+                    <Text style={styles.rivoBadgeText}>Rivo Automix</Text>
                   </View>
                 </View>
                 <Text style={styles.sheetSubtitle} numberOfLines={1}>
@@ -1054,10 +1054,10 @@ export default function MiniMixerModal({
               </View>
             </View>
 
-            {/* ── 2. TRANSITION STYLE • SPOTIFY PRESETS (2-COLUMN GRID) ── */}
+            {/* ── 2. TRANSITION STYLE • RIVO PRESETS (2-COLUMN GRID) ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>TRANSITION STYLE • SPOTIFY PRESETS</Text>
+                <Text style={styles.sectionTitle}>TRANSITION STYLE • RIVO PRESETS</Text>
                 <Text style={styles.sectionBadgeText}>{activeStyleObj.badge}</Text>
               </View>
 
@@ -1354,7 +1354,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     letterSpacing: 0.3,
   },
-  spotifyBadge: {
+  rivoBadge: {
     backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderRadius: 6,
     paddingHorizontal: 6,
@@ -1362,7 +1362,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.4)',
   },
-  spotifyBadgeText: {
+  rivoBadgeText: {
     fontSize: 9,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: 'bold',

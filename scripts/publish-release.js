@@ -29,7 +29,7 @@ async function publish() {
   const releaseName = `Rivo v${version} (Mobile & Desktop)`;
   const releaseBody = `## Rivo v${version} (Mobile & Desktop)
 
-### 🎛️ Full Spotify-Style Automix & Transition Parity
+### 🎛️ Full Rivo DJ Automix & Transition Parity
 - **7 Authentic DJ Curves**: Auto, Rise (tension sweep + drop), Blend (3-band sub bass swap), Wave (rhythmic low-pass), Melt (harmonic warp), Slam (instant downbeat snap), and Fade (equal-power).
 - **Exact Cue-In & Cue-Out Points**: Full waveform cue selection with quick-jump presets (Radio Cut, Chorus, Drop Start, Skip Intro).
 - **Independent Volume Trim & Speed Sync**: 50%-140% volume trim per deck and 0.85x-1.15x tempo control with instant BPM beat-matching.
