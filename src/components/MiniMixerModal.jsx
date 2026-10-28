@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   X, Sliders, Volume2, Wand2, Play, Square, Check, Sparkles, Activity, Music2, 
-  Disc, Zap, Radio, Layers, Plus, Minus, Info, Loader2
+  Zap, Radio, Layers, Plus, Minus, Loader2, MoveHorizontal
 } from 'lucide-react';
-import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, getCamelotColor, calculateBarsDuration } from '../utils/musicAnalysis';
+import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, calculateBarsDuration } from '../utils/musicAnalysis';
+import { calculateCrossfadeGains } from '../utils/audioEngine';
 import { useAudioPlayer, resolvePlayableAudioStream } from '../context/AudioContext';
 import { API_BASE_URL } from '../config';
 
@@ -110,7 +111,6 @@ export default function MiniMixerModal({
 
   const dataA = getTrackMusicalData(trackA);
   const dataB = getTrackMusicalData(trackB);
-  const compatibility = checkHarmonicCompatibility(dataA.key, dataB.key, dataA.bpm, dataB.bpm);
   const recommended = getRecommendedTransition(trackA, trackB);
 
   // Transition parameters state
@@ -120,6 +120,9 @@ export default function MiniMixerModal({
     initialTransition?.duration || 
     calculateBarsDuration(initialTransition?.bars || 4, dataA.bpm) || 8
   );
+
+  // Interactive Crossover Bias state (0.20 to 0.80, default 0.50 center)
+  const [crossoverBias, setCrossoverBias] = useState(Number(initialTransition?.crossoverBias) || 0.5);
 
   // Cue Points: Mix-Out (Track A) and Mix-In (Track B)
   const defaultMixOut = Math.round(durA * 0.85);
@@ -133,29 +136,27 @@ export default function MiniMixerModal({
   const [autoMatchBpm, setAutoMatchBpm] = useState(initialTransition?.autoMatchBpm !== false);
   const [bassKill, setBassKill] = useState(Boolean(initialTransition?.bassKill));
 
-  // Audition Engine State (Supports: Full Dual Transition, Deck A Solo, Deck B Solo)
+  // Dragging states
+  const [isDraggingDeckA, setIsDraggingDeckA] = useState(false);
+  const [isDraggingDeckB, setIsDraggingDeckB] = useState(false);
+  const [isDraggingCurve, setIsDraggingCurve] = useState(false);
+
+  // Audition State
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [soloPlayingDeck, setSoloPlayingDeck] = useState(null); // 'A' | 'B' | null
   const [soloProgress, setSoloProgress] = useState(0);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+  const [liveGainA, setLiveGainA] = useState(100);
+  const [liveGainB, setLiveGainB] = useState(0);
 
-  const auditionCtxRef = useRef(null);
   const auditionDeckARef = useRef(null);
   const auditionDeckBRef = useRef(null);
-  const auditionGainARef = useRef(null);
-  const auditionGainBRef = useRef(null);
-  const auditionFilterARef = useRef(null);
-  const auditionFilterBRef = useRef(null);
-  const auditionTimerRef = useRef(null);
   const auditionAnimRef = useRef(null);
 
   // Waveform peak data
-  const peaksA = useMemo(() => generatePeaksForTrack(trackA, 100), [trackA?.id, trackA?._id, trackA?.title]);
-  const peaksB = useMemo(() => generatePeaksForTrack(trackB, 100), [trackB?.id, trackB?._id, trackB?.title]);
-
-  const camelotColA = getCamelotColor(dataA.key);
-  const camelotColB = getCamelotColor(dataB.key);
+  const peaksA = useMemo(() => generatePeaksForTrack(trackA, 90), [trackA?.id, trackA?._id, trackA?.title]);
+  const peaksB = useMemo(() => generatePeaksForTrack(trackB, 90), [trackB?.id, trackB?._id, trackB?.title]);
 
   const trackAId = String(trackA?.id || trackA?._id || '');
   const trackBId = String(trackB?.id || trackB?._id || '');
@@ -167,6 +168,7 @@ export default function MiniMixerModal({
       const b = initialTransition.bars || (initialTransition.style === 'slam' ? 2 : 4);
       setBars(b);
       setDuration(initialTransition.duration || calculateBarsDuration(b, dataA.bpm) || 8);
+      setCrossoverBias(Number(initialTransition.crossoverBias) || 0.5);
       if (initialTransition.mixOutPoint) setMixOutPoint(Math.min(durA, Number(initialTransition.mixOutPoint)));
       if (initialTransition.mixInPoint) setMixInPoint(Math.min(durB, Number(initialTransition.mixInPoint)));
       setAutoMatchBpm(initialTransition.autoMatchBpm !== false);
@@ -176,28 +178,29 @@ export default function MiniMixerModal({
       const b = recommended.bars || 4;
       setBars(b);
       setDuration(recommended.duration || calculateBarsDuration(b, dataA.bpm) || 8);
+      setCrossoverBias(0.5);
       setMixOutPoint(defaultMixOut);
       setMixInPoint(0);
     }
   }, [trackAId, trackBId, isOpen]);
 
-  // Clean stop for isolated audition
+  // Clean stop for audition & solo previews
   const stopAudition = () => {
-    if (auditionTimerRef.current) clearInterval(auditionTimerRef.current);
-    if (auditionAnimRef.current) cancelAnimationFrame(auditionAnimRef.current);
+    if (auditionAnimRef.current) {
+      cancelAnimationFrame(auditionAnimRef.current);
+      auditionAnimRef.current = null;
+    }
     if (auditionDeckARef.current) {
       try {
         auditionDeckARef.current.pause();
-        auditionDeckARef.current.removeAttribute('src');
-        auditionDeckARef.current.load();
+        auditionDeckARef.current.src = '';
       } catch {}
       auditionDeckARef.current = null;
     }
     if (auditionDeckBRef.current) {
       try {
         auditionDeckBRef.current.pause();
-        auditionDeckBRef.current.removeAttribute('src');
-        auditionDeckBRef.current.load();
+        auditionDeckBRef.current.src = '';
       } catch {}
       auditionDeckBRef.current = null;
     }
@@ -205,22 +208,20 @@ export default function MiniMixerModal({
     setSoloPlayingDeck(null);
     setSoloProgress(0);
     setPreviewProgress(0);
+    setLiveGainA(100);
+    setLiveGainB(0);
     setIsLoadingAudio(false);
   };
 
   useEffect(() => {
     return () => {
       stopAudition();
-      if (auditionCtxRef.current && auditionCtxRef.current.state !== 'closed') {
-        try { auditionCtxRef.current.close(); } catch {}
-      }
     };
   }, []);
 
   if (!isOpen || !trackA || !trackB) return null;
 
-  // Max allowed seconds for slider (adapts to 16 bars without overflowing thumb)
-  const maxAllowedSec = Math.max(32, Math.ceil(duration / 4) * 4);
+  const maxAllowedSec = 32;
   const thumbPct = Math.max(0, Math.min(100, ((duration - 1) / (maxAllowedSec - 1)) * 100));
 
   const handleSelectBars = (numBars) => {
@@ -235,6 +236,81 @@ export default function MiniMixerModal({
       setBars(2);
       setDuration(calculateBarsDuration(2, dataA.bpm));
     }
+  };
+
+  // ── Drag Handlers for Deck A Waveform ──
+  const updateDeckAPositionFromEvent = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const pct = Math.max(0.05, Math.min(1.0, (clientX - targetRect.left) / targetRect.width));
+    setMixOutPoint(Math.round(pct * durA));
+  };
+
+  const handlePointerDownDeckA = (e) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDraggingDeckA(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    updateDeckAPositionFromEvent(e.clientX, rect);
+  };
+
+  const handlePointerMoveDeckA = (e) => {
+    if (!isDraggingDeckA) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    updateDeckAPositionFromEvent(e.clientX, rect);
+  };
+
+  const handlePointerUpDeckA = () => {
+    setIsDraggingDeckA(false);
+  };
+
+  // ── Drag Handlers for Deck B Waveform ──
+  const updateDeckBPositionFromEvent = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const pct = Math.max(0.0, Math.min(0.95, (clientX - targetRect.left) / targetRect.width));
+    setMixInPoint(Math.round(pct * durB));
+  };
+
+  const handlePointerDownDeckB = (e) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDraggingDeckB(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    updateDeckBPositionFromEvent(e.clientX, rect);
+  };
+
+  const handlePointerMoveDeckB = (e) => {
+    if (!isDraggingDeckB) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    updateDeckBPositionFromEvent(e.clientX, rect);
+  };
+
+  const handlePointerUpDeckB = () => {
+    setIsDraggingDeckB(false);
+  };
+
+  // ── Drag Handlers for Interactive Curve Crossover Point ──
+  const updateCrossoverFromEvent = (clientX, targetRect) => {
+    if (!targetRect || targetRect.width <= 0) return;
+    const pct = Math.max(0.20, Math.min(0.80, (clientX - targetRect.left) / targetRect.width));
+    setCrossoverBias(Number(pct.toFixed(2)));
+  };
+
+  const handlePointerDownCurve = (e) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDraggingCurve(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    updateCrossoverFromEvent(e.clientX, rect);
+  };
+
+  const handlePointerMoveCurve = (e) => {
+    if (!isDraggingCurve) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    updateCrossoverFromEvent(e.clientX, rect);
+  };
+
+  const handlePointerUpCurve = () => {
+    setIsDraggingCurve(false);
   };
 
   // ── Solo Deck A Audition (Mix-Out Point alone) ──
@@ -254,10 +330,9 @@ export default function MiniMixerModal({
       if (!urlA) return;
 
       const audioA = new Audio(urlA);
-      audioA.crossOrigin = 'anonymous';
       auditionDeckARef.current = audioA;
 
-      const previewDuration = Math.min(duration, 10);
+      const previewDuration = Math.min(duration, 8);
       const startSec = Math.max(0, mixOutPoint - previewDuration);
       audioA.currentTime = startSec;
       audioA.volume = 1.0;
@@ -303,11 +378,10 @@ export default function MiniMixerModal({
       if (!urlB) return;
 
       const audioB = new Audio(urlB);
-      audioB.crossOrigin = 'anonymous';
       auditionDeckBRef.current = audioB;
 
-      const previewDuration = Math.min(duration, 10);
-      audioB.currentTime = Math.max(0, mixInPoint);
+      const previewDuration = Math.min(duration, 8);
+      audioB.currentTime = mixInPoint;
       audioB.volume = 1.0;
 
       setSoloPlayingDeck('B');
@@ -334,8 +408,8 @@ export default function MiniMixerModal({
     }
   };
 
-  // ── Dual Track Transition DSP Audition Preview ──
-  const handleToggleAudition = async () => {
+  // ── Full Dual-Deck Transition Audition ──
+  const handleAuditionTransition = async () => {
     if (isPreviewing) {
       stopAudition();
       return;
@@ -353,69 +427,31 @@ export default function MiniMixerModal({
 
       const urlA = resA?.url ? (resA.url.startsWith('/') ? `${API_BASE_URL}${resA.url}` : resA.url) : '';
       const urlB = resB?.url ? (resB.url.startsWith('/') ? `${API_BASE_URL}${resB.url}` : resB.url) : '';
-
-      if (!urlA || !urlB) {
-        console.warn('[Audition] Missing audio URLs');
-        return;
-      }
-
-      // Initialize isolated AudioContext if not ready
-      if (!auditionCtxRef.current || auditionCtxRef.current.state === 'closed') {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        auditionCtxRef.current = new AudioCtx();
-      }
-      const ctx = auditionCtxRef.current;
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
+      if (!urlA || !urlB) return;
 
       const audioA = new Audio(urlA);
-      audioA.crossOrigin = 'anonymous';
-      auditionDeckARef.current = audioA;
-
       const audioB = new Audio(urlB);
-      audioB.crossOrigin = 'anonymous';
+      auditionDeckARef.current = audioA;
       auditionDeckBRef.current = audioB;
 
-      const sourceA = ctx.createMediaElementSource(audioA);
-      const filterA = ctx.createBiquadFilter();
-      const gainA = ctx.createGain();
-      sourceA.connect(filterA);
-      filterA.connect(gainA);
-      gainA.connect(ctx.destination);
-      auditionFilterARef.current = filterA;
-      auditionGainARef.current = gainA;
-
-      const sourceB = ctx.createMediaElementSource(audioB);
-      const filterB = ctx.createBiquadFilter();
-      const gainB = ctx.createGain();
-      sourceB.connect(filterB);
-      filterB.connect(gainB);
-      gainB.connect(ctx.destination);
-      auditionFilterBRef.current = filterB;
-      auditionGainBRef.current = gainB;
-
-      filterA.type = 'allpass';
-      filterA.frequency.value = 20000;
-      filterB.type = 'allpass';
-      filterB.frequency.value = 20000;
-      gainA.gain.value = 1.0;
-      gainB.gain.value = 0.0;
-
-      const leadInSec = 3.0; // Play 3s of Track A leading into transition
+      const leadInSec = 2.0;
       const seekA = Math.max(0, mixOutPoint - duration - leadInSec);
       audioA.currentTime = seekA;
       audioB.currentTime = mixInPoint;
+      audioA.volume = 1.0;
+      audioB.volume = 0.0;
 
       setIsPreviewing(true);
       setPreviewProgress(0);
+      setLiveGainA(100);
+      setLiveGainB(0);
 
       await audioA.play();
 
       const startTime = performance.now();
       const leadInMs = leadInSec * 1000;
       const transMs = Math.max(1, duration) * 1000;
-      const tailMs = 2500;
+      const tailMs = 2000;
       const totalMs = leadInMs + transMs + tailMs;
 
       let deckBStarted = false;
@@ -425,8 +461,10 @@ export default function MiniMixerModal({
 
         if (elapsed < leadInMs) {
           setPreviewProgress(0);
-          gainA.gain.value = 1.0;
-          gainB.gain.value = 0.0;
+          audioA.volume = 1.0;
+          audioB.volume = 0.0;
+          setLiveGainA(100);
+          setLiveGainB(0);
         } else if (elapsed <= leadInMs + transMs) {
           if (!deckBStarted) {
             deckBStarted = true;
@@ -434,36 +472,20 @@ export default function MiniMixerModal({
             audioB.play().catch(() => {});
           }
 
-          const p = (elapsed - leadInMs) / transMs;
-          setPreviewProgress(p);
+          const rawP = (elapsed - leadInMs) / transMs;
+          const { gainA, gainB } = calculateCrossfadeGains(rawP, style, crossoverBias);
 
-          if (style === 'rise') {
-            filterA.type = 'highpass';
-            filterA.frequency.value = 30 + Math.pow(p, 2) * 3500;
-            gainA.gain.value = p < 0.75 ? 1.0 : Math.max(0, 1 - (p - 0.75) * 4);
-            gainB.gain.value = Math.pow(p, 1.5);
-          } else if (style === 'blend') {
-            filterA.type = 'lowshelf';
-            filterA.frequency.value = 250;
-            filterA.gain.value = p < 0.45 ? 0 : -24 * ((p - 0.45) / 0.55);
-            gainA.gain.value = p < 0.5 ? 1.0 : Math.max(0, (1 - p) * 2);
-            gainB.gain.value = p < 0.5 ? p * 1.5 : 1.0;
-          } else if (style === 'wave') {
-            filterA.type = 'lowpass';
-            filterA.frequency.value = Math.max(350, 20000 * (1 - p));
-            gainA.gain.value = Math.cos(p * Math.PI / 2);
-            gainB.gain.value = Math.sin(p * Math.PI / 2);
-          } else if (style === 'slam') {
-            gainA.gain.value = p < 0.85 ? 1.0 : 0.0;
-            gainB.gain.value = p >= 0.85 ? 1.0 : 0.0;
-          } else {
-            gainA.gain.value = Math.cos(p * Math.PI / 2);
-            gainB.gain.value = Math.sin(p * Math.PI / 2);
-          }
+          audioA.volume = Math.max(0, Math.min(1, gainA));
+          audioB.volume = Math.max(0, Math.min(1, gainB));
+          setPreviewProgress(rawP);
+          setLiveGainA(Math.round(gainA * 100));
+          setLiveGainB(Math.round(gainB * 100));
         } else {
           setPreviewProgress(1);
-          gainA.gain.value = 0;
-          gainB.gain.value = 1.0;
+          audioA.volume = 0.0;
+          audioB.volume = 1.0;
+          setLiveGainA(0);
+          setLiveGainB(100);
           if (!audioA.paused) audioA.pause();
         }
 
@@ -475,7 +497,6 @@ export default function MiniMixerModal({
       };
 
       auditionAnimRef.current = requestAnimationFrame(tick);
-
     } catch (err) {
       console.warn('[Audition] Error:', err);
       stopAudition();
@@ -489,6 +510,7 @@ export default function MiniMixerModal({
       style,
       duration,
       bars,
+      crossoverBias,
       mixOutPoint,
       mixInPoint,
       autoMatchBpm,
@@ -509,39 +531,23 @@ export default function MiniMixerModal({
   const mixInPctB = Math.max(0, (mixInPoint / durB) * 100);
   const overlapEndPctB = Math.min(100, ((mixInPoint + overlapSec) / durB) * 100);
 
-  // SVG Envelope Curve Preview - dynamic width 400x70
+  // SVG Envelope Curve Points (500x70 resolution)
   const curvePointsA = [];
   const curvePointsB = [];
-  for (let i = 0; i <= 32; i++) {
-    const x = (i / 32) * 400;
-    const p = i / 32;
-    let gA, gB;
-
-    if (style === 'slam') {
-      gA = p < 0.85 ? 1 : 0;
-      gB = p >= 0.85 ? 1 : 0;
-    } else if (style === 'rise') {
-      gA = p < 0.75 ? 1.0 : Math.max(0, 1 - Math.pow((p - 0.75) / 0.25, 2));
-      gB = Math.pow(p, 1.5);
-    } else if (style === 'blend') {
-      gA = p < 0.45 ? 1 - 0.15 * Math.pow(p / 0.45, 2) : 0.85 * Math.pow((1 - p) / 0.55, 3);
-      gB = p < 0.45 ? 0.35 * Math.pow(p / 0.45, 1.8) : 0.35 + 0.65 * Math.pow((p - 0.45) / 0.55, 0.6);
-    } else if (style === 'wave') {
-      gA = p < 0.5 ? 1 - 0.25 * Math.sin(p * Math.PI) : Math.pow((1 - p) / 0.5, 2.2);
-      gB = p < 0.5 ? Math.pow(p / 0.5, 2.2) : 0.75 + 0.25 * Math.sin((p - 0.5) * Math.PI);
-    } else if (style === 'melt') {
-      gA = Math.pow(1 - p, 1.8);
-      gB = Math.pow(p, 1.8);
-    } else {
-      gA = Math.cos(p * Math.PI / 2);
-      gB = Math.sin(p * Math.PI / 2);
-    }
-
-    const yA = 60 - Math.max(0, Math.min(1, gA)) * 50;
-    const yB = 60 - Math.max(0, Math.min(1, gB)) * 50;
+  const sampleSteps = 40;
+  for (let i = 0; i <= sampleSteps; i++) {
+    const rawP = i / sampleSteps;
+    const x = rawP * 500;
+    const { gainA, gainB } = calculateCrossfadeGains(rawP, style, crossoverBias);
+    const yA = 62 - Math.max(0, Math.min(1, gainA)) * 52;
+    const yB = 62 - Math.max(0, Math.min(1, gainB)) * 52;
     curvePointsA.push(`${x.toFixed(1)},${yA.toFixed(1)}`);
     curvePointsB.push(`${x.toFixed(1)},${yB.toFixed(1)}`);
   }
+
+  const crossoverHandleX = crossoverBias * 500;
+  const { gainA: crossA, gainB: crossB } = calculateCrossfadeGains(crossoverBias, style, crossoverBias);
+  const crossoverHandleY = 62 - Math.max(0, Math.min(1, (crossA + crossB) / 2)) * 52;
 
   return (
     <div 
@@ -587,19 +593,20 @@ export default function MiniMixerModal({
         {/* ── Scrollable Body Area ── */}
         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
 
-          {/* 1. DUAL INTERACTIVE WAVEFORMS (TRACK A & TRACK B) */}
+          {/* 1. DUAL WAVEFORMS & INTUITIVE CUE CONTROLS */}
           <div className="space-y-3 p-4 rounded-2xl bg-zinc-950 border border-white/10">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-2">
                 <Layers size={14} className="text-emerald-400" />
                 Waveform Cue Points & Zone Resizing
               </span>
-              <span className="text-[11px] font-mono text-zinc-400">
-                Click waveform or use [-] [+] to adjust exact timing
+              <span className="text-[11px] font-mono text-zinc-400 flex items-center gap-1">
+                <MoveHorizontal size={12} className="text-emerald-400" />
+                Click waveform or drag sliders to position cue points
               </span>
             </div>
 
-            {/* DECK A WAVEFORM: MIX-OUT POINT & OVERLAP ZONE */}
+            {/* DECK A: MIX-OUT POINT */}
             <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
@@ -612,9 +619,8 @@ export default function MiniMixerModal({
                   </span>
                 </div>
                 
-                {/* Deck A Actions & Direct Time Adjusters */}
                 <div className="flex items-center gap-2 text-xs font-mono">
-                  {/* SOLO PREVIEW DECK A BUTTON */}
+                  {/* SOLO PREVIEW DECK A */}
                   <button
                     type="button"
                     onClick={handlePreviewSoloA}
@@ -624,7 +630,7 @@ export default function MiniMixerModal({
                         ? 'bg-red-500 text-white border-red-400 shadow-[0_0_10px_rgba(239,68,68,0.5)] animate-pulse'
                         : 'bg-zinc-800 hover:bg-zinc-700 text-red-300 border-red-500/30 hover:border-red-500/60'
                     }`}
-                    title="Audition only Track A Mix-Out point"
+                    title="Audition Track A Mix-Out point"
                   >
                     {isLoadingAudio && soloPlayingDeck === 'A' ? (
                       <Loader2 size={11} className="animate-spin" />
@@ -636,7 +642,7 @@ export default function MiniMixerModal({
                     <span>{soloPlayingDeck === 'A' ? 'Stop Mix-Out' : 'Preview Mix-Out'}</span>
                   </button>
 
-                  {/* Mix-Out Time Adjuster */}
+                  {/* Mix-Out Fine Tune Buttons */}
                   <div className="flex items-center gap-1 bg-zinc-900 border border-red-500/40 rounded-lg px-2 py-0.5">
                     <span className="text-red-400 font-bold text-[10px]">Mix-Out:</span>
                     <button
@@ -655,40 +661,38 @@ export default function MiniMixerModal({
                       <Plus size={11} />
                     </button>
                   </div>
-
-                  {/* Overlap Size Adjuster */}
-                  <div className="flex items-center gap-1 bg-zinc-900 border border-white/10 rounded-lg px-2 py-0.5">
-                    <span className="text-zinc-400 text-[10px]">Zone:</span>
-                    <button
-                      type="button"
-                      onClick={() => setDuration(d => Math.max(1, Number((d - 1).toFixed(1))))}
-                      className="text-zinc-400 hover:text-white px-1 font-bold"
-                    >
-                      <Minus size={11} />
-                    </button>
-                    <span className="font-bold text-emerald-400">{duration}s</span>
-                    <button
-                      type="button"
-                      onClick={() => setDuration(d => Math.min(48, Number((d + 1).toFixed(1))))}
-                      className="text-zinc-400 hover:text-white px-1 font-bold"
-                    >
-                      <Plus size={11} />
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              {/* Interactive Track A Waveform */}
+              {/* Direct Mix-Out Scrubber Slider */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-mono text-zinc-400">
+                  <span className="text-red-400 font-bold">
+                    Mix-Out: {formatTime(mixOutPoint)} / {formatTime(durA)} ({Math.round((mixOutPoint / durA) * 100)}%)
+                  </span>
+                  <span>Remaining: {formatTime(Math.max(0, durA - mixOutPoint))}</span>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max={durA}
+                  step="1"
+                  value={mixOutPoint}
+                  onChange={(e) => setMixOutPoint(Number(e.target.value))}
+                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-red-500"
+                />
+              </div>
+
+              {/* Interactive Draggable Deck A Waveform */}
               <div 
-                className="relative h-14 bg-zinc-950 rounded-lg overflow-hidden cursor-crosshair border border-white/5 flex items-center px-1"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = Math.max(0.1, Math.min(1.0, (e.clientX - rect.left) / rect.width));
-                  setMixOutPoint(Math.round(pct * durA));
-                }}
+                className="relative h-14 bg-zinc-950 rounded-lg overflow-hidden cursor-ew-resize border border-white/10 flex items-center px-1 select-none"
+                onPointerDown={handlePointerDownDeckA}
+                onPointerMove={handlePointerMoveDeckA}
+                onPointerUp={handlePointerUpDeckA}
+                onPointerCancel={handlePointerUpDeckA}
+                title="Click anywhere or drag to set Mix-Out point"
               >
-                {/* Waveform Amplitude Bars */}
-                <div className="absolute inset-0 flex items-center justify-between px-1.5 pointer-events-none opacity-40">
+                <div className="absolute inset-0 flex items-center justify-between px-1 pointer-events-none opacity-40">
                   {peaksA.map((p, idx) => (
                     <div 
                       key={idx}
@@ -698,12 +702,12 @@ export default function MiniMixerModal({
                   ))}
                 </div>
 
-                {/* Red Overlap Shaded Region (from mixOut - duration to mixOut) */}
+                {/* Shaded Red Overlap Region */}
                 <div 
-                  className="absolute top-0 bottom-0 bg-red-500/30 border-l-2 border-r-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)] pointer-events-none"
+                  className="absolute top-0 bottom-0 bg-red-500/30 border-l border-r-2 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.25)] pointer-events-none"
                   style={{
                     left: `${overlapStartPctA}%`,
-                    width: `${mixOutPctA - overlapStartPctA}%`
+                    width: `${Math.max(1, mixOutPctA - overlapStartPctA)}%`
                   }}
                 >
                   <div className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-black text-red-200">
@@ -711,25 +715,26 @@ export default function MiniMixerModal({
                   </div>
                 </div>
 
-                {/* Mix-Out Right Handle Marker */}
+                {/* Mix-Out Marker */}
                 <div 
-                  className="absolute top-0 bottom-0 w-1 bg-red-500 z-10 shadow-[0_0_10px_#ef4444]"
+                  className="absolute top-0 bottom-0 w-2 bg-red-500 z-10 shadow-[0_0_12px_#ef4444] cursor-ew-resize flex items-center justify-center"
                   style={{ left: `${mixOutPctA}%` }}
                 >
+                  <div className="w-0.5 h-6 bg-white/70 rounded-full" />
                   <div className="absolute top-0 -translate-x-1/2 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-red-600 text-white shadow pointer-events-none whitespace-nowrap">
                     Mix-Out: {formatTime(mixOutPoint)}
                   </div>
                 </div>
 
-                {/* Real-time Transition Audition Cursor */}
+                {/* Transition Audition Cursor */}
                 {isPreviewing && (
                   <div 
-                    className="absolute top-0 bottom-0 w-0.5 bg-white z-20 shadow-[0_0_8px_#ffffff]"
+                    className="absolute top-0 bottom-0 w-1 bg-white z-20 shadow-[0_0_8px_#ffffff]"
                     style={{ left: `${overlapStartPctA + previewProgress * (mixOutPctA - overlapStartPctA)}%` }}
                   />
                 )}
 
-                {/* Real-time Solo Deck A Cursor */}
+                {/* Solo Deck A Cursor */}
                 {soloPlayingDeck === 'A' && (
                   <div 
                     className="absolute top-0 bottom-0 w-1 bg-red-400 z-20 shadow-[0_0_10px_#ef4444]"
@@ -739,40 +744,42 @@ export default function MiniMixerModal({
               </div>
 
               {/* Quick Jump Cue Point Buttons */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
-                <span className="text-zinc-500">Quick Jump:</span>
-                <button
-                  type="button"
-                  onClick={() => setMixOutPoint(Math.round(durA * 0.45))}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Radio Cut (45%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMixOutPoint(Math.round(durA * 0.65))}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Chorus 2 (65%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMixOutPoint(Math.round(durA * 0.85))}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Outro (85%)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMixOutPoint(Math.max(5, durA - 2))}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Full Song (99%)
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[10px] font-mono">
+                <div className="flex flex-wrap items-center gap-1 text-zinc-400">
+                  <span className="text-zinc-500 mr-1">Quick Jump:</span>
+                  <button
+                    type="button"
+                    onClick={() => setMixOutPoint(Math.round(durA * 0.45))}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Radio Cut (45%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMixOutPoint(Math.round(durA * 0.65))}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Chorus 2 (65%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMixOutPoint(Math.round(durA * 0.85))}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Outro (85%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMixOutPoint(Math.max(5, durA - 2))}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Full Song (99%)
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* DECK B WAVEFORM: MIX-IN POINT & ENTRY ZONE */}
+            {/* DECK B: MIX-IN POINT */}
             <div className="p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
@@ -785,9 +792,8 @@ export default function MiniMixerModal({
                   </span>
                 </div>
                 
-                {/* Deck B Actions & Direct Time Adjusters */}
                 <div className="flex items-center gap-2 text-xs font-mono">
-                  {/* SOLO PREVIEW DECK B BUTTON */}
+                  {/* SOLO PREVIEW DECK B */}
                   <button
                     type="button"
                     onClick={handlePreviewSoloB}
@@ -797,7 +803,7 @@ export default function MiniMixerModal({
                         ? 'bg-emerald-500 text-black border-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)] animate-pulse'
                         : 'bg-zinc-800 hover:bg-zinc-700 text-emerald-300 border-emerald-500/30 hover:border-emerald-500/60'
                     }`}
-                    title="Audition only Track B Mix-In point"
+                    title="Audition Track B Mix-In point"
                   >
                     {isLoadingAudio && soloPlayingDeck === 'B' ? (
                       <Loader2 size={11} className="animate-spin" />
@@ -809,6 +815,7 @@ export default function MiniMixerModal({
                     <span>{soloPlayingDeck === 'B' ? 'Stop Mix-In' : 'Preview Mix-In'}</span>
                   </button>
 
+                  {/* Mix-In Fine Tune Buttons */}
                   <div className="flex items-center gap-1 bg-zinc-900 border border-emerald-500/40 rounded-lg px-2 py-0.5">
                     <span className="text-emerald-400 font-bold text-[10px]">Mix-In:</span>
                     <button
@@ -830,17 +837,35 @@ export default function MiniMixerModal({
                 </div>
               </div>
 
-              {/* Interactive Track B Waveform */}
+              {/* Direct Mix-In Scrubber Slider */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-mono text-zinc-400">
+                  <span className="text-emerald-400 font-bold">
+                    Mix-In: {formatTime(mixInPoint)} / {formatTime(durB)} ({Math.round((mixInPoint / durB) * 100)}%)
+                  </span>
+                  <span>Skips Intro: {formatTime(mixInPoint)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max={Math.max(0, durB - 5)}
+                  step="1"
+                  value={mixInPoint}
+                  onChange={(e) => setMixInPoint(Number(e.target.value))}
+                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+              </div>
+
+              {/* Interactive Draggable Deck B Waveform */}
               <div 
-                className="relative h-14 bg-zinc-950 rounded-lg overflow-hidden cursor-crosshair border border-white/5 flex items-center px-1"
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const pct = Math.max(0, Math.min(0.9, (e.clientX - rect.left) / rect.width));
-                  setMixInPoint(Math.round(pct * durB));
-                }}
+                className="relative h-14 bg-zinc-950 rounded-lg overflow-hidden cursor-ew-resize border border-white/10 flex items-center px-1 select-none"
+                onPointerDown={handlePointerDownDeckB}
+                onPointerMove={handlePointerMoveDeckB}
+                onPointerUp={handlePointerUpDeckB}
+                onPointerCancel={handlePointerUpDeckB}
+                title="Click anywhere or drag to set Mix-In point"
               >
-                {/* Waveform Amplitude Bars */}
-                <div className="absolute inset-0 flex items-center justify-between px-1.5 pointer-events-none opacity-40">
+                <div className="absolute inset-0 flex items-center justify-between px-1 pointer-events-none opacity-40">
                   {peaksB.map((p, idx) => (
                     <div 
                       key={idx}
@@ -850,12 +875,12 @@ export default function MiniMixerModal({
                   ))}
                 </div>
 
-                {/* Green Entry Shaded Region (from mixIn to mixIn + duration) */}
+                {/* Shaded Emerald Entry Region */}
                 <div 
-                  className="absolute top-0 bottom-0 bg-emerald-500/30 border-l-2 border-r-2 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)] pointer-events-none"
+                  className="absolute top-0 bottom-0 bg-emerald-500/30 border-l-2 border-r border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.25)] pointer-events-none"
                   style={{
                     left: `${mixInPctB}%`,
-                    width: `${overlapEndPctB - mixInPctB}%`
+                    width: `${Math.max(1, overlapEndPctB - mixInPctB)}%`
                   }}
                 >
                   <div className="absolute inset-0 flex items-center justify-center text-[9px] font-mono font-black text-emerald-200">
@@ -863,25 +888,26 @@ export default function MiniMixerModal({
                   </div>
                 </div>
 
-                {/* Mix-In Left Handle Marker */}
+                {/* Mix-In Marker */}
                 <div 
-                  className="absolute top-0 bottom-0 w-1 bg-emerald-400 z-10 shadow-[0_0_10px_#10b981]"
+                  className="absolute top-0 bottom-0 w-2 bg-emerald-400 z-10 shadow-[0_0_12px_#10b981] cursor-ew-resize flex items-center justify-center"
                   style={{ left: `${mixInPctB}%` }}
                 >
+                  <div className="w-0.5 h-6 bg-black/70 rounded-full" />
                   <div className="absolute top-0 -translate-x-1/2 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500 text-black shadow pointer-events-none whitespace-nowrap">
                     Mix-In: {formatTime(mixInPoint)}
                   </div>
                 </div>
 
-                {/* Real-time Transition Audition Cursor */}
+                {/* Transition Audition Cursor */}
                 {isPreviewing && (
                   <div 
-                    className="absolute top-0 bottom-0 w-0.5 bg-white z-20 shadow-[0_0_8px_#ffffff]"
+                    className="absolute top-0 bottom-0 w-1 bg-white z-20 shadow-[0_0_8px_#ffffff]"
                     style={{ left: `${mixInPctB + previewProgress * (overlapEndPctB - mixInPctB)}%` }}
                   />
                 )}
 
-                {/* Real-time Solo Deck B Cursor */}
+                {/* Solo Deck B Cursor */}
                 {soloPlayingDeck === 'B' && (
                   <div 
                     className="absolute top-0 bottom-0 w-1 bg-emerald-400 z-20 shadow-[0_0_10px_#10b981]"
@@ -891,29 +917,31 @@ export default function MiniMixerModal({
               </div>
 
               {/* Quick Jump Cue Point Buttons */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
-                <span className="text-zinc-500">Quick Jump:</span>
-                <button
-                  type="button"
-                  onClick={() => setMixInPoint(0)}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Start (0:00)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMixInPoint(Math.min(durB, 12))}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Skip Intro (+12s)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMixInPoint(Math.min(durB, 24))}
-                  className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
-                >
-                  Drop Start (+24s)
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 text-[10px] font-mono">
+                <div className="flex flex-wrap items-center gap-1 text-zinc-400">
+                  <span className="text-zinc-500 mr-1">Quick Jump:</span>
+                  <button
+                    type="button"
+                    onClick={() => setMixInPoint(0)}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Start (0:00)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMixInPoint(Math.min(durB, 12))}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Skip Intro (+12s)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMixInPoint(Math.min(durB, 24))}
+                    className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Drop Start (+24s)
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1038,92 +1066,193 @@ export default function MiniMixerModal({
             </div>
           </div>
 
-          {/* 4. REALTIME DYNAMIC ENVELOPE CURVE GRAPH */}
+          {/* 4. REALTIME INTERACTIVE ENVELOPE CURVE GRAPH & CROSSOVER TUNER */}
           <div className="p-4 rounded-2xl bg-zinc-950 border border-white/10 space-y-2.5">
-            <div className="flex items-center justify-between text-[10px] font-mono font-bold uppercase tracking-wider">
-              <span className="flex items-center gap-1.5 text-red-400 truncate max-w-[150px] sm:max-w-[200px]">
-                <span className="w-2 h-2 rounded-full bg-red-500 inline-block shrink-0" />
-                Track A Out ({trackA.title})
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono font-bold uppercase tracking-wider">
+              {/* Live Track A Meter */}
+              <span className="flex items-center gap-1.5 text-red-400">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block shrink-0" />
+                <span>Track A Out ({trackA.title})</span>
+                <span className="bg-red-500/20 text-red-300 border border-red-500/30 px-1.5 py-0.5 rounded font-black">
+                  {liveGainA}%
+                </span>
               </span>
 
-              <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-emerald-400 font-bold">
-                ⏱️ Window: {duration}s • {bars} {bars === 1 ? 'Bar' : 'Bars'} • {style.toUpperCase()}
-              </span>
+              {/* Preset Crossover Buttons */}
+              <div className="flex items-center gap-1">
+                <span className="text-zinc-500 mr-1 hidden sm:inline">Bias:</span>
+                <button
+                  type="button"
+                  onClick={() => setCrossoverBias(0.30)}
+                  className={`px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                    crossoverBias <= 0.35
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-black'
+                      : 'bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/20'
+                  }`}
+                  title="Track A ducks early, Track B takes over sooner"
+                >
+                  Early (30%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCrossoverBias(0.50)}
+                  className={`px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                    crossoverBias > 0.35 && crossoverBias < 0.65
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-black'
+                      : 'bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/20'
+                  }`}
+                  title="Centered 50% crossover"
+                >
+                  Center (50%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCrossoverBias(0.70)}
+                  className={`px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                    crossoverBias >= 0.65
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 font-black'
+                      : 'bg-zinc-900 text-zinc-400 border-white/5 hover:border-white/20'
+                  }`}
+                  title="Track A holds energy longer before drop"
+                >
+                  Late (70%)
+                </button>
+              </div>
 
-              <span className="flex items-center gap-1.5 text-emerald-400 truncate max-w-[150px] sm:max-w-[200px]">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shrink-0" />
-                Track B In ({trackB.title})
+              {/* Live Track B Meter */}
+              <span className="flex items-center gap-1.5 text-emerald-400">
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-black">
+                  {liveGainB}%
+                </span>
+                <span>Track B In ({trackB.title})</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shrink-0" />
               </span>
             </div>
 
-            {/* Dynamic Curve Container */}
-            <div className="relative h-20 w-full flex flex-col justify-center overflow-hidden bg-zinc-900/60 rounded-xl border border-white/10 p-2">
-              <svg viewBox="0 0 400 70" className="w-full h-full">
-                {/* Background Grid Lines spaced by bar divisions */}
-                <line x1="0" y1="35" x2="400" y2="35" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <line x1="100" y1="0" x2="100" y2="70" stroke="rgba(255,255,255,0.06)" />
-                <line x1="200" y1="0" x2="200" y2="70" stroke="rgba(255,255,255,0.12)" strokeDasharray="2 2" />
-                <line x1="300" y1="0" x2="300" y2="70" stroke="rgba(255,255,255,0.06)" />
+            {/* Fully Interactive Curve Area: Drag anywhere to shift crossover! */}
+            <div 
+              className="relative h-28 w-full flex flex-col justify-center overflow-hidden bg-zinc-900/60 rounded-xl border border-white/10 p-2 select-none cursor-ew-resize group"
+              onPointerDown={handlePointerDownCurve}
+              onPointerMove={handlePointerMoveCurve}
+              onPointerUp={handlePointerUpCurve}
+              onPointerCancel={handlePointerUpCurve}
+              title="Click or drag anywhere left/right to adjust crossover point"
+            >
+              <svg viewBox="0 0 500 70" className="w-full h-full pointer-events-none">
+                {/* Background Grid Lines representing time divisions */}
+                <line x1="0" y1="35" x2="500" y2="35" stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                <line x1="125" y1="0" x2="125" y2="70" stroke="rgba(255,255,255,0.06)" strokeDasharray="2 2" />
+                <line x1="250" y1="0" x2="250" y2="70" stroke="rgba(255,255,255,0.12)" strokeDasharray="2 2" />
+                <line x1="375" y1="0" x2="375" y2="70" stroke="rgba(255,255,255,0.06)" strokeDasharray="2 2" />
 
-                {/* Red Track A Volume Curve */}
-                <polyline
-                  fill="none"
-                  stroke="#ef4444"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  points={curvePointsA.join(' ')}
+                {/* Vertical Crossover Bias Indicator Line */}
+                <line 
+                  x1={crossoverHandleX} 
+                  y1="0" 
+                  x2={crossoverHandleX} 
+                  y2="70" 
+                  stroke="rgba(16,185,129,0.5)" 
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
                 />
 
-                {/* Green Track B Volume Curve */}
-                <polyline
-                  fill="none"
-                  stroke="#10b981"
-                  strokeWidth="3"
+                {/* Track A Red Fade-Out Curve */}
+                <polyline 
+                  fill="none" 
+                  stroke="#ef4444" 
+                  strokeWidth="2.5" 
                   strokeLinecap="round"
-                  points={curvePointsB.join(' ')}
+                  strokeLinejoin="round"
+                  points={curvePointsA.join(' ')} 
                 />
 
-                {/* Real-time Transition Audition Playhead */}
+                {/* Track B Green Fade-In Curve */}
+                <polyline 
+                  fill="none" 
+                  stroke="#10b981" 
+                  strokeWidth="2.5" 
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  points={curvePointsB.join(' ')} 
+                />
+
+                {/* Draggable Crossover Intersection Handle */}
+                <circle 
+                  cx={crossoverHandleX} 
+                  cy={crossoverHandleY} 
+                  r="7" 
+                  fill="#10b981" 
+                  stroke="#ffffff" 
+                  strokeWidth="2" 
+                  className="filter drop-shadow-[0_0_8px_rgba(16,185,129,0.9)]"
+                />
+
+                {/* Audition Active Sweep Playhead */}
                 {isPreviewing && (
-                  <line
-                    x1={previewProgress * 400}
-                    y1="0"
-                    x2={previewProgress * 400}
-                    y2="70"
-                    stroke="#ffffff"
-                    strokeWidth="2.5"
-                    strokeDasharray="4 2"
+                  <line 
+                    x1={previewProgress * 500} 
+                    y1="0" 
+                    x2={previewProgress * 500} 
+                    y2="70" 
+                    stroke="#ffffff" 
+                    strokeWidth="2" 
+                    className="filter drop-shadow-[0_0_8px_#ffffff]"
                   />
                 )}
               </svg>
 
-              {/* Dynamic Time Scale Ruler Under Curve */}
-              <div className="flex justify-between items-center text-[9px] font-mono text-zinc-400 px-1 mt-1 border-t border-white/5 pt-1">
-                <span>0s (Start)</span>
+              {/* Dynamic Time Markers strictly matching the selected Duration */}
+              <div className="flex justify-between items-center text-[10px] font-mono text-zinc-400 px-1 pt-1 border-t border-white/5">
+                <span>0.0s (Start)</span>
                 <span>{(duration * 0.25).toFixed(1)}s</span>
                 <span className="text-emerald-400 font-bold">Mid: {(duration * 0.5).toFixed(1)}s</span>
                 <span>{(duration * 0.75).toFixed(1)}s</span>
-                <span className="text-white font-bold">{duration}s (Full)</span>
+                <span className="text-zinc-200 font-bold">{duration}s (Full Drop)</span>
               </div>
             </div>
-          </div>
 
+            {/* Direct Crossover Point Slider */}
+            <div className="space-y-1 pt-1">
+              <div className="flex justify-between text-[10px] font-mono text-zinc-400">
+                <span className="text-emerald-400 font-bold">
+                  Crossover Point: {Math.round(crossoverBias * 100)}%
+                </span>
+                <span>
+                  {crossoverBias <= 0.35 
+                    ? 'Track A ducks earlier, Track B drops sooner' 
+                    : crossoverBias >= 0.65 
+                    ? 'Track A holds full energy longer before drop' 
+                    : 'Balanced centered crossover'}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.20"
+                max="0.80"
+                step="0.01"
+                value={crossoverBias}
+                onChange={(e) => setCrossoverBias(Number(e.target.value))}
+                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* ── Modal Footer Controls ── */}
-        <div className="p-4 border-t border-white/10 bg-zinc-900/90 flex items-center justify-between gap-3 shrink-0">
+        {/* ── Modal Footer: Audition & Save Controls ── */}
+        <div className="p-4 border-t border-white/10 bg-zinc-900/90 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          {/* Transition Audition Button */}
           <button
             type="button"
-            onClick={handleToggleAudition}
+            onClick={handleAuditionTransition}
             disabled={isLoadingAudio}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-full font-mono text-xs font-bold transition-all cursor-pointer ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer border ${
               isPreviewing
-                ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]'
-                : 'bg-white/10 hover:bg-white/20 text-white'
+                ? 'bg-red-500 text-white border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)]'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-white border-white/10 hover:border-white/30'
             }`}
           >
             {isLoadingAudio && isPreviewing ? (
-              <Loader2 size={14} className="animate-spin" />
+              <Loader2 size={14} className="animate-spin text-emerald-400" />
             ) : isPreviewing ? (
               <Square size={14} fill="currentColor" />
             ) : (
@@ -1132,25 +1261,25 @@ export default function MiniMixerModal({
             <span>{isPreviewing ? 'Stop Audition' : 'Audition Transition'}</span>
           </button>
 
+          {/* Action buttons */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => { stopAudition(); onClose(); }}
-              className="px-4 py-2.5 rounded-full text-xs font-bold text-zinc-300 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 cursor-pointer font-sans"
             >
-              <Check size={15} />
+              <Check size={14} />
               <span>Save Transition</span>
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );

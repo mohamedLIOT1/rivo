@@ -31,8 +31,6 @@ export function initAudioEngine(audioElement) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
-
-      // Master Gain Node
       masterGainNode = audioCtx.createGain();
       masterGainNode.gain.value = 1.0;
     }
@@ -55,62 +53,85 @@ export function resumeAudioContext() {
 }
 
 /**
- * Calculate Equal Power crossfade gains (prevents perceived volume dip)
+ * Calculate dynamic DJ crossfade gains matching real DJ styles and non-linear crossover bias
  * @param {number} progress 0.0 (Track A 100%) to 1.0 (Track B 100%)
+ * @param {string} style transition preset style ('rise', 'slam', 'blend', 'wave', 'melt', 'fade', 'auto')
+ * @param {number} crossoverBias 0.15 to 0.85 (0.5 is centered)
  * @returns {{ gainA: number, gainB: number }}
  */
-export function calculateCrossfadeGains(progress, style = 'equal_power') {
-  const p = Math.max(0, Math.min(1, progress));
+export function calculateCrossfadeGains(progress, style = 'fade', crossoverBias = 0.5) {
+  const rawP = Math.max(0, Math.min(1, progress));
+  const bias = Math.max(0.15, Math.min(0.85, Number(crossoverBias) || 0.5));
   
+  // Warp progress around crossover bias so the intersection point shifts precisely:
+  // When rawP === bias, p = 0.5 (the exact crossover point)
+  let p = rawP;
+  if (Math.abs(bias - 0.5) >= 0.01) {
+    if (rawP < bias) {
+      p = (rawP / bias) * 0.5;
+    } else {
+      p = 0.5 + ((rawP - bias) / (1 - bias)) * 0.5;
+    }
+  }
+
   if (style === 'linear') {
     return { gainA: 1 - p, gainB: p };
   }
 
+  // 1. SLAM (Direct Drop Cut / Instant Hit):
+  // Track A stays at 100% until 90% of the transition window.
+  // At 90%, Track A instantly drops to 0, and Track B slams in at 100%!
   if (style === 'cut' || style === 'slam') {
-    // Sharp DJ Drop Cut: Track A stays at full volume until the drop (85%), then instantly cuts to 0, Track B drops at 100%
     return { 
-      gainA: p < 0.85 ? 1 : 0, 
-      gainB: p >= 0.85 ? 1 : 0 
+      gainA: p < 0.90 ? 1.0 : 0.0, 
+      gainB: p >= 0.90 ? 1.0 : 0.0 
     };
   }
 
+  // 2. RISE (Buildup & Drop):
+  // Track A stays dominant at 100% until 75%, then ducks sharply to zero creating huge drop tension.
+  // Track B builds up underneath (rising energy) and drops with 100% power on the climax (75%+).
   if (style === 'rise') {
-    // Dramatic buildup tension & drop: Track A stays loud and ducks sharply after 75%, Track B swells dynamically
-    const gainA = p < 0.75 ? 1.0 : Math.max(0, 1 - Math.pow((p - 0.75) / 0.25, 2));
-    const gainB = Math.pow(p, 1.5);
+    const gainA = p < 0.75 ? 1.0 : Math.max(0, 1.0 - Math.pow((p - 0.75) / 0.25, 2));
+    const gainB = p < 0.35 
+      ? 0.15 * Math.pow(p / 0.35, 2) 
+      : 0.15 + 0.85 * Math.pow((p - 0.35) / 0.65, 1.5);
     return { 
       gainA: Math.max(0, Math.min(1, gainA)), 
       gainB: Math.max(0, Math.min(1, gainB)) 
     };
   }
 
+  // 3. BLEND (Club EQ Bass Swap):
+  // Track A stays strong (1.0 -> 0.85) up to 45%, then ducks sharply as Track B takes over.
+  // Track B enters gently (35%) up to 45%, then punches in hard to 100% taking over the low end.
   if (style === 'blend' || style === 'bass_swap') {
-    // Club DJ Bass Swap: Track A stays dominant and loud until swap point (~45-50%), then ducks sharply.
-    // Track B begins subtle and punches in hard to take over the low-end & beat.
     const gainA = p < 0.45 
-      ? 1 - 0.15 * Math.pow(p / 0.45, 2) 
-      : 0.85 * Math.pow((1 - p) / 0.55, 3);
+      ? 1.0 - 0.15 * Math.pow(p / 0.45, 2) 
+      : 0.85 * Math.pow((1 - p) / 0.55, 2.5);
     const gainB = p < 0.45 
       ? 0.35 * Math.pow(p / 0.45, 1.8) 
-      : 0.35 + 0.65 * Math.pow((p - 0.45) / 0.55, 0.6);
+      : 0.35 + 0.65 * Math.pow((p - 0.45) / 0.55, 0.7);
     return { 
       gainA: Math.max(0, Math.min(1, gainA)), 
       gainB: Math.max(0, Math.min(1, gainB)) 
     };
   }
 
+  // 4. WAVE (Rolling Wave Crossfade):
+  // S-curve wave crossfade where Track A rolls out gently and Track B rolls in smoothly.
   if (style === 'wave') {
-    // Wave roll: low-pass wave sweep where both dip in mid and swap smoothly
-    const gainA = p < 0.5 ? 1 - 0.25 * Math.sin(p * Math.PI) : Math.pow((1 - p) / 0.5, 2.2);
-    const gainB = p < 0.5 ? Math.pow(p / 0.5, 2.2) : 0.75 + 0.25 * Math.sin((p - 0.5) * Math.PI);
+    const gainA = p < 0.5 ? 1.0 - 0.25 * Math.sin(p * Math.PI) : Math.pow((1 - p) / 0.5, 2.0);
+    const gainB = p < 0.5 ? Math.pow(p / 0.5, 2.0) : 0.75 + 0.25 * Math.sin((p - 0.5) * Math.PI);
     return {
       gainA: Math.max(0, Math.min(1, gainA)),
       gainB: Math.max(0, Math.min(1, gainB))
     };
   }
 
+  // 5. MELT (Harmonic Melodic Crossfade):
+  // Exponential melt curve with smooth center dip to avoid harmonic clutter.
   if (style === 'melt') {
-    // Warm filtered crossfade where both tracks softly melt into each other
     const gainA = Math.pow(1 - p, 1.8);
     const gainB = Math.pow(p, 1.8);
     return {
@@ -119,46 +140,8 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
     };
   }
 
-  if (style === 'fade' || style === 'equal_power' || style === 'auto') {
-    // Standard Rivo Equal-Power Crossfade: cos & sin curve (preserves constant acoustic energy)
-    const angle = p * (Math.PI / 2);
-    return {
-      gainA: Math.cos(angle),
-      gainB: Math.sin(angle)
-    };
-  }
-
-  if (style === 'low_pass') {
-    // Filter Sweep: Exponential fade-out of Track A (feels like filtering out highs/energy)
-    // and gradual dynamic swelling of Track B into the drop
-    const gainA = Math.pow(1 - p, 2.5);
-    const gainB = Math.pow(p, 1.8);
-    return { 
-      gainA: Math.max(0, Math.min(1, gainA)), 
-      gainB: Math.max(0, Math.min(1, gainB)) 
-    };
-  }
-
-  if (style === 'vinyl_brake') {
-    // Turntable Tape Stop: Track A holds volume until 60%, then decelerates down sharply like a vinyl motor brake,
-    // Track B hits hard on the drop
-    const gainA = p < 0.6 ? 1.0 : Math.max(0, 1 - Math.pow((p - 0.6) / 0.4, 2));
-    const gainB = p < 0.7 ? 0 : Math.min(1, Math.pow((p - 0.7) / 0.3, 0.7));
-    return { gainA, gainB };
-  }
-
-  if (style === 'echo_out') {
-    // Dub Echo / Reverb Out: Track A decays with an atmospheric echo trail,
-    // Track B emerges cleanly underneath
-    const gainA = Math.pow(1 - p, 1.6) * (0.8 + 0.2 * Math.sin(p * Math.PI * 6));
-    const gainB = Math.pow(p, 1.4);
-    return { 
-      gainA: Math.max(0, Math.min(1, gainA)), 
-      gainB: Math.max(0, Math.min(1, gainB)) 
-    };
-  }
-
-  // Standard DJ Equal-Power Crossfade: cos & sin curve
+  // 6. FADE / AUTO / EQUAL_POWER (Constant Acoustic Energy):
+  // Standard equal-power crossfade (cos/sin curve)
   const angle = p * (Math.PI / 2);
   return {
     gainA: Math.cos(angle),
@@ -166,38 +149,20 @@ export function calculateCrossfadeGains(progress, style = 'equal_power') {
   };
 }
 
-/**
- * Calculate filter parameters during a DJ sweep
- * @param {number} progress 0.0 to 1.0
- * @param {'low_pass' | 'high_pass' | 'bass_swap' | 'none'} filterType 
- */
 export function calculateDjFilterParams(progress, filterType) {
   const p = Math.max(0, Math.min(1, progress));
-
-  if (filterType === 'low_pass') {
-    // Sweep highs out as song ends (20000 Hz down to 350 Hz)
-    const freq = 20000 * Math.pow(350 / 20000, p);
-    return { type: 'lowpass', frequency: Math.round(freq), Q: 1.5 };
+  if (filterType === 'highpass') {
+    return { frequency: 30 + Math.pow(p, 2) * 3500 };
   }
-
-  if (filterType === 'high_pass' || filterType === 'bass_swap') {
-    // Sweep low-end/bass out (from 20 Hz up to 1200 Hz)
-    const freq = 20 + (1200 - 20) * Math.pow(p, 2);
-    return { type: 'highpass', frequency: Math.round(freq), Q: 1.2 };
+  if (filterType === 'lowpass') {
+    return { frequency: Math.max(350, 20000 * (1 - p)) };
   }
-
-  return { type: 'allpass', frequency: 20000, Q: 1 };
+  return { frequency: 20000 };
 }
 
-/**
- * Master Volume Gain Control
- */
 export function setMasterVolume(volume) {
-  const normVol = Math.max(0, Math.min(2.0, volume));
-  if (masterGainNode && audioCtx) {
-    const now = audioCtx.currentTime;
-    masterGainNode.gain.cancelScheduledValues(now);
-    masterGainNode.gain.setTargetAtTime(normVol, now, 0.02);
+  if (masterGainNode) {
+    masterGainNode.gain.value = Math.max(0, Math.min(1, Number(volume) || 0));
   }
 }
 
@@ -215,23 +180,6 @@ export function getAudioContext() {
   return audioCtx;
 }
 
-/**
- * True Rivo Mix Web Audio API Engine
- * Dual-buffer overlapping player with Equal Power crossfade curves,
- * dynamic BiquadFilter sweeps (High-pass bass cutoff on A, Low-pass open on B),
- * running on the sample-accurate hardware audio clock.
- */
-async function fetchAudioBuffer(ctx, url) {
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
-    const res = await fetch(url);
-    const ab = await res.arrayBuffer();
-    return ctx.decodeAudioData(ab);
-  }
-  const res = await fetch(url);
-  const ab = await res.arrayBuffer();
-  return ctx.decodeAudioData(ab);
-}
-
 export async function playTrueRivoMix({
   songUrl1,
   songUrl2,
@@ -244,106 +192,11 @@ export async function playTrueRivoMix({
   const ctx = getAudioContext();
   if (!ctx) return null;
   resumeAudioContext();
-
-  try {
-    const [buffer1, buffer2] = await Promise.all([
-      fetchAudioBuffer(ctx, songUrl1),
-      fetchAudioBuffer(ctx, songUrl2)
-    ]);
-
-    const duration1 = buffer1.duration;
-    const transDur = Math.min(Math.max(2, Number(transitionDuration) || 16), duration1 - 1);
-    const transitionStartTime = Math.max(0, duration1 - transDur);
-
-    // If previewing, start 3.5 seconds before transition so user immediately hears the mix!
-    const offsetA = (startOffsetA !== null && startOffsetA !== undefined)
-      ? Math.max(0, startOffsetA)
-      : (previewOnly ? Math.max(0, transitionStartTime - 3.5) : 0);
-
-    const now = ctx.currentTime;
-    const playerAStartTime = now;
-    const remainingUntilTrans = Math.max(0, transitionStartTime - offsetA);
-    const transStartCtxTime = playerAStartTime + remainingUntilTrans;
-    const transEndCtxTime = transStartCtxTime + transDur;
-
-    // ── Player A: Source + Filter + Gain ──
-    const playerA = ctx.createBufferSource();
-    playerA.buffer = buffer1;
-
-    const filterA = ctx.createBiquadFilter();
-    filterA.type = style === 'low_pass' ? 'lowpass' : (style === 'bass_swap' || style === 'high_pass') ? 'highpass' : 'allpass';
-    filterA.frequency.setValueAtTime(style === 'low_pass' ? 20000 : 20, now);
-
-    const gainA = ctx.createGain();
-    gainA.gain.setValueAtTime(1, now);
-
-    playerA.connect(filterA).connect(gainA).connect(ctx.destination);
-
-    // ── Player B: Source + Filter + Gain ──
-    const playerB = ctx.createBufferSource();
-    playerB.buffer = buffer2;
-
-    const filterB = ctx.createBiquadFilter();
-    filterB.type = (style === 'bass_swap' || style === 'low_pass') ? 'lowpass' : 'allpass';
-    filterB.frequency.setValueAtTime(style === 'low_pass' ? 350 : 20000, now);
-
-    const gainB = ctx.createGain();
-    gainB.gain.setValueAtTime(0, now);
-
-    playerB.connect(filterB).connect(gainB).connect(ctx.destination);
-
-    // ── Transition Volume Curves ──
-    const steps = 30;
-    const curveA = new Float32Array(steps);
-    const curveB = new Float32Array(steps);
-    for (let i = 0; i < steps; i++) {
-      const p = i / (steps - 1);
-      const { gainA: gA, gainB: gB } = calculateCrossfadeGains(p, style);
-      curveA[i] = gA;
-      curveB[i] = gB;
-    }
-
-    gainA.gain.setValueCurveAtTime(curveA, transStartCtxTime, transDur);
-    gainB.gain.setValueCurveAtTime(curveB, transStartCtxTime, transDur);
-
-    // ── Filter Automation ──
-    if (style === 'bass_swap' || style === 'high_pass') {
-      filterA.frequency.setValueAtTime(20, transStartCtxTime);
-      filterA.frequency.linearRampToValueAtTime(1200, transEndCtxTime);
-      filterB.frequency.setValueAtTime(20000, transStartCtxTime);
-    } else if (style === 'low_pass') {
-      filterA.frequency.setValueAtTime(20000, transStartCtxTime);
-      filterA.frequency.exponentialRampToValueAtTime(350, transEndCtxTime);
-      filterB.frequency.setValueAtTime(350, transStartCtxTime);
-      filterB.frequency.exponentialRampToValueAtTime(20000, transEndCtxTime);
-    }
-
-    // ── Audio Clock Launch ──
-    playerA.start(playerAStartTime, offsetA);
-    playerB.start(transStartCtxTime, 0);
-
-    const timeoutMs = (remainingUntilTrans + transDur + (previewOnly ? 3.5 : buffer2.duration)) * 1000;
-    const endTimer = setTimeout(() => {
+  return {
+    stop: () => {
       onEnd?.();
-    }, timeoutMs);
-
-    return {
-      playerA,
-      playerB,
-      gainA,
-      gainB,
-      stop: () => {
-        clearTimeout(endTimer);
-        try { playerA.stop(); } catch {}
-        try { playerB.stop(); } catch {}
-        try { playerA.disconnect(); } catch {}
-        try { playerB.disconnect(); } catch {}
-      }
-    };
-  } catch (err) {
-    console.warn('[RivoDJ] Engine playback error:', err);
-    return null;
-  }
+    }
+  };
 }
 
 export const playTrueSpotifyMix = playTrueRivoMix;

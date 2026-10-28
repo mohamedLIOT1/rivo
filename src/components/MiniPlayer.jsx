@@ -400,17 +400,6 @@ export default function MiniPlayer({
 
           {/* CENTER: Cassette Controls & Progress Scrubber */}
           <div className="w-5/12 flex flex-col items-center gap-1">
-            {isMixMode && (
-              <div 
-                className="flex items-center gap-1.5 -mt-1 mb-0.5 select-none" 
-                title={nextMixTrack ? `DJ Mix Active • Up next: ${nextMixTrack.title}` : 'DJ Mix Mode'}
-              >
-                <span className="inline-flex items-center gap-1.5 text-[9px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30 px-2 py-0.5 rounded-full shadow-xs">
-                  <span className={`w-1.5 h-1.5 rounded-full bg-[#17a398] ${audio?.isTransitioning ? 'animate-ping' : 'animate-pulse'}`} />
-                  <span>{audio?.isTransitioning ? `Blending → ${nextMixTrack?.title || 'Next'}` : 'DJ AUTOMIX'}</span>
-                </span>
-              </div>
-            )}
             {/* Control buttons */}
             <div className="flex items-center gap-2 sm:gap-3">
               <button 

@@ -547,8 +547,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     let lastTimeUpdate = 0;
 
-    // ── Unified Dual-Deck Crossfade Execution ──
-    const triggerDualDeckTransition = (fromTrack, toTrack, nextIdx, transDur, transStyle, mixInPoint = 0) => {
+    // ── Dedicated Dual-Deck Automix Transition Engine ──
+    const triggerDualDeckTransition = (fromTrack, toTrack, nextIdx, transDur, transStyle, mixInPoint = 0, mixOutPoint = null, crossoverBias = 0.5) => {
       if (isTransitionRunningRef.current) return;
       isTransitionRunningRef.current = true;
       isTransitionTriggeredRef.current = true;
@@ -558,33 +558,39 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const toDeck = secondaryAudioRef.current;
       if (!fromDeck || !toDeck) {
         isTransitionRunningRef.current = false;
+        isTransitionTriggeredRef.current = false;
         setIsTransitioning(false);
         return;
       }
 
-      resumeAudioContext();
+      // Ensure primary deck is at master volume and unmuted
+      const masterVol = volumeRef.current;
+      fromDeck.volume = masterVol;
+      fromDeck.muted = false;
 
       resolvePlayableAudioStream(toTrack).then((res) => {
         if (!isTransitionRunningRef.current) return;
         if (!res?.url) {
           isTransitionRunningRef.current = false;
+          isTransitionTriggeredRef.current = false;
           setIsTransitioning(false);
+          if (fromDeck) fromDeck.volume = masterVol;
           return;
         }
 
         const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
         if (toDeck.src !== fullUrl) {
           toDeck.src = fullUrl;
-          toDeck.currentTime = Math.max(0, Number(mixInPoint) || 0);
-        } else if (Math.abs(toDeck.currentTime - (Number(mixInPoint) || 0)) > 2) {
-          toDeck.currentTime = Math.max(0, Number(mixInPoint) || 0);
         }
         toDeck.volume = 0;
+        toDeck.muted = false;
+        toDeck.currentTime = Math.max(0, Number(mixInPoint) || 0);
 
-        const masterVol = volumeRef.current;
-        const totalMs = Math.max(1000, transDur * 1000);
+        // Transition runs for at least 3 seconds, up to transDur seconds
+        const totalFadeMs = Math.max(3000, transDur * 1000);
 
         const startCrossfade = () => {
+          if (!isTransitionRunningRef.current) return;
           const startTime = performance.now();
           let totalPausedMs = 0;
           let pauseStart = 0;
@@ -592,7 +598,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const runFrame = () => {
             if (!isTransitionRunningRef.current) return;
 
-            // Preserve crossfade if user paused, without premature abort
+            // Preserve crossfade progress if user paused
             if (!isPlayingRef.current) {
               if (pauseStart === 0) pauseStart = performance.now();
               transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
@@ -604,16 +610,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
             }
 
             const elapsed = performance.now() - startTime - totalPausedMs;
-            const progress = Math.min(1, Math.max(0, elapsed / totalMs));
+            const progress = Math.min(1.0, Math.max(0.0, elapsed / totalFadeMs));
 
-            const { gainA, gainB } = calculateCrossfadeGains(progress, transStyle);
-            if (fromDeck) fromDeck.volume = Math.max(0, Math.min(1, masterVol * gainA));
-            if (toDeck) toDeck.volume = Math.max(0, Math.min(1, masterVol * gainB));
+            // Accurate non-linear DJ volume gains strictly matching the interactive curve
+            const { gainA, gainB } = calculateCrossfadeGains(progress, transStyle, crossoverBias);
 
-            if (progress < 1 && !isChangingTrackRef.current) {
+            if (fromDeck) {
+              fromDeck.volume = Math.max(0.0, Math.min(1.0, masterVol * gainA));
+            }
+            if (toDeck) {
+              toDeck.volume = Math.max(0.0, Math.min(1.0, masterVol * gainB));
+            }
+
+            if (progress < 1.0 && !isChangingTrackRef.current) {
               transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
             } else {
-              // Finish Transition: Swap Decks!
+              // ── Transition Finished: Swap Decks! ──
               if (fromDeck) {
                 fromDeck.pause();
                 fromDeck.currentTime = 0;
@@ -621,12 +633,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
               }
               if (toDeck) {
                 toDeck.volume = masterVol;
+                toDeck.muted = false;
               }
 
               // Reference swap: audioRef.current always points to active playing deck!
               const temp = audioRef.current;
               audioRef.current = secondaryAudioRef.current;
               secondaryAudioRef.current = temp;
+
+              if (audioRef.current) {
+                audioRef.current.volume = masterVol;
+                audioRef.current.muted = false;
+              }
 
               isTransitionRunningRef.current = false;
               isTransitionTriggeredRef.current = false;
@@ -655,7 +673,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           playPromise.then(() => {
             startCrossfade();
           }).catch((e) => {
-            console.warn('[RivoMix] Standby play error:', e);
+            console.warn('[RivoMix] Standby play notice:', e);
+            // If play rejected, start crossfade regardless so volume transition occurs
             startCrossfade();
           });
         } else {
@@ -664,7 +683,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }).catch((err) => {
         console.warn('[RivoMix] Stream resolve error:', err);
         isTransitionRunningRef.current = false;
+        isTransitionTriggeredRef.current = false;
         setIsTransitioning(false);
+        if (fromDeck) fromDeck.volume = masterVol;
       });
     };
 
@@ -767,6 +788,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                     ? Number(trans.mixOutPoint)
                     : Math.max(5, rounded - 2);
                   const mixInPoint = Number(trans?.mixInPoint) || 0;
+                  const crossoverBias = Number(trans?.crossoverBias) || 0.5;
                   const remaining = mixOutPoint - deck.currentTime;
 
                   // 1. Preload standby deck 15 seconds ahead of transition
@@ -789,11 +811,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   }
 
                   // 2. Launch DJ Crossfade right at the transition trigger point!
-                  if (remaining <= transDur && remaining > 0.05) {
-                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, transDur, transStyle, mixInPoint);
-                  } else if (remaining <= 0.05 && !isTransitionRunningRef.current && deck.currentTime >= mixOutPoint) {
-                    // Reached or passed Mix-Out point: immediately force transition into next track!
-                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, Math.min(2, transDur), transStyle, mixInPoint);
+                  if (remaining <= transDur && remaining > 0.1) {
+                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, transDur, transStyle, mixInPoint, mixOutPoint, crossoverBias);
+                  } else if (remaining <= 0.1 && !isTransitionRunningRef.current && deck.currentTime >= mixOutPoint) {
+                    // Jumped or reached Mix-Out point: trigger smooth transition (at least 3.5s so never an abrupt cutoff!)
+                    triggerDualDeckTransition(curTrack, nextTrack, nextIdx, Math.max(3.5, Math.min(transDur, 8)), transStyle, mixInPoint, mixOutPoint, crossoverBias);
                   }
                 }
               }
@@ -1043,6 +1065,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (streamData?.url && audioRef.current) {
         audioRef.current.src = streamData.url;
         audioRef.current.volume = volumeRef.current;
+        audioRef.current.muted = false;
         resumeAudioContext();
         await audioRef.current.play().catch(() => {});
         setIsPlaying(true);
@@ -1664,6 +1687,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         audioRef.current.pause();
         audioRef.current.removeAttribute('src');
         audioRef.current.load();
+        audioRef.current.volume = volumeRef.current;
+        audioRef.current.muted = false;
       }
       setCurrentTime(0);
       currentTimeRef.current = 0;
@@ -2557,7 +2582,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const seekTo = useCallback((seconds, isRemoteParam = false) => {
     const isRemote = isRemoteParam === true;
     if (isNaN(seconds)) return;
+
+    // Immediately halt any running crossfade transition on seek to prevent volume override or cutouts
+    if (transitionAnimFrameRef.current) {
+      cancelAnimationFrame(transitionAnimFrameRef.current);
+      transitionAnimFrameRef.current = null;
+    }
+    isTransitionRunningRef.current = false;
     isTransitionTriggeredRef.current = false;
+    setIsTransitioning(false);
+    if (secondaryAudioRef.current) {
+      try {
+        secondaryAudioRef.current.pause();
+        secondaryAudioRef.current.volume = 0;
+      } catch {}
+    }
+
     const s = Math.max(0, seconds);
     setCurrentTime(s);
     currentTimeRef.current = s;
@@ -2571,6 +2611,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           audioRef.current.currentTime = s;
         }
         audioRef.current.volume = volumeRef.current;
+        audioRef.current.muted = false;
       } catch (err) {
         console.warn('[WebAudio] seekTo error:', err);
       }
