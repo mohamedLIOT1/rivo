@@ -287,6 +287,32 @@ app.get('/api/app/version', optionalAuth, (req, res) => {
     }
   } catch (e) {}
 
+  // Dynamically compute exact file sizes from disk (in binary MB / MiB matching Windows Explorer & mobile managers)
+  try {
+    const downloadsDir = path.join(__dirname, '../public/downloads');
+    const calcSize = (filename) => {
+      const p = path.join(downloadsDir, filename);
+      if (fs.existsSync(p)) {
+        const bytes = fs.statSync(p).size;
+        const mb = bytes / (1024 * 1024);
+        return mb >= 10 ? `${mb.toFixed(1)} MB` : `${mb.toFixed(2)} MB`;
+      }
+      return null;
+    };
+    if (manifest.platforms?.windows) {
+      const sz = calcSize(manifest.platforms.windows.directFile) || calcSize('Rivo.exe') || calcSize('Rivo_Setup.exe');
+      if (sz) manifest.platforms.windows.fileSize = sz;
+    }
+    if (manifest.platforms?.android) {
+      const sz = calcSize(manifest.platforms.android.directFile) || calcSize('Rivo.apk');
+      if (sz) manifest.platforms.android.fileSize = sz;
+    }
+    if (manifest.platforms?.ios) {
+      const sz = calcSize(manifest.platforms.ios.directFile) || calcSize('Rivo.ipa');
+      if (sz) manifest.platforms.ios.fileSize = sz;
+    }
+  } catch (e) {}
+
   // Always apply dynamic fast OTA bundle to all mobile users if enabled
   const dynamicOta = getOtaManifest();
   if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {

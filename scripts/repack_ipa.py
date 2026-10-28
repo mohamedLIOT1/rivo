@@ -51,13 +51,23 @@ def repack():
     dist_generic_ipa = os.path.join(dist_dir, 'Rivo.ipa')
 
     temp_ipa = out_ipa + '.tmp'
+    hermes_bundle = os.path.join(base_dir, 'ios_main.hermes.bundle')
     print(f"Repacking IPA from {os.path.basename(src_ipa)} for v{version} (Build {build_num})...")
 
     with zipfile.ZipFile(src_ipa, 'r') as zin:
         with zipfile.ZipFile(temp_ipa, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
                 filename = item.filename
-                if filename == 'Payload/Rivo.app/Info.plist':
+                if filename == 'Payload/Rivo.app/main.jsbundle':
+                    if os.path.exists(hermes_bundle):
+                        with open(hermes_bundle, 'rb') as hf:
+                            new_bundle_bytes = hf.read()
+                        zout.writestr(item, new_bundle_bytes)
+                        print(f"   Injected new compiled Hermes bundle into main.jsbundle ({len(new_bundle_bytes)} bytes)")
+                    else:
+                        print("   WARNING: ios_main.hermes.bundle not found! Retaining original bundle.")
+                        zout.writestr(item, zin.read(filename))
+                elif filename == 'Payload/Rivo.app/Info.plist':
                     raw_plist = zin.read(filename)
                     plist_obj = plistlib.loads(raw_plist)
                     plist_obj['CFBundleShortVersionString'] = version
