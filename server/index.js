@@ -222,10 +222,6 @@ const BETA_VERSIONS_DATA = {
     }
   }
 };
-      notes: 'Update v2.1.6 • Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine, 5 transition styles (Auto/Fade/Rise/Blend/Cut), Camelot key colors & BPM.'
-    }
-  }
-};
 
 // Helper to read dynamic OTA manifest if present
 const getOtaManifest = () => {
