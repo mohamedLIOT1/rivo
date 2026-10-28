@@ -29,17 +29,17 @@ async function publish() {
   const releaseName = `Rivo v${version} (Mobile & Desktop)`;
   const releaseBody = `## Rivo v${version} (Mobile & Desktop)
 
-### 🎛️ Rivo-style Mixed Playlists with Dual-Deck Lookahead Engine
-- **True Dual-Deck Engine**: Seamless real-time overlap crossfading between songs on both online streaming and offline downloads without memory freeze or decode delays.
-- **5 Rivo Transition Styles**: Support for Auto, Fade, Rise, Blend (with Bass Swap), and Instant Cut.
-- **Camelot Wheel Harmony & BPM Columns**: Color-coded Camelot Key badges (1A-12B) and authentic BPM display in playlists.
-- **Interactive Transition Chips**: Clickable transition chips between playlist rows to inspect, configure bars (2, 4, 8, 12 bars), and audition with live real-time preview.
-- **Non-blocking Playback**: Removed mandatory download gating; playlists with Mix enabled play immediately.
+### 🎛️ Full Spotify-Style Automix & Transition Parity
+- **7 Authentic DJ Curves**: Auto, Rise (tension sweep + drop), Blend (3-band sub bass swap), Wave (rhythmic low-pass), Melt (harmonic warp), Slam (instant downbeat snap), and Fade (equal-power).
+- **Exact Cue-In & Cue-Out Points**: Full waveform cue selection with quick-jump presets (Radio Cut, Chorus, Drop Start, Skip Intro).
+- **Independent Volume Trim & Speed Sync**: 50%-140% volume trim per deck and 0.85x-1.15x tempo control with instant BPM beat-matching.
+- **Dual-Deck Auditioning**: Solo audition for Deck A mix-out and Deck B mix-in, plus complete live transition audition before saving.
+- **Strict Holy Quran Safeguards**: The Mix mode and transition engine are completely disabled for Quran recitations, surahs, and Quran playlists.
 
 ### 📱 Release Assets
-- **Android APK**: \`Rivo-v${version}.apk\` (Build 110, signed v1/v2/v3).
-- **iOS IPA**: \`Rivo-v${version}.ipa\` (Build 110).
-- **Windows EXE**: \`Rivo-v${version}.exe\` (v2.1.6).
+- **Android APK**: \`Rivo-v${version}.apk\` (Build 111, signed v1/v2/v3).
+- **iOS IPA**: \`Rivo-v${version}.ipa\` (Build 111).
+- **Windows EXE**: \`Rivo-v${version}.exe\` (v${version}).
 `;
 
   const searchDirs = [

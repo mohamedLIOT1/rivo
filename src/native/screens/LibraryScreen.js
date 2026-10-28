@@ -43,6 +43,7 @@ import {
   ArrowDown,
   Trash2,
   Sliders,
+  Zap,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -81,6 +82,8 @@ export default function LibraryScreen({
     setQueue,
     isMixMode,
     setIsMixMode,
+    activeTransitions,
+    setActiveTransitions,
   } = useAudioPlayer();
   const {
     currentUser,
@@ -107,7 +110,25 @@ export default function LibraryScreen({
 
   useEffect(() => {
     setIsReordering(false);
+    if (selectedView && typeof selectedView === 'object' && selectedView !== 'liked') {
+      const trans = selectedView.transitions || {};
+      setPlaylistTransitions(trans);
+      if (selectedView.isMix && setActiveTransitions) {
+        setActiveTransitions(trans);
+      }
+    } else {
+      setPlaylistTransitions({});
+    }
   }, [selectedView]);
+
+  useEffect(() => {
+    if (selectedView && typeof selectedView === 'object' && selectedView !== 'liked') {
+      const current = (playlists || []).find(p => String(p._id || p.id) === String(selectedView._id || selectedView.id));
+      if (current && current.transitions) {
+        setPlaylistTransitions(current.transitions);
+      }
+    }
+  }, [playlists]);
 
   const handleMoveTrack = async (index, direction) => {
     if (!selectedView || selectedView === 'liked') return;
@@ -276,15 +297,8 @@ export default function LibraryScreen({
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
     setIsLoadingAi(true);
 
-    const isMixPlaylist = Boolean(
-      selectedView.isMix ||
-      selectedView.mixed ||
-      (selectedView.name && selectedView.name.toLowerCase().includes('mix')) ||
-      isMixMode ||
-      isOffline
-    );
-    if (isMixPlaylist) {
-      // 🎛️ DJ Mix: Only suggest local device-vault tracks that are already downloaded
+    if (isOffline) {
+      // 🎛️ Offline Mode: Only suggest local device-vault tracks that are already downloaded
       try {
         const offlineList = await getDownloadedTracks().catch(() => []);
         const pool = [...(offlineList || []), ...(downloadedTracks || [])];
@@ -372,14 +386,7 @@ export default function LibraryScreen({
     const q = songSearchQuery.toLowerCase().trim();
     const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
     let pool = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
-    const isMixPlaylist = Boolean(
-      selectedView?.isMix ||
-      selectedView?.mixed ||
-      (selectedView?.name && selectedView.name.toLowerCase().includes('mix')) ||
-      isMixMode ||
-      isOffline
-    );
-    if (isMixPlaylist) {
+    if (isOffline) {
       pool = deduplicateTrackList([...(downloadedTracks || [])]);
     }
     return pool
@@ -415,6 +422,16 @@ export default function LibraryScreen({
     if (!playlist) return;
     const list = [...activePlaylistTracks];
     if (list.length === 0) return;
+    const isPlQuran = Boolean(isSelectedPlQuran || isQuranContent(playlist) || list.some(isQuranContent));
+    if (!isPlQuran && (playlist.isMix || isMixMode)) {
+      if (typeof setIsMixMode === 'function') setIsMixMode(true);
+      if (typeof setActiveTransitions === 'function' && playlistTransitions) {
+        setActiveTransitions(playlistTransitions);
+      }
+    } else {
+      if (typeof setIsMixMode === 'function') setIsMixMode(false);
+      if (typeof setActiveTransitions === 'function') setActiveTransitions({});
+    }
     if (shuffle) {
       for (let i = list.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -654,38 +671,90 @@ export default function LibraryScreen({
                 </View>
               );
             }
+            const nextTrack = activePlaylistTracks[index + 1];
+            const isTrackQuran = Boolean(isSelectedPlQuran || isQuranContent(item) || (nextTrack && isQuranContent(nextTrack)));
+            const hasNext = Boolean(nextTrack && selectedView !== 'liked' && !isReordering && !isTrackQuran);
+            const tAId = String(item._id || item.id || '');
+            const tBId = nextTrack ? String(nextTrack._id || nextTrack.id || '') : '';
+            const pairKey = `${tAId}_${tBId}`;
+            const titleKey = nextTrack ? `${(item.title || '').trim().toLowerCase()}_${(nextTrack.title || '').trim().toLowerCase()}` : '';
+            const trans = playlistTransitions[pairKey] || playlistTransitions[titleKey] || playlistTransitions[index] || { style: 'auto', duration: 8, bars: 4 };
+
+            const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
+                               trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
+                               trans.style === 'wave' ? '〰️ Wave' :
+                               trans.style === 'melt' ? '🧊 Melt' :
+                               trans.style === 'slam' ? '💥 Slam' :
+                               trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' : '✨ Auto';
+            const lengthLabel = trans.bars ? `${trans.bars} bars` : `${trans.duration || 8}s`;
+            const cueLabel = trans.mixOutPoint ? ` • at ${Math.floor(trans.mixOutPoint / 60)}:${String(trans.mixOutPoint % 60).padStart(2, '0')}` : '';
+
             return (
-              <SongItem
-                key={item._id || item.id || String(index)}
-                track={item}
-                index={index + 1}
-                onPlay={() => {
-                  if (selectedView === 'liked') {
-                    if (typeof playPlaylist === 'function') {
-                      playPlaylist(likedTracks, index);
-                    } else if (typeof playTrack === 'function') {
-                      playTrack(item, likedTracks);
+              <View key={item._id || item.id || String(index)}>
+                <SongItem
+                  track={item}
+                  index={index + 1}
+                  onPlay={() => {
+                    if (selectedView === 'liked') {
+                      if (typeof playPlaylist === 'function') {
+                        playPlaylist(likedTracks, index);
+                      } else if (typeof playTrack === 'function') {
+                        playTrack(item, likedTracks);
+                      }
+                    } else {
+                      const isItemQuran = Boolean(isSelectedPlQuran || isQuranContent(item));
+                      if (!isItemQuran && (selectedView?.isMix || isMixMode)) {
+                        if (typeof setIsMixMode === 'function') setIsMixMode(true);
+                        if (typeof setActiveTransitions === 'function' && playlistTransitions) {
+                          setActiveTransitions(playlistTransitions);
+                        }
+                      } else {
+                        if (typeof setIsMixMode === 'function') setIsMixMode(false);
+                        if (typeof setActiveTransitions === 'function') setActiveTransitions({});
+                      }
+                      if (typeof playPlaylist === 'function') {
+                        playPlaylist(activePlaylistTracks, index);
+                      } else if (typeof playTrack === 'function') {
+                        playTrack(item, activePlaylistTracks);
+                      }
                     }
-                  } else {
-                    if (typeof playPlaylist === 'function') {
-                      playPlaylist(activePlaylistTracks, index);
-                    } else if (typeof playTrack === 'function') {
-                      playTrack(item, activePlaylistTracks);
+                  }}
+                  onMorePress={() => {
+                    if (onTrackAction) {
+                      const plObj = selectedView && selectedView !== 'liked' ? selectedView : null;
+                      const plId = plObj ? String(plObj.id || plObj._id) : undefined;
+                      onTrackAction({
+                        ...item,
+                        playlistId: plId,
+                        playlist: plObj,
+                      });
                     }
-                  }
-                }}
-                onMorePress={() => {
-                  if (onTrackAction) {
-                    const plObj = selectedView && selectedView !== 'liked' ? selectedView : null;
-                    const plId = plObj ? String(plObj.id || plObj._id) : undefined;
-                    onTrackAction({
-                      ...item,
-                      playlistId: plId,
-                      playlist: plObj,
-                    });
-                  }
-                }}
-              />
+                  }}
+                />
+                {hasNext && (
+                  <View style={styles.transitionChipRow}>
+                    <View style={styles.transitionLine} />
+                    <TouchableOpacity
+                      style={styles.transitionChip}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setActiveMixerPair({
+                          from: item,
+                          to: nextTrack,
+                          index,
+                          pairKey,
+                        });
+                      }}
+                    >
+                      <Zap size={10} color="#10b981" />
+                      <Text style={styles.transitionChipText}>
+                        {styleLabel} • {lengthLabel}{cueLabel}
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={styles.transitionLine} />
+                  </View>
+                )}
+              </View>
             );
           }}
           ListHeaderComponent={
@@ -755,7 +824,7 @@ export default function LibraryScreen({
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <CassetteTag label={selectedView.isMix ? "🎛️ DJ MIX" : "CRATE PLAYLIST"} bg={!isDark ? '#0b1110' : colors.ink} textColor={selectedView.isMix ? '#f59e0b' : colors.tealLight} />
+                          <CassetteTag label={(!isSelectedPlQuran && selectedView.isMix) ? "🎛️ DJ MIX" : (isSelectedPlQuran ? "QURAN PLAYLIST" : "CRATE PLAYLIST")} bg={!isDark ? '#0b1110' : colors.ink} textColor={(!isSelectedPlQuran && selectedView.isMix) ? '#f59e0b' : colors.tealLight} />
                           <TouchableOpacity
                             style={[
                               styles.visibilityHeroPill,
@@ -821,7 +890,7 @@ export default function LibraryScreen({
                           onPress={() => handlePlayPlaylist(selectedView, false)}
                         >
                           <Play size={14} color={colors.ink} fill={colors.ink} />
-                          <Text style={styles.playHeroBtnText}>{selectedView.isMix ? "PLAY DJ MIX" : "PLAY"}</Text>
+                          <Text style={styles.playHeroBtnText}>{(!isSelectedPlQuran && selectedView.isMix) ? "PLAY DJ MIX" : "PLAY"}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.shuffleHeroBtn}
@@ -1303,11 +1372,49 @@ export default function LibraryScreen({
         onClose={() => setActiveMixerPair(null)}
         fromTrack={activeMixerPair?.from}
         toTrack={activeMixerPair?.to}
-        transition={activeMixerPair ? playlistTransitions[activeMixerPair.index] : null}
+        transition={
+          activeMixerPair
+            ? (playlistTransitions[activeMixerPair.pairKey] ||
+               playlistTransitions[`${activeMixerPair.from?.id || activeMixerPair.from?._id}_${activeMixerPair.to?.id || activeMixerPair.to?._id}`] ||
+               playlistTransitions[`${(activeMixerPair.from?.title || '').trim().toLowerCase()}_${(activeMixerPair.to?.title || '').trim().toLowerCase()}`] ||
+               playlistTransitions[activeMixerPair.index])
+            : null
+        }
         onSaveTransition={(newTrans) => {
           if (activeMixerPair) {
-            setPlaylistTransitions(prev => ({ ...prev, [activeMixerPair.index]: newTrans }));
-            showToast(`Applied ${newTrans.style.toUpperCase()} (${newTrans.bars} bars) transition`, 'success');
+            const { from, to, pairKey, index } = activeMixerPair;
+            const tAId = String(from?._id || from?.id || '');
+            const tBId = String(to?._id || to?.id || '');
+            const altKey = `${tAId}_${tBId}`;
+            const titleKey = `${(from?.title || '').trim().toLowerCase()}_${(to?.title || '').trim().toLowerCase()}`;
+
+            const updated = {
+              ...playlistTransitions,
+              [pairKey]: newTrans,
+              [altKey]: newTrans,
+              [titleKey]: newTrans,
+              [index]: newTrans,
+            };
+            setPlaylistTransitions(updated);
+
+            if (typeof setActiveTransitions === 'function') {
+              setActiveTransitions(prev => ({
+                ...prev,
+                [pairKey]: newTrans,
+                [altKey]: newTrans,
+                [titleKey]: newTrans,
+                [index]: newTrans,
+              }));
+            }
+
+            if (selectedView && selectedView !== 'liked' && updatePlaylist) {
+              const plId = String(selectedView.id || selectedView._id);
+              updatePlaylist(plId, { transitions: updated }).catch(err => {
+                console.warn('Failed to sync transitions to playlist:', err);
+              });
+            }
+
+            showToast(`Applied ${newTrans.style.toUpperCase()} (${newTrans.bars || 4} bars) transition`, 'success');
           }
         }}
       />

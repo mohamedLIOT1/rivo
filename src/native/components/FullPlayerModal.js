@@ -951,8 +951,9 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
               </View>
             </View>
 
-            {/* ── Rivo DJ Engine & Mix Controller Card ── */}
-            <View style={[styles.djDeckCard, isMixMode && styles.djDeckCardActive]}>
+            {/* ── Rivo DJ Engine & Mix Controller Card (Strictly Hidden for Holy Quran) ── */}
+            {!isCurQuran && (
+              <View style={[styles.djDeckCard, isMixMode && styles.djDeckCardActive]}>
               <View style={styles.djHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                   <Sliders size={18} color={isMixMode ? '#10b981' : '#94a3b8'} strokeWidth={2.5} />
@@ -1076,6 +1077,7 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 </>
               )}
             </View>
+            )}
           </ScrollView>
         )}
 

@@ -76,7 +76,7 @@ export default function MiniPlayer({
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
 
-  const isMixMode = Boolean(audio?.isMixMode);
+  const isMixMode = !isQuran && Boolean(audio?.isMixMode);
   const currentQueue = audio?.currentQueue || [];
   const currentQueueIndex = audio?.currentQueueIndex ?? -1;
   const nextMixTrack = isMixMode && currentQueue.length > 1 && currentQueueIndex >= 0

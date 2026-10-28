@@ -1729,8 +1729,8 @@ export default function FullPlayerModal({
             </button>
           </div>
 
-          {/* ── DJ Mix Mode: Coming Up Next Widget ── */}
-          {isMixMode && nextMixTrack && (
+          {/* ── DJ Mix Mode: Coming Up Next Widget (Strictly Hidden for Holy Quran) ── */}
+          {!isCurQuran && isMixMode && nextMixTrack && (
             <div className={`p-2.5 sm:p-3 my-2 rounded-xl border-2 border-[#17a398] w-full ${
               isDark ? 'bg-[#141d1b]' : 'bg-[#eef8f6]'
             }`}>

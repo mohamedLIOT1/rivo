@@ -220,3 +220,79 @@ export function getRecommendedTransition(trackA, trackB) {
     reason: 'Equal-power smooth fade over 4 bars.'
   };
 }
+
+/**
+ * Calculate dynamic DJ crossfade gains matching real DJ styles and non-linear crossover bias
+ */
+export function calculateCrossfadeGains(progress, style = 'fade', crossoverBias = 0.5) {
+  const rawP = Math.max(0, Math.min(1, progress));
+  const bias = Math.max(0.15, Math.min(0.85, Number(crossoverBias) || 0.5));
+  
+  let p = rawP;
+  if (Math.abs(bias - 0.5) >= 0.01) {
+    if (rawP < bias) {
+      p = (rawP / bias) * 0.5;
+    } else {
+      p = 0.5 + ((rawP - bias) / (1 - bias)) * 0.5;
+    }
+  }
+
+  if (style === 'linear') {
+    return { gainA: 1 - p, gainB: p };
+  }
+
+  if (style === 'cut' || style === 'slam') {
+    return { 
+      gainA: p < 0.90 ? 1.0 : 0.0, 
+      gainB: p >= 0.90 ? 1.0 : 0.0 
+    };
+  }
+
+  if (style === 'rise') {
+    const gainA = p < 0.75 ? 1.0 : Math.max(0, 1.0 - Math.pow((p - 0.75) / 0.25, 2));
+    const gainB = p < 0.35 
+      ? 0.15 * Math.pow(p / 0.35, 2) 
+      : 0.15 + 0.85 * Math.pow((p - 0.35) / 0.65, 1.5);
+    return { 
+      gainA: Math.max(0, Math.min(1, gainA)), 
+      gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
+  if (style === 'blend') {
+    const gainA = p < 0.30 
+      ? 1.0 
+      : Math.cos(((p - 0.30) / 0.70) * (Math.PI / 2));
+    const gainB = p < 0.70 
+      ? Math.sin((p / 0.70) * (Math.PI / 2)) 
+      : 1.0;
+    return { 
+      gainA: Math.max(0, Math.min(1, gainA)), 
+      gainB: Math.max(0, Math.min(1, gainB)) 
+    };
+  }
+
+  if (style === 'wave') {
+    const gainA = Math.cos(p * (Math.PI / 2));
+    const gainB = Math.sin(p * (Math.PI / 2));
+    const dip = 1.0 - 0.25 * Math.sin(p * Math.PI);
+    return {
+      gainA: Math.max(0, Math.min(1, gainA * dip)),
+      gainB: Math.max(0, Math.min(1, gainB * dip))
+    };
+  }
+
+  if (style === 'melt') {
+    const gainA = Math.pow(1 - p, 1.4);
+    const gainB = Math.pow(p, 1.4);
+    return {
+      gainA: Math.max(0, Math.min(1, gainA)),
+      gainB: Math.max(0, Math.min(1, gainB))
+    };
+  }
+
+  return {
+    gainA: Math.cos(p * (Math.PI / 2)),
+    gainB: Math.sin(p * (Math.PI / 2))
+  };
+}

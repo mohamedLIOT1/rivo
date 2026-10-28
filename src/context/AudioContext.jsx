@@ -802,14 +802,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
           // ── RIVO DJ MIX MODE Lookahead check & Dual-Deck transition ──
           if (isMixModeRef.current && isPlayingRef.current && !isTransitionRunningRef.current && !isChangingTrackRef.current) {
+            const curTrack = currentTrackRef.current;
+            if (isQuranContent(curTrack)) return; // 📿 Holy Quran Safeguard: Never crossfade or mix Quran
             const q = currentQueueRef.current;
             const curIdx = currentQueueIndexRef.current;
             if (q && q.length > 1 && curIdx >= 0) {
               const isLast = curIdx === q.length - 1;
               if (!isLast || repeatModeRef.current !== 'off') {
                 const nextIdx = (curIdx + 1) % q.length;
-                const curTrack = currentTrackRef.current;
                 const nextTrack = q[nextIdx];
+                if (isQuranContent(nextTrack)) return; // 📿 Holy Quran Safeguard: Never mix into Quran
                 const curId = String(curTrack?.id || curTrack?._id || '');
                 const nextId = String(nextTrack?.id || nextTrack?._id || '');
 
@@ -1789,15 +1791,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     }
 
-    // Strict Mix Mode Isolation: Only enable dual-deck mix transitions when playing from a designated Mix Playlist
-    if (newQueue && (newQueue._isMix || (newQueue._transitions && Object.keys(newQueue._transitions).length > 0))) {
+    // Strict Mix Mode Isolation: Only enable dual-deck mix transitions when playing from a designated Mix Playlist (never for Holy Quran)
+    if (!isTargetQuran && newQueue && (newQueue._isMix || (newQueue._transitions && Object.keys(newQueue._transitions).length > 0))) {
       setIsMixMode(true);
       isMixModeRef.current = true;
       if (newQueue._transitions) {
         setActiveTransitions(newQueue._transitions);
         activeTransRef.current = newQueue._transitions;
       }
-    } else if (newQueue) {
+    } else {
       setIsMixMode(false);
       isMixModeRef.current = false;
       setActiveTransitions({});

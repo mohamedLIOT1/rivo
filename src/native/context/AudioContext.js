@@ -25,6 +25,7 @@ import { parseLrcLyrics } from '../../utils/lrcParser';
 import { getSmartTasteAndMoodTracks } from '../utils/tasteAlgorithm';
 import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
+import { calculateCrossfadeGains } from '../utils/musicAnalysis';
 
 const AudioContext = createContext();
 const AudioProgressContext = createContext();
@@ -177,6 +178,11 @@ export const AudioProvider = ({ children }) => {
   const [mixStyle, setMixStyleState] = useState('equal_power');
   const mixStyleRef = useRef('equal_power');
   const nextSoundPlayingRef = useRef(false);
+  const [activeTransitions, setActiveTransitions] = useState({});
+  const activeTransRef = useRef({});
+  useEffect(() => {
+    activeTransRef.current = activeTransitions;
+  }, [activeTransitions]);
 
   useEffect(() => {
     AsyncStorage.getItem('@rivo_mix_mode').then((val) => {
@@ -250,16 +256,18 @@ export const AudioProvider = ({ children }) => {
     AsyncStorage.setItem('@rivo_mix_style', style).catch(() => {});
   };
 
-  const preloadNextTrackForDjMix = async () => {
+  const preloadNextTrackForDjMix = async (inPointSec = 0, speedB = 1.0) => {
     if (isMixPreloadingRef.current || nextSoundRef.current || !isMixModeRef.current) return;
+    const cur = currentTrackRef.current;
+    if (isQuranContent(cur)) return;
     const q = queueRef.current;
     if (!q || q.length <= 1) return;
 
-    const curId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+    const curId = String(cur?._id || cur?.id || '');
     const curIdx = q.findIndex(t => String(t._id || t.id) === curId);
     const nextIdx = (curIdx >= 0) ? (curIdx + 1) % q.length : 0;
     const nTrack = q[nextIdx];
-    if (!nTrack) return;
+    if (!nTrack || isQuranContent(nTrack)) return;
 
     isMixPreloadingRef.current = true;
     try {
@@ -286,7 +294,9 @@ export const AudioProvider = ({ children }) => {
         soundSource,
         {
           shouldPlay: false,
-          positionMillis: 0,
+          positionMillis: Math.max(0, Math.floor(inPointSec * 1000)),
+          rate: Number(speedB) || 1.0,
+          shouldCorrectPitch: true,
           volume: 0,
           progressUpdateIntervalMillis: 250,
         }
@@ -364,7 +374,11 @@ export const AudioProvider = ({ children }) => {
       nextSoundPlayingRef.current = false;
       loadedTrackIdRef.current = newActiveId;
       currentTrackRef.current = newActiveTrack;
-      setCurrentTrack(newActiveTrack);
+        setCurrentTrack(newActiveTrack);
+        try {
+          newActiveSound.setRateAsync(1.0, true).catch(() => {});
+          newActiveSound.setVolumeAsync(volumeRef.current || 0.8).catch(() => {});
+        } catch {}
 
       shouldBePlayingRef.current = true;
       isPlayingRef.current = true;
@@ -936,49 +950,75 @@ export const AudioProvider = ({ children }) => {
       progressRef.current = { currentTime: newCurrentTime, duration: newDuration };
       setProgress({ currentTime: newCurrentTime, duration: newDuration });
 
-      // RIVO DJ ENGINE: Dual-Player Seamless Auto-Crossfade
-      if (isMixModeRef.current && status.isPlaying && statusDurSec > 12) {
-        const remainingSec = statusDurSec - newCurrentTime;
-        const mixSec = mixDurationRef.current || 8;
+      // RIVO DJ ENGINE: Dual-Player Seamless Auto-Crossfade (Full Spotify-Style Lookahead)
+      if (isMixModeRef.current && status.isPlaying && statusDurSec > 10) {
+        const curTrack = currentTrackRef.current;
+        if (isQuranContent(curTrack)) return; // 📿 Holy Quran Safeguard: Never crossfade or mix Quran
+        const curId = String(curTrack?._id || curTrack?.id || '');
+        const q = queueRef.current || [];
+        const curIdx = q.findIndex(t => String(t._id || t.id) === curId);
+        const nextTrack = (curIdx >= 0 && curIdx + 1 < q.length) ? q[curIdx + 1] : q[0];
+        if (isQuranContent(nextTrack)) return; // 📿 Holy Quran Safeguard: Never mix into Quran
+        const nextId = String(nextTrack?._id || nextTrack?.id || '');
+
+        const pairKey = `${curId}_${nextId}`;
+        const pairKeyAlt = `${curId}___${nextId}`;
+        const titleKey = `${curTrack?.title}___${nextTrack?.title}`;
+
+        const trans = activeTransRef.current?.[pairKey] ||
+                      activeTransRef.current?.[pairKeyAlt] ||
+                      activeTransRef.current?.[titleKey] ||
+                      q?._transitions?.[pairKey] ||
+                      q?._transitions?.[pairKeyAlt] ||
+                      q?._transitions?.[titleKey];
+
+        let transDur = 8;
+        if (trans?.duration) {
+          transDur = Number(trans.duration);
+        } else if (trans?.bars) {
+          const bpm = Number(curTrack?.bpm) || 120;
+          transDur = Math.round((trans.bars * 240) / bpm);
+        } else if (mixDurationRef.current) {
+          transDur = Number(mixDurationRef.current);
+        }
+        transDur = Math.max(2, Math.min(48, transDur));
+        const transStyle = trans?.style || mixStyleRef.current || 'auto';
+        const mixOutPoint = (trans?.mixOutPoint !== undefined && Number(trans.mixOutPoint) > 5 && Number(trans.mixOutPoint) <= statusDurSec)
+          ? Number(trans.mixOutPoint)
+          : Math.max(5, statusDurSec - 2);
+        const mixInPoint = Number(trans?.mixInPoint) || 0;
+        const crossoverBias = Number(trans?.crossoverBias) || 0.5;
+        const volA = Number(trans?.volA) || 100;
+        const volB = Number(trans?.volB) || 100;
+        const speedA = Number(trans?.speedA) || 1.0;
+        const speedB = Number(trans?.speedB) || 1.0;
+
+        const remainingSec = mixOutPoint - newCurrentTime;
 
         // 1. Cue next track 4 seconds before the transition zone
-        if (remainingSec <= (mixSec + 4) && remainingSec > 0 && !nextSoundRef.current && !isMixPreloadingRef.current) {
-          preloadNextTrackForDjMix();
+        if (remainingSec <= (transDur + 4) && remainingSec > 0 && !nextSoundRef.current && !isMixPreloadingRef.current) {
+          preloadNextTrackForDjMix(mixInPoint, speedB);
         }
 
         // 2. Active Crossfade volume curves
-        if (remainingSec <= mixSec && remainingSec > 0) {
+        if (remainingSec <= transDur && remainingSec > 0) {
           if (nextSoundRef.current && !nextSoundPlayingRef.current) {
             nextSoundPlayingRef.current = true;
             nextSoundRef.current.playAsync().catch(() => {});
           }
-          const ratio = Math.max(0.01, remainingSec / mixSec);
-          let factorA = ratio;
-          let factorB = 1 - ratio;
-          const style = mixStyleRef.current || 'auto';
-          if (style === 'fade' || style === 'equal_power') {
-            factorA = Math.cos(((1 - ratio) * Math.PI) / 2);
-            factorB = Math.sin(((1 - ratio) * Math.PI) / 2);
-          } else if (style === 'rise') {
-            factorA = Math.pow(ratio, 2);
-            factorB = Math.pow(1 - ratio, 0.5);
-          } else if (style === 'blend' || style === 'bass_cut') {
-            factorA = Math.pow(ratio, 1.5);
-            factorB = Math.pow(1 - ratio, 0.7);
-          } else if (style === 'cut') {
-            factorA = remainingSec <= 0.5 ? 0 : 1;
-            factorB = remainingSec <= 0.5 ? 1 : 0;
-          } else {
-            // 'auto': Rivo intelligent curve
-            factorA = Math.cos(((1 - ratio) * Math.PI) / 2);
-            factorB = Math.sin(((1 - ratio) * Math.PI) / 2);
-          }
-          const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
+          const rawP = Math.max(0.01, Math.min(1, (transDur - remainingSec) / transDur));
+          const { gainA, gainB } = calculateCrossfadeGains(rawP, transStyle, crossoverBias);
+
+          const masterVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
+          const targetVolA = Math.max(0.01, Math.min(1, masterVol * gainA * (volA / 100)));
+          const targetVolB = Math.max(0.01, Math.min(1, masterVol * gainB * (volB / 100)));
+
           if (soundRef.current) {
-            soundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1, targetVol * factorA))).catch(() => {});
+            soundRef.current.setVolumeAsync(targetVolA).catch(() => {});
+            soundRef.current.setRateAsync(speedA, true).catch(() => {});
           }
           if (nextSoundRef.current) {
-            nextSoundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1, targetVol * factorB))).catch(() => {});
+            nextSoundRef.current.setVolumeAsync(targetVolB).catch(() => {});
           }
         }
       }
@@ -1381,6 +1421,20 @@ export const AudioProvider = ({ children }) => {
       requestSeq,
     };
     setProgress({ currentTime: safeTargetSec, duration: Number(track.duration || 0) });
+
+    if (isQuranContent(track)) {
+      // 📿 Holy Quran Safeguard: Immediately disengage DJ mix mode & preloaded buffers
+      isMixModeRef.current = false;
+      setIsMixModeState(false);
+      activeTransRef.current = {};
+      setActiveTransitions({});
+      if (nextSoundRef.current) {
+        nextSoundRef.current.unloadAsync().catch(() => {});
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        nextSoundPlayingRef.current = false;
+      }
+    }
 
     try {
       setIsLoading(true);
@@ -2466,7 +2520,7 @@ export const AudioProvider = ({ children }) => {
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
 
-    isMixMode, setIsMixMode, mixDuration, setMixDuration, mixStyle, setMixStyle, triggerManualMix,
+    isMixMode, setIsMixMode, mixDuration, setMixDuration, mixStyle, setMixStyle, triggerManualMix, activeTransitions, setActiveTransitions,
     playTrack, playPlaylist, togglePlay, seekTo, isShuffle, setIsShuffle, toggleShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, reorderQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
@@ -2477,7 +2531,7 @@ export const AudioProvider = ({ children }) => {
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
     jamSession, setJamSync,
     remoteDevicePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, isMixMode, mixDuration, mixStyle, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, isMixMode, mixDuration, mixStyle, activeTransitions, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
 
   return (
     <AudioContext.Provider value={controls}>
