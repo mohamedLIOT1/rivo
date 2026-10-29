@@ -352,19 +352,33 @@ function executeSeparation(task) {
       if (fs.existsSync(cloudScript)) {
         try {
           console.log(`[VocalSeparator] Attempting AI cloud vocal separation for: ${safe}`);
-          task.progress = 35;
-          task.eta = 'Isolating vocals with AI Neural Net...';
+          task.progress = 30;
+          task.eta = 'Connecting to neural isolation engine...';
           await new Promise((resCloud, rejCloud) => {
             const pyBin = process.platform === 'win32' ? 'python' : 'python3';
             const pyProc = spawn(pyBin, [cloudScript, tempWavAudio, targetStemPath], {
               env: { ...process.env }
             });
+
+            pyProc.stdout.on('data', (chunk) => {
+              const text = chunk.toString();
+              const lines = text.split('\n');
+              for (const line of lines) {
+                const match = line.match(/\[PROGRESS\]\s+(\d+)%\s+(.+)/);
+                if (match) {
+                  task.progress = Math.min(99, Math.max(task.progress, parseInt(match[1])));
+                  task.eta = match[2].trim();
+                  task.updatedAt = Date.now();
+                }
+              }
+            });
+
             const progressTimer = setInterval(() => {
-              if (task.progress < 92) {
-                task.progress = Math.min(92, task.progress + Math.floor(Math.random() * 6) + 4);
+              if (task.progress < 96) {
+                task.progress = Math.min(96, task.progress + 1);
                 task.updatedAt = Date.now();
               }
-            }, 1200);
+            }, 1000);
             const timeoutTimer = setTimeout(() => {
               clearInterval(progressTimer);
               try { pyProc.kill('SIGKILL'); } catch {}
