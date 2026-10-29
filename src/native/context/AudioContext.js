@@ -192,6 +192,13 @@ export const AudioProvider = ({ children }) => {
     isVocalOnlyRef.current = b;
     setIsVocalOnlyState(b);
     AsyncStorage.setItem('@rivo_vocal_only', String(b)).catch(() => {});
+
+    // Seamless runtime switch for active track when user toggles vocal isolation
+    const activeTrack = currentTrackRef.current;
+    if (activeTrack && !isQuranContent(activeTrack) && (isPlayingRef.current || soundRef.current)) {
+      const curPos = (playbackStatusRef.current.positionMillis || 0) / 1000;
+      playTrack(activeTrack, false, false, curPos);
+    }
   };
 
   const toggleVocalOnly = () => {
@@ -1541,54 +1548,64 @@ export const AudioProvider = ({ children }) => {
         });
       }
 
-      // Prioritize local downloaded version in Online Mode to save mobile data:
-      // Match by trackId OR clean title + artist in offline vault
-      const cleanTitle = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-      const cleanArtist = (track.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+      // Determine if Vocal-Only Mode is active for this content
+      const isVocalActive = isVocalOnlyRef.current && !isQuranContent(track);
 
-      const isUploadedTrack = track.source === 'Upload' || (track.audioUrl && (track.audioUrl.startsWith('/uploads/') || track.audioUrl.includes('/uploads/')));
+      let uri = null;
 
-      const local = (downloadedTracks || []).find(t => {
-        if (trackId && String(t._id || t.id) === trackId) return true;
-        if (isUploadedTrack) return false; // For uploaded tracks, only accept exact trackId match
-        const tTitle = (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-        const tArtist = (t.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-        return cleanTitle && cleanArtist && tTitle && tArtist && cleanTitle === tTitle && cleanArtist === tArtist;
-      });
+      if (!isVocalActive) {
+        // Prioritize local downloaded version in Online Mode to save mobile data:
+        // Match by trackId OR clean title + artist in offline vault
+        const cleanTitle = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+        const cleanArtist = (track.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
 
-      let uri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || track.nativeAudioUri || track.localAudioUri;
+        const local = (downloadedTracks || []).find(t => {
+          if (trackId && String(t._id || t.id) === trackId) return true;
+          if (isUploadedTrack) return false; // For uploaded tracks, only accept exact trackId match
+          const tTitle = (t.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+          const tArtist = (t.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+          return cleanTitle && cleanArtist && tTitle && tArtist && cleanTitle === tTitle && cleanArtist === tArtist;
+        });
 
-      // Authentic uploaded audio file handling
-      if (!uri && isUploadedTrack && track.audioUrl) {
-        const rawAudio = track.audioUrl;
-        uri = rawAudio.startsWith('/') ? `${API_BASE_URL}${rawAudio}` : (rawAudio.startsWith('http') ? rawAudio : `${API_BASE_URL}/${rawAudio}`);
-      }
+        uri = local?.nativeAudioUri || local?.localAudioUri || local?.audioUrl || track.nativeAudioUri || track.localAudioUri;
 
-      // Pre-resolved audio URL (e.g. broadcast from Jam host or cached HTTP audio stream)
-      if (!isOffline) {
-        if (!uri && !isRetry && track.resolvedAudioUrl && (track.resolvedAudioUrl.startsWith('http://') || track.resolvedAudioUrl.startsWith('https://'))) {
-          uri = track.resolvedAudioUrl;
+        // Authentic uploaded audio file handling
+        if (!uri && isUploadedTrack && track.audioUrl) {
+          const rawAudio = track.audioUrl;
+          uri = rawAudio.startsWith('/') ? `${API_BASE_URL}${rawAudio}` : (rawAudio.startsWith('http') ? rawAudio : `${API_BASE_URL}/${rawAudio}`);
         }
-        if (!uri && track.audioUrl && (track.audioUrl.startsWith('http://') || track.audioUrl.startsWith('https://')) && !track.audioUrl.includes('youtube.com/watch') && !track.audioUrl.includes('youtu.be/')) {
-          uri = track.audioUrl;
-        }
-      }
 
-      // Direct check on physical storage by trackId (detects local files on device even if not yet in state)
-      if ((!uri || !uri.startsWith('file://')) && !isUploadedTrack) {
-        const directMp3 = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.mp3`;
-        const directM4a = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.m4a`;
-        try {
-          const mInfo = await FileSystem.getInfoAsync(directMp3);
-          if (mInfo.exists && mInfo.size > 10000) {
-            uri = directMp3;
-          } else {
-            const m4Info = await FileSystem.getInfoAsync(directM4a);
-            if (m4Info.exists && m4Info.size > 10000) {
-              uri = directM4a;
-            }
+        // Pre-resolved audio URL (e.g. broadcast from Jam host or cached HTTP audio stream)
+        if (!isOffline) {
+          if (!uri && !isRetry && track.resolvedAudioUrl && (track.resolvedAudioUrl.startsWith('http://') || track.resolvedAudioUrl.startsWith('https://'))) {
+            uri = track.resolvedAudioUrl;
           }
-        } catch {}
+          if (!uri && track.audioUrl && (track.audioUrl.startsWith('http://') || track.audioUrl.startsWith('https://')) && !track.audioUrl.includes('youtube.com/watch') && !track.audioUrl.includes('youtu.be/')) {
+            uri = track.audioUrl;
+          }
+        }
+
+        // Direct check on physical storage by trackId (detects local files on device even if not yet in state)
+        if ((!uri || !uri.startsWith('file://')) && !isUploadedTrack) {
+          const directMp3 = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.mp3`;
+          const directM4a = `${FileSystem.documentDirectory}rivo_tracks/${trackId}.m4a`;
+          try {
+            const mInfo = await FileSystem.getInfoAsync(directMp3);
+            if (mInfo.exists && mInfo.size > 10000) {
+              uri = directMp3;
+            } else {
+              const m4Info = await FileSystem.getInfoAsync(directM4a);
+              if (m4Info.exists && m4Info.size > 10000) {
+                uri = directM4a;
+              }
+            }
+          } catch {}
+        }
+      } else {
+        // In Vocal-Only Mode: strictly only reuse if track already holds a verified vocal stem URL
+        if (track.vocalStemUrl && (track.vocalStemUrl.includes('/stems/') || track.vocalStemUrl.includes('vocal_'))) {
+          uri = track.vocalStemUrl.startsWith('/') ? `${API_BASE_URL}${track.vocalStemUrl}` : track.vocalStemUrl;
+        }
       }
 
       if (uri && uri.startsWith('file://')) {
@@ -1656,9 +1673,13 @@ export const AudioProvider = ({ children }) => {
       if (!uri) throw new Error('Could not resolve audio stream');
       if (uri.startsWith('/')) uri = `${API_BASE_URL}${uri}`;
 
-      track = { ...track, resolvedAudioUrl: uri };
-      if (uri.startsWith('http')) {
-        track.audioUrl = uri;
+      if (isVocalActive) {
+        track = { ...track, vocalStemUrl: uri };
+      } else {
+        track = { ...track, resolvedAudioUrl: uri };
+        if (uri.startsWith('http')) {
+          track.audioUrl = uri;
+        }
       }
       if (playRequestSeqRef.current !== requestSeq || String(currentTrackRef.current?._id || currentTrackRef.current?.id) !== trackId || soundLoadIdRef.current !== currentLoadId || abortController.signal.aborted) {
         if (playRequestSeqRef.current === requestSeq) {

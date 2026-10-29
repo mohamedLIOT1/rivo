@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import shutil
+import subprocess
 
 # Enable UTF-8 output
 sys.stdout.reconfigure(encoding='utf-8')
@@ -19,16 +20,32 @@ def main():
         print(f"Error: input file '{input_audio}' not found")
         sys.exit(1)
 
-    print(f"[CloudSeparator] Starting ZeroGPU cloud separation for: {input_audio}")
+    print(f"[CloudSeparator] Starting vocal separation for: {input_audio}")
     t0 = time.time()
 
     from gradio_client import Client, handle_file
 
-    # List of running ZeroGPU spaces to try in order
+    # List of cloud UVR5 spaces to try in priority order:
+    # 1. Fast GPU spaces (instant if token or quota available)
+    # 2. Unlimited CPU-basic spaces (no ZeroGPU quota limit)
     spaces = [
         "TheStinger/UVR5_UI",
-        "MohamedRashad/Audio-Separator",
-        "NeoPy/UVR5-UI"
+        "itsalboushi/UVR5_UI",
+        "NeoPy/UVR5-UI",
+        "B3XN/UVR5_UI",
+        "DelinaresMassates/UVR5_UI",
+        "stdz/UVR5_UI",
+        "stdz/UVR5_UI_2",
+        "DilshanIRU/UVR5_UI",
+        "teogabriel/UVR5-UI",
+        "Erickeee/UVR5_UI",
+        "AZG1/UVR5_UI",
+        "rhuanpagano/UVR5_UI",
+        "DannyMiko/UVR5_UI",
+        "Heisenbergerer/UVR5_UI",
+        "Kremixes/UVR5_UI",
+        "Iwidjwj/UVR5_UI",
+        "fasooo/UVR5_UI"
     ]
 
     last_error = None
@@ -36,7 +53,7 @@ def main():
         try:
             print(f"[CloudSeparator] Connecting to space: {space_id}...")
             client = Client(space_id, token=token)
-            
+
             print(f"[CloudSeparator] Submitting job to {space_id} with Kim_Vocal_2.onnx...")
             result = client.predict(
                 audio=handle_file(input_audio),
@@ -65,11 +82,45 @@ def main():
                 raise Exception(f"Invalid output from {space_id}: {result}")
 
         except Exception as e:
-            print(f"[CloudSeparator] Failed on {space_id}: {e}")
+            err_str = str(e)
+            print(f"[CloudSeparator] Failed on {space_id}: {err_str}")
             last_error = e
             continue
 
     print(f"[CloudSeparator] All cloud spaces failed. Last error: {last_error}")
+
+    # Fallback to local high-performance VR model if available on server
+    vr_model = "/tmp/audio-separator-models/3_HP-Vocal-UVR.pth"
+    if os.path.exists(vr_model):
+        try:
+            print(f"[CloudSeparator] Falling back to local VR architecture model: {vr_model}")
+            out_dir = os.path.dirname(os.path.abspath(output_mp3))
+            tmp_sep_dir = os.path.join(out_dir, f"tmp_vr_{int(time.time())}")
+            os.makedirs(tmp_sep_dir, exist_ok=True)
+
+            cmd = [
+                "audio-separator",
+                "-m", "3_HP-Vocal-UVR.pth",
+                "--single_stem", "Vocals",
+                "--output_format", "MP3",
+                "--output_dir", tmp_sep_dir,
+                input_audio
+            ]
+            subprocess.run(cmd, check=True, timeout=300)
+
+            # Look for generated vocal file in tmp_sep_dir
+            for f in os.listdir(tmp_sep_dir):
+                if f.endswith(".mp3") and "Vocals" in f:
+                    generated_vocal = os.path.join(tmp_sep_dir, f)
+                    if os.path.getsize(generated_vocal) > 10000:
+                        shutil.copyfile(generated_vocal, output_mp3)
+                        shutil.rmtree(tmp_sep_dir, ignore_errors=True)
+                        print(f"[CloudSeparator] SUCCESS via local VR model -> {output_mp3}")
+                        sys.exit(0)
+            shutil.rmtree(tmp_sep_dir, ignore_errors=True)
+        except Exception as local_err:
+            print(f"[CloudSeparator] Local VR separation fallback failed: {local_err}")
+
     sys.exit(2)
 
 if __name__ == "__main__":

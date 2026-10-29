@@ -96,62 +96,13 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     }
   }
 
-  // 1. Direct local file on device storage (by nativeAudioUri or downloadedTracks check)
-  const localUri = track.nativeAudioUri || track.localAudioUri;
-  if (localUri && localUri.startsWith('file://')) {
-    try {
-      const info = await FileSystem.getInfoAsync(localUri);
-      if (info.exists && info.size > 10000) {
-        if (cacheKey) streamCache.set(cacheKey, localUri);
-        return localUri;
-      }
-    } catch {}
-  }
-
   const rawUrl = track.audioUrl || '';
   const rawTitle = (track.title || '').trim();
   const rawArtist = (track.artist || '').trim();
   const { cleanTitle, cleanArtist } = getCleanQueries(rawTitle, rawArtist);
 
-  // 1b. Check if track is saved in offline storage by exact track ID OR exact clean title AND artist
-  try {
-    const { getDownloadedTracks } = require('./downloadManager');
-    const dls = await getDownloadedTracks();
-    if (Array.isArray(dls) && dls.length > 0) {
-      const found = dls.find(d => {
-        if (!d) return false;
-        if (trackId && String(d._id || d.id) === trackId) return true;
-        const dTitle = (d.title || '').toLowerCase().trim();
-        const dArtist = (d.artist || '').toLowerCase().trim();
-        const cTitle = (cleanTitle || rawTitle).toLowerCase().trim();
-        const cArtist = (cleanArtist || rawArtist).toLowerCase().trim();
-        // Exact title AND artist match required. Never fallback to loose title-only match.
-        return Boolean(cTitle && cArtist && dTitle && dArtist && dTitle === cTitle && dArtist === cArtist);
-      });
-      const dlUri = found?.localAudioUri || found?.nativeAudioUri;
-      if (dlUri && dlUri.startsWith('file://')) {
-        const info = await FileSystem.getInfoAsync(dlUri);
-        if (info.exists && info.size > 10000) {
-          if (cacheKey) streamCache.set(cacheKey, dlUri);
-          return dlUri;
-        }
-      }
-    }
-  } catch {}
-
-  // 1c. Direct local upload audio stream
-  if (
-    track.source === 'Upload' ||
-    rawUrl.startsWith('/uploads/') ||
-    rawUrl.includes('/uploads/')
-  ) {
-    const fullUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : (rawUrl.startsWith('http') ? rawUrl : `${API_BASE_URL}/${rawUrl}`);
-    if (cacheKey) streamCache.set(cacheKey, fullUrl);
-    if (track.duration && trackId) streamDurationCache.set(trackId, track.duration);
-    return fullUrl;
-  }
-
-    // 1d. Vocal-Only Mode: check and stream isolated vocal stem
+  // 1. Vocal-Only Mode: check and stream isolated vocal stem FIRST
+  // Strictly prevent playing standard music/audio when user has Vocal-Only mode enabled
   if (isVocalOnly && !isQuranContent(track)) {
     try {
       const qTitle = encodeURIComponent(cleanTitle || rawTitle || '');
@@ -159,7 +110,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       const qDur = encodeURIComponent(track.duration || '');
       const qUrl = encodeURIComponent(rawUrl || '');
 
-      // 1. Check if stem is already ready
+      // 1a. Check if stem is already ready
       const statusRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`);
       let statusData = statusRes.ok ? await statusRes.json() : null;
       if (statusData?.status === 'ready' && statusData.url) {
@@ -169,7 +120,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
         return fullVocalUrl;
       }
 
-      // 2. Not ready: notify UI with real-time progress banner
+      // 1b. Not ready: notify UI with real-time progress banner
       if (typeof onVocalStatus === 'function') {
         onVocalStatus({
           isProcessing: true,
@@ -179,13 +130,13 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
         });
       }
 
-      // 3. Trigger priority isolation on server
+      // 1c. Trigger priority isolation on server
       fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`).catch(() => {});
 
-      // 4. Poll every 1.5s until ready
+      // 1d. Poll every 1.4s until ready
       let pollAttempts = 0;
       let displayProgress = Math.max(12, statusData?.progress || 12);
-      while (pollAttempts < 35) {
+      while (pollAttempts < 45) {
         await new Promise(r => setTimeout(r, 1400));
         pollAttempts++;
 
@@ -258,6 +209,56 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     }
   } else if (isQuranContent(track)) {
     if (typeof onVocalStatus === 'function') onVocalStatus(null);
+  }
+
+  // 2. Direct local file on device storage (by nativeAudioUri or downloadedTracks check)
+  const localUri = track.nativeAudioUri || track.localAudioUri;
+  if (localUri && localUri.startsWith('file://')) {
+    try {
+      const info = await FileSystem.getInfoAsync(localUri);
+      if (info.exists && info.size > 10000) {
+        if (cacheKey) streamCache.set(cacheKey, localUri);
+        return localUri;
+      }
+    } catch {}
+  }
+
+  // 2b. Check if track is saved in offline storage by exact track ID OR exact clean title AND artist
+  try {
+    const { getDownloadedTracks } = require('./downloadManager');
+    const dls = await getDownloadedTracks();
+    if (Array.isArray(dls) && dls.length > 0) {
+      const found = dls.find(d => {
+        if (!d) return false;
+        if (trackId && String(d._id || d.id) === trackId) return true;
+        const dTitle = (d.title || '').toLowerCase().trim();
+        const dArtist = (d.artist || '').toLowerCase().trim();
+        const cTitle = (cleanTitle || rawTitle).toLowerCase().trim();
+        const cArtist = (cleanArtist || rawArtist).toLowerCase().trim();
+        // Exact title AND artist match required. Never fallback to loose title-only match.
+        return Boolean(cTitle && cArtist && dTitle && dArtist && dTitle === cTitle && dArtist === cArtist);
+      });
+      const dlUri = found?.localAudioUri || found?.nativeAudioUri;
+      if (dlUri && dlUri.startsWith('file://')) {
+        const info = await FileSystem.getInfoAsync(dlUri);
+        if (info.exists && info.size > 10000) {
+          if (cacheKey) streamCache.set(cacheKey, dlUri);
+          return dlUri;
+        }
+      }
+    }
+  } catch {}
+
+  // 2c. Direct local upload audio stream
+  if (
+    track.source === 'Upload' ||
+    rawUrl.startsWith('/uploads/') ||
+    rawUrl.includes('/uploads/')
+  ) {
+    const fullUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : (rawUrl.startsWith('http') ? rawUrl : `${API_BASE_URL}/${rawUrl}`);
+    if (cacheKey) streamCache.set(cacheKey, fullUrl);
+    if (track.duration && trackId) streamDurationCache.set(trackId, track.duration);
+    return fullUrl;
   }
 
   // 2. Direct MP3/M4A/AAC stream URL (non-YouTube)

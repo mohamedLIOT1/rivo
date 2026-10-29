@@ -356,8 +356,8 @@ function executeSeparation(task) {
             const timeoutTimer = setTimeout(() => {
               clearInterval(progressTimer);
               try { pyProc.kill('SIGKILL'); } catch {}
-              rejCloud(new Error('Cloud ZeroGPU timeout after 35s'));
-            }, 35000);
+              rejCloud(new Error('Cloud separator timeout after 150s'));
+            }, 150000);
 
             pyProc.on('close', (code) => {
               clearInterval(progressTimer);
@@ -376,7 +376,7 @@ function executeSeparation(task) {
             });
           });
         } catch (cloudErr) {
-          console.warn(`[VocalSeparator] Cloud GPU failed (${cloudErr.message}), falling back to instant high-precision DSP...`);
+          console.warn(`[VocalSeparator] Cloud/Local AI isolation error: ${cloudErr.message}`);
         }
       }
 
@@ -389,38 +389,12 @@ function executeSeparation(task) {
         task.progress = 100;
         task.eta = '00:00';
         task.error = null;
-        console.log(`[VocalSeparator] Successfully isolated pure vocal stem via Cloud GPU: ${targetStemPath}`);
+        console.log(`[VocalSeparator] Successfully isolated pure vocal stem via AI model: ${targetStemPath}`);
         return resolve();
       }
 
-      // Step B2: High-Precision, Zero-OOM Vocal DSP Extraction (1.5s execution, 100% reliable)
-      task.eta = 'Extracting pure vocal frequencies...';
-      task.progress = 75;
-      console.log(`[VocalSeparator] Starting ultra-fast high-precision DSP vocal extraction for: ${safe}`);
-
-      const vocalDspCmd = `ffmpeg -y -i "${tempWavAudio}" -af "stereotools=mlev=1.6:slev=0.015625,highpass=f=180,lowpass=f=7500,agate=range=0.04:threshold=0.03:ratio=3:attack=10:release=100" -c:a libmp3lame -b:a 256k "${targetStemPath}"`;
-      await new Promise((resDsp, rejDsp) => {
-        exec(vocalDspCmd, { timeout: 45000 }, (err, stdout, stderr) => {
-          if (err) return rejDsp(new Error(`DSP separation failed: ${stderr || err.message}`));
-          resDsp();
-        });
-      });
-
-      if (!fs.existsSync(targetStemPath) || fs.statSync(targetStemPath).size < 1000) {
-        throw new Error('Vocal stem output file is missing or invalid');
-      }
-
-      // Step C: Create links for all known aliases
-      for (const alias of task.aliases) {
-        if (alias !== safe) createStemAlias(safe, alias);
-      }
-
-      task.status = 'ready';
-      task.progress = 100;
-      task.eta = '00:00';
-      task.error = null;
-      console.log(`[VocalSeparator] Successfully isolated pure vocal stem: ${targetStemPath}`);
-      resolve();
+      // If AI isolation failed, mark task failed instead of returning audio with music
+      throw new Error('AI vocal isolation failed across all cloud and local models');
     } catch (err) {
       reject(err);
     } finally {
