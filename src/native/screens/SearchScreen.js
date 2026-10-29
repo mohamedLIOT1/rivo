@@ -22,6 +22,8 @@ import {
   ArrowRight,
   ShieldCheck,
   User,
+  Radio,
+  Mic,
 } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
@@ -34,6 +36,7 @@ import SongItem from '../ui/SongItem';
 import AlbumDetailModal from '../components/AlbumDetailModal';
 import ArtistDetailModal from '../components/ArtistDetailModal';
 import UserDetailModal from '../components/UserDetailModal';
+import SongRadarModal from '../components/SongRadarModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { splitArtists } from '../../utils/artistUtils.jsx';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -100,6 +103,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [isRadarOpen, setIsRadarOpen] = useState(false);
   const [visibleSongLimit, setVisibleSongLimit] = useState(25);
   const searchTimeoutRef = useRef(null);
   const userSearchTimeoutRef = useRef(null);
@@ -339,6 +343,37 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
           <CassetteTag label={isOffline ? 'OFFLINE SONGS' : 'ONLINE'} bg={colors.ink} textColor={colors.mint} />
         </View>
 
+        {/* Dedicated Song Radar Banner */}
+        {!hasSearch && (
+          <TouchableOpacity
+            style={[styles.radarBanner, !isDark && styles.radarBannerLight]}
+            activeOpacity={0.85}
+            onPress={() => setIsRadarOpen(true)}
+          >
+            <View style={styles.radarBannerLeft}>
+              <View style={styles.radarBannerIcon}>
+                <Radio size={18} color="#10b981" />
+              </View>
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.radarBannerTitle, !isDark && styles.textDark]}>
+                    SONG RADAR
+                  </Text>
+                  <View style={styles.radarPill}>
+                    <Text style={styles.radarPillText}>AUDIO & HUMMING</Text>
+                  </View>
+                </View>
+                <Text style={[styles.radarBannerSub, !isDark && styles.textDarkMuted]}>
+                  Tap to identify music or hum a tune
+                </Text>
+              </View>
+            </View>
+            <View style={styles.radarBannerArrow}>
+              <ArrowRight size={14} color="#10b981" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         <View style={[styles.inputContainer, !isDark && styles.inputContainerLight]}>
           <SearchIcon size={18} color={!isDark ? '#0b1110' : colors.ink} style={styles.searchIcon} />
           <TextInput
@@ -360,6 +395,15 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
               <X size={16} color={colors.ink} />
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            onPress={() => setIsRadarOpen(true)}
+            style={styles.radarQuickBtn}
+            activeOpacity={0.8}
+            accessibilityLabel="Song Radar"
+          >
+            <Mic size={14} color="#10b981" />
+            <Text style={styles.radarQuickBtnText}>RADAR</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Selected Genre Banner */}
@@ -731,6 +775,13 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
         onOpenChat={onOpenChat}
         onOpenFullPlayer={onOpenFullPlayer}
       />
+
+      {/* Song Radar Modal — Acoustic Audio & Humming Recognition */}
+      <SongRadarModal
+        visible={isRadarOpen}
+        onClose={() => setIsRadarOpen(false)}
+        onOpenAddToPlaylist={onTrackAction}
+      />
     </View>
   );
 }
@@ -800,6 +851,94 @@ const styles = StyleSheet.create({
   },
   clearBtn: {
     padding: 4,
+  },
+  radarQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0b1110',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  radarQuickBtnText: {
+    color: '#10b981',
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+    letterSpacing: 0.5,
+  },
+  radarBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#081714',
+    borderWidth: 2,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  radarBannerLight: {
+    backgroundColor: '#f4ede1',
+    borderColor: '#0b1110',
+  },
+  radarBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  radarBannerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radarBannerTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#10b981',
+    letterSpacing: 0.8,
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+  },
+  radarBannerSub: {
+    fontSize: 10,
+    color: colors.grayText,
+    marginTop: 2,
+  },
+  radarPill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderWidth: 0.5,
+    borderColor: '#10b981',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  radarPillText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#10b981',
+    fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+  },
+  radarBannerArrow: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textDark: {
+    color: '#0b1110',
+  },
+  textDarkMuted: {
+    color: '#57534e',
   },
   activeGenreBanner: {
     flexDirection: 'row',
