@@ -9,6 +9,7 @@ import {
 import { searchMusicOnline, isMusicTrack } from '../utils/searchEngine';
 import VerifiedBadge from '../components/VerifiedBadge';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
+import SongRadarModal from '../components/SongRadarModal';
 import { API_BASE_URL } from '../config';
 import { getTrackArtists, ArtistLinks, getCanonicalArtistName, getArtistAliases } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -89,6 +90,7 @@ export default function SearchScreen({
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
   const [userResults, setUserResults] = useState([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [isRadarOpen, setIsRadarOpen] = useState(false);
   const searchTimeoutRef = useRef(null);
   const userSearchTimeoutRef = useRef(null);
 
@@ -362,15 +364,26 @@ export default function SearchScreen({
                   Search Music & People
                 </h2>
 
-                {onOpenAddSongModal && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={onOpenAddSongModal}
-                    className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-mono font-black uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer shrink-0"
+                    onClick={() => setIsRadarOpen(true)}
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-mono font-black uppercase bg-emerald-500 hover:bg-emerald-400 text-black brutal-border brutal-shadow-sm brutal-btn cursor-pointer shrink-0 transition active:scale-95"
+                    title="Song Radar — Identify playing music or humming"
                   >
-                    <PlusCircle size={14} strokeWidth={2.5} />
-                    <span className="hidden xs:inline sm:inline">ADD SONG / LINK</span>
+                    <Radio size={14} className="animate-pulse" strokeWidth={2.5} />
+                    <span>SONG RADAR</span>
                   </button>
-                )}
+
+                  {onOpenAddSongModal && (
+                    <button
+                      onClick={onOpenAddSongModal}
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-mono font-black uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border brutal-shadow-sm brutal-btn cursor-pointer shrink-0"
+                    >
+                      <PlusCircle size={14} strokeWidth={2.5} />
+                      <span className="hidden xs:inline sm:inline">ADD SONG / LINK</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Tactile Search Input Box */}
@@ -395,23 +408,38 @@ export default function SearchScreen({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   autoComplete="off"
-                  className={`w-full font-mono text-xs sm:text-sm py-2 sm:py-2.5 pl-10 pr-10 brutal-border focus:outline-none transition-all ${
+                  className={`w-full font-mono text-xs sm:text-sm py-2 sm:py-2.5 pl-10 pr-24 sm:pr-28 brutal-border focus:outline-none transition-all ${
                     isDark 
                       ? 'bg-[#0b1110] text-white placeholder-zinc-500 border-zinc-700 focus:bg-[#141d1b]' 
                       : 'bg-[#ede5d3] text-[#0b1110] placeholder-[#082621]/60 border-black focus:bg-white'
                   }`}
                 />
-                {query && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {query && (
+                    <button
+                      onClick={() => setQuery('')}
+                      className={`w-6 h-6 flex items-center justify-center transition cursor-pointer brutal-border ${
+                        isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-[#ded2bb] text-[#0b1110] hover:bg-black hover:text-white'
+                      }`}
+                      title="Clear search"
+                    >
+                      <X size={13} strokeWidth={2.5} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => setQuery('')}
-                    className={`absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center transition cursor-pointer brutal-border ${
-                      isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-[#ded2bb] text-[#0b1110] hover:bg-black hover:text-white'
+                    type="button"
+                    onClick={() => setIsRadarOpen(true)}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-mono font-black transition cursor-pointer ${
+                      isDark 
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20' 
+                        : 'bg-[#ded2bb] text-black hover:bg-emerald-500 hover:text-black border border-black'
                     }`}
-                    title="Clear search"
+                    title="Song Radar — Listen & identify"
                   >
-                    <X size={13} strokeWidth={2.5} />
+                    <Mic size={12} strokeWidth={2.5} className="text-emerald-400" />
+                    <span className="hidden sm:inline">RADAR</span>
                   </button>
-                )}
+                </div>
               </div>
 
               {/* ── Search Type Filter Options (All / Songs / People) ── */}
@@ -1407,6 +1435,16 @@ export default function SearchScreen({
           globalTheme={globalTheme}
         />
       )}
+
+      {/* Song Radar Modal — Acoustic Audio & Humming Recognition */}
+      <SongRadarModal
+        isOpen={isRadarOpen}
+        onClose={() => setIsRadarOpen(false)}
+        onSelectTrack={(t) => onSelectTrack && onSelectTrack(t, [t])}
+        toggleLike={toggleLike}
+        openAddToPlaylist={openAddToPlaylist}
+        globalTheme={globalTheme}
+      />
     </div>
   </div>
 );

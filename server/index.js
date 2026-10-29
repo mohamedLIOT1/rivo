@@ -628,6 +628,7 @@ app.use('/api/stats',     require('./routes/stats'));
 app.use('/api/discord',   require('./routes/discord'));
 app.use('/api/ai',        require('./routes/ai'));
 app.use('/api/admin',     require('./routes/admin'));
+app.use('/api/recognize', require('./routes/recognize'));
 
 // SoundCloud fallback disabled routes
 app.get(['/api/soundcloud/fallback', '/api/tracks/fallback-stream'], (req, res) => {
