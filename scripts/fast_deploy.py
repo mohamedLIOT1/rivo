@@ -66,6 +66,8 @@ def main():
     upload_file(dist_tar, f"{REMOTE_DIR}/dist.tar.gz")
     upload_file(os.path.join(BASE_DIR, 'server/routes/tracks.js'), f"{REMOTE_DIR}/server/routes/tracks.js")
     upload_file(os.path.join(BASE_DIR, 'server/utils/vocalSeparator.js'), f"{REMOTE_DIR}/server/utils/vocalSeparator.js")
+    upload_file(os.path.join(BASE_DIR, 'server/utils/cloud_separator.py'), f"{REMOTE_DIR}/server/utils/cloud_separator.py")
+    upload_file(os.path.join(BASE_DIR, 'server/utils/helpers.js'), f"{REMOTE_DIR}/server/utils/helpers.js")
     upload_file(os.path.join(BASE_DIR, 'package.json'), f"{REMOTE_DIR}/package.json")
     upload_file(os.path.join(BASE_DIR, 'server/index.js'), f"{REMOTE_DIR}/server/index.js")
     upload_file(os.path.join(BASE_DIR, 'server/ota-manifest.json'), f"{REMOTE_DIR}/server/ota-manifest.json")
