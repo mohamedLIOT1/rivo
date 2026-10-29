@@ -1191,60 +1191,90 @@ router.get('/stream-proxy', async (req, res) => {
   }
 });
 
-// Vocal-Only Stream (Music-Free) with Stems Caching
+// Helper: Resolve track information and canonical stem aliases for vocal isolation
+async function resolveTrackStemInfo(req) {
+  let { id, trackId, url, title, artist, duration } = req.query;
+  trackId = trackId || id;
+
+  let dbTrack = null;
+  if (trackId && mongoose.isValidObjectId(trackId)) {
+    try { dbTrack = await Track.findById(trackId).lean(); } catch {}
+  }
+  if (!dbTrack && (title || artist)) {
+    try {
+      const query = {};
+      if (title && artist) {
+        query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+        query.artist = new RegExp(`^${escapeRegex(artist)}$`, 'i');
+      } else if (title) {
+        query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
+      }
+      dbTrack = await Track.findOne(query).lean();
+    } catch {}
+  }
+  if (dbTrack) {
+    trackId = trackId || String(dbTrack._id);
+    url = url || dbTrack.audioUrl;
+    title = title || dbTrack.title;
+    artist = artist || dbTrack.artist;
+    duration = duration || dbTrack.duration;
+  }
+
+  const aliases = [];
+  if (trackId) aliases.push(String(trackId));
+  if (url) {
+    const vidMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (vidMatch && vidMatch[1]) {
+      aliases.push(`yt_${vidMatch[1]}`);
+      aliases.push(vidMatch[1]);
+    }
+    aliases.push(crypto.createHash('md5').update(url).digest('hex'));
+  }
+  if (title) {
+    const cleanT = String(title).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const cleanA = String(artist || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    if (cleanT) {
+      aliases.push(`ta_${crypto.createHash('md5').update(`${cleanT}_${cleanA}`).digest('hex')}`);
+      aliases.push(crypto.createHash('md5').update(`${title}_${artist}`).digest('hex'));
+    }
+  }
+
+  const primaryKey = aliases[0] || (title ? `ta_${crypto.createHash('md5').update(title).digest('hex')}` : 'unknown_' + Date.now());
+
+  return { trackId, url, title, artist, duration, primaryKey, aliases };
+}
+
+// Check real-time status of vocal isolation
+router.get('/vocal-status', async (req, res) => {
+  try {
+    const { primaryKey, aliases } = await resolveTrackStemInfo(req);
+    const { getVocalIsolationStatus } = require('../utils/vocalSeparator');
+    const status = getVocalIsolationStatus(primaryKey, aliases);
+    res.json({ success: true, stemKey: primaryKey, ...status });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Vocal-Only Stream (Music-Free) with Stems Caching & Async Processing
 router.get('/vocal-stream', async (req, res) => {
   try {
-    let { id, trackId, url, title, artist, duration, json } = req.query;
-    trackId = trackId || id;
+    let { json, priority, prefetch } = req.query;
+    const isPriority = priority === '1' || priority === 'true' || (!prefetch && req.headers['x-rivo-priority']);
+    const { trackId, url, title, artist, duration, primaryKey, aliases } = await resolveTrackStemInfo(req);
+    const { isVocalStemReady, getVocalStemPath, getVocalIsolationStatus, startVocalIsolation } = require('../utils/vocalSeparator');
 
-    let dbTrack = null;
-    if (trackId && mongoose.isValidObjectId(trackId)) {
-      try { dbTrack = await Track.findById(trackId).lean(); } catch {}
-    }
-    if (!dbTrack && (title || artist)) {
-      try {
-        const query = {};
-        if (title && artist) {
-          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
-          query.artist = new RegExp(`^${escapeRegex(artist)}$`, 'i');
-        } else if (title) {
-          query.title = new RegExp(`^${escapeRegex(title)}$`, 'i');
-        }
-        dbTrack = await Track.findOne(query).lean();
-      } catch {}
-    }
-    if (dbTrack) {
-      trackId = trackId || String(dbTrack._id);
-      url = url || dbTrack.audioUrl;
-      title = title || dbTrack.title;
-      artist = artist || dbTrack.artist;
-      duration = duration || dbTrack.duration;
-    }
-
-    const { isVocalStemReady, getVocalStemPath, processVocalIsolation } = require('../utils/vocalSeparator');
-
-    // Generate consistent cache key
-    let stemKey = trackId || '';
-    if (!stemKey && url) {
-      const vidMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-      stemKey = vidMatch ? `yt_${vidMatch[1]}` : crypto.createHash('md5').update(url).digest('hex');
-    }
-    if (!stemKey && (title || artist)) {
-      stemKey = crypto.createHash('md5').update(`${title}_${artist}`).digest('hex');
-    }
-    if (!stemKey) return res.status(400).json({ error: 'Track identifier, URL, or Title/Artist required' });
-
-    // 1. Check if stem is already cached
-    if (isVocalStemReady(stemKey)) {
-      const stemFilePath = getVocalStemPath(stemKey);
+    // 1. Check if stem is already ready
+    const status = getVocalIsolationStatus(primaryKey, aliases);
+    if (status.status === 'ready') {
+      const stemFilePath = getVocalStemPath(primaryKey);
       if (json === 'true' || json === '1') {
-        const baseName = path.basename(stemFilePath);
-        return res.json({ success: true, url: `/uploads/stems/${baseName}`, cached: true });
+        return res.json({ success: true, status: 'ready', url: status.url, cached: true });
       }
       return res.sendFile(stemFilePath);
     }
 
-    // 2. Resolve playable source audio if needed
+    // 2. Resolve source audio if needed
     let sourceAudioPath = url || '';
     if (sourceAudioPath.startsWith('/uploads/') || sourceAudioPath.startsWith('uploads/')) {
       const resolvedUpload = safeResolveUpload(sourceAudioPath, uploadsDir);
@@ -1256,7 +1286,21 @@ router.get('/vocal-stream', async (req, res) => {
       if (mUrl) sourceAudioPath = decodeURIComponent(mUrl);
     }
 
-    // If sourceAudioPath is still empty or a youtube page url, resolve direct stream
+    // Fast check: look directly in uploads/audio-cache for video ID if present
+    const cacheDir = path.join(uploadsDir, 'audio-cache');
+    const vidMatch = (sourceAudioPath || '').match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i) ||
+                     (url || '').match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+    if (vidMatch && vidMatch[1]) {
+      const vid = vidMatch[1];
+      const localM4a = path.join(cacheDir, `${vid}.m4a`);
+      const localMp3 = path.join(cacheDir, `${vid}.mp3`);
+      if (fs.existsSync(localM4a) && fs.statSync(localM4a).size > 20000) {
+        sourceAudioPath = localM4a;
+      } else if (fs.existsSync(localMp3) && fs.statSync(localMp3).size > 20000) {
+        sourceAudioPath = localMp3;
+      }
+    }
+
     if (!sourceAudioPath || sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/')) {
       const directStream = await resolveOfficialYouTubeAudioStream(url || trackId || '', title || '', artist || '', { duration });
       const resolvedUrl = typeof directStream === 'object' && directStream?.url ? directStream.url : (typeof directStream === 'string' ? directStream : (directStream ? String(directStream) : ''));
@@ -1269,52 +1313,172 @@ router.get('/vocal-stream', async (req, res) => {
       }
     }
 
-    // Guarantee sourceAudioPath is not a raw watch URL that ffmpeg cannot download
-    if (sourceAudioPath && (sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/'))) {
-      const vidMatch = sourceAudioPath.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-      if (vidMatch && vidMatch[1]) {
-        const vid = vidMatch[1];
-        const cacheDir = path.join(uploadsDir, 'audio-cache');
-        if (!fs.existsSync(cacheDir)) {
-          try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
-        }
-        const localTarget = path.join(cacheDir, `${vid}.m4a`);
-        if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
-          sourceAudioPath = localTarget;
-        } else {
-          try {
-            const { getYtDlpBin, getCookiesPath } = require('../utils/helpers');
-            const bin = getYtDlpBin();
-            const cp = getCookiesPath();
-            const ytdlpArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba[ext=m4a]/ba/bestaudio', '-o', localTarget];
-            if (cp) ytdlpArgs.splice(1, 0, '--cookies', cp);
-            ytdlpArgs.push(`https://www.youtube.com/watch?v=${vid}`);
-            await new Promise((resolve) => {
-              execFile(bin, ytdlpArgs, { timeout: 45000 }, () => resolve());
-            });
-            if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
-              sourceAudioPath = localTarget;
-            }
-          } catch (dlErr) {
-            console.error('[VocalStream] Direct yt-dlp download fallback error:', dlErr.message);
+    // Guarantee local m4a cache if YouTube watch URL or Video ID
+    let targetVid = null;
+    const activeVidMatch = (sourceAudioPath || '').match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i) ||
+                           (url || '').match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i) ||
+                           (trackId && /^[a-zA-Z0-9_-]{11}$/.test(trackId) && !mongoose.isValidObjectId(trackId) ? [null, trackId] : null);
+
+    if (activeVidMatch && activeVidMatch[1]) {
+      targetVid = activeVidMatch[1];
+    } else if (typeof directStream === 'object' && directStream?.videoId) {
+      targetVid = String(directStream.videoId);
+    } else if (!sourceAudioPath || sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/')) {
+      if (title || artist) {
+        try {
+          const { searchYouTubeId } = require('../utils/helpers');
+          const sId = await searchYouTubeId({ artist, title, targetDuration: duration });
+          if (sId) {
+            const rawId = String(sId).trim();
+            const m = rawId.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+            targetVid = m ? m[1] : (/^[a-zA-Z0-9_-]{11}$/.test(rawId) ? rawId : null);
           }
+        } catch {}
+      }
+    }
+
+    if (targetVid && /^[a-zA-Z0-9_-]{11}$/.test(targetVid)) {
+      if (!fs.existsSync(cacheDir)) {
+        try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
+      }
+      const localTarget = path.join(cacheDir, `${targetVid}.m4a`);
+      if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
+        sourceAudioPath = localTarget;
+      } else {
+        try {
+          const { getYtDlpBin, getCookiesPath } = require('../utils/helpers');
+          const bin = getYtDlpBin();
+          const cp = getCookiesPath();
+          const ytdlpArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '-f', 'ba[ext=m4a]/ba/bestaudio', '-o', localTarget];
+          if (cp) {
+            ytdlpArgs.splice(1, 0, '--cookies', cp);
+          } else {
+            ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+          }
+          ytdlpArgs.push(`https://www.youtube.com/watch?v=${targetVid}`);
+          await new Promise((resolve) => {
+            execFile(bin, ytdlpArgs, { timeout: 45000 }, () => resolve());
+          });
+          if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
+            sourceAudioPath = localTarget;
+          }
+        } catch (dlErr) {
+          console.error('[VocalStream] Direct yt-dlp download fallback error:', dlErr.message);
         }
       }
     }
 
-    if (!sourceAudioPath) {
-      return res.status(404).json({ error: 'Could not resolve source audio to isolate' });
+    // STRICT CHECK: Never pass raw YouTube web URLs to ffmpeg
+    if (!sourceAudioPath || sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/')) {
+      return res.status(422).json({ error: 'Audio source could not be resolved for vocal separation' });
     }
 
-    // 3. Process vocal isolation
-    const result = await processVocalIsolation(sourceAudioPath, stemKey);
+    // 3. Trigger async vocal isolation in background with Concurrency = 1 Queue
+    const job = startVocalIsolation(sourceAudioPath, primaryKey, aliases, isPriority);
+
     if (json === 'true' || json === '1') {
-      return res.json({ success: true, url: result.url, cached: result.cached });
+      return res.json({
+        success: false,
+        status: job.status,
+        progress: job.progress || 0,
+        eta: job.eta || 'Preparing audio...',
+        stemKey: primaryKey
+      });
     }
-    return res.sendFile(result.path);
+
+    return res.status(202).json({
+      success: false,
+      status: job.status,
+      progress: job.progress || 0,
+      eta: job.eta || 'Preparing audio...',
+      stemKey: primaryKey
+    });
   } catch (err) {
     console.error('[VocalStream] Error:', err);
     res.status(500).json({ error: 'Vocal separation failed: ' + err.message });
+  }
+});
+
+// External GPU Worker (Google Colab / Cloud Worker) endpoints
+router.get('/vocal-worker/next', (req, res) => {
+  try {
+    const { getNextWorkerJob } = require('../utils/vocalSeparator');
+    const workerId = req.query.worker || 'Colab-Worker';
+    const job = getNextWorkerJob(workerId);
+    if (!job) {
+      return res.json({ hasJob: false });
+    }
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.json({
+      hasJob: true,
+      stemKey: job.stemKey,
+      aliases: job.aliases || [],
+      title: job.title || job.stemKey,
+      audioUrl: `${baseUrl}/api/tracks/vocal-worker/audio/${encodeURIComponent(job.stemKey)}`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/vocal-worker/audio/:stemKey', (req, res) => {
+  try {
+    const { getSafeStemKey, getJobInputSource } = require('../utils/vocalSeparator');
+    const safe = getSafeStemKey(req.params.stemKey);
+    const jobSource = getJobInputSource(safe);
+    if (jobSource && fs.existsSync(jobSource)) {
+      return res.sendFile(jobSource);
+    }
+    const cacheDir = path.join(uploadsDir, 'audio-cache');
+    let audioPath = null;
+    if (fs.existsSync(cacheDir)) {
+      const files = fs.readdirSync(cacheDir);
+      const m = files.find(f => f.startsWith(safe) || safe.includes(path.parse(f).name));
+      if (m) audioPath = path.join(cacheDir, m);
+    }
+    if (!audioPath) {
+      const stemsDir = path.join(uploadsDir, 'stems');
+      if (fs.existsSync(stemsDir)) {
+        const stemDirs = fs.readdirSync(stemsDir);
+        for (const d of stemDirs) {
+          if (d.startsWith(`tmp_${safe}`)) {
+            const wav = path.join(stemsDir, d, 'clean_input.wav');
+            if (fs.existsSync(wav)) { audioPath = wav; break; }
+          }
+        }
+      }
+    }
+    if (audioPath && fs.existsSync(audioPath)) {
+      return res.sendFile(audioPath);
+    }
+    res.status(404).json({ error: 'Source audio not found on server' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/vocal-worker/complete', upload.single('vocalFile'), (req, res) => {
+  try {
+    const { stemKey, aliases, worker } = req.body;
+    if (!stemKey || !req.file) {
+      return res.status(400).json({ error: 'Missing stemKey or vocalFile' });
+    }
+    const { completeWorkerJob } = require('../utils/vocalSeparator');
+    const aliasList = aliases ? aliases.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const success = completeWorkerJob(stemKey, req.file.path, aliasList, worker || 'Colab-Worker');
+    try { fs.unlinkSync(req.file.path); } catch {}
+    res.json({ success });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/vocal-worker/status', (req, res) => {
+  try {
+    const { getWorkerStatus } = require('../utils/vocalSeparator');
+    res.json({ success: true, ...getWorkerStatus() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -1363,6 +1527,27 @@ router.get('/download', async (req, res) => {
     const cleanArtist = sanitizeTag(artist, 'Artist').split(/[|/]/)[0].trim();
     const cleanTitle = sanitizeTag(title, 'Track');
     const cleanFilename = `${cleanArtist} - ${cleanTitle}`;
+
+    // Vocal-Only Mode Download Handler
+    const isVocalOnlyDownload = req.query.vocalOnly === 'true' || req.query.vocalOnly === '1';
+    if (isVocalOnlyDownload) {
+      const { isVocalStemReady, getVocalStemPath } = require('../utils/vocalSeparator');
+      const { primaryKey, aliases } = await resolveTrackStemInfo(req);
+      const allKeys = [primaryKey, ...aliases];
+      for (const k of allKeys) {
+        if (isVocalStemReady(k)) {
+          const stemFile = getVocalStemPath(k);
+          const vocalFilename = `${cleanFilename} [Vocal Only]`;
+          const safeAscii = vocalFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'vocal_track';
+          res.set({
+            'Content-Type': 'audio/mpeg',
+            'Content-Disposition': `attachment; filename="${safeAscii}.mp3"; filename*=UTF-8''${encodeURIComponent(vocalFilename)}.mp3`,
+            'Access-Control-Allow-Origin': '*'
+          });
+          return res.sendFile(stemFile);
+        }
+      }
+    }
 
     // Direct uploaded files with path traversal protection
     if (url && (url.startsWith('/uploads/') || url.includes('/uploads/'))) {

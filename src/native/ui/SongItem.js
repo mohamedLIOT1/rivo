@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { getTrackMusicalData, getCamelotColor } from '../utils/musicAnalysis';
+import { isQuranContent } from '../../utils/quranUtils';
 
 export default React.memo(function SongItem({
   track,
@@ -43,7 +44,15 @@ export default React.memo(function SongItem({
     return Boolean(curTitle && tTitle && curTitle === tTitle && (!curArtist || !tArtist || curArtist === tArtist));
   });
 
-  const shouldShowBpmKey = propShowBpmKey !== undefined ? propShowBpmKey : isMixMode;
+  const isQuran = Boolean(
+    track.isQuran ||
+    track.isQuranTrack ||
+    (typeof isQuranContent === 'function' && isQuranContent(track)) ||
+    (track.album && /quran|قرآن/i.test(track.album)) ||
+    (track.title && /سورة|سوره|قرآن|قران/i.test(track.title))
+  );
+
+  const shouldShowBpmKey = !isQuran && (propShowBpmKey === true);
   const musicalData = React.useMemo(() => shouldShowBpmKey ? getTrackMusicalData(track) : null, [shouldShowBpmKey, track]);
   const camelotColor = React.useMemo(() => musicalData ? getCamelotColor(musicalData.key) : null, [musicalData]);
 

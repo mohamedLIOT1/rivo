@@ -173,6 +173,7 @@ export default function MixesScreen({ onTrackAction }) {
                   key={track._id || track.id || idx}
                   track={track}
                   index={idx + 1}
+                  showBpmKey={true}
                   onMorePress={() => onTrackAction && onTrackAction(track)}
                 />
               ))}

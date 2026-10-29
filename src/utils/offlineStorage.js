@@ -377,8 +377,24 @@ export async function saveTrackOffline(track, options = {}) {
   try {
     let targetUrl = track.audioUrl || '';
     let audioBlob = null;
+    const isVocalOnlyActive = typeof window !== 'undefined' && localStorage.getItem('rivo_vocal_only') === 'true';
 
     if (signal?.aborted) return null;
+
+    // 0. If Vocal-Only Mode is active, prioritize fetching isolated vocal stem
+    if (isVocalOnlyActive) {
+      try {
+        const vocalStreamUrl = `${API_BASE_URL}/api/tracks/vocal-stream?trackId=${encodeURIComponent(trackId)}&url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}`;
+        const vocalRes = await fetch(vocalStreamUrl, { signal }).catch(() => null);
+        if (vocalRes && vocalRes.ok) {
+          const ct = vocalRes.headers.get('content-type') || '';
+          if (!ct.includes('html') && !ct.includes('json')) {
+            const b = await readResponseWithProgress(vocalRes, signal, options?.onProgress);
+            if (b && b.size > 20000) audioBlob = b;
+          }
+        }
+      } catch (ve) {}
+    }
 
     // 1. Data URI
     if (targetUrl.startsWith('data:')) {
@@ -442,7 +458,7 @@ export async function saveTrackOffline(track, options = {}) {
     if (!audioBlob) {
       try {
         if (signal?.aborted) return null;
-        const serverDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}`;
+        const serverDownloadUrl = `${API_BASE_URL}/api/tracks/download?url=${encodeURIComponent(targetUrl)}&title=${encodeURIComponent(track.title || '')}&artist=${encodeURIComponent(track.artist || '')}&id=${encodeURIComponent(trackId)}${isVocalOnlyActive ? '&vocalOnly=true' : ''}`;
         const serverRes = await fetch(serverDownloadUrl, { signal }).catch(() => null);
         if (serverRes && serverRes.ok) {
           const ct = serverRes.headers.get('content-type') || '';

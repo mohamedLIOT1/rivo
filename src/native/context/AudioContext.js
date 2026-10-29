@@ -16,7 +16,7 @@ import {
   updateDownloadedTrackLyrics,
   getTrackDedupeKey,
 } from '../services/downloadManager';
-import { resolveAudioStream } from '../services/youtubeResolver';
+import { resolveAudioStream, getStreamDurationFromCache } from '../services/youtubeResolver';
 import { showMediaNotification, updateMediaNotification, hideMediaNotification, subscribeToMediaActions } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
 import { useToast } from './ToastContext';
@@ -169,6 +169,36 @@ export const AudioProvider = ({ children }) => {
   const progressRef = useRef({ currentTime: 0, duration: 0 });
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
+  // ── Vocal-Only Mode State (AI Stem Isolation) ──
+  const [isVocalOnly, setIsVocalOnlyState] = useState(false);
+  const [vocalIsolationStatus, setVocalIsolationStatus] = useState(null);
+  const updateVocalStatus = (status) => {
+    setVocalIsolationStatus(status);
+  };
+  const isVocalOnlyRef = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@rivo_vocal_only').then((val) => {
+      if (val !== null) {
+        const b = val === 'true';
+        isVocalOnlyRef.current = b;
+        setIsVocalOnlyState(b);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const setIsVocalOnly = (val) => {
+    const b = Boolean(val);
+    isVocalOnlyRef.current = b;
+    setIsVocalOnlyState(b);
+    AsyncStorage.setItem('@rivo_vocal_only', String(b)).catch(() => {});
+  };
+
+  const toggleVocalOnly = () => {
+    setIsVocalOnly(!isVocalOnlyRef.current);
+  };
+
+
 
   // ── DJ Mix Mode & Crossfade State (Rivo-style 0-12s) ──
   const [isMixMode, setIsMixModeState] = useState(true);
@@ -279,7 +309,7 @@ export const AudioProvider = ({ children }) => {
         if (nTrack.resolvedAudioUrl && nTrack.resolvedAudioUrl.startsWith('http')) {
           nextUri = nTrack.resolvedAudioUrl;
         } else {
-          nextUri = await resolveAudioStream(nTrack).catch(() => null);
+          nextUri = await resolveAudioStream(nTrack, isVocalOnlyRef.current).catch(() => null);
         }
       }
 
@@ -290,7 +320,7 @@ export const AudioProvider = ({ children }) => {
       if (nextUri.startsWith('/')) nextUri = `${API_BASE_URL}${nextUri}`;
 
       const soundSource = { uri: nextUri };
-      const { sound } = await Audio.Sound.createAsync(
+      const { sound, status } = await Audio.Sound.createAsync(
         soundSource,
         {
           shouldPlay: false,
@@ -813,7 +843,12 @@ export const AudioProvider = ({ children }) => {
     }
 
     // ─── TRACK COMPLETION / NEXT TRACK / REPEAT ONE HANDLER ───
-    if (status.didJustFinish && ((status.positionMillis || 0) > 500 || (status.durationMillis || 0) > 500)) {
+    const isPlaybackFinished = Boolean(
+      status.didJustFinish ||
+      (statusDurSec > 5 && newCurrentTime >= statusDurSec - 1 && !status.isPlaying && !status.isBuffering) ||
+      (status.positionMillis > 3000 && status.durationMillis > 3000 && status.positionMillis >= status.durationMillis - 600)
+    );
+    if (isPlaybackFinished && ((status.positionMillis || 0) > 500 || (status.durationMillis || 0) > 500)) {
       const finishedTrack = currentTrackRef.current;
       if (finishedTrack && !isOfflineRef.current) {
         if (typeof autoPersistFinishedTrack === 'function') {
@@ -1421,9 +1456,11 @@ export const AudioProvider = ({ children }) => {
       requestSeq,
     };
     setProgress({ currentTime: safeTargetSec, duration: Number(track.duration || 0) });
+    setVocalIsolationStatus(null);
 
     if (isQuranContent(track)) {
-      // 📿 Holy Quran Safeguard: Immediately disengage DJ mix mode & preloaded buffers
+      // 📿 Holy Quran Safeguard: Immediately disengage DJ mix mode & vocal isolation
+      setVocalIsolationStatus(null);
       isMixModeRef.current = false;
       setIsMixModeState(false);
       activeTransRef.current = {};
@@ -1598,7 +1635,14 @@ export const AudioProvider = ({ children }) => {
           showToast(`"${track.title || 'Track'}" is not cached offline`, 'warning');
           return;
         }
-        uri = await resolveAudioStream(track);
+        uri = await resolveAudioStream(track, isQuranContent(track) ? false : isVocalOnlyRef.current, isQuranContent(track) ? null : updateVocalStatus);
+        const cachedDur = getStreamDurationFromCache(trackId);
+        if (cachedDur && cachedDur > 0) {
+          track = { ...track, duration: cachedDur };
+          playbackStatusRef.current.duration = cachedDur;
+          progressRef.current.duration = cachedDur;
+          setProgress(prev => ({ ...prev, duration: cachedDur }));
+        }
       }
 
       if (playRequestSeqRef.current !== requestSeq || String(currentTrackRef.current?._id || currentTrackRef.current?.id) !== trackId || soundLoadIdRef.current !== currentLoadId || abortController.signal.aborted) {
@@ -1684,6 +1728,14 @@ export const AudioProvider = ({ children }) => {
 
       soundRef.current = sound;
       loadedTrackIdRef.current = trackId;
+      if (status && status.durationMillis && status.durationMillis > 1000) {
+        const authenticSec = Math.floor(status.durationMillis / 1000);
+        track = { ...track, duration: authenticSec };
+        if (currentTrackRef.current) currentTrackRef.current.duration = authenticSec;
+        playbackStatusRef.current.duration = authenticSec;
+        progressRef.current.duration = authenticSec;
+        setProgress(prev => ({ ...prev, duration: authenticSec }));
+      }
       // Volume was already passed to createAsync directly
 
       // If user/remote paused while sound was creating:
@@ -2520,7 +2572,7 @@ export const AudioProvider = ({ children }) => {
     tracks: queue.length > 0 ? queue : INITIAL_TRACKS,
     sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume,
 
-    isMixMode, setIsMixMode, mixDuration, setMixDuration, mixStyle, setMixStyle, triggerManualMix, activeTransitions, setActiveTransitions,
+    isVocalOnly, setIsVocalOnly, toggleVocalOnly, vocalIsolationStatus, isMixMode, setIsMixMode, mixDuration, setMixDuration, mixStyle, setMixStyle, triggerManualMix, activeTransitions, setActiveTransitions,
     playTrack, playPlaylist, togglePlay, seekTo, isShuffle, setIsShuffle, toggleShuffle, toggleRepeat, playNextTrack, playPrevTrack,
     addToQueue, addMultipleToQueue, setQueue, removeFromQueue, reorderQueue, clearQueue,
     startSleepTimer, cancelSleepTimer,
@@ -2531,7 +2583,7 @@ export const AudioProvider = ({ children }) => {
     syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState,
     jamSession, setJamSync,
     remoteDevicePlayback,
-  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, isMixMode, mixDuration, mixStyle, activeTransitions, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
+  }), [currentTrack, isPlaying, isLoading, isShuffle, repeatMode, isOfflineMode, downloadedTracks, downloadedTrackIds, isTrackDownloaded, downloadingIds, queue, sleepTimerRemaining, lyrics, isLoadingLyrics, setLyrics, volume, setVolume, isVocalOnly, vocalIsolationStatus, isMixMode, mixDuration, mixStyle, activeTransitions, autoDownloadFinished, toggleAutoDownloadFinished, syncFromOnlineTrack, pauseNativePlayback, syncRemotePlayState, jamSession, setJamSync, remoteDevicePlayback, removeDownloadedTrack, removeDownloadedTracksBatch, registerFullPlayerHandler, openFullPlayer]);
 
   return (
     <AudioContext.Provider value={controls}>

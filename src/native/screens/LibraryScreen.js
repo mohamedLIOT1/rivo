@@ -810,6 +810,7 @@ export default function LibraryScreen({
                 <SongItem
                   track={item}
                   index={index + 1}
+                  showBpmKey={Boolean(!isSelectedPlQuran && isMixActive)}
                   onPlay={() => {
                     if (selectedView === 'liked') {
                       if (typeof playPlaylist === 'function') {

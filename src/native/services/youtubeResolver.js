@@ -1,3 +1,4 @@
+import { isQuranContent } from '../../utils/quranUtils';
 import * as FileSystem from 'expo-file-system';
 import { API_BASE_URL } from '../config';
 
@@ -76,19 +77,20 @@ export function getCleanQueries(title = '', artist = '') {
  * 3. Resolves authentic official YouTube stream via backend proxy.
  * 4. Resolves via server stream resolver.
  */
-export const resolveAudioStream = async (track) => {
+export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStatus = null) => {
   if (!track) return null;
 
   const trackId = String(track._id || track.id || '');
-  if (trackId && streamCache.has(trackId)) {
-    const cached = streamCache.get(trackId);
+  const cacheKey = (isVocalOnly && !isQuranContent(track)) ? `${trackId}_vocal` : trackId;
+  if (cacheKey && streamCache.has(cacheKey)) {
+    const cached = streamCache.get(cacheKey);
     // If it's a file URI, ensure it still exists on disk
     if (cached.startsWith('file://')) {
       try {
         const info = await FileSystem.getInfoAsync(cached);
         if (info.exists && info.size > 10000) return cached;
       } catch {}
-      streamCache.delete(trackId);
+      streamCache.delete(cacheKey);
     } else {
       return cached;
     }
@@ -100,7 +102,7 @@ export const resolveAudioStream = async (track) => {
     try {
       const info = await FileSystem.getInfoAsync(localUri);
       if (info.exists && info.size > 10000) {
-        if (trackId) streamCache.set(trackId, localUri);
+        if (cacheKey) streamCache.set(cacheKey, localUri);
         return localUri;
       }
     } catch {}
@@ -130,7 +132,7 @@ export const resolveAudioStream = async (track) => {
       if (dlUri && dlUri.startsWith('file://')) {
         const info = await FileSystem.getInfoAsync(dlUri);
         if (info.exists && info.size > 10000) {
-          if (trackId) streamCache.set(trackId, dlUri);
+          if (cacheKey) streamCache.set(cacheKey, dlUri);
           return dlUri;
         }
       }
@@ -144,9 +146,115 @@ export const resolveAudioStream = async (track) => {
     rawUrl.includes('/uploads/')
   ) {
     const fullUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : (rawUrl.startsWith('http') ? rawUrl : `${API_BASE_URL}/${rawUrl}`);
-    if (trackId) streamCache.set(trackId, fullUrl);
+    if (cacheKey) streamCache.set(cacheKey, fullUrl);
     if (track.duration && trackId) streamDurationCache.set(trackId, track.duration);
     return fullUrl;
+  }
+
+    // 1d. Vocal-Only Mode: check and stream isolated vocal stem
+  if (isVocalOnly && !isQuranContent(track)) {
+    try {
+      const qTitle = encodeURIComponent(cleanTitle || rawTitle || '');
+      const qArtist = encodeURIComponent(cleanArtist || rawArtist || '');
+      const qDur = encodeURIComponent(track.duration || '');
+      const qUrl = encodeURIComponent(rawUrl || '');
+
+      // 1. Check if stem is already ready
+      const statusRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`);
+      let statusData = statusRes.ok ? await statusRes.json() : null;
+      if (statusData?.status === 'ready' && statusData.url) {
+        if (typeof onVocalStatus === 'function') onVocalStatus(null);
+        const fullVocalUrl = statusData.url.startsWith('/') ? `${API_BASE_URL}${statusData.url}` : statusData.url;
+        if (cacheKey) streamCache.set(cacheKey, fullVocalUrl);
+        return fullVocalUrl;
+      }
+
+      // 2. Not ready: notify UI with real-time progress banner
+      if (typeof onVocalStatus === 'function') {
+        onVocalStatus({
+          isProcessing: true,
+          trackTitle: track.title,
+          progress: statusData?.progress || 10,
+          eta: 'Preparing audio...'
+        });
+      }
+
+      // 3. Trigger priority isolation on server
+      fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`).catch(() => {});
+
+      // 4. Poll every 1.5s until ready
+      let pollAttempts = 0;
+      let displayProgress = Math.max(12, statusData?.progress || 12);
+      while (pollAttempts < 35) {
+        await new Promise(r => setTimeout(r, 1400));
+        pollAttempts++;
+
+        try {
+          const pollRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`);
+          if (pollRes.ok) {
+            const curData = await pollRes.json();
+            if (curData.status === 'ready' && curData.url) {
+              if (typeof onVocalStatus === 'function') {
+                onVocalStatus({
+                  isProcessing: true,
+                  trackTitle: track.title,
+                  progress: 100,
+                  eta: 'Ready!'
+                });
+                setTimeout(() => onVocalStatus(null), 1000);
+              }
+              const fullVocalUrl = curData.url.startsWith('/') ? `${API_BASE_URL}${curData.url}` : curData.url;
+              if (cacheKey) streamCache.set(cacheKey, fullVocalUrl);
+              return fullVocalUrl;
+            } else if (curData.status === 'failed') {
+              console.warn('[youtubeResolver] Server vocal isolation failed, playing original audio');
+              if (typeof onVocalStatus === 'function') onVocalStatus(null);
+              break;
+            } else if (curData.status === 'processing') {
+              const realProgress = Number(curData.progress) || 0;
+              if (realProgress > 0) {
+                displayProgress = realProgress;
+              } else {
+                displayProgress = Math.min(92, displayProgress + 3);
+              }
+              if (typeof onVocalStatus === 'function') {
+                onVocalStatus({
+                  isProcessing: true,
+                  trackTitle: track.title,
+                  progress: Math.min(99, displayProgress),
+                  eta: curData.eta || (displayProgress > 60 ? 'Refining vocals...' : 'Isolating vocals...')
+                });
+              }
+            } else if (curData.status === 'queued') {
+              if (typeof onVocalStatus === 'function') {
+                onVocalStatus({
+                  isProcessing: true,
+                  trackTitle: track.title,
+                  progress: 10,
+                  eta: 'Queued in line...'
+                });
+              }
+            } else if (curData.status === 'idle') {
+              displayProgress = Math.min(30, displayProgress + 2);
+              if (typeof onVocalStatus === 'function') {
+                onVocalStatus({
+                  isProcessing: true,
+                  trackTitle: track.title,
+                  progress: displayProgress,
+                  eta: 'Buffering audio...'
+                });
+              }
+            }
+          }
+        } catch (pollErr) {}
+      }
+
+      if (typeof onVocalStatus === 'function') onVocalStatus(null);
+    } catch (e) {
+      if (typeof onVocalStatus === 'function') onVocalStatus(null);
+    }
+  } else if (isQuranContent(track)) {
+    if (typeof onVocalStatus === 'function') onVocalStatus(null);
   }
 
   // 2. Direct MP3/M4A/AAC stream URL (non-YouTube)
@@ -167,7 +275,7 @@ export const resolveAudioStream = async (track) => {
   // 3. Server-side Stream Resolution (Primary: /stream endpoint checks local cache, uploads & DB instantly)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
     const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
     const albumParam = track.album ? `&album=${encodeURIComponent(track.album)}` : '';
 
@@ -188,6 +296,7 @@ export const resolveAudioStream = async (track) => {
           if (trackId) streamCache.set(trackId, streamUrl);
           if (data?.duration && trackId) {
             streamDurationCache.set(trackId, data.duration);
+            track.duration = data.duration;
           }
           return streamUrl;
         }
@@ -209,6 +318,7 @@ export const resolveAudioStream = async (track) => {
           if (trackId) streamCache.set(trackId, cand);
           if (d.duration && trackId) {
             streamDurationCache.set(trackId, d.duration);
+            track.duration = d.duration;
           }
           return cand;
         }
@@ -234,9 +344,8 @@ export const resolveAudioStream = async (track) => {
       if (searchRes?.videoId) {
         ytId = searchRes.videoId;
         if (searchRes.duration && trackId) {
-          if (!targetDuration || Math.abs(searchRes.duration - targetDuration) <= 60) {
-            streamDurationCache.set(trackId, searchRes.duration);
-          }
+          streamDurationCache.set(trackId, searchRes.duration);
+          track.duration = searchRes.duration;
         }
       }
     } catch (e) {}
@@ -250,9 +359,8 @@ export const resolveAudioStream = async (track) => {
         if (trackId) {
           streamCache.set(trackId, directStream);
           if (directResult?.duration) {
-            if (!targetDuration || Math.abs(directResult.duration - targetDuration) <= 60) {
-              streamDurationCache.set(trackId, directResult.duration);
-            }
+            streamDurationCache.set(trackId, directResult.duration);
+            track.duration = directResult.duration;
           }
         }
         return directStream;

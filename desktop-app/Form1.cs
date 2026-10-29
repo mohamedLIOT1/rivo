@@ -362,7 +362,7 @@ public partial class Form1 : Form
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            string currentVersion = "2.1.6";
+            string currentVersion = typeof(Form1).Assembly.GetName().Version?.ToString(3) ?? "2.2.0";
             string remoteVersion = "";
             string downloadUrl = "https://rivo-m.duckdns.org/downloads/Rivo.exe";
             string notes = "";

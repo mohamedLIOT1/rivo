@@ -54,7 +54,7 @@ const clientStreamCache = new Map();
 const activeFullTrackCache = new Map();
 const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
-export async function resolvePlayableAudioStream(track, signal = null) {
+export async function resolvePlayableAudioStream(track, signal = null, isPrefetch = false) {
   if (!track) return null;
   const isVocalOnly = typeof window !== 'undefined' && localStorage.getItem('rivo_vocal_only') === 'true';
   const trackId = String(track.id || track._id || '');
@@ -68,7 +68,7 @@ export async function resolvePlayableAudioStream(track, signal = null) {
     }
   }
 
-  const result = await doResolvePlayableAudioStream(track, signal, isVocalOnly);
+  const result = await doResolvePlayableAudioStream(track, signal, isVocalOnly, isPrefetch);
   if (cacheKey && result?.url) {
     clientStreamCache.set(cacheKey, { data: result, timestamp: Date.now() });
     try {
@@ -112,7 +112,7 @@ async function _skip_rest() {
 }
 
 // ── Direct Audio Stream Resolver (HTML5 <audio> & Web Audio API) ──
-async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = false) {
+async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = false, isPrefetch = false) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
   let targetUrl = track.resolvedAudioUrl || track.audioUrl || '';
@@ -120,29 +120,128 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   // Vocal-Only Mode: check and stream isolated vocal stem
   const isQuran = isQuranContent(track);
   if (isVocalOnly && !isQuran) {
+    const dispatchVocalStatus = (statusObj) => {
+      if (isPrefetch) return;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('rivo-vocal-status-update', { detail: statusObj }));
+      }
+    };
+
     try {
       const qTitle = encodeURIComponent(track.title || '');
       const qArtist = encodeURIComponent(track.artist || '');
       const qDur = encodeURIComponent(track.duration || '');
       const qUrl = encodeURIComponent(targetUrl || '');
-      const vRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1`, { signal });
-      if (vRes.ok) {
-        const vData = await vRes.json();
-        if (vData.success && vData.url) {
-          const fullVocalUrl = vData.url.startsWith('/') ? `${API_BASE_URL}${vData.url}` : vData.url;
-          return {
-            url: fullVocalUrl,
-            duration: sanitizeDuration(track.duration, 210),
-            cover: normalizeCoverUrl(track.cover || track.coverUrl),
-            isVocalOnly: true
-          };
-        }
+
+      // 1. Initial status check
+      const statusRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`, { signal });
+      let statusData = statusRes.ok ? await statusRes.json() : null;
+
+      if (statusData?.status === 'ready' && statusData.url) {
+        dispatchVocalStatus(null);
+        const fullVocalUrl = statusData.url.startsWith('/') ? `${API_BASE_URL}${statusData.url}` : statusData.url;
+        return {
+          url: fullVocalUrl,
+          duration: sanitizeDuration(track.duration, 210),
+          cover: normalizeCoverUrl(track.cover || track.coverUrl),
+          isVocalOnly: true
+        };
       }
-      console.warn('[AudioContext] Vocal stream resolve non-OK status:', vRes.status);
+
+      // If this is a background prefetch and stem is not yet ready,
+      // queue background isolation quietly and exit immediately without blocking or polling
+      if (isPrefetch) {
+        fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&prefetch=1`, { signal }).catch(() => {});
+        return null;
+      }
+
+      // 2. Trigger isolation for active track (Priority 1)
+      dispatchVocalStatus({
+        isProcessing: true,
+        trackTitle: track.title,
+        progress: statusData?.progress || 1,
+        eta: statusData?.eta || 'Preparing audio...'
+      });
+
+      // Kick off priority background isolation on server
+      fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`, { signal }).catch(() => {});
+
+      // 3. Poll status every 1.5s until ready or cancelled
+      let pollAttempts = 0;
+      let displayProgress = Math.max(8, statusData?.progress || 8);
+      while (!signal?.aborted && pollAttempts < 1200) {
+        await new Promise(r => setTimeout(r, 1500));
+        if (signal?.aborted) break;
+
+        const checkRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`, { signal });
+        if (checkRes.ok) {
+          const curData = await checkRes.json();
+          if (curData.status === 'ready' && curData.url) {
+            dispatchVocalStatus({
+              isProcessing: true,
+              trackTitle: track.title,
+              progress: 100,
+              eta: 'Ready!'
+            });
+            setTimeout(() => dispatchVocalStatus(null), 1200);
+            const fullVocalUrl = curData.url.startsWith('/') ? `${API_BASE_URL}${curData.url}` : curData.url;
+            return {
+              url: fullVocalUrl,
+              duration: sanitizeDuration(track.duration, 210),
+              cover: normalizeCoverUrl(track.cover || track.coverUrl),
+              isVocalOnly: true
+            };
+          } else if (curData.status === 'processing') {
+            const realProgress = Number(curData.progress) || 0;
+            if (realProgress > 0) {
+              displayProgress = realProgress;
+            } else {
+              displayProgress = Math.min(30, displayProgress + 2);
+            }
+            dispatchVocalStatus({
+              isProcessing: true,
+              trackTitle: track.title,
+              progress: Math.min(99, displayProgress),
+              eta: curData.eta || (displayProgress > 50 ? 'Extracting pure vocals...' : 'Isolating vocals with AI...')
+            });
+          } else if (curData.status === 'queued') {
+            dispatchVocalStatus({
+              isProcessing: true,
+              trackTitle: track.title,
+              progress: 5,
+              eta: curData.eta || 'Queued behind active isolation...'
+            });
+          } else if (curData.status === 'failed') {
+            dispatchVocalStatus({
+              isProcessing: false,
+              error: 'Failed to isolate vocals'
+            });
+            setTimeout(() => dispatchVocalStatus(null), 4000);
+            return null;
+          } else {
+            // If still preparing / idle, gently show progress and retry kickoff every 4 attempts
+            displayProgress = Math.min(15, displayProgress + 1);
+            dispatchVocalStatus({
+              isProcessing: true,
+              trackTitle: track.title,
+              progress: displayProgress,
+              eta: 'Preparing audio stream...'
+            });
+            if (pollAttempts > 0 && pollAttempts % 4 === 0) {
+              fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`, { signal }).catch(() => {});
+            }
+          }
+        }
+        pollAttempts++;
+      }
     } catch (e) {
-      if (e.name === 'AbortError') throw e;
+      if (e.name === 'AbortError') {
+        dispatchVocalStatus(null);
+        throw e;
+      }
       console.warn('[AudioContext] Vocal stream resolve notice:', e.message);
     }
+    dispatchVocalStatus(null);
     // Strictly prevent fallback to playing with background music when user enabled Vocal-Only mode
     return null;
   }
@@ -360,6 +459,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [jamSession, setJamSessionState] = useState(null);
   const [remoteDevicePlayback, setRemoteDevicePlayback] = useState(null);
   const [isAutoplayBlocked, setIsAutoplayBlocked] = useState(false);
+  const [vocalIsolationStatus, setVocalIsolationStatus] = useState(null);
+
+  useEffect(() => {
+    const handleVocalStatus = (e) => {
+      setVocalIsolationStatus(e.detail);
+    };
+    window.addEventListener('rivo-vocal-status-update', handleVocalStatus);
+    return () => window.removeEventListener('rivo-vocal-status-update', handleVocalStatus);
+  }, []);
 
   const resumeAutoplay = useCallback(() => {
     setIsAutoplayBlocked(false);
@@ -950,7 +1058,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                     standbyPreloadedIdRef.current = nextId;
                     const standby = secondaryAudioRef.current;
                     if (standby) {
-                      resolvePlayableAudioStream(nextTrack).then((res) => {
+                      resolvePlayableAudioStream(nextTrack, null, true).then((res) => {
                         if (res?.url && standbyPreloadedIdRef.current === nextId) {
                           const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
                           if (standby.src !== fullUrl) {
@@ -991,7 +1099,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   const nextTrack = q[nextIdx];
                   const nextId = String(nextTrack?.id || nextTrack?._id || '');
                   if (nextId && !clientStreamCache.has(nextId)) {
-                    resolvePlayableAudioStream(nextTrack).catch(() => {});
+                    resolvePlayableAudioStream(nextTrack, null, true).catch(() => {});
                   }
                 }
               }
@@ -1772,6 +1880,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
   const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null, isSmartMood = false) => {
     if (!track) return;
+    setVocalIsolationStatus(null);
 
     // Track daily listening seed for dynamic personalized mixes
     try {
@@ -2721,7 +2830,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (nextTrack) {
           const trackId = String(nextTrack.id || nextTrack._id || '');
           if (trackId && !clientStreamCache.has(trackId)) {
-            resolvePlayableAudioStream(nextTrack).catch(() => {});
+            resolvePlayableAudioStream(nextTrack, null, true).catch(() => {});
           }
         }
         // Also prefetch 2nd track ahead for seamless continuous listening
@@ -2731,7 +2840,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (secondNextTrack) {
             const trackId2 = String(secondNextTrack.id || secondNextTrack._id || '');
             if (trackId2 && !clientStreamCache.has(trackId2)) {
-              resolvePlayableAudioStream(secondNextTrack).catch(() => {});
+              resolvePlayableAudioStream(secondNextTrack, null, true).catch(() => {});
             }
           }
         }
@@ -3139,7 +3248,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const seekPoint = Math.max(0, mixOutPoint - dur - 3);
 
       // Preload standby deck immediately with tB so it's instantly ready
-      resolvePlayableAudioStream(tB).then((res) => {
+      resolvePlayableAudioStream(tB, null, true).then((res) => {
         if (res?.url && secondaryAudioRef.current) {
           const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
           secondaryAudioRef.current.src = fullUrl;
@@ -3196,6 +3305,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     addToJamQueue, removeFromJamQueue, reorderJamQueue,
     remoteDevicePlayback,
     isAutoplayBlocked, resumeAutoplay,
+    vocalIsolationStatus,
   };
 
   return (

@@ -212,6 +212,37 @@ export default function MiniPlayer({
             : 'bg-[#fdfbf7] border-black text-[#0b1110]'
         }`}
       >
+        {/* Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) */}
+        {!isQuran && audio?.vocalIsolationStatus?.isProcessing && (
+          <div className="absolute -top-10 inset-x-0 h-10 bg-[#0d1615] border-t-2 border-b border-emerald-500/80 px-4 flex items-center justify-between text-xs font-mono text-emerald-400 z-50 shadow-[0_-4px_16px_rgba(16,185,129,0.3)]">
+            <div className="flex items-center gap-2.5 truncate mr-2">
+              <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="font-bold tracking-wider uppercase text-white truncate text-[11px] md:text-xs">
+                ISOLATING VOCALS (AI): <span className="text-emerald-400">{audio.vocalIsolationStatus.progress || 0}%</span>
+              </span>
+              {audio.vocalIsolationStatus.eta && (
+                <span className="text-zinc-400 text-[11px] hidden sm:inline">
+                  • TIME LEFT: {audio.vocalIsolationStatus.eta}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="w-24 sm:w-36 md:w-52 bg-zinc-900 border border-emerald-500/40 rounded-full h-2 overflow-hidden shadow-inner">
+                <div 
+                  className="bg-emerald-400 h-full transition-all duration-300 ease-out shadow-[0_0_8px_rgba(52,211,153,0.8)]" 
+                  style={{ width: `${Math.max(4, audio.vocalIsolationStatus.progress || 0)}%` }}
+                />
+              </div>
+              <span className="text-[10px] md:text-[11px] text-emerald-300 font-semibold tracking-wider">
+                {audio.vocalIsolationStatus.eta ? audio.vocalIsolationStatus.eta : 'WAITING'}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Mobile Scrubber Line (generous 32px touch & drag hitbox) */}
         <div 
           role="slider"

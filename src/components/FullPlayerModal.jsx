@@ -132,7 +132,8 @@ export default function FullPlayerModal({
     isRepeat: ctxIsRepeat, repeatMode: ctxRepeatMode, toggleRepeat: ctxToggleRepeat, setIsRepeat,
     currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue,
     togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
-    isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition
+    isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition,
+    vocalIsolationStatus
   } = useAudioPlayer();
 
   const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
@@ -1640,6 +1641,27 @@ export default function FullPlayerModal({
               )}
             </div>
           </div>
+
+          {/* Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) */}
+          {!isCurQuran && vocalIsolationStatus?.isProcessing && (
+            <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/60 flex flex-col gap-1.5 text-xs font-mono text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 font-bold tracking-wider uppercase text-white text-[11px]">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  Isolating Vocals (AI): <span className="text-emerald-400">{vocalIsolationStatus.progress || 0}%</span>
+                </span>
+                <span className="text-zinc-400 text-[11px]">
+                  {vocalIsolationStatus.eta ? `ETA: ${vocalIsolationStatus.eta}` : 'Preparing...'}
+                </span>
+              </div>
+              <div className="w-full bg-zinc-900 border border-emerald-500/30 rounded-full h-2 overflow-hidden shadow-inner">
+                <div 
+                  className="bg-emerald-400 h-full transition-all duration-300 ease-out shadow-[0_0_8px_rgba(52,211,153,0.8)]" 
+                  style={{ width: `${Math.max(4, vocalIsolationStatus.progress || 0)}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Mechanical Transport Controls */}
           <div className="flex items-center justify-between mb-2 shrink-0">

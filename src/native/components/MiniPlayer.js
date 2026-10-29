@@ -6,10 +6,11 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { isQuranContent } from '../../utils/quranUtils';
 
 export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode, vocalIsolationStatus } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
@@ -22,6 +23,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+  const isQuran = isQuranContent(currentTrack);
   const isLive = Boolean(currentTrack?.isLive || currentTrack?.genre === 'quran-radio');
   const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
   const progressPercent = isLive ? 100 : (effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0);
@@ -32,6 +34,21 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 
   return (
     <View style={[styles.outerDock, { bottom: dockBottom }]}>
+
+            {/* Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) */}
+      {!isQuran && vocalIsolationStatus?.isProcessing && (
+        <View style={styles.miniVocalBanner}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            <View style={styles.miniVocalDot} />
+            <Text style={styles.miniVocalTitle} numberOfLines={1}>
+              ISOLATING VOCALS (AI): <Text style={{ color: colors.mint }}>{vocalIsolationStatus.progress || 0}%</Text>
+            </Text>
+          </View>
+          <Text style={styles.miniVocalEta} numberOfLines={1} ellipsizeMode="tail">
+            {vocalIsolationStatus.eta || 'WAITING'}
+          </Text>
+        </View>
+      )}
 
       {currentTrack && (
         <TouchableOpacity
@@ -122,6 +139,38 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 }
 
 const styles = StyleSheet.create({
+  miniVocalBanner: {
+    height: 28,
+    backgroundColor: '#052e26',
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.6)',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  miniVocalDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34d399',
+  },
+  miniVocalTitle: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  miniVocalEta: {
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 6,
+    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#94a3b8',
+  },
+
   outerDock: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 70 : 56,

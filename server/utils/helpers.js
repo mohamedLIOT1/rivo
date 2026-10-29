@@ -790,8 +790,35 @@ async function searchTracksInternal(query) {
           timeout: 4000
         });
         if (ytRes.data?.items && Array.isArray(ytRes.data.items)) {
-          ytTracks = ytRes.data.items
-            .filter(item => item?.id?.videoId)
+          const videoItems = ytRes.data.items.filter(item => item?.id?.videoId);
+          const videoIds = videoItems.map(item => item.id.videoId);
+          let durationMap = {};
+          if (videoIds.length > 0) {
+            try {
+              const detailsRes = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+                params: {
+                  part: 'contentDetails',
+                  id: videoIds.join(','),
+                  key: apiKey
+                },
+                timeout: 3000
+              });
+              if (detailsRes.data?.items && Array.isArray(detailsRes.data.items)) {
+                for (const vid of detailsRes.data.items) {
+                  const iso = vid.contentDetails?.duration || '';
+                  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                  if (match) {
+                    const hours = parseInt(match[1] || '0', 10);
+                    const mins = parseInt(match[2] || '0', 10);
+                    const secs = parseInt(match[3] || '0', 10);
+                    durationMap[vid.id] = hours * 3600 + mins * 60 + secs;
+                  }
+                }
+              }
+            } catch (dErr) {}
+          }
+
+          ytTracks = videoItems
             .map(item => {
               const videoId = item.id.videoId;
               let title = item.snippet?.title || targetQuery;
@@ -805,6 +832,7 @@ async function searchTracksInternal(query) {
               const cover = item.snippet?.thumbnails?.high?.url ||
                             item.snippet?.thumbnails?.medium?.url ||
                             `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+              const exactDuration = durationMap[videoId] || 180;
               return {
                 id: `yt-${videoId}`,
                 title,
@@ -812,7 +840,7 @@ async function searchTracksInternal(query) {
                 album: 'YouTube',
                 cover,
                 audioUrl: `https://www.youtube.com/watch?v=${videoId}`,
-                duration: 240,
+                duration: exactDuration,
                 source: 'YouTube'
               };
             })
@@ -1604,6 +1632,21 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
         }
       }
     } catch {}
+  }
+  if (videoId) {
+    if (typeof videoId === 'object') {
+      const extracted = videoId.id || videoId.videoId || (typeof videoId.toString === 'function' ? videoId.toString() : '');
+      videoId = (extracted && extracted !== '[object Object]') ? extracted : null;
+    } else {
+      videoId = String(videoId);
+    }
+  }
+  if (videoId) {
+    videoId = String(videoId).trim();
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+      const m = videoId.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+      videoId = m ? m[1] : null;
+    }
   }
   if (!videoId) return null;
 

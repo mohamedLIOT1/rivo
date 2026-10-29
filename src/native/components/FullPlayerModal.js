@@ -338,6 +338,7 @@ const DraggableQueueList = React.memo(function DraggableQueueList({
 
 export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const {
+    vocalIsolationStatus,
     currentTrack,
     isPlaying,
     isLoading,
@@ -842,6 +843,34 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 </View>
               </View>
 
+                            {/* ── Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) ── */}
+              {!isCurQuran && vocalIsolationStatus?.isProcessing && (
+                <View style={styles.vocalBannerBox}>
+                  <View style={styles.vocalBannerHeader}>
+                    <View style={styles.vocalBannerLeft}>
+                      <View style={styles.vocalPingDot} />
+                      <Text style={styles.vocalBannerTitle} numberOfLines={1}>
+                        ISOLATING VOCALS (AI):{' '}
+                        <Text style={{ color: colors.mint, fontWeight: 'bold' }}>
+                          {vocalIsolationStatus.progress || 0}%
+                        </Text>
+                      </Text>
+                    </View>
+                    <Text style={styles.vocalBannerEta} numberOfLines={1} ellipsizeMode="tail">
+                      {vocalIsolationStatus.eta || 'Isolating...'}
+                    </Text>
+                  </View>
+                  <View style={styles.vocalProgressBarBg}>
+                    <View
+                      style={[
+                        styles.vocalProgressBarFill,
+                        { width: `${Math.max(4, Math.min(100, vocalIsolationStatus.progress || 0))}%` }
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+
               {/* ── Transport Controls ── */}
               <View style={styles.controlsRow}>
                 {/* Shuffle Button */}
@@ -950,134 +979,6 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 </View>
               </View>
             </View>
-
-            {/* ── Rivo DJ Engine & Mix Controller Card (Strictly Hidden for Holy Quran) ── */}
-            {!isCurQuran && (
-              <View style={[styles.djDeckCard, isMixMode && styles.djDeckCardActive]}>
-              <View style={styles.djHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  <Sliders size={18} color={isMixMode ? '#10b981' : '#94a3b8'} strokeWidth={2.5} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.djTitle}>RIVO DJ ENGINE</Text>
-                    <Text style={styles.djSubtitle} numberOfLines={1}>
-                      {isMixMode ? 'AUTO BEATMATCH & SEAMLESS CROSSFADE ACTIVE' : 'DJ MIX MODE OFF'}
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.djToggleBtn, isMixMode ? styles.djToggleBtnActive : styles.djToggleBtnInactive]}
-                  onPress={() => setIsMixMode(!isMixMode)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.djIndicatorDot, { backgroundColor: isMixMode ? '#10b981' : '#64748b' }]} />
-                  <Text style={[styles.djToggleText, { color: isMixMode ? '#10b981' : '#94a3b8' }]}>
-                    {isMixMode ? 'MIX ON' : 'MIX OFF'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {isMixMode && (
-                <>
-                  {/* Next Up Cue Bar */}
-                  <View style={styles.djNextUpBox}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <Text style={styles.djNextUpLabel}>UPCOMING CUE</Text>
-                      <Text style={styles.djCountdownText}>
-                        {(effectiveDuration || duration) > currentTime
-                          ? `Mix in ${Math.max(0, Math.round((effectiveDuration || duration) - currentTime))}s`
-                          : 'Cue ready'}
-                      </Text>
-                    </View>
-                    <View style={styles.djNextSongRow}>
-                      {nextTrackInQueue ? (
-                        <>
-                          <Image
-                            source={{ uri: normalizeCoverUri(nextTrackInQueue.cover || nextTrackInQueue.coverUrl) }}
-                            style={styles.djNextCover}
-                          />
-                          <View style={{ flex: 1, marginLeft: 8 }}>
-                            <Text style={styles.djNextTitle} numberOfLines={1}>
-                              {nextTrackInQueue.title || 'Next Track'}
-                            </Text>
-                            <Text style={styles.djNextArtist} numberOfLines={1}>
-                              {nextTrackInQueue.artist || 'Unknown Artist'}
-                            </Text>
-                          </View>
-                        </>
-                      ) : (
-                        <Text style={styles.djNoNextText}>End of queue — loops back to track 1</Text>
-                      )}
-                    </View>
-                  </View>
-
-                  {/* Transition Length Selector (Rivo 4/4 Bars) */}
-                  <View style={styles.djParamSection}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <Text style={styles.djParamLabel}>TRANSITION LENGTH</Text>
-                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#10b981', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                        {mixDuration === 0 ? 'OFF' : (mixDuration + 's')}
-                      </Text>
-                    </View>
-                    <View style={styles.djPillRow}>
-                      {[
-                        { sec: 0, label: 'Off' },
-                        { sec: 4, label: '2 bars' },
-                        { sec: 8, label: '4 bars' },
-                        { sec: 16, label: '8 bars' },
-                        { sec: 24, label: '12 bars' },
-                      ].map((item) => (
-                        <TouchableOpacity
-                          key={item.sec}
-                          style={[styles.djPill, mixDuration === item.sec && styles.djPillActive]}
-                          onPress={() => setMixDuration(item.sec)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.djPillText, mixDuration === item.sec && styles.djPillTextActive]}>
-                            {item.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Transition Style Selector (5 Rivo Presets) */}
-                  <View style={styles.djParamSection}>
-                    <Text style={styles.djParamLabel}>RIVO TRANSITION STYLE</Text>
-                    <View style={styles.djPillRow}>
-                      {[
-                        { id: 'auto', label: 'Auto' },
-                        { id: 'fade', label: 'Fade' },
-                        { id: 'rise', label: 'Rise' },
-                        { id: 'blend', label: 'Blend' },
-                        { id: 'cut', label: 'Cut' },
-                      ].map((st) => (
-                        <TouchableOpacity
-                          key={st.id}
-                          style={[styles.djPill, (mixStyle || 'auto') === st.id && styles.djPillActive]}
-                          onPress={() => setMixStyle(st.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.djPillText, (mixStyle || 'auto') === st.id && styles.djPillTextActive]}>
-                            {st.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-
-                  {/* Trigger Crossfade Button */}
-                  <TouchableOpacity
-                    style={styles.djTriggerBtn}
-                    onPress={triggerManualMix}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.djTriggerBtnText}>⚡ TRIGGER TRANSITION NOW</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-            )}
           </ScrollView>
         )}
 
@@ -1296,6 +1197,65 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
 }
 
 const styles = StyleSheet.create({
+  vocalBannerBox: {
+    marginHorizontal: 4,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(5, 46, 38, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.5)',
+  },
+  vocalBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    overflow: 'hidden',
+  },
+  vocalBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  vocalPingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#34d399',
+  },
+  vocalBannerTitle: {
+    fontSize: 10.5,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: 'bold',
+    color: '#ffffff',
+    letterSpacing: 0.3,
+  },
+  vocalBannerEta: {
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 8,
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#94a3b8',
+  },
+  vocalProgressBarBg: {
+    width: '100%',
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#0a100e',
+    overflow: 'hidden',
+    borderWidth: 0.5,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  vocalProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#10b981',
+    borderRadius: 3,
+  },
+
   container: {
     flex: 1,
     paddingTop: Platform.OS === 'ios' ? 44 : 20,
