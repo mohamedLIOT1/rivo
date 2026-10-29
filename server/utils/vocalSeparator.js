@@ -314,8 +314,16 @@ function executeSeparation(task) {
       await new Promise((resWav, rejWav) => {
         const convertCmd = `ffmpeg -y -i "${localInput}" -vn -ar 44100 -ac 2 -c:a pcm_s16le "${tempWavAudio}"`;
         exec(convertCmd, { timeout: 120000 }, (err, stdout, stderr) => {
-          if (err) return rejWav(new Error(`Failed to decode audio: ${stderr || err.message}`));
-          resWav();
+          if (!err && fs.existsSync(tempWavAudio) && fs.statSync(tempWavAudio).size > 1000) {
+            return resWav();
+          }
+          const fbCmd = `ffmpeg -y -i "${localInput}" -map 0:a:0? -ar 44100 -ac 2 -c:a pcm_s16le "${tempWavAudio}"`;
+          exec(fbCmd, { timeout: 120000 }, (err2, stdout2, stderr2) => {
+            if (err2 || !fs.existsSync(tempWavAudio) || fs.statSync(tempWavAudio).size < 1000) {
+              return rejWav(new Error(`Failed to decode audio: ${stderr2 || stderr || err2?.message}`));
+            }
+            resWav();
+          });
         });
       });
 

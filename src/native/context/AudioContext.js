@@ -1566,7 +1566,7 @@ export const AudioProvider = ({ children }) => {
 
       // Pre-resolved audio URL (e.g. broadcast from Jam host or cached HTTP audio stream)
       if (!isOffline) {
-        if (!uri && track.resolvedAudioUrl && (track.resolvedAudioUrl.startsWith('http://') || track.resolvedAudioUrl.startsWith('https://'))) {
+        if (!uri && !isRetry && track.resolvedAudioUrl && (track.resolvedAudioUrl.startsWith('http://') || track.resolvedAudioUrl.startsWith('https://'))) {
           uri = track.resolvedAudioUrl;
         }
         if (!uri && track.audioUrl && (track.audioUrl.startsWith('http://') || track.audioUrl.startsWith('https://')) && !track.audioUrl.includes('youtube.com/watch') && !track.audioUrl.includes('youtu.be/')) {
@@ -1814,7 +1814,8 @@ export const AudioProvider = ({ children }) => {
         setIsLoading(false);
       }
       if (!isRetry && !isOffline && playRequestSeqRef.current === requestSeq) {
-        return playTrack(track, trackList, true, targetTime, isRemote);
+        const cleanRetryTrack = { ...track, resolvedAudioUrl: null };
+        return playTrack(cleanRetryTrack, trackList, true, targetTime, isRemote);
       } else if (playRequestSeqRef.current === requestSeq) {
         showToast(`Could not play: ${track?.title || 'Track'}`, 'error');
       }

@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.2.1',
+      version: '2.2.2',
       name: 'Rivo Web',
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
     },
     windows: {
-      version: '2.2.1',
+      version: '2.2.2',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.1.exe',
+      directFile: 'Rivo-v2.2.2.exe',
       mandatory: false,
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
     },
     android: {
-      version: '2.2.1',
-      build: 115,
+      version: '2.2.2',
+      build: 116,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.1.apk',
+      directFile: 'Rivo-v2.2.2.apk',
       mandatory: false,
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
     },
     ios: {
-      version: '2.2.1',
-      build: 115,
+      version: '2.2.2',
+      build: 116,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.1.ipa',
+      directFile: 'Rivo-v2.2.2.ipa',
       mandatory: false,
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
     }
   }
 };
@@ -181,42 +181,42 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.2.1',
+      version: '2.2.2',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
     },
     windows: {
-      version: '2.2.1',
+      version: '2.2.2',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.1.exe',
+      directFile: 'Rivo-v2.2.2.exe',
       mandatory: false,
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
     },
     android: {
-      version: '2.2.1',
-      build: 115,
+      version: '2.2.2',
+      build: 116,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.1.apk',
+      directFile: 'Rivo-v2.2.2.apk',
       mandatory: false,
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.',
-      notesEn: 'Instant OTA update v2.1.9 • Full Automix & Holy Quran protection.',
+      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.',
+      notesEn: 'Instant OTA update v2.2.2 • High fidelity audio & bug fixes.',
       ota: {
         enabled: true,
-        version: '2.2.1',
+        version: '2.2.2',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'Instant OTA update v2.1.9 • Full Automix & Holy Quran protection.',
-        notesEn: 'Instant OTA update v2.1.9 • Full Automix & Holy Quran protection.'
+        notes: 'تحديث فوري جديد v2.2.2 • إصلاح مشكلة التحميل والأغاني بدون موسيقى.',
+        notesEn: 'Instant OTA update v2.2.2 • High fidelity audio & bug fixes.'
       }
     },
     ios: {
-      version: '2.2.1',
-      build: 115,
+      version: '2.2.2',
+      build: 116,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.1.ipa',
+      directFile: 'Rivo-v2.2.2.ipa',
       mandatory: false,
       notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
     }

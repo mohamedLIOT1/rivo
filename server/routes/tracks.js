@@ -25,6 +25,8 @@ const {
   cleanLyricsMetadata,
   getCookiesPath,
   getYtDlpBin,
+  isAudioFileValid,
+  downloadYouTubeAudioToCache,
   invalidateAudioCache
 } = require('../utils/helpers');
 
@@ -1294,10 +1296,18 @@ router.get('/vocal-stream', async (req, res) => {
       const vid = vidMatch[1];
       const localM4a = path.join(cacheDir, `${vid}.m4a`);
       const localMp3 = path.join(cacheDir, `${vid}.mp3`);
-      if (fs.existsSync(localM4a) && fs.statSync(localM4a).size > 20000) {
-        sourceAudioPath = localM4a;
-      } else if (fs.existsSync(localMp3) && fs.statSync(localMp3).size > 20000) {
-        sourceAudioPath = localMp3;
+      if (fs.existsSync(localM4a)) {
+        if (isAudioFileValid(localM4a)) {
+          sourceAudioPath = localM4a;
+        } else {
+          try { fs.unlinkSync(localM4a); } catch {}
+        }
+      } else if (fs.existsSync(localMp3)) {
+        if (isAudioFileValid(localMp3)) {
+          sourceAudioPath = localMp3;
+        } else {
+          try { fs.unlinkSync(localMp3); } catch {}
+        }
       }
     }
 
@@ -1342,28 +1352,12 @@ router.get('/vocal-stream', async (req, res) => {
         try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
       }
       const localTarget = path.join(cacheDir, `${targetVid}.m4a`);
-      if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
+      if (fs.existsSync(localTarget) && isAudioFileValid(localTarget)) {
         sourceAudioPath = localTarget;
       } else {
-        try {
-          const { getYtDlpBin, getCookiesPath } = require('../utils/helpers');
-          const bin = getYtDlpBin();
-          const cp = getCookiesPath();
-          const ytdlpArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '-f', 'ba[ext=m4a]/ba/bestaudio', '-o', localTarget];
-          if (cp) {
-            ytdlpArgs.splice(1, 0, '--cookies', cp);
-          } else {
-            ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
-          }
-          ytdlpArgs.push(`https://www.youtube.com/watch?v=${targetVid}`);
-          await new Promise((resolve) => {
-            execFile(bin, ytdlpArgs, { timeout: 45000 }, () => resolve());
-          });
-          if (fs.existsSync(localTarget) && fs.statSync(localTarget).size > 20000) {
-            sourceAudioPath = localTarget;
-          }
-        } catch (dlErr) {
-          console.error('[VocalStream] Direct yt-dlp download fallback error:', dlErr.message);
+        const downloaded = await downloadYouTubeAudioToCache(targetVid, cacheDir);
+        if (downloaded && isAudioFileValid(downloaded)) {
+          sourceAudioPath = downloaded;
         }
       }
     }
@@ -1603,9 +1597,9 @@ router.get('/download', async (req, res) => {
     if (videoId) {
       const cachedM4a = path.join(__dirname, `../../uploads/audio-cache/${videoId}.m4a`);
       const cachedMp3 = path.join(__dirname, `../../uploads/audio-cache/${videoId}.mp3`);
-      const localCachedFile = (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000)
+      const localCachedFile = (fs.existsSync(cachedM4a) && isAudioFileValid(cachedM4a))
         ? cachedM4a
-        : ((fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) ? cachedMp3 : null);
+        : ((fs.existsSync(cachedMp3) && isAudioFileValid(cachedMp3)) ? cachedMp3 : null);
 
       if (localCachedFile) {
         const ext = path.extname(localCachedFile);

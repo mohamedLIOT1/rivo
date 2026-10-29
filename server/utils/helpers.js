@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const { execFile, spawn } = require('child_process');
+const { execFile, spawn, execSync } = require('child_process');
 const { Track, Album, SongLyrics, User } = require('../models');
 
 function escapeRegex(s) {
@@ -1271,6 +1271,73 @@ function getCookiesPath() {
   return null;
 }
 
+function isAudioFileValid(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return false;
+  try {
+    const stats = fs.statSync(filePath);
+    if (stats.size < 30000) return false;
+    const probe = execSync(
+      `ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+      { timeout: 6000 }
+    );
+    return probe.toString().trim() === 'audio';
+  } catch {
+    return false;
+  }
+}
+
+async function downloadYouTubeAudioToCache(videoId, cacheDir) {
+  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
+  if (!fs.existsSync(cacheDir)) {
+    try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
+  }
+  const targetFile = path.join(cacheDir, `${videoId}.m4a`);
+  if (isAudioFileValid(targetFile)) return targetFile;
+
+  // Clean up corrupted target if present
+  try { if (fs.existsSync(targetFile)) fs.unlinkSync(targetFile); } catch {}
+
+  const bin = getYtDlpBin();
+  const cp = getCookiesPath();
+  const tempTarget = path.join(cacheDir, `${videoId}_dl_${Date.now()}.%(ext)s`);
+
+  const ytdlpArgs = [
+    '--no-check-certificates',
+    '--no-playlist',
+    '--no-warnings',
+    '-f', '140/ba[ext=m4a]/ba/bestaudio',
+    '-x',
+    '--audio-format', 'm4a',
+    '-o', tempTarget
+  ];
+  if (cp) {
+    ytdlpArgs.splice(1, 0, '--cookies', cp);
+  } else {
+    ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+  }
+  ytdlpArgs.push(`https://www.youtube.com/watch?v=${videoId}`);
+
+  const nodeBinDir = path.dirname(process.execPath);
+  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
+
+  await new Promise((resolve) => {
+    execFile(bin, ytdlpArgs, { timeout: 60000, env: execEnv }, () => resolve());
+  });
+
+  const actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
+  if (fs.existsSync(actualDownloaded) && isAudioFileValid(actualDownloaded)) {
+    try {
+      fs.renameSync(actualDownloaded, targetFile);
+    } catch {
+      fs.copyFileSync(actualDownloaded, targetFile);
+      try { fs.unlinkSync(actualDownloaded); } catch {}
+    }
+    return targetFile;
+  }
+  try { if (fs.existsSync(actualDownloaded)) fs.unlinkSync(actualDownloaded); } catch {}
+  return null;
+}
+
 function getYtDlpBin() {
   const isWin = process.platform === 'win32';
   const binName = isWin ? 'yt-dlp.exe' : 'yt-dlp';
@@ -1462,33 +1529,13 @@ function processNextBgDownload() {
 
   const { videoId, targetFile } = bgDownloadQueue.shift();
   try {
-    if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) {
+    if (fs.existsSync(targetFile) && isAudioFileValid(targetFile)) {
       return processNextBgDownload();
     }
   } catch {}
 
   activeBackgroundDownloads.add(videoId);
-  const bin = getYtDlpBin();
-  const cp = getCookiesPath();
-  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const ytdlpArgs = [
-    '--no-check-certificates',
-    '--no-playlist',
-    '--no-warnings',
-    '--js-runtimes', 'node',
-    '-f', 'ba[ext=m4a]/ba/bestaudio',
-    '-o', targetFile,
-    ytUrl
-  ];
-  if (cp) {
-    ytdlpArgs.splice(1, 0, '--cookies', cp);
-  } else {
-    ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
-  }
-
-  const nodeBinDir = path.dirname(process.execPath);
-  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
-  execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, (err) => {
+  downloadYouTubeAudioToCache(videoId, path.dirname(targetFile)).finally(() => {
     activeBackgroundDownloads.delete(videoId);
     processNextBgDownload();
   });
@@ -1659,18 +1706,26 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   const cachedMp3 = path.join(audioCacheDir, `${videoId}.mp3`);
 
   if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
-    const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
-    retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
-    retObj.duration = defaultDur;
-    retObj.videoId = videoId;
-    return retObj;
+    if (isAudioFileValid(cachedM4a)) {
+      const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
+      retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
+      retObj.duration = defaultDur;
+      retObj.videoId = videoId;
+      return retObj;
+    } else {
+      try { fs.unlinkSync(cachedM4a); } catch {}
+    }
   }
   if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
-    const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
-    retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
-    retObj.duration = defaultDur;
-    retObj.videoId = videoId;
-    return retObj;
+    if (isAudioFileValid(cachedMp3)) {
+      const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
+      retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
+      retObj.duration = defaultDur;
+      retObj.videoId = videoId;
+      return retObj;
+    } else {
+      try { fs.unlinkSync(cachedMp3); } catch {}
+    }
   }
 
   const cachedStream = directStreamCache.get(videoId);
@@ -1733,32 +1788,9 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       return resObj;
     }
 
-    // 1. Direct YouTube download to disk with cookies
-    const bin = getYtDlpBin();
-    const cp = getCookiesPath();
-    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const ytdlpArgs = [
-      '--no-check-certificates',
-      '--no-playlist',
-      '--no-warnings',
-      '--js-runtimes', 'node',
-      '-f', 'ba[ext=m4a]/ba/bestaudio',
-      '-o', cachedM4a
-    ];
-    if (cp) {
-      ytdlpArgs.splice(1, 0, '--cookies', cp);
-    } else {
-      ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
-    }
-    ytdlpArgs.push(ytUrl);
-
-    const nodeBinDir = path.dirname(process.execPath);
-    const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
-    await new Promise((resolve) => {
-      execFile(bin, ytdlpArgs, { timeout: 20000, env: execEnv }, () => resolve());
-    });
-
-    if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
+    // 1. Direct YouTube download to disk with cookies & format fixup
+    const downloadedCache = await downloadYouTubeAudioToCache(videoId, audioCacheDir);
+    if (downloadedCache && isAudioFileValid(downloadedCache)) {
       return `/uploads/audio-cache/${videoId}.m4a`;
     }
 
@@ -2198,6 +2230,8 @@ module.exports = {
   scrapePlaylistOrAlbum,
   autoAddTrackToUserLinksPlaylist,
   getCookiesPath,
+  isAudioFileValid,
+  downloadYouTubeAudioToCache,
   getYtDlpBin,
   ensureYtDlpBinary,
   initWarmYtWorker,

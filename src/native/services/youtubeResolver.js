@@ -213,9 +213,9 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
             } else if (curData.status === 'processing') {
               const realProgress = Number(curData.progress) || 0;
               if (realProgress > 0) {
-                displayProgress = realProgress;
+                displayProgress = Math.max(displayProgress, realProgress);
               } else {
-                displayProgress = Math.min(92, displayProgress + 3);
+                displayProgress = Math.min(92, displayProgress + 2);
               }
               if (typeof onVocalStatus === 'function') {
                 onVocalStatus({
@@ -235,7 +235,10 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
                 });
               }
             } else if (curData.status === 'idle') {
-              displayProgress = Math.min(30, displayProgress + 2);
+              displayProgress = Math.min(50, displayProgress + 1);
+              if (pollAttempts % 5 === 0) {
+                fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`).catch(() => {});
+              }
               if (typeof onVocalStatus === 'function') {
                 onVocalStatus({
                   isProcessing: true,

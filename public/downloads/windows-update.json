@@ -1,6 +1,6 @@
 {
-  "version": "2.2.1",
-  "pub_date": "2026-10-29T08:00:00Z",
-  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.1.exe",
-  "notes": "Update v2.2.1: Robust Vocal Separation fallback, fixed audio stream duration sync, and strict Quran protection."
+  "version": "2.2.2",
+  "pub_date": "2026-10-29T11:30:00Z",
+  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.2.exe",
+  "notes": "Update v2.2.2: Fixed music loading hang at 30%, pristine audio stream fixup, and vocal isolation improvements."
 }
