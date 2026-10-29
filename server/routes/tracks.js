@@ -1331,20 +1331,16 @@ router.get('/vocal-stream', async (req, res) => {
 
     if (activeVidMatch && activeVidMatch[1]) {
       targetVid = activeVidMatch[1];
-    } else if (typeof directStream === 'object' && directStream?.videoId) {
-      targetVid = String(directStream.videoId);
-    } else if (!sourceAudioPath || sourceAudioPath.includes('youtube.com/watch') || sourceAudioPath.includes('youtu.be/')) {
-      if (title || artist) {
-        try {
-          const { searchYouTubeId } = require('../utils/helpers');
-          const sId = await searchYouTubeId({ artist, title, targetDuration: duration });
-          if (sId) {
-            const rawId = String(sId).trim();
-            const m = rawId.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-            targetVid = m ? m[1] : (/^[a-zA-Z0-9_-]{11}$/.test(rawId) ? rawId : null);
-          }
-        } catch {}
-      }
+    } else if (title || artist) {
+      try {
+        const { searchYouTubeId } = require('../utils/helpers');
+        const sId = await searchYouTubeId({ artist, title, targetDuration: duration });
+        if (sId) {
+          const rawId = String(sId).trim();
+          const m = rawId.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+          targetVid = m ? m[1] : (/^[a-zA-Z0-9_-]{11}$/.test(rawId) ? rawId : null);
+        }
+      } catch {}
     }
 
     if (targetVid && /^[a-zA-Z0-9_-]{11}$/.test(targetVid)) {

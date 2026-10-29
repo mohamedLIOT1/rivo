@@ -291,28 +291,32 @@ function executeSeparation(task) {
         task.progress = 10;
         const downloadedRaw = path.join(tempDir, 'raw_input.m4a');
 
-        const axios = require('axios');
-        const dlRes = await axios({
-          method: 'get',
-          url: localInput,
-          responseType: 'stream',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-            'Accept': '*/*',
-            'Range': 'bytes=0-'
-          },
-          timeout: 45000
-        });
+        try {
+          const axios = require('axios');
+          const dlRes = await axios({
+            method: 'get',
+            url: localInput,
+            responseType: 'stream',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+              'Accept': '*/*',
+              'Range': 'bytes=0-'
+            },
+            timeout: 45000
+          });
 
-        const writer = fs.createWriteStream(downloadedRaw);
-        await new Promise((resDl, rejDl) => {
-          dlRes.data.pipe(writer);
-          writer.on('finish', resDl);
-          writer.on('error', rejDl);
-        });
+          const writer = fs.createWriteStream(downloadedRaw);
+          await new Promise((resDl, rejDl) => {
+            dlRes.data.pipe(writer);
+            writer.on('finish', resDl);
+            writer.on('error', rejDl);
+          });
 
-        if (fs.existsSync(downloadedRaw) && fs.statSync(downloadedRaw).size > 10000) {
-          localInput = downloadedRaw;
+          if (fs.existsSync(downloadedRaw) && fs.statSync(downloadedRaw).size > 10000) {
+            localInput = downloadedRaw;
+          }
+        } catch (dlErr) {
+          console.warn(`[VocalSeparator] Direct stream buffering fallback for ${safe}: ${dlErr.message}`);
         }
       }
 

@@ -448,12 +448,17 @@ export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {})
   // Secondary: "${cleanTitle}" ${cleanArtist} official audio
   const searchQueries = [];
   if (cleanArt && cleanTit) {
+    searchQueries.push(`${cleanArt} ${cleanTit} Topic`);
+    searchQueries.push(`${cleanArt} ${cleanTit} official audio`);
     searchQueries.push(`"${cleanArt}" "${cleanTit}"`);
-    searchQueries.push(`"${cleanTit}" ${cleanArt} official audio`);
+    searchQueries.push(`${cleanArt} ${cleanTit}`);
+  } else if (cleanTit) {
+    searchQueries.push(`${cleanTit} official audio`);
+    searchQueries.push(cleanTit);
   } else if (query) {
     const cleanQ = query.replace(/\s+music$/i, '').trim();
-    searchQueries.push(cleanQ);
     searchQueries.push(`${cleanQ} official audio`);
+    searchQueries.push(cleanQ);
   }
 
   if (searchQueries.length === 0) return null;
@@ -525,11 +530,18 @@ export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {})
         if (normTitle && candTitle.includes(normTitle)) score += 40;
         if (normArtist && (candTitle.includes(normArtist) || candChannel.includes(normArtist))) score += 30;
 
-        if (candChannel.includes('topic') || candChannel.includes('official') || candChannel.includes('vevo')) score += 30;
-        if (candTitle.includes('official audio') || candTitle.includes('official lyric') || candTitle.includes('official video')) score += 20;
+        if (candChannel.includes('topic')) score += 90;
+        else if (candChannel.includes('official') || candChannel.includes('vevo')) score += 30;
+
+        if (candTitle.includes('official audio') || candTitle.includes('audio')) score += 70;
+        else if (candTitle.includes('official lyric') || candTitle.includes('lyrics')) score += 30;
+        else if (candTitle.includes('official video') || candTitle.includes('music video') || candTitle.includes('video') || candTitle.includes('كليب')) score -= 40;
+
+        const isUnwantedModifier = !normTitle.includes('remix') && !normTitle.includes('ريمكس') &&
+          (candTitle.includes('remix') || candTitle.includes('ريمكس') || candTitle.includes('slowed') || candTitle.includes('reverb') || candTitle.includes('cover') || candTitle.includes('كفر') || candTitle.includes('karaoke') || candTitle.includes('حفلة') || candTitle.includes('live') || candTitle.includes('concert'));
+        if (isUnwantedModifier) score -= 200;
 
         if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 100;
-        if (!normTitle.includes('live') && candTitle.includes('live') && !normTitle.includes('حفلة')) score -= 50;
         if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 100;
 
         return {

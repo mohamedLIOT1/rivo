@@ -199,8 +199,8 @@ export const AudioProvider = ({ children }) => {
     // Seamless runtime switch for active track when user toggles vocal isolation
     const activeTrack = currentTrackRef.current;
     if (activeTrack && !isQuranContent(activeTrack) && (isPlayingRef.current || soundRef.current)) {
-      const curPos = (playbackStatusRef.current.positionMillis || 0) / 1000;
-      playTrack(activeTrack, false, false, curPos);
+      const curPos = Number(playbackStatusRef.current?.currentTime || progressRef.current?.currentTime || 0);
+      playTrack(activeTrack, queueRef.current || [], false, curPos);
     }
   };
 
@@ -1529,22 +1529,23 @@ export const AudioProvider = ({ children }) => {
         nextSoundRef.current = null;
         nextTrackRef.current = null;
         try { prevNext.setOnPlaybackStatusUpdate(null); } catch {}
-        prevNext.stopAsync().catch(() => {});
-        prevNext.unloadAsync().catch(() => {});
+        await prevNext.stopAsync().catch(() => {});
+        await prevNext.unloadAsync().catch(() => {});
       }
       if (soundRef.current) {
         const prevSound = soundRef.current;
         soundRef.current = null;
         loadedTrackIdRef.current = null;
         try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
-        prevSound.stopAsync().catch(() => {});
-        prevSound.unloadAsync().catch(() => {});
+        await prevSound.stopAsync().catch(() => {});
+        await prevSound.unloadAsync().catch(() => {});
       }
 
       // Proactively keep Android MediaNotificationService & WakeLock active during background transition
+      // Keep isPlaying: false during buffering/resolving/isolating so Dynamic Island doesn't desync
       if (shouldBePlayingRef.current) {
         const isLikedTrack = likedTrackIds.some(id => String(id) === String(track._id || track.id));
-        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+        updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
           ...track,
           currentTime: safeTargetSec,
           duration: Number(track.duration || 240)
@@ -1705,8 +1706,8 @@ export const AudioProvider = ({ children }) => {
         soundRef.current = null;
         loadedTrackIdRef.current = null;
         try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
-        prevSound.stopAsync().catch(() => {});
-        prevSound.unloadAsync().catch(() => {});
+        await prevSound.stopAsync().catch(() => {});
+        await prevSound.unloadAsync().catch(() => {});
       }
 
       // Proactively keep Android MediaNotificationService & WakeLock active during background transition
