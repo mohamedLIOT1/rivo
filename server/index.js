@@ -223,10 +223,6 @@ const BETA_VERSIONS_DATA = {
     }
   }
 };
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
-    }
-  }
-};
 
 // Helper to read dynamic OTA manifest if present
 const getOtaManifest = () => {
