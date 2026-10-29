@@ -191,6 +191,9 @@ export const AudioProvider = ({ children }) => {
     const b = Boolean(val);
     isVocalOnlyRef.current = b;
     setIsVocalOnlyState(b);
+    if (!b) {
+      setVocalIsolationStatus(null);
+    }
     AsyncStorage.setItem('@rivo_vocal_only', String(b)).catch(() => {});
 
     // Seamless runtime switch for active track when user toggles vocal isolation
@@ -1550,6 +1553,11 @@ export const AudioProvider = ({ children }) => {
 
       // Determine if Vocal-Only Mode is active for this content
       const isVocalActive = isVocalOnlyRef.current && !isQuranContent(track);
+      if (!isVocalActive) {
+        setVocalIsolationStatus(null);
+      }
+
+      const isUploadedTrack = track.source === 'Upload' || (track.audioUrl && (track.audioUrl.startsWith('/uploads/') || track.audioUrl.includes('/uploads/')));
 
       let uri = null;
 
@@ -1829,6 +1837,7 @@ export const AudioProvider = ({ children }) => {
       } catch {}
       broadcastListeningActivity(track, true, 0);
     } catch (err) {
+      setVocalIsolationStatus(null);
       broadcastListeningActivity(null, false, 0);
       if (playRequestSeqRef.current === requestSeq) {
         isLoadingRef.current = false;

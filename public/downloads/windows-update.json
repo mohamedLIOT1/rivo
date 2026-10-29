@@ -1,6 +1,6 @@
 {
-  "version": "2.2.3",
-  "pub_date": "2026-10-29T12:20:00Z",
-  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.3.exe",
-  "notes": "Update v2.2.3: True vocal-only stream isolation, fixed background music leakage during vocal mode, and high-precision stem resolver."
+  "version": "2.2.4",
+  "pub_date": "2026-10-29T15:15:00Z",
+  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.4.exe",
+  "notes": "Update v2.2.4: Fixed audio playback crash & vocal banner stuck at 90%, seamless vocal switching, pure audio playback."
 }

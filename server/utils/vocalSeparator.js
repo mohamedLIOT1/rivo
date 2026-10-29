@@ -187,6 +187,16 @@ function getVocalIsolationStatus(stemKey, aliases = []) {
   for (const k of allKeys) {
     if (jobMap.has(k)) {
       const job = jobMap.get(k);
+      if (job.status === 'failed') {
+        return {
+          status: 'failed',
+          progress: 0,
+          eta: 'Isolation unavailable',
+          url: null,
+          error: job.error || null,
+          cached: false
+        };
+      }
       return {
         status: job.status,
         progress: job.progress || 0,
@@ -248,6 +258,8 @@ async function processQueue() {
   } catch (err) {
     console.error(`[VocalSeparator] Error isolating vocals for ${currentTask.stemKey}:`, err.message);
     currentTask.status = 'failed';
+    currentTask.progress = 0;
+    currentTask.eta = 'Isolation unavailable';
     currentTask.error = err.message;
     currentTask.failedAt = Date.now();
   } finally {
@@ -356,8 +368,8 @@ function executeSeparation(task) {
             const timeoutTimer = setTimeout(() => {
               clearInterval(progressTimer);
               try { pyProc.kill('SIGKILL'); } catch {}
-              rejCloud(new Error('Cloud separator timeout after 150s'));
-            }, 150000);
+              rejCloud(new Error('Cloud separator timeout after 240s'));
+            }, 240000);
 
             pyProc.on('close', (code) => {
               clearInterval(progressTimer);

@@ -25,28 +25,19 @@ def main():
 
     from gradio_client import Client, handle_file
 
-    # List of cloud UVR5 spaces to try in priority order:
-    # 1. Fast GPU spaces (instant if token or quota available)
-    # 2. Unlimited CPU-basic spaces (no ZeroGPU quota limit)
-    spaces = [
+    # Prioritize unlimited, reliable UVR5 spaces that do not enforce ZeroGPU limits
+    cpu_spaces = [
+        "B3XN/UVR5_UI",
+        "stdz/UVR5_UI",
+        "fasooo/UVR5_UI",
+        "teogabriel/UVR5-UI"
+    ]
+    gpu_spaces = [
         "TheStinger/UVR5_UI",
         "itsalboushi/UVR5_UI",
-        "NeoPy/UVR5-UI",
-        "B3XN/UVR5_UI",
-        "DelinaresMassates/UVR5_UI",
-        "stdz/UVR5_UI",
-        "stdz/UVR5_UI_2",
-        "DilshanIRU/UVR5_UI",
-        "teogabriel/UVR5-UI",
-        "Erickeee/UVR5_UI",
-        "AZG1/UVR5_UI",
-        "rhuanpagano/UVR5_UI",
-        "DannyMiko/UVR5_UI",
-        "Heisenbergerer/UVR5_UI",
-        "Kremixes/UVR5_UI",
-        "Iwidjwj/UVR5_UI",
-        "fasooo/UVR5_UI"
+        "NeoPy/UVR5-UI"
     ]
+    spaces = (gpu_spaces + cpu_spaces) if token else (cpu_spaces + gpu_spaces)
 
     last_error = None
     for space_id in spaces:
@@ -55,13 +46,13 @@ def main():
             client = Client(space_id, token=token)
 
             print(f"[CloudSeparator] Submitting job to {space_id} with Kim_Vocal_2.onnx...")
-            result = client.predict(
+            job = client.submit(
                 audio=handle_file(input_audio),
                 model='Kim_Vocal_2.onnx',
                 out_format='mp3',
                 hop_length=1024,
                 segment_size=256,
-                denoise=True,
+                denoise=False,
                 overlap=0.25,
                 batch_size=1,
                 norm_thresh=0.9,
@@ -69,6 +60,7 @@ def main():
                 single_stem='Vocals',
                 api_name='/mdxnet_separator'
             )
+            result = job.result(timeout=200)
 
             # result is tuple: (vocal_path, inst_path)
             vocal_stem = result[0] if isinstance(result, (list, tuple)) else result

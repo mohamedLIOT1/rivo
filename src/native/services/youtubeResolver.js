@@ -120,14 +120,18 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
         return fullVocalUrl;
       }
 
-      // 1b. Not ready: notify UI with real-time progress banner
+      // 1b. Not ready: notify UI with real-time progress banner (skip if failed)
       if (typeof onVocalStatus === 'function') {
-        onVocalStatus({
-          isProcessing: true,
-          trackTitle: track.title,
-          progress: statusData?.progress || 10,
-          eta: 'Preparing audio...'
-        });
+        if (statusData?.status === 'failed') {
+          onVocalStatus(null);
+        } else {
+          onVocalStatus({
+            isProcessing: true,
+            trackTitle: track.title,
+            progress: Math.min(80, statusData?.progress || 10),
+            eta: statusData?.eta || 'Preparing audio...'
+          });
+        }
       }
 
       // 1c. Trigger priority isolation on server
@@ -135,7 +139,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
 
       // 1d. Poll every 1.4s until ready
       let pollAttempts = 0;
-      let displayProgress = Math.max(12, statusData?.progress || 12);
+      let displayProgress = Math.max(12, statusData?.status === 'failed' ? 12 : (statusData?.progress || 12));
       while (pollAttempts < 45) {
         await new Promise(r => setTimeout(r, 1400));
         pollAttempts++;
@@ -207,7 +211,8 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     } catch (e) {
       if (typeof onVocalStatus === 'function') onVocalStatus(null);
     }
-  } else if (isQuranContent(track)) {
+  } else {
+    // Vocal-Only mode is OFF or content is Holy Quran -> strictly clear any vocal isolation banner
     if (typeof onVocalStatus === 'function') onVocalStatus(null);
   }
 
