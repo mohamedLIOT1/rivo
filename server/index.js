@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.2.2',
+      version: '2.2.3',
       name: 'Rivo Web',
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     },
     windows: {
-      version: '2.2.2',
+      version: '2.2.3',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.2.exe',
+      directFile: 'Rivo-v2.2.3.exe',
       mandatory: false,
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     },
     android: {
-      version: '2.2.2',
-      build: 116,
+      version: '2.2.3',
+      build: 117,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.2.apk',
+      directFile: 'Rivo-v2.2.3.apk',
       mandatory: false,
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     },
     ios: {
-      version: '2.2.2',
-      build: 116,
+      version: '2.2.3',
+      build: 117,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.2.ipa',
+      directFile: 'Rivo-v2.2.3.ipa',
       mandatory: false,
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     }
   }
 };
@@ -181,44 +181,44 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.2.2',
+      version: '2.2.3',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     },
     windows: {
-      version: '2.2.2',
+      version: '2.2.3',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.2.exe',
+      directFile: 'Rivo-v2.2.3.exe',
       mandatory: false,
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     },
     android: {
-      version: '2.2.2',
-      build: 116,
+      version: '2.2.3',
+      build: 117,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.2.apk',
+      directFile: 'Rivo-v2.2.3.apk',
       mandatory: false,
-      notes: 'Update v2.2.2 • إصلاح مشكلة تحميل الأغاني والتوقف عند 30% وضمان جودة الصوت الصافي.',
-      notesEn: 'Instant OTA update v2.2.2 • High fidelity audio & bug fixes.',
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.',
+      notesEn: 'Instant OTA update v2.2.3 • Pure AI vocal isolation & seamless switching.',
       ota: {
         enabled: true,
-        version: '2.2.2',
+        version: '2.2.3',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث فوري جديد v2.2.2 • إصلاح مشكلة التحميل والأغاني بدون موسيقى.',
-        notesEn: 'Instant OTA update v2.2.2 • High fidelity audio & bug fixes.'
+        notes: 'تحديث فوري جديد v2.2.3 • عزل حقيقي للأغاني بدون موسيقى وضمان النقاء التام.',
+        notesEn: 'Instant OTA update v2.2.3 • Pure AI vocal isolation & seamless switching.'
       }
     },
     ios: {
-      version: '2.2.2',
-      build: 116,
+      version: '2.2.3',
+      build: 117,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.2.ipa',
+      directFile: 'Rivo-v2.2.3.ipa',
       mandatory: false,
-      notes: 'Update v2.2.1 • إصلاح معالجة الأغاني بدون موسيقى، دقة مدة التشغيل، ومنع السكوت وحماية القرآن الكريم.'
+      notes: 'Update v2.2.3 • إصلاح تشغيل الأغاني بدون موسيقى، عزل صوتي حقيقي بالذكاء الاصطناعي، وتبديل فوري عند اللحظة الحالية.'
     }
   }
 };
