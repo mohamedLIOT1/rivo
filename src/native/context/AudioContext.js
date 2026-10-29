@@ -1723,7 +1723,7 @@ export const AudioProvider = ({ children }) => {
       const initialPosMs = Math.round(safeTargetSec * 1000);
       const willPlay = Boolean(autoPlay && shouldBePlayingRef.current);
       const initialVol = volumeRef.current !== undefined ? volumeRef.current : 1.0;
-      const { sound } = await Audio.Sound.createAsync(
+      const { sound, status } = await Audio.Sound.createAsync(
         soundSource,
         {
           shouldPlay: willPlay,
@@ -1757,7 +1757,7 @@ export const AudioProvider = ({ children }) => {
 
       soundRef.current = sound;
       loadedTrackIdRef.current = trackId;
-      if (status && status.durationMillis && status.durationMillis > 1000) {
+      if (typeof status !== 'undefined' && status && status.durationMillis && status.durationMillis > 1000) {
         const authenticSec = Math.floor(status.durationMillis / 1000);
         track = { ...track, duration: authenticSec };
         if (currentTrackRef.current) currentTrackRef.current.duration = authenticSec;
@@ -1846,7 +1846,7 @@ export const AudioProvider = ({ children }) => {
       if (!isRetry && !isOffline && playRequestSeqRef.current === requestSeq) {
         const cleanRetryTrack = { ...track, resolvedAudioUrl: null };
         return playTrack(cleanRetryTrack, trackList, true, targetTime, isRemote);
-      } else if (playRequestSeqRef.current === requestSeq) {
+      } else if (playRequestSeqRef.current === requestSeq && (!soundRef.current || loadedTrackIdRef.current !== trackId)) {
         showToast(`Could not play: ${track?.title || 'Track'}`, 'error');
       }
     } finally {

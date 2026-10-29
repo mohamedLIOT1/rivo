@@ -351,25 +351,25 @@ function executeSeparation(task) {
       let cloudDone = false;
       if (fs.existsSync(cloudScript)) {
         try {
-          console.log(`[VocalSeparator] Attempting Cloud ZeroGPU inference for: ${safe}`);
-          task.progress = 40;
-          task.eta = 'Isolating vocals with Cloud GPU (A10G)...';
+          console.log(`[VocalSeparator] Attempting AI cloud vocal separation for: ${safe}`);
+          task.progress = 35;
+          task.eta = 'Isolating vocals with AI Neural Net...';
           await new Promise((resCloud, rejCloud) => {
             const pyBin = process.platform === 'win32' ? 'python' : 'python3';
             const pyProc = spawn(pyBin, [cloudScript, tempWavAudio, targetStemPath], {
               env: { ...process.env }
             });
             const progressTimer = setInterval(() => {
-              if (task.progress < 90) {
-                task.progress = Math.min(90, task.progress + Math.floor(Math.random() * 8) + 6);
+              if (task.progress < 92) {
+                task.progress = Math.min(92, task.progress + Math.floor(Math.random() * 6) + 4);
                 task.updatedAt = Date.now();
               }
-            }, 1800);
+            }, 1200);
             const timeoutTimer = setTimeout(() => {
               clearInterval(progressTimer);
               try { pyProc.kill('SIGKILL'); } catch {}
-              rejCloud(new Error('Cloud separator timeout after 240s'));
-            }, 240000);
+              rejCloud(new Error('Cloud separator timeout after 120s'));
+            }, 120000);
 
             pyProc.on('close', (code) => {
               clearInterval(progressTimer);

@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.2.4',
+      version: '2.2.5',
       name: 'Rivo Web',
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
     },
     windows: {
-      version: '2.2.4',
+      version: '2.2.5',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.4.exe',
+      directFile: 'Rivo-v2.2.5.exe',
       mandatory: false,
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
     },
     android: {
-      version: '2.2.4',
-      build: 118,
+      version: '2.2.5',
+      build: 119,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.4.apk',
+      directFile: 'Rivo-v2.2.5.apk',
       mandatory: false,
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
     },
     ios: {
-      version: '2.2.4',
-      build: 118,
+      version: '2.2.5',
+      build: 119,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.4.ipa',
+      directFile: 'Rivo-v2.2.5.ipa',
       mandatory: false,
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
     }
   }
 };
@@ -181,43 +181,48 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.2.4',
+      version: '2.2.5',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
     },
     windows: {
-      version: '2.2.4',
+      version: '2.2.5',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.4.exe',
+      directFile: 'Rivo-v2.2.5.exe',
       mandatory: false,
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
     },
     android: {
-      version: '2.2.4',
-      build: 118,
+      version: '2.2.5',
+      build: 119,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.4.apk',
+      directFile: 'Rivo-v2.2.5.apk',
       mandatory: false,
-      notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.',
-      notesEn: 'Instant OTA update v2.2.4 • Playback bug fix & pure vocal stem resolver.',
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.',
+      notesEn: 'Instant OTA update v2.2.5 • Instant audio playback & ultra-fast neural vocal separator.',
       ota: {
         enabled: true,
-        version: '2.2.4',
+        version: '2.2.5',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث فوري جديد v2.2.4 • إصلاح التشغيل الفوري وإزالة تعليق المعالجة.',
-        notesEn: 'Instant OTA update v2.2.4 • Playback bug fix & pure vocal stem resolver.'
+        notes: 'تحديث فوري جديد v2.2.5 • تسريع التشغيل الفوري وإزالة تعليق المعالجة.',
+        notesEn: 'Instant OTA update v2.2.5 • Instant audio playback & ultra-fast neural vocal separator.'
       }
     },
     ios: {
-      version: '2.2.4',
-      build: 118,
+      version: '2.2.5',
+      build: 119,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.4.ipa',
+      directFile: 'Rivo-v2.2.5.ipa',
       mandatory: false,
+      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.',
+      notesEn: 'Instant update v2.2.5 • Instant audio playback & ultra-fast neural vocal separator.'
+    }
+  }
+};
       notes: 'Update v2.2.4 • إصلاح شامل لتشغيل الأغاني أوفلاين وأونلاين، إزالة تعليق شريط المعالجة عند 90%، وتبديل سلس ومثالي.'
     }
   }

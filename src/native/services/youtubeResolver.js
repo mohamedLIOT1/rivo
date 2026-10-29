@@ -140,7 +140,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       // 1d. Poll every 1.4s until ready
       let pollAttempts = 0;
       let displayProgress = Math.max(12, statusData?.status === 'failed' ? 12 : (statusData?.progress || 12));
-      while (pollAttempts < 45) {
+      while (pollAttempts < 55) {
         await new Promise(r => setTimeout(r, 1400));
         pollAttempts++;
 

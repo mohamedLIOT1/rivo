@@ -25,48 +25,78 @@ def main():
 
     from gradio_client import Client, handle_file
 
-    # Prioritize unlimited, reliable UVR5 spaces that do not enforce ZeroGPU limits
-    cpu_spaces = [
-        "B3XN/UVR5_UI",
-        "stdz/UVR5_UI",
-        "fasooo/UVR5_UI",
-        "teogabriel/UVR5-UI"
+    configs = [
+        {
+            "space": "csukuangfj/music-source-separation",
+            "type": "csukuangfj",
+            "timeout": 90
+        },
+        {
+            "space": "teamup-tech/BS-RoFormer",
+            "type": "teamup",
+            "timeout": 90
+        },
+        {
+            "space": "B3XN/UVR5_UI",
+            "type": "uvr5",
+            "timeout": 120
+        },
+        {
+            "space": "stdz/UVR5_UI",
+            "type": "uvr5",
+            "timeout": 120
+        }
     ]
-    gpu_spaces = [
-        "TheStinger/UVR5_UI",
-        "itsalboushi/UVR5_UI",
-        "NeoPy/UVR5-UI"
-    ]
-    spaces = (gpu_spaces + cpu_spaces) if token else (cpu_spaces + gpu_spaces)
 
     last_error = None
-    for space_id in spaces:
+    for cfg in configs:
+        space_id = cfg["space"]
+        space_type = cfg["type"]
+        space_timeout = cfg["timeout"]
+
         try:
             print(f"[CloudSeparator] Connecting to space: {space_id}...")
             client = Client(space_id, token=token)
 
-            print(f"[CloudSeparator] Submitting job to {space_id} with Kim_Vocal_2.onnx...")
-            job = client.submit(
-                audio=handle_file(input_audio),
-                model='Kim_Vocal_2.onnx',
-                out_format='mp3',
-                hop_length=1024,
-                segment_size=256,
-                denoise=False,
-                overlap=0.25,
-                batch_size=1,
-                norm_thresh=0.9,
-                amp_thresh=0.7,
-                single_stem='Vocals',
-                api_name='/mdxnet_separator'
-            )
-            result = job.result(timeout=200)
+            print(f"[CloudSeparator] Submitting audio to {space_id} ({space_type})...")
+            if space_type == "csukuangfj":
+                job = client.submit(
+                    in_filename=handle_file(input_audio),
+                    api_name='/process_uploaded_file'
+                )
+            elif space_type == "teamup":
+                job = client.submit(
+                    input_0=handle_file(input_audio),
+                    api_name='/process'
+                )
+            else:
+                job = client.submit(
+                    audio=handle_file(input_audio),
+                    model='Kim_Vocal_2.onnx',
+                    out_format='mp3',
+                    hop_length=1024,
+                    segment_size=256,
+                    denoise=False,
+                    overlap=0.25,
+                    batch_size=1,
+                    norm_thresh=0.9,
+                    amp_thresh=0.7,
+                    single_stem='Vocals',
+                    api_name='/mdxnet_separator'
+                )
 
-            # result is tuple: (vocal_path, inst_path)
+            result = job.result(timeout=space_timeout)
             vocal_stem = result[0] if isinstance(result, (list, tuple)) else result
+
             if vocal_stem and os.path.exists(vocal_stem) and os.path.getsize(vocal_stem) > 10000:
                 os.makedirs(os.path.dirname(os.path.abspath(output_mp3)), exist_ok=True)
-                shutil.copyfile(vocal_stem, output_mp3)
+                # Ensure final output is high-bitrate MP3
+                if vocal_stem.lower().endswith('.mp3'):
+                    shutil.copyfile(vocal_stem, output_mp3)
+                else:
+                    conv_cmd = ["ffmpeg", "-y", "-i", vocal_stem, "-c:a", "libmp3lame", "-b:a", "256k", output_mp3]
+                    subprocess.run(conv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
                 elapsed = time.time() - t0
                 print(f"[CloudSeparator] SUCCESS on {space_id} in {elapsed:.1f}s -> {output_mp3}")
                 sys.exit(0)
@@ -80,39 +110,6 @@ def main():
             continue
 
     print(f"[CloudSeparator] All cloud spaces failed. Last error: {last_error}")
-
-    # Fallback to local high-performance VR model if available on server
-    vr_model = "/tmp/audio-separator-models/3_HP-Vocal-UVR.pth"
-    if os.path.exists(vr_model):
-        try:
-            print(f"[CloudSeparator] Falling back to local VR architecture model: {vr_model}")
-            out_dir = os.path.dirname(os.path.abspath(output_mp3))
-            tmp_sep_dir = os.path.join(out_dir, f"tmp_vr_{int(time.time())}")
-            os.makedirs(tmp_sep_dir, exist_ok=True)
-
-            cmd = [
-                "audio-separator",
-                "-m", "3_HP-Vocal-UVR.pth",
-                "--single_stem", "Vocals",
-                "--output_format", "MP3",
-                "--output_dir", tmp_sep_dir,
-                input_audio
-            ]
-            subprocess.run(cmd, check=True, timeout=300)
-
-            # Look for generated vocal file in tmp_sep_dir
-            for f in os.listdir(tmp_sep_dir):
-                if f.endswith(".mp3") and "Vocals" in f:
-                    generated_vocal = os.path.join(tmp_sep_dir, f)
-                    if os.path.getsize(generated_vocal) > 10000:
-                        shutil.copyfile(generated_vocal, output_mp3)
-                        shutil.rmtree(tmp_sep_dir, ignore_errors=True)
-                        print(f"[CloudSeparator] SUCCESS via local VR model -> {output_mp3}")
-                        sys.exit(0)
-            shutil.rmtree(tmp_sep_dir, ignore_errors=True)
-        except Exception as local_err:
-            print(f"[CloudSeparator] Local VR separation fallback failed: {local_err}")
-
     sys.exit(2)
 
 if __name__ == "__main__":
