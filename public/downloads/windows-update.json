@@ -1,6 +1,6 @@
 {
-  "version": "2.2.5",
-  "pub_date": "2026-10-29T16:50:00Z",
-  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.5.exe",
-  "notes": "Update v2.2.5: Instant audio playback with zero error toast, ultra-fast neural vocal isolation without hanging."
+  "version": "2.2.7",
+  "pub_date": "2026-10-29T21:00:00Z",
+  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.7.exe",
+  "notes": "Update v2.2.7: MiniPlayer layout fix, discrete navigation pill, and clean search header."
 }

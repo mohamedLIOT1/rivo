@@ -343,37 +343,6 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
           <CassetteTag label={isOffline ? 'OFFLINE SONGS' : 'ONLINE'} bg={colors.ink} textColor={colors.mint} />
         </View>
 
-        {/* Dedicated Song Radar Banner */}
-        {!hasSearch && (
-          <TouchableOpacity
-            style={[styles.radarBanner, !isDark && styles.radarBannerLight]}
-            activeOpacity={0.85}
-            onPress={() => setIsRadarOpen(true)}
-          >
-            <View style={styles.radarBannerLeft}>
-              <View style={styles.radarBannerIcon}>
-                <Radio size={18} color="#10b981" />
-              </View>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.radarBannerTitle, !isDark && styles.textDark]}>
-                    SONG RADAR
-                  </Text>
-                  <View style={styles.radarPill}>
-                    <Text style={styles.radarPillText}>AUDIO & HUMMING</Text>
-                  </View>
-                </View>
-                <Text style={[styles.radarBannerSub, !isDark && styles.textDarkMuted]}>
-                  Tap to identify music or hum a tune
-                </Text>
-              </View>
-            </View>
-            <View style={styles.radarBannerArrow}>
-              <ArrowRight size={14} color="#10b981" />
-            </View>
-          </TouchableOpacity>
-        )}
-
         <View style={[styles.inputContainer, !isDark && styles.inputContainerLight]}>
           <SearchIcon size={18} color={!isDark ? '#0b1110' : colors.ink} style={styles.searchIcon} />
           <TextInput

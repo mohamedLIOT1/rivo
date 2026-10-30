@@ -1061,7 +1061,7 @@ function NativeAppShell() {
       {currentTrack && (
         <MiniPlayer
           onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-          bottomOffset={navStyle === 'fab' ? (Platform.OS === 'ios' ? 88 : 78) : (Platform.OS === 'ios' ? 70 : 56)}
+          bottomOffset={navStyle === 'fab' ? (Platform.OS === 'ios' ? 14 : 10) : (Platform.OS === 'ios' ? 70 : 56)}
         />
       )}
 
@@ -1072,6 +1072,7 @@ function NativeAppShell() {
         <FloatingNavMenu
           activeTab={activeTab}
           onTabPress={handleTabPress}
+          hasTrack={Boolean(currentTrack)}
         />
       ) : (
         <View style={[styles.bottomBar, !isDark && styles.bottomBarLight]}>

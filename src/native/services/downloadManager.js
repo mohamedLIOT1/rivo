@@ -963,33 +963,41 @@ export const downloadTrack = async (track, onProgress) => {
       }
 
       // Embed ID3 tags directly into MP3 file so image & lyrics are bundled into the audio file itself!
-  if (audioFileUri.endsWith('.mp3')) {
-    try {
-      let coverBase64 = null;
-      let coverMime = 'image/jpeg';
-      if (localCover && localCover.startsWith('file://')) {
-        const cInfo = await FileSystem.getInfoAsync(localCover).catch(() => ({ exists: false }));
-        if (cInfo.exists && cInfo.size > 0 && cInfo.size < 5000000) {
-          coverBase64 = await FileSystem.readAsStringAsync(localCover, { encoding: FileSystem.EncodingType.Base64 });
-          if (localCover.toLowerCase().endsWith('.png')) coverMime = 'image/png';
+      const targetTagAudioUri = existingLocalUri || audioFileUri;
+      if (targetTagAudioUri.endsWith('.mp3')) {
+        try {
+          let coverBase64 = null;
+          let coverMime = 'image/jpeg';
+          let localCoverToEmbed = existingRecord?.coverUrl || existingRecord?.cover || track.coverUrl || track.cover || '';
+          if (!localCoverToEmbed.startsWith('file://')) {
+            try {
+              const cInfo = await FileSystem.getInfoAsync(coverFileUri);
+              if (cInfo.exists && cInfo.size > 0) localCoverToEmbed = coverFileUri;
+            } catch {}
+          }
+          if (localCoverToEmbed && localCoverToEmbed.startsWith('file://')) {
+            const cInfo = await FileSystem.getInfoAsync(localCoverToEmbed).catch(() => ({ exists: false }));
+            if (cInfo.exists && cInfo.size > 0 && cInfo.size < 5000000) {
+              coverBase64 = await FileSystem.readAsStringAsync(localCoverToEmbed, { encoding: FileSystem.EncodingType.Base64 });
+              if (localCoverToEmbed.toLowerCase().endsWith('.png')) coverMime = 'image/png';
+            }
+          }
+          const lyricsString = Array.isArray(trackLyrics) && trackLyrics.length > 0
+            ? trackLyrics.map(l => l.text).join('\n')
+            : (typeof rawLyrics === 'string' ? rawLyrics : '');
+
+          await embedId3v2TagsToMp3File(targetTagAudioUri, {
+            title: cleanTitle,
+            artist: cleanArtist,
+            album: cleanAlbum,
+            lyrics: lyricsString,
+            coverBase64,
+            coverMime,
+          });
+        } catch (tagErr) {
+          console.warn('[downloadManager] ID3 tag embedding notice:', tagErr?.message);
         }
       }
-      const lyricsString = Array.isArray(trackLyrics) && trackLyrics.length > 0
-        ? trackLyrics.map(l => l.text).join('\n')
-        : (typeof rawLyrics === 'string' ? rawLyrics : '');
-
-      await embedId3v2TagsToMp3File(audioFileUri, {
-        title: cleanTitle,
-        artist: cleanArtist,
-        album: cleanAlbum,
-        lyrics: lyricsString,
-        coverBase64,
-        coverMime,
-      });
-    } catch (tagErr) {
-      console.warn('[downloadManager] ID3 tag embedding notice:', tagErr?.message);
-    }
-  }
 
   const record = {
         ...track,

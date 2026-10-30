@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.2.6",
+  "version": "2.2.7",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري (3.35 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (3.35 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3509907,
+  "notes": "تحديث فوري v2.2.7: تحسين مظهر الميني بلاير ونقل زر التنقل وإزالة كارت الرادار",
+  "notesEn": "Instant OTA v2.2.7: MiniPlayer layout fix, discrete navigation pill, and clean search header",
+  "bundleSize": 3508890,
   "sizeMb": "3.35 MB",
-  "updatedAt": "2026-10-29T19:38:01.416Z"
+  "updatedAt": "2026-10-29T20:53:54.318Z"
 }

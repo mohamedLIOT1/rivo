@@ -376,6 +376,46 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 const ytSearchCache = new Map();
 let ytQuotaExceededUntil = 0;
 
+// Multi-Key YouTube API Manager with automatic failover and rotation
+function getYouTubeApiKeys() {
+  const rawList = process.env.YOUTUBE_API_KEYS || process.env.YOUTUBE_API_KEY || '';
+  const parsed = rawList.split(',').map(k => k.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+  if (parsed.length === 0) {
+    parsed.push('AIzaSyBMoZQ5TZxtIQLeOj-Kia-WmP1C4b2Ite0');
+  }
+  return parsed;
+}
+
+const keyQuotaExceededMap = new Map();
+let currentKeyIndex = 0;
+
+function getActiveYouTubeApiKey() {
+  const keys = getYouTubeApiKeys();
+  if (keys.length === 0) return null;
+  const now = Date.now();
+  for (let i = 0; i < keys.length; i++) {
+    const idx = (currentKeyIndex + i) % keys.length;
+    const key = keys[idx];
+    const cooldown = keyQuotaExceededMap.get(key) || 0;
+    if (now > cooldown) {
+      currentKeyIndex = idx;
+      return key;
+    }
+  }
+  return null;
+}
+
+function markYouTubeApiKeyExceeded(key, hours = 4) {
+  if (!key) return;
+  const cooldownUntil = Date.now() + hours * 3600 * 1000;
+  keyQuotaExceededMap.set(key, cooldownUntil);
+  console.warn(`[YouTube API Rotation] Key ...${key.slice(-6)} reached quota limit! Rotating key (cooldown: ${hours}h)`);
+  const keys = getYouTubeApiKeys();
+  if (keys.length > 0) {
+    currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+  }
+}
+
 function calculateTitleSimilarity(targetTitle = '', candTitle = '', targetArtist = '') {
   const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
   const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
@@ -584,9 +624,9 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
 
   const finalQuery = searchQueries[0];
 
-  // 2. Fallback: YouTube Data API v3
-  const apiKey = process.env.YOUTUBE_API_KEY || 'AIzaSyD9GLRXh9UgmhFbuhNqRfr-WPIT3QlWxJs';
-  if (apiKey && Date.now() > ytQuotaExceededUntil) {
+  // 2. Fallback: YouTube Data API v3 with automatic key rotation
+  const apiKey = getActiveYouTubeApiKey();
+  if (apiKey) {
     try {
       const res = await axios.get('https://www.googleapis.com/youtube/v3/search', {
         params: {
@@ -619,7 +659,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     } catch (err) {
       const errMsg = err?.response?.data?.error?.message || err.message;
       if (err?.response?.status === 403 || /quota/i.test(errMsg)) {
-        ytQuotaExceededUntil = Date.now() + 2 * 3600 * 1000;
+        markYouTubeApiKeyExceeded(apiKey);
       }
     }
   }
@@ -784,8 +824,8 @@ async function searchTracksInternal(query) {
       }));
 
     let ytTracks = [];
-    const apiKey = process.env.YOUTUBE_API_KEY;
-    if (apiKey && Date.now() > ytQuotaExceededUntil) {
+    const apiKey = getActiveYouTubeApiKey();
+    if (apiKey) {
       try {
         const ytRes = await axios.get('https://www.googleapis.com/youtube/v3/search', {
           params: {
@@ -857,7 +897,7 @@ async function searchTracksInternal(query) {
       } catch (err) {
         const errMsg = err?.response?.data?.error?.message || err.message || '';
         if (err?.response?.status === 403 || errMsg.toLowerCase().includes('quota')) {
-          ytQuotaExceededUntil = Date.now() + 2 * 3600 * 1000;
+          markYouTubeApiKeyExceeded(apiKey);
         }
       }
     }

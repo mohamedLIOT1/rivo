@@ -30,7 +30,7 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const rawCover = currentTrack?.coverUrl || currentTrack?.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 
-  const dockBottom = bottomOffset !== undefined ? bottomOffset : (Platform.OS === 'ios' ? 70 : 56);
+  const dockBottom = bottomOffset !== undefined ? bottomOffset : (Platform.OS === 'ios' ? 14 : 10);
 
   return (
     <View style={[styles.outerDock, { bottom: dockBottom }]}>
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
 
   outerDock: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 70 : 56,
+    bottom: Platform.OS === 'ios' ? 14 : 10,
     left: 8,
     right: 8,
     maxWidth: 680,

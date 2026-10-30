@@ -17,11 +17,11 @@ import { useNavPreferences } from '../context/NavPreferencesContext';
 import { colors } from '../theme/colors';
 import NavHubIcon from '../ui/NavHubIcon';
 
-const BUTTON_SIZE = 58;
+const BUTTON_SIZE = 38;
 const ITEM_CIRCLE_SIZE = 50;
 const ARC_RADIUS = 124; // Expanded radial distance for comfortable spacing
 
-export default function FloatingNavMenu({ activeTab, onTabPress }) {
+export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = false }) {
   const { isDark } = useTheme();
   const { visibleMenuItems } = useNavPreferences();
   const [isOpen, setIsOpen] = useState(false);
@@ -282,7 +282,9 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
         style={[
           styles.fabWrapper,
           {
-            bottom: Platform.OS === 'ios' ? 24 : 14,
+            bottom: hasTrack
+              ? (Platform.OS === 'ios' ? 74 : 68)
+              : (Platform.OS === 'ios' ? 24 : 16),
             transform: [
               { translateX: pan.x },
               { translateY: pan.y },
@@ -337,7 +339,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
                 { transform: [{ rotate: spin }, { scale: fabScale }] },
               ]}
             >
-              <NavHubIcon size={24} color={isDark ? '#0b1110' : '#ffffff'} strokeWidth={2.4} />
+              <NavHubIcon size={18} color={isDark ? '#26c4b7' : '#0b1110'} />
             </Animated.View>
           )}
         </TouchableOpacity>
@@ -461,7 +463,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress }) {
 const styles = StyleSheet.create({
   fabWrapper: {
     position: 'absolute',
-    alignSelf: 'center',
+    right: 14,
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     alignItems: 'center',
@@ -470,9 +472,9 @@ const styles = StyleSheet.create({
   },
   fabPulseRing: {
     position: 'absolute',
-    width: BUTTON_SIZE + 16,
-    height: BUTTON_SIZE + 16,
-    borderRadius: (BUTTON_SIZE + 16) / 2,
+    width: BUTTON_SIZE + 10,
+    height: BUTTON_SIZE + 10,
+    borderRadius: (BUTTON_SIZE + 10) / 2,
     borderWidth: 2,
   },
   fabButton: {
@@ -481,7 +483,7 @@ const styles = StyleSheet.create({
     borderRadius: BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
+    borderWidth: 1.5,
     elevation: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
@@ -489,8 +491,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   fabButtonDark: {
-    backgroundColor: colors.mint,
-    borderColor: '#0b1110',
+    backgroundColor: '#101b19',
+    borderColor: '#17a398',
   },
   fabButtonLight: {
     backgroundColor: '#0b1110',
@@ -602,7 +604,7 @@ const styles = StyleSheet.create({
   },
   arcCircleLight: {
     backgroundColor: '#e6f7f4',
-    borderColor: '#0b1110',
+    borderColor: '#17a398',
   },
   arcCircleActive: {
     backgroundColor: colors.mint,
@@ -647,7 +649,7 @@ const styles = StyleSheet.create({
     borderRadius: BUTTON_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2.5,
+    borderWidth: 1.5,
     elevation: 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },

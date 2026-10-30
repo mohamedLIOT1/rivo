@@ -172,7 +172,7 @@ export default function ListeningActivityPanel({
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-xs font-mono font-black uppercase tracking-wider">
-                  FRIEND ACTIVITY
+                  {activities.some(a => a.isCommunity) && !activities.some(a => !a.isCommunity) ? 'LIVE ACTIVITY' : 'FRIEND ACTIVITY'}
                 </h3>
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] rounded">
                   {activities.length}
@@ -181,7 +181,7 @@ export default function ListeningActivityPanel({
               <span className="text-[9.5px] font-mono text-zinc-400 block mt-0.5">
                 {liveCount > 0 
                   ? `🎧 ${liveCount} live right now` 
-                  : 'Live listening status'}
+                  : (activities.some(a => a.isCommunity) ? 'Live community listeners' : 'Live listening status')}
               </span>
             </div>
           </div>
@@ -305,6 +305,11 @@ export default function ListeningActivityPanel({
                       ) : (
                         <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-500 border border-zinc-700/40 uppercase shrink-0">
                           Offline {timeAgo ? `• ${timeAgo}` : ''}
+                        </span>
+                      )}
+                      {friend.isCommunity && (
+                        <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30 uppercase shrink-0">
+                          Community
                         </span>
                       )}
                     </div>

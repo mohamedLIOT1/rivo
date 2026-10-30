@@ -545,6 +545,13 @@ router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio',
       artist: { $regex: new RegExp(`^${escapeRegex(cleanA)}$`, 'i') }
     });
     if (existingTrack) {
+      // Clean up orphaned uploaded files from disk since this is a duplicate
+      if (req.files?.audio?.[0]?.path) {
+        try { fs.unlinkSync(req.files.audio[0].path); } catch {}
+      }
+      if (req.files?.cover?.[0]?.path) {
+        try { fs.unlinkSync(req.files.cover[0].path); } catch {}
+      }
       if (req.user?.id) {
         await autoAddTrackToUserLinksPlaylist(req.user.id, existingTrack._id, existingTrack.cover);
       }
@@ -576,6 +583,12 @@ router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio',
 
     res.json({ success: true, track: newTrack });
   } catch (err) {
+    if (req.files?.audio?.[0]?.path) {
+      try { fs.unlinkSync(req.files.audio[0].path); } catch {}
+    }
+    if (req.files?.cover?.[0]?.path) {
+      try { fs.unlinkSync(req.files.cover[0].path); } catch {}
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -668,7 +681,23 @@ const deleteTrackHandler = async (req, res) => {
 
     try {
       const existing = await Track.findById(trackId);
-      if (existing?.audioUrl) invalidateAudioCache(existing.audioUrl);
+      if (existing) {
+        if (existing.audioUrl) {
+          invalidateAudioCache(existing.audioUrl);
+          if (existing.audioUrl.startsWith('/uploads/') || existing.audioUrl.startsWith('uploads/')) {
+            const audioPath = safeResolveUpload(existing.audioUrl, uploadsDir);
+            if (audioPath && fs.existsSync(audioPath)) {
+              try { fs.unlinkSync(audioPath); } catch {}
+            }
+          }
+        }
+        if (existing.cover && (existing.cover.startsWith('/uploads/') || existing.cover.startsWith('uploads/'))) {
+          const coverPath = safeResolveUpload(existing.cover, uploadsDir);
+          if (coverPath && fs.existsSync(coverPath)) {
+            try { fs.unlinkSync(coverPath); } catch {}
+          }
+        }
+      }
       await Track.deleteOne({ _id: trackId });
     } catch {}
     try {
@@ -1148,6 +1177,25 @@ router.get('/stream-proxy', async (req, res) => {
     return res.status(403).json({ error: error || 'SSRF verification failed' });
   }
 
+  const abortController = new AbortController();
+  let upstreamStream = null;
+
+  const cleanupStream = () => {
+    try {
+      abortController.abort();
+      if (upstreamStream && typeof upstreamStream.destroy === 'function') {
+        upstreamStream.destroy();
+      }
+    } catch {}
+  };
+
+  req.on('close', () => {
+    if (!res.writableEnded) {
+      cleanupStream();
+    }
+  });
+  res.on('error', cleanupStream);
+
   try {
     const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
     if (req.headers.range && !targetUrl.includes('sndcdn.com') && !targetUrl.includes('soundcloud.')) {
@@ -1159,6 +1207,7 @@ router.get('/stream-proxy', async (req, res) => {
       url: targetUrl,
       responseType: 'stream',
       headers,
+      signal: abortController.signal,
       timeout: 180000,
       maxRedirects: 5,
       beforeRedirect: (options) => {
@@ -1176,6 +1225,12 @@ router.get('/stream-proxy', async (req, res) => {
       validateStatus: (status) => status < 400
     });
 
+    upstreamStream = response.data;
+    upstreamStream.on('error', (err) => {
+      cleanupStream();
+      if (!res.headersSent) res.status(500).end();
+    });
+
     res.status(response.status);
     const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
     for (const [key, value] of Object.entries(response.headers)) {
@@ -1189,7 +1244,8 @@ router.get('/stream-proxy', async (req, res) => {
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
     response.data.pipe(res);
   } catch (err) {
-    res.status(500).send('Proxy streaming failed');
+    cleanupStream();
+    if (!res.headersSent) res.status(500).send('Proxy streaming failed');
   }
 });
 

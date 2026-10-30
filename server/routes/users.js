@@ -213,14 +213,24 @@ router.get('/listening-activity', optionalAuth, async (req, res) => {
     if (currentUserId) {
       const me = await User.findById(currentUserId).lean();
       if (me && me.following && me.following.length > 0) {
-        const followedUsers = await User.find({ _id: { $in: me.following } })
-          .select('_id name avatar bio currentListening lastActiveAt updatedAt')
+        const objectIds = me.following.map(id => {
+          try { return new mongoose.Types.ObjectId(String(id)); } catch { return null; }
+        }).filter(Boolean);
+
+        const followedUsers = await User.find({
+          $or: [
+            { _id: { $in: objectIds } },
+            { _id: { $in: me.following } }
+          ]
+        })
+          .select('_id name avatar bio currentListening lastActiveAt updatedAt isVerified')
           .lean();
+
         friends = followedUsers.map(u => {
           const uId = String(u._id);
           const isOnline = Boolean(req.userSocketMap?.has(uId) && req.userSocketMap.get(uId).size > 0);
           const lastActivityTime = new Date(u.currentListening?.updatedAt || u.lastActiveAt || u.updatedAt || 0).getTime();
-          const isRecent = (Date.now() - lastActivityTime) < 180000;
+          const isRecent = (Date.now() - lastActivityTime) < 300000;
           const isLive = Boolean(isOnline && u.currentListening?.isPlaying && isRecent);
 
           return {
@@ -231,8 +241,52 @@ router.get('/listening-activity', optionalAuth, async (req, res) => {
             isVerified: isVerifiedUser(u.name),
             currentListening: u.currentListening || null,
             lastActiveAt: u.lastActiveAt || u.updatedAt || null,
-            isOnline,
+            isOnline: isOnline || isLive,
             isLive
+          };
+        });
+      }
+    }
+
+    // Community Active Listeners Fallback:
+    // If the user has no friends currently active or has not followed anyone yet,
+    // show other active listeners on Rivo so the activity panel is never dead or zeroed out!
+    if (friends.length === 0) {
+      const excludeIds = [];
+      if (currentUserId && mongoose.isValidObjectId(currentUserId)) {
+        try { excludeIds.push(new mongoose.Types.ObjectId(String(currentUserId))); } catch {}
+      }
+
+      const activeCommunity = await User.find({
+        ...(excludeIds.length > 0 ? { _id: { $nin: excludeIds } } : {}),
+        $or: [
+          { 'currentListening.isPlaying': true },
+          { 'currentListening.title': { $exists: true, $ne: '' } },
+          { lastActiveAt: { $gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } }
+        ]
+      })
+      .sort({ 'currentListening.isPlaying': -1, lastActiveAt: -1 })
+      .limit(8)
+      .select('_id name avatar bio currentListening lastActiveAt isVerified')
+      .lean();
+
+      if (activeCommunity.length > 0) {
+        friends = activeCommunity.map(u => {
+          const uId = String(u._id);
+          const isOnline = Boolean(req.userSocketMap?.has(uId) && req.userSocketMap.get(uId).size > 0);
+          const isLive = Boolean(u.currentListening?.isPlaying);
+
+          return {
+            id: uId,
+            name: u.name,
+            avatar: u.avatar || '',
+            bio: u.bio || '',
+            isVerified: isVerifiedUser(u.name),
+            currentListening: u.currentListening || null,
+            lastActiveAt: u.lastActiveAt || null,
+            isOnline: isOnline || isLive,
+            isLive,
+            isCommunity: true
           };
         });
       }
@@ -294,10 +348,10 @@ router.get('/:id/followers', optionalAuth, async (req, res) => {
     const rawId = req.params.id;
     let target = null;
     if (mongoose.isValidObjectId(rawId)) {
-      target = await User.findById(rawId).select('followers').lean();
+      target = await User.findById(rawId).select('_id followers').lean();
     }
     if (!target) {
-      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('followers').lean();
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('_id followers').lean();
     }
     if (!target) return res.status(404).json({ error: 'User not found' });
 
@@ -308,12 +362,23 @@ router.get('/:id/followers', optionalAuth, async (req, res) => {
     }).filter(Boolean);
 
     const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+    const objectIdList = validObjectIds.map(id => {
+      try { return new mongoose.Types.ObjectId(String(id)); } catch { return null; }
+    }).filter(Boolean);
+
     const followerUsers = await User.find({
       $or: [
+        { _id: { $in: objectIdList } },
         { _id: { $in: validObjectIds } },
-        { id: { $in: rawIds } }
+        { id: { $in: rawIds } },
+        { name: { $in: rawIds } }
       ]
     }).select('_id name avatar bio').lean();
+
+    // If ghost IDs exist (users were deleted), automatically sync database array
+    if (target._id && followerUsers.length !== (target.followers || []).length) {
+      await User.findByIdAndUpdate(target._id, { $set: { followers: followerUsers.map(u => u._id) } }).catch(() => {});
+    }
 
     const followers = followerUsers.map(f => ({
       id: String(f._id),
@@ -335,10 +400,10 @@ router.get('/:id/following', optionalAuth, async (req, res) => {
     const rawId = req.params.id;
     let target = null;
     if (mongoose.isValidObjectId(rawId)) {
-      target = await User.findById(rawId).select('following').lean();
+      target = await User.findById(rawId).select('_id following').lean();
     }
     if (!target) {
-      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('following').lean();
+      target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('_id following').lean();
     }
     if (!target) return res.status(404).json({ error: 'User not found' });
 
@@ -349,12 +414,23 @@ router.get('/:id/following', optionalAuth, async (req, res) => {
     }).filter(Boolean);
 
     const validObjectIds = rawIds.filter(id => mongoose.isValidObjectId(id));
+    const objectIdList = validObjectIds.map(id => {
+      try { return new mongoose.Types.ObjectId(String(id)); } catch { return null; }
+    }).filter(Boolean);
+
     const followingUsers = await User.find({
       $or: [
+        { _id: { $in: objectIdList } },
         { _id: { $in: validObjectIds } },
-        { id: { $in: rawIds } }
+        { id: { $in: rawIds } },
+        { name: { $in: rawIds } }
       ]
     }).select('_id name avatar bio').lean();
+
+    // If ghost IDs exist (users were deleted), automatically sync database array
+    if (target._id && followingUsers.length !== (target.following || []).length) {
+      await User.findByIdAndUpdate(target._id, { $set: { following: followingUsers.map(u => u._id) } }).catch(() => {});
+    }
 
     const following = followingUsers.map(f => ({
       id: String(f._id),

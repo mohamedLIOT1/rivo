@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.2.5',
+      version: '2.2.7',
       name: 'Rivo Web',
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     windows: {
-      version: '2.2.5',
+      version: '2.2.7',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.5.exe',
+      directFile: 'Rivo-v2.2.7.exe',
       mandatory: false,
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     android: {
-      version: '2.2.5',
-      build: 119,
+      version: '2.2.7',
+      build: 120,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.5.apk',
+      directFile: 'Rivo-v2.2.7.apk',
       mandatory: false,
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     ios: {
-      version: '2.2.5',
-      build: 119,
+      version: '2.2.7',
+      build: 120,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.5.ipa',
+      directFile: 'Rivo-v2.2.7.ipa',
       mandatory: false,
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     }
   }
 };
@@ -181,45 +181,45 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.2.5',
+      version: '2.2.7',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     windows: {
-      version: '2.2.5',
+      version: '2.2.7',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.5.exe',
+      directFile: 'Rivo-v2.2.7.exe',
       mandatory: false,
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     android: {
-      version: '2.2.5',
-      build: 119,
+      version: '2.2.7',
+      build: 120,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.5.apk',
+      directFile: 'Rivo-v2.2.7.apk',
       mandatory: false,
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.',
-      notesEn: 'Instant OTA update v2.2.5 • Instant audio playback & ultra-fast neural vocal separator.',
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
+      notesEn: 'Instant OTA update v2.2.7 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.',
       ota: {
         enabled: true,
-        version: '2.2.5',
+        version: '2.2.7',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث فوري جديد v2.2.5 • تسريع التشغيل الفوري وإزالة تعليق المعالجة.',
-        notesEn: 'Instant OTA update v2.2.5 • Instant audio playback & ultra-fast neural vocal separator.'
+        notes: 'تحديث فوري v2.2.7: تحسين مظهر الميني بلاير ونقل زر التنقل وإزالة كارت الرادار.',
+        notesEn: 'Instant OTA update v2.2.7 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
       }
     },
     ios: {
-      version: '2.2.5',
-      build: 119,
+      version: '2.2.7',
+      build: 120,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.5.ipa',
+      directFile: 'Rivo-v2.2.7.ipa',
       mandatory: false,
-      notes: 'Update v2.2.5 • تسريع بدء تشغيل الأغاني وإزالة خطأ التشغيل، تكامل مع محرك العزل العصبي الفائق السرعة بدون تعليق، وإصلاح شامل لجميع المنصات.',
-      notesEn: 'Instant update v2.2.5 • Instant audio playback & ultra-fast neural vocal separator.'
+      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
+      notesEn: 'Instant update v2.2.7 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
     }
   }
 };
@@ -415,12 +415,12 @@ app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) =
 });
 
 // Secure Webhook for automated deployment on GitHub push
-const DEPLOY_SECRET = process.env.DEPLOY_SECRET || 'rivo-deploy-sec-2026';
+const DEPLOY_SECRET = process.env.DEPLOY_SECRET;
 let isDeploying = false;
 
 app.post('/api/deploy-webhook', (req, res) => {
   if (!DEPLOY_SECRET) {
-    return res.status(503).json({ error: 'Deployment webhook is not configured on this server.' });
+    return res.status(503).json({ error: 'Deployment webhook is disabled. Set DEPLOY_SECRET in .env to enable.' });
   }
 
   const secret = req.headers['x-webhook-secret'] || req.body?.secret || req.query?.secret;
@@ -578,8 +578,25 @@ app.get('/api/sync', auth, async (req, res) => {
   }
 });
 
-// Proxy Audio API with SSRF protection
+// Proxy Audio API with SSRF protection and client disconnect abort
 app.get('/api/proxy-audio', async (req, res) => {
+  const abortController = new AbortController();
+  let upstreamStream = null;
+
+  const cleanupStream = () => {
+    try {
+      abortController.abort();
+      if (upstreamStream && typeof upstreamStream.destroy === 'function') {
+        upstreamStream.destroy();
+      }
+    } catch {}
+  };
+
+  req.on('close', () => {
+    if (!res.writableEnded) cleanupStream();
+  });
+  res.on('error', cleanupStream);
+
   try {
     const rawUrl = req.query.url;
     if (!rawUrl || typeof rawUrl !== 'string') return res.status(400).end();
@@ -597,9 +614,16 @@ app.get('/api/proxy-audio', async (req, res) => {
       url: safeUrl.parsed.href,
       responseType: 'stream',
       headers,
+      signal: abortController.signal,
       timeout: 25000,
       maxRedirects: 0,
       validateStatus: (status) => status < 400
+    });
+
+    upstreamStream = r.data;
+    upstreamStream.on('error', () => {
+      cleanupStream();
+      if (!res.headersSent) res.status(500).end();
     });
 
     res.set({
@@ -612,6 +636,7 @@ app.get('/api/proxy-audio', async (req, res) => {
     res.status(r.status);
     r.data.pipe(res);
   } catch (e) {
+    cleanupStream();
     if (!res.headersSent) res.status(500).end();
   }
 });
