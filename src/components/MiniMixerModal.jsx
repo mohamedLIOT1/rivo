@@ -134,11 +134,18 @@ export default function MiniMixerModal({
     return initialTransition?.mixInPoint ? Math.min(durB, Number(initialTransition.mixInPoint)) : 0;
   });
 
+  // Strictly clamp DJ speed / tempo to safe window [0.85, 1.15]
+  const clampSpeed = (val) => {
+    const n = Number(val);
+    if (isNaN(n) || n < 0.85 || n > 1.15) return 1.0;
+    return Number(n.toFixed(2));
+  };
+
   // Volume Trim & Speed Controls for Deck A & Deck B
   const [volA, setVolA] = useState(initialTransition?.volA !== undefined ? Number(initialTransition.volA) : 100);
   const [volB, setVolB] = useState(initialTransition?.volB !== undefined ? Number(initialTransition.volB) : 100);
-  const [speedA, setSpeedA] = useState(initialTransition?.speedA !== undefined ? Number(initialTransition.speedA) : 1.0);
-  const [speedB, setSpeedB] = useState(initialTransition?.speedB !== undefined ? Number(initialTransition.speedB) : 1.0);
+  const [speedA, setSpeedA] = useState(() => clampSpeed(initialTransition?.speedA));
+  const [speedB, setSpeedB] = useState(() => clampSpeed(initialTransition?.speedB));
 
   const [autoMatchBpm, setAutoMatchBpm] = useState(initialTransition?.autoMatchBpm !== false);
   const [bassKill, setBassKill] = useState(Boolean(initialTransition?.bassKill));
@@ -162,12 +169,37 @@ export default function MiniMixerModal({
   const auditionDeckBRef = useRef(null);
   const auditionAnimRef = useRef(null);
 
+  const getAuditionAudioA = () => {
+    if (!auditionDeckARef.current) {
+      const a = new Audio();
+      a.preload = 'auto';
+      auditionDeckARef.current = a;
+    }
+    return auditionDeckARef.current;
+  };
+
+  const getAuditionAudioB = () => {
+    if (!auditionDeckBRef.current) {
+      const b = new Audio();
+      b.preload = 'auto';
+      auditionDeckBRef.current = b;
+    }
+    return auditionDeckBRef.current;
+  };
+
   // Waveform peak data
   const peaksA = useMemo(() => generatePeaksForTrack(trackA, 90), [trackA?.id, trackA?._id, trackA?.title]);
   const peaksB = useMemo(() => generatePeaksForTrack(trackB, 90), [trackB?.id, trackB?._id, trackB?.title]);
 
   const trackAId = String(trackA?.id || trackA?._id || '');
   const trackBId = String(trackB?.id || trackB?._id || '');
+
+  // Pre-resolve both audio streams as soon as the modal opens for 0ms instant playback
+  useEffect(() => {
+    if (!isOpen || !trackA || !trackB) return;
+    resolvePlayableAudioStream(trackA, null, true).catch(() => {});
+    resolvePlayableAudioStream(trackB, null, true).catch(() => {});
+  }, [isOpen, trackAId, trackBId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -181,8 +213,8 @@ export default function MiniMixerModal({
       if (initialTransition.mixInPoint) setMixInPoint(Math.min(durB, Number(initialTransition.mixInPoint)));
       setVolA(initialTransition.volA !== undefined ? Number(initialTransition.volA) : 100);
       setVolB(initialTransition.volB !== undefined ? Number(initialTransition.volB) : 100);
-      setSpeedA(initialTransition.speedA !== undefined ? Number(initialTransition.speedA) : 1.0);
-      setSpeedB(initialTransition.speedB !== undefined ? Number(initialTransition.speedB) : 1.0);
+      setSpeedA(clampSpeed(initialTransition.speedA));
+      setSpeedB(clampSpeed(initialTransition.speedB));
       setAutoMatchBpm(initialTransition.autoMatchBpm !== false);
       setBassKill(Boolean(initialTransition.bassKill));
     } else {
@@ -209,21 +241,15 @@ export default function MiniMixerModal({
     }
     if (auditionDeckARef.current) {
       try {
-        const a = auditionDeckARef.current;
-        a.pause();
-        a.removeAttribute('src');
-        a.load();
+        auditionDeckARef.current.pause();
+        auditionDeckARef.current.currentTime = 0;
       } catch {}
-      auditionDeckARef.current = null;
     }
     if (auditionDeckBRef.current) {
       try {
-        const b = auditionDeckBRef.current;
-        b.pause();
-        b.removeAttribute('src');
-        b.load();
+        auditionDeckBRef.current.pause();
+        auditionDeckBRef.current.currentTime = 0;
       } catch {}
-      auditionDeckBRef.current = null;
     }
     setIsPreviewing(false);
     setSoloPlayingDeck(null);
@@ -237,6 +263,22 @@ export default function MiniMixerModal({
   useEffect(() => {
     return () => {
       stopAudition();
+      if (auditionDeckARef.current) {
+        try {
+          auditionDeckARef.current.pause();
+          auditionDeckARef.current.removeAttribute('src');
+          auditionDeckARef.current.load();
+        } catch {}
+        auditionDeckARef.current = null;
+      }
+      if (auditionDeckBRef.current) {
+        try {
+          auditionDeckBRef.current.pause();
+          auditionDeckBRef.current.removeAttribute('src');
+          auditionDeckBRef.current.load();
+        } catch {}
+        auditionDeckBRef.current = null;
+      }
     };
   }, []);
 
@@ -338,11 +380,12 @@ export default function MiniMixerModal({
   const safePlayAudio = async (audio, startTime, volume, speed) => {
     resumeAudioContext();
     audio.volume = Math.max(0, Math.min(1, volume));
-    audio.playbackRate = Number(speed) || 1.0;
+    audio.playbackRate = clampSpeed(speed);
 
-    try { audio.load(); } catch (e) {}
+    const seekTarget = Math.max(0, Number(startTime) || 0);
 
-    if (audio.readyState < 2) {
+    // If metadata not yet loaded, wait for it before seeking
+    if (audio.readyState < 1) {
       await new Promise((resolve) => {
         let done = false;
         const finish = () => {
@@ -353,8 +396,10 @@ export default function MiniMixerModal({
         };
         const onReady = () => {
           try {
-            if (startTime > 0 && isFinite(audio.duration) && startTime < audio.duration) {
-              audio.currentTime = startTime;
+            if (seekTarget > 0 && isFinite(audio.duration) && seekTarget < audio.duration) {
+              audio.currentTime = seekTarget;
+            } else {
+              audio.currentTime = 0;
             }
           } catch (e) {}
           finish();
@@ -362,15 +407,17 @@ export default function MiniMixerModal({
         audio.addEventListener('loadedmetadata', onReady, { once: true });
         audio.addEventListener('canplay', finish, { once: true });
         audio.addEventListener('error', finish, { once: true });
-        setTimeout(finish, 2000);
+        setTimeout(finish, 2500);
       });
+    } else {
+      try {
+        if (seekTarget > 0 && isFinite(audio.duration) && seekTarget < audio.duration) {
+          audio.currentTime = seekTarget;
+        } else {
+          audio.currentTime = 0;
+        }
+      } catch (e) {}
     }
-
-    try {
-      if (startTime > 0 && isFinite(audio.duration) && startTime < audio.duration) {
-        audio.currentTime = startTime;
-      }
-    } catch (e) {}
 
     try {
       await audio.play();
@@ -385,9 +432,10 @@ export default function MiniMixerModal({
       }
     }
 
+    // Verify currentTime after playback starts
     try {
-      if (startTime > 0 && isFinite(audio.duration) && Math.abs(audio.currentTime - startTime) > 1.5) {
-        audio.currentTime = startTime;
+      if (seekTarget > 0 && isFinite(audio.duration) && Math.abs(audio.currentTime - seekTarget) > 1.5) {
+        audio.currentTime = seekTarget;
       }
     } catch (e) {}
   };
@@ -400,6 +448,7 @@ export default function MiniMixerModal({
     }
     stopAudition();
     resumeAudioContext();
+    const audioA = getAuditionAudioA();
 
     if (isPlaying) {
       wasPlayingRef.current = true;
@@ -415,14 +464,15 @@ export default function MiniMixerModal({
         return;
       }
 
-      const audioA = new Audio(urlA);
-      audioA.preload = 'auto';
-      auditionDeckARef.current = audioA;
+      if (audioA.src !== urlA) {
+        audioA.src = urlA;
+        try { audioA.load(); } catch (e) {}
+      }
 
       const previewDuration = Math.min(duration, 8);
       const startSec = Math.max(0, mixOutPoint - previewDuration);
       const targetVol = Math.max(0, Math.min(1, (Number(volA) || 100) / 100));
-      const spd = Number(speedA) || 1.0;
+      const spd = clampSpeed(speedA);
 
       await safePlayAudio(audioA, startSec, targetVol, spd);
       setIsLoadingAudio(false);
@@ -431,12 +481,12 @@ export default function MiniMixerModal({
       const totalMs = (previewDuration / spd) * 1000;
 
       const tick = () => {
-        if (!auditionDeckARef.current) return;
+        if (!auditionDeckARef.current || auditionDeckARef.current.paused) return;
         const elapsed = performance.now() - startTime;
         const p = Math.min(1, elapsed / totalMs);
         setSoloProgress(p);
 
-        if (p < 1 && !audioA.ended) {
+        if (p < 1 && !audioA.ended && !audioA.paused) {
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
           stopAudition();
@@ -457,6 +507,7 @@ export default function MiniMixerModal({
     }
     stopAudition();
     resumeAudioContext();
+    const audioB = getAuditionAudioB();
 
     if (isPlaying) {
       wasPlayingRef.current = true;
@@ -472,14 +523,15 @@ export default function MiniMixerModal({
         return;
       }
 
-      const audioB = new Audio(urlB);
-      audioB.preload = 'auto';
-      auditionDeckBRef.current = audioB;
+      if (audioB.src !== urlB) {
+        audioB.src = urlB;
+        try { audioB.load(); } catch (e) {}
+      }
 
       const previewDuration = Math.min(duration, 8);
       const startSec = Math.max(0, mixInPoint);
       const targetVol = Math.max(0, Math.min(1, (Number(volB) || 100) / 100));
-      const spd = Number(speedB) || 1.0;
+      const spd = clampSpeed(speedB);
 
       await safePlayAudio(audioB, startSec, targetVol, spd);
       setIsLoadingAudio(false);
@@ -488,12 +540,12 @@ export default function MiniMixerModal({
       const totalMs = (previewDuration / spd) * 1000;
 
       const tick = () => {
-        if (!auditionDeckBRef.current) return;
+        if (!auditionDeckBRef.current || auditionDeckBRef.current.paused) return;
         const elapsed = performance.now() - startTime;
         const p = Math.min(1, elapsed / totalMs);
         setSoloProgress(p);
 
-        if (p < 1 && !audioB.ended) {
+        if (p < 1 && !audioB.ended && !audioB.paused) {
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
           stopAudition();
@@ -514,6 +566,8 @@ export default function MiniMixerModal({
     }
     stopAudition();
     resumeAudioContext();
+    const audioA = getAuditionAudioA();
+    const audioB = getAuditionAudioB();
 
     if (isPlaying) {
       wasPlayingRef.current = true;
@@ -534,17 +588,19 @@ export default function MiniMixerModal({
         return;
       }
 
-      const audioA = new Audio(urlA);
-      const audioB = new Audio(urlB);
-      audioA.preload = 'auto';
-      audioB.preload = 'auto';
-      auditionDeckARef.current = audioA;
-      auditionDeckBRef.current = audioB;
+      if (audioA.src !== urlA) {
+        audioA.src = urlA;
+        try { audioA.load(); } catch (e) {}
+      }
+      if (audioB.src !== urlB) {
+        audioB.src = urlB;
+        try { audioB.load(); } catch (e) {}
+      }
 
       const multA = (Number(volA) || 100) / 100;
       const multB = (Number(volB) || 100) / 100;
-      const spdA = Number(speedA) || 1.0;
-      const spdB = Number(speedB) || 1.0;
+      const spdA = clampSpeed(speedA);
+      const spdB = clampSpeed(speedB);
 
       const leadInSec = 2.0;
       const seekA = Math.max(0, mixOutPoint - duration - leadInSec);
@@ -572,7 +628,6 @@ export default function MiniMixerModal({
           audioB.addEventListener('error', () => resolve(), { once: true });
           setTimeout(resolve, 2000);
         }
-        try { audioB.load(); } catch (e) {}
       });
 
       // Play Deck A
@@ -646,7 +701,7 @@ export default function MiniMixerModal({
     }
   };
 
-  const handleSave = () => {
+    const handleSave = () => {
     stopAudition();
     setIsSavedNotice(true);
     setIsMixMode?.(true);
@@ -936,7 +991,7 @@ export default function MiniMixerModal({
                     max="1.15"
                     step="0.01"
                     value={speedA}
-                    onChange={(e) => setSpeedA(Number(e.target.value))}
+                    onChange={(e) => setSpeedA(clampSpeed(e.target.value))}
                     className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-amber-500"
                   />
                 </div>
@@ -1149,7 +1204,7 @@ export default function MiniMixerModal({
                         type="button" 
                         onClick={() => {
                           const ratio = Number((dataA.bpm / dataB.bpm).toFixed(2));
-                          setSpeedB(Math.max(0.85, Math.min(1.15, ratio)));
+                          setSpeedB(clampSpeed(ratio));
                         }} 
                         className="text-[9px] text-emerald-400 hover:text-emerald-300 font-bold cursor-pointer bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30"
                         title={`Match Deck B speed to Deck A tempo (${dataA.bpm} BPM)`}
@@ -1171,7 +1226,7 @@ export default function MiniMixerModal({
                     max="1.15"
                     step="0.01"
                     value={speedB}
-                    onChange={(e) => setSpeedB(Number(e.target.value))}
+                    onChange={(e) => setSpeedB(clampSpeed(e.target.value))}
                     className="w-full h-1 bg-zinc-800 rounded appearance-none cursor-pointer accent-teal-400"
                   />
                 </div>

@@ -353,7 +353,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
         return {
           url: cand,
           duration: sanitizeDuration(sData.duration || track.duration, 210),
-          cover: normalizeCoverUrl(sData.cover || track.cover || track.coverUrl),
+          cover: normalizeCoverUrl(track.cover || track.coverUrl || sData.cover),
           track: sData.track || null
         };
       }
@@ -373,7 +373,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
         return {
           url: cand,
           duration: sanitizeDuration(d.duration || track.duration, 210),
-          cover: normalizeCoverUrl(d.cover || track.cover || track.coverUrl),
+          cover: normalizeCoverUrl(track.cover || track.coverUrl || d.cover),
           track: d.track || null
         };
       }
@@ -786,8 +786,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       fromDeck.muted = false;
 
       // Apply initial playback speed
-      const rateA = Math.max(0.5, Math.min(2.0, Number(speedA) || 1.0));
-      const rateB = Math.max(0.5, Math.min(2.0, Number(speedB) || 1.0));
+      const rateA = (!isNaN(Number(speedA)) && Number(speedA) >= 0.85 && Number(speedA) <= 1.15) ? Number(Number(speedA).toFixed(2)) : 1.0;
+      const rateB = (!isNaN(Number(speedB)) && Number(speedB) >= 0.85 && Number(speedB) <= 1.15) ? Number(Number(speedB).toFixed(2)) : 1.0;
       fromDeck.playbackRate = rateA;
 
       resolvePlayableAudioStream(toTrack).then((res) => {
@@ -1050,8 +1050,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
                   const crossoverBias = Number(trans?.crossoverBias) || 0.5;
                   const volA = Number(trans?.volA) || 100;
                   const volB = Number(trans?.volB) || 100;
-                  const speedA = Number(trans?.speedA) || 1.0;
-                  const speedB = Number(trans?.speedB) || 1.0;
+                  const speedA = (!isNaN(Number(trans?.speedA)) && Number(trans?.speedA) >= 0.85 && Number(trans?.speedA) <= 1.15) ? Number(Number(trans?.speedA).toFixed(2)) : 1.0;
+                  const speedB = (!isNaN(Number(trans?.speedB)) && Number(trans?.speedB) >= 0.85 && Number(trans?.speedB) <= 1.15) ? Number(Number(trans?.speedB).toFixed(2)) : 1.0;
                   const remaining = mixOutPoint - deck.currentTime;
 
                   // 1. Preload standby deck 15 seconds ahead of transition
@@ -1444,7 +1444,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         playableUrl = `${API_BASE_URL}${playableUrl}`;
       }
 
-      if (streamResult.cover && streamResult.cover !== currentTrack.cover) {
+      if (streamResult.cover && (!currentTrack?.cover || currentTrack.cover.includes('default') || currentTrack.cover.includes('unsplash') || currentTrack.cover.includes('ui-avatars'))) {
         setCurrentTrack(prev => (prev && String(prev.id || prev._id) === newId) ? { ...prev, cover: streamResult.cover } : prev);
       }
       if (streamResult.duration && streamResult.duration > 0) {
@@ -1456,7 +1456,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (streamResult?.track) {
         const dbTrack = streamResult.track;
         const realId = String(dbTrack._id || dbTrack.id);
-        setCurrentTrack(prev => (prev && (String(prev.id || prev._id) === newId || prev.title === dbTrack.title) ? { ...prev, ...dbTrack, id: realId, _id: realId } : prev));
+        setCurrentTrack(prev => {
+          if (!prev || (String(prev.id || prev._id) !== newId && prev.title !== dbTrack.title)) return prev;
+          const finalCover = (prev.cover && !prev.cover.includes('default') && !prev.cover.includes('ui-avatars')) ? prev.cover : (dbTrack.cover || prev.cover);
+          return { ...prev, ...dbTrack, cover: finalCover, id: realId, _id: realId };
+        });
         setCurrentQueue(prevQueue =>
           prevQueue.map(t => {
             if (String(t.id || t._id) === newId || (t.title === dbTrack.title && t.artist === dbTrack.artist)) {
@@ -3237,8 +3241,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       crossoverBias: Number(transConfig?.crossoverBias) || 0.5,
       volA: Number(transConfig?.volA) || 100,
       volB: Number(transConfig?.volB) || 100,
-      speedA: Number(transConfig?.speedA) || 1.0,
-      speedB: Number(transConfig?.speedB) || 1.0,
+      speedA: (!isNaN(Number(transConfig?.speedA)) && Number(transConfig?.speedA) >= 0.85 && Number(transConfig?.speedA) <= 1.15) ? Number(Number(transConfig?.speedA).toFixed(2)) : 1.0,
+      speedB: (!isNaN(Number(transConfig?.speedB)) && Number(transConfig?.speedB) >= 0.85 && Number(transConfig?.speedB) <= 1.15) ? Number(Number(transConfig?.speedB).toFixed(2)) : 1.0,
     };
 
     const nextTrans = {
