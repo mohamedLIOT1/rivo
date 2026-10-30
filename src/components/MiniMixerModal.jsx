@@ -243,12 +243,16 @@ export default function MiniMixerModal({
       try {
         auditionDeckARef.current.pause();
         auditionDeckARef.current.currentTime = 0;
+        auditionDeckARef.current.volume = 1.0;
+        auditionDeckARef.current.muted = false;
       } catch {}
     }
     if (auditionDeckBRef.current) {
       try {
         auditionDeckBRef.current.pause();
         auditionDeckBRef.current.currentTime = 0;
+        auditionDeckBRef.current.volume = 1.0;
+        auditionDeckBRef.current.muted = false;
       } catch {}
     }
     setIsPreviewing(false);
@@ -379,41 +383,36 @@ export default function MiniMixerModal({
   // Helper to safely prepare, seek, and play HTML5 audio across browsers without dropping currentTime
   const safePlayAudio = async (audio, startTime, volume, speed) => {
     resumeAudioContext();
+    audio.muted = false;
     audio.volume = Math.max(0, Math.min(1, volume));
     audio.playbackRate = clampSpeed(speed);
 
     const seekTarget = Math.max(0, Number(startTime) || 0);
 
-    if (audio.readyState < 1) {
-      await new Promise((resolve) => {
-        let done = false;
-        const finish = () => {
-          if (!done) {
-            done = true;
-            resolve();
-          }
-        };
-        audio.addEventListener('loadedmetadata', finish, { once: true });
-        audio.addEventListener('canplay', finish, { once: true });
-        audio.addEventListener('error', finish, { once: true });
-        setTimeout(finish, 2500);
-      });
+    const applySeek = () => {
+      try {
+        if (seekTarget > 0 && isFinite(audio.duration) && seekTarget < audio.duration) {
+          audio.currentTime = seekTarget;
+        } else {
+          audio.currentTime = 0;
+        }
+      } catch (e) {}
+    };
+
+    if (audio.readyState >= 1) {
+      applySeek();
+    } else {
+      audio.addEventListener('loadedmetadata', applySeek, { once: true });
     }
 
     try {
-      if (seekTarget > 0 && isFinite(audio.duration) && seekTarget < audio.duration) {
-        audio.currentTime = seekTarget;
-      } else {
-        audio.currentTime = 0;
-      }
-    } catch (e) {}
-
-    try {
       await audio.play();
+      applySeek();
     } catch (e) {
       console.warn('[safePlayAudio] Play attempt retry:', e);
       try {
         await audio.play();
+        applySeek();
       } catch (e2) {
         console.error('[safePlayAudio] Play failed:', e2);
       }
@@ -454,7 +453,11 @@ export default function MiniMixerModal({
       const targetVol = Math.max(0, Math.min(1, (Number(volA) || 100) / 100));
       const spd = clampSpeed(speedA);
 
+      audioA.muted = false;
+      audioA.volume = targetVol;
       await safePlayAudio(audioA, startSec, targetVol, spd);
+      audioA.muted = false;
+      audioA.volume = targetVol;
       setIsLoadingAudio(false);
 
       const startTime = performance.now();
@@ -513,7 +516,11 @@ export default function MiniMixerModal({
       const targetVol = Math.max(0, Math.min(1, (Number(volB) || 100) / 100));
       const spd = clampSpeed(speedB);
 
+      audioB.muted = false;
+      audioB.volume = targetVol;
       await safePlayAudio(audioB, startSec, targetVol, spd);
+      audioB.muted = false;
+      audioB.volume = targetVol;
       setIsLoadingAudio(false);
 
       const startTime = performance.now();
@@ -586,52 +593,10 @@ export default function MiniMixerModal({
       const seekA = Math.max(0, mixOutPoint - duration - leadInSec);
       const seekB = Math.max(0, mixInPoint);
 
-      // Pre-warm Deck B in parallel
-      audioB.playbackRate = spdB;
-      audioB.volume = 0.0;
-      const prepDeckBPromise = new Promise((resolve) => {
-        const onReady = () => {
-          try {
-            if (seekB > 0 && isFinite(audioB.duration) && seekB < audioB.duration) {
-              audioB.currentTime = seekB;
-            } else {
-              audioB.currentTime = 0;
-            }
-          } catch (e) {}
-          resolve();
-        };
-        if (audioB.readyState >= 1) {
-          onReady();
-        } else {
-          audioB.addEventListener('loadedmetadata', onReady, { once: true });
-          audioB.addEventListener('canplay', onReady, { once: true });
-          audioB.addEventListener('error', () => resolve(), { once: true });
-          setTimeout(resolve, 2000);
-        }
-      });
-
-      // Prime and unlock Deck B synchronously under user activation
-      audioB.playbackRate = spdB;
-      audioB.volume = 0.0;
-      try {
-        if (seekB > 0 && isFinite(audioB.duration) && seekB < audioB.duration) {
-          audioB.currentTime = seekB;
-        } else {
-          audioB.currentTime = 0;
-        }
-        const bUnlock = audioB.play();
-        if (bUnlock !== undefined) {
-          bUnlock.then(() => {
-            audioB.pause();
-            try { audioB.currentTime = seekB; } catch {}
-          }).catch(() => {});
-        }
-      } catch (e) {}
-
-      // Start Deck A
+      // Start Deck A audibly and Deck B silently under user activation
       await Promise.all([
         safePlayAudio(audioA, seekA, 1.0 * multA, spdA),
-        prepDeckBPromise
+        safePlayAudio(audioB, seekB, 0.0, spdB)
       ]);
 
       setIsLoadingAudio(false);
@@ -651,18 +616,26 @@ export default function MiniMixerModal({
         const elapsed = performance.now() - startTime;
 
         if (elapsed < leadInMs) {
-          // Deck A lead-in
+          // Deck A lead-in: Deck B stays silent at seekB
           setPreviewProgress(0);
           audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
           audioB.volume = 0.0;
+          try {
+            if (Math.abs(audioB.currentTime - seekB) > 0.5) {
+              audioB.currentTime = seekB;
+            }
+          } catch {}
           setLiveGainA(Math.round(100 * multA));
           setLiveGainB(0);
         } else if (elapsed <= leadInMs + transMs) {
-          // Active crossfade
+          // Active crossfade: Deck B seamlessly fades in!
           if (!deckBActive) {
             deckBActive = true;
+            audioB.muted = false;
             try { audioB.currentTime = seekB; } catch {}
-            audioB.play().catch(() => {});
+            if (audioB.paused) {
+              audioB.play().catch(() => {});
+            }
           }
 
           const rawP = Math.max(0, Math.min(1, (elapsed - leadInMs) / transMs));
@@ -678,7 +651,9 @@ export default function MiniMixerModal({
           if (!deckBActive) {
             deckBActive = true;
             try { audioB.currentTime = seekB; } catch {}
-            audioB.play().catch(() => {});
+            if (audioB.paused) {
+              audioB.play().catch(() => {});
+            }
           }
           if (!audioA.paused) {
             try { audioA.pause(); } catch {}

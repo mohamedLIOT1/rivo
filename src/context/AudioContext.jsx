@@ -1511,6 +1511,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             .catch(() => {});
         }
       }
+      audio.muted = false;
       audio.volume = volumeRef.current;
       isChangingTrackRef.current = false;
 

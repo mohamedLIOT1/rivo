@@ -14,7 +14,8 @@ export const API_BASE_URL = (() => {
       protocol === 'tauri:' ||
       protocol === 'file:' ||
       hostname.includes('tauri') ||
-      hostname.endsWith('.localhost')
+      hostname.endsWith('.localhost') ||
+      hostname.includes('duckdns.org')
     ) {
       return 'https://rivo-m.duckdns.org';
     }
