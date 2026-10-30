@@ -511,6 +511,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const shouldPlayRef     = useRef(false); // Force autoplay on track change
   const lastLoadedUrlRef  = useRef(null);  // Last URL loaded into audio element (prevents interruption on metadata-only changes)
   const lastLoadedIdRef   = useRef(null);  // Last track ID loaded (detects actual track change vs metadata update)
+  const [playTrigger, setPlayTrigger] = useState(0);
   const lastLoadedStreamUrlRef = useRef(null);
   const isTransitionTriggeredRef = useRef(false);
   const isSeamlessYtHandoffRef   = useRef(false);
@@ -1393,8 +1394,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
     (async () => {
       const newId = String(currentTrack.id || currentTrack._id || '');
 
-      // Guard: if track ID is the same and already loaded, don't reload audio stream on metadata updates
-      if (newId && newId === lastLoadedIdRef.current) {
+      // Guard: if track ID is the same and audio already loaded with src, skip re-resolving unless explicitly requested to play
+      if (newId && newId === lastLoadedIdRef.current && audioRef.current?.src && !shouldPlayRef.current) {
         return;
       }
 
@@ -1550,7 +1551,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       isEffectCancelled = true;
       abortController.abort();
     };
-  }, [currentTrack?.id || currentTrack?._id]);
+  }, [currentTrack?.id || currentTrack?._id, playTrigger]);
 
   // ── MediaSession API (Lockscreen & Bluetooth Controls) ──
   useEffect(() => {
@@ -1785,6 +1786,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (nextPlaying) {
         resumeAudioContext();
         lastPauseTimeRef.current = 0;
+        if ((!audio.src || audio.src === '' || audio.src === window.location.href) && currentTrackRef.current) {
+          playTrack(currentTrackRef.current);
+          return;
+        }
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
@@ -1960,13 +1965,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
       errorAdvanceTimerRef.current = null;
     }
 
+    const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+    const nextId = String(track?.id || track?._id || '');
+
+    if (curId && curId === nextId && audioRef.current?.src && lastLoadedStreamUrlRef.current) {
+      isChangingTrackRef.current = false;
+      resumeAudioContext();
+      if (audioRef.current.paused) {
+        audioRef.current.play().then(() => setIsAutoplayBlocked(false)).catch(() => {});
+      }
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      return;
+    }
+
     isChangingTrackRef.current = true;
     if (!isSeamless) {
       // Immediately stop previous audio synchronously & reset progress to prevent overlap/lag
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.removeAttribute('src');
-        audioRef.current.load();
+        if (curId !== nextId) {
+          audioRef.current.removeAttribute('src');
+          audioRef.current.load();
+        }
         audioRef.current.volume = volumeRef.current;
         audioRef.current.muted = false;
       }
@@ -2116,6 +2137,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // Signal that the next currentTrack change should autoplay
     shouldPlayRef.current = true;
+    lastLoadedIdRef.current = null;
+    setPlayTrigger(prev => prev + 1);
     currentTrackRef.current = trackToPlay;
     const initDur = (trackToPlay.duration && trackToPlay.duration > 0 && trackToPlay.duration < 86400)
       ? sanitizeDuration(trackToPlay.duration)

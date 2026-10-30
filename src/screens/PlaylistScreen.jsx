@@ -88,14 +88,25 @@ export default function PlaylistScreen({
               const fTrackIds = Array.isArray(fetched.trackIds) && fetched.trackIds.length > 0
                 ? fetched.trackIds.map(String)
                 : (Array.isArray(data.tracks) ? data.tracks.map(t => String(t.id || t._id)) : []);
-              setRemotePlaylist({
+              const cleanTracks = (data.tracks || fetched.tracks || []).map(t => {
+                const title = String(t.title || t.name || '').trim().toLowerCase();
+                const isAnon = title === 'anonymous' || title.includes('anonymous');
+                return {
+                  ...t,
+                  album: isAnon ? 'Single' : (t.album || 'Single'),
+                  cover: isAnon ? 'https://i.ytimg.com/vi/Lp8StQkBuUQ/hqdefault.jpg' : normalizeCoverUrl(t.cover, t)
+                };
+              });
+              const enrichedPl = {
                 ...fetched,
                 isAlbum: isAlb || fetched.isAlbum,
                 trackIds: fTrackIds,
-                tracks: data.tracks || fetched.tracks || []
-              });
-              if (Array.isArray(data.tracks) && data.tracks.length > 0) {
-                setFetchedTracks(data.tracks);
+                tracks: cleanTracks
+              };
+              setRemotePlaylist(enrichedPl);
+              try { onUpdatePlaylist(enrichedPl); } catch {}
+              if (cleanTracks.length > 0) {
+                setFetchedTracks(cleanTracks);
               }
             }
           }

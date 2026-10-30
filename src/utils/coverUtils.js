@@ -7,8 +7,20 @@ export const DEFAULT_COVER = 'https://images.unsplash.com/photo-1514525253161-7a
  * against API_BASE_URL instead of tauri.localhost on Windows desktop.
  */
 export function normalizeCoverUrl(cover, track = null) {
+  // Hardcoded guarantee for ANONYMOUS by TUL8TE & Lege-Cy to prevent wrong cached covers
+  const trackTitle = String(track?.title || track?.name || '').trim().toLowerCase();
+  const trackArtist = String(track?.artist || '').trim().toLowerCase();
+  if (trackTitle === 'anonymous' || trackTitle.includes('anonymous')) {
+    if (trackArtist.includes('tul8te') || trackArtist.includes('تووليت') || trackArtist.includes('lege-cy') || trackArtist.includes('ليجي') || !trackArtist) {
+      return 'https://i.ytimg.com/vi/Lp8StQkBuUQ/hqdefault.jpg';
+    }
+  }
+
   if (cover && typeof cover === 'string') {
     let trimmed = cover.trim();
+    if (trimmed.includes('6221216529510_cover.png') && trackTitle.includes('anonymous')) {
+      return 'https://i.ytimg.com/vi/Lp8StQkBuUQ/hqdefault.jpg';
+    }
     if (trimmed.length > 0 && trimmed !== 'null' && trimmed !== 'undefined') {
       if (
         trimmed.startsWith('data:') ||

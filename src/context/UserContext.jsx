@@ -67,14 +67,19 @@ export function UserProvider({ children }) {
         if (Array.isArray(parsed)) {
           const cleaned = parsed
             .filter(t => !isSoundCloudTrack(t))
-            .map(t => ({
-              ...t,
-              cover: normalizeCoverUrl(t.cover, t)
-            }));
-          if (cleaned.length !== parsed.length) {
+            .map(t => {
+              const title = String(t.title || t.name || '').trim().toLowerCase();
+              const isAnon = title === 'anonymous' || title.includes('anonymous');
+              return {
+                ...t,
+                album: isAnon ? 'Single' : t.album,
+                cover: isAnon ? 'https://i.ytimg.com/vi/Lp8StQkBuUQ/hqdefault.jpg' : normalizeCoverUrl(t.cover, t)
+              };
+            });
+          try {
             localStorage.setItem('rivo_tracks', JSON.stringify(cleaned));
             localStorage.setItem('liofy_tracks', JSON.stringify(cleaned));
-          }
+          } catch {}
           return cleaned;
         }
       }
@@ -85,7 +90,36 @@ export function UserProvider({ children }) {
   const [playlists, setPlaylists] = useState(() => {
     try {
       const s = localStorage.getItem('rivo_playlists') || localStorage.getItem('liofy_playlists');
-      return s ? JSON.parse(s) : [];
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const cleanedPl = parsed.map(pl => {
+            if (Array.isArray(pl.tracks)) {
+              return {
+                ...pl,
+                tracks: pl.tracks.map(t => {
+                  const title = String(t.title || t.name || '').trim().toLowerCase();
+                  if (title === 'anonymous' || title.includes('anonymous')) {
+                    return {
+                      ...t,
+                      album: 'Single',
+                      cover: 'https://i.ytimg.com/vi/Lp8StQkBuUQ/hqdefault.jpg'
+                    };
+                  }
+                  return t;
+                })
+              };
+            }
+            return pl;
+          });
+          try {
+            localStorage.setItem('rivo_playlists', JSON.stringify(cleanedPl));
+            localStorage.setItem('liofy_playlists', JSON.stringify(cleanedPl));
+          } catch {}
+          return cleanedPl;
+        }
+      }
+      return [];
     } catch { return []; }
   });
 
