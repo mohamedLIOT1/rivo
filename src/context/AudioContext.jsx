@@ -495,6 +495,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const isPlayingRef      = useRef(isPlaying);
   const currentTimeRef    = useRef(currentTime);
   const durationRef       = useRef(duration);
+  const pendingInitialSeekRef = useRef(null);
   const jamSessionRef     = useRef(jamSession);
 
   useEffect(() => { 
@@ -1484,7 +1485,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
             if (lastLoadedStreamUrlRef.current !== playableUrl) {
         lastLoadedStreamUrlRef.current = playableUrl;
         audio.src = playableUrl;
-        audio.currentTime = 0;
+        if (pendingInitialSeekRef.current !== null && isFinite(pendingInitialSeekRef.current) && pendingInitialSeekRef.current > 0) {
+          try { audio.currentTime = pendingInitialSeekRef.current; } catch (e) {}
+          pendingInitialSeekRef.current = null;
+        } else {
+          audio.currentTime = 0;
+        }
 
         // Full-track pre-buffering: download entire song into local memory Blob in background
         if (playableUrl.startsWith('http') && typeof fetch !== 'undefined') {
@@ -3205,10 +3211,42 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
     dur = Math.min(24, Math.max(2, dur));
     const style = transConfig?.style || 'auto';
-    const pairKey = `${String(tA.id || tA._id)}___${String(tB.id || tB._id)}`;
+    const tAId = String(tA.id || tA._id || '');
+    const tBId = String(tB.id || tB._id || '');
+    const pairKey = `${tAId}___${tBId}`;
+    const pairKeyAlt = `${tAId}_${tBId}`;
+    const titleKey = `${tA.title}___${tB.title}`;
 
-    // 1. Save transition config
-    const nextTrans = { ...activeTransRef.current, [pairKey]: { ...transConfig, style, duration: dur } };
+    const rawDur = (tA.duration && Number(tA.duration) > 5)
+      ? Number(tA.duration)
+      : (durationRef.current > 0 ? durationRef.current : 180);
+    const trackDur = Math.max(10, Math.round(rawDur));
+    const calculatedMixOut = (transConfig?.mixOutPoint !== undefined && Number(transConfig.mixOutPoint) > 5)
+      ? Number(transConfig.mixOutPoint)
+      : Math.max(5, trackDur - 2);
+    const mixInPoint = Number(transConfig?.mixInPoint) || 0;
+    const seekPoint = Math.max(0, calculatedMixOut - dur - 3);
+
+    // 1. Save transition config across all matching keys so timeupdate definitely finds it
+    const configToSave = {
+      ...transConfig,
+      style,
+      duration: dur,
+      mixOutPoint: calculatedMixOut,
+      mixInPoint,
+      crossoverBias: Number(transConfig?.crossoverBias) || 0.5,
+      volA: Number(transConfig?.volA) || 100,
+      volB: Number(transConfig?.volB) || 100,
+      speedA: Number(transConfig?.speedA) || 1.0,
+      speedB: Number(transConfig?.speedB) || 1.0,
+    };
+
+    const nextTrans = {
+      ...(activeTransRef.current || {}),
+      [pairKey]: configToSave,
+      [pairKeyAlt]: configToSave,
+      [titleKey]: configToSave,
+    };
     setActiveTransitions(nextTrans);
     activeTransRef.current = nextTrans;
     setIsMixMode(true);
@@ -3218,8 +3256,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     standbyPreloadedIdRef.current = null;
 
     // 2. Ensure queue contains tA and tB sequentially so lookahead transitions into tB
-    const tAId = String(tA.id || tA._id || '');
-    const tBId = String(tB.id || tB._id || '');
     const q = currentQueueRef.current || [];
     const idxA = q.findIndex(t => String(t.id || t._id) === tAId);
     if (idxA >= 0 && q[idxA + 1] && String(q[idxA + 1].id || q[idxA + 1]._id) === tBId) {
@@ -3233,45 +3269,33 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentQueueIndex(0);
     }
 
+    // 3. Preload standby deck immediately with tB so it's ready for instant transition
+    resolvePlayableAudioStream(tB, null, true).then((res) => {
+      if (res?.url && secondaryAudioRef.current) {
+        const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
+        secondaryAudioRef.current.src = fullUrl;
+        secondaryAudioRef.current.currentTime = Math.max(0, mixInPoint);
+        secondaryAudioRef.current.volume = 0;
+        try { secondaryAudioRef.current.load(); } catch (e) {}
+      }
+    }).catch(() => {});
+
     const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
 
-    const doSeek = () => {
+    if (curId !== tAId) {
+      pendingInitialSeekRef.current = seekPoint;
+      playTrack(tA, [tA, tB]);
+      setCurrentTime(seekPoint);
+      setIsPlaying(true);
+    } else {
       const deck = audioRef.current;
-      const rawDur = (!isNaN(deck?.duration) && isFinite(deck?.duration) && deck.duration > 5)
-        ? Math.round(deck.duration)
-        : (durationRef.current > 0 ? durationRef.current : (tA.duration || 180));
-      const trackDur = Math.max(10, rawDur);
-      const mixOutPoint = (transConfig?.mixOutPoint !== undefined && Number(transConfig.mixOutPoint) > 5 && Number(transConfig.mixOutPoint) <= trackDur)
-        ? Number(transConfig.mixOutPoint)
-        : trackDur;
-      const mixInPoint = Number(transConfig?.mixInPoint) || 0;
-      const seekPoint = Math.max(0, mixOutPoint - dur - 3);
-
-      // Preload standby deck immediately with tB so it's instantly ready
-      resolvePlayableAudioStream(tB, null, true).then((res) => {
-        if (res?.url && secondaryAudioRef.current) {
-          const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
-          secondaryAudioRef.current.src = fullUrl;
-          secondaryAudioRef.current.currentTime = 0;
-          secondaryAudioRef.current.volume = 0;
-          secondaryAudioRef.current.load();
-        }
-      }).catch(() => {});
-
       if (deck) {
-        deck.currentTime = seekPoint;
+        try { deck.currentTime = seekPoint; } catch {}
         deck.volume = volumeRef.current;
         deck.play().catch(() => {});
       }
       setCurrentTime(seekPoint);
       setIsPlaying(true);
-    };
-
-    if (curId !== tAId) {
-      playTrack(tA, [tA, tB]);
-      setTimeout(doSeek, 1000);
-    } else {
-      doSeek();
     }
   }, [duration]);
 

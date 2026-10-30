@@ -42,6 +42,7 @@ export default function PlaylistScreen({
   openEditSongModal,
   openEditAlbumModal,
   openAddToPlaylist,
+  onViewProfile,
   globalTheme = 'dark',
   onToast = () => {},
 }) {
@@ -984,6 +985,27 @@ export default function PlaylistScreen({
                   className="text-[#17a398] font-black uppercase inline-block truncate"
                   linkClassName="hover:underline cursor-pointer"
                 />
+              </div>
+            )}
+
+            {!isSiteAlbum && !playlist.isLikedSongs && (playlist.ownerName || playlist.owner) && (
+              <div className="mt-1 text-[11px] sm:text-xs font-mono font-bold flex items-center gap-1.5 truncate">
+                <span className={isDark ? 'text-zinc-400' : 'text-[#082621]/70'}>Curated by</span>
+                <span
+                  onClick={() => {
+                    const targetUid = playlist.ownerId || (typeof playlist.owner === 'object' ? (playlist.owner._id || playlist.owner.id) : playlist.owner);
+                    if (targetUid && onViewProfile) {
+                      onViewProfile(targetUid);
+                    }
+                  }}
+                  className="text-[#17a398] font-black uppercase hover:underline cursor-pointer flex items-center gap-1"
+                  title={`View profile of ${playlist.ownerName || 'creator'}`}
+                >
+                  {playlist.ownerAvatar && (
+                    <img src={playlist.ownerAvatar} alt="" className="w-4 h-4 rounded-full object-cover inline-block" />
+                  )}
+                  <span>@{playlist.ownerName || 'Listener'}</span>
+                </span>
               </div>
             )}
 

@@ -1374,7 +1374,7 @@ export default function FullPlayerModal({
             RIVO HI-FI STEREO • 24-BIT MASTER
           </span>
           <p className="text-sm font-display font-black text-[#fdfbf7] truncate mt-0.5">
-            {currentTrack.title || 'Unknown Track'}
+            {currentTrack.title || 'Unknown Track'}{currentTrack.artist ? ` • ${currentTrack.artist}` : ''}
           </p>
         </div>
 
@@ -1414,7 +1414,7 @@ export default function FullPlayerModal({
       <div className="relative z-10 flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center px-4 md:px-10 pt-2 pb-6 overflow-hidden max-w-6xl mx-auto w-full gap-8">
 
         {/* ─── LEFT DECK: Master Cassette Audio Console ─── */}
-        <div className={`flex-1 flex flex-col justify-between max-w-md mx-auto w-full lg:max-w-md lg:h-[530px] ${
+        <div className={`flex-1 flex flex-col justify-between max-w-md mx-auto w-full lg:max-w-md min-h-[530px] lg:max-h-[88vh] lg:h-auto ${
           isDark 
             ? 'bg-[#0e1614] text-[#fdfbf7] border-2 border-[#243632] shadow-[0_0_0_2px_#070b0a,0_16px_40px_rgba(0,0,0,0.9)]' 
             : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick brutal-shadow-lg paper-texture'
@@ -1443,7 +1443,7 @@ export default function FullPlayerModal({
 
           {/* Cassette / Vinyl / Album Art Bay */}
           <div className="flex-1 flex items-center justify-center py-1 min-h-0">
-            <div className="relative w-[185px] h-[185px] xs:w-[195px] xs:h-[195px] sm:w-[205px] sm:h-[205px] max-h-[35vh] flex items-center justify-center shrink-0">
+            <div className="relative w-[170px] h-[170px] xs:w-[180px] xs:h-[180px] sm:w-[190px] sm:h-[190px] max-h-[30vh] flex items-center justify-center shrink-0">
               {isVinylMode ? (
                 <div 
                   className={`w-full h-full rounded-full flex items-center justify-center relative overflow-hidden brutal-border brutal-shadow-md ${isPlaying ? 'vinyl-spin' : ''}`}
@@ -1753,38 +1753,43 @@ export default function FullPlayerModal({
 
           {/* ── DJ Mix Mode: Coming Up Next Widget (Strictly Hidden for Holy Quran) ── */}
           {!isCurQuran && isMixMode && nextMixTrack && (
-            <div className={`p-2.5 sm:p-3 my-2 rounded-xl border-2 border-[#17a398] w-full ${
-              isDark ? 'bg-[#141d1b]' : 'bg-[#eef8f6]'
+            <div className={`px-2.5 py-1.5 my-1.5 rounded-xl border border-[#17a398]/70 w-full shrink-0 transition-all ${
+              isDark ? 'bg-[#141d1b]/95 shadow-[0_2px_10px_rgba(23,163,152,0.12)]' : 'bg-[#eef8f6] shadow-sm'
             }`}>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="text-[10px] font-mono font-black text-[#17a398] uppercase tracking-wider flex items-center gap-1.5">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-[9px] font-mono font-black text-[#17a398] uppercase tracking-wider flex items-center gap-1">
                   <span>🎛️</span>
                   <span>COMING UP NEXT</span>
                 </div>
-                <div className="text-[9px] font-mono font-bold text-[#17a398] border border-[#17a398] px-1.5 py-0.2 rounded">
+                <div className="text-[8px] font-mono font-bold text-[#17a398] border border-[#17a398]/40 px-1.5 py-0.2 rounded">
                   EQUAL POWER • 8s
                 </div>
               </div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <img 
                   src={normalizeCoverUrl(nextMixTrack.cover, nextMixTrack)} 
                   alt={nextMixTrack.title}
-                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg object-cover border-2 border-[#17a398]/40 shrink-0" 
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover border border-[#17a398]/40 shrink-0" 
                 />
                 <div className="flex-1 min-w-0">
-                  <div className={`text-xs sm:text-sm font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                  <div className={`text-xs font-bold truncate leading-tight ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                     {nextMixTrack.title}
                   </div>
-                  <div className="text-[10px] text-zinc-400 truncate">
+                  <div className="text-[9px] text-zinc-400 truncate leading-tight">
                     {nextMixTrack.artist}
                   </div>
                 </div>
                 <button 
-                  onClick={() => previewDjTransition?.(currentTrack, nextMixTrack, { style: 'equal_power', duration: 8 })}
-                  className="bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] text-[10px] font-mono font-black px-2.5 py-1.5 rounded-lg brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer shrink-0"
+                  onClick={() => {
+                    const tAId = String(currentTrack?.id || currentTrack?._id || '');
+                    const tBId = String(nextMixTrack?.id || nextMixTrack?._id || '');
+                    const customTrans = activeTransitions?.[`${tAId}___${tBId}`] || activeTransitions?.[`${tAId}_${tBId}`];
+                    previewDjTransition?.(currentTrack, nextMixTrack, customTrans || { style: 'equal_power', duration: 8 });
+                  }}
+                  className="bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] text-[9px] font-mono font-black px-2 py-1 rounded-md brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer shrink-0 active:scale-95 transition-transform"
                   title="Preview transition"
                 >
-                  <Play size={11} fill="currentColor" />
+                  <Play size={10} fill="currentColor" />
                   <span>PREVIEW</span>
                 </button>
               </div>
@@ -1986,7 +1991,7 @@ export default function FullPlayerModal({
         <div className={`hidden lg:flex flex-1 ${
     isCurQuran && desktopSideTab === 'lyrics' 
       ? 'h-[calc(100vh-140px)] min-h-[620px] max-h-[880px] p-2' 
-      : 'h-[530px] p-6'
+      : 'min-h-[530px] lg:max-h-[88vh] lg:h-auto p-6'
   } ${
     isDark 
       ? (isCurQuran ? 'bg-[#070e0c] text-white border border-emerald-500/40 shadow-[0_0_40px_rgba(16,185,129,0.15)]' : 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700 shadow-2xl') 

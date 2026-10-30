@@ -239,6 +239,7 @@ export default function ScreenRouter({
           onSelectArtist={handleSelectArtist}
           toggleLike={toggleLike}
           toggleDownload={handleDownload}
+          onViewProfile={(uId) => navigateTo('profile', { userId: uId })}
           onBack={() => handleNavigateBack(isQuranContent(selectedPlaylist) ? 'quran' : 'library')}
           onAddTrackToPlaylist={handleAddTrackToPlaylist}
           onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}

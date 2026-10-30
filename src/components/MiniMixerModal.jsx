@@ -105,6 +105,7 @@ export default function MiniMixerModal({
   onSaveTransition
 }) {
   const { setIsMixMode, isPlaying, togglePlay } = useAudioPlayer();
+  const wasPlayingRef = useRef(false);
 
   const durA = Math.max(10, Math.round(Number(trackA?.duration) || 180));
   const durB = Math.max(10, Math.round(Number(trackB?.duration) || 210));
@@ -208,15 +209,19 @@ export default function MiniMixerModal({
     }
     if (auditionDeckARef.current) {
       try {
-        auditionDeckARef.current.pause();
-        auditionDeckARef.current.src = '';
+        const a = auditionDeckARef.current;
+        a.pause();
+        a.removeAttribute('src');
+        a.load();
       } catch {}
       auditionDeckARef.current = null;
     }
     if (auditionDeckBRef.current) {
       try {
-        auditionDeckBRef.current.pause();
-        auditionDeckBRef.current.src = '';
+        const b = auditionDeckBRef.current;
+        b.pause();
+        b.removeAttribute('src');
+        b.load();
       } catch {}
       auditionDeckBRef.current = null;
     }
@@ -335,7 +340,9 @@ export default function MiniMixerModal({
     audio.volume = Math.max(0, Math.min(1, volume));
     audio.playbackRate = Number(speed) || 1.0;
 
-    if (audio.readyState < 1) {
+    try { audio.load(); } catch (e) {}
+
+    if (audio.readyState < 2) {
       await new Promise((resolve) => {
         let done = false;
         const finish = () => {
@@ -344,24 +351,42 @@ export default function MiniMixerModal({
             resolve();
           }
         };
-        audio.addEventListener('loadedmetadata', finish, { once: true });
+        const onReady = () => {
+          try {
+            if (startTime > 0 && isFinite(audio.duration) && startTime < audio.duration) {
+              audio.currentTime = startTime;
+            }
+          } catch (e) {}
+          finish();
+        };
+        audio.addEventListener('loadedmetadata', onReady, { once: true });
         audio.addEventListener('canplay', finish, { once: true });
         audio.addEventListener('error', finish, { once: true });
-        setTimeout(finish, 3500);
+        setTimeout(finish, 2000);
       });
     }
 
     try {
-      if (startTime > 0) {
+      if (startTime > 0 && isFinite(audio.duration) && startTime < audio.duration) {
         audio.currentTime = startTime;
       }
     } catch (e) {}
 
-    await audio.play();
-
-    // Verify currentTime after play begins in case browser reset it
     try {
-      if (startTime > 0 && Math.abs(audio.currentTime - startTime) > 1.5) {
+      await audio.play();
+    } catch (e) {
+      console.warn('[safePlayAudio] Play attempt retry:', e);
+      try {
+        audio.currentTime = 0;
+        await audio.play();
+      } catch (e2) {
+        console.error('[safePlayAudio] Play failed:', e2);
+        throw e2;
+      }
+    }
+
+    try {
+      if (startTime > 0 && isFinite(audio.duration) && Math.abs(audio.currentTime - startTime) > 1.5) {
         audio.currentTime = startTime;
       }
     } catch (e) {}
@@ -376,6 +401,10 @@ export default function MiniMixerModal({
     stopAudition();
     resumeAudioContext();
 
+    if (isPlaying) {
+      wasPlayingRef.current = true;
+      togglePlay();
+    }
     setSoloPlayingDeck('A');
     setIsLoadingAudio(true);
     try {
@@ -429,6 +458,10 @@ export default function MiniMixerModal({
     stopAudition();
     resumeAudioContext();
 
+    if (isPlaying) {
+      wasPlayingRef.current = true;
+      togglePlay();
+    }
     setSoloPlayingDeck('B');
     setIsLoadingAudio(true);
     try {
@@ -482,6 +515,10 @@ export default function MiniMixerModal({
     stopAudition();
     resumeAudioContext();
 
+    if (isPlaying) {
+      wasPlayingRef.current = true;
+      togglePlay();
+    }
     setIsPreviewing(true);
     setIsLoadingAudio(true);
     try {
@@ -517,18 +554,25 @@ export default function MiniMixerModal({
       audioB.playbackRate = spdB;
       audioB.volume = 0.0;
       const prepDeckBPromise = new Promise((resolve) => {
-        if (audioB.readyState >= 1) {
-          try { audioB.currentTime = seekB; } catch {}
+        const onReady = () => {
+          try {
+            if (seekB > 0 && isFinite(audioB.duration) && seekB < audioB.duration) {
+              audioB.currentTime = seekB;
+            } else {
+              audioB.currentTime = 0;
+            }
+          } catch (e) {}
           resolve();
+        };
+        if (audioB.readyState >= 1) {
+          onReady();
         } else {
-          const onMeta = () => {
-            try { audioB.currentTime = seekB; } catch {}
-            resolve();
-          };
-          audioB.addEventListener('loadedmetadata', onMeta, { once: true });
-          setTimeout(resolve, 3500);
+          audioB.addEventListener('loadedmetadata', onReady, { once: true });
+          audioB.addEventListener('canplay', onReady, { once: true });
+          audioB.addEventListener('error', () => resolve(), { once: true });
+          setTimeout(resolve, 2000);
         }
-        audioB.load();
+        try { audioB.load(); } catch (e) {}
       });
 
       // Play Deck A
