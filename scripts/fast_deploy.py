@@ -65,6 +65,7 @@ def main():
     # 2. Upload small server & config files
     upload_file(dist_tar, f"{REMOTE_DIR}/dist.tar.gz")
     upload_file(os.path.join(BASE_DIR, 'server/routes/tracks.js'), f"{REMOTE_DIR}/server/routes/tracks.js")
+    upload_file(os.path.join(BASE_DIR, 'server/routes/users.js'), f"{REMOTE_DIR}/server/routes/users.js")
     upload_file(os.path.join(BASE_DIR, 'server/routes/recognize.js'), f"{REMOTE_DIR}/server/routes/recognize.js")
     upload_file(os.path.join(BASE_DIR, 'server/package.json'), f"{REMOTE_DIR}/server/package.json")
     upload_file(os.path.join(BASE_DIR, 'server/utils/vocalSeparator.js'), f"{REMOTE_DIR}/server/utils/vocalSeparator.js")
@@ -106,19 +107,25 @@ if [ -f Rivo-v{version}.exe ] && [ -s Rivo-v{version}.exe ]; then
     cp -f Rivo-v{version}.exe Rivo.exe
 fi
 
-# Sync to dist/downloads
+# Sync light metadata to dist/downloads without duplicating heavy binaries
 mkdir -p {REMOTE_DIR}/dist/downloads/ota
-[ -f Rivo-v{version}.apk ] && cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/ || true
-[ -f Rivo.apk ] && cp -f Rivo.apk {REMOTE_DIR}/dist/downloads/ || true
-[ -f Rivo-v{version}.ipa ] && cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/ || true
-[ -f Rivo.ipa ] && cp -f Rivo.ipa {REMOTE_DIR}/dist/downloads/ || true
-[ -f Rivo-v{version}.exe ] && cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/ || true
-[ -f Rivo.exe ] && cp -f Rivo.exe {REMOTE_DIR}/dist/downloads/ || true
 [ -f windows-update.json ] && cp -f windows-update.json {REMOTE_DIR}/dist/downloads/ || true
 [ -f ota/index.android.bundle ] && cp -f ota/index.android.bundle {REMOTE_DIR}/dist/downloads/ota/ || true
 
-# Also sync to /var/www/html if it exists
+# Also sync fresh dist to /home/ubuntu/dist/
+mkdir -p /home/ubuntu/dist
+cp -rf {REMOTE_DIR}/dist/* /home/ubuntu/dist/ 2>/dev/null || true
 sudo cp -rf {REMOTE_DIR}/dist/* /var/www/html/ 2>/dev/null || true
+
+# Inject YouTube keys into .env if missing
+if ! grep -q "YOUTUBE_API_KEYS" {REMOTE_DIR}/.env 2>/dev/null; then
+    echo 'YOUTUBE_API_KEYS="AIzaSyBMoZQ5TZxtIQLeOj-Kia-WmP1C4b2Ite0,AIzaSyBPxOKu6g2aWdG8VcvN9kcMPLIajJZ2JCY"' >> {REMOTE_DIR}/.env
+    echo "Added YOUTUBE_API_KEYS to .env"
+fi
+
+# Clean any leftover lock files or temp chunks
+rm -f /home/ubuntu/.git/index.lock {REMOTE_DIR}/.git/index.lock 2>/dev/null || true
+rm -rf /tmp/audio-separator-* /tmp/*chunk* 2>/dev/null || true
 
 # Restart PM2
 pm2 restart rivo
