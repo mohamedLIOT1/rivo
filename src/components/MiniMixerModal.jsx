@@ -384,24 +384,12 @@ export default function MiniMixerModal({
 
     const seekTarget = Math.max(0, Number(startTime) || 0);
 
-    const applySeek = () => {
-      try {
-        if (seekTarget > 0 && isFinite(audio.duration) && seekTarget < audio.duration) {
-          audio.currentTime = seekTarget;
-        } else {
-          audio.currentTime = 0;
-        }
-      } catch (e) {}
-    };
-
-    // If metadata not yet loaded, wait for it before seeking
     if (audio.readyState < 1) {
       await new Promise((resolve) => {
         let done = false;
         const finish = () => {
           if (!done) {
             done = true;
-            applySeek();
             resolve();
           }
         };
@@ -410,29 +398,26 @@ export default function MiniMixerModal({
         audio.addEventListener('error', finish, { once: true });
         setTimeout(finish, 2500);
       });
-    } else {
-      applySeek();
     }
+
+    try {
+      if (seekTarget > 0 && isFinite(audio.duration) && seekTarget < audio.duration) {
+        audio.currentTime = seekTarget;
+      } else {
+        audio.currentTime = 0;
+      }
+    } catch (e) {}
 
     try {
       await audio.play();
     } catch (e) {
       console.warn('[safePlayAudio] Play attempt retry:', e);
       try {
-        audio.currentTime = 0;
         await audio.play();
       } catch (e2) {
         console.error('[safePlayAudio] Play failed:', e2);
-        throw e2;
       }
     }
-
-    // Verify currentTime after playback starts
-    try {
-      if (seekTarget > 0 && isFinite(audio.duration) && Math.abs(audio.currentTime - seekTarget) > 1.5) {
-        audio.currentTime = seekTarget;
-      }
-    } catch (e) {}
   };
 
   // ── Solo Deck A Audition (Mix-Out Point alone) ──
@@ -476,12 +461,12 @@ export default function MiniMixerModal({
       const totalMs = (previewDuration / spd) * 1000;
 
       const tick = () => {
-        if (!auditionDeckARef.current || auditionDeckARef.current.paused) return;
+        if (!auditionDeckARef.current) return;
         const elapsed = performance.now() - startTime;
         const p = Math.min(1, elapsed / totalMs);
         setSoloProgress(p);
 
-        if (p < 1 && !audioA.ended && !audioA.paused) {
+        if (p < 1 && !audioA.ended) {
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
           stopAudition();
@@ -535,12 +520,12 @@ export default function MiniMixerModal({
       const totalMs = (previewDuration / spd) * 1000;
 
       const tick = () => {
-        if (!auditionDeckBRef.current || auditionDeckBRef.current.paused) return;
+        if (!auditionDeckBRef.current) return;
         const elapsed = performance.now() - startTime;
         const p = Math.min(1, elapsed / totalMs);
         setSoloProgress(p);
 
-        if (p < 1 && !audioB.ended && !audioB.paused) {
+        if (p < 1 && !audioB.ended) {
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
           stopAudition();
@@ -654,44 +639,33 @@ export default function MiniMixerModal({
       setLiveGainA(Math.round(100 * multA));
       setLiveGainB(0);
 
-      const transStartSec = Math.max(0, mixOutPoint - duration);
-      const transEndSec = mixOutPoint;
-      const transLenSec = Math.max(0.1, duration);
-      const auditionStartWall = performance.now();
-      const maxSafetyTimeoutMs = (duration + 20) * 1000;
-      let tailStartTime = null;
+      const startTime = performance.now();
+      const leadInMs = 1500;
+      const transMs = Math.max(1, duration) * 1000;
+      const tailMs = 2500;
+      const totalMs = leadInMs + transMs + tailMs;
       let deckBActive = false;
 
       const tick = () => {
         if (!auditionDeckARef.current && !auditionDeckBRef.current) return;
-        const nowWall = performance.now();
-        if (nowWall - auditionStartWall > maxSafetyTimeoutMs) {
-          stopAudition();
-          return;
-        }
+        const elapsed = performance.now() - startTime;
 
-        const curA = audioA.currentTime;
-
-        if (curA < transStartSec && !tailStartTime) {
+        if (elapsed < leadInMs) {
           // Deck A lead-in
           setPreviewProgress(0);
           audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
           audioB.volume = 0.0;
           setLiveGainA(Math.round(100 * multA));
           setLiveGainB(0);
-        } else if (curA < transEndSec && !audioA.ended && !tailStartTime) {
-          // Deck A -> Deck B active crossfade
+        } else if (elapsed <= leadInMs + transMs) {
+          // Active crossfade
           if (!deckBActive) {
             deckBActive = true;
-            try {
-              if (Math.abs(audioB.currentTime - seekB) > 0.5) {
-                audioB.currentTime = seekB;
-              }
-            } catch {}
+            try { audioB.currentTime = seekB; } catch {}
             audioB.play().catch(() => {});
           }
 
-          const rawP = Math.max(0, Math.min(1, (curA - transStartSec) / transLenSec));
+          const rawP = Math.max(0, Math.min(1, (elapsed - leadInMs) / transMs));
           const { gainA, gainB } = calculateCrossfadeGains(rawP, style, crossoverBias);
 
           audioA.volume = Math.max(0, Math.min(1, gainA * multA));
@@ -700,7 +674,7 @@ export default function MiniMixerModal({
           setLiveGainA(Math.round(gainA * multA * 100));
           setLiveGainB(Math.round(gainB * multB * 100));
         } else {
-          // Deck B tail phase (after crossover concludes)
+          // Deck B tail phase
           if (!deckBActive) {
             deckBActive = true;
             try { audioB.currentTime = seekB; } catch {}
@@ -714,18 +688,13 @@ export default function MiniMixerModal({
           audioB.volume = Math.max(0, Math.min(1, 1.0 * multB));
           setLiveGainA(0);
           setLiveGainB(Math.round(100 * multB));
-
-          if (!tailStartTime) {
-            tailStartTime = nowWall;
-          }
-
-          if (nowWall - tailStartTime >= 2500 || audioB.ended) {
-            stopAudition();
-            return;
-          }
         }
 
-        auditionAnimRef.current = requestAnimationFrame(tick);
+        if (elapsed < totalMs && (!audioB.ended || elapsed < leadInMs + transMs)) {
+          auditionAnimRef.current = requestAnimationFrame(tick);
+        } else {
+          stopAudition();
+        }
       };
 
       auditionAnimRef.current = requestAnimationFrame(tick);
