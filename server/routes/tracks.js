@@ -875,7 +875,12 @@ async function autoPersistExternalTrack({ id, trackId, title, artist, album, cov
         }
       }
     }
-    if (!t) {
+    if (t) {
+      if (duration && duration > 0 && Math.abs((t.duration || 0) - duration) > 2) {
+        t.duration = duration;
+        await t.save().catch(() => {});
+      }
+    } else {
       t = await Track.create({
         title: title.trim(),
         artist: (artist || 'Unknown Artist').trim(),
