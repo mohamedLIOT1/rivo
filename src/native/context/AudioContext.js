@@ -65,6 +65,7 @@ export const AudioProvider = ({ children }) => {
   const nextTrackRef = useRef(null);
   const isMixPreloadingRef = useRef(false);
   const isMixTransitioningRef = useRef(false);
+  const isHandoffRunningRef = useRef(false);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -838,6 +839,67 @@ export const AudioProvider = ({ children }) => {
     return cleaned;
   };
 
+  const completeSeamlessHandoff = async () => {
+    if (isHandoffRunningRef.current) return;
+    isHandoffRunningRef.current = true;
+
+    try {
+      if (nextSoundRef.current && nextTrackRef.current) {
+        console.log('[RivoDJ] ⚡ Executing clean seamless crossfade handoff to Deck B');
+        const prevSound = soundRef.current;
+        const newActiveSound = nextSoundRef.current;
+        const newActiveTrack = nextTrackRef.current;
+        const newActiveId = String(newActiveTrack._id || newActiveTrack.id || '');
+
+        // 1. Immediately detach listener, stop, and unload Deck A to guarantee zero audio bleed
+        if (prevSound) {
+          try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
+          prevSound.stopAsync().catch(() => {});
+          prevSound.unloadAsync().catch(() => {});
+        }
+
+        // 2. Promote Deck B to primary playing Sound
+        soundRef.current = newActiveSound;
+        nextSoundRef.current = null;
+        nextTrackRef.current = null;
+        nextSoundPlayingRef.current = false;
+        loadedTrackIdRef.current = newActiveId;
+        currentTrackRef.current = newActiveTrack;
+        setCurrentTrack(newActiveTrack);
+
+        shouldBePlayingRef.current = true;
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        isLoadingRef.current = false;
+        setIsLoading(false);
+
+        // 3. Connect playback listener and restore target master volume on Deck B
+        newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+        const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
+        newActiveSound.setVolumeAsync(targetVol).catch(() => {});
+        try { newActiveSound.setRateAsync(1.0, true).catch(() => {}); } catch {}
+
+        // 4. Update Lock Screen / Notification
+        const isLiked = likedTrackIds.some(id => String(id) === newActiveId);
+        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLiked, newActiveTrack);
+      } else {
+        // Fallback: If Deck B was not preloaded or ready, advance queue normally
+        if (playNextTrackRef.current) {
+          playNextTrackRef.current();
+        }
+      }
+    } catch (err) {
+      console.warn('[RivoDJ] Error during seamless handoff:', err);
+      if (playNextTrackRef.current) {
+        playNextTrackRef.current();
+      }
+    } finally {
+      setTimeout(() => {
+        isHandoffRunningRef.current = false;
+      }, 1200);
+    }
+  };
+
   const onPlaybackStatusUpdate = (status) => {
     if (!status.isLoaded) return;
 
@@ -881,39 +943,8 @@ export const AudioProvider = ({ children }) => {
       }
 
       // RIVO DJ ENGINE: Seamless handoff if next sound is already running
-      if (isMixModeRef.current && nextSoundRef.current && nextTrackRef.current) {
-        console.log('[RivoDJ] ⚡ Completing seamless crossfade to next track');
-        const prevSound = soundRef.current;
-        const newActiveSound = nextSoundRef.current;
-        const newActiveTrack = nextTrackRef.current;
-        const newActiveId = String(newActiveTrack._id || newActiveTrack.id || '');
-
-        if (prevSound) {
-          try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
-          prevSound.stopAsync().catch(() => {});
-          prevSound.unloadAsync().catch(() => {});
-        }
-
-        soundRef.current = newActiveSound;
-        nextSoundRef.current = null;
-        nextTrackRef.current = null;
-        nextSoundPlayingRef.current = false;
-        loadedTrackIdRef.current = newActiveId; // CRITICAL: keeps active sound alive!
-        currentTrackRef.current = newActiveTrack;
-        setCurrentTrack(newActiveTrack);
-
-        shouldBePlayingRef.current = true;
-        isPlayingRef.current = true;
-        setIsPlaying(true);
-        isLoadingRef.current = false;
-        setIsLoading(false);
-
-        newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-        const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
-        newActiveSound.setVolumeAsync(targetVol).catch(() => {});
-
-        const isLiked = likedTrackIds.some(id => String(id) === newActiveId);
-        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLiked, newActiveTrack);
+      if (isMixModeRef.current) {
+        completeSeamlessHandoff();
         return;
       }
 
@@ -988,7 +1019,8 @@ export const AudioProvider = ({ children }) => {
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
     const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
     const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
-    const newDuration = statusDurSec > 1 ? statusDurSec : (knownDur > 0 ? knownDur : 240);
+    const isDoubledGlitch = knownDur >= 30 && statusDurSec >= Math.floor(knownDur * 1.7) && statusDurSec <= Math.ceil(knownDur * 2.3);
+    const newDuration = (isDoubledGlitch && knownDur > 0) ? knownDur : (statusDurSec > 1 ? statusDurSec : (knownDur > 0 ? knownDur : 240));
 
     if (playbackStatusRef.current.currentTime !== newCurrentTime) {
       playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: newCurrentTime, duration: newDuration };
@@ -1065,6 +1097,12 @@ export const AudioProvider = ({ children }) => {
           if (nextSoundRef.current) {
             nextSoundRef.current.setVolumeAsync(targetVolB).catch(() => {});
           }
+        }
+
+        // 3. Exact Mix-Out point reached (remainingSec <= 0): IMMEDIATE HANDOFF!
+        if (remainingSec <= 0) {
+          completeSeamlessHandoff();
+          return;
         }
       }
 
@@ -1759,7 +1797,10 @@ export const AudioProvider = ({ children }) => {
       soundRef.current = sound;
       loadedTrackIdRef.current = trackId;
       if (typeof status !== 'undefined' && status && status.durationMillis && status.durationMillis > 1000) {
-        const authenticSec = Math.floor(status.durationMillis / 1000);
+        const rawSec = Math.floor(status.durationMillis / 1000);
+        const curKnown = Number(track.duration || 0);
+        const isGlitch = curKnown >= 30 && rawSec >= Math.floor(curKnown * 1.7) && rawSec <= Math.ceil(curKnown * 2.3);
+        const authenticSec = (isGlitch && curKnown > 0) ? curKnown : rawSec;
         track = { ...track, duration: authenticSec };
         if (currentTrackRef.current) currentTrackRef.current.duration = authenticSec;
         playbackStatusRef.current.duration = authenticSec;

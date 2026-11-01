@@ -606,6 +606,9 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
           if (best && best.videoId) {
             if (ytSearchCache.size > 5000) ytSearchCache.clear();
             const resObj = new String(best.videoId);
+            resObj.id = best.videoId;
+            resObj.videoId = best.videoId;
+            resObj.duration = best.duration || null;
             resObj.confidence = best.confidence;
             resObj.durationDiff = best.durationDiff;
             ytSearchCache.set(cacheKey, resObj);
@@ -1334,6 +1337,25 @@ function isAudioFileValid(filePath) {
   }
 }
 
+const localFileDurationCache = new Map();
+function getLocalAudioFileDuration(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  if (localFileDurationCache.has(filePath)) return localFileDurationCache.get(filePath);
+  try {
+    const probe = execSync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
+      { timeout: 4000 }
+    );
+    const durSec = Math.round(Number(probe.toString().trim()));
+    if (durSec > 0 && durSec < 86400) {
+      if (localFileDurationCache.size > 2000) localFileDurationCache.clear();
+      localFileDurationCache.set(filePath, durSec);
+      return durSec;
+    }
+  } catch {}
+  return null;
+}
+
 async function downloadYouTubeAudioToCache(videoId, cacheDir) {
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
   if (!fs.existsSync(cacheDir)) {
@@ -1472,7 +1494,7 @@ opts = {
     'nocheckcertificate': True,
     'noplaylist': True,
     'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb']}},
-    'format': 'ba/b'
+    'format': '140/ba[ext=m4a]/ba/bestaudio'
 }
 
 ydl = yt_dlp.YoutubeDL(opts)
@@ -1511,7 +1533,14 @@ for line in sys.stdin:
             const { resolve, timer } = ytWorkerPending.get(parsed.id);
             clearTimeout(timer);
             ytWorkerPending.delete(parsed.id);
-            resolve(parsed.url || null);
+            if (parsed.url) {
+              const res = new String(parsed.url);
+              res.url = parsed.url;
+              res.duration = parsed.duration ? Math.round(Number(parsed.duration)) : null;
+              resolve(res);
+            } else {
+              resolve(null);
+            }
           }
         } catch {}
       }
@@ -1591,12 +1620,15 @@ function processNextBgDownload() {
 
 async function extractDirectStreamUrl(videoId) {
   try {
-    const warmUrl = await extractViaWarmWorker(videoId);
+    const warmRes = await extractViaWarmWorker(videoId);
+    const warmUrl = warmRes ? (warmRes.url || String(warmRes)) : null;
     if (warmUrl && warmUrl.startsWith('http')) {
-      let dur = null;
-      const mDur = warmUrl.match(/[?&]dur=([0-9.]+)/);
-      if (mDur && !isNaN(Number(mDur[1]))) {
-        dur = Math.round(Number(mDur[1]));
+      let dur = warmRes?.duration || null;
+      if (!dur) {
+        const mDur = warmUrl.match(/[?&]dur=([0-9.]+)/);
+        if (mDur && !isNaN(Number(mDur[1]))) {
+          dur = Math.round(Number(mDur[1]));
+        }
       }
       const res = new String(warmUrl);
       res.url = warmUrl;
@@ -1620,7 +1652,7 @@ async function extractDirectStreamUrl(videoId) {
   } else {
     ytdlpArgs.push('--extractor-args', 'youtube:player_client=android,ios,mweb');
   }
-  ytdlpArgs.push('-g', '-f', 'ba/bestaudio', ytUrl);
+  ytdlpArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio', ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
@@ -1649,7 +1681,7 @@ async function extractDirectStreamUrl(videoId) {
       // Instant fallback without extractor args
       const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--print', '%(duration)s'];
       if (cp) fbArgs.push('--cookies', cp);
-      fbArgs.push('-g', '-f', 'ba/bestaudio', ytUrl);
+      fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio', ytUrl);
       execFile(bin, fbArgs, { timeout: 35000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -1755,9 +1787,10 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
   if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
     if (isAudioFileValid(cachedM4a)) {
+      const realDur = getLocalAudioFileDuration(cachedM4a) || targetDuration || defaultDur;
       const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
       retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
-      retObj.duration = defaultDur;
+      retObj.duration = realDur;
       retObj.videoId = videoId;
       return retObj;
     } else {
@@ -1766,9 +1799,10 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
     if (isAudioFileValid(cachedMp3)) {
+      const realDur = getLocalAudioFileDuration(cachedMp3) || targetDuration || defaultDur;
       const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
       retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
-      retObj.duration = defaultDur;
+      retObj.duration = realDur;
       retObj.videoId = videoId;
       return retObj;
     } else {
@@ -1784,7 +1818,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       queueBackgroundAudioCache(videoId, cachedM4a, true);
       const retObj = new String(cachedStream.url);
       retObj.url = cachedStream.url;
-      retObj.duration = cachedStream.duration || defaultDur;
+      retObj.duration = cachedStream.duration || targetDuration || defaultDur;
       retObj.videoId = videoId;
       return retObj;
     }
@@ -1796,7 +1830,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       if (url && !url.includes('.m3u8')) {
         const retObj = new String(url);
         retObj.url = url;
-        retObj.duration = url.duration || defaultDur;
+        retObj.duration = url.duration || targetDuration || defaultDur;
         retObj.videoId = videoId;
         return retObj;
       }
@@ -1806,7 +1840,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   const extractPromise = (async () => {
     let directResult = await extractDirectStreamUrl(videoId);
     let directUrl = directResult ? (directResult.url || String(directResult)) : null;
-    let authenticDuration = directResult?.duration || null;
+    let authenticDuration = directResult?.duration || targetDuration || null;
     // Never overwrite an explicit videoId with a fuzzy YouTube search fallback
     if (!directUrl && !isExplicitVideoId && (title || artist)) {
       try {
@@ -1816,11 +1850,12 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
           const freshStream = await extractDirectStreamUrl(freshVidStr);
           if (freshStream) {
             const fUrl = freshStream.url || String(freshStream);
-            const fDur = freshStream.duration || null;
+            const fDur = freshStream.duration || freshId.duration || targetDuration || null;
             directStreamCache.set(freshVidStr, { url: fUrl, duration: fDur, expireAt: Date.now() + 3 * 3600 * 1000 });
             const resObj = new String(fUrl);
             resObj.url = fUrl;
-            resObj.duration = fDur;
+            resObj.duration = fDur || defaultDur;
+            resObj.videoId = freshVidStr;
             return resObj;
           }
         }
@@ -1828,18 +1863,25 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     }
 
     if (directUrl && !directUrl.includes('.m3u8')) {
-      directStreamCache.set(videoId, { url: directUrl, duration: authenticDuration, expireAt: Date.now() + 3 * 3600 * 1000 });
+      const chosenDur = authenticDuration || targetDuration || defaultDur;
+      directStreamCache.set(videoId, { url: directUrl, duration: chosenDur, expireAt: Date.now() + 3 * 3600 * 1000 });
       queueBackgroundAudioCache(videoId, cachedM4a, true);
       const resObj = new String(directUrl);
       resObj.url = directUrl;
-      resObj.duration = authenticDuration;
+      resObj.duration = chosenDur;
+      resObj.videoId = videoId;
       return resObj;
     }
 
     // 1. Direct YouTube download to disk with cookies & format fixup
     const downloadedCache = await downloadYouTubeAudioToCache(videoId, audioCacheDir);
     if (downloadedCache && isAudioFileValid(downloadedCache)) {
-      return `/uploads/audio-cache/${videoId}.m4a`;
+      const fileDur = getLocalAudioFileDuration(downloadedCache) || targetDuration || defaultDur;
+      const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
+      retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
+      retObj.duration = fileDur;
+      retObj.videoId = videoId;
+      return retObj;
     }
 
     // 2. Fallback to SoundCloud only if YouTube completely fails AND not explicit video ID

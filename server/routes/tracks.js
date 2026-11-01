@@ -1007,7 +1007,7 @@ const handleTrackStream = async (req, res) => {
         artist,
         album: req.query.album || track?.album || 'Single',
         cover: targetCover,
-        audioUrl: rawUrl || (vidCandidate ? `https://www.youtube.com/watch?${vidCandidate}` : ''),
+        audioUrl: rawUrl || (vidCandidate ? `https://www.youtube.com/watch?v=${vidCandidate}` : ''),
         duration: finalDur
       });
 
