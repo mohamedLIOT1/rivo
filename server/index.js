@@ -22,7 +22,7 @@ const { User, Track, Album } = require('./models');
 const { auth, adminAuth, optionalAuth } = require('./middleware/auth');
 const { uploadsDir } = require('./middleware/upload');
 const { validateSafeUrl } = require('./utils/security');
-const { searchTracksInternal, isQuranContent, ensureYtDlpBinary } = require('./utils/helpers');
+const { searchTracksInternal, isQuranContent, ensureYtDlpBinary, initWarmYtWorker } = require('./utils/helpers');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -136,35 +136,35 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.2.7',
+      version: '2.2.8',
       name: 'Rivo Web',
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     windows: {
-      version: '2.2.7',
+      version: '2.2.8',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.7.exe',
+      directFile: 'Rivo-v2.2.8.exe',
       mandatory: false,
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     android: {
-      version: '2.2.7',
-      build: 120,
+      version: '2.2.8',
+      build: 121,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.7.apk',
+      directFile: 'Rivo-v2.2.8.apk',
       mandatory: false,
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     ios: {
-      version: '2.2.7',
-      build: 120,
+      version: '2.2.8',
+      build: 121,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.7.ipa',
+      directFile: 'Rivo-v2.2.8.ipa',
       mandatory: false,
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     }
   }
 };
@@ -181,45 +181,45 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
   platforms: {
     web: {
-      version: '2.2.7',
+      version: '2.2.8',
       name: 'Rivo Web (Beta)',
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     windows: {
-      version: '2.2.7',
+      version: '2.2.8',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.7.exe',
+      directFile: 'Rivo-v2.2.8.exe',
       mandatory: false,
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
     },
     android: {
-      version: '2.2.7',
-      build: 120,
+      version: '2.2.8',
+      build: 121,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.7.apk',
+      directFile: 'Rivo-v2.2.8.apk',
       mandatory: false,
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
-      notesEn: 'Instant OTA update v2.2.7 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.',
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
+      notesEn: 'Instant OTA update v2.2.8 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.',
       ota: {
         enabled: true,
-        version: '2.2.7',
+        version: '2.2.8',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث فوري v2.2.7: تحسين مظهر الميني بلاير ونقل زر التنقل وإزالة كارت الرادار.',
-        notesEn: 'Instant OTA update v2.2.7 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
+        notes: 'تحديث فوري v2.2.8: تحسين مظهر الميني بلاير ونقل زر التنقل وإزالة كارت الرادار.',
+        notesEn: 'Instant OTA update v2.2.8 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
       }
     },
     ios: {
-      version: '2.2.7',
-      build: 120,
+      version: '2.2.8',
+      build: 121,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.7.ipa',
+      directFile: 'Rivo-v2.2.8.ipa',
       mandatory: false,
-      notes: 'Update v2.2.7 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
-      notesEn: 'Instant update v2.2.7 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
+      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
+      notesEn: 'Instant update v2.2.8 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
     }
   }
 };
@@ -702,7 +702,9 @@ require('./sockets')(io, {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Rivo Server running on port ${PORT}`);
-  ensureYtDlpBinary().catch((err) => console.warn('[yt-dlp] startup check notice:', err.message));
+  ensureYtDlpBinary().then(() => {
+    try { initWarmYtWorker(); } catch {}
+  }).catch((err) => console.warn('[yt-dlp] startup check notice:', err.message));
 });
 
 module.exports = { app, server, io };

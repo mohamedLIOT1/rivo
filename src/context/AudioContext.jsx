@@ -1114,8 +1114,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (!isNaN(deck.duration) && isFinite(deck.duration) && deck.duration > 5 && deck.duration < 86400) {
           const rawDuration = Math.round(deck.duration);
           const curKnown = Number(currentTrackRef.current?.duration || 0);
-          const isGlitch = curKnown >= 30 && rawDuration >= Math.floor(curKnown * 1.7) && rawDuration <= Math.ceil(curKnown * 2.3);
-          const rounded = (isGlitch && curKnown > 0) ? curKnown : rawDuration;
+          const isGlitch = false;
+          const rounded = (curKnown > 0) ? curKnown : rawDuration;
           setDuration(rounded);
           durationRef.current = rounded;
           if (currentTrackRef.current) currentTrackRef.current.duration = rounded;
@@ -1127,8 +1127,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (!isNaN(deck.duration) && isFinite(deck.duration) && deck.duration > 5 && deck.duration < 86400) {
           const rawDuration = Math.round(deck.duration);
           const curKnown = Number(currentTrackRef.current?.duration || 0);
-          const isGlitch = curKnown >= 30 && rawDuration >= Math.floor(curKnown * 1.7) && rawDuration <= Math.ceil(curKnown * 2.3);
-          const rounded = (isGlitch && curKnown > 0) ? curKnown : rawDuration;
+          const isGlitch = false;
+          const rounded = (curKnown > 0) ? curKnown : rawDuration;
           setDuration(rounded);
           durationRef.current = rounded;
           if (currentTrackRef.current) currentTrackRef.current.duration = rounded;

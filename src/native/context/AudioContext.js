@@ -1019,8 +1019,8 @@ export const AudioProvider = ({ children }) => {
     const newCurrentTime = Math.floor(status.positionMillis / 1000);
     const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
     const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
-    const isDoubledGlitch = knownDur >= 30 && statusDurSec >= Math.floor(knownDur * 1.7) && statusDurSec <= Math.ceil(knownDur * 2.3);
-    const newDuration = (isDoubledGlitch && knownDur > 0) ? knownDur : (statusDurSec > 1 ? statusDurSec : (knownDur > 0 ? knownDur : 240));
+    const isDoubledGlitch = false;
+    const newDuration = (knownDur > 0) ? knownDur : (statusDurSec > 1 ? statusDurSec : 240);
 
     if (playbackStatusRef.current.currentTime !== newCurrentTime) {
       playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: newCurrentTime, duration: newDuration };
@@ -1799,8 +1799,8 @@ export const AudioProvider = ({ children }) => {
       if (typeof status !== 'undefined' && status && status.durationMillis && status.durationMillis > 1000) {
         const rawSec = Math.floor(status.durationMillis / 1000);
         const curKnown = Number(track.duration || 0);
-        const isGlitch = curKnown >= 30 && rawSec >= Math.floor(curKnown * 1.7) && rawSec <= Math.ceil(curKnown * 2.3);
-        const authenticSec = (isGlitch && curKnown > 0) ? curKnown : rawSec;
+        const isGlitch = false;
+        const authenticSec = (curKnown > 0) ? curKnown : rawSec;
         track = { ...track, duration: authenticSec };
         if (currentTrackRef.current) currentTrackRef.current.duration = authenticSec;
         playbackStatusRef.current.duration = authenticSec;

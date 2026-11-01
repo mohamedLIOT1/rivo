@@ -284,7 +284,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
   // 3. Server-side Stream Resolution (Primary: /stream endpoint checks local cache, uploads & DB instantly)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 7000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
     const albumParam = track.album ? `&album=${encodeURIComponent(track.album)}` : '';
 

@@ -869,8 +869,8 @@ async function autoPersistExternalTrack({ id, trackId, title, artist, album, cov
         const stripped = cleanT.replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
         if (stripped.length > 2) {
           t = await Track.findOne({
-            title: new RegExp(escapeRegex(stripped), 'i'),
-            ...(cleanA ? { artist: new RegExp(escapeRegex(cleanA), 'i') } : {})
+            title: new RegExp(`^${escapeRegex(stripped)}$`, 'i'),
+            ...(cleanA ? { artist: new RegExp(`^${escapeRegex(cleanA)}$`, 'i') } : {})
           });
         }
       }
