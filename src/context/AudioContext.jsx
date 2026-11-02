@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { initAudioEngine, setMasterVolume, resumeAudioContext, calculateCrossfadeGains, playTrueRivoMix, getAudioContext } from '../utils/audioEngine';
 import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicAnalysis';
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
@@ -1364,12 +1364,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, []);
 
-  const setVolume = (val) => {
+  const setVolume = useCallback((val) => {
     volumeRef.current = val;
     setVolumeState(val);
     setMasterVolume(val);
     if (audioRef.current) audioRef.current.volume = val;
-  };
+  }, []);
 
   // ── Real Listening Activity Tracker (Ticks accurate seconds when music is playing) ──
   useEffect(() => {
@@ -3333,7 +3333,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
   }, [duration]);
 
-  const value = {
+  const value = useMemo(() => ({
     currentTrack, setCurrentTrack,
     currentQueue, setCurrentQueue,
     currentQueueIndex, setCurrentQueueIndex,
@@ -3364,7 +3364,36 @@ export function AudioProvider({ children, tracks, setTracks }) {
     remoteDevicePlayback,
     isAutoplayBlocked, resumeAutoplay,
     vocalIsolationStatus,
-  };
+  }), [
+    currentTrack, setCurrentTrack,
+    currentQueue, setCurrentQueue,
+    currentQueueIndex, setCurrentQueueIndex,
+    isPlaying, setIsPlaying,
+    currentTime, duration,
+    volume, setVolume,
+    isShuffle, setIsShuffle,
+    toggleShuffle,
+    isRepeat, setIsRepeat,
+    repeatMode, setRepeatMode,
+    toggleRepeat,
+    isOfflineMode, setIsOfflineMode,
+    isYtTrack,
+    isMixMode, setIsMixMode,
+    isTransitioning,
+    activeTransitions, setActiveTransitions,
+    previewDjTransition, startDjMode, stopDjMode,
+    togglePlay, playTrack,
+    playNextTrack, playPrevTrack,
+    addToQueue, removeFromQueue,
+    reorderQueue, clearQueue,
+    seekTo, audioRef,
+    jamSession, setJamSync,
+    syncRemotePlayState,
+    addToJamQueue, removeFromJamQueue, reorderJamQueue,
+    remoteDevicePlayback,
+    isAutoplayBlocked, resumeAutoplay,
+    vocalIsolationStatus,
+  ]);
 
   return (
     <AudioPlayerContext.Provider value={value}>

@@ -201,7 +201,11 @@ export const notifyDownloadedTracksChanged = (tracks) => {
   }
 };
 
-const saveToStorageAndManifest = async (list) => {
+let debouncedSaveTimer = null;
+let pendingSaveList = null;
+let inMemoryDownloadedTracks = null;
+
+const commitToStorageAndManifest = async (list) => {
   try {
     const jsonStr = JSON.stringify(list || []);
     await AsyncStorage.setItem(STORAGE_KEY, jsonStr).catch(() => {});
@@ -212,10 +216,46 @@ const saveToStorageAndManifest = async (list) => {
       } catch {}
     }
   } catch (e) {
-    console.warn('[downloadManager] saveToStorageAndManifest error:', e.message);
+    console.warn('[downloadManager] commitToStorageAndManifest error:', e.message);
   }
-  notifyDownloadedTracksChanged(list);
 };
+
+export const flushDownloadedTracksSave = async () => {
+  if (debouncedSaveTimer) {
+    clearTimeout(debouncedSaveTimer);
+    debouncedSaveTimer = null;
+  }
+  if (pendingSaveList !== null) {
+    const toSave = pendingSaveList;
+    pendingSaveList = null;
+    await commitToStorageAndManifest(toSave);
+  }
+};
+
+export const saveDownloadedTracks = async (list, { immediate = false } = {}) => {
+  const cleaned = deduplicateTrackList(list || []);
+  inMemoryDownloadedTracks = cleaned;
+  notifyDownloadedTracksChanged(cleaned);
+  pendingSaveList = cleaned;
+
+  if (immediate) {
+    return await flushDownloadedTracksSave();
+  }
+
+  if (debouncedSaveTimer) {
+    clearTimeout(debouncedSaveTimer);
+  }
+  debouncedSaveTimer = setTimeout(async () => {
+    debouncedSaveTimer = null;
+    if (pendingSaveList !== null) {
+      const toSave = pendingSaveList;
+      pendingSaveList = null;
+      await commitToStorageAndManifest(toSave);
+    }
+  }, 2500);
+};
+
+const saveToStorageAndManifest = saveDownloadedTracks;
 
 export const reanchorDocumentUri = (uri) => {
   if (!uri || typeof uri !== 'string') return uri;
@@ -226,7 +266,13 @@ export const reanchorDocumentUri = (uri) => {
   return uri;
 };
 
-export const getDownloadedTracks = async () => {
+export const getDownloadedTracks = async (forceRefresh = false) => {
+  if (!forceRefresh && inMemoryDownloadedTracks !== null && Array.isArray(inMemoryDownloadedTracks)) {
+    return inMemoryDownloadedTracks;
+  }
+  if (forceRefresh && pendingSaveList !== null) {
+    await flushDownloadedTracksSave();
+  }
   try {
     await ensureDirs();
 
@@ -501,9 +547,11 @@ export const getDownloadedTracks = async () => {
       } catch (healErr) {}
     }
 
-    return deduplicateTrackList(tracks);
+    const finalTracks = deduplicateTrackList(tracks);
+    inMemoryDownloadedTracks = finalTracks;
+    return finalTracks;
   } catch {
-    return [];
+    return inMemoryDownloadedTracks || [];
   }
 };
 

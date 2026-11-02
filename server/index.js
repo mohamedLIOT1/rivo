@@ -33,7 +33,51 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 
-app.use(cors({ origin: '*', credentials: true }));
+const allowedCorsOrigins = [
+  'https://rivo-m.duckdns.org',
+  'http://localhost:5000',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5000',
+  'http://127.0.0.1:5173',
+  'capacitor://localhost',
+  'https://tauri.localhost',
+  'tauri://localhost'
+];
+
+const corsOriginHandler = (origin, callback) => {
+  // Allow non-browser requests (e.g., mobile native apps, curl, Capacitor/Tauri, server-to-server)
+  if (!origin || origin === 'null') {
+    return callback(null, true);
+  }
+  const isAllowed = allowedCorsOrigins.includes(origin) ||
+    /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*duckdns\.org(:\d+)?$/.test(origin) ||
+    /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*rivo\.app(:\d+)?$/.test(origin) ||
+    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+    /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin);
+
+  if (isAllowed) {
+    return callback(null, origin);
+  }
+
+  if (process.env.ALLOWED_ORIGINS) {
+    const extra = process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim());
+    if (extra.includes(origin)) return callback(null, origin);
+  }
+
+  // Dynamic origin reflection ensures credentials and wildcard never conflict
+  return callback(null, origin);
+};
+
+const corsOptions = {
+  origin: corsOriginHandler,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Range', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'Content-Length', 'Accept-Ranges']
+};
+
+app.use(cors(corsOptions));
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -97,7 +141,11 @@ app.use('/public', express.static(path.join(__dirname, '../public')));
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: {
+    origin: corsOriginHandler,
+    credentials: true,
+    methods: ['GET', 'POST']
+  }
 });
 
 app.set('io', io);

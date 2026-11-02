@@ -8,7 +8,7 @@ import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isQuranContent } from '../../utils/quranUtils';
 
-export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
+function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const { isDark = true } = useTheme?.() || {};
   const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode, vocalIsolationStatus } = useAudioPlayer();
   const { currentTime, duration } = useAudioProgress();
@@ -137,6 +137,8 @@ export default function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   </View>
 );
 }
+
+export default React.memo(MiniPlayer);
 
 const styles = StyleSheet.create({
   miniVocalBanner: {

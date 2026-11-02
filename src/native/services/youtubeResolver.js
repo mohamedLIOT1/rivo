@@ -77,8 +77,17 @@ export function getCleanQueries(title = '', artist = '') {
  * 3. Resolves authentic official YouTube stream via backend proxy.
  * 4. Resolves via server stream resolver.
  */
-export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStatus = null) => {
+export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStatus = null, signal = null) => {
   if (!track) return null;
+
+  if (!signal && (track?._abortSignal || track?.signal)) {
+    signal = track._abortSignal || track.signal;
+  }
+
+  if (signal && signal.aborted) {
+    if (typeof onVocalStatus === 'function') onVocalStatus(null);
+    return null;
+  }
 
   const trackId = String(track._id || track.id || '');
   const cacheKey = (isVocalOnly && !isQuranContent(track)) ? `${trackId}_vocal` : trackId;
@@ -141,13 +150,52 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       let pollAttempts = 0;
       let displayProgress = Math.max(12, statusData?.status === 'failed' ? 12 : (statusData?.progress || 12));
       while (pollAttempts < 55) {
-        await new Promise(r => setTimeout(r, 1400));
+        if (signal && signal.aborted) {
+          if (typeof onVocalStatus === 'function') onVocalStatus(null);
+          return null;
+        }
+
+        await new Promise(r => {
+          let timeoutId;
+          const onAbort = () => {
+            clearTimeout(timeoutId);
+            r();
+          };
+          timeoutId = setTimeout(() => {
+            if (signal?.removeEventListener) signal.removeEventListener('abort', onAbort);
+            r();
+          }, 1400);
+          if (signal?.addEventListener) {
+            signal.addEventListener('abort', onAbort, { once: true });
+          }
+        });
+
+        if (signal && signal.aborted) {
+          if (typeof onVocalStatus === 'function') onVocalStatus(null);
+          return null;
+        }
+
         pollAttempts++;
 
         try {
-          const pollRes = await fetch(`${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`);
+          if (signal && signal.aborted) {
+            if (typeof onVocalStatus === 'function') onVocalStatus(null);
+            return null;
+          }
+          const pollRes = await fetch(
+            `${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`,
+            signal ? { signal } : undefined
+          );
+          if (signal && signal.aborted) {
+            if (typeof onVocalStatus === 'function') onVocalStatus(null);
+            return null;
+          }
           if (pollRes.ok) {
             const curData = await pollRes.json();
+            if (signal && signal.aborted) {
+              if (typeof onVocalStatus === 'function') onVocalStatus(null);
+              return null;
+            }
             if (curData.status === 'ready' && curData.url) {
               if (typeof onVocalStatus === 'function') {
                 onVocalStatus({
@@ -204,7 +252,12 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
               }
             }
           }
-        } catch (pollErr) {}
+        } catch (pollErr) {
+          if (signal && signal.aborted) {
+            if (typeof onVocalStatus === 'function') onVocalStatus(null);
+            return null;
+          }
+        }
       }
 
       if (typeof onVocalStatus === 'function') onVocalStatus(null);

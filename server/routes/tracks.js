@@ -1072,34 +1072,7 @@ router.get('/debug-stream', async (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
 
-  let runningNodeProcesses = '';
-  try {
-    const { execSync } = require('child_process');
-    runningNodeProcesses = execSync('ps aux | grep node', { encoding: 'utf8' });
-  } catch (e) { runningNodeProcesses = e.message; }
-
-  // Synchronously overwrite /home/ubuntu/dist with fresh build from /home/ubuntu/rivo/dist
-  try {
-    const srcDist = path.join(__dirname, '../../dist');
-    const targetDist = '/home/ubuntu/dist';
-    if (fs.existsSync(srcDist) && fs.existsSync(targetDist)) {
-      for (const file of fs.readdirSync(srcDist)) {
-        const srcFile = path.join(srcDist, file);
-        const targetFile = path.join(targetDist, file);
-        if (fs.statSync(srcFile).isFile()) {
-          fs.copyFileSync(srcFile, targetFile);
-        }
-      }
-      const srcAssets = path.join(srcDist, 'assets');
-      const targetAssets = path.join(targetDist, 'assets');
-      if (fs.existsSync(srcAssets)) {
-        if (!fs.existsSync(targetAssets)) fs.mkdirSync(targetAssets, { recursive: true });
-        for (const af of fs.readdirSync(srcAssets)) {
-          fs.copyFileSync(path.join(srcAssets, af), path.join(targetAssets, af));
-        }
-      }
-    }
-  } catch (e) {}
+  const runningNodeProcesses = 'Disabled for security';
 
   let rootIndexHtml = '';
   let distIndexHtml = '';
@@ -1178,6 +1151,8 @@ router.get('/stream-proxy', async (req, res) => {
 
   // Fast-path: Check if local cached audio exists for this videoId
   let videoId = req.query.videoId || null;
+  const title = req.query.title || '';
+  const artist = req.query.artist || '';
   if (!videoId && targetUrl) {
     const m = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/|[?&]id=o-)([a-zA-Z0-9_-]{11})/i);
     if (m) videoId = m[1];
@@ -1253,8 +1228,8 @@ router.get('/stream-proxy', async (req, res) => {
       if (!res.headersSent) res.status(500).end();
     });
 
-    res.status(response.status);
     const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
+    res.status(response.status);
     const isGoogleVideo = targetUrl.includes('googlevideo.com');
     for (const [key, value] of Object.entries(response.headers)) {
       const lowerKey = key.toLowerCase();
@@ -1268,22 +1243,80 @@ router.get('/stream-proxy', async (req, res) => {
       }
     }
     res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    const clientOrigin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', clientOrigin);
+    if (clientOrigin !== '*') {
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     res.setHeader('Access-Control-Allow-Headers', 'Range');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
     response.data.pipe(res);
   } catch (err) {
     cleanupStream();
     // Auto-recovery: If stream proxy failed (e.g. 403 Forbidden / expired token), attempt fresh resolution
-    if (!res.headersSent && videoId) {
+    if (!res.headersSent && (videoId || title || artist)) {
       try {
-        const freshDirect = await resolveOfficialYouTubeAudioStream(videoId);
+        if (videoId) {
+          invalidateAudioCache(videoId);
+        }
+        const freshDirect = await resolveOfficialYouTubeAudioStream(videoId || '', title, artist);
         if (freshDirect) {
           const freshResolved = freshDirect.url || String(freshDirect);
-          if (freshResolved.startsWith('/uploads/')) {
-            const localFile = safeResolveUpload(freshResolved, uploadsDir);
-            if (localFile && fs.existsSync(localFile)) {
-              return res.sendFile(localFile);
+          if (freshResolved) {
+            if (freshResolved.startsWith('/uploads/') || freshResolved.startsWith('uploads/')) {
+              const localFile = safeResolveUpload(freshResolved, uploadsDir);
+              if (localFile && fs.existsSync(localFile)) {
+                return res.sendFile(localFile);
+              }
+            } else if ((freshResolved.startsWith('http://') || freshResolved.startsWith('https://')) && freshResolved !== targetUrl) {
+              const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
+              try {
+                const { valid: freshValid } = await validateSafeUrl(freshResolved);
+                if (freshValid) {
+                  const freshHeaders = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
+                  if (req.headers.range && !freshResolved.includes('sndcdn.com') && !freshResolved.includes('soundcloud.')) {
+                    freshHeaders['Range'] = req.headers.range;
+                  }
+                  const freshResponse = await axios({
+                    method: 'get',
+                    url: freshResolved,
+                    responseType: 'stream',
+                    headers: freshHeaders,
+                    timeout: 180000,
+                    maxRedirects: 5,
+                    validateStatus: (status) => status < 400
+                  });
+                  res.status(freshResponse.status);
+                  const isGoogleVideoFresh = freshResolved.includes('googlevideo.com');
+                  for (const [key, value] of Object.entries(freshResponse.headers)) {
+                    const lowerKey = key.toLowerCase();
+                    if (!HOP_BY_HOP.includes(lowerKey)) {
+                      if (lowerKey === 'content-length' && isGoogleVideoFresh && freshResponse.status === 200 && !req.headers.range) {
+                        continue;
+                      }
+                      res.setHeader(key, value);
+                    }
+                  }
+                  res.setHeader('Accept-Ranges', 'bytes');
+                  const freshOrigin = req.headers.origin || '*';
+                  res.setHeader('Access-Control-Allow-Origin', freshOrigin);
+                  if (freshOrigin !== '*') {
+                    res.setHeader('Vary', 'Origin');
+                    res.setHeader('Access-Control-Allow-Credentials', 'true');
+                  }
+                  res.setHeader('Access-Control-Allow-Headers', 'Range');
+                  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+                  return freshResponse.data.pipe(res);
+                }
+              } catch (streamErr) {
+                if (!res.headersSent) {
+                  return res.redirect(302, freshResolved);
+                }
+              }
+              if (!res.headersSent) {
+                return res.redirect(302, freshResolved);
+              }
             }
           }
         }

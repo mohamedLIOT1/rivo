@@ -1699,7 +1699,12 @@ export const AudioProvider = ({ children }) => {
           showToast(`"${track.title || 'Track'}" is not cached offline`, 'warning');
           return;
         }
-        uri = await resolveAudioStream(track, isQuranContent(track) ? false : isVocalOnlyRef.current, isQuranContent(track) ? null : updateVocalStatus);
+        uri = await resolveAudioStream(
+          track,
+          isQuranContent(track) ? false : isVocalOnlyRef.current,
+          isQuranContent(track) ? null : updateVocalStatus,
+          abortController?.signal
+        );
         const cachedDur = getStreamDurationFromCache(trackId);
         if (cachedDur && cachedDur > 0) {
           track = { ...track, duration: cachedDur };

@@ -5,7 +5,7 @@ import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { normalizeCoverUrl } from '../utils/coverUtils';
 
-export default function MiniPlayer({
+function MiniPlayer({
   currentTrack,
   isPlaying: propIsPlaying,
   togglePlay: propTogglePlay,
@@ -693,3 +693,6 @@ export default function MiniPlayer({
     </>
   );
 }
+
+export default React.memo(MiniPlayer);
+

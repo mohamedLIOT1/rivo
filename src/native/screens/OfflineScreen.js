@@ -18,6 +18,7 @@ import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { isQuranContent } from '../../utils/quranUtils';
 import {
   getDownloadedTracks,
   removeDownloadedTrack,
@@ -44,9 +45,10 @@ export default function OfflineScreen() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [folderTab, setFolderTab] = useState('all'); // 'all' | 'music' | 'quran'
 
   const filteredOfflineTracks = useMemo(() => {
-    if (!searchQuery.trim()) return offlineTracks;
+    if (!searchQuery.trim()) return offlineTracks || [];
     const q = searchQuery.toLowerCase().trim();
     return (offlineTracks || []).filter(t => {
       const title = (t.title || '').toLowerCase();
@@ -55,6 +57,19 @@ export default function OfflineScreen() {
       return title.includes(q) || artist.includes(q) || album.includes(q);
     });
   }, [offlineTracks, searchQuery]);
+
+  const quranCount = useMemo(() => (offlineTracks || []).filter(isQuranContent).length, [offlineTracks]);
+  const musicCount = useMemo(() => (offlineTracks || []).filter(t => !isQuranContent(t)).length, [offlineTracks]);
+
+  const displayedTracks = useMemo(() => {
+    return (filteredOfflineTracks || []).filter(t => {
+      if (!t) return false;
+      const isQ = isQuranContent(t);
+      if (folderTab === 'music') return !isQ;
+      if (folderTab === 'quran') return isQ;
+      return true;
+    });
+  }, [filteredOfflineTracks, folderTab]);
 
   useEffect(() => {
     loadOffline();
@@ -369,9 +384,77 @@ export default function OfflineScreen() {
         {/* Offline Tracks List */}
         <View style={styles.listSection}>
           <View style={[styles.listHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
-            <Text style={[styles.listTitle, !isDark && styles.listTitleLight]}>DOWNLOADED SONGS</Text>
-            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>{searchQuery ? `${filteredOfflineTracks.length} OF ${(offlineTracks || []).length}` : `${(offlineTracks || []).length} SAVED`}</Text>
+            <Text style={[styles.listTitle, !isDark && styles.listTitleLight]}>DOWNLOADED VAULT</Text>
+            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>{searchQuery ? `${displayedTracks.length} OF ${(offlineTracks || []).length}` : `${(offlineTracks || []).length} SAVED`}</Text>
           </View>
+
+          {/* Category Folder Filter Tabs */}
+          {(offlineTracks || []).length > 0 && (
+            <View style={styles.folderTabBar}>
+              <TouchableOpacity
+                style={[
+                  styles.folderTabBtn,
+                  !isDark && styles.folderTabBtnLight,
+                  folderTab === 'all' && styles.folderTabBtnActive,
+                ]}
+                onPress={() => setFolderTab('all')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.folderTabText,
+                    !isDark && styles.folderTabTextLight,
+                    folderTab === 'all' && styles.folderTabTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  ALL ({(offlineTracks || []).length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.folderTabBtn,
+                  !isDark && styles.folderTabBtnLight,
+                  folderTab === 'music' && styles.folderTabBtnActive,
+                ]}
+                onPress={() => setFolderTab('music')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.folderTabText,
+                    !isDark && styles.folderTabTextLight,
+                    folderTab === 'music' && styles.folderTabTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  🎵 MUSIC ({musicCount})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.folderTabBtn,
+                  !isDark && styles.folderTabBtnLight,
+                  folderTab === 'quran' && styles.folderTabBtnActive,
+                ]}
+                onPress={() => setFolderTab('quran')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.folderTabText,
+                    !isDark && styles.folderTabTextLight,
+                    folderTab === 'quran' && styles.folderTabTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  📖 QURAN ({quranCount})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {(!offlineTracks || offlineTracks.length === 0) ? (
             <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
@@ -402,9 +485,20 @@ export default function OfflineScreen() {
                 <Text style={styles.heroActionTextSec}>CLEAR SEARCH</Text>
               </TouchableOpacity>
             </View>
+          ) : (displayedTracks.length === 0) ? (
+            <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
+                {folderTab === 'quran' ? 'No Quran Recitations' : 'No Music Tracks'}
+              </Text>
+              <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
+                {folderTab === 'quran' 
+                  ? 'No Quran audio files found in offline storage.' 
+                  : 'No music audio files found in offline storage.'}
+              </Text>
+            </View>
           ) : (
             <View style={styles.tracksList}>
-              {(filteredOfflineTracks || []).filter(Boolean).map((track, idx) => {
+              {(displayedTracks || []).filter(Boolean).map((track, idx) => {
                 const trackId = String(track?._id || track?.id || idx);
                 const currentId = String(currentTrack?._id || currentTrack?.id || '');
                 const active = Boolean(currentTrack && trackId === currentId);
@@ -460,16 +554,21 @@ export default function OfflineScreen() {
                       <View style={styles.badgeRow}>
                         <View style={[
                           styles.localPill,
-                          track?.isLocalImport && {
+                          isQuranContent(track) && {
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16,185,129,0.16)',
+                          },
+                          track?.isLocalImport && !isQuranContent(track) && {
                             borderColor: colors.mint,
                             backgroundColor: 'rgba(52,211,153,0.12)',
                           }
                         ]}>
                           <Text style={[
                             styles.localPillText,
-                            track?.isLocalImport && { color: colors.mint }
+                            isQuranContent(track) && { color: '#6ee7b7' },
+                            track?.isLocalImport && !isQuranContent(track) && { color: colors.mint }
                           ]}>
-                            {track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE SONG'}
+                            {isQuranContent(track) ? 'HOLY QURAN' : track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE SONG'}
                           </Text>
                         </View>
                       </View>
@@ -1021,5 +1120,50 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '900',
     fontFamily: 'monospace',
+  },
+  folderTabBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 14,
+    paddingHorizontal: 2,
+  },
+  folderTabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#1e332f',
+    backgroundColor: '#0c1715',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  folderTabBtnLight: {
+    backgroundColor: '#e6edf0',
+    borderColor: '#cbd5e1',
+  },
+  folderTabBtnActive: {
+    borderColor: colors.mint,
+    backgroundColor: colors.mint,
+    shadowColor: colors.mint,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  folderTabText: {
+    color: '#8da8a3',
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: 'monospace',
+    letterSpacing: 0.3,
+  },
+  folderTabTextLight: {
+    color: '#475569',
+  },
+  folderTabTextActive: {
+    color: colors.ink,
+    fontWeight: '900',
   },
 });

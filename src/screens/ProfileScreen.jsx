@@ -254,6 +254,7 @@ export default function ProfileScreen({
   // ── View another user's profile ──
   const handleViewUserProfile = async (userId) => {
     if (!userId) return;
+    setViewingLoading(true);
     try {
       const cleanUserId = encodeURIComponent(String(userId).trim());
       const token = getToken();
@@ -261,8 +262,12 @@ export default function ProfileScreen({
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       const data = await res.json();
-      if (data.success) setViewingProfile(data.user);
-    } catch {}
+      if (data.success && data.user) setViewingProfile(data.user);
+    } catch (e) {
+      console.warn('[ProfileScreen] Load user profile error:', e);
+    } finally {
+      setViewingLoading(false);
+    }
   };
 
   // ── Toggle Follow ──
@@ -368,6 +373,47 @@ export default function ProfileScreen({
     } catch {}
     setSavingPlId(null);
   };
+
+  const isViewingOther = Boolean(
+    viewingUserId &&
+    String(viewingUserId).trim() !== String(currentUser?._id || currentUser?.id || '').trim()
+  );
+
+  if (isViewingOther && !viewingProfile) {
+    return (
+      <div className={`flex-1 flex flex-col overflow-hidden select-none font-sans transition-colors ${
+        isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
+      }`}>
+        <div className={`flex items-center gap-3 px-4 py-3 brutal-border border-x-0 border-t-0 shrink-0 ${
+          isDark ? 'bg-[#101716] border-zinc-800 text-white' : 'bg-[#0b1110] text-[#fdfbf7]'
+        }`}>
+          <button 
+            onClick={() => {
+              setViewingProfile(null);
+              if (onClearViewingUser) onClearViewingUser();
+              if (onBack) onBack();
+            }} 
+            className={`w-8 h-8 rounded-lg brutal-border flex items-center justify-center brutal-btn cursor-pointer ${
+              isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110]'
+            }`}
+          >
+            <ArrowLeft size={16} strokeWidth={2.5} />
+          </button>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display font-black text-sm text-white">Loading Dossier...</h1>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="w-14 h-14 rounded-2xl brutal-border bg-[#10b981] flex items-center justify-center brutal-shadow mb-4">
+            <Loader2 size={26} className="text-[#0b1110] animate-spin" />
+          </div>
+          <p className="font-display font-black text-sm tracking-wider uppercase mb-1 text-white">Retrieving User Prescription</p>
+          <p className="font-mono text-xs opacity-60 text-zinc-300">Connecting to dispensary network...</p>
+        </div>
+      </div>
+    );
+  }
 
   // ── Viewing another user's profile ──
   if (viewingProfile) {
