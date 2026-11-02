@@ -528,6 +528,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   }); // 'off' | 'all' | 'one'
   const isRepeat = repeatMode !== 'off';
   const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+  const isLoadingTrackRef = useRef(false);
   const [isYtTrack, setIsYtTrack] = useState(false); // exposed for RAF-based lyrics sync
   const isYtTrackRef = useRef(false);
 

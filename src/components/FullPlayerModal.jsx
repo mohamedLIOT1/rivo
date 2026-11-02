@@ -133,7 +133,8 @@ export default function FullPlayerModal({
     currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue,
     togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
     isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition,
-    vocalIsolationStatus
+    vocalIsolationStatus,
+    isLoadingTrack: ctxIsLoadingTrack
   } = useAudioPlayer();
 
   const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
@@ -141,6 +142,7 @@ export default function FullPlayerModal({
     : null;
 
   const { toggleLike: ctxToggleLike } = useUser() || {};
+  const isLoadingTrack = Boolean(ctxIsLoadingTrack);
   const isPlaying = propIsPlaying !== undefined ? propIsPlaying : ctxIsPlaying;
   const togglePlay = propTogglePlay || ctxTogglePlay;
   const playNext = propPlayNext || ctxPlayNextTrack;
