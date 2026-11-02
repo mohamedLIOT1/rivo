@@ -728,7 +728,7 @@ router.post('/:id/upload-cover', auth, (req, res, next) => {
     let u = await User.findById(req.user.id);
     let pl = u ? u.playlists.find(p => String(p.id || p._id) === targetId) : null;
 
-    if (!pl) {
+    if (!pl && isAdminUser(req.user)) {
       const isTargetObjId = mongoose.isValidObjectId(targetId);
       const anyUser = await User.findOne(isTargetObjId
         ? { $or: [{ 'playlists.id': targetId }, { 'playlists._id': new mongoose.Types.ObjectId(targetId) }] }
@@ -740,22 +740,24 @@ router.post('/:id/upload-cover', auth, (req, res, next) => {
       }
     }
 
-    try {
-      const alb = await Album.findOne({ $or: [{ id: targetId }, { _id: mongoose.isValidObjectId(targetId) ? targetId : undefined }] });
-      if (alb) {
-        alb.cover = coverUrl;
-        await alb.save();
-      }
-    } catch {}
-
-    if (pl && u) {
-      pl.cover = coverUrl;
-      u.markModified('playlists');
-      await u.save();
-      return res.json({ success: true, cover: coverUrl, playlist: pl });
+    if (isAdminUser(req.user)) {
+      try {
+        const alb = await Album.findOne({ $or: [{ id: targetId }, { _id: mongoose.isValidObjectId(targetId) ? targetId : undefined }] });
+        if (alb) {
+          alb.cover = coverUrl;
+          await alb.save();
+        }
+      } catch {}
     }
 
-    res.json({ success: true, cover: coverUrl });
+    if (!pl) {
+      return res.status(403).json({ success: false, error: 'You do not own this playlist' });
+    }
+
+    pl.cover = coverUrl;
+    u.markModified('playlists');
+    await u.save();
+    return res.json({ success: true, cover: coverUrl, playlist: pl });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

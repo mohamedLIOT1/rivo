@@ -16,7 +16,7 @@ import {
   updateDownloadedTrackLyrics,
   getTrackDedupeKey,
 } from '../services/downloadManager';
-import { resolveAudioStream, getStreamDurationFromCache } from '../services/youtubeResolver';
+import { resolveAudioStream, getStreamDurationFromCache, clearStreamCache } from '../services/youtubeResolver';
 import { showMediaNotification, updateMediaNotification, hideMediaNotification, subscribeToMediaActions } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
 import { useToast } from './ToastContext';
@@ -66,6 +66,7 @@ export const AudioProvider = ({ children }) => {
   const isMixPreloadingRef = useRef(false);
   const isMixTransitioningRef = useRef(false);
   const isHandoffRunningRef = useRef(false);
+  const stallRecoveryTimerRef = useRef(null);
 
   const { showToast } = useToast();
   const conn = useConnectivity();
@@ -741,7 +742,20 @@ export const AudioProvider = ({ children }) => {
       .catch(() => {});
 
     return () => {
-      if (soundRef.current) soundRef.current.unloadAsync().catch(() => {});
+      if (soundRef.current) {
+        try { soundRef.current.setOnPlaybackStatusUpdate(null); } catch {}
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      if (nextSoundRef.current) {
+        try { nextSoundRef.current.setOnPlaybackStatusUpdate(null); } catch {}
+        nextSoundRef.current.unloadAsync().catch(() => {});
+        nextSoundRef.current = null;
+      }
+      if (stallRecoveryTimerRef.current) {
+        clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = null;
+      }
       if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
       hideMediaNotification();
       broadcastListeningActivity(null, false, 0);
@@ -901,7 +915,58 @@ export const AudioProvider = ({ children }) => {
   };
 
   const onPlaybackStatusUpdate = (status) => {
-    if (!status.isLoaded) return;
+    if (!status.isLoaded) {
+      if (status.error) {
+        console.warn(`[AudioContext] Expo-AV playback status error: ${status.error}`);
+        if (stallRecoveryTimerRef.current) {
+          clearTimeout(stallRecoveryTimerRef.current);
+          stallRecoveryTimerRef.current = null;
+        }
+        if (shouldBePlayingRef.current && !isLoadingRef.current) {
+          const cur = currentTrackRef.current;
+          const tid = String(cur?._id || cur?.id || '');
+          if (tid) clearStreamCache(tid);
+          if (cur && !cur._retryDone) {
+            cur._retryDone = true;
+            console.log('[AudioContext] Attempting smooth stream recovery for:', cur.title);
+            playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0);
+          } else if (playNextTrackRef.current) {
+            playNextTrackRef.current();
+          }
+        }
+      }
+      return;
+    }
+
+    const newCurrentTime = Math.floor((status.positionMillis || 0) / 1000);
+    const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
+
+
+    // Stall watchdog: If buffering for more than 4.5s continuously while should be playing
+    if (status.isBuffering && status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current) {
+      if (!stallRecoveryTimerRef.current) {
+        stallRecoveryTimerRef.current = setTimeout(() => {
+          stallRecoveryTimerRef.current = null;
+          if (shouldBePlayingRef.current && !isLoadingRef.current && soundRef.current) {
+            console.warn('[AudioContext] Expo-AV playback stalled in buffering > 4.5s, recovering...');
+            const cur = currentTrackRef.current;
+            const tid = String(cur?._id || cur?.id || '');
+            if (tid) clearStreamCache(tid);
+            if (cur && !cur._retryDone) {
+              cur._retryDone = true;
+              playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0);
+            } else if (playNextTrackRef.current) {
+              playNextTrackRef.current();
+            }
+          }
+        }, 4500);
+      }
+    } else if (status.isPlaying) {
+      if (stallRecoveryTimerRef.current) {
+        clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = null;
+      }
+    }
 
     // Safety: Ensure sound matches the active track currently displayed
     const currentActiveId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
@@ -1016,8 +1081,8 @@ export const AudioProvider = ({ children }) => {
       return;
     }
 
-    const newCurrentTime = Math.floor(status.positionMillis / 1000);
-    const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
+
+
     const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
     const isDoubledGlitch = false;
     const newDuration = (knownDur > 0) ? knownDur : (statusDurSec > 1 ? statusDurSec : 240);
@@ -1770,12 +1835,12 @@ export const AudioProvider = ({ children }) => {
       const { sound, status } = await Audio.Sound.createAsync(
         soundSource,
         {
-          shouldPlay: willPlay,
+          shouldPlay: false,
           positionMillis: initialPosMs > 0 ? initialPosMs : 0,
           volume: initialVol,
           progressUpdateIntervalMillis: 250,
         },
-        onPlaybackStatusUpdate
+        null
       );
 
       const currentActiveId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
@@ -1801,6 +1866,7 @@ export const AudioProvider = ({ children }) => {
 
       soundRef.current = sound;
       loadedTrackIdRef.current = trackId;
+      sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
       if (typeof status !== 'undefined' && status && status.durationMillis && status.durationMillis > 1000) {
         const rawSec = Math.floor(status.durationMillis / 1000);
         const curKnown = Number(track.duration || 0);
@@ -1891,10 +1957,19 @@ export const AudioProvider = ({ children }) => {
         setIsLoading(false);
       }
       if (!isRetry && !isOffline && playRequestSeqRef.current === requestSeq) {
-        const cleanRetryTrack = { ...track, resolvedAudioUrl: null };
+        clearStreamCache(trackId);
+        const cleanRetryTrack = { ...track, resolvedAudioUrl: null, isRetry: true };
         return playTrack(cleanRetryTrack, trackList, true, targetTime, isRemote);
       } else if (playRequestSeqRef.current === requestSeq && (!soundRef.current || loadedTrackIdRef.current !== trackId)) {
+        clearStreamCache(trackId);
         showToast(`Could not play: ${track?.title || 'Track'}`, 'error');
+        if (shouldBePlayingRef.current && playNextTrackRef.current) {
+          setTimeout(() => {
+            if (shouldBePlayingRef.current && playRequestSeqRef.current === requestSeq) {
+              playNextTrackRef.current();
+            }
+          }, 1200);
+        }
       }
     } finally {
       if (playRequestSeqRef.current === requestSeq) {

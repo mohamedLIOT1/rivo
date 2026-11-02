@@ -188,6 +188,10 @@ module.exports = function (io, updateConfig = {}) {
       authenticateSocketEvent(data);
       const uidStr = socket.userId;
       if (!uidStr) return; // Ignore unauthenticated claim
+      if (userDisconnectGraceTimers.has(uidStr)) {
+        clearTimeout(userDisconnectGraceTimers.get(uidStr));
+        userDisconnectGraceTimers.delete(uidStr);
+      }
       socket.join(`user:${uidStr}`);
       if (!userSocketMap.has(uidStr)) {
         userSocketMap.set(uidStr, new Set());
@@ -203,6 +207,10 @@ module.exports = function (io, updateConfig = {}) {
       authenticateSocketEvent(data);
       const uidStr = socket.userId;
       if (!uidStr) return; // Ignore unauthenticated claim
+      if (userDisconnectGraceTimers.has(uidStr)) {
+        clearTimeout(userDisconnectGraceTimers.get(uidStr));
+        userDisconnectGraceTimers.delete(uidStr);
+      }
       socket.join(`user:${uidStr}`);
       if (!userSocketMap.has(uidStr)) {
         userSocketMap.set(uidStr, new Set());
@@ -775,6 +783,18 @@ module.exports = function (io, updateConfig = {}) {
       const target = room.members.find(m => m.socketId === memberSocketId || (memberId && (m.id === memberId || m._id === memberId)));
       if (!target || target.socketId === room.hostId) return;
 
+      const targetId = target.id || target._id;
+      const kickTimeoutKeys = [
+        `${cleanCode}:${target.socketId}`,
+        ...(targetId ? [`${cleanCode}:${targetId}`] : [])
+      ];
+      for (const k of kickTimeoutKeys) {
+        if (jamDisconnectTimeouts.has(k)) {
+          clearTimeout(jamDisconnectTimeouts.get(k));
+          jamDisconnectTimeouts.delete(k);
+        }
+      }
+
       room.members = room.members.filter(m => m.socketId !== target.socketId);
 
       io.to(target.socketId).emit('jam:kicked', {
@@ -796,11 +816,31 @@ module.exports = function (io, updateConfig = {}) {
       const cleanCode = String(roomCode || '').trim().toUpperCase();
       socket.leave(cleanCode);
       const room = jamRooms[cleanCode] || jamRooms[roomCode];
+
+      const effUid = socket.userId;
+      const leaveTimeoutKeys = [
+        `${cleanCode}:${socket.id}`,
+        ...(effUid ? [`${cleanCode}:${effUid}`] : [])
+      ];
+      for (const k of leaveTimeoutKeys) {
+        if (jamDisconnectTimeouts.has(k)) {
+          clearTimeout(jamDisconnectTimeouts.get(k));
+          jamDisconnectTimeouts.delete(k);
+        }
+      }
+
       if (room) {
         const wasHost = room.hostId === socket.id;
-        room.members = room.members.filter(m => m.socketId !== socket.id);
+        room.members = room.members.filter(m => m.socketId !== socket.id && (!effUid || String(m.id || m._id) !== String(effUid)));
         if (room.members.length === 0) {
           delete jamRooms[cleanCode];
+          if (jamRooms[roomCode]) delete jamRooms[roomCode];
+          for (const [k, t] of jamDisconnectTimeouts.entries()) {
+            if (k.startsWith(`${cleanCode}:`)) {
+              clearTimeout(t);
+              jamDisconnectTimeouts.delete(k);
+            }
+          }
         } else {
           if (wasHost || !room.members.some(m => m.socketId === room.hostId)) {
             const randomIdx = Math.floor(Math.random() * room.members.length);
@@ -902,14 +942,17 @@ module.exports = function (io, updateConfig = {}) {
             const currentRoom = jamRooms[code];
             if (!currentRoom) return;
 
-            currentRoom.members = currentRoom.members.filter(m => m.socketId !== socket.id && (!member?.id || m.id !== member.id));
+            currentRoom.members = currentRoom.members.filter(m => m.socketId !== socket.id && (!member?.id || String(m.id || m._id) !== String(member.id || member._id)));
 
             if (currentRoom.members.length === 0) {
-              setTimeout(() => {
-                if (jamRooms[code] && (!jamRooms[code].members || jamRooms[code].members.length === 0)) {
-                  delete jamRooms[code];
+              delete jamRooms[code];
+              // Clear any leftover timeouts for this empty room code to prevent memory leaks
+              for (const [k, t] of jamDisconnectTimeouts.entries()) {
+                if (k.startsWith(`${code}:`)) {
+                  clearTimeout(t);
+                  jamDisconnectTimeouts.delete(k);
                 }
-              }, 60000);
+              }
             } else {
               // If the disconnecting socket was host, immediately transfer to an active remaining member
               if (currentRoom.hostId === socket.id || !currentRoom.members.some(m => m.socketId === currentRoom.hostId)) {
@@ -943,3 +986,8 @@ module.exports = function (io, updateConfig = {}) {
     });
   });
 };
+
+module.exports.userSocketMap = userSocketMap;
+module.exports.jamRooms = jamRooms;
+module.exports.jamDisconnectTimeouts = jamDisconnectTimeouts;
+module.exports.userDeviceSessions = userDeviceSessions;

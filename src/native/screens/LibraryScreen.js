@@ -63,7 +63,7 @@ import MiniMixerModal from '../components/MiniMixerModal';
 
 const { width } = Dimensions.get('window');
 
-export default function LibraryScreen({
+function LibraryScreen({
   onOpenCreatePlaylist,
   onNavigateOffline,
   onTrackAction,
@@ -701,6 +701,279 @@ export default function LibraryScreen({
     }
   };
 
+  const handlePlayTrackItem = useCallback((item, index) => {
+    if (selectedView === 'liked') {
+      if (typeof playPlaylist === 'function') {
+        playPlaylist(likedTracks, index);
+      } else if (typeof playTrack === 'function') {
+        playTrack(item, likedTracks);
+      }
+    } else {
+      const isItemQuran = Boolean(isSelectedPlQuran || isQuranContent(item));
+      if (!isItemQuran && isMixActive) {
+        if (typeof setIsMixMode === 'function') setIsMixMode(true);
+        if (typeof setActiveTransitions === 'function' && playlistTransitions) {
+          setActiveTransitions(playlistTransitions);
+        }
+      } else {
+        if (typeof setIsMixMode === 'function') setIsMixMode(false);
+        if (typeof setActiveTransitions === 'function') setActiveTransitions({});
+      }
+      if (typeof playPlaylist === 'function') {
+        playPlaylist(activePlaylistTracks, index);
+      } else if (typeof playTrack === 'function') {
+        playTrack(item, activePlaylistTracks);
+      }
+    }
+  }, [
+    selectedView,
+    playPlaylist,
+    playTrack,
+    likedTracks,
+    activePlaylistTracks,
+    isSelectedPlQuran,
+    isMixActive,
+    setIsMixMode,
+    setActiveTransitions,
+    playlistTransitions,
+  ]);
+
+  const handleTrackItemMorePress = useCallback((item) => {
+    if (onTrackAction) {
+      const plObj = selectedView && selectedView !== 'liked' ? selectedView : null;
+      const plId = plObj ? String(plObj.id || plObj._id) : undefined;
+      onTrackAction({
+        ...item,
+        playlistId: plId,
+        playlist: plObj,
+      });
+    }
+  }, [onTrackAction, selectedView]);
+
+  const renderTrackItem = useCallback(({ item, index }) => {
+    if (isReordering && selectedView !== 'liked') {
+      return (
+        <View style={[styles.reorderRow, !isDark && styles.reorderRowLight]}>
+          <View style={{ width: 26, alignItems: 'center' }}>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#94a3b8' }}>{index + 1}</Text>
+          </View>
+          <Image
+            source={{ uri: normalizeCoverUri(item.cover || item.coverUrl) }}
+            style={{ width: 40, height: 40, borderRadius: 6, marginHorizontal: 8, backgroundColor: '#1f2e2a' }}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#ffffff' : '#0b1110' }} numberOfLines={1}>
+              {item.title || 'Untitled'}
+            </Text>
+            <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }} numberOfLines={1}>
+              {item.artist || 'Unknown Artist'}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity
+              onPress={() => handleMoveTrack(index, -1)}
+              disabled={index === 0}
+              style={[styles.reorderBtn, index === 0 && { opacity: 0.25 }]}
+              activeOpacity={0.7}
+            >
+              <ArrowUp size={16} color={isDark ? '#ffffff' : '#000000'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleMoveTrack(index, 1)}
+              disabled={index === activePlaylistTracks.length - 1}
+              style={[styles.reorderBtn, index === activePlaylistTracks.length - 1 && { opacity: 0.25 }]}
+              activeOpacity={0.7}
+            >
+              <ArrowDown size={16} color={isDark ? '#ffffff' : '#000000'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleRemoveTrackDirect(item, index)}
+              style={[styles.reorderBtn, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}
+              activeOpacity={0.7}
+            >
+              <Trash2 size={16} color="#dc2626" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    const nextTrack = activePlaylistTracks[index + 1];
+    const isTrackQuran = Boolean(isSelectedPlQuran || isQuranContent(item) || (nextTrack && isQuranContent(nextTrack)));
+    const hasNext = Boolean(nextTrack && selectedView !== 'liked' && !isReordering && !isTrackQuran);
+    const tAId = String(item._id || item.id || '');
+    const tBId = nextTrack ? String(nextTrack._id || nextTrack.id || '') : '';
+    const pairKey = `${tAId}_${tBId}`;
+    const titleKey = nextTrack ? `${(item.title || '').trim().toLowerCase()}_${(nextTrack.title || '').trim().toLowerCase()}` : '';
+    const trans = playlistTransitions[pairKey] || playlistTransitions[titleKey] || playlistTransitions[index] || { style: 'auto', duration: 8, bars: 4 };
+
+    const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
+                       trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
+                       trans.style === 'wave' ? '〰️ Wave' :
+                       trans.style === 'melt' ? '🧊 Melt' :
+                       trans.style === 'slam' ? '💥 Slam' :
+                       trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' : '✨ Auto';
+    const lengthLabel = trans.bars ? `${trans.bars} bars` : `${trans.duration || 8}s`;
+    const cueLabel = trans.mixOutPoint ? ` • at ${Math.floor(trans.mixOutPoint / 60)}:${String(trans.mixOutPoint % 60).padStart(2, '0')}` : '';
+
+    return (
+      <View key={item._id || item.id || String(index)}>
+        <SongItem
+          track={item}
+          index={index + 1}
+          showBpmKey={Boolean(!isSelectedPlQuran && isMixActive)}
+          onPlay={() => handlePlayTrackItem(item, index)}
+          onMorePress={() => handleTrackItemMorePress(item)}
+        />
+        {isMixActive && hasNext && !isSelectedPlQuran && (
+          <View style={styles.transitionChipRow}>
+            <View style={styles.transitionLine} />
+            <TouchableOpacity
+              style={styles.transitionChip}
+              activeOpacity={0.7}
+              onPress={() => {
+                setActiveMixerPair({
+                  from: item,
+                  to: nextTrack,
+                  index,
+                  pairKey,
+                });
+              }}
+            >
+              <Zap size={10} color="#10b981" />
+              <Text style={styles.transitionChipText}>
+                {styleLabel} • {lengthLabel}{cueLabel}
+              </Text>
+            </TouchableOpacity>
+            <View style={styles.transitionLine} />
+          </View>
+        )}
+      </View>
+    );
+  }, [
+    isReordering,
+    selectedView,
+    isDark,
+    activePlaylistTracks,
+    handleMoveTrack,
+    handleRemoveTrackDirect,
+    isSelectedPlQuran,
+    playlistTransitions,
+    isMixActive,
+    handlePlayTrackItem,
+    handleTrackItemMorePress,
+  ]);
+
+  const renderPlaylistItem = useCallback(({ item: playlist }) => (
+    <TouchableOpacity
+      key={playlist._id || playlist.id}
+      style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth }]}
+      activeOpacity={0.85}
+      onPress={() => setSelectedView(playlist)}
+    >
+      <View style={styles.playlistCoverBox}>
+        {playlist.cover ? (
+          <Image
+            source={{ uri: normalizeCoverUri(playlist.cover) }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
+        ) : (
+          <Disc size={28} color={colors.mint} />
+        )}
+      </View>
+      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
+        {playlist.name}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+        <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }]}>
+          {(playlist.tracks || playlist.trackIds || []).length} TRACKS
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          {playlist.isMix && (
+            <View style={{ backgroundColor: '#17a398', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 2 }}>
+              <Text style={{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }}>🎛️ MIX</Text>
+            </View>
+          )}
+          {playlist.isPublic !== false ? (
+            <>
+              <Globe size={10} color="#17a398" />
+              <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }}>PUB</Text>
+            </>
+          ) : (
+            <>
+              <Lock size={10} color="#9ca3af" />
+              <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }}>PRIV</Text>
+            </>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  ), [cardWidth, colors, isDark]);
+
+  const renderPlaylistsHeader = useCallback(() => (
+    <View>
+      {/* Liked Songs Cassette Card */}
+      <TouchableOpacity
+        style={styles.cardOuter}
+        activeOpacity={0.9}
+        onPress={() => setSelectedView('liked')}
+      >
+        <View style={styles.cardShadow} />
+        <View style={[styles.likedBanner, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}>
+          <View style={styles.likedBannerIcon}>
+            <Heart size={28} color={colors.rust} fill={colors.rust} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+            <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
+            <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} SONGS SAVED</Text>
+          </View>
+          <View style={styles.cardArrowPill}>
+            <Play size={14} color={colors.ink} fill={colors.ink} />
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* Offline Recordings Shortcut Card */}
+      <TouchableOpacity
+        style={styles.cardOuter}
+        activeOpacity={0.9}
+        onPress={onNavigateOffline}
+      >
+        <View style={styles.cardShadow} />
+        <View style={[styles.likedBanner, !isDark ? { backgroundColor: '#ede5d3', borderColor: '#0b1110' } : { backgroundColor: '#162e2a' }]}>
+          <View style={[styles.likedBannerIcon, { backgroundColor: colors.teal }]}>
+            <Download size={24} color={colors.ink} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <CassetteTag label="OFFLINE STORAGE" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+            <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>OFFLINE VAULT</Text>
+            <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>PLAY ANYWHERE WITHOUT WI-FI</Text>
+          </View>
+          <View style={styles.cardArrowPill}>
+            <Play size={14} color={colors.ink} fill={colors.ink} />
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* User Playlists */}
+      <View style={[styles.cratesHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
+        <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }]}>YOUR PLAYLISTS ({playlists.length})</Text>
+        <CassetteTag label="COLLECTION" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+      </View>
+    </View>
+  ), [isDark, colors, likedTracks.length, onNavigateOffline, playlists.length]);
+
+  const renderPlaylistsEmpty = useCallback(() => (
+    <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
+      <FolderHeart size={36} color={colors.teal} />
+      <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No playlists created yet</Text>
+      <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
+        Create custom playlists to organize your favorite songs.
+      </Text>
+    </View>
+  ), [isDark, colors]);
+
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header */}
@@ -740,140 +1013,7 @@ export default function LibraryScreen({
         <FlatList
           data={selectedView === 'liked' ? likedTracks : activePlaylistTracks}
           keyExtractor={(item, idx) => String(item._id || item.id || idx)}
-          renderItem={({ item, index }) => {
-            if (isReordering && selectedView !== 'liked') {
-              return (
-                <View style={[styles.reorderRow, !isDark && styles.reorderRowLight]}>
-                  <View style={{ width: 26, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#94a3b8' }}>{index + 1}</Text>
-                  </View>
-                  <Image
-                    source={{ uri: normalizeCoverUri(item.cover || item.coverUrl) }}
-                    style={{ width: 40, height: 40, borderRadius: 6, marginHorizontal: 8, backgroundColor: '#1f2e2a' }}
-                  />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#ffffff' : '#0b1110' }} numberOfLines={1}>
-                      {item.title || 'Untitled'}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: isDark ? '#94a3b8' : '#64748b' }} numberOfLines={1}>
-                      {item.artist || 'Unknown Artist'}
-                    </Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <TouchableOpacity
-                      onPress={() => handleMoveTrack(index, -1)}
-                      disabled={index === 0}
-                      style={[styles.reorderBtn, index === 0 && { opacity: 0.25 }]}
-                      activeOpacity={0.7}
-                    >
-                      <ArrowUp size={16} color={isDark ? '#ffffff' : '#000000'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleMoveTrack(index, 1)}
-                      disabled={index === activePlaylistTracks.length - 1}
-                      style={[styles.reorderBtn, index === activePlaylistTracks.length - 1 && { opacity: 0.25 }]}
-                      activeOpacity={0.7}
-                    >
-                      <ArrowDown size={16} color={isDark ? '#ffffff' : '#000000'} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => handleRemoveTrackDirect(item, index)}
-                      style={[styles.reorderBtn, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}
-                      activeOpacity={0.7}
-                    >
-                      <Trash2 size={16} color="#dc2626" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            }
-            const nextTrack = activePlaylistTracks[index + 1];
-            const isTrackQuran = Boolean(isSelectedPlQuran || isQuranContent(item) || (nextTrack && isQuranContent(nextTrack)));
-            const hasNext = Boolean(nextTrack && selectedView !== 'liked' && !isReordering && !isTrackQuran);
-            const tAId = String(item._id || item.id || '');
-            const tBId = nextTrack ? String(nextTrack._id || nextTrack.id || '') : '';
-            const pairKey = `${tAId}_${tBId}`;
-            const titleKey = nextTrack ? `${(item.title || '').trim().toLowerCase()}_${(nextTrack.title || '').trim().toLowerCase()}` : '';
-            const trans = playlistTransitions[pairKey] || playlistTransitions[titleKey] || playlistTransitions[index] || { style: 'auto', duration: 8, bars: 4 };
-
-            const styleLabel = trans.style === 'rise' ? '⚡ Rise' :
-                               trans.style === 'blend' || trans.style === 'bass_swap' ? '🌊 Blend' :
-                               trans.style === 'wave' ? '〰️ Wave' :
-                               trans.style === 'melt' ? '🧊 Melt' :
-                               trans.style === 'slam' ? '💥 Slam' :
-                               trans.style === 'fade' || trans.style === 'equal_power' ? '🎚️ Fade' : '✨ Auto';
-            const lengthLabel = trans.bars ? `${trans.bars} bars` : `${trans.duration || 8}s`;
-            const cueLabel = trans.mixOutPoint ? ` • at ${Math.floor(trans.mixOutPoint / 60)}:${String(trans.mixOutPoint % 60).padStart(2, '0')}` : '';
-
-            return (
-              <View key={item._id || item.id || String(index)}>
-                <SongItem
-                  track={item}
-                  index={index + 1}
-                  showBpmKey={Boolean(!isSelectedPlQuran && isMixActive)}
-                  onPlay={() => {
-                    if (selectedView === 'liked') {
-                      if (typeof playPlaylist === 'function') {
-                        playPlaylist(likedTracks, index);
-                      } else if (typeof playTrack === 'function') {
-                        playTrack(item, likedTracks);
-                      }
-                    } else {
-                      const isItemQuran = Boolean(isSelectedPlQuran || isQuranContent(item));
-                      if (!isItemQuran && isMixActive) {
-                        if (typeof setIsMixMode === 'function') setIsMixMode(true);
-                        if (typeof setActiveTransitions === 'function' && playlistTransitions) {
-                          setActiveTransitions(playlistTransitions);
-                        }
-                      } else {
-                        if (typeof setIsMixMode === 'function') setIsMixMode(false);
-                        if (typeof setActiveTransitions === 'function') setActiveTransitions({});
-                      }
-                      if (typeof playPlaylist === 'function') {
-                        playPlaylist(activePlaylistTracks, index);
-                      } else if (typeof playTrack === 'function') {
-                        playTrack(item, activePlaylistTracks);
-                      }
-                    }
-                  }}
-                  onMorePress={() => {
-                    if (onTrackAction) {
-                      const plObj = selectedView && selectedView !== 'liked' ? selectedView : null;
-                      const plId = plObj ? String(plObj.id || plObj._id) : undefined;
-                      onTrackAction({
-                        ...item,
-                        playlistId: plId,
-                        playlist: plObj,
-                      });
-                    }
-                  }}
-                />
-                {isMixActive && hasNext && !isSelectedPlQuran && (
-                  <View style={styles.transitionChipRow}>
-                    <View style={styles.transitionLine} />
-                    <TouchableOpacity
-                      style={styles.transitionChip}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        setActiveMixerPair({
-                          from: item,
-                          to: nextTrack,
-                          index,
-                          pairKey,
-                        });
-                      }}
-                    >
-                      <Zap size={10} color="#10b981" />
-                      <Text style={styles.transitionChipText}>
-                        {styleLabel} • {lengthLabel}{cueLabel}
-                      </Text>
-                    </TouchableOpacity>
-                    <View style={styles.transitionLine} />
-                  </View>
-                )}
-              </View>
-            );
-          }}
+          renderItem={renderTrackItem}
           ListHeaderComponent={
             selectedView === 'liked' ? (
               <View>
@@ -1215,9 +1355,21 @@ export default function LibraryScreen({
           }
         />
       ) : (
-        <ScrollView
+        <FlatList
+          key={`playlists_list_${numCols}`}
+          data={playlists}
+          numColumns={numCols}
+          keyExtractor={(item, idx) => String(item._id || item.id || idx)}
+          renderItem={renderPlaylistItem}
+          ListHeaderComponent={renderPlaylistsHeader}
+          ListEmptyComponent={renderPlaylistsEmpty}
+          columnWrapperStyle={numCols > 1 ? { gap: 10, marginBottom: 10 } : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -1226,118 +1378,7 @@ export default function LibraryScreen({
               colors={[colors.mint]}
             />
           }
-        >
-          <View>
-            {/* Liked Songs Cassette Card */}
-            <TouchableOpacity
-              style={styles.cardOuter}
-              activeOpacity={0.9}
-              onPress={() => setSelectedView('liked')}
-            >
-              <View style={styles.cardShadow} />
-              <View style={[styles.likedBanner, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}>
-                <View style={styles.likedBannerIcon}>
-                  <Heart size={28} color={colors.rust} fill={colors.rust} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
-                  <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
-                  <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} SONGS SAVED</Text>
-                </View>
-                <View style={styles.cardArrowPill}>
-                  <Play size={14} color={colors.ink} fill={colors.ink} />
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Offline Recordings Shortcut Card */}
-            <TouchableOpacity
-              style={styles.cardOuter}
-              activeOpacity={0.9}
-              onPress={onNavigateOffline}
-            >
-              <View style={styles.cardShadow} />
-              <View style={[styles.likedBanner, !isDark ? { backgroundColor: '#ede5d3', borderColor: '#0b1110' } : { backgroundColor: '#162e2a' }]}>
-                <View style={[styles.likedBannerIcon, { backgroundColor: colors.teal }]}>
-                  <Download size={24} color={colors.ink} />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <CassetteTag label="OFFLINE STORAGE" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
-                  <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>OFFLINE VAULT</Text>
-                  <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>PLAY ANYWHERE WITHOUT WI-FI</Text>
-                </View>
-                <View style={styles.cardArrowPill}>
-                  <Play size={14} color={colors.ink} fill={colors.ink} />
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* User Playlists */}
-            <View style={[styles.cratesHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
-              <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }]}>YOUR PLAYLISTS ({playlists.length})</Text>
-              <CassetteTag label="COLLECTION" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
-            </View>
-
-            {playlists.length === 0 ? (
-              <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
-                <FolderHeart size={36} color={colors.teal} />
-                <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No playlists created yet</Text>
-                <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
-                  Create custom playlists to organize your favorite songs.
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.playlistGrid}>
-                {playlists.map((playlist) => (
-                  <TouchableOpacity
-                    key={playlist._id || playlist.id}
-                    style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth }]}
-                    activeOpacity={0.85}
-                    onPress={() => setSelectedView(playlist)}
-                  >
-                    <View style={styles.playlistCoverBox}>
-                      {playlist.cover ? (
-                        <Image
-                          source={{ uri: normalizeCoverUri(playlist.cover) }}
-                          style={{ width: '100%', height: '100%' }}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <Disc size={28} color={colors.mint} />
-                      )}
-                    </View>
-                    <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
-                      {playlist.name}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-                      <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }]}>
-                        {(playlist.tracks || playlist.trackIds || []).length} TRACKS
-                      </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                        {playlist.isMix && (
-                          <View style={{ backgroundColor: '#17a398', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 2 }}>
-                            <Text style={{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }}>🎛️ MIX</Text>
-                          </View>
-                        )}
-                        {playlist.isPublic !== false ? (
-                          <>
-                            <Globe size={10} color="#17a398" />
-                            <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }}>PUB</Text>
-                          </>
-                        ) : (
-                          <>
-                            <Lock size={10} color="#9ca3af" />
-                            <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }}>PRIV</Text>
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        </ScrollView>
+        />
       )}
 
       {/* ── Edit Playlist Modal ── */}
@@ -2336,3 +2377,5 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
+
+export default React.memo(LibraryScreen);

@@ -729,11 +729,97 @@ function NativeAppShell() {
   const currentTrack = audioContext.currentTrack;
   const registerFullPlayerHandler = audioContext.registerFullPlayerHandler;
 
+  const handleOpenFullPlayer = useCallback(() => {
+    setIsFullPlayerOpen(true);
+  }, []);
+
+  const handleTrackAction = useCallback((track) => {
+    setActionTrack(track);
+  }, []);
+
+  const handleOpenChat = useCallback((target) => {
+    if (target) setChatTargetUser(target);
+    setIsChatOpen(true);
+  }, []);
+
+  const handleSelectAlbum = useCallback((alb) => {
+    setSelectedAlbum(alb);
+  }, []);
+
+  const handleSelectArtist = useCallback((art) => {
+    setSelectedArtist(art);
+  }, []);
+
+  const handleOpenCreatePlaylist = useCallback(() => {
+    setIsCreatePlaylistOpen(true);
+  }, []);
+
+  const handleNavigateOffline = useCallback(() => {
+    setActiveTab('offline');
+  }, []);
+
+  const handleOpenAddSong = useCallback(() => {
+    setIsAddSongOpen(true);
+  }, []);
+
+  const handleOpenSettings = useCallback(() => {
+    setIsSettingsOpen(true);
+  }, []);
+
+  const handleOpenAuth = useCallback(() => {
+    setIsIntroAuthOpen(true);
+  }, []);
+
+  const handleOpenFriendActivity = useCallback(() => {
+    setIsFriendActivityOpen(true);
+  }, []);
+
+  const handleOpenJam = useCallback(() => {
+    setIsJamOpen(true);
+  }, []);
+
+  const handleSelectPlaylist = useCallback(() => {
+    setActiveTab('library');
+  }, []);
+
+  const handleQueryChange = useCallback((txt) => {
+    setHeaderSearchText(txt);
+  }, []);
+
+  const handleLogoPress = useCallback(() => {
+    setActiveTab('home');
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setHeaderSearchText('');
+  }, []);
+
+  const handleOpenMessages = useCallback(() => {
+    setUnreadChatCount(0);
+    setIsChatOpen(true);
+  }, []);
+
+  const handleOpenMenu = useCallback(() => {
+    setIsMenuOpen(true);
+  }, []);
+
+  const handleCloseMenu = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
+
+  const handleAvatarPress = useCallback(() => {
+    if (currentUser) {
+      setActiveTab('profile');
+    } else {
+      setIsIntroAuthOpen(true);
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     if (typeof registerFullPlayerHandler === 'function') {
-      registerFullPlayerHandler(() => setIsFullPlayerOpen(true));
+      registerFullPlayerHandler(handleOpenFullPlayer);
     }
-  }, [registerFullPlayerHandler]);
+  }, [registerFullPlayerHandler, handleOpenFullPlayer]);
   const { currentUser, isAuthLoaded, tracks: userTracks = [], albums: userAlbums = [] } = useUser();
   const [headerSearchText, setHeaderSearchText] = useState('');
   const { isDark, toggleTheme } = useTheme();
@@ -865,7 +951,7 @@ function NativeAppShell() {
     }
   }, [isAuthLoaded, currentUser]);
 
-  const handleTabPress = (tabId) => {
+  const handleTabPress = useCallback((tabId) => {
     if (tabId === 'chat') {
       setIsChatOpen(true);
     } else {
@@ -873,7 +959,7 @@ function NativeAppShell() {
       setSelectedArtist(null);
       setActiveTab(tabId);
     }
-  };
+  }, []);
 
   const renderActiveScreen = () => {
     switch (activeTab) {
@@ -881,42 +967,36 @@ function NativeAppShell() {
         return (
           <SearchScreen
             initialQuery={headerSearchText}
-            onQueryChange={(txt) => setHeaderSearchText(txt)}
-            onTrackAction={(track) => setActionTrack(track)}
-            onOpenChat={(target) => {
-              if (target) setChatTargetUser(target);
-              setIsChatOpen(true);
-            }}
-            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
-            onSelectArtist={(art) => setSelectedArtist(art)}
+            onQueryChange={handleQueryChange}
+            onTrackAction={handleTrackAction}
+            onOpenChat={handleOpenChat}
+            onOpenFullPlayer={handleOpenFullPlayer}
+            onSelectAlbum={handleSelectAlbum}
+            onSelectArtist={handleSelectArtist}
           />
         );
       case 'library':
         return (
           <LibraryScreen
-            onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
-            onNavigateOffline={() => setActiveTab('offline')}
-            onTrackAction={(track) => setActionTrack(track)}
+            onOpenCreatePlaylist={handleOpenCreatePlaylist}
+            onNavigateOffline={handleNavigateOffline}
+            onTrackAction={handleTrackAction}
           />
         );
       case 'quran':
-        return <QuranScreen onTrackAction={(track) => setActionTrack(track)} />;
+        return <QuranScreen onTrackAction={handleTrackAction} />;
       case 'profile':
         return (
           <ProfileScreen
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onOpenAuth={() => setIsIntroAuthOpen(true)}
-            onOpenFriendActivity={() => setIsFriendActivityOpen(true)}
-            onOpenJam={() => setIsJamOpen(true)}
-            onOpenChat={(target) => {
-              if (target) setChatTargetUser(target);
-              setIsChatOpen(true);
-            }}
-            onSelectPlaylist={() => setActiveTab('library')}
-            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
-            onSelectArtist={(art) => setSelectedArtist(art)}
+            onOpenSettings={handleOpenSettings}
+            onOpenAuth={handleOpenAuth}
+            onOpenFriendActivity={handleOpenFriendActivity}
+            onOpenJam={handleOpenJam}
+            onOpenChat={handleOpenChat}
+            onSelectPlaylist={handleSelectPlaylist}
+            onOpenFullPlayer={handleOpenFullPlayer}
+            onSelectAlbum={handleSelectAlbum}
+            onSelectArtist={handleSelectArtist}
           />
         );
       case 'stats':
@@ -929,21 +1009,21 @@ function NativeAppShell() {
         return (
           <HomeScreen
             initialFilter="music"
-            onOpenAddSong={() => setIsAddSongOpen(true)}
-            onTrackAction={(track) => setActionTrack(track)}
-            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
-            onSelectArtist={(art) => setSelectedArtist(art)}
+            onOpenAddSong={handleOpenAddSong}
+            onTrackAction={handleTrackAction}
+            onOpenFullPlayer={handleOpenFullPlayer}
+            onSelectAlbum={handleSelectAlbum}
+            onSelectArtist={handleSelectArtist}
           />
         );
       default:
         return (
           <HomeScreen
-            onOpenAddSong={() => setIsAddSongOpen(true)}
-            onTrackAction={(track) => setActionTrack(track)}
-            onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-            onSelectAlbum={(alb) => setSelectedAlbum(alb)}
-            onSelectArtist={(art) => setSelectedArtist(art)}
+            onOpenAddSong={handleOpenAddSong}
+            onTrackAction={handleTrackAction}
+            onOpenFullPlayer={handleOpenFullPlayer}
+            onSelectAlbum={handleSelectAlbum}
+            onSelectArtist={handleSelectArtist}
           />
         );
     }
@@ -955,7 +1035,7 @@ function NativeAppShell() {
         {/* Brand Logo: [Icon] RIVO */}
         <TouchableOpacity
           style={styles.brandingRow}
-          onPress={() => setActiveTab('home')}
+          onPress={handleLogoPress}
           activeOpacity={0.8}
         >
           <View style={styles.logoBadge}>
@@ -988,7 +1068,7 @@ function NativeAppShell() {
           />
           {Boolean(headerSearchText) && (
             <TouchableOpacity
-              onPress={() => setHeaderSearchText('')}
+              onPress={handleClearSearch}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={{ padding: 2 }}
             >
@@ -1002,10 +1082,7 @@ function NativeAppShell() {
           {/* Chat / Messages Button (replaces theme toggle in header) */}
           <TouchableOpacity
             style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
-            onPress={() => {
-              setUnreadChatCount(0);
-              setIsChatOpen(true);
-            }}
+            onPress={handleOpenMessages}
             activeOpacity={0.8}
           >
             <MessageSquare size={16} color={isDark ? '#38bdf8' : '#0b1110'} strokeWidth={2.4} />
@@ -1019,7 +1096,7 @@ function NativeAppShell() {
           {/* Menu Drawer Toggle (☰ 3 bars) */}
           <TouchableOpacity
             style={styles.topIconBtn}
-            onPress={() => setIsMenuOpen(true)}
+            onPress={handleOpenMenu}
             activeOpacity={0.8}
           >
             <Menu size={16} color="#ffffff" strokeWidth={2.5} />
@@ -1028,13 +1105,7 @@ function NativeAppShell() {
           {/* User Profile Avatar / Sign In */}
           <TouchableOpacity
             style={styles.avatarBtn}
-            onPress={() => {
-              if (currentUser) {
-                setActiveTab('profile');
-              } else {
-                setIsIntroAuthOpen(true);
-              }
-            }}
+            onPress={handleAvatarPress}
             activeOpacity={0.8}
           >
             {currentUser?.avatar ? (
@@ -1060,7 +1131,7 @@ function NativeAppShell() {
           ───────────────────────────────────────── */}
       {currentTrack && (
         <MiniPlayer
-          onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
+          onOpenFullPlayer={handleOpenFullPlayer}
           bottomOffset={navStyle === 'fab' ? (Platform.OS === 'ios' ? 14 : 10) : (Platform.OS === 'ios' ? 70 : 56)}
         />
       )}
@@ -1109,17 +1180,17 @@ function NativeAppShell() {
         visible={isMenuOpen}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setIsMenuOpen(false)}
+        onRequestClose={handleCloseMenu}
       >
         <TouchableOpacity
           style={styles.menuOverlay}
           activeOpacity={1}
-          onPress={() => setIsMenuOpen(false)}
+          onPress={handleCloseMenu}
         >
           <View style={styles.menuSheet}>
             <View style={styles.menuHeader}>
               <Text style={styles.menuTitle}>RIVO MENU</Text>
-              <TouchableOpacity onPress={() => setIsMenuOpen(false)}>
+              <TouchableOpacity onPress={handleCloseMenu}>
                 <X size={18} color="#ffffff" />
               </TouchableOpacity>
             </View>

@@ -4,10 +4,20 @@ import { API_BASE_URL } from '../config';
 
 const streamCache = new Map();
 const streamDurationCache = new Map();
+const STREAM_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
 export const getStreamFromCache = (trackId) => {
   if (!trackId) return null;
-  return streamCache.get(String(trackId)) || null;
+  const entry = streamCache.get(String(trackId));
+  if (!entry) return null;
+  if (typeof entry === 'object' && entry.url) {
+    if (Date.now() - (entry.timestamp || 0) > STREAM_CACHE_TTL) {
+      streamCache.delete(String(trackId));
+      return null;
+    }
+    return entry.url;
+  }
+  return typeof entry === 'string' ? entry : null;
 };
 
 export const getStreamDurationFromCache = (trackId) => {
@@ -19,7 +29,13 @@ export const clearStreamCache = (trackId) => {
   if (!trackId) return;
   const idStr = String(trackId);
   streamCache.delete(idStr);
+  streamCache.delete(`${idStr}_vocal`);
   streamDurationCache.delete(idStr);
+};
+
+export const setStreamInCache = (key, url) => {
+  if (!key || !url) return;
+  streamCache.set(String(key), { url, timestamp: Date.now() });
 };
 
 let cachedVisitorData = '';
@@ -90,18 +106,27 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
   }
 
   const trackId = String(track._id || track.id || '');
+  if (track.isRetry || track._clearCache) {
+    clearStreamCache(trackId);
+  }
   const cacheKey = (isVocalOnly && !isQuranContent(track)) ? `${trackId}_vocal` : trackId;
-  if (cacheKey && streamCache.has(cacheKey)) {
-    const cached = streamCache.get(cacheKey);
-    // If it's a file URI, ensure it still exists on disk
-    if (cached.startsWith('file://')) {
-      try {
-        const info = await FileSystem.getInfoAsync(cached);
-        if (info.exists && info.size > 10000) return cached;
-      } catch {}
-      streamCache.delete(cacheKey);
-    } else {
-      return cached;
+  if (cacheKey && streamCache.has(cacheKey) && !track.isRetry) {
+    const cachedEntry = streamCache.get(cacheKey);
+    const cachedUrl = typeof cachedEntry === 'object' && cachedEntry !== null ? cachedEntry.url : cachedEntry;
+    const cachedTime = typeof cachedEntry === 'object' && cachedEntry !== null ? cachedEntry.timestamp : 0;
+    if (cachedUrl) {
+      // If it's a file URI, ensure it still exists on disk
+      if (cachedUrl.startsWith('file://')) {
+        try {
+          const info = await FileSystem.getInfoAsync(cachedUrl);
+          if (info.exists && info.size > 10000) return cachedUrl;
+        } catch {}
+        streamCache.delete(cacheKey);
+      } else if (cachedTime && Date.now() - cachedTime > STREAM_CACHE_TTL) {
+        streamCache.delete(cacheKey);
+      } else {
+        return cachedUrl;
+      }
     }
   }
 
@@ -125,7 +150,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       if (statusData?.status === 'ready' && statusData.url) {
         if (typeof onVocalStatus === 'function') onVocalStatus(null);
         const fullVocalUrl = statusData.url.startsWith('/') ? `${API_BASE_URL}${statusData.url}` : statusData.url;
-        if (cacheKey) streamCache.set(cacheKey, fullVocalUrl);
+        if (cacheKey) setStreamInCache(cacheKey, fullVocalUrl);
         return fullVocalUrl;
       }
 
@@ -207,7 +232,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
                 setTimeout(() => onVocalStatus(null), 1000);
               }
               const fullVocalUrl = curData.url.startsWith('/') ? `${API_BASE_URL}${curData.url}` : curData.url;
-              if (cacheKey) streamCache.set(cacheKey, fullVocalUrl);
+              if (cacheKey) setStreamInCache(cacheKey, fullVocalUrl);
               return fullVocalUrl;
             } else if (curData.status === 'failed') {
               console.warn('[youtubeResolver] Server vocal isolation failed, playing original audio');
@@ -275,7 +300,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     try {
       const info = await FileSystem.getInfoAsync(localUri);
       if (info.exists && info.size > 10000) {
-        if (cacheKey) streamCache.set(cacheKey, localUri);
+        if (cacheKey) setStreamInCache(cacheKey, localUri);
         return localUri;
       }
     } catch {}
@@ -300,7 +325,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       if (dlUri && dlUri.startsWith('file://')) {
         const info = await FileSystem.getInfoAsync(dlUri);
         if (info.exists && info.size > 10000) {
-          if (cacheKey) streamCache.set(cacheKey, dlUri);
+          if (cacheKey) setStreamInCache(cacheKey, dlUri);
           return dlUri;
         }
       }
@@ -314,7 +339,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     rawUrl.includes('/uploads/')
   ) {
     const fullUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : (rawUrl.startsWith('http') ? rawUrl : `${API_BASE_URL}/${rawUrl}`);
-    if (cacheKey) streamCache.set(cacheKey, fullUrl);
+    if (cacheKey) setStreamInCache(cacheKey, fullUrl);
     if (track.duration && trackId) streamDurationCache.set(trackId, track.duration);
     return fullUrl;
   }
@@ -328,7 +353,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     !rawUrl.includes('sndcdn.com') &&
     (rawUrl.endsWith('.mp3') || rawUrl.endsWith('.m4a'))
   ) {
-    if (trackId) streamCache.set(trackId, rawUrl);
+    if (trackId) setStreamInCache(trackId, rawUrl);
     return rawUrl;
   }
 
@@ -337,58 +362,83 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
   // 3. Server-side Stream Resolution (Primary: /stream endpoint checks local cache, uploads & DB instantly)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
-    const albumParam = track.album ? `&album=${encodeURIComponent(track.album)}` : '';
-
-    // 3a. Direct fast stream endpoint: /api/tracks/:id/stream (same as Web)
-    try {
-      const serverStreamRes = await fetch(
-        `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}${albumParam}`,
-        { signal: controller.signal }
-      );
-      if (serverStreamRes.ok) {
-        const data = await serverStreamRes.json();
-        let streamUrl = data?.url || data?.directUrl;
-        if (streamUrl && !streamUrl.includes('youtube.com/watch') && !streamUrl.includes('youtu.be/')) {
-          if (streamUrl.startsWith('/')) {
-            streamUrl = `${API_BASE_URL}${streamUrl}`;
-          }
-          clearTimeout(timeoutId);
-          if (trackId) streamCache.set(trackId, streamUrl);
-          if (data?.duration && trackId) {
-            streamDurationCache.set(trackId, data.duration);
-            track.duration = data.duration;
-          }
-          return streamUrl;
-        }
-      }
-    } catch {}
-
-    // 3b. Resolve stream via /api/tracks/resolve-stream
-    try {
-      const resolveRes = await fetch(
-        `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}${albumParam}`,
-        { signal: controller.signal }
-      );
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const onParentAbort = () => {
       clearTimeout(timeoutId);
-      if (resolveRes.ok) {
-        const d = await resolveRes.json();
-        if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
-          let cand = d.url;
-          if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
-          if (trackId) streamCache.set(trackId, cand);
-          if (d.duration && trackId) {
-            streamDurationCache.set(trackId, d.duration);
-            track.duration = d.duration;
+      try { controller.abort(); } catch {}
+    };
+    if (signal) {
+      if (signal.aborted) {
+        clearTimeout(timeoutId);
+        return null;
+      }
+      signal.addEventListener('abort', onParentAbort, { once: true });
+    }
+
+    try {
+      const durParam = targetDuration ? `&duration=${encodeURIComponent(targetDuration)}` : '';
+      const albumParam = track.album ? `&album=${encodeURIComponent(track.album)}` : '';
+
+      // 3a. Direct fast stream endpoint: /api/tracks/:id/stream (same as Web)
+      try {
+        const serverStreamRes = await fetch(
+          `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(rawUrl)}&title=${encodeURIComponent(cleanTitle || rawTitle)}&artist=${encodeURIComponent(cleanArtist || rawArtist)}${durParam}${albumParam}`,
+          { signal: controller.signal }
+        );
+        if (serverStreamRes.ok) {
+          const data = await serverStreamRes.json();
+          let streamUrl = data?.url || data?.directUrl;
+          if (streamUrl && !streamUrl.includes('youtube.com/watch') && !streamUrl.includes('youtu.be/')) {
+            if (streamUrl.startsWith('/')) {
+              streamUrl = `${API_BASE_URL}${streamUrl}`;
+            }
+            if (trackId) setStreamInCache(trackId, streamUrl);
+            if (data?.duration && trackId) {
+              streamDurationCache.set(trackId, data.duration);
+              track.duration = data.duration;
+            }
+            return streamUrl;
           }
-          return cand;
+        }
+      } catch (e) {
+        if (controller.signal.aborted || signal?.aborted) return null;
+      }
+
+      // 3b. Resolve stream via /api/tracks/resolve-stream
+      if (!controller.signal.aborted && !signal?.aborted) {
+        try {
+          const resolveRes = await fetch(
+            `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}${albumParam}`,
+            { signal: controller.signal }
+          );
+          if (resolveRes.ok) {
+            const d = await resolveRes.json();
+            if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
+              let cand = d.url;
+              if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+              if (trackId) setStreamInCache(trackId, cand);
+              if (d.duration && trackId) {
+                streamDurationCache.set(trackId, d.duration);
+                track.duration = d.duration;
+              }
+              return cand;
+            }
+          }
+        } catch (e) {
+          if (controller.signal.aborted || signal?.aborted) return null;
         }
       }
-    } catch {}
+    } finally {
+      clearTimeout(timeoutId);
+      if (signal?.removeEventListener) {
+        signal.removeEventListener('abort', onParentAbort);
+      }
+    }
   } catch (e) {
-    // Backend request failed or timed out, fallback to client-side
+    if (signal?.aborted) return null;
   }
+
+  if (signal?.aborted) return null;
 
   // 4. Client-side YouTube Audio Stream Resolution Fallback
   let ytId = extractYouTubeId(rawUrl) ||
@@ -397,12 +447,13 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
   // If no direct ytId, search YouTube client-side directly (<300ms)
   const isUploadTrack = track.source === 'Upload' || (rawUrl && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/')));
   if (!isUploadTrack && !ytId && (cleanTitle || cleanArtist || rawTitle)) {
+    if (signal?.aborted) return null;
     try {
       const searchRes = await searchYouTubeClientSide({
         artist: cleanArtist || rawArtist,
         title: cleanTitle || rawTitle,
         targetDuration
-      });
+      }, signal);
       if (searchRes?.videoId) {
         ytId = searchRes.videoId;
         if (searchRes.duration && trackId) {
@@ -413,13 +464,15 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     } catch (e) {}
   }
 
+  if (signal?.aborted) return null;
+
   if (ytId) {
     try {
-      const directResult = await resolveClientSideYouTubeStream(ytId);
+      const directResult = await resolveClientSideYouTubeStream(ytId, signal);
       const directStream = typeof directResult === 'string' ? directResult : directResult?.url;
       if (directStream) {
         if (trackId) {
-          streamCache.set(trackId, directStream);
+          setStreamInCache(trackId, directStream);
           if (directResult?.duration) {
             streamDurationCache.set(trackId, directResult.duration);
             track.duration = directResult.duration;
@@ -465,7 +518,10 @@ export function calculateTitleSimilarity(targetTitle = '', candTitle = '', targe
  * Returns { videoId, duration, title, channel } with exact duration parsed from lengthText.
  * Enforces strict duration filter (diff <= 15s-25s) and title/channel scoring.
  */
-export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {}) => {
+export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {}, passedSignal = null) => {
+  const signal = passedSignal || (maybeOptions instanceof AbortSignal ? maybeOptions : maybeOptions?.signal) || (queryOrOptions && typeof queryOrOptions === 'object' ? queryOrOptions.signal : null) || null;
+  if (signal?.aborted) return null;
+
   let query = '';
   let targetDuration = null;
   let artist = '';
@@ -531,9 +587,23 @@ export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {})
   const normTitle = cleanTit.toLowerCase();
 
   for (const q of searchQueries) {
+    if (signal?.aborted) return null;
+    let timeout = null;
+    let onAbort = null;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 4000);
+      timeout = setTimeout(() => controller.abort(), 4000);
+      onAbort = () => {
+        clearTimeout(timeout);
+        try { controller.abort(); } catch {}
+      };
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timeout);
+          return null;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
       const res = await fetch(`https://www.youtube.com/youtubei/v1/search?key=${key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -551,6 +621,7 @@ export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {})
         signal: controller.signal
       });
       clearTimeout(timeout);
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
       if (!res.ok) continue;
 
       const d = await res.json();
@@ -647,8 +718,8 @@ export function extractYouTubeId(input) {
   return null;
 }
 
-export const resolveClientSideYouTubeStream = async (ytId) => {
-  if (!ytId) return null;
+export const resolveClientSideYouTubeStream = async (ytId, signal = null) => {
+  if (!ytId || signal?.aborted) return null;
   try {
     const key = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
     let visitorData = '';
@@ -658,6 +729,17 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const onAbort = () => {
+        clearTimeout(timeoutId);
+        try { controller.abort(); } catch {}
+      };
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(timeoutId);
+          return null;
+        }
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
 
       const webRes = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
         headers: {
@@ -668,6 +750,7 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
       });
       const html = await webRes.text();
       clearTimeout(timeoutId);
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
 
       const visitorMatch = html.match(/"VISITOR_DATA":"([^"]+)"/);
       if (visitorMatch && visitorMatch[1]) {
@@ -690,6 +773,8 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
         cookies = webRes.headers.get('set-cookie') || '';
       }
     } catch (e) {}
+
+    if (signal?.aborted) return null;
 
     const playerBody = {
       context: {
@@ -729,6 +814,17 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
 
     const playerController = new AbortController();
     const playerTimeout = setTimeout(() => playerController.abort(), 6000);
+    const onPlayerAbort = () => {
+      clearTimeout(playerTimeout);
+      try { playerController.abort(); } catch {}
+    };
+    if (signal) {
+      if (signal.aborted) {
+        clearTimeout(playerTimeout);
+        return null;
+      }
+      signal.addEventListener('abort', onPlayerAbort, { once: true });
+    }
 
     const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, {
       method: 'POST',
@@ -737,6 +833,7 @@ export const resolveClientSideYouTubeStream = async (ytId) => {
       signal: playerController.signal,
     });
     clearTimeout(playerTimeout);
+    if (signal && onPlayerAbort) signal.removeEventListener('abort', onPlayerAbort);
 
     if (res.ok) {
       const data = await res.json();

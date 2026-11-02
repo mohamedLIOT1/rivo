@@ -3,9 +3,9 @@
   "version": "2.2.9",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "Performance and stability update (v2.2.9)",
-  "notesEn": "Instant in-app OTA update (3.35 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3513995,
-  "sizeMb": "3.35 MB",
-  "updatedAt": "2026-11-02T17:37:14.269Z"
+  "notes": "Master stability update v2.2.9",
+  "notesEn": "Instant in-app OTA update (3.36 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 3518925,
+  "sizeMb": "3.36 MB",
+  "updatedAt": "2026-11-02T18:27:24.760Z"
 }

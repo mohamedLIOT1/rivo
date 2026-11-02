@@ -159,14 +159,28 @@ router.get('/:recipientId', auth, async (req, res) => {
 router.post('/send', auth, async (req, res) => {
   try {
     const { recipientId, text, track, jamInvite } = req.body;
-    if (!recipientId) return res.status(400).json({ error: 'Recipient required' });
+    if (!recipientId || typeof recipientId !== 'string') {
+      return res.status(400).json({ error: 'Valid recipient ID is required' });
+    }
+
+    if (String(recipientId) === String(req.user.id)) {
+      return res.status(400).json({ error: 'Cannot send message to yourself' });
+    }
 
     const bot = await getOrCreateSystemBot();
     const botId = String(bot._id);
     const isSendingToBot = String(recipientId) === botId;
 
+    if (!isSendingToBot && !mongoose.isValidObjectId(recipientId)) {
+      return res.status(400).json({ error: 'Invalid recipient user ID' });
+    }
+
+    const cleanText = typeof text === 'string' ? sanitizeText(text) : '';
+    if (!cleanText.trim() && !track && !jamInvite) {
+      return res.status(400).json({ error: 'Message content, track or jam invite required' });
+    }
+
     const sender = await User.findById(req.user.id).select('_id name avatar role email').lean();
-    const cleanText = sanitizeText(text || '');
 
     // Check for global broadcast command: /send all <message> or /sendall <message>
     const broadcastMatch = cleanText.match(/^\/send\s*all(?:\s+([\s\S]+))?$/i) || cleanText.match(/^\/sendall(?:\s+([\s\S]+))?$/i);

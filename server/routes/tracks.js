@@ -128,14 +128,16 @@ router.post('/by-ids', async (req, res) => {
     }).lean() : [];
 
     setImmediate(async () => {
-      for (const t of tracks) {
-        if (t.title && (!t.cover || t.cover.includes('unsplash') || t.cover.includes('pixabay') || t.cover.includes('format=svg'))) {
-          try {
-            const real = await fetchTrackCover(t.title, t.artist);
-            if (real) await Track.updateOne({ _id: t._id }, { $set: { cover: real } });
-          } catch {}
+      try {
+        for (const t of tracks) {
+          if (t.title && (!t.cover || t.cover.includes('unsplash') || t.cover.includes('pixabay') || t.cover.includes('format=svg'))) {
+            try {
+              const real = await fetchTrackCover(t.title, t.artist);
+              if (real) await Track.updateOne({ _id: t._id }, { $set: { cover: real } });
+            } catch {}
+          }
         }
-      }
+      } catch {}
     });
 
     const formatted = tracks.map((t) => ({
@@ -1030,7 +1032,7 @@ const handleTrackStream = async (req, res) => {
     res.status(500).json({ success: false, error: e.message });
   }
 };
-router.get('/sync-dist', (req, res) => {
+router.get('/sync-dist', adminAuth, (req, res) => {
   try {
     const srcDir = path.join(__dirname, '../../dist');
     const destDir = '/home/ubuntu/dist';
@@ -1064,7 +1066,7 @@ router.get('/:id/stream', handleTrackStream);
 
 
 
-router.get('/debug-stream', async (req, res) => {
+router.get('/debug-stream', adminAuth, async (req, res) => {
   const videoId = req.query.videoId || '0hhXwSen-Vw';
   const bin = getYtDlpBin();
   const binExists = fs.existsSync(bin);

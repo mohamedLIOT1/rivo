@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  FlatList,
   RefreshControl,
   useWindowDimensions,
   ActivityIndicator,
@@ -55,7 +56,7 @@ const DISPENSARY_GENRES = [
   { id: 'ambient', label: 'NIGHT AMBIENT', color: '#6366f1', tag: 'FOCUS DEEP' },
 ];
 
-export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', onQueryChange }) {
+function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', onQueryChange }) {
   const { width } = useWindowDimensions();
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
   const albumGap = 10;
@@ -334,6 +335,282 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
 
   const hasSearch = query.trim().length > 0 || Boolean(selectedGenre);
 
+  const handlePlaySong = useCallback((track) => {
+    playTrack(track, filteredTracks);
+  }, [playTrack, filteredTracks]);
+
+  const handleSongMorePress = useCallback((track) => {
+    if (onTrackAction) onTrackAction(track);
+  }, [onTrackAction]);
+
+  const renderSongItem = useCallback(({ item, index }) => (
+    <SongItem
+      key={item._id || item.id || index}
+      track={item}
+      index={index + 1}
+      onPlay={handlePlaySong}
+      onMorePress={handleSongMorePress}
+    />
+  ), [handlePlaySong, handleSongMorePress]);
+
+  const isShowingSongs = hasSearch && (activeFilter === 'all' || activeFilter === 'songs');
+  const songData = useMemo(() => {
+    return isShowingSongs ? filteredTracks.slice(0, visibleSongLimit) : [];
+  }, [isShowingSongs, filteredTracks, visibleSongLimit]);
+
+  const renderHeader = useCallback(() => (
+    <View>
+      {/* If no query and no selected genre: Show 12 Genre Blister Packs */}
+      {!hasSearch && (
+        <View style={styles.genresSection}>
+          <View style={styles.sectionTitleRow}>
+            <Disc size={16} color={colors.mint} />
+            <Text style={styles.sectionHeading}>POPULAR GENRES & MOODS</Text>
+          </View>
+
+          <View style={styles.genresGrid}>
+            {DISPENSARY_GENRES.map((g) => (
+              <TouchableOpacity
+                key={g.id}
+                style={[styles.genreCard, { backgroundColor: g.color, width: genreCardWidth }]}
+                activeOpacity={0.85}
+                onPress={() => setSelectedGenre(g.id)}
+              >
+                <View style={styles.genreCardInner}>
+                  <Text style={styles.genreLabel}>{g.label}</Text>
+                  <Text style={styles.genreTag}>{g.tag}</Text>
+                  <View style={styles.genreDecoDisc}>
+                    <Disc size={36} color="rgba(0,0,0,0.2)" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* ── PEOPLE & LISTENERS SECTION (Top priority for people queries) ── */}
+      {(activeFilter === 'people' || (hasSearch && activeFilter === 'all' && (userResults.length > 0 || isSearchingUsers))) && (
+        <View style={styles.peopleSection}>
+          <View style={styles.sectionTitleRow}>
+            <Users size={16} color="#06b6d4" strokeWidth={2.4} />
+            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+              PEOPLE & LISTENERS
+            </Text>
+            <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
+              <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
+            </View>
+            {isSearchingUsers && (
+              <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 6 }} />
+            )}
+          </View>
+
+          {userResults.length === 0 && !isSearchingUsers ? (
+            activeFilter === 'people' && (
+              <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
+                <Users size={36} color="#06b6d4" />
+                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No listeners found.</Text>
+                <Text style={styles.emptySub}>Try searching with a different user name.</Text>
+              </View>
+            )
+          ) : (
+            <ScrollView
+              horizontal={activeFilter === 'all'}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={activeFilter === 'all' ? styles.peopleScrollRow : styles.peopleVerticalList}
+            >
+              {userResults.map((u) => {
+                const initial = (u.name || 'U').charAt(0).toUpperCase();
+                return (
+                  <TouchableOpacity
+                    key={u.id}
+                    style={[
+                      activeFilter === 'all' ? styles.personCardHorizontal : styles.personCardVertical,
+                      !isDark && styles.personCardLight,
+                    ]}
+                    onPress={() => setSelectedUser(u)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.personAvatarWrap}>
+                      {u.avatar ? (
+                        <Image
+                          source={{ uri: normalizeCoverUri(u.avatar) }}
+                          style={styles.personAvatar}
+                        />
+                      ) : (
+                        <View style={styles.personAvatarFallback}>
+                          <Text style={styles.personAvatarInitial}>{initial}</Text>
+                        </View>
+                      )}
+                      {u.isVerified && (
+                        <View style={styles.personVerifiedBadge}>
+                          <ShieldCheck size={10} color="#082621" />
+                        </View>
+                      )}
+                    </View>
+
+                    <View style={styles.personInfo}>
+                      <Text style={[styles.personName, !isDark && styles.personNameLight]} numberOfLines={1}>
+                        {u.name}
+                      </Text>
+                      <Text style={styles.personSub} numberOfLines={1}>
+                        {u.followersCount || 0} followers • {(u.publicPlaylists || []).length} crates
+                      </Text>
+                    </View>
+
+                    <View style={styles.personActionBtn}>
+                      <Text style={styles.personActionText}>View</Text>
+                      <ArrowRight size={11} color="#06b6d4" />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      )}
+
+      {/* ── ARTISTS SECTION (Matching Images) ── */}
+      {hasSearch && (activeFilter === 'all' || activeFilter === 'artists') && matchingArtists.length > 0 && (
+        <View style={styles.artistsSection}>
+          <View style={styles.sectionTitleRow}>
+            <Users size={16} color="#17a398" strokeWidth={2.4} />
+            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+              ARTISTS
+            </Text>
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{matchingArtists.length}</Text>
+            </View>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.artistsScrollRow}>
+            {matchingArtists.map((artist, idx) => {
+              const coverUri = artist.cover;
+              return (
+                <TouchableOpacity
+                  key={artist.name || idx}
+                  style={[styles.artistCard, !isDark && styles.artistCardLight]}
+                  onPress={() => onSelectArtist ? onSelectArtist(artist) : setSelectedArtist(artist)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.artistAvatarWrap}>
+                    <Image
+                      source={{ uri: normalizeCoverUri(coverUri) }}
+                      style={styles.artistAvatar}
+                      resizeMode="cover"
+                    />
+                  </View>
+                  <Text style={[styles.artistName, !isDark && styles.artistNameLight]} numberOfLines={1}>
+                    {artist.name}
+                  </Text>
+                  <Text style={styles.artistCountPill}>
+                    {artist.count} {artist.count === 1 ? 'Song' : 'Songs'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ── ALBUMS SECTION (Matching Images) ── */}
+      {hasSearch && (activeFilter === 'all' || activeFilter === 'albums') && matchingAlbums.length > 0 && (
+        <View style={styles.albumsSection}>
+          <View style={styles.sectionTitleRow}>
+            <Layers size={16} color="#f59e0b" strokeWidth={2.4} />
+            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+              ALBUMS
+            </Text>
+            <View style={[styles.countBadge, { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: '#f59e0b' }]}>
+              <Text style={[styles.countBadgeText, { color: '#f59e0b' }]}>{matchingAlbums.length}</Text>
+            </View>
+          </View>
+
+          <View style={styles.albumsGrid}>
+            {matchingAlbums.map((alb, index) => {
+              const coverUri = alb.cover || alb.coverUrl || alb.tracks?.[0]?.cover || alb.tracks?.[0]?.coverUrl;
+              return (
+                <TouchableOpacity
+                  key={alb.id || alb.name || String(index)}
+                  style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
+                  onPress={() => onSelectAlbum ? onSelectAlbum(alb) : setSelectedAlbum(alb)}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.albumCoverWrap}>
+                    <View style={styles.albumCoverPlaceholder}>
+                      <Disc size={36} color="#1f3630" strokeWidth={1.5} />
+                    </View>
+                    <Image
+                      source={{ uri: normalizeCoverUri(coverUri) }}
+                      style={styles.albumCover}
+                      resizeMode="cover"
+                    />
+                  </View>
+                  <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
+                    {alb.name}
+                  </Text>
+                  <Text style={styles.albumArtist} numberOfLines={1}>
+                    {alb.artist || 'Various Artists'}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* ── SONGS SECTION HEADER ── */}
+      {isShowingSongs && filteredTracks.length > 0 && (
+        <View style={styles.resultsHeader}>
+          <Text style={styles.resultsCount}>
+            FOUND {filteredTracks.length} SONGS
+          </Text>
+        </View>
+      )}
+    </View>
+  ), [
+    hasSearch,
+    genreCardWidth,
+    activeFilter,
+    userResults,
+    isSearchingUsers,
+    isDark,
+    matchingArtists,
+    matchingAlbums,
+    albumCardWidth,
+    isShowingSongs,
+    filteredTracks.length,
+    onSelectArtist,
+    onSelectAlbum,
+    colors.mint,
+  ]);
+
+  const renderFooter = useCallback(() => {
+    if (!isShowingSongs || filteredTracks.length <= visibleSongLimit) return null;
+    return (
+      <TouchableOpacity
+        style={[styles.loadMoreBtn, !isDark && styles.loadMoreBtnLight]}
+        onPress={() => setVisibleSongLimit((prev) => prev + 25)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.loadMoreText}>
+          SHOW MORE ({filteredTracks.length - visibleSongLimit} MORE TRACKS)
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [isShowingSongs, filteredTracks.length, visibleSongLimit, isDark]);
+
+  const renderEmpty = useCallback(() => {
+    if (!isShowingSongs || filteredTracks.length > 0) return null;
+    return (
+      <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
+        <Disc size={36} color={colors.teal} />
+        <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No matching songs found.</Text>
+        <Text style={styles.emptySub}>Try searching for another artist, album or track title.</Text>
+      </View>
+    );
+  }, [isShowingSongs, filteredTracks.length, isDark, colors.teal]);
+
   return (
     <View style={[styles.container, !isDark && styles.containerLight]}>
       {/* Header & Search Bar */}
@@ -447,9 +724,19 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
         )}
       </View>
 
-      <ScrollView
+      <FlatList
+        data={songData}
+        keyExtractor={(item, index) => item._id || item.id || String(index)}
+        renderItem={renderSongItem}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -458,249 +745,7 @@ export default function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlay
             colors={[colors.mint]}
           />
         }
-      >
-        {/* If no query and no selected genre: Show 12 Genre Blister Packs */}
-        {!hasSearch && (
-          <View style={styles.genresSection}>
-            <View style={styles.sectionTitleRow}>
-              <Disc size={16} color={colors.mint} />
-              <Text style={styles.sectionHeading}>POPULAR GENRES & MOODS</Text>
-            </View>
-
-            <View style={styles.genresGrid}>
-              {DISPENSARY_GENRES.map((g) => (
-                <TouchableOpacity
-                  key={g.id}
-                  style={[styles.genreCard, { backgroundColor: g.color, width: genreCardWidth }]}
-                  activeOpacity={0.85}
-                  onPress={() => setSelectedGenre(g.id)}
-                >
-                  <View style={styles.genreCardInner}>
-                    <Text style={styles.genreLabel}>{g.label}</Text>
-                    <Text style={styles.genreTag}>{g.tag}</Text>
-                    <View style={styles.genreDecoDisc}>
-                      <Disc size={36} color="rgba(0,0,0,0.2)" />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* ── PEOPLE & LISTENERS SECTION (Top priority for people queries) ── */}
-        {(activeFilter === 'people' || (hasSearch && activeFilter === 'all' && (userResults.length > 0 || isSearchingUsers))) && (
-          <View style={styles.peopleSection}>
-            <View style={styles.sectionTitleRow}>
-              <Users size={16} color="#06b6d4" strokeWidth={2.4} />
-              <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-                PEOPLE & LISTENERS
-              </Text>
-              <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
-                <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
-              </View>
-              {isSearchingUsers && (
-                <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 6 }} />
-              )}
-            </View>
-
-            {userResults.length === 0 && !isSearchingUsers ? (
-              activeFilter === 'people' && (
-                <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
-                  <Users size={36} color="#06b6d4" />
-                  <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No listeners found.</Text>
-                  <Text style={styles.emptySub}>Try searching with a different user name.</Text>
-                </View>
-              )
-            ) : (
-              <ScrollView
-                horizontal={activeFilter === 'all'}
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={activeFilter === 'all' ? styles.peopleScrollRow : styles.peopleVerticalList}
-              >
-                {userResults.map((u) => {
-                  const initial = (u.name || 'U').charAt(0).toUpperCase();
-                  return (
-                    <TouchableOpacity
-                      key={u.id}
-                      style={[
-                        activeFilter === 'all' ? styles.personCardHorizontal : styles.personCardVertical,
-                        !isDark && styles.personCardLight,
-                      ]}
-                      onPress={() => setSelectedUser(u)}
-                      activeOpacity={0.85}
-                    >
-                      <View style={styles.personAvatarWrap}>
-                        {u.avatar ? (
-                          <Image
-                            source={{ uri: normalizeCoverUri(u.avatar) }}
-                            style={styles.personAvatar}
-                          />
-                        ) : (
-                          <View style={styles.personAvatarFallback}>
-                            <Text style={styles.personAvatarInitial}>{initial}</Text>
-                          </View>
-                        )}
-                        {u.isVerified && (
-                          <View style={styles.personVerifiedBadge}>
-                            <ShieldCheck size={10} color="#082621" />
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.personInfo}>
-                        <Text style={[styles.personName, !isDark && styles.personNameLight]} numberOfLines={1}>
-                          {u.name}
-                        </Text>
-                        <Text style={styles.personSub} numberOfLines={1}>
-                          {u.followersCount || 0} followers • {(u.publicPlaylists || []).length} crates
-                        </Text>
-                      </View>
-
-                      <View style={styles.personActionBtn}>
-                        <Text style={styles.personActionText}>View</Text>
-                        <ArrowRight size={11} color="#06b6d4" />
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        )}
-
-        {/* ── ARTISTS SECTION (Matching Images) ── */}
-        {hasSearch && (activeFilter === 'all' || activeFilter === 'artists') && matchingArtists.length > 0 && (
-          <View style={styles.artistsSection}>
-            <View style={styles.sectionTitleRow}>
-              <Users size={16} color="#17a398" strokeWidth={2.4} />
-              <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-                ARTISTS
-              </Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{matchingArtists.length}</Text>
-              </View>
-            </View>
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.artistsScrollRow}>
-              {matchingArtists.map((artist, idx) => {
-                const coverUri = artist.cover;
-                return (
-                  <TouchableOpacity
-                    key={artist.name || idx}
-                    style={[styles.artistCard, !isDark && styles.artistCardLight]}
-                    onPress={() => onSelectArtist ? onSelectArtist(artist) : setSelectedArtist(artist)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.artistAvatarWrap}>
-                      <Image
-                        source={{ uri: normalizeCoverUri(coverUri) }}
-                        style={styles.artistAvatar}
-                        resizeMode="cover"
-                      />
-                    </View>
-                    <Text style={[styles.artistName, !isDark && styles.artistNameLight]} numberOfLines={1}>
-                      {artist.name}
-                    </Text>
-                    <Text style={styles.artistCountPill}>
-                      {artist.count} {artist.count === 1 ? 'Song' : 'Songs'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* ── ALBUMS SECTION (Matching Images) ── */}
-        {hasSearch && (activeFilter === 'all' || activeFilter === 'albums') && matchingAlbums.length > 0 && (
-          <View style={styles.albumsSection}>
-            <View style={styles.sectionTitleRow}>
-              <Layers size={16} color="#f59e0b" strokeWidth={2.4} />
-              <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-                ALBUMS
-              </Text>
-              <View style={[styles.countBadge, { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: '#f59e0b' }]}>
-                <Text style={[styles.countBadgeText, { color: '#f59e0b' }]}>{matchingAlbums.length}</Text>
-              </View>
-            </View>
-
-            <View style={styles.albumsGrid}>
-              {matchingAlbums.map((alb, index) => {
-                const coverUri = alb.cover || alb.coverUrl || alb.tracks?.[0]?.cover || alb.tracks?.[0]?.coverUrl;
-                return (
-                  <TouchableOpacity
-                    key={alb.id || alb.name || String(index)}
-                    style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
-                    onPress={() => onSelectAlbum ? onSelectAlbum(alb) : setSelectedAlbum(alb)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.albumCoverWrap}>
-                      <View style={styles.albumCoverPlaceholder}>
-                        <Disc size={36} color="#1f3630" strokeWidth={1.5} />
-                      </View>
-                      <Image
-                        source={{ uri: normalizeCoverUri(coverUri) }}
-                        style={styles.albumCover}
-                        resizeMode="cover"
-                      />
-                    </View>
-                    <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
-                      {alb.name}
-                    </Text>
-                    <Text style={styles.albumArtist} numberOfLines={1}>
-                      {alb.artist || 'Various Artists'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* ── SONGS SECTION ── */}
-        {hasSearch && (activeFilter === 'all' || activeFilter === 'songs') && (
-          <View style={styles.resultsSection}>
-            <View style={styles.resultsHeader}>
-              <Text style={styles.resultsCount}>
-                FOUND {filteredTracks.length} SONGS
-              </Text>
-            </View>
-
-            {filteredTracks.length === 0 ? (
-              <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
-                <Disc size={36} color={colors.teal} />
-                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No matching songs found.</Text>
-                <Text style={styles.emptySub}>Try searching for another artist, album or track title.</Text>
-              </View>
-            ) : (
-              <View style={styles.tracksList}>
-                {filteredTracks.slice(0, visibleSongLimit).map((track, index) => (
-                  <SongItem
-                    key={track._id || track.id || index}
-                    track={track}
-                    index={index + 1}
-                    onPlay={(t) => playTrack(t, filteredTracks)}
-                    onMorePress={() => onTrackAction && onTrackAction(track)}
-                  />
-                ))}
-
-                {filteredTracks.length > visibleSongLimit && (
-                  <TouchableOpacity
-                    style={[styles.loadMoreBtn, !isDark && styles.loadMoreBtnLight]}
-                    onPress={() => setVisibleSongLimit((prev) => prev + 25)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.loadMoreText}>
-                      SHOW MORE ({filteredTracks.length - visibleSongLimit} MORE TRACKS)
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
-        )}
-      </ScrollView>
+      />
 
       {/* Album Details Modal */}
       {!onSelectAlbum && (
@@ -1328,3 +1373,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+export default React.memo(SearchScreen);

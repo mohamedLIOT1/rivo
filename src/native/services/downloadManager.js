@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform, Share } from 'react-native';
+import { Platform, Share, InteractionManager } from 'react-native';
 import {
   resolveAudioStream,
   resolveClientSideYouTubeStream,
@@ -204,19 +204,32 @@ export const notifyDownloadedTracksChanged = (tracks) => {
 let debouncedSaveTimer = null;
 let pendingSaveList = null;
 let inMemoryDownloadedTracks = null;
+let isCommittingSave = false;
+let needsRecommitSave = false;
 
 const commitToStorageAndManifest = async (list) => {
+  if (isCommittingSave) {
+    needsRecommitSave = true;
+    return;
+  }
+  isCommittingSave = true;
   try {
     const jsonStr = JSON.stringify(list || []);
     await AsyncStorage.setItem(STORAGE_KEY, jsonStr).catch(() => {});
     await FileSystem.writeAsStringAsync(MANIFEST_FILE, jsonStr).catch(() => {});
     if (PERSISTENT_DIR && PERSISTENT_MANIFEST) {
-      try {
-        await FileSystem.writeAsStringAsync(PERSISTENT_MANIFEST, jsonStr);
-      } catch {}
+      await FileSystem.writeAsStringAsync(PERSISTENT_MANIFEST, jsonStr).catch(() => {});
     }
   } catch (e) {
     console.warn('[downloadManager] commitToStorageAndManifest error:', e.message);
+  } finally {
+    isCommittingSave = false;
+    if (needsRecommitSave && pendingSaveList !== null) {
+      needsRecommitSave = false;
+      const nextList = pendingSaveList;
+      pendingSaveList = null;
+      commitToStorageAndManifest(nextList);
+    }
   }
 };
 
@@ -245,17 +258,52 @@ export const saveDownloadedTracks = async (list, { immediate = false } = {}) => 
   if (debouncedSaveTimer) {
     clearTimeout(debouncedSaveTimer);
   }
-  debouncedSaveTimer = setTimeout(async () => {
+  debouncedSaveTimer = setTimeout(() => {
     debouncedSaveTimer = null;
     if (pendingSaveList !== null) {
       const toSave = pendingSaveList;
       pendingSaveList = null;
-      await commitToStorageAndManifest(toSave);
+      if (InteractionManager && typeof InteractionManager.runAfterInteractions === 'function') {
+        InteractionManager.runAfterInteractions(() => {
+          commitToStorageAndManifest(toSave);
+        });
+      } else {
+        commitToStorageAndManifest(toSave);
+      }
     }
-  }, 2500);
+  }, 3500);
 };
 
 const saveToStorageAndManifest = saveDownloadedTracks;
+
+const purgeLegacyStorageKeys = (idsToDeleteSet, targetKeysSet) => {
+  const runPurge = async () => {
+    for (const legKey of LEGACY_STORAGE_KEYS) {
+      if (legKey === STORAGE_KEY) continue;
+      try {
+        const raw = await AsyncStorage.getItem(legKey);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        const legFiltered = parsed.filter(t => {
+          if (!t) return false;
+          const tid = String(t._id || t.id);
+          if (idsToDeleteSet && idsToDeleteSet.has(tid)) return false;
+          const tKey = getTrackDedupeKey(t);
+          if (targetKeysSet && tKey && targetKeysSet.has(tKey)) return false;
+          return true;
+        });
+        await AsyncStorage.setItem(legKey, JSON.stringify(legFiltered)).catch(() => {});
+      } catch {}
+    }
+  };
+
+  if (InteractionManager && typeof InteractionManager.runAfterInteractions === 'function') {
+    InteractionManager.runAfterInteractions(runPurge);
+  } else {
+    setTimeout(runPurge, 100);
+  }
+};
 
 export const reanchorDocumentUri = (uri) => {
   if (!uri || typeof uri !== 'string') return uri;
@@ -307,9 +355,9 @@ export const getDownloadedTracks = async (forceRefresh = false) => {
             const pList = JSON.parse(pRaw);
             if (Array.isArray(pList) && pList.length > 0) {
               tracks = pList;
-              // Sync back to internal manifest and AsyncStorage
-              await AsyncStorage.setItem(STORAGE_KEY, pRaw).catch(() => {});
-              await FileSystem.writeAsStringAsync(MANIFEST_FILE, pRaw).catch(() => {});
+              // Sync back to internal manifest and AsyncStorage asynchronously without stalling
+              AsyncStorage.setItem(STORAGE_KEY, pRaw).catch(() => {});
+              FileSystem.writeAsStringAsync(MANIFEST_FILE, pRaw).catch(() => {});
             }
           }
         }
@@ -1513,30 +1561,11 @@ export const removeDownloadedTracksBatch = async (tracksOrIds = []) => {
     return true;
   });
 
-  // Single commit to storage and manifest
-  await saveToStorageAndManifest(updated);
+  // Single commit to storage and manifest (debounced)
+  saveToStorageAndManifest(updated);
 
-  // Single pass through legacy storage keys
-  for (const legKey of LEGACY_STORAGE_KEYS) {
-    if (legKey === STORAGE_KEY) continue;
-    try {
-      const raw = await AsyncStorage.getItem(legKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const legFiltered = parsed.filter(t => {
-            if (!t) return false;
-            const tid = String(t._id || t.id);
-            if (targetIds.has(tid)) return false;
-            const tKey = getTrackDedupeKey(t);
-            if (tKey && targetKeys.has(tKey)) return false;
-            return true;
-          });
-          await AsyncStorage.setItem(legKey, JSON.stringify(legFiltered));
-        }
-      }
-    } catch {}
-  }
+  // Asynchronously purge legacy storage keys in background without blocking UI
+  purgeLegacyStorageKeys(targetIds, targetKeys);
 
   return updated;
 };
@@ -1594,28 +1623,11 @@ export const removeDownloadedTrack = async (trackOrId) => {
     return true;
   });
 
-  await saveToStorageAndManifest(updated);
+  // Single commit to storage and manifest (debounced)
+  saveToStorageAndManifest(updated);
 
-  // Also purge removed items from legacy storage keys so they never resurrect
-  for (const legKey of LEGACY_STORAGE_KEYS) {
-    if (legKey === STORAGE_KEY) continue;
-    try {
-      const raw = await AsyncStorage.getItem(legKey);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          const legFiltered = parsed.filter(t => {
-            if (!t) return false;
-            const tid = String(t._id || t.id);
-            if (idsToDelete.has(tid)) return false;
-            if (targetKey && getTrackDedupeKey(t) === targetKey) return false;
-            return true;
-          });
-          await AsyncStorage.setItem(legKey, JSON.stringify(legFiltered));
-        }
-      }
-    } catch {}
-  }
+  // Asynchronously purge legacy storage keys in background without blocking UI
+  purgeLegacyStorageKeys(idsToDelete, targetKey ? new Set([targetKey]) : null);
 
   return updated;
 };

@@ -46,7 +46,7 @@ router.post('/recommendations', optionalAuth, async (req, res) => {
       name = '', 
       playlistName = '', 
       trackIds = [] 
-    } = req.body;
+    } = req.body || {};
 
     const effectiveName = name || playlistName || '';
     const isPlQuran = Boolean(isQuran || QURAN_REGEX.test(effectiveName));
@@ -150,14 +150,14 @@ Select the 10 best matching tracks from the available list that fit the style an
 // ب. Artist Bio Generator (للـ Admin)
 router.post('/generate-artist-bio', adminAuth, async (req, res) => {
   try {
-    const { artistName, genres = [] } = req.body;
-    if (!artistName) return res.status(400).json({ error: 'Artist name required' });
+    const { artistName, genres = [] } = req.body || {};
+    if (!artistName || typeof artistName !== 'string') return res.status(400).json({ error: 'Valid artist name is required' });
     if (!process.env.GEMINI_API_KEY || !genAI) {
       return res.json({ success: false, bio: '' });
     }
     const model = getGeminiModel();
     if (!model) return res.json({ success: false, bio: '' });
-    const prompt = `Write a professional music artist bio for "${artistName}" ${genres.length ? `who creates ${genres.join(', ')} music` : ''}. 
+    const prompt = `Write a professional music artist bio for "${artistName.trim()}" ${Array.isArray(genres) && genres.length ? `who creates ${genres.join(', ')} music` : ''}. 
 Keep it 2-3 sentences, engaging, and suitable for a music streaming platform. Write in English.`;
     const result = await model.generateContent(prompt);
     res.json({ success: true, bio: result.response.text().trim() });
@@ -169,7 +169,7 @@ Keep it 2-3 sentences, engaging, and suitable for a music streaming platform. Wr
 // ج. Lyrics Translation
 router.post('/translate-lyrics', auth, async (req, res) => {
   try {
-    const { lyrics, targetLang = 'ar' } = req.body;
+    const { lyrics, targetLang = 'ar' } = req.body || {};
     if (!lyrics) return res.status(400).json({ error: 'Lyrics required' });
     if (!process.env.GEMINI_API_KEY || !genAI) {
       return res.json({ success: false, translation: '' });

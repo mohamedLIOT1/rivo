@@ -8,14 +8,24 @@ let isInitialized = false;
 
 // ── Global gesture listener: auto-resume AudioContext on first user interaction ──
 function setupGestureResumeListener() {
+  if (typeof document === 'undefined') return;
+  const events = ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
+  const removeListeners = () => {
+    events.forEach(evt => document.removeEventListener(evt, resumeOnGesture));
+  };
   const resumeOnGesture = () => {
-    if (audioCtx && audioCtx.state === 'suspended') {
-      audioCtx.resume().then(() => {
-        console.log('[AudioEngine] AudioContext resumed via user gesture');
-      }).catch(() => {});
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
+        audioCtx.resume().then(() => {
+          if (audioCtx && audioCtx.state === 'running') {
+            removeListeners();
+          }
+        }).catch(() => {});
+      } else if (audioCtx.state === 'running') {
+        removeListeners();
+      }
     }
   };
-  const events = ['touchstart', 'touchend', 'mousedown', 'click', 'keydown'];
   events.forEach(evt => document.addEventListener(evt, resumeOnGesture, { passive: true }));
 }
 
@@ -163,6 +173,17 @@ export function calculateDjFilterParams(progress, filterType) {
 export function setMasterVolume(volume) {
   if (masterGainNode) {
     masterGainNode.gain.value = Math.max(0, Math.min(1, Number(volume) || 0));
+  }
+}
+
+export function closeAudioContext() {
+  if (audioCtx && audioCtx.state !== 'closed') {
+    try {
+      audioCtx.close().catch(() => {});
+    } catch {}
+    audioCtx = null;
+    masterGainNode = null;
+    isInitialized = false;
   }
 }
 

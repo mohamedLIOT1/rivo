@@ -8,20 +8,31 @@ const { sanitizeText } = require('../utils/security');
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = req.body;
-    const cleanName = sanitizeText(name);
-    if (!cleanName || !email || !password) {
-      return res.status(400).json({ error: 'Name, email and password required' });
+    if (typeof name !== 'string' || typeof email !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ error: 'Name, email and password must be valid strings' });
     }
-    const existing = await User.findOne({ email: email.toLowerCase() });
+    const cleanName = sanitizeText(name).trim();
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanName || !cleanEmail || !password) {
+      return res.status(400).json({ error: 'Name, email and password are required' });
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Invalid email address format' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+    const existing = await User.findOne({ email: cleanEmail });
     if (existing) return res.status(400).json({ error: 'Email already registered' });
 
     const hashed = await bcrypt.hash(password, 10);
-    const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'U')}&background=1DB954&color=000&size=512&bold=true&format=png`;
+    const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName || 'U')}&background=1DB954&color=000&size=512&bold=true&format=png`;
 
-    const isInitAdmin = isAdminUser({ email });
+    const isInitAdmin = isAdminUser({ email: cleanEmail });
     const user = await new User({
       name: cleanName,
-      email: email.toLowerCase(),
+      email: cleanEmail,
       password: hashed,
       avatar: defaultAvatar,
       bio: '',
@@ -47,7 +58,11 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const rawIdentifier = (req.body.identifier || req.body.email || req.body.username || '').trim();
+    const rawInput = req.body.identifier || req.body.email || req.body.username || '';
+    if (typeof rawInput !== 'string' || typeof req.body.password !== 'string') {
+      return res.status(400).json({ error: 'Email/username and password must be valid strings' });
+    }
+    const rawIdentifier = rawInput.trim();
     const { password } = req.body;
     if (!rawIdentifier || !password) {
       return res.status(400).json({ error: 'Email or username and password are required' });
@@ -123,12 +138,19 @@ router.post('/update-profile', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    if (req.body.name) user.name = sanitizeText(req.body.name);
-    if (req.body.bio !== undefined) user.bio = sanitizeText(req.body.bio);
+    if (req.body.name !== undefined) {
+      if (typeof req.body.name !== 'string') return res.status(400).json({ error: 'Name must be a string' });
+      const cleanName = sanitizeText(req.body.name).trim();
+      if (!cleanName) return res.status(400).json({ error: 'Name cannot be empty' });
+      user.name = cleanName.slice(0, 100);
+    }
+    if (req.body.bio !== undefined) {
+      user.bio = typeof req.body.bio === 'string' ? sanitizeText(req.body.bio).trim().slice(0, 500) : '';
+    }
     if (req.body.avatar && typeof req.body.avatar === 'string') {
       const cleanAv = req.body.avatar.trim();
       if (!cleanAv.toLowerCase().startsWith('javascript:') && !cleanAv.toLowerCase().startsWith('data:text/html')) {
-        user.avatar = cleanAv;
+        user.avatar = cleanAv.slice(0, 2048);
       }
     }
     await user.save();

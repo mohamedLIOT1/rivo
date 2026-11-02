@@ -12,4 +12,7 @@ const ArtistSchema = new mongoose.Schema({
   updatedBy: { type: String, default: 'admin' }
 }, { timestamps: true });
 
+ArtistSchema.index({ name: 1, isVerified: 1 });
+ArtistSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.models.Artist || mongoose.model('Artist', ArtistSchema);

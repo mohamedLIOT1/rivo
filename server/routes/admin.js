@@ -35,10 +35,12 @@ router.get('/analytics', adminAuth, async (req, res) => {
 
 // Broadcast Message Endpoint
 router.post('/broadcast', adminAuth, (req, res) => {
-  const { message, type = 'info' } = req.body;
-  if (!message) return res.status(400).json({ error: 'Message required' });
+  const { message, type = 'info' } = req.body || {};
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    return res.status(400).json({ error: 'Valid message string required' });
+  }
   if (req.io) {
-    req.io.emit('system:broadcast', { message, type, timestamp: Date.now() });
+    req.io.emit('system:broadcast', { message: message.trim(), type, timestamp: Date.now() });
   }
   res.json({ success: true, sent: true });
 });
@@ -72,7 +74,10 @@ router.get('/users', adminAuth, async (req, res) => {
 // Update user role or verified status
 router.patch('/users/:id/role', adminAuth, async (req, res) => {
   try {
-    const { role, isVerified } = req.body;
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid user ID format' });
+    }
+    const { role, isVerified } = req.body || {};
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (role !== undefined) {

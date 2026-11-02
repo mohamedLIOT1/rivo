@@ -13,4 +13,9 @@ const LyricsSchema = new mongoose.Schema({
   verifiedAt: { type: Date, default: null }
 }, { timestamps: true });
 
+LyricsSchema.index({ trackKey: 1, isVerified: 1 });
+LyricsSchema.index({ trackId: 1, isVerified: 1 });
+LyricsSchema.index({ source: 1, isVerified: 1 });
+LyricsSchema.index({ updatedAt: -1 });
+
 module.exports = mongoose.models.SongLyrics || mongoose.model('SongLyrics', LyricsSchema);

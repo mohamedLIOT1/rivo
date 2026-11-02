@@ -15,4 +15,10 @@ const AlbumSchema = new mongoose.Schema({
   source: { type: String, default: 'album_detection' }
 }, { timestamps: true });
 
+AlbumSchema.index({ name: 1, artist: 1 });
+AlbumSchema.index({ artist: 1, createdAt: -1 });
+AlbumSchema.index({ isPublic: 1, updatedAt: -1 });
+AlbumSchema.index({ trackIds: 1 });
+AlbumSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.models.Album || mongoose.model('Album', AlbumSchema);

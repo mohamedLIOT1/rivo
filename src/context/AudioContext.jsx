@@ -52,6 +52,23 @@ export function shuffleArray(array) {
 // ── Client-side Stream Cache (Instant 0ms repeated playbacks) ──
 const clientStreamCache = new Map();
 const activeFullTrackCache = new Map();
+function setTrackBlobCache(key, blobUrl) {
+  if (activeFullTrackCache.has(key)) {
+    const old = activeFullTrackCache.get(key);
+    if (old && old.startsWith('blob:')) {
+      try { URL.revokeObjectURL(old); } catch {}
+    }
+  }
+  if (activeFullTrackCache.size >= 3) {
+    const oldestKey = activeFullTrackCache.keys().next().value;
+    const oldUrl = activeFullTrackCache.get(oldestKey);
+    if (oldUrl && oldUrl.startsWith('blob:')) {
+      try { URL.revokeObjectURL(oldUrl); } catch {}
+    }
+    activeFullTrackCache.delete(oldestKey);
+  }
+  activeFullTrackCache.set(key, blobUrl);
+}
 const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
 export async function resolvePlayableAudioStream(track, signal = null, isPrefetch = false) {
@@ -300,8 +317,10 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   if (typeof window !== 'undefined' && typeof window.RIVO_RESOLVE_STREAM === 'function') {
     try {
       const nativeStreamPromise = new Promise((resolve) => {
+        let timeoutTimer = null;
         const onResolved = (ev) => {
           if (ev.detail && (ev.detail.trackId === trackId || (trackId && ev.detail.trackId?.includes(trackId)))) {
+            if (timeoutTimer) clearTimeout(timeoutTimer);
             window.removeEventListener('rivo-receive-resolved-stream', onResolved);
             resolve({
               url: ev.detail.url || null,
@@ -310,7 +329,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
           }
         };
         window.addEventListener('rivo-receive-resolved-stream', onResolved);
-        setTimeout(() => {
+        timeoutTimer = setTimeout(() => {
           window.removeEventListener('rivo-receive-resolved-stream', onResolved);
           resolve(null);
         }, 3000);
@@ -872,9 +891,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
               toDeck.volume = Math.max(0.0, Math.min(1.0, masterVol * gainB * multB));
             }
 
-            if (progress < 1.0 && !isChangingTrackRef.current) {
+            if (progress < 1.0 && !isChangingTrackRef.current && isTransitionRunningRef.current) {
               transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
-            } else {
+            } else if (isTransitionRunningRef.current && !isChangingTrackRef.current) {
               // ── Transition Finished: Swap Decks! ──
               if (fromDeck) {
                 fromDeck.pause();
@@ -1167,8 +1186,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
         // Live radio continuous stream handler: never advance or stop, always auto-reconnect!
         if (finished && (finished.isLive || finished.isRadio)) {
+          const radioTrackId = String(finished.id || finished._id || '');
           setTimeout(() => {
-            if (!currentTrackRef.current) return;
+            const latest = currentTrackRef.current;
+            if (!latest || String(latest.id || latest._id || '') !== radioTrackId) return;
             const streamUrl = finished.fallbackUrl && finished._usedFallback ? finished.fallbackUrl : finished.audioUrl;
             if (streamUrl && deck) {
               const sep = streamUrl.includes('?') ? '&' : '?';
@@ -1253,8 +1274,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
         // Live radio auto-reconnect & fallback mirror
         if (cur && (cur.isLive || cur.isRadio)) {
+          const radioTrackId = String(cur.id || cur._id || '');
           setTimeout(() => {
-            if (!currentTrackRef.current) return;
+            const latest = currentTrackRef.current;
+            if (!latest || String(latest.id || latest._id || '') !== radioTrackId) return;
             const streamUrl = (!cur._usedFallback && cur.fallbackUrl) ? cur.fallbackUrl : cur.audioUrl;
             cur._usedFallback = !cur._usedFallback;
             if (streamUrl && deck) {
@@ -1282,7 +1305,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
                 errorAdvanceTimerRef.current = setTimeout(() => {
                   if (isChangingTrackRef.current) return;
-                  if (playNextTrackRef.current && isPlayingRef.current) {
+                  if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
                     playNextTrackRef.current();
                   }
                 }, 1500);
@@ -1292,11 +1315,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
               if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
               errorAdvanceTimerRef.current = setTimeout(() => {
                 if (isChangingTrackRef.current) return;
-                if (playNextTrackRef.current && isPlayingRef.current) {
+                if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
                   playNextTrackRef.current();
                 }
               }, 1500);
             });
+        } else if (cur && (isPlayingRef.current || shouldPlayRef.current)) {
+          if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+          errorAdvanceTimerRef.current = setTimeout(() => {
+            if (isChangingTrackRef.current) return;
+            if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
+              playNextTrackRef.current();
+            }
+          }, 1500);
         }
       };
 
@@ -1326,11 +1357,42 @@ export function AudioProvider({ children, tracks, setTracks }) {
     const cleanupB = attachDeckListeners(audioB);
 
     return () => {
-      if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
-      if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-      if (transitionAnimFrameRef.current) cancelAnimationFrame(transitionAnimFrameRef.current);
+      if (stallRecoveryTimerRef.current) {
+        clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = null;
+      }
+      if (errorAdvanceTimerRef.current) {
+        clearTimeout(errorAdvanceTimerRef.current);
+        errorAdvanceTimerRef.current = null;
+      }
+      if (seekListeningSyncTimeoutRef.current) {
+        clearTimeout(seekListeningSyncTimeoutRef.current);
+        seekListeningSyncTimeoutRef.current = null;
+      }
+      if (transitionAnimFrameRef.current) {
+        cancelAnimationFrame(transitionAnimFrameRef.current);
+        transitionAnimFrameRef.current = null;
+      }
       cleanupA();
       cleanupB();
+      try {
+        audioA.pause();
+        audioA.removeAttribute('src');
+        audioA.load();
+      } catch {}
+      try {
+        audioB.pause();
+        audioB.removeAttribute('src');
+        audioB.load();
+      } catch {}
+      audioRef.current = null;
+      secondaryAudioRef.current = null;
+      activeFullTrackCache.forEach((url) => {
+        if (url && url.startsWith('blob:')) {
+          try { URL.revokeObjectURL(url); } catch {}
+        }
+      });
+      activeFullTrackCache.clear();
     };
   }, [stopYouTube]);
 
@@ -1433,6 +1495,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (!streamResult?.url) {
         console.warn('[AudioContext] Could not resolve audio stream for track:', currentTrack.title);
         isChangingTrackRef.current = false;
+        if (shouldPlayRef.current || isPlayingRef.current) {
+          if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+          errorAdvanceTimerRef.current = setTimeout(() => {
+            if (playNextTrackRef.current && !isChangingTrackRef.current) {
+              playNextTrackRef.current();
+            }
+          }, 1500);
+        }
         setIsPlaying(false);
         isPlayingRef.current = false;
         const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
@@ -1511,7 +1581,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             .then(blob => {
               if (blob && String(currentTrackRef.current?.id || currentTrackRef.current?._id) === bufferKey) {
                 const blobUrl = URL.createObjectURL(blob);
-                activeFullTrackCache.set(bufferKey, blobUrl);
+                setTrackBlobCache(bufferKey, blobUrl);
               }
             })
             .catch(() => {});
@@ -1813,6 +1883,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       } else {
         lastPauseTimeRef.current = Date.now();
+        if (stallRecoveryTimerRef.current) {
+          clearTimeout(stallRecoveryTimerRef.current);
+          stallRecoveryTimerRef.current = null;
+        }
         audio.pause();
         if (sec) sec.pause();
       }
@@ -1939,15 +2013,33 @@ export function AudioProvider({ children, tracks, setTracks }) {
     } catch {}
 
     const isSeamless = isSeamlessYtHandoffRef.current;
+    if (transitionAnimFrameRef.current) {
+      cancelAnimationFrame(transitionAnimFrameRef.current);
+      transitionAnimFrameRef.current = null;
+    }
+    isTransitionRunningRef.current = false;
     isTransitionTriggeredRef.current = false;
+    setIsTransitioning(false);
     transitionActiveTrackIdRef.current = null;
     if (activeWebAudioMixRef.current) {
       activeWebAudioMixRef.current.stop();
       activeWebAudioMixRef.current = null;
     }
     if (secondaryAudioRef.current && !isSeamless) {
-      secondaryAudioRef.current.pause();
-      secondaryAudioRef.current.removeAttribute('src');
+      try {
+        secondaryAudioRef.current.pause();
+        secondaryAudioRef.current.volume = 0;
+        secondaryAudioRef.current.removeAttribute('src');
+        secondaryAudioRef.current.load();
+      } catch {}
+    }
+    if (stallRecoveryTimerRef.current) {
+      clearTimeout(stallRecoveryTimerRef.current);
+      stallRecoveryTimerRef.current = null;
+    }
+    if (errorAdvanceTimerRef.current) {
+      clearTimeout(errorAdvanceTimerRef.current);
+      errorAdvanceTimerRef.current = null;
     }
     resumeAudioContext();
     isUserPauseActionRef.current = false;

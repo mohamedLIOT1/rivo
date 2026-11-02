@@ -62,8 +62,18 @@ const UserSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-UserSchema.index({ email: 1 });
+UserSchema.index({ name: 1 });
 UserSchema.index({ lastActiveAt: -1 });
 UserSchema.index({ totalListeningSeconds: -1 });
+UserSchema.index({ weeklyWeek: 1, weeklyListeningSeconds: -1 });
+UserSchema.index({ 'currentListening.isPlaying': 1, lastActiveAt: -1 });
+UserSchema.index({ 'playlists.id': 1 });
+UserSchema.index({ 'playlists._id': 1 });
+UserSchema.index({ 'discord.linkCode': 1 });
+UserSchema.index({ isBot: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ followers: 1 });
+UserSchema.index({ following: 1 });
+UserSchema.index({ likedTrackIds: 1 });
 
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

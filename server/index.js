@@ -65,8 +65,8 @@ const corsOriginHandler = (origin, callback) => {
     if (extra.includes(origin)) return callback(null, origin);
   }
 
-  // Dynamic origin reflection ensures credentials and wildcard never conflict
-  return callback(null, origin);
+  // Strict CORS: reject unauthorized third-party origins
+  return callback(null, false);
 };
 
 const corsOptions = {
@@ -148,9 +148,12 @@ const io = new Server(server, {
   }
 });
 
+const { userSocketMap } = require('./sockets');
+
 app.set('io', io);
 app.use((req, res, next) => {
   req.io = io;
+  req.userSocketMap = userSocketMap;
   next();
 });
 

@@ -16,13 +16,19 @@ const TrackSchema = new mongoose.Schema({
   contentType: { type: String, enum: ['music', 'quran', 'podcast', 'audiobook'], default: 'music' },
   isPodcast: { type: Boolean, default: false },
   isAudiobook: { type: Boolean, default: false },
+  plays: { type: Number, default: 0 }
 }, { timestamps: true, strict: false });
 
 TrackSchema.index({ title: 1, artist: 1 });
+TrackSchema.index({ artist: 1, plays: -1 });
+TrackSchema.index({ artist: 1, createdAt: -1 });
+TrackSchema.index({ album: 1, createdAt: -1 });
+TrackSchema.index({ isQuran: 1, plays: -1 });
+TrackSchema.index({ source: 1, createdAt: -1 });
+TrackSchema.index({ audioUrl: 1 });
+TrackSchema.index({ plays: -1 });
 TrackSchema.index({ createdAt: -1 });
 TrackSchema.index({ isQuran: 1 });
 TrackSchema.index({ contentType: 1 });
-TrackSchema.index({ album: 1 });
-TrackSchema.index({ source: 1 });
 
 module.exports = mongoose.models.Track || mongoose.model('Track', TrackSchema);

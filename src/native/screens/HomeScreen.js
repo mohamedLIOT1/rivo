@@ -25,7 +25,7 @@ import { sortTracksByPopularity } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 import { deduplicateTrackList } from '../services/downloadManager';
 
-export default function HomeScreen({
+function HomeScreen({
   onOpenAddSong,
   onTrackAction,
   onOpenFullPlayer,
@@ -345,6 +345,14 @@ export default function HomeScreen({
     return null;
   }, [displayTracks.length, visibleCount, isOffline]);
 
+  const handlePlaySong = useCallback((track) => {
+    playTrack(track, displayTracks);
+  }, [playTrack, displayTracks]);
+
+  const handleMoreSong = useCallback((track) => {
+    if (onTrackAction) onTrackAction(track);
+  }, [onTrackAction]);
+
   const renderItem = useCallback(({ item }) => {
     const itemId = String(item._id || item.id || '');
     return (
@@ -352,11 +360,11 @@ export default function HomeScreen({
         track={item}
         isCurrent={curTrackId !== '' && curTrackId === itemId}
         isLiked={likedSet.has(itemId)}
-        onPlay={() => playTrack(item, displayTracks)}
-        onMorePress={() => onTrackAction && onTrackAction(item)}
+        onPlay={handlePlaySong}
+        onMorePress={handleMoreSong}
       />
     );
-  }, [curTrackId, likedSet, displayTracks, onTrackAction, playTrack]);
+  }, [curTrackId, likedSet, handlePlaySong, handleMoreSong]);
 
   return (
     <>
@@ -739,3 +747,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+export default React.memo(HomeScreen);

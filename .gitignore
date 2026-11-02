@@ -80,3 +80,6 @@ scripts/archive/
 Thumbs.db
 .idea/
 .vscode/
+
+ios_assets/
+
