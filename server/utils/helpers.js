@@ -1356,6 +1356,141 @@ function getLocalAudioFileDuration(filePath) {
   return null;
 }
 
+const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
+async function extractInnertubeDirectStream(videoId) {
+  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
+
+  const clientProfiles = [
+    {
+      name: 'ANDROID',
+      context: {
+        client: {
+          clientName: 'ANDROID',
+          clientVersion: '20.01.35',
+          androidSdkVersion: 30,
+          hl: 'en',
+          gl: 'US'
+        }
+      },
+      headers: {
+        'User-Agent': 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip'
+      }
+    },
+    {
+      name: 'IOS',
+      context: {
+        client: {
+          clientName: 'IOS',
+          clientVersion: '20.01.35',
+          deviceMake: 'Apple',
+          deviceModel: 'iPhone15,2',
+          hl: 'en',
+          gl: 'US'
+        }
+      },
+      headers: {
+        'User-Agent': 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)'
+      }
+    },
+    {
+      name: 'ANDROID_VR',
+      context: {
+        client: {
+          clientName: 'ANDROID_VR',
+          clientVersion: '1.56.21',
+          deviceMake: 'Oculus',
+          deviceModel: 'Quest 3',
+          osName: 'Android',
+          osVersion: '12',
+          hl: 'en',
+          gl: 'US'
+        }
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36'
+      }
+    },
+    {
+      name: 'WEB_EMBEDDED_PLAYER',
+      context: {
+        client: {
+          clientName: 'WEB_EMBEDDED_PLAYER',
+          clientVersion: '2.20260708.00.00',
+          hl: 'en',
+          gl: 'US'
+        },
+        thirdParty: {
+          embedUrl: `https://www.youtube.com/embed/${videoId}`
+        }
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.youtube.com/'
+      }
+    }
+  ];
+
+  for (const p of clientProfiles) {
+    try {
+      const res = await axios.post(
+        `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`,
+        {
+          videoId,
+          context: p.context
+        },
+        {
+          headers: Object.assign({ 'Content-Type': 'application/json' }, p.headers),
+          timeout: 3500
+        }
+      );
+
+      const streamingData = res.data && res.data.streamingData;
+      const formats = [].concat(
+        (streamingData && streamingData.formats) || [],
+        (streamingData && streamingData.adaptiveFormats) || []
+      );
+
+      const audioFormats = formats.filter(
+        f => f && f.url && f.mimeType && f.mimeType.startsWith('audio/')
+      );
+
+      if (audioFormats.length > 0) {
+        // Prioritize itag 140 (128kbps AAC / audio/mp4), then any audio/mp4, then highest bitrate
+        const itag140 = audioFormats.find(f => f.itag === 140);
+        const mp4Audio = audioFormats.find(f => f.mimeType && f.mimeType.includes('audio/mp4'));
+        audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+        const chosen = itag140 || mp4Audio || audioFormats[0];
+
+        if (chosen && chosen.url && chosen.url.startsWith('http')) {
+          let duration = null;
+          if (chosen.approxDurationMs && !isNaN(Number(chosen.approxDurationMs))) {
+            duration = Math.round(Number(chosen.approxDurationMs) / 1000);
+          } else if (res.data?.videoDetails?.lengthSeconds) {
+            duration = Math.round(Number(res.data.videoDetails.lengthSeconds));
+          } else {
+            const mDur = chosen.url.match(/[?&]dur=([0-9.]+)/);
+            if (mDur && !isNaN(Number(mDur[1]))) {
+              duration = Math.round(Number(mDur[1]));
+            }
+          }
+
+          const resObj = new String(chosen.url);
+          resObj.url = chosen.url;
+          resObj.duration = duration;
+          resObj.itag = chosen.itag;
+          resObj.mimeType = chosen.mimeType;
+          return resObj;
+        }
+      }
+    } catch (e) {
+      // Continue to next client profile
+    }
+  }
+
+  return null;
+}
+
 async function downloadYouTubeAudioToCache(videoId, cacheDir) {
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
   if (!fs.existsSync(cacheDir)) {
@@ -1367,6 +1502,27 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir) {
   // Clean up corrupted target if present
   try { if (fs.existsSync(targetFile)) fs.unlinkSync(targetFile); } catch {}
 
+  const nodeBinDir = path.dirname(process.execPath);
+  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
+
+  // 1. Direct fast download from YouTube Innertube stream if available (bypasses yt-dlp entirely)
+  try {
+    const directRes = await extractInnertubeDirectStream(videoId);
+    if (directRes && directRes.url) {
+      const fastTarget = path.join(cacheDir, `${videoId}_innertube_${Date.now()}.m4a`);
+      execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', directRes.url, '-c', 'copy', '-movflags', '+faststart', fastTarget], { timeout: 15000, env: execEnv });
+      if (fs.existsSync(fastTarget) && isAudioFileValid(fastTarget)) {
+        try { fs.renameSync(fastTarget, targetFile); } catch {
+          fs.copyFileSync(fastTarget, targetFile);
+          try { fs.unlinkSync(fastTarget); } catch {}
+        }
+        return targetFile;
+      }
+      try { if (fs.existsSync(fastTarget)) fs.unlinkSync(fastTarget); } catch {}
+    }
+  } catch {}
+
+  // 2. yt-dlp fallback with short timeout (10s)
   const bin = getYtDlpBin();
   const cp = getCookiesPath();
   const tempTarget = path.join(cacheDir, `${videoId}_dl_${Date.now()}.%(ext)s`);
@@ -1387,11 +1543,8 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir) {
   }
   ytdlpArgs.push(`https://www.youtube.com/watch?v=${videoId}`);
 
-  const nodeBinDir = path.dirname(process.execPath);
-  const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
-
   await new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 60000, env: execEnv }, () => resolve());
+    execFile(bin, ytdlpArgs, { timeout: 10000, env: execEnv }, () => resolve());
   });
 
   const actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
@@ -1646,6 +1799,15 @@ async function extractDirectStreamUrl(videoId) {
     }
   } catch {}
 
+  // 1. Direct fast Innertube player API call BEFORE yt-dlp (bypasses bot block with itag 140)
+  try {
+    const itResult = await extractInnertubeDirectStream(videoId);
+    if (itResult && itResult.url) {
+      return itResult;
+    }
+  } catch {}
+
+  // 2. Fallback to yt-dlp with reduced timeout (6s) so the server never hangs
   const bin = getYtDlpBin();
   const cp = getCookiesPath();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -1666,7 +1828,10 @@ async function extractDirectStreamUrl(videoId) {
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 35000, env: execEnv }, (err, stdout) => {
+    execFile(bin, ytdlpArgs, { timeout: 6000, env: execEnv }, (err, stdout, stderr) => {
+      const allErr = `${err?.message || ''} ${stderr || ''}`;
+      const isBotBlock = /403|forbidden|bot|sign in to confirm/i.test(allErr);
+
       if (stdout) {
         const lines = stdout.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const directUrl = lines.find(l => l.startsWith('http')) || null;
@@ -1687,11 +1852,17 @@ async function extractDirectStreamUrl(videoId) {
           return resolve(res);
         }
       }
-      // Instant fallback without extractor args
+
+      // If bot blocked, skip fallback yt-dlp call immediately
+      if (isBotBlock) {
+        return resolve(null);
+      }
+
+      // Instant fallback without extractor args (reduced timeout 6s)
       const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--print', '%(duration)s'];
       if (cp) fbArgs.push('--cookies', cp);
       fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio', ytUrl);
-      execFile(bin, fbArgs, { timeout: 35000, env: execEnv }, (err2, stdout2) => {
+      execFile(bin, fbArgs, { timeout: 6000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const directUrl2 = lines2.find(l => l.startsWith('http')) || null;
@@ -1754,20 +1925,6 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   if (!videoId && rawUrl) {
     const rawMatch = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
     if (rawMatch && rawMatch[1]) { videoId = rawMatch[1]; isExplicitVideoId = true; }
-  }
-  if (!videoId && (title || artist)) {
-    try {
-      const scResult = await extractSoundCloudStream(title, artist, options);
-      if (scResult) {
-        const scUrl = typeof scResult === 'object' ? scResult.url : String(scResult);
-        if (scUrl && !scUrl.includes('.m3u8')) {
-          const retObj = new String(scUrl);
-          retObj.url = scUrl;
-          retObj.duration = defaultDur;
-          return retObj;
-        }
-      }
-    } catch {}
   }
   if (videoId) {
     if (typeof videoId === 'object') {
@@ -1891,34 +2048,6 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       retObj.duration = fileDur;
       retObj.videoId = videoId;
       return retObj;
-    }
-
-    // 2. Fallback to SoundCloud only if YouTube completely fails AND not explicit video ID
-    if (!isExplicitVideoId && (title || artist)) {
-      try {
-        const scResult = await extractSoundCloudStream(title, artist, {
-          album: options?.album,
-          duration: defaultDur,
-          strictDuration: true
-        });
-        if (scResult) {
-          const scUrl = typeof scResult === 'object' ? scResult.url : String(scResult);
-          const isM3u8 = scUrl.includes('.m3u8');
-          if (!isM3u8) {
-            directStreamCache.set(videoId, { url: scUrl, expireAt: Date.now() + 3 * 3600 * 1000 });
-            queueBackgroundAudioCache(videoId, cachedM4a, false);
-            return scUrl;
-          } else {
-            const scSource = scResult.webpageUrl || scUrl;
-            await new Promise((resolve) => {
-              execFile(bin, ['--no-check-certificates', '--no-playlist', '--no-warnings', '-f', 'ba/bestaudio', '-o', cachedM4a, scSource], { timeout: 25000, env: execEnv }, () => resolve());
-            });
-            if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
-              return `/uploads/audio-cache/${videoId}.m4a`;
-            }
-          }
-        }
-      } catch {}
     }
 
     if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
@@ -2167,120 +2296,8 @@ async function fetchGeniusLyrics(title, artist, duration = 180) {
 }
 
 async function extractSoundCloudStream(title = '', artist = '', options = {}) {
-  if (!title && !artist) return null;
-  const bin = getYtDlpBin();
-  const cleanTitle = (title || '')
-    .replace(/\(Official.*?\)|\[Official.*?\]|Video|Audio|Lyrics|Visualizer|Clip|كليب|فيديو|رسمي/gi, '')
-    .trim();
-
-  const VERSION_KEYWORDS = [
-    'red bull', 'symphonic', 'سيمفونيك', 'ريد بول', 'ريدبول',
-    'live', 'حفلة', 'حفله', 'لايف',
-    'remix', 'ريمكس',
-    'acoustic', 'أكوستيك', 'اكوستيك',
-    'orchestra', 'أوركسترا', 'اوركسترا',
-    'piano', 'بيانو',
-    'instrumental', 'موسيقى'
-  ];
-
-  const albumStr = (options?.album || '').toLowerCase();
-  const titleStr = (title || '').toLowerCase();
-  const extraKws = [];
-  for (const kw of VERSION_KEYWORDS) {
-    if ((albumStr.includes(kw) || titleStr.includes(kw)) && !cleanTitle.toLowerCase().includes(kw)) {
-      extraKws.push(kw);
-    }
-  }
-
-  const query = `${artist ? artist + ' ' : ''}${cleanTitle}${extraKws.length > 0 ? ' ' + extraKws.join(' ') : ''}`.trim();
-  const targetDuration = Number(options?.duration || options?.targetDuration) || null;
-  const strictDuration = Boolean(options?.strictDuration || targetDuration);
-
-  const args = [
-    '--no-check-certificates',
-    '--no-playlist',
-    '-j',
-    `scsearch5:${query}`
-  ];
-
-  return new Promise((resolve) => {
-    execFile(bin, args, { timeout: 9000 }, (err, stdout) => {
-      if (err || !stdout) return resolve(null);
-      const lines = stdout.trim().split(/\r?\n/);
-      const candidates = [];
-
-      for (const line of lines) {
-        try {
-          const item = JSON.parse(line.trim());
-          if (!item) continue;
-
-          let audioUrl = null;
-          let isM3u8 = false;
-          if (Array.isArray(item.formats)) {
-            const progressiveFmt = item.formats.find(f => f.url && f.url.startsWith('http') && !f.url.includes('.m3u8') && !f.protocol?.includes('m3u8') && !f.url.includes('preview-media') && !f.url.includes('/preview/'));
-            if (progressiveFmt?.url) {
-              audioUrl = progressiveFmt.url;
-            } else {
-              const anyFmt = item.formats.find(f => f.url && f.url.startsWith('http') && !f.url.includes('preview-media') && !f.url.includes('/preview/'));
-              if (anyFmt?.url) {
-                audioUrl = anyFmt.url;
-                isM3u8 = anyFmt.url.includes('.m3u8') || Boolean(anyFmt.protocol?.includes('m3u8'));
-              }
-            }
-          }
-          if (!audioUrl && item.url && item.url.startsWith('http')) {
-            audioUrl = item.url;
-            isM3u8 = item.url.includes('.m3u8');
-          }
-          if (!audioUrl) continue;
-
-          const dur = Number(item.duration) || 0;
-          const candTitle = String(item.title || item.track || '').toLowerCase();
-          const candUploader = String(item.uploader || '').toLowerCase();
-
-          let matchesVersion = true;
-          if (extraKws.length > 0) {
-            matchesVersion = extraKws.some(kw => candTitle.includes(kw) || candUploader.includes(kw));
-          }
-
-          let durDiff = targetDuration && dur > 0 ? Math.abs(dur - targetDuration) : null;
-
-          if (strictDuration && durDiff !== null && durDiff > 35) {
-            continue;
-          }
-
-          if (extraKws.length > 0 && !matchesVersion) {
-            continue;
-          }
-
-          candidates.push({
-            url: audioUrl,
-            webpageUrl: item.webpage_url || (item.url && item.url.startsWith('http') && !item.url.includes('.m3u8') ? item.url : null),
-            isM3u8: isM3u8,
-            duration: dur,
-            durDiff: durDiff !== null ? durDiff : 999,
-            matchesVersion: matchesVersion ? 1 : 0
-          });
-        } catch {}
-      }
-
-      if (candidates.length === 0) return resolve(null);
-
-      candidates.sort((a, b) => {
-        if (b.matchesVersion !== a.matchesVersion) return b.matchesVersion - a.matchesVersion;
-        if (!a.isM3u8 && b.isM3u8) return -1;
-        if (a.isM3u8 && !b.isM3u8) return 1;
-        return a.durDiff - b.durDiff;
-      });
-
-      const chosen = candidates[0];
-      const resObj = new String(chosen.url);
-      resObj.url = chosen.url;
-      resObj.webpageUrl = chosen.webpageUrl;
-      resObj.isM3u8 = chosen.isM3u8;
-      resolve(resObj);
-    });
-  });
+  // Disabled: SoundCloud is strictly disabled per user requirement (YouTube ONLY)
+  return null;
 }
 
 function cleanupAudioCache() {

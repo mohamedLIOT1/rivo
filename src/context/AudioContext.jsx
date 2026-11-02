@@ -9,6 +9,7 @@ import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/list
 import { useUser } from './UserContext';
 import { getSmartTasteAndMoodTracks } from '../utils/tasteAlgorithm';
 import { normalizeCoverUrl } from '../utils/coverUtils';
+import { resolveClientSideYouTubeStream, searchYouTubeClientSide, resolveDirectYouTubeAudio } from '../utils/clientStreamResolver';
 
 const AudioPlayerContext = createContext(null);
 
@@ -361,15 +362,36 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
 
-  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream
+  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with 3.5s timeout)
+  let backendStreamResult = null;
+  const backendController = new AbortController();
+  const backendTimeoutId = setTimeout(() => {
+    try { backendController.abort(); } catch {}
+  }, 3500);
+
+  const onParentAbort = () => {
+    clearTimeout(backendTimeoutId);
+    try { backendController.abort(); } catch {}
+  };
+  if (signal) {
+    if (signal.aborted) {
+      clearTimeout(backendTimeoutId);
+      return null;
+    }
+    signal.addEventListener('abort', onParentAbort, { once: true });
+  }
+
   try {
-    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}`, { signal });
+    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}`, { signal: backendController.signal });
+    clearTimeout(backendTimeoutId);
+    if (signal && onParentAbort) signal.removeEventListener('abort', onParentAbort);
+
     if (sRes.ok) {
       const sData = await sRes.json();
       let cand = sData?.url || sData?.directUrl;
       if (cand && !cand.includes('youtube.com/watch') && !cand.includes('youtu.be/')) {
         if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
-        return {
+        backendStreamResult = {
           url: cand,
           duration: sanitizeDuration(sData.duration || track.duration, 210),
           cover: normalizeCoverUrl(track.cover || track.coverUrl || sData.cover),
@@ -378,27 +400,70 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
       }
     }
   } catch (e) {
-    if (e.name === 'AbortError') throw e;
+    clearTimeout(backendTimeoutId);
+    if (signal && onParentAbort) signal.removeEventListener('abort', onParentAbort);
+    if (signal?.aborted) return null;
+    // Backend timed out (>3.5s) or failed - immediately fall through to instant direct client-side stream resolution
   }
 
-  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}`, { signal });
-    if (res.ok) {
-      const d = await res.json();
-      if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
-        let cand = d.url;
-        if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+  if (backendStreamResult?.url) {
+    return backendStreamResult;
+  }
+
+  // 5b. Direct client-side YouTube stream resolution fallback (Zero-proxy Innertube resolution)
+  if (!signal?.aborted) {
+    try {
+      const clientDirectStream = await resolveDirectYouTubeAudio(track, signal);
+      if (clientDirectStream?.url) {
         return {
-          url: cand,
-          duration: sanitizeDuration(d.duration || track.duration, 210),
-          cover: normalizeCoverUrl(track.cover || track.coverUrl || d.cover),
-          track: d.track || null
+          url: clientDirectStream.url,
+          duration: sanitizeDuration(clientDirectStream.duration || track.duration, 210),
+          cover: normalizeCoverUrl(clientDirectStream.cover || track.cover || track.coverUrl),
+          track: clientDirectStream.track || null
         };
       }
+    } catch (e) {
+      if (signal?.aborted) return null;
     }
-  } catch (e) {
-    if (e.name === 'AbortError') throw e;
+  }
+
+  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with 2.5s timeout)
+  if (!signal?.aborted) {
+    const resolveController = new AbortController();
+    const resolveTimeoutId = setTimeout(() => {
+      try { resolveController.abort(); } catch {}
+    }, 2500);
+    const onResolveParentAbort = () => {
+      clearTimeout(resolveTimeoutId);
+      try { resolveController.abort(); } catch {}
+    };
+    if (signal) {
+      signal.addEventListener('abort', onResolveParentAbort, { once: true });
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}`, { signal: resolveController.signal });
+      clearTimeout(resolveTimeoutId);
+      if (signal && onResolveParentAbort) signal.removeEventListener('abort', onResolveParentAbort);
+
+      if (res.ok) {
+        const d = await res.json();
+        if (d.success && d.url && !d.url.includes('youtube.com/watch') && !d.url.includes('youtu.be/')) {
+          let cand = d.url;
+          if (cand.startsWith('/')) cand = `${API_BASE_URL}${cand}`;
+          return {
+            url: cand,
+            duration: sanitizeDuration(d.duration || track.duration, 210),
+            cover: normalizeCoverUrl(track.cover || track.coverUrl || d.cover),
+            track: d.track || null
+          };
+        }
+      }
+    } catch (e) {
+      clearTimeout(resolveTimeoutId);
+      if (signal && onResolveParentAbort) signal.removeEventListener('abort', onResolveParentAbort);
+      if (signal?.aborted) return null;
+    }
   }
 
   // 7. Last-resort fallback for plain mp3/m4a URLs
