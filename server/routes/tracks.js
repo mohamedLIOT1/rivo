@@ -921,9 +921,23 @@ const handleTrackStream = async (req, res) => {
     if (id && mongoose.isValidObjectId(id)) {
       track = await Track.findById(id).lean();
     }
-    const rawUrl = req.query.url || track?.audioUrl || '';
-    const title = req.query.title || track?.title || '';
-    const artist = req.query.artist || track?.artist || '';
+    let rawUrl = req.query.url || track?.audioUrl || '';
+    let title = req.query.title || track?.title || '';
+    let artist = req.query.artist || track?.artist || '';
+
+    if (!track && (title || artist)) {
+      try {
+        track = await Track.findOne({
+          title: new RegExp(`^${escapeRegex(title)}$`, 'i'),
+          ...(artist ? { artist: new RegExp(`^${escapeRegex(artist)}$`, 'i') } : {})
+        }).lean();
+        if (track?.audioUrl && !rawUrl) {
+          rawUrl = track.audioUrl;
+        }
+        if (track?.title && !title) title = track.title;
+        if (track?.artist && !artist) artist = track.artist;
+      } catch (err) {}
+    }
 
     // Direct local upload stream check
     if (rawUrl && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/')) || track?.source === 'Upload' || (track?.audioUrl && (track.audioUrl.startsWith('/uploads/') || track.audioUrl.includes('/uploads/')))) {
@@ -953,6 +967,35 @@ const handleTrackStream = async (req, res) => {
 
     if (rawUrl && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) && !rawUrl.includes('youtube.com') && !rawUrl.includes('youtu.be') && !rawUrl.includes('soundcloud.com')) {
       return res.json({ success: true, url: rawUrl, directUrl: rawUrl, duration: track?.duration || 210, cover: track?.cover || '' });
+    }
+
+    // Immediate return if audio cache already exists for videoId
+    const targetCandidate = rawUrl || track?.audioUrl || id || '';
+    const vidMatch = targetCandidate.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/|^yt[-_]?)([a-zA-Z0-9_-]{11})/i) ||
+      (typeof targetCandidate === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(targetCandidate.trim()) && !mongoose.isValidObjectId(targetCandidate.trim()) ? [null, targetCandidate.trim()] : null);
+    const videoId = vidMatch?.[1] || null;
+
+    if (videoId) {
+      const cachedM4a = path.join(uploadsDir, 'audio-cache', `${videoId}.m4a`);
+      if (fs.existsSync(cachedM4a) && isAudioFileValid(cachedM4a)) {
+        return res.json({
+          success: true,
+          url: `/uploads/audio-cache/${videoId}.m4a`,
+          directUrl: `/uploads/audio-cache/${videoId}.m4a`,
+          duration: track?.duration || 210,
+          cover: track?.cover || ''
+        });
+      }
+      const cachedMp3 = path.join(uploadsDir, 'audio-cache', `${videoId}.mp3`);
+      if (fs.existsSync(cachedMp3) && isAudioFileValid(cachedMp3)) {
+        return res.json({
+          success: true,
+          url: `/uploads/audio-cache/${videoId}.mp3`,
+          directUrl: `/uploads/audio-cache/${videoId}.mp3`,
+          duration: track?.duration || 210,
+          cover: track?.cover || ''
+        });
+      }
     }
 
     // Check if title and artist match an authentic uploaded track in local DB (e.g. 3alsamet v2)
@@ -1156,7 +1199,7 @@ router.get('/stream-proxy', async (req, res) => {
   const title = req.query.title || '';
   const artist = req.query.artist || '';
   if (!videoId && targetUrl) {
-    const m = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/|[?&]id=o-)([a-zA-Z0-9_-]{11})/i);
+    const m = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
     if (m) videoId = m[1];
   }
   if (videoId) {
@@ -1195,8 +1238,21 @@ router.get('/stream-proxy', async (req, res) => {
   });
   res.on('error', cleanupStream);
 
+  const getMatchingUserAgent = (url) => {
+    if (req.headers['user-agent']) {
+      return req.headers['user-agent'];
+    }
+    if (url.includes('c=ANDROID')) {
+      return 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip';
+    }
+    if (url.includes('c=IOS')) {
+      return 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)';
+    }
+    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  };
+
   try {
-    const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
+    const headers = { 'User-Agent': getMatchingUserAgent(targetUrl) };
     if (req.headers.range && !targetUrl.includes('sndcdn.com') && !targetUrl.includes('soundcloud.')) {
       headers['Range'] = req.headers.range;
     }
@@ -1221,7 +1277,7 @@ router.get('/stream-proxy', async (req, res) => {
           throw new Error('Blocked SSRF redirect: ' + e.message);
         }
       },
-      validateStatus: (status) => status < 400
+      validateStatus: (status) => status < 400 || status === 416
     });
 
     upstreamStream = response.data;
@@ -1230,8 +1286,15 @@ router.get('/stream-proxy', async (req, res) => {
       if (!res.headersSent) res.status(500).end();
     });
 
-    const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
     res.status(response.status);
+    if (response.status === 416) {
+      if (response.headers['content-range']) {
+        res.setHeader('Content-Range', response.headers['content-range']);
+      }
+      return res.end();
+    }
+
+    const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
     const isGoogleVideo = targetUrl.includes('googlevideo.com');
     for (const [key, value] of Object.entries(response.headers)) {
       const lowerKey = key.toLowerCase();
@@ -1260,7 +1323,7 @@ router.get('/stream-proxy', async (req, res) => {
     if (!res.headersSent && (videoId || title || artist)) {
       try {
         if (videoId) {
-          invalidateAudioCache(videoId);
+          invalidateAudioCache(videoId, false);
         }
         const freshDirect = await resolveOfficialYouTubeAudioStream(videoId || '', title, artist);
         if (freshDirect) {
@@ -1276,7 +1339,7 @@ router.get('/stream-proxy', async (req, res) => {
               try {
                 const { valid: freshValid } = await validateSafeUrl(freshResolved);
                 if (freshValid) {
-                  const freshHeaders = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
+                  const freshHeaders = { 'User-Agent': getMatchingUserAgent(freshResolved) };
                   if (req.headers.range && !freshResolved.includes('sndcdn.com') && !freshResolved.includes('soundcloud.')) {
                     freshHeaders['Range'] = req.headers.range;
                   }
@@ -1287,9 +1350,15 @@ router.get('/stream-proxy', async (req, res) => {
                     headers: freshHeaders,
                     timeout: 180000,
                     maxRedirects: 5,
-                    validateStatus: (status) => status < 400
+                    validateStatus: (status) => status < 400 || status === 416
                   });
                   res.status(freshResponse.status);
+                  if (freshResponse.status === 416) {
+                    if (freshResponse.headers['content-range']) {
+                      res.setHeader('Content-Range', freshResponse.headers['content-range']);
+                    }
+                    return res.end();
+                  }
                   const isGoogleVideoFresh = freshResolved.includes('googlevideo.com');
                   for (const [key, value] of Object.entries(freshResponse.headers)) {
                     const lowerKey = key.toLowerCase();
@@ -1313,11 +1382,19 @@ router.get('/stream-proxy', async (req, res) => {
                 }
               } catch (streamErr) {
                 if (!res.headersSent) {
-                  return res.redirect(302, freshResolved);
+                  return res.status(502).json({
+                    error: 'STREAM_PROXY_FAILED',
+                    message: 'Upstream stream could not be proxied',
+                    recoverable: true
+                  });
                 }
               }
               if (!res.headersSent) {
-                return res.redirect(302, freshResolved);
+                return res.status(502).json({
+                  error: 'STREAM_PROXY_FAILED',
+                  message: 'Upstream stream could not be proxied',
+                  recoverable: true
+                });
               }
             }
           }

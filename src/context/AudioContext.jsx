@@ -362,12 +362,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
 
-  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with 3.5s timeout)
+  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with 12s timeout)
   let backendStreamResult = null;
   const backendController = new AbortController();
   const backendTimeoutId = setTimeout(() => {
     try { backendController.abort(); } catch {}
-  }, 3500);
+  }, 12000);
 
   const onParentAbort = () => {
     clearTimeout(backendTimeoutId);
@@ -411,7 +411,9 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   }
 
   // 5b. Direct client-side YouTube stream resolution fallback (Zero-proxy Innertube resolution)
-  if (!signal?.aborted) {
+  // Only call resolveDirectYouTubeAudio on native/mobile because web browsers get blocked by CORS and forbidden headers
+  const isNativeEnvironment = typeof window !== 'undefined' && Boolean(window.ReactNativeWebView);
+  if (!signal?.aborted && isNativeEnvironment) {
     try {
       const clientDirectStream = await resolveDirectYouTubeAudio(track, signal);
       if (clientDirectStream?.url) {
@@ -427,12 +429,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
     }
   }
 
-  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with 2.5s timeout)
+  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with 10s timeout)
   if (!signal?.aborted) {
     const resolveController = new AbortController();
     const resolveTimeoutId = setTimeout(() => {
       try { resolveController.abort(); } catch {}
-    }, 2500);
+    }, 10000);
     const onResolveParentAbort = () => {
       clearTimeout(resolveTimeoutId);
       try { resolveController.abort(); } catch {}
@@ -1320,7 +1322,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         stallRecoveryTimerRef.current = setTimeout(() => {
           if (!isPlayingRef.current || isChangingTrackRef.current) return;
           const cur = deck.currentTime || currentTimeRef.current || 0;
-          if (deck && deck.src && cur > 0) {
+          if (deck && deck.src) {
             const s = deck.src;
             deck.src = s;
             deck.currentTime = cur;
@@ -2312,7 +2314,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
       durationRef.current = initDur;
     }
     setCurrentTrack(trackToPlay);
-    setIsPlaying(true);
+    // Do NOT set setIsPlaying(true) prematurely before stream begins playing or while isChangingTrackRef.current is true
+    setIsLoadingTrack(true);
+    isLoadingTrackRef.current = true;
+    if (audioRef.current && audioRef.current.src && !audioRef.current.paused) {
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+      setIsLoadingTrack(false);
+      isLoadingTrackRef.current = false;
+    }
 
     if (typeof window !== 'undefined' && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       try {
@@ -2323,7 +2333,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           : (durationRef.current > 0 ? durationRef.current : 210);
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'PLAYBACK_STATE',
-          isPlaying: true,
+          isPlaying: false,
+          isLoading: true,
           repeatMode: repeatMode,
           isRepeat: repeatMode !== 'off',
           isShuffle: Boolean(isShuffle),
@@ -3521,6 +3532,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     remoteDevicePlayback,
     isAutoplayBlocked, resumeAutoplay,
     vocalIsolationStatus,
+    isLoadingTrack, setIsLoadingTrack,
   }), [
     currentTrack, setCurrentTrack,
     currentQueue, setCurrentQueue,
@@ -3550,6 +3562,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     remoteDevicePlayback,
     isAutoplayBlocked, resumeAutoplay,
     vocalIsolationStatus,
+    isLoadingTrack, setIsLoadingTrack,
   ]);
 
   return (

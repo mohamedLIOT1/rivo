@@ -2,8 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const { execFile, spawn, execSync } = require('child_process');
+const { execFile, execFileSync, spawn, execSync } = require('child_process');
 const { Track, Album, SongLyrics, User } = require('../models');
+const { resolveBulletproofAudioStream } = require('./streamFallbackProvider');
 
 function escapeRegex(s) {
   return String(s || '').replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
@@ -690,7 +691,14 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     const bin = getYtDlpBin();
     const cookiesPath = fs.existsSync('/home/ubuntu/rivo/cookies.txt') ? '/home/ubuntu/rivo/cookies.txt' : (fs.existsSync(path.join(__dirname, '../../cookies.txt')) ? path.join(__dirname, '../../cookies.txt') : '/home/ubuntu/cookies.txt');
     const simpleQ = `${cleanArt} ${cleanTit}`.trim() || finalQuery;
-    const ytdlpArgs = ['--no-check-certificates', '--no-playlist', '--get-id', `ytsearch1:${simpleQ}`];
+    const ytdlpArgs = [
+      '--ignore-config',
+      '--no-check-certificates',
+      '--no-playlist',
+      '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
+      '--get-id',
+      `ytsearch1:${simpleQ}`
+    ];
     if (fs.existsSync(cookiesPath)) {
       ytdlpArgs.splice(1, 0, '--cookies', cookiesPath);
     }
@@ -1250,7 +1258,7 @@ const activeBackgroundDownloads = new Set();
 const MAX_CONCURRENT_BG_DOWNLOADS = 3;
 const bgDownloadQueue = [];
 
-function invalidateAudioCache(videoIdOrUrl) {
+function invalidateAudioCache(videoIdOrUrl, deleteDiskFile = false) {
   if (!videoIdOrUrl || typeof videoIdOrUrl !== 'string') return;
   const m = videoIdOrUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
   const vid = m ? m[1] : (/^[a-zA-Z0-9_-]{11}$/.test(videoIdOrUrl.trim()) && !mongoose.isValidObjectId(videoIdOrUrl.trim()) ? videoIdOrUrl.trim() : null);
@@ -1258,18 +1266,20 @@ function invalidateAudioCache(videoIdOrUrl) {
 
   directStreamCache.delete(vid);
 
-  const audioCacheDirs = [
-    path.join(__dirname, '../../uploads/audio-cache'),
-    '/home/ubuntu/uploads/audio-cache',
-    '/home/ubuntu/rivo/uploads/audio-cache'
-  ];
-  for (const dir of audioCacheDirs) {
-    try {
-      const f1 = path.join(dir, `${vid}.m4a`);
-      const f2 = path.join(dir, `${vid}.mp3`);
-      if (fs.existsSync(f1)) fs.unlinkSync(f1);
-      if (fs.existsSync(f2)) fs.unlinkSync(f2);
-    } catch {}
+  if (deleteDiskFile) {
+    const audioCacheDirs = [
+      path.join(__dirname, '../../uploads/audio-cache'),
+      '/home/ubuntu/uploads/audio-cache',
+      '/home/ubuntu/rivo/uploads/audio-cache'
+    ];
+    for (const dir of audioCacheDirs) {
+      try {
+        const f1 = path.join(dir, `${vid}.m4a`);
+        const f2 = path.join(dir, `${vid}.mp3`);
+        if (fs.existsSync(f1)) fs.unlinkSync(f1);
+        if (fs.existsSync(f2)) fs.unlinkSync(f2);
+      } catch {}
+    }
   }
 }
 
@@ -1322,8 +1332,10 @@ function getCookiesPath() {
   return null;
 }
 
+const verifiedAudioFiles = new Set();
 function isAudioFileValid(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return false;
+  if (verifiedAudioFiles.has(filePath)) return true;
   try {
     const stats = fs.statSync(filePath);
     if (stats.size < 30000) return false;
@@ -1331,7 +1343,12 @@ function isAudioFileValid(filePath) {
       `ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of default=noprint_wrappers=1:nokey=1 "${filePath}"`,
       { timeout: 6000 }
     );
-    return probe.toString().trim() === 'audio';
+    const valid = probe.toString().trim() === 'audio';
+    if (valid) {
+      if (verifiedAudioFiles.size > 5000) verifiedAudioFiles.clear();
+      verifiedAudioFiles.add(filePath);
+    }
+    return valid;
   } catch {
     return false;
   }
@@ -1431,67 +1448,72 @@ async function extractInnertubeDirectStream(videoId) {
     }
   ];
 
-  for (const p of clientProfiles) {
-    try {
-      const res = await axios.post(
-        `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`,
-        {
-          videoId,
-          context: p.context
-        },
-        {
-          headers: Object.assign({ 'Content-Type': 'application/json' }, p.headers),
-          timeout: 3500
-        }
-      );
-
-      const streamingData = res.data && res.data.streamingData;
-      const formats = [].concat(
-        (streamingData && streamingData.formats) || [],
-        (streamingData && streamingData.adaptiveFormats) || []
-      );
-
-      const audioFormats = formats.filter(
-        f => f && f.url && f.mimeType && f.mimeType.startsWith('audio/')
-      );
-
-      if (audioFormats.length > 0) {
-        // Prioritize itag 140 (128kbps AAC / audio/mp4), then any audio/mp4, then highest bitrate
-        const itag140 = audioFormats.find(f => f.itag === 140);
-        const mp4Audio = audioFormats.find(f => f.mimeType && f.mimeType.includes('audio/mp4'));
-        audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
-        const chosen = itag140 || mp4Audio || audioFormats[0];
-
-        if (chosen && chosen.url && chosen.url.startsWith('http')) {
-          let duration = null;
-          if (chosen.approxDurationMs && !isNaN(Number(chosen.approxDurationMs))) {
-            duration = Math.round(Number(chosen.approxDurationMs) / 1000);
-          } else if (res.data?.videoDetails?.lengthSeconds) {
-            duration = Math.round(Number(res.data.videoDetails.lengthSeconds));
-          } else {
-            const mDur = chosen.url.match(/[?&]dur=([0-9.]+)/);
-            if (mDur && !isNaN(Number(mDur[1]))) {
-              duration = Math.round(Number(mDur[1]));
-            }
-          }
-
-          const resObj = new String(chosen.url);
-          resObj.url = chosen.url;
-          resObj.duration = duration;
-          resObj.itag = chosen.itag;
-          resObj.mimeType = chosen.mimeType;
-          return resObj;
-        }
+  const fetchProfile = async (p) => {
+    const res = await axios.post(
+      `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_API_KEY}`,
+      {
+        videoId,
+        context: p.context
+      },
+      {
+        headers: Object.assign({ 'Content-Type': 'application/json' }, p.headers),
+        timeout: 2400
       }
-    } catch (e) {
-      // Continue to next client profile
-    }
-  }
+    );
 
-  return null;
+    const streamingData = res.data && res.data.streamingData;
+    const formats = [].concat(
+      (streamingData && streamingData.formats) || [],
+      (streamingData && streamingData.adaptiveFormats) || []
+    );
+
+    const audioFormats = formats.filter(
+      f => f && f.url && f.mimeType && f.mimeType.startsWith('audio/')
+    );
+
+    if (audioFormats.length > 0) {
+      // Prioritize itag 140 (128kbps AAC / audio/mp4), then any audio/mp4, then highest bitrate
+      const itag140 = audioFormats.find(f => f.itag === 140);
+      const mp4Audio = audioFormats.find(f => f.mimeType && f.mimeType.includes('audio/mp4'));
+      audioFormats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+      const chosen = itag140 || mp4Audio || audioFormats[0];
+
+      if (chosen && chosen.url && chosen.url.startsWith('http')) {
+        let duration = null;
+        if (chosen.approxDurationMs && !isNaN(Number(chosen.approxDurationMs))) {
+          duration = Math.round(Number(chosen.approxDurationMs) / 1000);
+        } else if (res.data?.videoDetails?.lengthSeconds) {
+          duration = Math.round(Number(res.data.videoDetails.lengthSeconds));
+        } else {
+          const mDur = chosen.url.match(/[?&]dur=([0-9.]+)/);
+          if (mDur && !isNaN(Number(mDur[1]))) {
+            duration = Math.round(Number(mDur[1]));
+          }
+        }
+
+        const resObj = new String(chosen.url);
+        resObj.url = chosen.url;
+        resObj.duration = duration;
+        resObj.itag = chosen.itag;
+        resObj.mimeType = chosen.mimeType;
+        return resObj;
+      }
+    }
+    throw new Error('No audio format found');
+  };
+
+  try {
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500));
+    return await Promise.race([
+      Promise.any(clientProfiles.map(p => fetchProfile(p))),
+      timeoutPromise
+    ]);
+  } catch {
+    return null;
+  }
 }
 
-async function downloadYouTubeAudioToCache(videoId, cacheDir) {
+async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = null) {
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
   if (!fs.existsSync(cacheDir)) {
     try { fs.mkdirSync(cacheDir, { recursive: true }); } catch {}
@@ -1505,12 +1527,16 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir) {
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
 
-  // 1. Direct fast download from YouTube Innertube stream if available (bypasses yt-dlp entirely)
+  // 1. Direct fast download from known stream URL or YouTube Innertube stream
   try {
-    const directRes = await extractInnertubeDirectStream(videoId);
-    if (directRes && directRes.url) {
-      const fastTarget = path.join(cacheDir, `${videoId}_innertube_${Date.now()}.m4a`);
-      execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', directRes.url, '-c', 'copy', '-movflags', '+faststart', fastTarget], { timeout: 15000, env: execEnv });
+    let streamUrl = directStreamUrl;
+    if (!streamUrl) {
+      const directRes = await extractInnertubeDirectStream(videoId);
+      if (directRes && directRes.url) streamUrl = directRes.url;
+    }
+    if (streamUrl && streamUrl.startsWith('http')) {
+      const fastTarget = path.join(cacheDir, `${videoId}_stream_${Date.now()}.m4a`);
+      execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', streamUrl, '-c', 'copy', '-movflags', '+faststart', fastTarget], { timeout: 35000, env: execEnv });
       if (fs.existsSync(fastTarget) && isAudioFileValid(fastTarget)) {
         try { fs.renameSync(fastTarget, targetFile); } catch {
           fs.copyFileSync(fastTarget, targetFile);
@@ -1522,15 +1548,17 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir) {
     }
   } catch {}
 
-  // 2. yt-dlp fallback with short timeout (10s)
+  // 2. yt-dlp fallback with robust timeout (45s)
   const bin = getYtDlpBin();
   const cp = getCookiesPath();
   const tempTarget = path.join(cacheDir, `${videoId}_dl_${Date.now()}.%(ext)s`);
 
   const ytdlpArgs = [
+    '--ignore-config',
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
+    '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
     '-f', '140/ba[ext=m4a]/ba/bestaudio',
     '-x',
     '--audio-format', 'm4a',
@@ -1538,20 +1566,21 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir) {
   ];
   if (cp) {
     ytdlpArgs.splice(1, 0, '--cookies', cp);
+    ytdlpArgs.splice(3, 0, '--extractor-args', 'youtube:player_client=mweb,android,ios');
   } else {
-    ytdlpArgs.splice(4, 0, '--extractor-args', 'youtube:player_client=android,ios,mweb');
+    ytdlpArgs.splice(1, 0, '--extractor-args', 'youtube:player_client=mweb,android,ios');
   }
   ytdlpArgs.push(`https://www.youtube.com/watch?v=${videoId}`);
 
   await new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 10000, env: execEnv }, () => resolve());
+    execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, () => resolve());
   });
 
   const actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
   if (fs.existsSync(actualDownloaded) && isAudioFileValid(actualDownloaded)) {
     const faststartTarget = tempTarget.replace('.%(ext)s', '_fs.m4a');
     try {
-      execSync(`ffmpeg -v error -i "${actualDownloaded}" -c copy -movflags +faststart "${faststartTarget}" -y`, { timeout: 15000, env: execEnv });
+      execSync(`ffmpeg -v error -i "${actualDownloaded}" -c copy -movflags +faststart "${faststartTarget}" -y`, { timeout: 20000, env: execEnv });
       if (fs.existsSync(faststartTarget) && isAudioFileValid(faststartTarget)) {
         try { fs.unlinkSync(actualDownloaded); } catch {}
         fs.renameSync(faststartTarget, targetFile);
@@ -1655,7 +1684,11 @@ opts = {
     'no_warnings': True,
     'nocheckcertificate': True,
     'noplaylist': True,
-    'extractor_args': {'youtube': {'player_client': ['android', 'ios', 'mweb']}},
+    'ignoreconfig': True,
+    'extractor_args': {
+        'youtubepot-bgutilhttp': {'base_url': ['http://127.0.0.1:4416']},
+        'youtube': {'player_client': ['android', 'ios', 'mweb']}
+    },
     'format': '140/ba[ext=m4a]/ba/bestaudio'
 }
 
@@ -1747,7 +1780,7 @@ function extractViaWarmWorker(videoId) {
   });
 }
 
-function queueBackgroundAudioCache(videoId, targetFile, highPriority = false) {
+function queueBackgroundAudioCache(videoId, targetFile, highPriority = false, streamUrl = null) {
   try {
     if (fs.existsSync(targetFile) && fs.statSync(targetFile).size > 20000) return;
   } catch {}
@@ -1755,9 +1788,9 @@ function queueBackgroundAudioCache(videoId, targetFile, highPriority = false) {
   if (bgDownloadQueue.some(item => item.videoId === videoId)) return;
 
   if (highPriority) {
-    bgDownloadQueue.unshift({ videoId, targetFile });
+    bgDownloadQueue.unshift({ videoId, targetFile, streamUrl });
   } else {
-    bgDownloadQueue.push({ videoId, targetFile });
+    bgDownloadQueue.push({ videoId, targetFile, streamUrl });
   }
   processNextBgDownload();
 }
@@ -1766,7 +1799,7 @@ function processNextBgDownload() {
   if (activeBackgroundDownloads.size >= MAX_CONCURRENT_BG_DOWNLOADS) return;
   if (bgDownloadQueue.length === 0) return;
 
-  const { videoId, targetFile } = bgDownloadQueue.shift();
+  const { videoId, targetFile, streamUrl } = bgDownloadQueue.shift();
   try {
     if (fs.existsSync(targetFile) && isAudioFileValid(targetFile)) {
       return processNextBgDownload();
@@ -1774,7 +1807,7 @@ function processNextBgDownload() {
   } catch {}
 
   activeBackgroundDownloads.add(videoId);
-  downloadYouTubeAudioToCache(videoId, path.dirname(targetFile)).finally(() => {
+  downloadYouTubeAudioToCache(videoId, path.dirname(targetFile), streamUrl).finally(() => {
     activeBackgroundDownloads.delete(videoId);
     processNextBgDownload();
   });
@@ -1812,10 +1845,12 @@ async function extractDirectStreamUrl(videoId) {
   const cp = getCookiesPath();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const ytdlpArgs = [
+    '--ignore-config',
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
     '--js-runtimes', 'node',
+    '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
     '--print', '%(duration)s'
   ];
   if (cp) {
@@ -1859,7 +1894,15 @@ async function extractDirectStreamUrl(videoId) {
       }
 
       // Instant fallback without extractor args (reduced timeout 6s)
-      const fbArgs = ['--no-check-certificates', '--no-playlist', '--no-warnings', '--js-runtimes', 'node', '--print', '%(duration)s'];
+      const fbArgs = [
+        '--ignore-config',
+        '--no-check-certificates',
+        '--no-playlist',
+        '--no-warnings',
+        '--js-runtimes', 'node',
+        '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
+        '--print', '%(duration)s'
+      ];
       if (cp) fbArgs.push('--cookies', cp);
       fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio', ytUrl);
       execFile(bin, fbArgs, { timeout: 6000, env: execEnv }, (err2, stdout2) => {
@@ -1943,6 +1986,30 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
   if (!videoId) return null;
 
+  // 0. Fast bulletproof stream & cache resolver (<500ms)
+  const uploadsDir = path.join(__dirname, '../../uploads');
+  try {
+    const bulletproofRes = await resolveBulletproofAudioStream({
+      videoId,
+      uploadsDir,
+      primaryExtractor: extractDirectStreamUrl
+    });
+    if (bulletproofRes && bulletproofRes.success && bulletproofRes.url) {
+      const streamPath = bulletproofRes.url;
+      const dur = bulletproofRes.duration || targetDuration || defaultDur;
+      const retObj = new String(streamPath);
+      retObj.url = streamPath;
+      retObj.duration = dur;
+      retObj.videoId = videoId;
+      if (streamPath.startsWith('http')) {
+        directStreamCache.set(videoId, { url: streamPath, duration: dur, expireAt: Date.now() + 3 * 3600 * 1000 });
+        const targetM4a = path.join(uploadsDir, 'audio-cache', `${videoId}.m4a`);
+        queueBackgroundAudioCache(videoId, targetM4a, true, streamPath);
+      }
+      return retObj;
+    }
+  } catch (err) {}
+
   const audioCacheDir = path.join(__dirname, '../../uploads/audio-cache');
   if (!fs.existsSync(audioCacheDir)) {
     try { fs.mkdirSync(audioCacheDir, { recursive: true }); } catch {}
@@ -1981,7 +2048,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     if (cachedStream.url && cachedStream.url.includes('.m3u8')) {
       directStreamCache.delete(videoId);
     } else {
-      queueBackgroundAudioCache(videoId, cachedM4a, true);
+      queueBackgroundAudioCache(videoId, cachedM4a, true, cachedStream.url);
       const retObj = new String(cachedStream.url);
       retObj.url = cachedStream.url;
       retObj.duration = cachedStream.duration || targetDuration || defaultDur;
@@ -2031,7 +2098,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     if (directUrl && !directUrl.includes('.m3u8')) {
       const chosenDur = authenticDuration || targetDuration || defaultDur;
       directStreamCache.set(videoId, { url: directUrl, duration: chosenDur, expireAt: Date.now() + 3 * 3600 * 1000 });
-      queueBackgroundAudioCache(videoId, cachedM4a, true);
+      queueBackgroundAudioCache(videoId, cachedM4a, true, directUrl);
       const resObj = new String(directUrl);
       resObj.url = directUrl;
       resObj.duration = chosenDur;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle, Radio } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Loader2, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle, Radio } from 'lucide-react';
 import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -37,6 +37,7 @@ function MiniPlayer({
 }) {
   const isDark = globalTheme === 'dark';
   const audio = useAudioPlayer();
+  const isLoadingTrack = audio?.isLoadingTrack;
   const isPlaying = propIsPlaying !== undefined ? propIsPlaying : audio?.isPlaying;
   const togglePlay = propTogglePlay || onTogglePlay || audio?.togglePlay;
   const playNext = propPlayNext || onNext || audio?.playNextTrack;

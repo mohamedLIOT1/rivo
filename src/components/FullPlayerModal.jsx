@@ -1700,12 +1700,15 @@ export default function FullPlayerModal({
                   ? 'border-2 border-[#090e0c] shadow-[3px_3px_0px_#050807,0_0_16px_rgba(23,163,152,0.35)]' 
                   : 'brutal-border-thick brutal-shadow-md'
               }`}
-              title={isPlaying ? "Pause" : "Play"}
+              title={isLoadingTrack ? "Loading..." : isPlaying ? "Pause" : "Play"}
             >
-              {isPlaying 
-                ? <Pause size={20} fill="currentColor" /> 
-                : <Play size={20} fill="currentColor" className="ml-0.5" />
-              }
+              {isLoadingTrack ? (
+                <Loader2 size={20} className="animate-spin text-[#0b1110]" />
+              ) : isPlaying ? (
+                <Pause size={20} fill="currentColor" /> 
+              ) : (
+                <Play size={20} fill="currentColor" className="ml-0.5" />
+              )}
             </button>
 
             <button 

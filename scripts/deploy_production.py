@@ -1,6 +1,9 @@
 import subprocess
 import os
 import sys
+import tarfile
+import json
+import argparse
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -9,6 +12,7 @@ if not os.path.exists(KEY):
     alt_key = os.path.expanduser(r"~/Desktop/LightsailDefaultKey-eu-north-1.pem")
     if os.path.exists(alt_key):
         KEY = alt_key
+
 HOST = "ubuntu@rivo-m.duckdns.org"
 REMOTE_DIR = "/home/ubuntu/rivo"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,9 +22,11 @@ def run_ssh(cmd):
     print(f"[SSH] {cmd}", flush=True)
     res = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', stdin=subprocess.DEVNULL)
     if res.returncode != 0:
-        print(f"Error: {res.stderr}", flush=True)
+        print(f"Error: {res.stderr.strip()}", flush=True)
     else:
-        print(f"Output: {(res.stdout or '').strip()}", flush=True)
+        out = (res.stdout or '').strip()
+        if out:
+            print(f"Output:\n{out}", flush=True)
     return res
 
 def upload_file(local_path, remote_path):
@@ -28,128 +34,166 @@ def upload_file(local_path, remote_path):
     print(f"[SCP] {os.path.basename(local_path)} -> {remote_path}", flush=True)
     res = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', stdin=subprocess.DEVNULL)
     if res.returncode != 0:
-        print(f"SCP Error: {res.stderr}", flush=True)
+        print(f"SCP Error: {res.stderr.strip()}", flush=True)
         return False
     return True
 
-import json
-import re
-
 def get_current_version():
     pkg_path = os.path.join(BASE_DIR, 'package.json')
-    with open(pkg_path, 'r', encoding='utf-8') as f:
-        pkg = json.load(f)
-        return pkg.get('version', '2.1.0')
+    try:
+        with open(pkg_path, 'r', encoding='utf-8') as f:
+            return json.load(f).get('version', '2.2.9')
+    except Exception:
+        return '2.2.9'
 
-def main():
-    version = get_current_version()
-    print(f"=== Deploying v{version} to Production Server ===")
-    
-    # Pre-create remote directories
-    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server/middleware {REMOTE_DIR}/server/models {REMOTE_DIR}/server/utils {REMOTE_DIR}/uploads/stems")
+def sync_server():
+    print("\n📦 [1/4] Packaging and syncing server/ code...", flush=True)
+    server_dir = os.path.join(BASE_DIR, 'server')
+    tar_path = os.path.join(BASE_DIR, 'server_sync.tar.gz')
 
-    # 1. Upload server files
-    server_files = [
-        ("server/models/User.js", f"{REMOTE_DIR}/server/models/User.js"),
-        ("server/models/Track.js", f"{REMOTE_DIR}/server/models/Track.js"),
-        ("server/models/Message.js", f"{REMOTE_DIR}/server/models/Message.js"),
-        ("server/routes/users.js", f"{REMOTE_DIR}/server/routes/users.js"),
-        ("server/middleware/auth.js", f"{REMOTE_DIR}/server/middleware/auth.js"),
-        ("server/routes/tracks.js", f"{REMOTE_DIR}/server/routes/tracks.js"),
-        ("server/routes/stats.js", f"{REMOTE_DIR}/server/routes/stats.js"),
-        ("server/routes/albums.js", f"{REMOTE_DIR}/server/routes/albums.js"),
-        ("server/routes/artists.js", f"{REMOTE_DIR}/server/routes/artists.js"),
-        ("server/routes/playlists.js", f"{REMOTE_DIR}/server/routes/playlists.js"),
-        ("server/routes/chat.js", f"{REMOTE_DIR}/server/routes/chat.js"),
-        ("server/routes/ai.js", f"{REMOTE_DIR}/server/routes/ai.js"),
-        ("server/utils/helpers.js", f"{REMOTE_DIR}/server/utils/helpers.js"),
-        ("server/utils/vocalSeparator.js", f"{REMOTE_DIR}/server/utils/vocalSeparator.js"),
-        ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
-        ("package.json", f"{REMOTE_DIR}/package.json"),
-        ("server/sockets/index.js", f"{REMOTE_DIR}/server/sockets/index.js"),
-        ("server/discordActivity.js", f"{REMOTE_DIR}/server/discordActivity.js"),
-        ("server/index.js", f"{REMOTE_DIR}/server/index.js"),
-    ]
-    for local_rel, remote in server_files:
-        local = os.path.join(BASE_DIR, local_rel)
-        if not upload_file(local, remote):
-            sys.exit(1)
-
-    # 2. Upload APK, IPA & EXE downloads, OTA bundles, and bot assets
-    download_files = [
-        ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
-        ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
-        ("public/downloads/Rivo_Setup.exe.sig", f"{REMOTE_DIR}/public/downloads/Rivo_Setup.exe.sig"),
-        (f"public/downloads/Rivo-v{version}.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.apk"),
-        (f"public/downloads/Rivo-v{version}.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa"),
-        (f"public/downloads/Rivo-v{version}.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.exe"),
-        ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
-        ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
-        ("public/downloads/Rivo.exe", f"{REMOTE_DIR}/public/downloads/Rivo.exe"),
-        ("public/assets/rivo-bot.png", f"{REMOTE_DIR}/public/assets/rivo-bot.png"),
-        ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
-    ]
-    for local_rel, remote in download_files:
-        local = os.path.join(BASE_DIR, local_rel)
-        if os.path.exists(local):
-            upload_file(local, remote)
-
-    print("Fetching and verifying binary releases from GitHub on remote server...")
-    run_ssh(
-        f"cd {REMOTE_DIR}/public/downloads && "
-        f"([ -f Rivo-v{version}.apk ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.apk -o Rivo-v{version}.apk 2>/dev/null || true) && "
-        f"([ -f Rivo-v{version}.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.exe -o Rivo-v{version}.exe 2>/dev/null || true) && "
-        f"([ -f Rivo-v{version}.ipa ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo-v{version}.ipa -o Rivo-v{version}.ipa 2>/dev/null || true) && "
-        f"([ -f Rivo_Setup.exe ] || curl -sL https://github.com/mohamedLIOT1/Rivo/releases/download/v{version}/Rivo_Setup.exe -o Rivo_Setup.exe 2>/dev/null || true) && "
-        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/public/downloads/Rivo.apk 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/public/downloads/Rivo.ipa 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/public/downloads/Rivo.exe 2>/dev/null || true && "
-        f"mkdir -p {REMOTE_DIR}/dist/downloads && "
-        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/Rivo-v{version}.apk 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/Rivo-v{version}.ipa 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/Rivo-v{version}.exe 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.apk {REMOTE_DIR}/dist/downloads/Rivo.apk 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.ipa {REMOTE_DIR}/dist/downloads/Rivo.ipa 2>/dev/null || true && "
-        f"cp -f Rivo-v{version}.exe {REMOTE_DIR}/dist/downloads/Rivo.exe 2>/dev/null || true && "
-        f"mkdir -p /home/ubuntu/dist/downloads /var/www/html/downloads && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /home/ubuntu/dist/downloads/ 2>/dev/null || true && "
-        f"cp -f {REMOTE_DIR}/public/downloads/Rivo* /var/www/html/downloads/ 2>/dev/null || true"
-    )
-
-    # 3. Build fresh web bundle, create dist archive and upload (excluding heavy downloads directory)
-    print("Building fresh web bundle with Vite...", flush=True)
-    build_cmd = "node ./node_modules/vite/bin/vite.js build"
-    b_res = subprocess.run(build_cmd, shell=True, cwd=BASE_DIR)
-    if b_res.returncode != 0:
-        print("Web build failed! Aborting deployment.", flush=True)
-        sys.exit(1)
-
-    dist_dir = os.path.join(BASE_DIR, 'dist')
-    tar_path = os.path.join(BASE_DIR, f'dist_v{version.replace(".", "")}.tar.gz')
-    print("Archiving web dist (excluding downloads)...", flush=True)
-    import tarfile
-
-    def filter_downloads(tarinfo):
-        if 'downloads' in tarinfo.name:
+    def filter_server(tarinfo):
+        parts = tarinfo.name.replace('\\', '/').split('/')
+        if any(ignored in parts for ignored in ['node_modules', '.cache', '__pycache__', 'uploads']):
+            return None
+        if tarinfo.name.endswith(('.mp3', '.m4a', '.wav', '.log', '.tmp')):
             return None
         return tarinfo
 
     with tarfile.open(tar_path, "w:gz") as tar:
-        tar.add(dist_dir, arcname="dist", filter=filter_downloads)
+        tar.add(server_dir, arcname="server", filter=filter_server)
+        pkg_local = os.path.join(BASE_DIR, 'package.json')
+        if os.path.exists(pkg_local):
+            tar.add(pkg_local, arcname="package.json")
 
-    tar_filename = os.path.basename(tar_path)
-    print(f"Uploading dist archive ({os.path.getsize(tar_path)} bytes)...")
-    upload_file(tar_path, f"{REMOTE_DIR}/{tar_filename}")
-    run_ssh(f"cd {REMOTE_DIR} && tar -xzf {tar_filename} && rm {tar_filename} && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /home/ubuntu/rivo/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true)")
+    tar_size = os.path.getsize(tar_path)
+    print(f"Server archive created: {tar_size:,} bytes")
+    uploaded = upload_file(tar_path, f"{REMOTE_DIR}/server_sync.tar.gz")
     if os.path.exists(tar_path):
         os.remove(tar_path)
 
-    # 4. Restart PM2 & Broadcast update
-    print("Restarting PM2 backend...")
-    run_ssh("pm2 restart rivo")
-    print("Broadcasting update...")
-    run_ssh("curl -s http://localhost:5000/api/app/broadcast-update || true")
-    print("=== Deployment Complete! ===")
+    if not uploaded:
+        print("❌ Failed to upload server archive!")
+        sys.exit(1)
+
+    extract_cmd = (
+        f"mkdir -p {REMOTE_DIR}/server && "
+        f"tar -xzf {REMOTE_DIR}/server_sync.tar.gz -C {REMOTE_DIR}/ && "
+        f"rm -f {REMOTE_DIR}/server_sync.tar.gz"
+    )
+    res = run_ssh(extract_cmd)
+    if res.returncode != 0:
+        print("❌ Failed to extract server files on remote!")
+        sys.exit(1)
+    print("✅ Server code synchronized successfully.")
+
+def build_and_sync_frontend(skip_build=False):
+    print("\n🎨 [2/4] Building and syncing frontend dist...", flush=True)
+    if not skip_build:
+        print("Executing Vite build...")
+        build_bin = "npm.cmd" if os.name == 'nt' else "npm"
+        b_res = subprocess.run([build_bin, "run", "build"], cwd=BASE_DIR, shell=True)
+        if b_res.returncode != 0:
+            print("Trying direct vite executable...")
+            vite_path = os.path.join(BASE_DIR, "node_modules", "vite", "bin", "vite.js")
+            b_res = subprocess.run(["node", vite_path, "build"], cwd=BASE_DIR)
+        if b_res.returncode != 0:
+            print("❌ Frontend build failed! Aborting deployment.")
+            sys.exit(1)
+        print("✅ Frontend build completed successfully.")
+
+    dist_dir = os.path.join(BASE_DIR, 'dist')
+    if not os.path.isdir(dist_dir):
+        print("❌ Dist directory does not exist! Aborting.")
+        sys.exit(1)
+
+    tar_path = os.path.join(BASE_DIR, 'dist_sync.tar.gz')
+    print("Archiving dist/ (excluding heavy downloads)...")
+
+    with tarfile.open(tar_path, "w:gz") as tar:
+        for root, dirs, files in os.walk(dist_dir):
+            if 'downloads' in root.replace('\\', '/'):
+                continue
+            for f in files:
+                full_path = os.path.join(root, f)
+                rel_path = os.path.relpath(full_path, dist_dir)
+                tar.add(full_path, arcname=rel_path)
+
+    tar_size = os.path.getsize(tar_path)
+    print(f"Dist archive created: {tar_size:,} bytes")
+    uploaded = upload_file(tar_path, f"{REMOTE_DIR}/dist_sync.tar.gz")
+    if os.path.exists(tar_path):
+        os.remove(tar_path)
+
+    if not uploaded:
+        print("❌ Failed to upload dist archive!")
+        sys.exit(1)
+
+    unpack_cmd = (
+        f"mkdir -p {REMOTE_DIR}/dist /home/ubuntu/dist && "
+        f"tar -xzf {REMOTE_DIR}/dist_sync.tar.gz -C {REMOTE_DIR}/dist/ && "
+        f"rm -f {REMOTE_DIR}/dist_sync.tar.gz && "
+        f"cp -rf {REMOTE_DIR}/dist/* /home/ubuntu/dist/ 2>/dev/null || true && "
+        f"sudo cp -rf {REMOTE_DIR}/dist/* /var/www/html/ 2>/dev/null || true"
+    )
+    res = run_ssh(unpack_cmd)
+    if res.returncode != 0:
+        print("❌ Failed to unpack dist files on remote!")
+        sys.exit(1)
+    print("✅ Frontend dist synchronized successfully.")
+
+def sync_assets_and_metadata():
+    print("\n📄 [3/4] Syncing OTA bundles & metadata...", flush=True)
+    meta_files = [
+        ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
+        ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
+        ("public/assets/rivo-bot.png", f"{REMOTE_DIR}/public/assets/rivo-bot.png"),
+        ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
+    ]
+    for local_rel, remote_path in meta_files:
+        p = os.path.join(BASE_DIR, local_rel)
+        if os.path.exists(p):
+            upload_file(p, remote_path)
+    print("✅ Metadata synchronized.")
+
+def restart_and_verify():
+    print("\n⚡ [4/4] Reloading PM2 and verifying status...", flush=True)
+    # Safe cleanup and reload
+    remote_cmd = (
+        f"rm -f {REMOTE_DIR}/*.tar.gz /home/ubuntu/*.tar.gz 2>/dev/null || true; "
+        f"pm2 reload 0 || pm2 restart 0; "
+        f"curl -s http://localhost:5000/api/app/broadcast-update 2>/dev/null || true; "
+        f"pm2 status"
+    )
+    run_ssh(remote_cmd)
+    print("✅ PM2 reloaded and verified.")
+
+def main():
+    parser = argparse.ArgumentParser(description="Deploy Rivo to Production Server")
+    parser.add_argument("--server-only", action="store_true", help="Only sync server files and reload PM2")
+    parser.add_argument("--dist-only", action="store_true", help="Only build and sync web dist")
+    parser.add_argument("--skip-build", action="store_true", help="Skip Vite build (use existing dist)")
+    args = parser.parse_args()
+
+    version = get_current_version()
+    print(f"==================================================")
+    print(f"🚀 Deploying Rivo v{version} to Production ({HOST})")
+    print(f"==================================================")
+
+    # Pre-create remote directories
+    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server {REMOTE_DIR}/dist /home/ubuntu/dist")
+
+    if args.dist_only:
+        build_and_sync_frontend(skip_build=args.skip_build)
+    elif args.server_only:
+        sync_server()
+        restart_and_verify()
+    else:
+        sync_server()
+        build_and_sync_frontend(skip_build=args.skip_build)
+        sync_assets_and_metadata()
+        restart_and_verify()
+
+    print(f"\n🎉 Deployment completed successfully!")
 
 if __name__ == '__main__':
     main()
