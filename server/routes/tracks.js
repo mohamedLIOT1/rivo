@@ -997,10 +997,10 @@ const handleTrackStream = async (req, res) => {
     const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist, { duration, album: albumName });
     if (streamUrl) {
       const resolvedPath = streamUrl.url || String(streamUrl);
-      const isLocalUpload = resolvedPath.startsWith('/uploads/');
-      const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
-
       const vidCandidate = streamUrl.videoId || (rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+      const isLocalUpload = resolvedPath.startsWith('/uploads/');
+      const vidParam = vidCandidate ? `&videoId=${encodeURIComponent(vidCandidate)}` : '';
+      const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}`;
       const targetCover = req.query.cover || (vidCandidate ? `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg` : track?.cover || '');
       const finalDur = (streamUrl.duration && streamUrl.duration > 0) ? streamUrl.duration : (duration || track?.duration || 210);
       if (track?._id && finalDur > 0 && Math.abs((track.duration || 0) - finalDur) > 3) {
@@ -1176,6 +1176,23 @@ router.get('/stream-proxy', async (req, res) => {
     return res.sendFile(resolvedPath);
   }
 
+  // Fast-path: Check if local cached audio exists for this videoId
+  let videoId = req.query.videoId || null;
+  if (!videoId && targetUrl) {
+    const m = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/|[?&]id=o-)([a-zA-Z0-9_-]{11})/i);
+    if (m) videoId = m[1];
+  }
+  if (videoId) {
+    const cachedM4a = path.join(uploadsDir, 'audio-cache', `${videoId}.m4a`);
+    if (fs.existsSync(cachedM4a) && isAudioFileValid(cachedM4a)) {
+      return res.sendFile(cachedM4a);
+    }
+    const cachedMp3 = path.join(uploadsDir, 'audio-cache', `${videoId}.mp3`);
+    if (fs.existsSync(cachedMp3) && isAudioFileValid(cachedMp3)) {
+      return res.sendFile(cachedMp3);
+    }
+  }
+
   // Remote URL: strictly prevent SSRF
   const { valid, error } = await validateSafeUrl(targetUrl);
   if (!valid) {
@@ -1238,8 +1255,15 @@ router.get('/stream-proxy', async (req, res) => {
 
     res.status(response.status);
     const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization'];
+    const isGoogleVideo = targetUrl.includes('googlevideo.com');
     for (const [key, value] of Object.entries(response.headers)) {
-      if (!HOP_BY_HOP.includes(key.toLowerCase())) {
+      const lowerKey = key.toLowerCase();
+      if (!HOP_BY_HOP.includes(lowerKey)) {
+        // Prevent iOS AVPlayer from estimating double duration on fragmented MP4:
+        // On 200 OK full stream without Range, do NOT send Content-Length for GoogleVideo streams
+        if (lowerKey === 'content-length' && isGoogleVideo && response.status === 200 && !req.headers.range) {
+          continue;
+        }
         res.setHeader(key, value);
       }
     }
@@ -1250,6 +1274,21 @@ router.get('/stream-proxy', async (req, res) => {
     response.data.pipe(res);
   } catch (err) {
     cleanupStream();
+    // Auto-recovery: If stream proxy failed (e.g. 403 Forbidden / expired token), attempt fresh resolution
+    if (!res.headersSent && videoId) {
+      try {
+        const freshDirect = await resolveOfficialYouTubeAudioStream(videoId);
+        if (freshDirect) {
+          const freshResolved = freshDirect.url || String(freshDirect);
+          if (freshResolved.startsWith('/uploads/')) {
+            const localFile = safeResolveUpload(freshResolved, uploadsDir);
+            if (localFile && fs.existsSync(localFile)) {
+              return res.sendFile(localFile);
+            }
+          }
+        }
+      } catch (recErr) {}
+    }
     if (!res.headersSent) res.status(500).send('Proxy streaming failed');
   }
 });
@@ -2079,7 +2118,9 @@ const resolveStreamHandler = async (req, res) => {
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
-            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            const vidCandidate = directAudio.videoId || (dbTrack.audioUrl && dbTrack.audioUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+            const vidParam = vidCandidate ? `&videoId=${encodeURIComponent(vidCandidate)}` : '';
+            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}`;
             const finalDur = (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210);
             if (dbTrack._id && finalDur > 0 && Math.abs((dbTrack.duration || 0) - finalDur) > 3) {
               Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
@@ -2140,7 +2181,9 @@ const resolveStreamHandler = async (req, res) => {
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
-            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            const vidCandidate = directAudio.videoId || (dbTrack.audioUrl && dbTrack.audioUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+            const vidParam = vidCandidate ? `&videoId=${encodeURIComponent(vidCandidate)}` : '';
+            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}`;
             const finalDur = (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210);
             if (dbTrack._id && finalDur > 0 && Math.abs((dbTrack.duration || 0) - finalDur) > 3) {
               Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
@@ -2172,7 +2215,9 @@ const resolveStreamHandler = async (req, res) => {
           if (directAudio) {
             const resolvedPath = directAudio.url || String(directAudio);
             const isLocalUpload = resolvedPath.startsWith('/uploads/');
-            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
+            const vidCandidate = directAudio.videoId || (dbTrack.audioUrl && dbTrack.audioUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+            const vidParam = vidCandidate ? `&videoId=${encodeURIComponent(vidCandidate)}` : '';
+            const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}`;
             const coverUrl = req.query.cover || `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg`;
             const savedTrack = await autoPersistExternalTrack({
               title,
@@ -2201,8 +2246,9 @@ const resolveStreamHandler = async (req, res) => {
       if (directAudio) {
         const resolvedPath = directAudio.url || String(directAudio);
         const isLocalUpload = resolvedPath.startsWith('/uploads/');
-        const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}`;
         const vidId = directAudio.videoId || (url && url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
+        const vidParam = vidId ? `&videoId=${encodeURIComponent(vidId)}` : '';
+        const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}`;
         const coverUrl = req.query.cover || (vidId ? `https://i.ytimg.com/vi/${vidId}/hqdefault.jpg` : '');
         const savedTrack = await autoPersistExternalTrack({
           title,

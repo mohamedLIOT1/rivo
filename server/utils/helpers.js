@@ -1396,6 +1396,15 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir) {
 
   const actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
   if (fs.existsSync(actualDownloaded) && isAudioFileValid(actualDownloaded)) {
+    const faststartTarget = tempTarget.replace('.%(ext)s', '_fs.m4a');
+    try {
+      execSync(`ffmpeg -v error -i "${actualDownloaded}" -c copy -movflags +faststart "${faststartTarget}" -y`, { timeout: 15000, env: execEnv });
+      if (fs.existsSync(faststartTarget) && isAudioFileValid(faststartTarget)) {
+        try { fs.unlinkSync(actualDownloaded); } catch {}
+        fs.renameSync(faststartTarget, targetFile);
+        return targetFile;
+      }
+    } catch {}
     try {
       fs.renameSync(actualDownloaded, targetFile);
     } catch {
@@ -2321,6 +2330,7 @@ module.exports = {
   autoAddTrackToUserLinksPlaylist,
   getCookiesPath,
   isAudioFileValid,
+  getLocalAudioFileDuration,
   downloadYouTubeAudioToCache,
   getYtDlpBin,
   ensureYtDlpBinary,
