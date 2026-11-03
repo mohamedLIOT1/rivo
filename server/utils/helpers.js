@@ -1287,29 +1287,29 @@ const EMBEDDED_YOUTUBE_COOKIES = `# Netscape HTTP Cookie File
 # https://curl.haxx.se/rfc/cookie_spec.html
 # This is a generated file! Do not edit.
 
-.youtube.com\tTRUE\t/\tFALSE\t1827141845\tHSID\tAQbU9Tf375bT4QpZs
-.youtube.com\tTRUE\t/\tTRUE\t1827141845\tSSID\tAclKQ8_TaNTLqZD3K
-.youtube.com\tTRUE\t/\tFALSE\t1827141845\tAPISID\t3zneGuIfvKtozDjN/AXOz5H_n5FGLInD6k
-.youtube.com\tTRUE\t/\tTRUE\t1827141845\tSAPISID\tzaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
-.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-1PAPISID\tzaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
-.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-3PAPISID\tzaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
-.youtube.com\tTRUE\t/\tTRUE\t1806394086\t__Secure-BUCKET\tCNwH
-.youtube.com\tTRUE\t/\tTRUE\t1827152440\tPREF\tf6=40000000&f7=100&tz=Africa.Cairo
-.youtube.com\tTRUE\t/\tFALSE\t1827141845\tSID\tg.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkFk3GtoMcaISajUtaI2z2sQACgYKASASARISFQHGX2Mihh8rHmNr7-9nMkhuI0W56xoVAUF8yKoOfUkWGe4ikoU9i0vnsdws0076
-.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-1PSID\tg.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkZcR7ZicwZ5nK8Reny4qfsAACgYKAS4SARISFQHGX2MiTI5rRe-BIYBIoHKenMhSihoVAUF8yKpetsu8nrg9c9LolLnHcSGf0076
-.youtube.com\tTRUE\t/\tTRUE\t1827141845\t__Secure-3PSID\tg.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkRoeRVdjXRxsiP4X_OSkwZgACgYKAX4SARISFQHGX2MiMBeLd5mC9jclOeOiPyFVCRoVAUF8yKoQScwucgwCtlMFvX_MiBsT0076
-.youtube.com\tTRUE\t/\tTRUE\t1792593020\tCONSISTENCY\tAJDB8J9z1qgYbsjF6VYTS5cBrXdf5dQM1oJ8DSCx-AJZB-Y9iTllaCB3M5IN_vpaYUwCTr4BPCPuOzg839fWfQhS1CvbFwq9T1wjPtxo8vmO9d_wifxw_lWB3pzMV3X6mqRqDV5h85kUhTSVTJf4kqMP
-.youtube.com\tTRUE\t/\tTRUE\t1824128424\t__Secure-1PSIDTS\tsidts-CjUBkldj_7mVUKAMxfd-g-VgeaKxTY1onG8l_MXkiAtE3OKdjgjam0AzcwqxddA8f_eUH0SBNBAA
-.youtube.com\tTRUE\t/\tTRUE\t1824128424\t__Secure-3PSIDTS\tsidts-CjUBkldj_7mVUKAMxfd-g-VgeaKxTY1onG8l_MXkiAtE3OKdjgjam0AzcwqxddA8f_eUH0SBNBAA
-.youtube.com\tTRUE\t/\tTRUE\t1827152434\tLOGIN_INFO\tAFmmF2swRAIgLxwOUj2Afdq2fj95ZDcqoBYWUm2ghtMiZTwvM3UbMA8CIA79yuKwJqRTTNZeoPvrKwDDgTziIbNeL9tpBwzzId79:QUQ3MjNmdzFqOWNUZUtSVGxsemxqTXByQmJFbnl6YXZfLXBRZ2JxeEF6ZkpEQ2RYZ3l1NDRScHBreGRHYTVZd2wzQlFjQ0NZLWtpdjhOWldHdml3cnJTNHg2V0VLODV4OWJadmFXWWZhSUhRS0JGMG9lbU1BMmNEMUNQTzI1bGduUmRtNElZMmQyYXhRVXhyZjRQeDhWaVlJV3B1eHlzRmlR
-.youtube.com\tTRUE\t/\tFALSE\t1824128444\tSIDCC\tAPD_SKGd0obHwAh4uz7zEc3kP4oTDfaG4PJwJouvgSWEFI1_pohfOqyelVmYl_QN29q5jdhGbA
-.youtube.com\tTRUE\t/\tTRUE\t1824128444\t__Secure-1PSIDCC\tAPD_SKHnFyJ44WrYIfaghirV_s2P10Xn_mjYmNloVgIiTBxrzvx_QNBqFJC1jVHxKP23FnN3hw
-.youtube.com\tTRUE\t/\tTRUE\t1824128444\t__Secure-3PSIDCC\tAPD_SKEt0lAGgtKLHDCjfi8-NRge2SZyUnKqHFss0yG6viDAwTyGg9_O62dCJkYMohy7Gyy7cA
-.youtube.com\tTRUE\t/\tTRUE\t1808144444\tVISITOR_INFO1_LIVE\tJf8osUMeS10
-.youtube.com\tTRUE\t/\tTRUE\t1808144444\tVISITOR_PRIVACY_METADATA\tCgJFRxIEGgAgSw%3D%3D
-.youtube.com\tTRUE\t/\tTRUE\t1808074648\t__Secure-ROLLOUT_TOKEN\tCPXGhauU6_yKbRC204iuxJ6WAxixutido8mXAw%3D%3D
-.youtube.com\tTRUE\t/\tTRUE\t1808074651\t__Secure-YNID\tCvUBCAUSpwEB8QZuZjUnroPvujPC3Wq9VPpVyFXjJkEVLyX0G2ZeWt-yWDcVxGpQc56oqwstlhl6_p8Z8v6Yjvz7CpAeQhqKrK8hf3UkgGOjx8schwdfmFyxjatR63v14OPmhdVGOOokRuWYlOaqCwHs1ddI8Sb7ENQOMtWJVysT5pOCja3CUj73YTh_bs4wGChhb6g3AT0KwSblKXMo3jjouAN1thjfeKjbm9RMAigFMkUB3qmdT745vqUOfinqih3J96-yqVENg_JunC0qPZ_QGKe4M3r_1CLQNKfJqYVYboBLdxZrdzTVDWOc728PPFqPLcehzwY
-.youtube.com\tTRUE\t/\tTRUE\t0\tYSC\terQZ8FhXOLo
+.youtube.com	TRUE	/	FALSE	1827141845	HSID	AQbU9Tf375bT4QpZs
+.youtube.com	TRUE	/	TRUE	1827141845	SSID	AclKQ8_TaNTLqZD3K
+.youtube.com	TRUE	/	FALSE	1827141845	APISID	3zneGuIfvKtozDjN/AXOz5H_n5FGLInD6k
+.youtube.com	TRUE	/	TRUE	1827141845	SAPISID	zaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
+.youtube.com	TRUE	/	TRUE	1827141845	__Secure-1PAPISID	zaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
+.youtube.com	TRUE	/	TRUE	1827141845	__Secure-3PAPISID	zaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
+.youtube.com	TRUE	/	TRUE	1806394086	__Secure-BUCKET	CNwH
+.youtube.com	TRUE	/	TRUE	1828279814	PREF	f6=40000000&f7=100&tz=Africa.Cairo
+.youtube.com	TRUE	/	FALSE	1827141845	SID	g.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkFk3GtoMcaISajUtaI2z2sQACgYKASASARISFQHGX2Mihh8rHmNr7-9nMkhuI0W56xoVAUF8yKoOfUkWGe4ikoU9i0vnsdws0076
+.youtube.com	TRUE	/	TRUE	1827141845	__Secure-1PSID	g.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkZcR7ZicwZ5nK8Reny4qfsAACgYKAS4SARISFQHGX2MiTI5rRe-BIYBIoHKenMhSihoVAUF8yKpetsu8nrg9c9LolLnHcSGf0076
+.youtube.com	TRUE	/	TRUE	1827141845	__Secure-3PSID	g.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkRoeRVdjXRxsiP4X_OSkwZgACgYKAX4SARISFQHGX2MiMBeLd5mC9jclOeOiPyFVCRoVAUF8yKoQScwucgwCtlMFvX_MiBsT0076
+.youtube.com	TRUE	/	TRUE	1827152434	LOGIN_INFO	AFmmF2swRAIgLxwOUj2Afdq2fj95ZDcqoBYWUm2ghtMiZTwvM3UbMA8CIA79yuKwJqRTTNZeoPvrKwDDgTziIbNeL9tpBwzzId79:QUQ3MjNmdzFqOWNUZUtSVGxsemxqTXByQmJFbnl6YXZfLXBRZ2JxeEF6ZkpEQ2RYZ3l1NDRScHBreGRHYTVZd2wzQlFjQ0NZLWtpdjhOWldHdml3cnJTNHg2V0VLODV4OWJadmFXWWZhSUhRS0JGMG9lbU1BMmNEMUNQTzI1bGduUmRtNElZMmQyYXhRVXhyZjRQeDhWaVlJV3B1eHlzRmlR
+.youtube.com	TRUE	/	FALSE	1793719824	ST-3opvp5	session_logininfo=AFmmF2swRAIgLxwOUj2Afdq2fj95ZDcqoBYWUm2ghtMiZTwvM3UbMA8CIA79yuKwJqRTTNZeoPvrKwDDgTziIbNeL9tpBwzzId79%3AQUQ3MjNmdzFqOWNUZUtSVGxsemxqTXByQmJFbnl6YXZfLXBRZ2JxeEF6ZkpEQ2RYZ3l1NDRScHBreGRHYTVZd2wzQlFjQ0NZLWtpdjhOWldHdml3cnJTNHg2V0VLODV4OWJadmFXWWZhSUhRS0JGMG9lbU1BMmNEMUNQTzI1bGduUmRtNElZMmQyYXhRVXhyZjRQeDhWaVlJV3B1eHlzRmlR
+.youtube.com	TRUE	/	TRUE	1825255819	__Secure-1PSIDTS	sidts-CjUBnJZzavLeNlASkEmGSRgadHNZopszfBf9pNbG-5Ef2fU92JH-mWey8fTVym7GPxzeheJVXxAA
+.youtube.com	TRUE	/	TRUE	1825255819	__Secure-3PSIDTS	sidts-CjUBnJZzavLeNlASkEmGSRgadHNZopszfBf9pNbG-5Ef2fU92JH-mWey8fTVym7GPxzeheJVXxAA
+.youtube.com	TRUE	/	FALSE	1825255819	SIDCC	APD_SKGI_O6jlZFFlAan6LPxE5VNJGq6aLuyVKL1PmyD-Gy-tfbdsVwfuJQ0qJlJ-WomOA7gTQ
+.youtube.com	TRUE	/	TRUE	1825255819	__Secure-1PSIDCC	APD_SKHXsrasaDrzcKr8M2PPp6yWlMTyVzFkyLBEB927A9NlEVvxZRqkZ5FDAjG-7JlduZbNwA
+.youtube.com	TRUE	/	TRUE	1825255819	__Secure-3PSIDCC	APD_SKGlXnv1RZGUxZPs__-1zz9qtKzPtVxY6KY9f-egS_zQwkyW8p5CrUqKKvLDicultHDnhg
+.youtube.com	TRUE	/	TRUE	1809271819	VISITOR_INFO1_LIVE	Jf8osUMeS10
+.youtube.com	TRUE	/	TRUE	1809271819	VISITOR_PRIVACY_METADATA	CgJFRxIEGgAgSw%3D%3D
+.youtube.com	TRUE	/	TRUE	1809271806	__Secure-YNID	CuwBCAUSngEBDB6PDFBLQsGxauIBU3Om6GKjlq9oYTnVlIoFwQ35p-vLrd8gA03apibVuPr87Bj3qIEOyfm6Lne_Qz6ptmVVM4cNDP1Do9fbEaN7MzMtjrrMMZv9BXiz-bLGb_SbBcspck-LryEjlvQcDN46h2OFTveNetT2juCAaTknJpXMsbKbhq9I-f2hz06hz3sIsVSn6Wc4hDF0qSuFQAwMPigFMkUBHFj1as5Emyy0il60s8VtbAYV2xC7qDVG7pPDHiQB1PKoqMhwAvd9FZdFe1r7bdkZ-zKAMI7qdx-24zXOrRmnzKD4DQU
+.youtube.com	TRUE	/	TRUE	0	YSC	9ilY0f8en9k
+.youtube.com	TRUE	/	TRUE	1809271806	__Secure-ROLLOUT_TOKEN	CPXGhauU6_yKbRC204iuxJ6WAxiS4bn-juyXAw%3D%3D
 `;
 
 function getCookiesPath() {
@@ -1559,7 +1559,7 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
     '--no-playlist',
     '--no-warnings',
     '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
-    '-f', '140/ba[ext=m4a]/ba/bestaudio',
+    '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b',
     '-x',
     '--audio-format', 'm4a',
     '-o', tempTarget
@@ -1849,7 +1849,6 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--js-runtimes', 'node',
     '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
     '--print', '%(duration)s'
   ];
@@ -1858,12 +1857,12 @@ async function extractDirectStreamUrl(videoId) {
   } else {
     ytdlpArgs.push('--extractor-args', 'youtube:player_client=android,ios,mweb');
   }
-  ytdlpArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio', ytUrl);
+  ytdlpArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b', ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 6000, env: execEnv }, (err, stdout, stderr) => {
+    execFile(bin, ytdlpArgs, { timeout: 25000, env: execEnv }, (err, stdout, stderr) => {
       const allErr = `${err?.message || ''} ${stderr || ''}`;
       const isBotBlock = /403|forbidden|bot|sign in to confirm/i.test(allErr);
 
@@ -1893,19 +1892,18 @@ async function extractDirectStreamUrl(videoId) {
         return resolve(null);
       }
 
-      // Instant fallback without extractor args (reduced timeout 6s)
+      // Instant fallback without extractor args (timeout 25s)
       const fbArgs = [
         '--ignore-config',
         '--no-check-certificates',
         '--no-playlist',
         '--no-warnings',
-        '--js-runtimes', 'node',
         '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
         '--print', '%(duration)s'
       ];
       if (cp) fbArgs.push('--cookies', cp);
-      fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio', ytUrl);
-      execFile(bin, fbArgs, { timeout: 6000, env: execEnv }, (err2, stdout2) => {
+      fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b', ytUrl);
+      execFile(bin, fbArgs, { timeout: 25000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);
         const lines2 = stdout2.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const directUrl2 = lines2.find(l => l.startsWith('http')) || null;
