@@ -1313,31 +1313,32 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
       };
 
+      const handleCanPlay = () => {
+        if (deck !== audioRef.current) return;
+        setIsLoadingTrack(false);
+        isLoadingTrackRef.current = false;
+      };
+
       const handleStalledOrWaiting = () => {
         if (deck !== audioRef.current) return;
         if (!isPlayingRef.current || isChangingTrackRef.current) return;
-        const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
-        const cachedBlob = activeFullTrackCache.get(curId);
-        if (cachedBlob && deck && deck.src !== cachedBlob) {
-          const cur = deck.currentTime || currentTimeRef.current || 0;
-          deck.src = cachedBlob;
-          deck.currentTime = cur;
-          resumeAudioContext();
-          deck.play().catch(() => {});
-          return;
+
+        // When active playback is interrupted mid-track, show buffering indicator
+        if (deck.currentTime > 0) {
+          setIsLoadingTrack(true);
+          isLoadingTrackRef.current = true;
         }
+
         if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
+        // Do NOT abort or wipe deck.src on a short 1.5s timer!
+        // Allow progressive buffering. Only if stalled for over 8 seconds without progress, attempt gentle resume
         stallRecoveryTimerRef.current = setTimeout(() => {
           if (!isPlayingRef.current || isChangingTrackRef.current) return;
-          const cur = deck.currentTime || currentTimeRef.current || 0;
-          if (deck && deck.src) {
-            const s = deck.src;
-            deck.src = s;
-            deck.currentTime = cur;
+          if (deck && deck.paused && deck.readyState >= 2) {
             resumeAudioContext();
             deck.play().catch(() => {});
           }
-        }, 1500);
+        }, 8000);
       };
 
       const handleError = () => {
@@ -1413,12 +1414,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       deck.addEventListener('durationchange', handleDurationChange);
       deck.addEventListener('ended', handleEnded);
       deck.addEventListener('playing', handlePlaying);
-      deck.addEventListener('canplay', () => {
-        if (deck === audioRef.current) {
-          setIsLoadingTrack(false);
-          isLoadingTrackRef.current = false;
-        }
-      });
+      deck.addEventListener('canplay', handleCanPlay);
+      deck.addEventListener('canplaythrough', handleCanPlay);
       deck.addEventListener('stalled', handleStalledOrWaiting);
       deck.addEventListener('waiting', handleStalledOrWaiting);
       deck.addEventListener('error', handleError);
@@ -1429,6 +1426,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         deck.removeEventListener('durationchange', handleDurationChange);
         deck.removeEventListener('ended', handleEnded);
         deck.removeEventListener('playing', handlePlaying);
+        deck.removeEventListener('canplay', handleCanPlay);
+        deck.removeEventListener('canplaythrough', handleCanPlay);
         deck.removeEventListener('stalled', handleStalledOrWaiting);
         deck.removeEventListener('waiting', handleStalledOrWaiting);
         deck.removeEventListener('error', handleError);
@@ -1578,6 +1577,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (!streamResult?.url) {
         console.warn('[AudioContext] Could not resolve audio stream for track:', currentTrack.title);
         isChangingTrackRef.current = false;
+        setIsLoadingTrack(false);
+        isLoadingTrackRef.current = false;
         if (shouldPlayRef.current || isPlayingRef.current) {
           if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
           errorAdvanceTimerRef.current = setTimeout(() => {
@@ -1655,20 +1656,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
         } else {
           audio.currentTime = 0;
         }
-
-        // Full-track pre-buffering: download entire song into local memory Blob in background
-        if (playableUrl.startsWith('http') && typeof fetch !== 'undefined') {
-          const bufferKey = newId;
-          fetch(playableUrl)
-            .then(res => res.ok ? res.blob() : null)
-            .then(blob => {
-              if (blob && String(currentTrackRef.current?.id || currentTrackRef.current?._id) === bufferKey) {
-                const blobUrl = URL.createObjectURL(blob);
-                setTrackBlobCache(bufferKey, blobUrl);
-              }
-            })
-            .catch(() => {});
-        }
       }
       audio.muted = false;
       audio.volume = volumeRef.current;
@@ -1681,7 +1668,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (playPromise !== undefined) {
           playPromise.then(() => {
             setIsAutoplayBlocked(false);
+            setIsLoadingTrack(false);
+            isLoadingTrackRef.current = false;
           }).catch(e => {
+            setIsLoadingTrack(false);
+            isLoadingTrackRef.current = false;
             if (e.name === 'NotAllowedError') {
               setIsAutoplayBlocked(true);
             }
@@ -1692,6 +1683,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 resumeAudioContext();
                 audio.play().then(() => {
                   setIsAutoplayBlocked(false);
+                  setIsLoadingTrack(false);
+                  isLoadingTrackRef.current = false;
                 }).catch(() => {});
                 document.removeEventListener('touchstart', retryPlay);
                 document.removeEventListener('click', retryPlay);
@@ -1703,6 +1696,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
         setIsPlaying(true);
       } else {
+        setIsLoadingTrack(false);
+        isLoadingTrackRef.current = false;
         audio.pause();
       }
     })();
@@ -1805,6 +1800,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       window.ReactNativeWebView.postMessage(JSON.stringify({
         type: 'PLAYBACK_STATE',
         isPlaying: Boolean(isPlaying),
+        isLoading: Boolean(isLoadingTrack),
         repeatMode: repeatMode,
         isRepeat: repeatMode !== 'off',
         isShuffle: Boolean(isShuffle),
@@ -1838,7 +1834,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }));
       }
     } catch (e) {}
-  }, [currentTrack, isPlaying, repeatMode, isShuffle, likedTrackIds, duration]);
+  }, [currentTrack, isPlaying, isLoadingTrack, repeatMode, isShuffle, likedTrackIds, duration]);
 
   // Periodic time sync to keep Android Notification Seekbar accurate
   useEffect(() => {
@@ -1858,6 +1854,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'PLAYBACK_STATE',
               isPlaying: true,
+              isLoading: false,
               repeatMode: repeatMode,
               isRepeat: repeatMode !== 'off',
               isShuffle: Boolean(isShuffle),
