@@ -1304,6 +1304,10 @@ router.get('/stream-proxy', async (req, res) => {
         if (lowerKey === 'content-length' && isGoogleVideo && response.status === 200 && !req.headers.range) {
           continue;
         }
+        if (lowerKey === 'content-type' && (String(value).includes('video/mp4') || isGoogleVideo)) {
+          res.setHeader('Content-Type', 'audio/mp4');
+          continue;
+        }
         res.setHeader(key, value);
       }
     }
@@ -1364,6 +1368,10 @@ router.get('/stream-proxy', async (req, res) => {
                     const lowerKey = key.toLowerCase();
                     if (!HOP_BY_HOP.includes(lowerKey)) {
                       if (lowerKey === 'content-length' && isGoogleVideoFresh && freshResponse.status === 200 && !req.headers.range) {
+                        continue;
+                      }
+                      if (lowerKey === 'content-type' && (String(value).includes('video/mp4') || isGoogleVideoFresh)) {
+                        res.setHeader('Content-Type', 'audio/mp4');
                         continue;
                       }
                       res.setHeader(key, value);
