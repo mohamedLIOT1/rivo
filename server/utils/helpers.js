@@ -1503,7 +1503,7 @@ async function extractInnertubeDirectStream(videoId) {
   };
 
   try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1200));
     return await Promise.race([
       Promise.any(clientProfiles.map(p => fetchProfile(p))),
       timeoutPromise
@@ -1566,9 +1566,9 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
   ];
   if (cp) {
     ytdlpArgs.splice(1, 0, '--cookies', cp);
-    ytdlpArgs.splice(3, 0, '--extractor-args', 'youtube:player_client=mweb,android,ios');
+    ytdlpArgs.splice(3, 0, '--extractor-args', 'youtube:player_client=web');
   } else {
-    ytdlpArgs.splice(1, 0, '--extractor-args', 'youtube:player_client=mweb,android,ios');
+    ytdlpArgs.splice(1, 0, '--extractor-args', 'youtube:player_client=web,mweb');
   }
   ytdlpArgs.push(`https://www.youtube.com/watch?v=${videoId}`);
 
@@ -1668,6 +1668,7 @@ let warmWorkerFailedPermanently = false;
 function initWarmYtWorker() {
   if (process.platform === 'win32' || ytWorkerProc || warmWorkerFailedPermanently) return;
   try {
+    const cp = getCookiesPath();
     const pyScript = `
 import sys, os, json
 try:
@@ -1687,10 +1688,13 @@ opts = {
     'ignoreconfig': True,
     'extractor_args': {
         'youtubepot-bgutilhttp': {'base_url': ['http://127.0.0.1:4416']},
-        'youtube': {'player_client': ['android', 'ios', 'mweb']}
+        'youtube': {'player_client': ['web']}
     },
-    'format': '140/ba[ext=m4a]/ba/bestaudio'
+    'format': '140/ba[ext=m4a]/ba/bestaudio/18/b'
 }
+cookie_path = ${JSON.stringify(cp || '')}
+if cookie_path and os.path.exists(cookie_path):
+    opts['cookiefile'] = cookie_path
 
 ydl = yt_dlp.YoutubeDL(opts)
 print("READY", flush=True)
@@ -1768,7 +1772,7 @@ function extractViaWarmWorker(videoId) {
     const timer = setTimeout(() => {
       ytWorkerPending.delete(id);
       resolve(null);
-    }, 1500);
+    }, 8000);
     ytWorkerPending.set(id, { resolve, timer });
     try {
       ytWorkerProc.stdin.write(JSON.stringify({ id, videoId }) + '\n');
@@ -1854,8 +1858,9 @@ async function extractDirectStreamUrl(videoId) {
   ];
   if (cp) {
     ytdlpArgs.push('--cookies', cp);
+    ytdlpArgs.push('--extractor-args', 'youtube:player_client=web');
   } else {
-    ytdlpArgs.push('--extractor-args', 'youtube:player_client=android,ios,mweb');
+    ytdlpArgs.push('--extractor-args', 'youtube:player_client=web,mweb');
   }
   ytdlpArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b', ytUrl);
 
@@ -1901,7 +1906,12 @@ async function extractDirectStreamUrl(videoId) {
         '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
         '--print', '%(duration)s'
       ];
-      if (cp) fbArgs.push('--cookies', cp);
+      if (cp) {
+        fbArgs.push('--cookies', cp);
+        fbArgs.push('--extractor-args', 'youtube:player_client=web');
+      } else {
+        fbArgs.push('--extractor-args', 'youtube:player_client=web,mweb');
+      }
       fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b', ytUrl);
       execFile(bin, fbArgs, { timeout: 25000, env: execEnv }, (err2, stdout2) => {
         if (!stdout2) return resolve(null);

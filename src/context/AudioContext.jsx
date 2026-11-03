@@ -362,12 +362,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
 
-  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with 12s timeout)
+  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with 45s timeout for uncached stream extractions)
   let backendStreamResult = null;
   const backendController = new AbortController();
   const backendTimeoutId = setTimeout(() => {
     try { backendController.abort(); } catch {}
-  }, 12000);
+  }, 45000);
 
   const onParentAbort = () => {
     clearTimeout(backendTimeoutId);
@@ -429,12 +429,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
     }
   }
 
-  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with 10s timeout)
+  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with 40s timeout)
   if (!signal?.aborted) {
     const resolveController = new AbortController();
     const resolveTimeoutId = setTimeout(() => {
       try { resolveController.abort(); } catch {}
-    }, 10000);
+    }, 40000);
     const onResolveParentAbort = () => {
       clearTimeout(resolveTimeoutId);
       try { resolveController.abort(); } catch {}
@@ -620,6 +620,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const lastPauseTimeRef  = useRef(0);
   const stallRecoveryTimerRef = useRef(null);
   const errorAdvanceTimerRef = useRef(null);
+  const isContinuousPlaybackRef = useRef(false);
+  const consecutiveErrorsRef = useRef(0);
   const isSmartMoodQueueRef = useRef(false);
   const playedSmartSongIdsRef = useRef(new Set());
   const currentUserRef = useRef(currentUser);
@@ -1041,6 +1043,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
           isLoadingTrackRef.current = false;
         }
         if (!deck || isNaN(deck.currentTime)) return;
+        if (deck.currentTime > 0) {
+          consecutiveErrorsRef.current = 0;
+        }
 
         if (stallRecoveryTimerRef.current) {
           clearTimeout(stallRecoveryTimerRef.current);
@@ -1277,19 +1282,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
           deck.currentTime = 0;
           deck.play().catch(() => {});
         } else {
+          isContinuousPlaybackRef.current = true;
           // In Jam Session: ONLY the Host auto-advances when track finishes!
           if (jamSessionRef.current) {
             if (isJamHost() && playNextTrackRef.current) {
-              playNextTrackRef.current();
+              playNextTrackRef.current(true);
             }
           } else if (playNextTrackRef.current) {
-            playNextTrackRef.current();
+            playNextTrackRef.current(true);
           }
         }
       };
 
       const handlePlaying = () => {
         if (deck !== audioRef.current) return;
+        consecutiveErrorsRef.current = 0;
         setIsLoadingTrack(false);
         isLoadingTrackRef.current = false;
         if (stallRecoveryTimerRef.current) {
@@ -1319,22 +1326,28 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isLoadingTrackRef.current = false;
       };
 
+      const handleLoadedData = () => {
+        if (deck !== audioRef.current) return;
+        if ((isPlayingRef.current || shouldPlayRef.current) && deck.paused) {
+          resumeAudioContext();
+          deck.play().catch(() => {});
+        }
+      };
+
       const handleStalledOrWaiting = () => {
         if (deck !== audioRef.current) return;
         if (!isPlayingRef.current || isChangingTrackRef.current) return;
 
-        // When active playback is interrupted mid-track, show buffering indicator
-        if (deck.currentTime > 0) {
-          setIsLoadingTrack(true);
-          isLoadingTrackRef.current = true;
-        }
+        // Show buffering indicator whenever stalled or waiting for stream chunks
+        setIsLoadingTrack(true);
+        isLoadingTrackRef.current = true;
 
         if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
         // Do NOT abort or wipe deck.src on a short 1.5s timer!
         // Allow progressive buffering. Only if stalled for over 8 seconds without progress, attempt gentle resume
         stallRecoveryTimerRef.current = setTimeout(() => {
           if (!isPlayingRef.current || isChangingTrackRef.current) return;
-          if (deck && deck.paused && deck.readyState >= 2) {
+          if (deck) {
             resumeAudioContext();
             deck.play().catch(() => {});
           }
@@ -1380,37 +1393,68 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 resumeAudioContext();
                 deck.play().catch(() => {});
               } else {
+                const isContinuous = isContinuousPlaybackRef.current;
+                if (isContinuous && consecutiveErrorsRef.current < 2) {
+                  consecutiveErrorsRef.current += 1;
+                  if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+                  errorAdvanceTimerRef.current = setTimeout(() => {
+                    if (isChangingTrackRef.current) return;
+                    if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
+                      playNextTrackRef.current(true);
+                    }
+                  }, 1500);
+                } else {
+                  isContinuousPlaybackRef.current = false;
+                  consecutiveErrorsRef.current = 0;
+                  setIsPlaying(false);
+                  isPlayingRef.current = false;
+                  shouldPlayRef.current = false;
+                }
+              }
+            })
+            .catch(() => {
+              const isContinuous = isContinuousPlaybackRef.current;
+              if (isContinuous && consecutiveErrorsRef.current < 2) {
+                consecutiveErrorsRef.current += 1;
                 if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
                 errorAdvanceTimerRef.current = setTimeout(() => {
                   if (isChangingTrackRef.current) return;
                   if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
-                    playNextTrackRef.current();
+                    playNextTrackRef.current(true);
                   }
                 }, 1500);
+              } else {
+                isContinuousPlaybackRef.current = false;
+                consecutiveErrorsRef.current = 0;
+                setIsPlaying(false);
+                isPlayingRef.current = false;
+                shouldPlayRef.current = false;
               }
-            })
-            .catch(() => {
-              if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-              errorAdvanceTimerRef.current = setTimeout(() => {
-                if (isChangingTrackRef.current) return;
-                if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
-                  playNextTrackRef.current();
-                }
-              }, 1500);
             });
         } else if (cur && (isPlayingRef.current || shouldPlayRef.current)) {
-          if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-          errorAdvanceTimerRef.current = setTimeout(() => {
-            if (isChangingTrackRef.current) return;
-            if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
-              playNextTrackRef.current();
-            }
-          }, 1500);
+          const isContinuous = isContinuousPlaybackRef.current;
+          if (isContinuous && consecutiveErrorsRef.current < 2) {
+            consecutiveErrorsRef.current += 1;
+            if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+            errorAdvanceTimerRef.current = setTimeout(() => {
+              if (isChangingTrackRef.current) return;
+              if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
+                playNextTrackRef.current(true);
+              }
+            }, 1500);
+          } else {
+            isContinuousPlaybackRef.current = false;
+            consecutiveErrorsRef.current = 0;
+            setIsPlaying(false);
+            isPlayingRef.current = false;
+            shouldPlayRef.current = false;
+          }
         }
       };
 
       deck.addEventListener('timeupdate', handleTimeUpdate);
       deck.addEventListener('loadedmetadata', handleLoadedMetadata);
+      deck.addEventListener('loadeddata', handleLoadedData);
       deck.addEventListener('durationchange', handleDurationChange);
       deck.addEventListener('ended', handleEnded);
       deck.addEventListener('playing', handlePlaying);
@@ -1423,6 +1467,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       return () => {
         deck.removeEventListener('timeupdate', handleTimeUpdate);
         deck.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        deck.removeEventListener('loadeddata', handleLoadedData);
         deck.removeEventListener('durationchange', handleDurationChange);
         deck.removeEventListener('ended', handleEnded);
         deck.removeEventListener('playing', handlePlaying);
@@ -1579,16 +1624,29 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isChangingTrackRef.current = false;
         setIsLoadingTrack(false);
         isLoadingTrackRef.current = false;
-        if (shouldPlayRef.current || isPlayingRef.current) {
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+        shouldPlayRef.current = false;
+
+        const isContinuous = isContinuousPlaybackRef.current;
+        // ONLY auto-advance if this was part of continuous background playback when previous track ended naturally
+        if (isContinuous && consecutiveErrorsRef.current < 2) {
+          consecutiveErrorsRef.current += 1;
           if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
           errorAdvanceTimerRef.current = setTimeout(() => {
             if (playNextTrackRef.current && !isChangingTrackRef.current) {
-              playNextTrackRef.current();
+              playNextTrackRef.current(true);
             }
           }, 1500);
+        } else {
+          // Manual user play or consecutive limit reached: NEVER auto-advance!
+          isContinuousPlaybackRef.current = false;
+          consecutiveErrorsRef.current = 0;
+          if (errorAdvanceTimerRef.current) {
+            clearTimeout(errorAdvanceTimerRef.current);
+            errorAdvanceTimerRef.current = null;
+          }
         }
-        setIsPlaying(false);
-        isPlayingRef.current = false;
         const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
         if (token) {
           fetch(`${API_BASE_URL}/api/users/listening-activity`, {
@@ -1650,11 +1708,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
             if (lastLoadedStreamUrlRef.current !== playableUrl) {
         lastLoadedStreamUrlRef.current = playableUrl;
         audio.src = playableUrl;
+        audio.load();
         if (pendingInitialSeekRef.current !== null && isFinite(pendingInitialSeekRef.current) && pendingInitialSeekRef.current > 0) {
           try { audio.currentTime = pendingInitialSeekRef.current; } catch (e) {}
           pendingInitialSeekRef.current = null;
         } else {
-          audio.currentTime = 0;
+          try {
+            if (audio.currentTime !== 0) audio.currentTime = 0;
+          } catch (e) {}
         }
       }
       audio.muted = false;
@@ -1664,12 +1725,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
       if (isPlayingRef.current || shouldPlayRef.current) {
         shouldPlayRef.current = false;
         resumeAudioContext();
+        setIsLoadingTrack(true);
+        isLoadingTrackRef.current = true;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
             setIsAutoplayBlocked(false);
-            setIsLoadingTrack(false);
-            isLoadingTrackRef.current = false;
           }).catch(e => {
             setIsLoadingTrack(false);
             isLoadingTrackRef.current = false;
@@ -1683,8 +1744,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 resumeAudioContext();
                 audio.play().then(() => {
                   setIsAutoplayBlocked(false);
-                  setIsLoadingTrack(false);
-                  isLoadingTrackRef.current = false;
                 }).catch(() => {});
                 document.removeEventListener('touchstart', retryPlay);
                 document.removeEventListener('click', retryPlay);
@@ -1695,10 +1754,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
           });
         }
         setIsPlaying(true);
+        isPlayingRef.current = true;
       } else {
         setIsLoadingTrack(false);
         isLoadingTrackRef.current = false;
         audio.pause();
+        setIsPlaying(false);
+        isPlayingRef.current = false;
       }
     })();
 
@@ -2054,8 +2116,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
   }, [togglePlay]);
 
-  const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null, isSmartMood = false) => {
+  const playTrack = useCallback(async (track, newQueue = null, isRemote = false, queueIndex = null, isSmartMood = false, isContinuous = false) => {
     if (!track) return;
+    isContinuousPlaybackRef.current = Boolean(isContinuous);
     setVocalIsolationStatus(null);
 
     // Track daily listening seed for dynamic personalized mixes
@@ -2172,6 +2235,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       setCurrentTime(0);
       currentTimeRef.current = 0;
+      if (curId !== nextId) {
+        setIsPlaying(false);
+        isPlayingRef.current = false;
+      }
     }
 
     let trackToPlay = { ...track };
@@ -2665,7 +2732,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
     });
   }, []);
 
-  const playNextTrack = useCallback(() => {
+  const playNextTrack = useCallback((isAutoAdvance = false) => {
+    isContinuousPlaybackRef.current = Boolean(isAutoAdvance);
     // Advance shared room queue if active in Jam
     if (jamSessionRef.current && socketRef.current) {
       if (jamSessionRef.current.queue && jamSessionRef.current.queue.length > 0) {
@@ -2710,7 +2778,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const nextIdx = curIdx + 1;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
-        playTrack(activeList[nextIdx], activeList, false, nextIdx, true);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx, true, isAutoAdvance);
         setIsPlaying(true);
         return;
       }
@@ -2758,7 +2826,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueue(newQueue);
         currentQueueIndexRef.current = 0;
         setCurrentQueueIndex(0);
-        playTrack(newQueue[0], newQueue, false, 0, true);
+        playTrack(newQueue[0], newQueue, false, 0, true, isAutoAdvance);
         setIsPlaying(true);
         return;
       }
@@ -2812,7 +2880,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const safeChosenIdx = chosenIdx >= 0 ? chosenIdx : 0;
       currentQueueIndexRef.current = safeChosenIdx;
       setCurrentQueueIndex(safeChosenIdx);
-      playTrack(chosen, activeList, false, safeChosenIdx);
+      playTrack(chosen, activeList, false, safeChosenIdx, false, isAutoAdvance);
     } else if (isShuffleRef.current) {
       // In shuffle mode, currentQueue is ALREADY shuffled in place!
       // Simply take the next item in the queue so what was displayed under Up Next plays!
@@ -2837,7 +2905,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setCurrentQueue(reshuffled);
           currentQueueIndexRef.current = 0;
           setCurrentQueueIndex(0);
-          playTrack(reshuffled[0], reshuffled, false, 0);
+          playTrack(reshuffled[0], reshuffled, false, 0, false, isAutoAdvance);
           return;
         }
 
@@ -2850,7 +2918,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
               const newIdx = activeList.length;
               currentQueueIndexRef.current = newIdx;
               setCurrentQueueIndex(newIdx);
-              playTrack(fresh[0], updatedQueue, false, newIdx);
+              playTrack(fresh[0], updatedQueue, false, newIdx, false, isAutoAdvance);
               return;
             }
           } catch (e) {
@@ -2870,7 +2938,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
             const newIdx = activeList.length;
             currentQueueIndexRef.current = newIdx;
             setCurrentQueueIndex(newIdx);
-            playTrack(randomPick, updatedQueue, false, newIdx);
+            playTrack(randomPick, updatedQueue, false, newIdx, false, isAutoAdvance);
             return;
           }
         })();
@@ -2878,7 +2946,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
       currentQueueIndexRef.current = nextIdx;
       setCurrentQueueIndex(nextIdx);
-      playTrack(activeList[nextIdx], activeList, false, nextIdx);
+      playTrack(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance);
     } else if (isOfflineMode) {
       const offlineQueue = activeList.filter(t => t.downloaded || t.isOffline);
       if (offlineQueue.length === 0) return;
@@ -2887,7 +2955,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const nextIdx = (idx + 1) % offlineQueue.length;
       currentQueueIndexRef.current = nextIdx;
       setCurrentQueueIndex(nextIdx);
-      playTrack(offlineQueue[nextIdx], offlineQueue, false, nextIdx);
+      playTrack(offlineQueue[nextIdx], offlineQueue, false, nextIdx, false, isAutoAdvance);
     } else {
       const curId = String(currentTrackRef.current?.id || currentTrackRef.current?._id);
       let idx = -1;
@@ -2915,7 +2983,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const nextIdx = normalWithIndices[nextPos].index;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
-        playTrack(activeList[nextIdx], activeList, false, nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance);
       } else if (idx >= activeList.length - 1) {
         // Queue of 10 tracks finished! Exclude played songs and fetch 10 BRAND NEW tracks matching current taste & Quran boundary!
         activeList.forEach(t => playedSmartSongIdsRef.current.add(String(t.id || t._id)));
@@ -2952,19 +3020,16 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setCurrentQueue(next10);
           currentQueueIndexRef.current = 0;
           setCurrentQueueIndex(0);
-          playTrack(next10[0], next10, false, 0);
-          setIsPlaying(true);
+          playTrack(next10[0], next10, false, 0, false, isAutoAdvance);
           return;
         }
       } else {
         const nextIdx = idx + 1;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
-        playTrack(activeList[nextIdx], activeList, false, nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance);
       }
     }
-    // Force playing state so song starts automatically
-    setIsPlaying(true);
   }, [isOfflineMode, playTrack, fetchSmartShuffleTracks]);
 
   useEffect(() => {
