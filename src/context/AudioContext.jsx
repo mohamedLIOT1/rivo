@@ -1036,6 +1036,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const handleTimeUpdate = () => {
         // Only active primary deck triggers UI and scheduling
         if (deck !== audioRef.current) return;
+        if (isLoadingTrackRef.current) {
+          setIsLoadingTrack(false);
+          isLoadingTrackRef.current = false;
+        }
         if (!deck || isNaN(deck.currentTime)) return;
 
         if (stallRecoveryTimerRef.current) {
@@ -1286,6 +1290,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       const handlePlaying = () => {
         if (deck !== audioRef.current) return;
+        setIsLoadingTrack(false);
+        isLoadingTrackRef.current = false;
         if (stallRecoveryTimerRef.current) {
           clearTimeout(stallRecoveryTimerRef.current);
           stallRecoveryTimerRef.current = null;
@@ -1336,6 +1342,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       const handleError = () => {
         if (deck !== audioRef.current) return;
+        setIsLoadingTrack(false);
+        isLoadingTrackRef.current = false;
         deck.crossOrigin = null;
         if (isChangingTrackRef.current) return;
         if (!isPlayingRef.current && !shouldPlayRef.current) return;
@@ -1405,6 +1413,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
       deck.addEventListener('durationchange', handleDurationChange);
       deck.addEventListener('ended', handleEnded);
       deck.addEventListener('playing', handlePlaying);
+      deck.addEventListener('canplay', () => {
+        if (deck === audioRef.current) {
+          setIsLoadingTrack(false);
+          isLoadingTrackRef.current = false;
+        }
+      });
       deck.addEventListener('stalled', handleStalledOrWaiting);
       deck.addEventListener('waiting', handleStalledOrWaiting);
       deck.addEventListener('error', handleError);
