@@ -63,6 +63,60 @@ import MiniMixerModal from '../components/MiniMixerModal';
 
 const { width } = Dimensions.get('window');
 
+const PlaylistItemGridCard = React.memo(function PlaylistItemGridCard({
+  playlist,
+  isDark,
+  cardWidth,
+  onSelect,
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth }]}
+      activeOpacity={0.85}
+      onPress={() => onSelect(playlist)}
+    >
+      <View style={styles.playlistCoverBox}>
+        {playlist.cover ? (
+          <Image
+            source={{ uri: normalizeCoverUri(playlist.cover) }}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
+        ) : (
+          <Disc size={28} color={colors.mint} />
+        )}
+      </View>
+      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
+        {playlist.name}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+        <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }]}>
+          {(playlist.tracks || playlist.trackIds || []).length} TRACKS
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          {playlist.isMix && (
+            <View style={{ backgroundColor: '#17a398', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 2 }}>
+              <Text style={{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }}>🎛️ MIX</Text>
+            </View>
+          )}
+          {playlist.isPublic !== false ? (
+            <>
+              <Globe size={10} color="#17a398" />
+              <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }}>PUB</Text>
+            </>
+          ) : (
+            <>
+              <Lock size={10} color="#9ca3af" />
+              <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }}>PRIV</Text>
+            </>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 function LibraryScreen({
   onOpenCreatePlaylist,
   onNavigateOffline,
@@ -77,6 +131,8 @@ function LibraryScreen({
     playTrack,
     playPlaylist,
     currentTrack,
+    isPlaying,
+    isLoading,
     tracks: audioTracks,
     downloadedTracks = [],
     handleDownloadTrack,
@@ -818,9 +874,15 @@ function LibraryScreen({
   };
 
   const handlePlayTrackItem = useCallback((item, index) => {
+    const list = selectedView === 'liked' ? likedTracks : activePlaylistTracks;
+    const resolvedIndex = typeof index === 'number' && index >= 0
+      ? index
+      : list.findIndex(t => String(t._id || t.id) === String(item?._id || item?.id));
+    const safeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
+
     if (selectedView === 'liked') {
       if (typeof playPlaylist === 'function') {
-        playPlaylist(likedTracks, index);
+        playPlaylist(likedTracks, safeIndex);
       } else if (typeof playTrack === 'function') {
         playTrack(item, likedTracks);
       }
@@ -835,15 +897,15 @@ function LibraryScreen({
         if (typeof setIsMixMode === 'function') setIsMixMode(false);
         if (typeof setActiveTransitions === 'function') setActiveTransitions({});
       }
-      const list = [...activePlaylistTracks];
-      list.isMix = !isItemQuran && isMixActive;
-      list._isMix = !isItemQuran && isMixActive;
-      list.name = selectedView?.name;
-      if (playlistTransitions) list._transitions = playlistTransitions;
+      const pList = [...activePlaylistTracks];
+      pList.isMix = !isItemQuran && isMixActive;
+      pList._isMix = !isItemQuran && isMixActive;
+      pList.name = selectedView?.name;
+      if (playlistTransitions) pList._transitions = playlistTransitions;
       if (typeof playPlaylist === 'function') {
-        playPlaylist(list, index);
+        playPlaylist(pList, safeIndex);
       } else if (typeof playTrack === 'function') {
-        playTrack(item, list);
+        playTrack(item, pList);
       }
     }
   }, [
@@ -943,11 +1005,13 @@ function LibraryScreen({
           track={item}
           index={index + 1}
           isCurrent={curTrackId !== '' && curTrackId === tAId}
+          isPlaying={curTrackId !== '' && curTrackId === tAId && isPlaying}
+          isLoading={curTrackId !== '' && curTrackId === tAId && isLoading}
           isLiked={likedSet.has(tAId)}
           isDark={isDark}
           showBpmKey={Boolean(!isSelectedPlQuran && isMixActive)}
-          onPlay={() => handlePlayTrackItem(item, index)}
-          onMorePress={() => handleTrackItemMorePress(item)}
+          onPlay={handlePlayTrackItem}
+          onMorePress={handleTrackItemMorePress}
         />
         {isMixActive && hasNext && !isSelectedPlQuran && (
           <View style={styles.transitionChipRow}>
@@ -987,56 +1051,24 @@ function LibraryScreen({
     handlePlayTrackItem,
     handleTrackItemMorePress,
     curTrackId,
+    isPlaying,
+    isLoading,
     likedSet,
   ]);
 
+  const handleSelectPlaylistCard = useCallback((pl) => {
+    setSelectedView(pl);
+  }, []);
+
   const renderPlaylistItem = useCallback(({ item: playlist }) => (
-    <TouchableOpacity
+    <PlaylistItemGridCard
       key={playlist._id || playlist.id}
-      style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth }]}
-      activeOpacity={0.85}
-      onPress={() => setSelectedView(playlist)}
-    >
-      <View style={styles.playlistCoverBox}>
-        {playlist.cover ? (
-          <Image
-            source={{ uri: normalizeCoverUri(playlist.cover) }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-            fadeDuration={0}
-          />
-        ) : (
-          <Disc size={28} color={colors.mint} />
-        )}
-      </View>
-      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
-        {playlist.name}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-        <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }]}>
-          {(playlist.tracks || playlist.trackIds || []).length} TRACKS
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-          {playlist.isMix && (
-            <View style={{ backgroundColor: '#17a398', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 2 }}>
-              <Text style={{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }}>🎛️ MIX</Text>
-            </View>
-          )}
-          {playlist.isPublic !== false ? (
-            <>
-              <Globe size={10} color="#17a398" />
-              <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }}>PUB</Text>
-            </>
-          ) : (
-            <>
-              <Lock size={10} color="#9ca3af" />
-              <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }}>PRIV</Text>
-            </>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  ), [cardWidth, colors, isDark]);
+      playlist={playlist}
+      isDark={isDark}
+      cardWidth={cardWidth}
+      onSelect={handleSelectPlaylistCard}
+    />
+  ), [cardWidth, isDark, handleSelectPlaylistCard]);
 
   const renderPlaylistsHeader = useCallback(() => (
     <View>
@@ -1435,8 +1467,8 @@ function LibraryScreen({
                   ) : null}
                 </View>
 
-                {/* Tracks List: Search Results or AI Recommendations */}
-                {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).map((recTrack) => {
+                {/* Tracks List: Search Results or AI Recommendations (Capped to 15 for low-end tablets) */}
+                {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).slice(0, 15).map((recTrack) => {
                   const recId = String(recTrack._id || recTrack.id);
                   const isJustAdded = justAddedSongId === recId;
                   return (

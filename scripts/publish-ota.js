@@ -74,7 +74,7 @@ function isHermesConfigured() {
   return true;
 }
 
-const cmd = `node node_modules/@expo/cli/build/bin/cli export:embed --entry-file index.js --platform android --dev false --bundle-output "${bundlePath}" --assets-dest "${path.join(rootDir, 'android', 'app', 'src', 'main', 'res')}"`;
+const cmd = `node node_modules/@expo/cli/build/bin/cli export:embed --entry-file index.js --platform android --dev false --reset-cache --bundle-output "${bundlePath}" --assets-dest "${path.join(rootDir, 'android', 'app', 'src', 'main', 'res')}"`;
 
 try {
   console.log('Running Metro bundler (takes ~30-60s)...');
