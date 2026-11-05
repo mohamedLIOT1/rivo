@@ -1,0 +1,327 @@
+import { useState, useRef, useCallback } from 'react';
+import { getSmartTasteAndMoodTracks } from '../../utils/tasteAlgorithm';
+import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
+import { QURAN_LIVE_STATIONS } from '../../data/quranLiveStations';
+import { INITIAL_TRACKS } from '../../data/initialTracks';
+import { getTrackDedupeKey } from '../../services/downloadManager';
+
+export const useAudioQueue = ({
+  userTracks = [],
+  currentUser = null,
+  likedTrackIds = [],
+  showToast = () => {},
+  downloadedTracks = [],
+  currentTrackRef,
+  playbackStatusRef,
+  playTrackCallbackRef,
+  seekToCallbackRef,
+  jamSyncRef,
+  canControlJam = () => true,
+  isJamHost = () => true,
+  repeatModeRef,
+  isMixModeRef,
+}) => {
+  const [queue, setQueueState] = useState([]);
+  const queueRef = useRef([]);
+
+  const [isShuffle, setIsShuffleState] = useState(false);
+  const isShuffleRef = useRef(false);
+
+  const [repeatMode, setRepeatModeState] = useState('off'); // 'off' | 'all' | 'one'
+
+  const historyStackRef = useRef([]);
+  const isHistoryNavRef = useRef(false);
+  const playedInQueueCycleRef = useRef(new Set());
+  const isSmartMoodQueueRef = useRef(false);
+  const playedSmartSongIdsRef = useRef(new Set());
+
+  const setQueue = useCallback((newQueue) => {
+    queueRef.current = Array.isArray(newQueue) ? newQueue : [];
+    setQueueState(queueRef.current);
+  }, []);
+
+  const addToQueue = useCallback((track) => {
+    if (!track) return;
+    const newQ = [...queueRef.current, track];
+    setQueue(newQ);
+    showToast(`Added to queue: ${track.title}`, 'info');
+  }, [setQueue, showToast]);
+
+  const addMultipleToQueue = useCallback((tracksToAdd) => {
+    if (!Array.isArray(tracksToAdd) || tracksToAdd.length === 0) return;
+    const newQ = [...queueRef.current, ...tracksToAdd];
+    setQueue(newQ);
+    showToast(`Added ${tracksToAdd.length} track(s) to queue`, 'info');
+  }, [setQueue, showToast]);
+
+  const removeFromQueue = useCallback((trackIdOrIdx) => {
+    if (typeof trackIdOrIdx === 'number') {
+      const newQ = [...queueRef.current];
+      newQ.splice(trackIdOrIdx, 1);
+      setQueue(newQ);
+      return;
+    }
+    const newQ = queueRef.current.filter(t => String(t._id || t.id) !== String(trackIdOrIdx));
+    setQueue(newQ);
+  }, [setQueue]);
+
+  const reorderQueue = useCallback((fromIdx, toIdx) => {
+    if (fromIdx < 0 || toIdx < 0 || fromIdx >= queueRef.current.length || toIdx >= queueRef.current.length) return;
+    const newQ = [...queueRef.current];
+    const [moved] = newQ.splice(fromIdx, 1);
+    newQ.splice(toIdx, 0, moved);
+    setQueue(newQ);
+  }, [setQueue]);
+
+  const clearQueue = useCallback(() => {
+    setQueue([]);
+  }, [setQueue]);
+
+  const setIsShuffle = useCallback((val) => {
+    const next = typeof val === 'function' ? val(isShuffleRef.current) : Boolean(val);
+    isShuffleRef.current = next;
+    setIsShuffleState(next);
+  }, []);
+
+  const toggleShuffle = useCallback(() => {
+    setIsShuffle((prev) => {
+      const next = !prev;
+      isShuffleRef.current = next;
+      if (next && queueRef.current.length > 1) {
+        const cur = currentTrackRef.current;
+        const curId = String(cur?._id || cur?.id || '');
+        const currentIdx = queueRef.current.findIndex(t => String(t._id || t.id) === curId);
+        if (currentIdx >= 0) {
+          const played = queueRef.current.slice(0, currentIdx + 1);
+          const upcoming = queueRef.current.slice(currentIdx + 1);
+          const shuffledUpcoming = [...upcoming].sort(() => Math.random() - 0.5);
+          setQueue([...played, ...shuffledUpcoming]);
+        } else {
+          const shuffled = [...queueRef.current].sort(() => Math.random() - 0.5);
+          setQueue(shuffled);
+        }
+      }
+      return next;
+    });
+  }, [currentTrackRef, setQueue, setIsShuffle]);
+
+  const setRepeatMode = useCallback((val) => {
+    const next = typeof val === 'function' ? val(repeatModeRef.current) : val;
+    repeatModeRef.current = next;
+    setRepeatModeState(next);
+  }, [repeatModeRef]);
+
+  const toggleRepeat = useCallback(() => {
+    setRepeatMode(prev => {
+      if (prev === 'off') return 'all';
+      if (prev === 'all') return 'one';
+      return 'off';
+    });
+  }, [setRepeatMode]);
+
+  const playNextTrack = useCallback((forceLocal = false) => {
+    if (!forceLocal && jamSyncRef?.current?.jamSession && jamSyncRef?.current?.socket) {
+      const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
+      if (roomCode) {
+        if (!canControlJam()) return;
+        if (jamSyncRef.current.jamSession.queue && jamSyncRef.current.jamSession.queue.length > 0) {
+          jamSyncRef.current.socket.emit('jam:next_track', { roomCode });
+          return;
+        }
+        if (!isJamHost() && jamSyncRef.current.jamSession.hostOnlyControl) {
+          jamSyncRef.current.socket.emit('jam:next_track', { roomCode });
+          return;
+        }
+      }
+    }
+
+    const cur = currentTrackRef.current;
+
+    // Strict Quran Radio isolation & continuous wrap-around loop
+    if (cur && isRadioTrack(cur)) {
+      const q = queueRef.current;
+      const radioPool = (Array.isArray(q) && q.length > 0 && q.some(isRadioTrack))
+        ? q.filter(isRadioTrack)
+        : QURAN_LIVE_STATIONS;
+      const currentId = String(cur._id || cur.id || '');
+      let idx = radioPool.findIndex(t => String(t._id || t.id) === currentId);
+      const nextIdx = (idx >= 0 && idx < radioPool.length - 1) ? idx + 1 : 0;
+      setQueue(radioPool);
+      if (playTrackCallbackRef.current) {
+        playTrackCallbackRef.current(radioPool[nextIdx], radioPool);
+      }
+      return;
+    }
+
+    let q = queueRef.current;
+    if (!q || q.length === 0) {
+      q = downloadedTracks.length > 0 ? downloadedTracks : [];
+      if (q.length > 0) setQueue(q);
+    }
+    const isCurQuran = Boolean(cur && isQuranContent(cur));
+
+    const triggerAutoQueue = async () => {
+      try {
+        if (cur) {
+          playedSmartSongIdsRef.current.add(String(cur._id || cur.id));
+          const curDedupeKey = getTrackDedupeKey(cur);
+          if (curDedupeKey) playedSmartSongIdsRef.current.add(curDedupeKey);
+        }
+        (queueRef.current || []).forEach(t => {
+          if (t) {
+            playedSmartSongIdsRef.current.add(String(t._id || t.id));
+            const k = getTrackDedupeKey(t);
+            if (k) playedSmartSongIdsRef.current.add(k);
+          }
+        });
+
+        const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
+          .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
+
+        let nextBatch = getSmartTasteAndMoodTracks({
+          allTracks: pool,
+          currentUser,
+          followedArtists: currentUser?.following || [],
+          likedTrackIds,
+          excludeTrackIds: playedSmartSongIdsRef.current,
+          limit: 25,
+          currentTrack: cur || currentTrackRef.current,
+          maxPerArtist: 2,
+        });
+
+        if (!nextBatch || nextBatch.length === 0) {
+          playedSmartSongIdsRef.current = new Set(cur ? [String(cur._id || cur.id), getTrackDedupeKey(cur)] : []);
+          nextBatch = getSmartTasteAndMoodTracks({
+            allTracks: pool,
+            currentUser,
+            followedArtists: currentUser?.following || [],
+            likedTrackIds,
+            excludeTrackIds: playedSmartSongIdsRef.current,
+            limit: 25,
+            currentTrack: cur || currentTrackRef.current,
+            maxPerArtist: 2,
+          });
+        }
+
+        if (nextBatch && nextBatch.length > 0) {
+          const newQueue = cur ? [cur, ...nextBatch] : nextBatch;
+          setQueue(newQueue);
+          if (playTrackCallbackRef.current) playTrackCallbackRef.current(nextBatch[0], newQueue);
+          return;
+        }
+      } catch (err) {}
+    };
+
+    const currentId = String(cur?._id || cur?.id || '');
+    let i = q.findIndex(t => String(t._id || t.id) === currentId);
+
+    if (isShuffleRef.current) {
+      const unplayed = q.filter((t, idx) => idx !== i && !playedInQueueCycleRef.current.has(String(t._id || t.id)));
+      if (unplayed.length > 0) {
+        const randomTrack = unplayed[Math.floor(Math.random() * unplayed.length)];
+        playedInQueueCycleRef.current.add(String(randomTrack._id || randomTrack.id));
+        if (playTrackCallbackRef.current) playTrackCallbackRef.current(randomTrack, q);
+        return;
+      }
+      playedInQueueCycleRef.current.clear();
+      if (cur) playedInQueueCycleRef.current.add(currentId);
+    }
+
+    if (i >= 0 && i < q.length - 1) {
+      if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[i + 1], q);
+    } else if (q.length > 0) {
+      if (repeatModeRef.current === 'all' || isMixModeRef?.current) {
+        if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[0], q);
+      } else {
+        triggerAutoQueue();
+      }
+    } else {
+      triggerAutoQueue();
+    }
+  }, [
+    jamSyncRef, canControlJam, isJamHost, downloadedTracks, setQueue, currentTrackRef,
+    userTracks, currentUser, likedTrackIds, playTrackCallbackRef, repeatModeRef, isMixModeRef
+  ]);
+
+  const playPrevTrack = useCallback((isFromRemoteJam = false) => {
+    if ((playbackStatusRef.current?.currentTime || 0) > 3) {
+      if (seekToCallbackRef.current) seekToCallbackRef.current(0);
+      return;
+    }
+
+    if (!isFromRemoteJam && jamSyncRef?.current?.jamSession && jamSyncRef?.current?.socket) {
+      const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
+      if (roomCode) {
+        if (!canControlJam()) return;
+        jamSyncRef.current.socket.emit('jam:prev_track', { roomCode });
+        return;
+      }
+    }
+
+    const cur = currentTrackRef.current;
+
+    // Strict Quran Radio isolation & continuous wrap-around loop (wrapping backwards from first to last)
+    if (cur && isRadioTrack(cur)) {
+      const q = queueRef.current;
+      const radioPool = (Array.isArray(q) && q.length > 0 && q.some(isRadioTrack))
+        ? q.filter(isRadioTrack)
+        : QURAN_LIVE_STATIONS;
+      const currentId = String(cur._id || cur.id || '');
+      let idx = radioPool.findIndex(t => String(t._id || t.id) === currentId);
+      const prevIdx = idx > 0 ? idx - 1 : radioPool.length - 1;
+      setQueue(radioPool);
+      if (playTrackCallbackRef.current) {
+        playTrackCallbackRef.current(radioPool[prevIdx], radioPool);
+      }
+      return;
+    }
+
+    if (historyStackRef.current.length > 0) {
+      const prev = historyStackRef.current.pop();
+      isHistoryNavRef.current = true;
+      if (playTrackCallbackRef.current) playTrackCallbackRef.current(prev, queueRef.current);
+      return;
+    }
+
+    let q = queueRef.current;
+    if (!q || q.length === 0) {
+      q = downloadedTracks.length > 0 ? downloadedTracks : [];
+      if (q.length > 0) setQueue(q);
+    }
+    if (!q || q.length === 0) return;
+
+    const currentId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+    let i = q.findIndex(t => String(t._id || t.id) === currentId);
+
+    if (i > 0) {
+      if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[i - 1], q);
+    } else {
+      if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[q.length - 1], q);
+    }
+  }, [
+    playbackStatusRef, seekToCallbackRef, jamSyncRef, canControlJam,
+    downloadedTracks, setQueue, currentTrackRef, playTrackCallbackRef
+  ]);
+
+  return {
+    queue,
+    queueRef,
+    setQueue,
+    addToQueue,
+    addMultipleToQueue,
+    removeFromQueue,
+    reorderQueue,
+    clearQueue,
+    isShuffle,
+    isShuffleRef,
+    setIsShuffle,
+    toggleShuffle,
+    repeatMode,
+    setRepeatMode,
+    toggleRepeat,
+    historyStackRef,
+    isHistoryNavRef,
+    playNextTrack,
+    playPrevTrack,
+  };
+};

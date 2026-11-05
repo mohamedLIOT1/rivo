@@ -12,10 +12,12 @@ import {
 } from 'react-native';
 import { BookOpen, ChevronLeft, ChevronRight, Moon, Sun, AlertCircle } from 'lucide-react-native';
 import { getSurahPageRange, getMushafPageUrl } from '../utils/quranMetadata';
+import { useTranslation } from '../context/LocalizationContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
+  const { t, isRTL } = useTranslation();
   const surahInfo = useMemo(() => {
     return getSurahPageRange(track?.title || track?.name || '', track?.artist || '');
   }, [track?.title, track?.name, track?.artist]);
@@ -85,17 +87,21 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
       {/* ── TOP HEADER ── */}
-      <View style={styles.header}>
-        <View style={styles.surahBadge}>
+      <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+        <View style={[styles.surahBadge, isRTL && { flexDirection: 'row-reverse' }]}>
           <BookOpen size={14} color="#d4af37" />
-          <Text style={styles.surahName}>{surahInfo?.name || 'The Holy Quran'}</Text>
-          <Text style={styles.versesBadge}>{surahInfo?.verses} Verses</Text>
+          <Text style={[styles.surahName, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }]}>
+            {surahInfo?.name || t('quran.mushafTitle')}
+          </Text>
+          <Text style={[styles.versesBadge, isRTL && { letterSpacing: 0 }]}>
+            {t('quran.mushafVerses', { count: surahInfo?.verses || 0 })}
+          </Text>
         </View>
 
-        <View style={styles.headerRight}>
+        <View style={[styles.headerRight, isRTL && { flexDirection: 'row-reverse' }]}>
           <View style={styles.pagePill}>
             <Text style={styles.pagePillText}>
-              Page <Text style={{ color: '#ffffff', fontWeight: '900' }}>{currentPage}</Text> / {endPage}
+              {t('quran.pageLabel')} <Text style={{ color: '#ffffff', fontWeight: '900' }}>{currentPage}</Text> / {endPage}
             </Text>
           </View>
 
@@ -121,19 +127,25 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="small" color="#d4af37" />
-            <Text style={styles.loadingText}>Page {currentPage}...</Text>
+            <Text style={[styles.loadingText, isRTL && { letterSpacing: 0 }]}>
+              {t('quran.loadingPage', { page: currentPage })}
+            </Text>
           </View>
         )}
 
         {hasError ? (
           <View style={styles.errorContainer}>
             <AlertCircle size={28} color="#f59e0b" />
-            <Text style={styles.errorText}>Failed to load page</Text>
+            <Text style={[styles.errorText, isRTL && { letterSpacing: 0 }]}>
+              {t('quran.errorLoadingPage')}
+            </Text>
             <TouchableOpacity 
               style={styles.retryBtn}
               onPress={() => { setHasError(false); setIsLoading(true); }}
             >
-              <Text style={styles.retryBtnText}>Retry</Text>
+              <Text style={[styles.retryBtnText, isRTL && { letterSpacing: 0 }]}>
+                {t('quran.retry')}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (

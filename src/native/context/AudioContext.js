@@ -123,6 +123,7 @@ export const AudioProvider = ({ children }) => {
   // DJ Crossfade Hook
   const volumeRef = useRef(0.8);
   const isLoadingRef = useRef(false);
+  const isVocalOnlyRef = useRef(false);
   const dj = useDjCrossfade({
     currentTrackRef,
     queueRef: queue.queueRef,
@@ -134,7 +135,7 @@ export const AudioProvider = ({ children }) => {
     loadedTrackIdRef,
     downloadedTracksRef: downloads.downloadedTracksRef,
     isOfflineRef: { current: isOffline },
-    isVocalOnlyRef: { current: false },
+    isVocalOnlyRef,
     setCurrentTrack: (t) => setCurrentTrackRef.current?.(t),
     setIsPlaying: (p) => setIsPlayingRef.current?.(p),
     setIsLoading: (l) => {},
@@ -176,6 +177,7 @@ export const AudioProvider = ({ children }) => {
     jamSyncRef: jamSync.jamSyncRef,
     canControlJam: jamSync.canControlJam,
     currentUser,
+    isVocalOnlyRef,
   });
 
   // Audio Lyrics Hook
@@ -268,6 +270,7 @@ export const AudioProvider = ({ children }) => {
       mixStyle: dj.mixStyle,
       setMixStyle: dj.setMixStyle,
       triggerManualMix: dj.triggerManualMix,
+      previewDjTransition: (tA, tB, cfg) => dj.previewDjTransition(tA, tB, cfg, playback.seekTo, playback.playTrack),
       activeTransitions: dj.activeTransitions,
       setActiveTransitions: dj.updateActiveTransitions,
 

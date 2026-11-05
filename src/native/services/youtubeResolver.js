@@ -172,11 +172,12 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
         if (statusData?.status === 'failed') {
           onVocalStatus(null);
         } else {
+          const initialProg = Math.min(80, statusData?.progress || 10);
           onVocalStatus({
             isProcessing: true,
             trackTitle: track.title,
-            progress: Math.min(80, statusData?.progress || 10),
-            eta: statusData?.eta || 'Preparing audio...'
+            progress: initialProg,
+            eta: statusData?.eta || `Isolating vocals... ${initialProg}%`
           });
         }
       }
@@ -248,7 +249,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
               if (cacheKey) setStreamInCache(cacheKey, fullVocalUrl);
               return fullVocalUrl;
             } else if (curData.status === 'failed') {
-              console.warn('[youtubeResolver] Server vocal isolation failed, playing original audio');
+              console.warn('[youtubeResolver] Server vocal isolation unavailable, smoothly playing original high-quality audio');
               if (typeof onVocalStatus === 'function') onVocalStatus(null);
               break;
             } else if (curData.status === 'processing') {
@@ -258,12 +259,13 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
               } else {
                 displayProgress = Math.min(92, displayProgress + 2);
               }
+              const boundedProg = Math.min(99, displayProgress);
               if (typeof onVocalStatus === 'function') {
                 onVocalStatus({
                   isProcessing: true,
                   trackTitle: track.title,
-                  progress: Math.min(99, displayProgress),
-                  eta: curData.eta || (displayProgress > 60 ? 'Refining vocals...' : 'Isolating vocals...')
+                  progress: boundedProg,
+                  eta: curData.eta ? `${curData.eta} (${boundedProg}%)` : `Isolating vocals... ${boundedProg}%`
                 });
               }
             } else if (curData.status === 'queued') {
@@ -272,7 +274,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
                   isProcessing: true,
                   trackTitle: track.title,
                   progress: 10,
-                  eta: 'Queued in line...'
+                  eta: curData.eta || 'Queued in line...'
                 });
               }
             } else if (curData.status === 'idle') {
@@ -285,7 +287,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
                   isProcessing: true,
                   trackTitle: track.title,
                   progress: displayProgress,
-                  eta: 'Buffering audio...'
+                  eta: curData.eta || `Isolating vocals... ${displayProgress}%`
                 });
               }
             }

@@ -599,7 +599,7 @@ export default function SettingsModal({ visible, onClose }) {
                 <View style={styles.infoRow}>
                   <Text style={[styles.label, { color: textMuted }]}>{t('settings.storageUsed')}:</Text>
                   <Text style={[styles.valueMono, { color: textTitle }]}>
-                    {storageInfo ? `${storageInfo.totalCount} tracks (${(storageInfo.totalBytes / 1048576).toFixed(1)} MB)` : 'Scanning...'}
+                    {storageInfo ? `${storageInfo.fileCount ?? storageInfo.totalCount ?? 0} tracks (${((storageInfo.totalBytes || 0) / 1048576).toFixed(1)} MB)` : 'Scanning...'}
                   </Text>
                 </View>
 

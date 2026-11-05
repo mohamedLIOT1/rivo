@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   FlatList,
   TouchableOpacity,
@@ -15,10 +14,13 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import QuranRadioModal from '../components/QuranRadioModal';
+import QuranHeroBanner from '../components/quran/QuranHeroBanner';
+import { styles } from './QuranScreen.styles';
 import {
   isQuranContent,
   getQuranReciterName,
@@ -34,13 +36,17 @@ import {
 function QuranScreen({ onTrackAction }) {
   const { playTrack, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
-  const { tracks: userTracks } = useUser();
+  const { tracks: userTracks, likedTrackIds = [] } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleLimit, setVisibleLimit] = useState(40);
   const [isRadioModalOpen, setIsRadioModalOpen] = useState(false);
+
+  const likedSet = useMemo(() => new Set((likedTrackIds || []).map(String)), [likedTrackIds]);
+  const downloadedSet = useMemo(() => new Set((downloadedTracks || []).map(t => String(t._id || t.id))), [downloadedTracks]);
 
   React.useEffect(() => {
     setVisibleLimit(40);
@@ -153,59 +159,43 @@ function QuranScreen({ onTrackAction }) {
   const renderSongItem = useCallback(({ item: track, index }) => {
     const sNum = getSurahNumber(track);
     const displayIndex = (sNum >= 1 && sNum <= 114) ? sNum : (index + 1);
+    const trackId = String(track._id || track.id || '');
+    const isCurrent = curTrackId !== '' && curTrackId === trackId;
     return (
       <SongItem
-        key={track._id || track.id || index}
+        key={trackId || index}
         track={track}
         index={displayIndex}
+        isCurrent={isCurrent}
+        isPlaying={isCurrent && isPlaying}
+        isLoading={isCurrent && isLoading}
+        isLiked={likedSet.has(trackId)}
+        isDownloaded={downloadedSet.has(trackId)}
+        isDark={isDark}
         showBpmKey={false}
         onPlay={handlePlayTrack}
         onMorePress={handleMorePress}
       />
     );
-  }, [handlePlayTrack, handleMorePress]);
+  }, [curTrackId, isPlaying, isLoading, likedSet, downloadedSet, isDark, handlePlayTrack, handleMorePress]);
 
   const renderHeader = useMemo(() => {
     return (
       <View>
-        {/* Header Banner with Arabic Aesthetic */}
-        <View style={styles.bannerOuter}>
-          <View style={styles.bannerShadow} />
-          <View style={styles.banner}>
-            <View style={styles.bannerTopRow}>
-              <View style={styles.quranPill}>
-                <BookOpen size={13} color={colors.ink} />
-                <Text style={styles.quranPillText}>HOLY QURAN AUDIO</Text>
-              </View>
-              <CassetteTag label="RECITATIONS" bg={colors.ink} textColor={colors.mint} />
-            </View>
-
-            <Text style={styles.arabicTitle}>The Holy Quran</Text>
-            <TouchableOpacity style={styles.radioBannerBtn} onPress={() => setIsRadioModalOpen(true)} activeOpacity={0.85}>
-              <Radio size={16} color="#000000" strokeWidth={2.5} />
-              <Text style={styles.radioBannerBtnText}>Holy Quran Radio (Live 24/7)</Text>
-            </TouchableOpacity>
-            <Text style={styles.arabicSub}>
-              Listen to soulful recitations ordered by the Holy Quran with high audio fidelity.
-            </Text>
-
-            {/* Search bar inside Quran */}
-            <View style={styles.searchBar}>
-              <Search size={16} color={colors.ink} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search surah or reciter..."
-                placeholderTextColor={colors.grayText}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-            </View>
-          </View>
-        </View>
+        <QuranHeroBanner
+          styles={styles}
+          isRTL={isRTL}
+          t={t}
+          onOpenRadio={() => setIsRadioModalOpen(true)}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+        />
 
         {/* Reciters Horizontal Carousel */}
         <View style={styles.recitersSection}>
-          <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }]}>RECITERS</Text>
+          <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif', textAlign: 'right' }]}>
+            {t('quran.reciters')}
+          </Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -222,9 +212,10 @@ function QuranScreen({ onTrackAction }) {
                 style={[
                   styles.reciterPillText,
                   selectedReciter === null && styles.reciterPillTextActive,
+                  isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }
                 ]}
               >
-                All Reciters ({recitersList.length})
+                {t('quran.tabReciters', { count: recitersList.length })}
               </Text>
             </TouchableOpacity>
 
@@ -240,6 +231,7 @@ function QuranScreen({ onTrackAction }) {
                     style={[
                       styles.reciterPillText,
                       active && styles.reciterPillTextActive,
+                      isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }
                     ]}
                   >
                     {r.name} ({r.count})
@@ -255,10 +247,10 @@ function QuranScreen({ onTrackAction }) {
           <View style={styles.reciterGridSection}>
             <View style={styles.reciterGridHeader}>
               <Text style={[styles.reciterGridTitle, !isDark && { color: colors.ink }]}>
-                Select Reciter to Listen to Full Quran
+                {t('quran.selectReciter')}
               </Text>
               <Text style={styles.reciterGridSubtitle}>
-                Browse Surahs ordered 1 to 114
+                {t('quran.browseSurahs')}
               </Text>
             </View>
 
@@ -279,8 +271,8 @@ function QuranScreen({ onTrackAction }) {
                       {reciter.name}
                     </Text>
                     <View style={styles.reciterCardBadge}>
-                      <Text style={styles.reciterCardBadgeText}>
-                        {reciter.count} Surahs
+                      <Text style={[styles.reciterCardBadgeText, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }]}>
+                        {t('quran.surahsCount', { count: reciter.count })}
                       </Text>
                     </View>
                   </View>
@@ -292,21 +284,23 @@ function QuranScreen({ onTrackAction }) {
           <>
             {selectedReciter && (
               <View style={[styles.selectedReciterBanner, !isDark && styles.selectedReciterBannerLight]}>
-                <View style={styles.selectedReciterRow}>
+                <View style={[styles.selectedReciterRow, isRTL && { flexDirection: 'row-reverse' }]}>
                   <TouchableOpacity
                     style={styles.backBtn}
                     onPress={() => setSelectedReciter(null)}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.backBtnText}>← All Reciters</Text>
+                    <Text style={[styles.backBtnText, isRTL && { letterSpacing: 0 }]}>
+                      {t('quran.backToReciters')}
+                    </Text>
                   </TouchableOpacity>
 
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  <View style={{ flex: 1, alignItems: isRTL ? 'flex-start' : 'flex-end' }}>
                     <Text style={[styles.selectedReciterName, !isDark && { color: colors.ink }]} numberOfLines={1}>
-                      Sheikh {selectedReciter}
+                      {t('quran.sheikh', { name: selectedReciter })}
                     </Text>
                     <Text style={styles.selectedReciterCount}>
-                      {displayedTracks.length} Surahs • Ordered 1 to 114
+                      {t('quran.surahsAvailableCount', { count: displayedTracks.length })}
                     </Text>
                   </View>
                 </View>
@@ -318,21 +312,21 @@ function QuranScreen({ onTrackAction }) {
                     activeOpacity={0.8}
                   >
                     <Play size={14} color={colors.ink} fill={colors.ink} />
-                    <Text style={styles.playAllBtnText}>
-                      Play All from Surah {getSurahName(displayedTracks[0]) || 'Start'}
+                    <Text style={[styles.playAllBtnText, isRTL && { letterSpacing: 0 }]}>
+                      {t('quran.playAllFromSurah', { name: getSurahName(displayedTracks[0]) || (isRTL ? 'البداية' : 'Start') })}
                     </Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
 
-            <View style={styles.listHeader}>
+            <View style={[styles.listHeader, isRTL && { flexDirection: 'row-reverse' }]}>
               <Text style={styles.listCount}>
-                {displayedTracks.length} Surahs Available
+                {t('quran.recitationsAvailable', { count: displayedTracks.length })}
               </Text>
               {(selectedReciter || searchQuery.trim()) && (
                 <TouchableOpacity onPress={handleClearFilter}>
-                  <Text style={styles.clearFilterText}>Clear Filter ✕</Text>
+                  <Text style={styles.clearFilterText}>{t('quran.clearFilter')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -355,17 +349,15 @@ function QuranScreen({ onTrackAction }) {
     return (
       <View style={styles.emptyCard}>
         <BookOpen size={36} color={colors.mint} />
-        <Text style={styles.emptyTitle}>
-          {isOffline ? 'No downloaded recitations' : 'No matching recitations'}
+        <Text style={[styles.emptyTitle, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }]}>
+          {isOffline ? t('quran.noDownloadedRecitations') : t('quran.noRecitations')}
         </Text>
-        <Text style={styles.emptySub}>
-          {isOffline
-            ? 'No recitations downloaded yet. Download tracks online to play them offline.'
-            : 'Try searching with another surah or reciter name.'}
+        <Text style={[styles.emptySub, isRTL && { letterSpacing: 0, lineHeight: 20 }]}>
+          {t('quran.noRecitationsSub')}
         </Text>
       </View>
     );
-  }, [selectedReciter, searchQuery, isOffline]);
+  }, [selectedReciter, searchQuery, isOffline, t, isRTL]);
 
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
@@ -378,8 +370,8 @@ function QuranScreen({ onTrackAction }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         windowSize={Platform.OS === 'android' ? 3 : 5}
-        initialNumToRender={Platform.OS === 'android' ? 8 : 10}
-        maxToRenderPerBatch={Platform.OS === 'android' ? 6 : 10}
+        initialNumToRender={Platform.OS === 'android' ? 6 : 8}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 6}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
       />
@@ -389,355 +381,3 @@ function QuranScreen({ onTrackAction }) {
 }
 
 export default React.memo(QuranScreen);
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.ink,
-  },
-  bannerOuter: {
-    margin: 14,
-    marginBottom: 10,
-    position: 'relative',
-  },
-  bannerShadow: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    right: -4,
-    bottom: -4,
-    backgroundColor: colors.tealDark,
-    borderRadius: 12,
-  },
-  banner: {
-    backgroundColor: '#044a37',
-    borderWidth: 2.5,
-    borderColor: colors.ink,
-    borderRadius: 12,
-    padding: 16,
-  },
-  bannerTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  quranPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.paper,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    gap: 5,
-  },
-  quranPillText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 10,
-    color: colors.ink,
-  },
-  arabicTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#ffffff',
-    textAlign: 'right',
-    marginBottom: 4,
-  },
-  arabicSub: {
-    fontSize: 11,
-    color: '#a7f3d0',
-    textAlign: 'right',
-    lineHeight: 16,
-    marginBottom: 12,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.paper,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 40,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    color: colors.ink,
-    textAlign: 'right',
-  },
-  recitersSection: {
-    paddingHorizontal: 14,
-    marginBottom: 10,
-  },
-  sectionHeading: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.paper,
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  reciterScroll: {
-    gap: 8,
-    paddingRight: 14,
-  },
-  reciterPill: {
-    backgroundColor: colors.surfaceDark,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  reciterPillActive: {
-    backgroundColor: colors.mint,
-    borderColor: colors.ink,
-  },
-  reciterPillText: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    fontSize: 11,
-    color: colors.paperMuted,
-  },
-  reciterPillTextActive: {
-    color: colors.ink,
-    fontWeight: '900',
-  },
-  scrollContent: {
-    padding: 14,
-    paddingTop: 4,
-    paddingBottom: 110,
-  },
-  listHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-    paddingBottom: 6,
-  },
-  listCount: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.tealLight,
-  },
-  clearFilterText: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    fontSize: 10,
-    color: colors.rust,
-  },
-  emptyCard: {
-    padding: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceDark,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 10,
-  },
-  emptyTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    fontSize: 14,
-    color: colors.paper,
-    marginTop: 10,
-  },
-  emptySub: {
-    fontSize: 11,
-    color: colors.paperMuted,
-    marginTop: 4,
-  },
-  tracksList: {
-    gap: 8,
-  },
-  loadMoreBtn: {
-    backgroundColor: '#182320',
-    borderWidth: 1.5,
-    borderColor: colors.mint,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  radioBannerBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#d4af37',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#000000',
-    marginBottom: 12,
-    shadowColor: '#d4af37',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    elevation: Platform.OS === 'android' ? 0 : 3,
-  },
-  radioBannerBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 13,
-    color: '#000000',
-  },
-  loadMoreText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 12,
-    color: colors.mint,
-  },
-  reciterGridSection: {
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  reciterGridHeader: {
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  reciterGridTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 14,
-    color: '#ffffff',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  reciterGridSubtitle: {
-    fontSize: 11,
-    color: '#a7f3d0',
-    textAlign: 'center',
-  },
-  reciterCardsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  reciterCard: {
-    width: '48%',
-    backgroundColor: '#0a231f',
-    borderWidth: 2,
-    borderColor: '#17a398',
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  reciterCardLight: {
-    backgroundColor: '#fdfbf7',
-    borderColor: colors.ink,
-  },
-  reciterCardCover: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: colors.mint,
-    marginBottom: 8,
-    backgroundColor: '#041d1a',
-  },
-  reciterCardInfo: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  reciterCardName: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 12,
-    color: '#ffffff',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  reciterCardBadge: {
-    backgroundColor: '#064e3b',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#10b981',
-  },
-  reciterCardBadgeText: {
-    fontFamily: 'monospace',
-    fontWeight: '800',
-    fontSize: 10,
-    color: '#a7f3d0',
-  },
-  selectedReciterBanner: {
-    backgroundColor: '#08332b',
-    borderWidth: 2,
-    borderColor: '#17a398',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 14,
-  },
-  selectedReciterBannerLight: {
-    backgroundColor: '#e6f7f4',
-    borderColor: colors.ink,
-  },
-  selectedReciterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 8,
-  },
-  backBtn: {
-    backgroundColor: colors.mint,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  backBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  selectedReciterName: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 13,
-    color: '#ffffff',
-    textAlign: 'right',
-  },
-  selectedReciterCount: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    color: '#a7f3d0',
-    marginTop: 2,
-    textAlign: 'right',
-  },
-  playAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 6,
-  },
-  playAllBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-});

@@ -4,8 +4,10 @@ import {
   ZoomIn, ZoomOut, RotateCcw, Sparkles, AlertCircle, Maximize2, Minimize2 
 } from 'lucide-react';
 import { getSurahPageRange, getMushafPageUrl } from '../utils/quranMetadata';
+import { useTranslation } from '../context/PreferencesContext';
 
 export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
+  const { t, isRTL } = useTranslation();
   const surahInfo = useMemo(() => {
     return getSurahPageRange(track?.title || track?.name || '', track?.artist || '');
   }, [track?.title, track?.name, track?.artist]);
@@ -80,10 +82,10 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
             <BookOpen size={17} />
           </div>
           <div>
-            <h3 className="text-sm md:text-base font-black text-white tracking-wide flex items-center gap-2 font-display">
-              <span>{surahInfo?.name || 'The Holy Quran'}</span>
+            <h3 className="text-sm md:text-base font-black text-white flex items-center gap-2 font-display">
+              <span className="quran-script">{surahInfo?.name || t('quran.mushafTitle')}</span>
               <span className="text-[10px] md:text-xs font-mono font-bold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-800/60">
-                {surahInfo?.verses} Verses
+                {t('quran.mushafVerses', { count: surahInfo?.verses || 0 })}
               </span>
             </h3>
           </div>
@@ -92,31 +94,31 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
         {/* Page counter & View Mode toggle */}
         <div className="flex items-center gap-1.5 sm:gap-2">
           <div className="text-xs font-mono font-bold text-emerald-300 bg-[#061411] px-2.5 py-1 rounded-lg border border-emerald-500/30 shadow-inner">
-            Page <span className="text-white font-black">{currentPage}</span> / {endPage}
+            {t('quran.pageLabel')} <span className="text-white font-black">{currentPage}</span> / {endPage}
           </div>
 
           {/* Toggle AMOLED Dark / Clean Paper */}
           <button
             onClick={() => setIsFullscreen(f => !f)}
             className="flex items-center gap-1 text-xs font-mono px-2 py-1 rounded-lg border transition-colors cursor-pointer bg-emerald-950/40 border-emerald-500/30 hover:bg-emerald-500 hover:text-black text-emerald-300"
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            title={isFullscreen ? t('quran.exitFullscreen') : t('quran.fullscreen')}
           >
             {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-            <span className="hidden sm:inline text-[11px] font-bold">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+            <span className="hidden sm:inline text-[11px] font-bold">{isFullscreen ? t('quran.exitFullscreen') : t('quran.fullscreen')}</span>
           </button>
 
           {/* Zoom controls */}
           <button
             onClick={() => setZoomLevel(z => Math.min(2, z + 0.15))}
             className="p-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors cursor-pointer"
-            title="Zoom In"
+            title={t('quran.zoomIn')}
           >
             <ZoomIn size={14} />
           </button>
           <button
             onClick={() => setZoomLevel(z => Math.max(0.8, z - 0.15))}
             className="p-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/40 hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors cursor-pointer"
-            title="Zoom Out"
+            title={t('quran.zoomOut')}
           >
             <ZoomOut size={14} />
           </button>
@@ -124,10 +126,10 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
           <button
             onClick={() => setViewMode(v => v === 'dark' ? 'clean' : 'dark')}
             className="flex items-center gap-1.5 text-xs font-mono font-bold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer bg-emerald-950/40 border-emerald-500/30 hover:bg-emerald-500 hover:text-black text-emerald-300"
-            title="Toggle Display Mode (Dark / Original)"
+            title={viewMode === 'dark' ? t('quran.modeDark') : t('quran.modeClean')}
           >
             {viewMode === 'dark' ? <Moon size={13} className="text-emerald-400" /> : <Sun size={13} className="text-amber-400" />}
-            <span className="hidden sm:inline text-[11px]">{viewMode === 'dark' ? 'Dark' : 'Original'}</span>
+            <span className="hidden sm:inline text-[11px]">{viewMode === 'dark' ? t('quran.modeDark') : t('quran.modeClean')}</span>
           </button>
         </div>
       </div>
@@ -138,7 +140,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
         {isLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black/60 backdrop-blur-xs">
             <div className="w-8 h-8 rounded-full border-2 border-emerald-400 border-t-transparent animate-spin mb-2" />
-            <span className="text-xs font-mono text-emerald-300 font-bold">Loading Mushaf page {currentPage}...</span>
+            <span className="text-xs font-mono text-emerald-300 font-bold">{t('quran.loadingPage', { page: currentPage })}</span>
           </div>
         )}
 
@@ -146,12 +148,12 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
         {hasError && (
           <div className="flex flex-col items-center justify-center p-6 text-center z-10 my-auto">
             <AlertCircle size={32} className="text-amber-400 mb-2" />
-            <p className="text-sm font-bold text-white mb-2">Failed to load Mushaf page</p>
+            <p className="text-sm font-bold text-white mb-2">{t('quran.errorLoadingPage')}</p>
             <button
               onClick={() => { setHasError(false); setIsLoading(true); }}
               className="text-xs font-mono px-3.5 py-1.5 rounded-lg bg-emerald-500 text-black font-bold hover:bg-emerald-400 cursor-pointer"
             >
-              Retry
+              {t('quran.retry')}
             </button>
           </div>
         )}
@@ -189,7 +191,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
               ? 'opacity-20 cursor-not-allowed bg-black/40 text-zinc-600' 
               : 'bg-black/85 hover:bg-emerald-400 text-white hover:text-black border border-emerald-500/40 hover:scale-105 shadow-[0_0_20px_rgba(0,0,0,0.6)]'
           }`}
-          title="Next Page (Left)"
+          title={t('quran.nextPage')}
         >
           <ChevronLeft size={24} />
         </button>
@@ -203,7 +205,7 @@ export default function QuranMushafViewer({ track, globalTheme = 'dark' }) {
               ? 'opacity-20 cursor-not-allowed bg-black/40 text-zinc-600' 
               : 'bg-black/85 hover:bg-emerald-400 text-white hover:text-black border border-emerald-500/40 hover:scale-105 shadow-[0_0_20px_rgba(0,0,0,0.6)]'
           }`}
-          title="Previous Page (Right)"
+          title={t('quran.prevPage')}
         >
           <ChevronRight size={24} />
         </button>

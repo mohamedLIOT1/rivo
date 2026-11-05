@@ -7,6 +7,20 @@
     <meta name="description" content="Rivo Sonic Dispensary — Fast musical analgesics, non-stop flow, and pure sound relief." />
     <meta name="theme-color" content="#17a398" />
 
+    <!-- Low-End Tablet & Mobile Hardware Performance Detection -->
+    <script>
+      (function() {
+        try {
+          var isLowEnd = (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ||
+                         (navigator.deviceMemory && navigator.deviceMemory <= 2) ||
+                         /Android|SM-T|GT-P|Tab|Tablet/i.test(navigator.userAgent);
+          if (isLowEnd) {
+            document.documentElement.classList.add('low-end-device');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
     <!-- Open Graph / WhatsApp / Facebook / Discord Link Embeds -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://rivo-m.duckdns.org/" />
@@ -47,10 +61,10 @@
     <!-- Fonts: Preconnect & Preload to prevent render blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" />
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&family=Tajawal:wght@400;500;700;800;900&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&family=Space+Mono:wght@400;700&family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet" />
     </noscript>
 
     <!-- Splash Screen Style -->

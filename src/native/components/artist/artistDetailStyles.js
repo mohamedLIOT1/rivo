@@ -44,11 +44,11 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   backText: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 11,
     fontWeight: '900',
     color: '#fdfbf7',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   scrollArea: {
     flex: 1,
@@ -93,11 +93,11 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
   },
   verifiedText: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 9,
     fontWeight: '900',
     color: '#26c4b7',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   artistName: {
     fontFamily: 'monospace',
@@ -258,11 +258,11 @@ export const styles = StyleSheet.create({
     gap: 6,
   },
   queueBtnText: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 10,
     fontWeight: '900',
     color: '#fdfbf7',
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
   followBtn: {
     flexDirection: 'row',
@@ -279,11 +279,11 @@ export const styles = StyleSheet.create({
     backgroundColor: '#17a398',
   },
   followBtnText: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 10,
     fontWeight: '900',
     color: '#fdfbf7',
-    letterSpacing: 0.3,
+    letterSpacing: 0,
   },
   followBtnTextActive: {
     color: '#0b1110',
@@ -310,17 +310,18 @@ export const styles = StyleSheet.create({
     borderBottomColor: 'rgba(255,255,255,0.1)',
   },
   sectionTitle: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 12,
     fontWeight: '900',
     color: '#fdfbf7',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   sectionCounter: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 9.5,
     fontWeight: '800',
     color: '#17a398',
+    letterSpacing: 0,
   },
   albumGrid: {
     flexDirection: 'row',

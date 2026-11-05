@@ -354,6 +354,8 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     toggleLikeTrack && toggleLikeTrack(id);
   }, [toggleLikeTrack]);
 
+  const likedSet = useMemo(() => new Set((likedTrackIds || []).map(String)), [likedTrackIds]);
+
   const renderSongItem = useCallback(({ item, index }) => {
     const itemId = String(item._id || item.id || '');
     const isCurrent = curTrackId !== '' && curTrackId === itemId;
@@ -365,14 +367,14 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         isCurrent={isCurrent}
         isPlaying={isCurrent && isPlaying}
         isLoading={isCurrent && isLoading}
-        isLiked={Array.isArray(likedTrackIds) ? likedTrackIds.includes(itemId) : false}
+        isLiked={likedSet.has(itemId)}
         onPlay={handlePlaySong}
         onMorePress={handleSongMorePress}
         onToggleLike={handleToggleLike}
         isDark={isDark}
       />
     );
-  }, [curTrackId, isPlaying, isLoading, likedTrackIds, handlePlaySong, handleSongMorePress, handleToggleLike, isDark]);
+  }, [curTrackId, isPlaying, isLoading, likedSet, handlePlaySong, handleSongMorePress, handleToggleLike, isDark]);
 
   const isShowingSongs = hasSearch && (activeFilter === 'all' || activeFilter === 'songs');
   const songData = useMemo(() => {
@@ -506,7 +508,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.artistsScrollRow}>
-            {matchingArtists.map((artist, idx) => {
+            {matchingArtists.slice(0, 10).map((artist, idx) => {
               const coverUri = artist.cover;
               return (
                 <TouchableOpacity
@@ -550,7 +552,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           </View>
 
           <View style={styles.albumsGrid}>
-            {matchingAlbums.map((alb, index) => {
+            {matchingAlbums.slice(0, 8).map((alb, index) => {
               const coverUri = alb.cover || alb.coverUrl || alb.tracks?.[0]?.cover || alb.tracks?.[0]?.coverUrl;
               return (
                 <TouchableOpacity

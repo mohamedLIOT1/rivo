@@ -1,0 +1,107 @@
+{
+  "undeclaredVars": [],
+  "brokenImports": [],
+  "contextMemoizationIssues": [],
+  "fileLineLimitIssues": [
+    {
+      "file": "src/native/components/AddAlbumModal.js",
+      "lines": 561
+    },
+    {
+      "file": "src/native/components/AddSongModal.js",
+      "lines": 563
+    },
+    {
+      "file": "src/native/components/AlbumDetailModal.js",
+      "lines": 1110
+    },
+    {
+      "file": "src/native/components/artist/artistDetailStyles.js",
+      "lines": 474
+    },
+    {
+      "file": "src/native/components/ChatModal.js",
+      "lines": 1198
+    },
+    {
+      "file": "src/native/components/CreatePlaylistModal.js",
+      "lines": 1191
+    },
+    {
+      "file": "src/native/components/FloatingNavMenu.js",
+      "lines": 662
+    },
+    {
+      "file": "src/native/components/FriendActivityModal.js",
+      "lines": 679
+    },
+    {
+      "file": "src/native/components/IntroAuthModal.js",
+      "lines": 661
+    },
+    {
+      "file": "src/native/components/JamRoomModal.js",
+      "lines": 1689
+    },
+    {
+      "file": "src/native/components/MiniMixerModal.js",
+      "lines": 1890
+    },
+    {
+      "file": "src/native/components/SettingsModal.js",
+      "lines": 1039
+    },
+    {
+      "file": "src/native/components/SongRadarModal.js",
+      "lines": 878
+    },
+    {
+      "file": "src/native/components/UserDetailModal.js",
+      "lines": 950
+    },
+    {
+      "file": "src/native/context/UserContext.js",
+      "lines": 601
+    },
+    {
+      "file": "src/native/screens/AdminScreen.js",
+      "lines": 1406
+    },
+    {
+      "file": "src/native/screens/HomeScreen.js",
+      "lines": 808
+    },
+    {
+      "file": "src/native/screens/LibraryScreen.js",
+      "lines": 2584
+    },
+    {
+      "file": "src/native/screens/OfflineScreen.styles.js",
+      "lines": 520
+    },
+    {
+      "file": "src/native/screens/ProfileScreen.js",
+      "lines": 2136
+    },
+    {
+      "file": "src/native/screens/SearchScreen.js",
+      "lines": 1409
+    },
+    {
+      "file": "src/native/screens/StatsScreen.js",
+      "lines": 654
+    },
+    {
+      "file": "src/native/services/youtubeResolver.js",
+      "lines": 900
+    },
+    {
+      "file": "src/native/theme/appStyles.js",
+      "lines": 562
+    },
+    {
+      "file": "App.js",
+      "lines": 1436
+    }
+  ]
+}

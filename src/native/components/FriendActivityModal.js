@@ -28,6 +28,17 @@ import { useTheme } from '../context/ThemeContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import UserDetailModal from './UserDetailModal';
 
+function formatCompactPillNative(lastActiveAt) {
+  if (!lastActiveAt) return 'OFFLINE';
+  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+  if (isNaN(diffSec) || diffSec < 0) return 'OFFLINE';
+  if (diffSec < 60) return 'NOW';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}M`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}H`;
+  const days = Math.floor(diffSec / 86400);
+  return `${days}D`;
+}
+
 function formatLastSeenSubtitle(lastActiveAt) {
   if (!lastActiveAt) return 'Offline';
   const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
@@ -98,7 +109,13 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
               <View style={[styles.liveBadge, { backgroundColor: '#1e3a34' }]}>
                 <Text style={[styles.liveBadgeText, { color: '#34d399' }]}>ONLINE</Text>
               </View>
-            ) : null}
+            ) : (
+              <View style={[styles.liveBadge, { backgroundColor: isDark ? '#27272a' : '#d4d4d8', borderWidth: 1, borderColor: isDark ? '#3f3f46' : '#a1a1aa' }]}>
+                <Text style={[styles.liveBadgeText, { color: isDark ? '#a1a1aa' : '#52525b' }]}>
+                  {formatCompactPillNative(item.lastActiveAt)}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Bottom Row: Full width track title & artist */}
@@ -106,7 +123,7 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
             <View style={styles.trackInfoRow}>
               <Disc size={12} color="#26c4b7" strokeWidth={2.4} />
               <Text style={[styles.trackTitle, { color: '#26c4b7', fontWeight: '700' }]} numberOfLines={1}>
-                Playing: {listening.title || 'Playing song'}
+                {listening.title || 'Playing song'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
               </Text>
             </View>
@@ -114,17 +131,16 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
             <View style={styles.trackInfoRow}>
               <Disc size={11} color="#f59e0b" strokeWidth={2} />
               <Text style={[styles.trackTitle, { color: !isDark ? '#b45309' : '#fcd34d' }]} numberOfLines={1}>
-                Paused: {listening.title || 'Track'}
+                {listening.title || 'Track'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
               </Text>
             </View>
           ) : listening && !item.isOnline ? (
             <View style={styles.trackInfoRow}>
               <Disc size={11} color="#64748b" strokeWidth={1.8} />
-              <Text style={[styles.trackTitle, { color: !isDark ? '#57534e' : '#94a3b8' }]} numberOfLines={1}>
-                Last played: {listening.title || 'Track'}
+              <Text style={[styles.trackTitle, { color: !isDark ? '#27272a' : '#e4e4e7', fontWeight: '600' }]} numberOfLines={1}>
+                {listening.title || 'Track'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
-                {item.lastActiveAt ? ` • ${formatLastSeenSubtitle(item.lastActiveAt)}` : ''}
               </Text>
             </View>
           ) : (

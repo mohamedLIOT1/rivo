@@ -1,0 +1,98 @@
+import { StyleSheet, Platform } from 'react-native';
+import { colors } from './fullPlayerStyles';
+
+export const queueStyles = StyleSheet.create({
+  queueBody: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 40,
+    maxWidth: 640,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  queueHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 16,
+    maxWidth: 640,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  queueHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+    letterSpacing: 0.8,
+  },
+  clearQueueBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  clearQueueBtnText: {
+    color: '#ef4444',
+    fontSize: 10,
+    fontWeight: '900',
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
+  },
+  queueItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 64,
+    marginBottom: 8,
+  },
+  dropIndicatorBar: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    height: 3,
+    borderRadius: 2,
+    zIndex: 10,
+  },
+  queueThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: '#000000',
+  },
+  queueTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  queueArtist: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  queueControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 6,
+  },
+  queueActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dragHandle: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

@@ -4,12 +4,12 @@
 
 /* ── Arabic & RTL Localization Support ── */
 html[dir="rtl"], [dir="rtl"], body.rtl {
-  font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Cairo', 'Tajawal', 'Noto Sans Arabic', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 body.rtl,
 body.rtl * {
-  font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Cairo', 'Tajawal', 'Noto Sans Arabic', 'Segoe UI', system-ui, -apple-system, sans-serif;
   letter-spacing: normal !important;
 }
 
@@ -30,12 +30,60 @@ body.rtl svg * {
 
 body.rtl .font-display,
 [dir="rtl"] .font-display {
-  font-family: 'Cairo', 'Space Grotesk', system-ui, sans-serif !important;
+  font-family: 'Cairo', 'Tajawal', 'Space Grotesk', system-ui, sans-serif !important;
+  letter-spacing: normal !important;
 }
 
 body.rtl .font-mono,
 [dir="rtl"] .font-mono {
   font-family: 'Cairo', 'Space Mono', monospace !important;
+  letter-spacing: normal !important;
+}
+
+/* Clean, comfortable Arabic line-height & text rendering (مريح للعين) */
+body.rtl h1,
+body.rtl h2,
+body.rtl h3,
+body.rtl h4,
+body.rtl p,
+body.rtl span,
+body.rtl button,
+body.rtl label,
+[dir="rtl"] h1,
+[dir="rtl"] h2,
+[dir="rtl"] h3,
+[dir="rtl"] h4,
+[dir="rtl"] p,
+[dir="rtl"] span,
+[dir="rtl"] button,
+[dir="rtl"] label {
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Right-aligned text flow for Arabic content */
+body.rtl .rtl-text-right {
+  text-align: right !important;
+}
+
+body.rtl input[type="text"],
+body.rtl input[type="search"],
+body.rtl textarea {
+  direction: rtl;
+  text-align: right;
+}
+
+body.rtl input::placeholder,
+body.rtl textarea::placeholder {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Quranic typography class */
+.quran-script {
+  font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Cairo', serif !important;
+  line-height: 2 !important;
   letter-spacing: normal !important;
 }
 
@@ -876,8 +924,64 @@ input[type=range].opacity-0::-moz-range-thumb {
   .backdrop-blur-md,
   .backdrop-blur-lg,
   .backdrop-blur-xl {
-    backdrop-filter: blur(4px) !important;
-    -webkit-backdrop-filter: blur(4px) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: rgba(14, 23, 21, 0.96) !important;
+  }
+}
+
+/* =============================================
+   Low-End Device & Android Tablet GPU Acceleration
+   (Targeting Samsung Galaxy Tab A, Mali-T830 / weak GPUs)
+   ============================================= */
+html.low-end-device,
+@media (max-width: 1280px) and (pointer: coarse),
+@media (max-width: 1024px) {
+  /* Complete removal of GPU fill-rate chokepoints (backdrop-filter Gaussian blur passes) */
+  html.low-end-device .glass-panel,
+  html.low-end-device .glass-player,
+  html.low-end-device .sp-mobile-nav,
+  html.low-end-device [class*="backdrop-blur-"],
+  .glass-panel,
+  .glass-player,
+  .sp-mobile-nav,
+  [class*="backdrop-blur-"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html.low-end-device .glass-panel,
+  .glass-panel {
+    background: rgba(18, 18, 18, 0.96) !important;
+  }
+
+  html.low-end-device .glass-player,
+  .glass-player {
+    background: #0e1715 !important;
+  }
+
+  html.low-end-device .sp-mobile-nav,
+  .sp-mobile-nav {
+    background: #0b1110 !important;
+  }
+
+  html.low-end-device [class*="bg-black/"][class*="backdrop-blur-"],
+  [class*="bg-black/"][class*="backdrop-blur-"] {
+    background-color: rgba(0, 0, 0, 0.88) !important;
+  }
+
+  /* Offscreen DOM virtualization for track list rows via browser native layout engine */
+  .sp-track-row {
+    content-visibility: auto;
+    contain-intrinsic-size: 56px;
+  }
+
+  /* Snappier lightweight shadows for low fill-rate tablet GPUs */
+  .brutal-shadow-lg {
+    box-shadow: 2px 2px 0px #0b1110 !important;
+  }
+  .brutal-shadow {
+    box-shadow: 1.5px 1.5px 0px #0b1110 !important;
   }
 }
 

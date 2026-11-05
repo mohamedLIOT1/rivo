@@ -1,0 +1,73 @@
+import React from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { Heart } from 'lucide-react-native';
+import { styles } from './fullPlayerStyles';
+
+export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
+  currentTrack,
+  trackId,
+  isLiked,
+  toggleLikeTrack,
+  vocalIsolationStatus,
+}) {
+  const genre = currentTrack?.genre || 'MUSIC';
+
+  return (
+    <View>
+      {/* Vocal isolation status banner if active */}
+      {vocalIsolationStatus && (
+        <View style={styles.vocalBannerBox}>
+          <View style={styles.vocalBannerHeader}>
+            <View style={styles.vocalBannerLeft}>
+              <View style={styles.vocalPingDot} />
+              <Text style={styles.vocalBannerTitle}>AI VOCAL ISOLATION</Text>
+            </View>
+            <Text style={styles.vocalBannerEta}>
+              {vocalIsolationStatus.eta ? `${vocalIsolationStatus.eta} (${vocalIsolationStatus.progress || 0}%)` : `Isolating vocals... ${vocalIsolationStatus.progress || 0}%`}
+            </Text>
+          </View>
+          <View style={styles.vocalProgressBarBg}>
+            <View
+              style={[
+                styles.vocalProgressBarFill,
+                { width: `${Math.min(100, Math.max(5, Number(vocalIsolationStatus.progress || 0)))}%` }
+              ]}
+            />
+          </View>
+        </View>
+      )}
+
+      {/* Song Title & Action Info Bar */}
+      <View style={styles.trackInfoRow}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <View style={styles.genreBadge}>
+            <Text style={styles.genreBadgeText}>
+              {String(genre).toUpperCase()}
+            </Text>
+          </View>
+          <Text style={styles.songTitle} numberOfLines={1}>
+            {currentTrack?.title || 'Untitled Track'}
+          </Text>
+          <Text style={styles.songArtist} numberOfLines={1}>
+            {currentTrack?.artist || 'Unknown Artist'}
+          </Text>
+        </View>
+
+        {/* Heart Button */}
+        <TouchableOpacity
+          onPress={() => toggleLikeTrack(trackId)}
+          style={styles.deckHeartBtn}
+          activeOpacity={0.8}
+        >
+          <Heart
+            size={20}
+            color={isLiked ? '#ef4444' : '#9ca3af'}
+            fill={isLiked ? '#ef4444' : 'transparent'}
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+});
+
+export default FullPlayerTrackInfo;

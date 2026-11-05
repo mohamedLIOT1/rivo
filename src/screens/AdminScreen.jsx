@@ -12,6 +12,7 @@ import EditArtistModal from '../components/EditArtistModal';
 import AddAlbumModal from '../components/AddAlbumModal';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import VerifiedBadge from '../components/VerifiedBadge';
+import { useTranslation } from '../context/PreferencesContext';
 
 export default function AdminScreen({
   currentUser,
@@ -32,6 +33,7 @@ export default function AdminScreen({
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
+  const { t, isRTL } = useTranslation();
   const isAdmin = isUserAdmin(currentUser);
 
   // 'accounts' | 'tracks' | 'albums' | 'artists' | 'playlists' | 'lyrics'
@@ -300,16 +302,16 @@ export default function AdminScreen({
         <div className="w-16 h-16 rounded-2xl bg-red-500/20 text-red-500 flex items-center justify-center mb-4 brutal-border">
           <ShieldAlert size={32} />
         </div>
-        <h2 className="text-xl font-mono font-black uppercase mb-2">Access Denied</h2>
+        <h2 className="text-xl font-mono font-black uppercase mb-2">{t('admin.accessDenied')}</h2>
         <p className="text-sm max-w-md font-sans mb-6 text-zinc-400">
-          Administrator privileges are required to access this portal. Designated site administrators: <strong>Lio</strong>, <strong>Ali</strong>, and <strong>Tester</strong>.
+          {t('admin.accessDeniedDesc')}
         </p>
         {onBack && (
           <button
             onClick={onBack}
             className="px-5 py-2.5 bg-[#17a398] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm cursor-pointer rounded-xl"
           >
-            Back to Home
+            {t('admin.backToHome')}
           </button>
         )}
       </div>
@@ -372,9 +374,9 @@ export default function AdminScreen({
               className={`p-2.5 brutal-border brutal-shadow-sm rounded-xl cursor-pointer transition-transform hover:-translate-x-1 ${
                 isDark ? 'bg-[#182320] text-zinc-300 hover:text-white border-zinc-700' : 'bg-[#ede5d3] text-black border-black hover:bg-white'
               }`}
-              title="Back"
+              title={t('admin.back')}
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={18} className={isRTL ? 'rotate-180' : ''} />
             </button>
           )}
           <div className="w-10 h-10 rounded-xl bg-[#f59e0b] text-black flex items-center justify-center brutal-border shrink-0">
@@ -383,14 +385,14 @@ export default function AdminScreen({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl sm:text-2xl font-mono font-black uppercase tracking-wider">
-                Admin Control Center
+                {t('admin.portalTitle')}
               </h1>
               <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded bg-[#f59e0b] text-black">
-                Root Admin
+                {t('admin.rootAdmin')}
               </span>
             </div>
             <p className={`text-xs font-sans ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Full administrative privileges: Edit artists, albums, songs, playlists, user roles, and lyrics.
+              {t('admin.adminDescription')}
             </p>
           </div>
         </div>
@@ -400,19 +402,19 @@ export default function AdminScreen({
             isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
             <Users size={14} className="text-[#17a398]" />
-            <span><strong>{users.length}</strong> Users</span>
+            <span>{t('admin.usersCount', { count: users.length })}</span>
           </div>
           <div className={`px-3 py-1.5 rounded-xl brutal-border flex items-center gap-1.5 ${
             isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
             <Music2 size={14} className="text-[#f59e0b]" />
-            <span><strong>{tracks.length}</strong> Songs</span>
+            <span>{t('admin.songsCount', { count: tracks.length })}</span>
           </div>
           <div className={`px-3 py-1.5 rounded-xl brutal-border flex items-center gap-1.5 ${
             isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
             <Disc size={14} className="text-[#26c4b7]" />
-            <span><strong>{adminAlbums.length}</strong> Albums</span>
+            <span>{t('admin.albumsCount', { count: adminAlbums.length })}</span>
           </div>
         </div>
       </div>
@@ -424,89 +426,103 @@ export default function AdminScreen({
       )}
 
       {/* ── Navigation Tabs ── */}
-      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 border-b-2 border-zinc-700/50">
+      <div className={`flex items-center gap-2 mb-6 overflow-x-auto pb-2 border-b-2 border-zinc-700/50 ${isRTL ? 'flex-row-reverse' : ''}`}>
         <button
           onClick={() => setActiveTab('accounts')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'accounts'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <Users size={14} />
-          <span>Accounts ({users.length})</span>
+          <span>{t('admin.tabAccounts', { count: users.length })}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('tracks')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'tracks'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <Music2 size={14} />
-          <span>Songs ({tracks.length})</span>
+          <span>{t('admin.tabTracks', { count: tracks.length })}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('albums')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'albums'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <Disc size={14} />
-          <span>Albums ({adminAlbums.length})</span>
+          <span>{t('admin.tabAlbums', { count: adminAlbums.length })}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('artists')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'artists'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <Sparkles size={14} />
-          <span>Artists ({artistsList.length})</span>
+          <span>{t('admin.tabArtists', { count: artistsList.length })}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('playlists')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'playlists'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <ListMusic size={14} />
-          <span>Playlists ({adminPlaylists.length})</span>
+          <span>{t('admin.tabPlaylists', { count: adminPlaylists.length })}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('lyrics')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'lyrics'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <FileText size={14} />
-          <span>Lyrics Hub</span>
+          <span>{t('admin.tabLyrics', { count: tracks.length })}</span>
         </button>
 
         <button
           onClick={() => setActiveTab('analytics')}
-          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase tracking-wider brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
             activeTab === 'analytics'
               ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
               : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
           }`}
         >
           <BarChart2 size={14} />
-          <span>Analytics</span>
+          <span>{t('admin.tabAnalytics')}</span>
         </button>
       </div>
 

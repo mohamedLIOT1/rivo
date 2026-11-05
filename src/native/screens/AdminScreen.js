@@ -35,6 +35,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 
@@ -43,6 +44,7 @@ export default function AdminScreen() {
   const { playTrack } = useAudioPlayer();
   const { showToast } = useToast();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
 
   const isAdmin = currentUser?.role === 'admin' || currentUser?.email?.includes('admin');
 
@@ -443,42 +445,42 @@ export default function AdminScreen() {
   }, [adminPlaylists, playlistQuery]);
 
   const TABS = [
-    { id: 'tracks', label: 'SONGS', count: tracks.length, icon: Music2 },
-    { id: 'accounts', label: 'ACCOUNTS', count: users.length, icon: Users },
-    { id: 'albums', label: 'ALBUMS', count: albums.length, icon: Disc },
-    { id: 'artists', label: 'ARTISTS', count: artists.length, icon: UserCheck },
-    { id: 'playlists', label: 'PLAYLISTS', count: adminPlaylists.length, icon: ListMusic },
-    { id: 'analytics', label: 'ANALYTICS', count: null, icon: BarChart2 },
+    { id: 'tracks', label: isRTL ? 'الأغاني' : 'SONGS', count: tracks.length, icon: Music2 },
+    { id: 'accounts', label: isRTL ? 'الحسابات' : 'ACCOUNTS', count: users.length, icon: Users },
+    { id: 'albums', label: isRTL ? 'الألبومات' : 'ALBUMS', count: albums.length, icon: Disc },
+    { id: 'artists', label: isRTL ? 'الفنانون' : 'ARTISTS', count: artists.length, icon: UserCheck },
+    { id: 'playlists', label: isRTL ? 'القوائم' : 'PLAYLISTS', count: adminPlaylists.length, icon: ListMusic },
+    { id: 'analytics', label: isRTL ? 'الإحصائيات' : 'ANALYTICS', count: null, icon: BarChart2 },
   ];
 
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+        <View style={isRTL && { alignItems: 'flex-end' }}>
+          <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 6 }, isRTL && { flexDirection: 'row-reverse' }]}>
             <ShieldCheck size={18} color={isAdmin ? colors.mint : colors.rust} />
-            <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]}>ADMIN CONSOLE</Text>
+            <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]}>{t('admin.portalTitle')}</Text>
           </View>
-          <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>CONTENT & COMMUNITY MANAGEMENT</Text>
+          <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>{t('admin.adminDescription')}</Text>
         </View>
 
         <TouchableOpacity
-          style={styles.refreshBtn}
+          style={[styles.refreshBtn, isRTL && { flexDirection: 'row-reverse' }]}
           onPress={handleRefreshCurrent}
           activeOpacity={0.8}
         >
           <RefreshCw size={13} color="#082621" />
-          <Text style={styles.refreshText}>REFRESH</Text>
+          <Text style={styles.refreshText}>{t('admin.refresh') || 'REFRESH'}</Text>
         </TouchableOpacity>
       </View>
 
       {/* Warning if not admin */}
       {!isAdmin && (
-        <View style={styles.warningCard}>
+        <View style={[styles.warningCard, isRTL && { flexDirection: 'row-reverse' }]}>
           <AlertTriangle size={16} color={colors.rust} />
-          <Text style={styles.warningText}>
-            Read-only mode. You need admin permissions for destructive actions.
+          <Text style={[styles.warningText, isRTL && { textAlign: 'right' }]}>
+            {t('admin.accessDeniedDesc')}
           </Text>
         </View>
       )}
@@ -522,8 +524,8 @@ export default function AdminScreen() {
             <View style={styles.searchBox}>
               <Search size={14} color="#9ca3af" />
               <TextInput
-                style={styles.searchInput}
-                placeholder="Search songs, artists, IDs..."
+                style={[styles.searchInput, isRTL && { textAlign: 'right' }]}
+                placeholder={t('admin.searchTracks') || 'Search songs, artists, IDs...'}
                 placeholderTextColor="#6b7280"
                 value={trackQuery}
                 onChangeText={setTrackQuery}
@@ -531,21 +533,28 @@ export default function AdminScreen() {
               />
             </View>
 
-            <View style={styles.filterPillsRow}>
-              {['all', 'songs', 'quran'].map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[styles.filterPill, trackFilter === f && styles.filterPillActive]}
-                  onPress={() => setTrackFilter(f)}
-                >
-                  <Text style={[styles.filterPillText, trackFilter === f && styles.filterPillTextActive]}>
-                    {f.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            <View style={[styles.filterPillsRow, isRTL && { flexDirection: 'row-reverse' }]}>
+              {['all', 'songs', 'quran'].map((f) => {
+                const label = f === 'all' 
+                  ? (t('admin.filterAll') || 'ALL')
+                  : f === 'songs' 
+                    ? (t('admin.filterSongs') || 'SONGS')
+                    : (t('admin.filterQuran') || 'QURAN');
+                return (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterPill, trackFilter === f && styles.filterPillActive]}
+                    onPress={() => setTrackFilter(f)}
+                  >
+                    <Text style={[styles.filterPillText, trackFilter === f && styles.filterPillTextActive, isRTL && { letterSpacing: 0 }]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
 
               <TouchableOpacity
-                style={styles.dedupeBtn}
+                style={[styles.dedupeBtn, isRTL && { flexDirection: 'row-reverse' }]}
                 onPress={handleDeduplicateTracks}
                 disabled={isDeduplicating}
                 activeOpacity={0.8}
@@ -555,7 +564,9 @@ export default function AdminScreen() {
                 ) : (
                   <>
                     <Sparkles size={11} color="#082621" strokeWidth={2.5} />
-                    <Text style={styles.dedupeBtnText}>DEDUPLICATE</Text>
+                    <Text style={[styles.dedupeBtnText, isRTL && { letterSpacing: 0 }]}>
+                      {t('admin.deduplicateSongs') || 'DEDUPLICATE'}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -1022,11 +1033,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   headerSub: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontSize: 10,
     color: colors.mint,
     marginTop: 2,
-    letterSpacing: 1,
+    letterSpacing: 0,
   },
   refreshBtn: {
     backgroundColor: colors.mint,
@@ -1302,11 +1313,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   loadMoreBtnText: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontWeight: '900',
     fontSize: 10,
     color: colors.mint,
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
   analyticsContainer: {
     paddingBottom: 24,

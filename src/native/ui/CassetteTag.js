@@ -1,11 +1,20 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { colors } from '../theme/colors';
+import { isArabicText } from '../theme/typography';
 
 function CassetteTag({ label, bg = colors.deepForest, textColor = colors.tealLight, style }) {
+  const isAr = isArabicText(label);
+
   return (
     <View style={[styles.tag, { backgroundColor: bg }, style]}>
-      <Text style={[styles.text, { color: textColor }]}>
+      <Text
+        style={[
+          styles.text,
+          { color: textColor },
+          isAr && styles.textArabic
+        ]}
+      >
         {label}
       </Text>
     </View>
@@ -29,5 +38,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  textArabic: {
+    fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif',
+    letterSpacing: 0,
+    textTransform: 'none',
+    lineHeight: 15,
   },
 });

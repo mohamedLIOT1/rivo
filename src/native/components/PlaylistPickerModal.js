@@ -1,10 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Platform } from 'react-native';
 import { X, Plus, FolderPlus, Music, Check } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
+
+const PLAYLIST_ROW_HEIGHT = 65;
+
+const PlaylistItemRow = React.memo(function PlaylistItemRow({
+  item,
+  isProcessing,
+  onSelect,
+}) {
+  const count = Array.isArray(item.tracks) ? item.tracks.length : 0;
+  return (
+    <TouchableOpacity
+      style={styles.playlistItem}
+      onPress={() => onSelect(item)}
+      disabled={isProcessing}
+      activeOpacity={0.7}
+    >
+      <View style={styles.playlistIcon}>
+        <Music size={16} color={colors.mint} />
+      </View>
+      <View style={{ flex: 1, marginLeft: 10 }}>
+        <Text style={styles.playlistName} numberOfLines={1}>
+          {item.name}
+        </Text>
+        <Text style={styles.playlistCount}>{count} TRACKS</Text>
+      </View>
+      {isProcessing ? (
+        <ActivityIndicator size="small" color={colors.teal} />
+      ) : (
+        <View style={styles.addPill}>
+          <Check size={14} color={colors.ink} />
+          <Text style={styles.addPillText}>ADD</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
 
 export default function PlaylistPickerModal({ visible, track, onClose }) {
   const { playlists, createPlaylist, addToPlaylist, token } = useUser();
@@ -55,6 +91,23 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
       setAddingId(null);
     }
   };
+
+  const getItemLayout = useCallback((_, index) => ({
+    length: PLAYLIST_ROW_HEIGHT,
+    offset: PLAYLIST_ROW_HEIGHT * index,
+    index,
+  }), []);
+
+  const renderPlaylistItem = useCallback(({ item }) => {
+    const pId = item._id || item.id;
+    return (
+      <PlaylistItemRow
+        item={item}
+        isProcessing={addingId === pId}
+        onSelect={handleSelectPlaylist}
+      />
+    );
+  }, [addingId, handleSelectPlaylist]);
 
   return (
     <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'fade'} transparent onRequestClose={onClose}>
@@ -114,41 +167,12 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
                 data={playlists}
                 keyExtractor={(item, index) => String(item._id || item.id || index)}
                 style={{ maxHeight: 280 }}
-                windowSize={5}
-                maxToRenderPerBatch={8}
+                windowSize={3}
+                maxToRenderPerBatch={6}
                 initialNumToRender={8}
                 removeClippedSubviews={true}
-                renderItem={({ item }) => {
-                  const pId = item._id || item.id;
-                  const count = Array.isArray(item.tracks) ? item.tracks.length : 0;
-                  const isProcessing = addingId === pId;
-
-                  return (
-                    <TouchableOpacity
-                      style={styles.playlistItem}
-                      onPress={() => handleSelectPlaylist(item)}
-                      disabled={isProcessing}
-                    >
-                      <View style={styles.playlistIcon}>
-                        <Music size={16} color={colors.mint} />
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.playlistName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
-                        <Text style={styles.playlistCount}>{count} TRACKS</Text>
-                      </View>
-                      {isProcessing ? (
-                        <ActivityIndicator size="small" color={colors.teal} />
-                      ) : (
-                        <View style={styles.addPill}>
-                          <Check size={14} color={colors.ink} />
-                          <Text style={styles.addPillText}>ADD</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                }}
+                getItemLayout={getItemLayout}
+                renderItem={renderPlaylistItem}
               />
             )}
           </View>

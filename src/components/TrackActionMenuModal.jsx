@@ -7,6 +7,7 @@ import ConfirmModal from './ConfirmModal';
 import { isUserAdmin } from '../utils/adminUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useDownloadManager } from '../context/DownloadContext';
+import { useTranslation } from '../context/PreferencesContext';
 
 export default function TrackActionMenuModal({
   isOpen,
@@ -26,6 +27,7 @@ export default function TrackActionMenuModal({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const isDark = globalTheme === 'dark';
   const isAdmin = isUserAdmin(currentUser);
+  const { t, isRTL } = useTranslation();
   const { currentTrack, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
@@ -131,7 +133,7 @@ export default function TrackActionMenuModal({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-display font-black truncate">{track.title}</p>
               <p className={`text-xs truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                {track.artist || 'Unknown Artist'}
+                {track.artist || t('common.unknownArtist')}
               </p>
               {track.album && (
                 <p className={`text-[10px] font-mono truncate ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
@@ -144,7 +146,7 @@ export default function TrackActionMenuModal({
               className={`p-2 rounded-xl cursor-pointer transition-colors ${
                 isDark ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'text-zinc-600 hover:text-black hover:bg-[#ede5d3]'
               }`}
-              title="Close"
+              title={t('common.close')}
             >
               <X size={18} />
             </button>
@@ -161,7 +163,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <Play size={16} className="text-[#17a398]" />
-                <span>Play Track Now</span>
+                <span>{t('modals.playNow')}</span>
               </button>
             )}
 
@@ -174,7 +176,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <ListPlus size={16} className="text-[#26c4b7]" />
-                <span>{jamSession ? 'Play Next in Jam' : 'Play Next in Queue'}</span>
+                <span>{jamSession ? t('modals.playNextJam') : t('modals.playNext')}</span>
               </button>
             )}
 
@@ -187,7 +189,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <Plus size={16} className="text-[#26c4b7]" />
-                <span>{jamSession ? 'Add to Jam Queue' : 'Add to Queue'}</span>
+                <span>{jamSession ? t('modals.addToJamQueue') : t('modals.addToQueue')}</span>
               </button>
             )}
 
@@ -202,7 +204,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <BookmarkPlus size={16} className="text-[#f59e0b]" />
-                <span>Add to Playlist...</span>
+                <span>{t('modals.addToPlaylist')}</span>
               </button>
             )}
 
@@ -218,7 +220,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <X size={16} />
-                <span>Cancel Ongoing Download</span>
+                <span>{t('modals.cancelDownload')}</span>
               </button>
             ) : isTrackQueued?.(track.id || track._id) ? (
               <button
@@ -231,7 +233,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <X size={16} />
-                <span>Cancel Download (In Queue)</span>
+                <span>{t('modals.cancelDownloadQueue')}</span>
               </button>
             ) : track.downloaded ? (
               <button
@@ -248,7 +250,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <CheckCircle2 size={16} />
-                <span>Remove from Offline Downloads</span>
+                <span>{t('modals.inOfflineVault')}</span>
               </button>
             ) : (
               <button
@@ -261,7 +263,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <Download size={16} className="text-[#17a398]" />
-                <span>Download Song (Offline Tape)</span>
+                <span>{t('modals.downloadOffline')}</span>
               </button>
             )}
 
@@ -274,7 +276,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <BookmarkMinus size={16} />
-                <span>Remove from {playlist.name || 'Playlist'}</span>
+                <span>{t('modals.removeFromPlaylist')}</span>
               </button>
             )}
 
@@ -287,7 +289,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <Edit3 size={16} className="text-[#17a398]" />
-                <span>Edit Song Details (Admin)</span>
+                <span>{t('modals.editSongTitle')}</span>
               </button>
             )}
 
@@ -300,7 +302,7 @@ export default function TrackActionMenuModal({
                 }`}
               >
                 <Trash2 size={16} />
-                <span>Delete Song Permanently</span>
+                <span>{t('modals.deleteTrack')}</span>
               </button>
             )}
           </div>

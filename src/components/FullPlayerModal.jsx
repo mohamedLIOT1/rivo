@@ -10,6 +10,7 @@ import { API_BASE_URL } from '../config';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useUI } from '../context/UIContext';
+import { useTranslation } from '../context/PreferencesContext';
 import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
 import TrackActionMenuModal from './TrackActionMenuModal';
@@ -176,6 +177,7 @@ function FullPlayerModal({
     (currentTrack.audioUrl.includes('youtube.com') || currentTrack.audioUrl.includes('youtu.be'))
   );
 
+  const { t, isRTL } = useTranslation();
   const [activeTab, setActiveTab] = useState('player');
   const [desktopSideTab, setDesktopSideTab] = useState('lyrics');
   const [isVinylMode, setIsVinylMode] = useState(false);
@@ -1418,9 +1420,9 @@ function FullPlayerModal({
       {/* ── Tab Selector (Mobile only) ── */}
       <div className="relative z-10 flex lg:hidden justify-center gap-1 px-4 py-2">
         {[
-          { id: 'player', label: 'Now Playing' },
-          ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
-          { id: 'queue', label: isCurRadio ? `Radio Stations (${displayQueue.length})` : `Queue (${displayQueue.length})` },
+          { id: 'player', label: t('player.nowPlaying') || 'Now Playing' },
+          ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? (t('player.ayatTab') || 'Ayat') : (t('player.lyrics') || 'Lyrics') }] : []),
+          { id: 'queue', label: isCurRadio ? (t('player.radioStationsTab', { count: displayQueue.length }) || `Radio Stations (${displayQueue.length})`) : (t('player.queueTab', { count: displayQueue.length }) || `Queue (${displayQueue.length})`) },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -2038,7 +2040,7 @@ function FullPlayerModal({
                     : isDark ? 'bg-[#1c2422] text-zinc-400 hover:text-white' : 'bg-white text-[#0b1110] border border-[#0b1110] hover:bg-[#ede5d3]'
                 }`}
               >
-                {isCurQuran ? 'Mushaf' : 'Lyrics'}
+                {isCurQuran ? (t('player.mushafTab') || 'Mushaf') : (t('player.lyrics') || 'Lyrics')}
               </button>
               )}
               <button
@@ -2049,7 +2051,7 @@ function FullPlayerModal({
                     : isDark ? 'bg-[#1c2422] text-zinc-400 hover:text-white' : 'bg-white text-[#0b1110] border border-[#0b1110] hover:bg-[#ede5d3]'
                 }`}
               >
-                Queue ({displayQueue.length})
+                {t('player.queueTab', { count: displayQueue.length }) || `Queue (${displayQueue.length})`}
               </button>
             </div>
 

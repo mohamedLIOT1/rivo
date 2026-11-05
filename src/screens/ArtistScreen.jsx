@@ -11,6 +11,7 @@ import ArtistHero from '../components/artist/ArtistHero';
 import ArtistAlbumsGrid from '../components/artist/ArtistAlbumsGrid';
 import ArtistTrackList from '../components/artist/ArtistTrackList';
 import ArtistBioSection from '../components/artist/ArtistBioSection';
+import { useTranslation } from '../context/PreferencesContext';
 
 export const OFFICIAL_ALBUM_COVERS = {
   'roma': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/46/81/82/468182bd-6914-bf7d-2f4a-4cb4bd5175cd/196925215671.jpg/1200x1200bb.jpg',
@@ -69,6 +70,7 @@ export default function ArtistScreen({
   onToast = () => {}
 }) {
   const isDark = globalTheme === 'dark';
+  const { t, isRTL } = useTranslation();
   const { addToQueue, jamSession } = useAudioPlayer();
   const { isFollowingArtist, toggleFollowArtist } = useUser();
   const [artist, setArtist] = useState(initialArtist || { name: 'Artist' });
@@ -152,8 +154,8 @@ export default function ArtistScreen({
             isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
           }`}
         >
-          <ArrowLeft size={13} strokeWidth={2.5} />
-          <span>Back</span>
+          <ArrowLeft size={13} strokeWidth={2.5} className={isRTL ? 'rotate-180' : ''} />
+          <span>{t('admin.back') || 'Back'}</span>
         </button>
       )}
 

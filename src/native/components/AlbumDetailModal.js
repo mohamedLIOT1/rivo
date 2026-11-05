@@ -42,6 +42,19 @@ import MiniPlayer from './MiniPlayer';
 const { width } = Dimensions.get('window');
 
 
+function areEqualAlbumRow(prev, next) {
+  const prevId = String(prev.track?._id || prev.track?.id || '');
+  const nextId = String(next.track?._id || next.track?.id || '');
+  return (
+    prevId === nextId &&
+    prev.isCurrent === next.isCurrent &&
+    prev.isLiked === next.isLiked &&
+    prev.isDl === next.isDl &&
+    prev.isDark === next.isDark &&
+    prev.index === next.index
+  );
+}
+
 const AlbumTrackRow = React.memo(({
   track,
   index,
@@ -474,6 +487,49 @@ export default function AlbumDetailModal({
   }, [visible]);
   if (!visible || !album) return null;
 
+  const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
+  const likedSet = new Set((likedTrackIds || []).map(String));
+  const downloadedSet = new Set((downloadedTracks || []).map(d => String(d._id || d.id)));
+
+  const handlePlayRow = (selected) => {
+    playTrack(selected, effectiveAlbumTracks);
+  };
+
+  const handleDownloadRow = (selected) => {
+    if (handleDownloadTrack) handleDownloadTrack(selected);
+  };
+
+  const handleToggleLikeRow = (id) => {
+    if (toggleLikeTrack) toggleLikeTrack(id);
+  };
+
+  const renderTrackItem = ({ item: t, index }) => {
+    const trackId = String(t._id || t.id || '');
+    const isCurrent = curTrackId !== '' && curTrackId === trackId;
+    const isLiked = likedSet.has(trackId);
+    const isDl = downloadedSet.has(trackId) || Boolean(t.isDownloaded || t.localAudioUri);
+
+    return (
+      <AlbumTrackRow
+        track={t}
+        index={index}
+        isCurrent={isCurrent}
+        isLiked={isLiked}
+        isDl={isDl}
+        coverUri={coverUri}
+        albumArtist={albumArtist}
+        onPlay={handlePlayRow}
+        onOpenFullPlayer={handleOpenFull}
+        onDownload={handleDownloadRow}
+        onToggleLike={handleToggleLikeRow}
+        onTrackAction={handleTrackAction}
+        styles={styles}
+        formatDuration={formatDuration}
+        isDark={isDark}
+      />
+    );
+  };
+
   return (
     <Animated.View
       style={[
@@ -649,34 +705,7 @@ export default function AlbumDetailModal({
               </View>
             </View>
           )}
-          renderItem={({ item: t, index }) => {
-            const trackId = String(t._id || t.id || '');
-            const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
-            const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-            const isDl = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(
-              (d) => String(d._id || d.id) === trackId
-            ) || Boolean(t.isDownloaded || t.localAudioUri);
-
-            return (
-              <AlbumTrackRow
-                track={t}
-                index={index}
-                isCurrent={isCurrent}
-                isLiked={isLiked}
-                isDl={isDl}
-                coverUri={coverUri}
-                albumArtist={albumArtist}
-                onPlay={(selected) => playTrack(selected, effectiveAlbumTracks)}
-                onOpenFullPlayer={handleOpenFull}
-                onDownload={(selected) => !isDl && handleDownloadTrack && handleDownloadTrack(selected)}
-                onToggleLike={(id) => toggleLikeTrack && toggleLikeTrack(id)}
-                onTrackAction={handleTrackAction}
-                styles={styles}
-                formatDuration={formatDuration}
-                isDark={isDark}
-              />
-            );
-          }}
+          renderItem={renderTrackItem}
           ListFooterComponent={<View style={{ height: currentTrack ? 120 : 60 }} />}
         />
 

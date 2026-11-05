@@ -234,10 +234,10 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
           } else if (curData.status === 'failed') {
             dispatchVocalStatus({
               isProcessing: false,
-              error: 'Failed to isolate vocals'
+              error: 'Vocal isolation unavailable, smoothly playing original high-quality audio'
             });
-            setTimeout(() => dispatchVocalStatus(null), 4000);
-            return null;
+            setTimeout(() => dispatchVocalStatus(null), 3000);
+            break;
           } else {
             // If still preparing / idle, gently show progress and retry kickoff every 4 attempts
             displayProgress = Math.min(15, displayProgress + 1);
@@ -262,8 +262,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
       console.warn('[AudioContext] Vocal stream resolve notice:', e.message);
     }
     dispatchVocalStatus(null);
-    // Strictly prevent fallback to playing with background music when user enabled Vocal-Only mode
-    return null;
+    // Smoothly falls back to regular high-quality audio below without locking at 0:00
   }
 
   // 1. Prioritize offline storage / IndexedDB

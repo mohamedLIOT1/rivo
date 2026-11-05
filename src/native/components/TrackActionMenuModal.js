@@ -4,6 +4,7 @@ import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2, Trash2, Folde
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { exportTrackAudioFile } from '../services/downloadManager';
@@ -13,6 +14,7 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
   const { playTrack, addToQueue, handleDownloadTrack, downloadedTracks = [], downloadingIds = {} } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack, removeTrackFromPlaylist } = useUser();
   const { showToast } = useToast();
+  const { t, isRTL } = useTranslation();
 
   if (!visible || !track) return null;
 
@@ -38,17 +40,17 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
           <View style={styles.hardShadow} />
           <View style={styles.sheet}>
             {/* Header Track Preview */}
-            <View style={styles.header}>
+            <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
               <View style={styles.coverBox}>
                 <Image
                   source={{ uri: normalizeCoverUri(track.coverUrl || track.cover) }}
                   style={styles.cover}
                 />
               </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <CassetteTag label="AUDIO TAPE ACTIONS" bg={colors.ink} textColor={colors.tealLight} />
-                <Text style={styles.title} numberOfLines={1}>{track.title}</Text>
-                <Text style={styles.artist} numberOfLines={1}>{track.artist || 'Unknown Artist'}</Text>
+              <View style={{ flex: 1, marginHorizontal: 12 }}>
+                <CassetteTag label={t('modals.trackActionsTitle')} bg={colors.ink} textColor={colors.tealLight} />
+                <Text style={[styles.title, isRTL && { textAlign: 'right', letterSpacing: 0 }]} numberOfLines={1}>{track.title}</Text>
+                <Text style={[styles.artist, isRTL && { textAlign: 'right', letterSpacing: 0 }]} numberOfLines={1}>{track.artist || t('common.unknownArtist')}</Text>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                 <X size={20} color={colors.ink} />
@@ -58,29 +60,29 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
             {/* Actions List */}
             <View style={styles.actionsList}>
               <TouchableOpacity
-                style={styles.actionRow}
+                style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }]}
                 onPress={() => {
                   playTrack(track);
                   onClose();
                 }}
               >
                 <Play size={18} color={colors.ink} fill={colors.teal} />
-                <Text style={styles.actionText}>Play Now</Text>
+                <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }]}>{t('modals.playNow')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.actionRow}
+                style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }]}
                 onPress={() => {
                   addToQueue(track);
                   onClose();
                 }}
               >
                 <ListPlus size={18} color={colors.ink} />
-                <Text style={styles.actionText}>Add to Queue</Text>
+                <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }]}>{t('modals.addToQueue')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.actionRow}
+                style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }]}
                 onPress={() => {
                   toggleLikeTrack(trackId);
                   onClose();
@@ -91,24 +93,26 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   color={isLiked ? colors.crimson : colors.ink}
                   fill={isLiked ? colors.crimson : 'transparent'}
                 />
-                <Text style={styles.actionText}>{isLiked ? 'Remove from Liked' : 'Save to Liked Tapes'}</Text>
+                <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }]}>
+                  {isLiked ? t('modals.removeFromLiked') : t('modals.saveToLiked')}
+                </Text>
               </TouchableOpacity>
 
               {onOpenAddToPlaylist && (
                 <TouchableOpacity
-                  style={styles.actionRow}
+                  style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }]}
                   onPress={() => {
                     onClose();
                     onOpenAddToPlaylist(track);
                   }}
                 >
                   <ListPlus size={18} color={colors.tealDark} />
-                  <Text style={styles.actionText}>Add to Playlist</Text>
+                  <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }]}>{t('modals.addToPlaylist')}</Text>
                 </TouchableOpacity>
               )}
 
               <TouchableOpacity
-                style={[styles.actionRow, (isDownloaded || isDownloading) && { opacity: 0.9 }]}
+                style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }, (isDownloaded || isDownloading) && { opacity: 0.9 }]}
                 disabled={isDownloading}
                 onPress={() => {
                   handleDownloadTrack(track);
@@ -122,50 +126,50 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                 ) : (
                   <Download size={18} color={colors.ink} />
                 )}
-                <Text style={[styles.actionText, isDownloaded && { color: colors.tealDark, fontWeight: '700' }]}>
+                <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }, isDownloaded && { color: colors.tealDark, fontWeight: '700' }]}>
                   {isDownloading
-                    ? `Downloading (${downloadingIds[trackId] || 0}%)...`
+                    ? t('modals.downloadingPercent', { percent: downloadingIds[trackId] || 0 })
                     : isDownloaded
-                    ? 'Saved in Offline Vault'
-                    : 'Download Offline Tape'}
+                    ? t('modals.inOfflineVault')
+                    : t('modals.downloadOffline')}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.actionRow}
+                style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }]}
                 onPress={() => {
                   handleShare();
                   onClose();
                 }}
               >
                 <Share2 size={18} color={colors.ink} />
-                <Text style={styles.actionText}>Share Tape</Text>
+                <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }]}>{t('modals.shareTape')}</Text>
               </TouchableOpacity>
 
               {isDownloaded && (
                 <TouchableOpacity
-                  style={styles.actionRow}
+                  style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }]}
                   onPress={async () => {
                     try {
                       onClose();
-                      if (showToast) showToast('Preparing audio file for export...', 'info');
+                      if (showToast) showToast(t('modals.preparingExport'), 'info');
                       await exportTrackAudioFile(track);
-                      if (showToast) showToast('Export dialog opened!', 'success');
+                      if (showToast) showToast(t('modals.exportReady'), 'success');
                     } catch (e) {
-                      if (showToast) showToast(e.message || 'Export failed', 'error');
+                      if (showToast) showToast(e.message || t('modals.exportFailed'), 'error');
                     }
                   }}
                 >
                   <FolderDown size={18} color="#10b981" />
-                  <Text style={[styles.actionText, { color: '#10b981', fontWeight: 'bold' }]}>
-                    Export Audio File (حفظ في الملفات)
+                  <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }, { color: '#10b981', fontWeight: 'bold' }]}>
+                    {t('modals.exportAudioFile')}
                   </Text>
                 </TouchableOpacity>
               )}
 
               {Boolean(track.playlistId || track.playlist) && (
                 <TouchableOpacity
-                  style={[styles.actionRow, { borderTopWidth: 1.5, borderTopColor: '#ede5d3', marginTop: 4 }]}
+                  style={[styles.actionRow, isRTL && { flexDirection: 'row-reverse' }, { borderTopWidth: 1.5, borderTopColor: '#ede5d3', marginTop: 4 }]}
                   onPress={() => {
                     const plId = track.playlistId || track.playlist?.id || track.playlist?._id;
                     if (removeTrackFromPlaylist) removeTrackFromPlaylist(plId, trackId);
@@ -174,8 +178,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   }}
                 >
                   <Trash2 size={18} color="#dc2626" />
-                  <Text style={[styles.actionText, { color: '#dc2626', fontWeight: 'bold' }]}>
-                    Remove from Playlist
+                  <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }, { color: '#dc2626', fontWeight: 'bold' }]}>
+                    {t('modals.removeFromPlaylist')}
                   </Text>
                 </TouchableOpacity>
               )}

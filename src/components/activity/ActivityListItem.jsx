@@ -28,6 +28,24 @@ function formatTimeAgo(dateStr, isRTL) {
   return days === 1 ? 'yesterday' : `${days}d ago`;
 }
 
+function formatBadgePill(lastActiveAt, isRTL) {
+  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'OFFLINE';
+  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'OFFLINE';
+  if (diffSec < 60) return isRTL ? 'الآن' : 'NOW';
+  if (diffSec < 3600) {
+    const mins = Math.floor(diffSec / 60);
+    return isRTL ? `${mins} د` : `${mins}M`;
+  }
+  if (diffSec < 86400) {
+    const hours = Math.floor(diffSec / 3600);
+    return isRTL ? `${hours} س` : `${hours}H`;
+  }
+  const days = Math.floor(diffSec / 86400);
+  if (days === 1) return isRTL ? 'أمس' : '1D';
+  return isRTL ? `${days} ي` : `${days}D`;
+}
+
 function ActivityListItemComponent({
   friend,
   isDark = true,
@@ -117,18 +135,29 @@ function ActivityListItemComponent({
 
             {/* Time / Status pill cleanly positioned on the top-right */}
             {isLive ? (
-              <span className="flex items-center gap-1 text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded-md bg-[#17a398] text-[#0b1110] uppercase shrink-0 shadow-xs">
+              <span className="flex items-center gap-1 text-[9px] font-mono font-black px-2 py-0.5 rounded-full bg-[#17a398] text-[#0b1110] uppercase shrink-0 shadow-xs">
                 <Radio size={9} strokeWidth={3} className="shrink-0 animate-pulse" />
                 {isRTL ? 'مباشر' : 'LIVE'}
               </span>
             ) : isOnline ? (
-              <span className="text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded-md bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 uppercase shrink-0">
+              <span className="text-[9px] font-mono font-black px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 uppercase shrink-0">
                 {isRTL ? 'متصل' : 'ONLINE'}
               </span>
-            ) : null}
+            ) : (
+              <span
+                className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                  isDark
+                    ? 'bg-zinc-800/90 text-zinc-300 border border-zinc-700/60'
+                    : 'bg-[#ded4c1] text-zinc-700 border border-[#0b1110]/20'
+                }`}
+                title={friend.lastActiveAt ? (isRTL ? `آخر نشاط: ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last active: ${formatTimeAgo(friend.lastActiveAt, false)}`) : (isRTL ? 'غير متصل' : 'Offline')}
+              >
+                {formatBadgePill(friend.lastActiveAt, isRTL)}
+              </span>
+            )}
           </div>
 
-          {/* Listening State / Track Info Row - Full flex width */}
+          {/* Listening State / Track Info Row - Full width allocated to track title */}
           {isLive && listening ? (
             <div
               onClick={(e) => {
@@ -136,7 +165,7 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
-              title={`${isRTL ? 'يستمع إلى' : 'Playing'}: ${listening.title || 'Playing song'}`}
+              title={`${isRTL ? 'يستمع إلى' : 'Playing'}: ${listening.title || 'Playing song'}${listening.artist ? ` • ${listening.artist}` : ''}`}
             >
               <Disc
                 size={12}
@@ -144,9 +173,9 @@ function ActivityListItemComponent({
                 style={{ animationDuration: '3s' }}
                 strokeWidth={2.4}
               />
-              <p className="text-[11px] truncate leading-tight text-[#26c4b7] font-bold flex-1 min-w-0">
-                {isRTL ? 'يستمع إلى: ' : 'Playing: '}{listening.title || 'Playing song'}
-                {listening.artist ? ` • ${listening.artist}` : ''}
+              <p className="text-xs truncate leading-snug text-[#26c4b7] font-bold flex-1 min-w-0">
+                <span>{listening.title || 'Playing song'}</span>
+                {listening.artist ? <span className="opacity-80 font-medium"> • {listening.artist}</span> : ''}
               </p>
             </div>
           ) : listening && isOnline ? (
@@ -156,16 +185,16 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
-              title={`${isRTL ? 'متوقف مؤقتاً' : 'Paused'}: ${listening.title || 'Track'}`}
+              title={`${isRTL ? 'متوقف مؤقتاً' : 'Paused'}: ${listening.title || 'Track'}${listening.artist ? ` • ${listening.artist}` : ''}`}
             >
               <Disc size={11} className="shrink-0 text-[#f59e0b]" strokeWidth={2} />
               <p
-                className={`text-[11px] truncate leading-tight flex-1 min-w-0 ${
+                className={`text-xs truncate leading-snug flex-1 min-w-0 font-medium ${
                   isDark ? 'text-[#fcd34d]' : 'text-[#b45309]'
                 }`}
               >
-                {isRTL ? 'متوقف مؤقتاً: ' : 'Paused: '}{listening.title || 'Track'}
-                {listening.artist ? ` • ${listening.artist}` : ''}
+                <span>{listening.title || 'Track'}</span>
+                {listening.artist ? <span className="opacity-80"> • {listening.artist}</span> : ''}
               </p>
             </div>
           ) : listening && !isOnline ? (
@@ -175,24 +204,18 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
-              title={`${isRTL ? 'آخر استماع' : 'Last played'}: ${listening.title || 'Track'}${friend.lastActiveAt ? ` • ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : ''}`}
+              title={`${isRTL ? 'آخر استماع' : 'Last played'}: ${listening.title || 'Track'}${listening.artist ? ` • ${listening.artist}` : ''}`}
             >
-              <Disc size={11} className="shrink-0 text-[#64748b]" strokeWidth={1.8} />
-              <p className="text-[11px] truncate leading-tight text-[#94a3b8] flex-1 min-w-0">
-                <span className="text-[#64748b]">{isRTL ? 'آخر استماع: ' : 'Last played: '}</span>
-                <span>{listening.title || 'Track'}</span>
-                {listening.artist ? ` • ${listening.artist}` : ''}
-                {friend.lastActiveAt ? (
-                  <span className="text-[#64748b] font-mono text-[10.5px]"> • {formatTimeAgo(friend.lastActiveAt, isRTL)}</span>
-                ) : null}
+              <Disc size={11} className="shrink-0 text-zinc-500" strokeWidth={1.8} />
+              <p className="text-xs truncate leading-snug text-zinc-300 font-medium flex-1 min-w-0">
+                <span className="font-semibold text-white">{listening.title || 'Track'}</span>
+                {listening.artist ? <span className="text-zinc-400"> • {listening.artist}</span> : ''}
               </p>
             </div>
           ) : (
-            <p className="text-[11px] font-mono text-[#64748b] truncate leading-tight flex-1 min-w-0">
+            <p className="text-xs font-mono text-zinc-400 truncate leading-snug flex-1 min-w-0">
               {isOnline
                 ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Exploring music')
-                : friend.lastActiveAt
-                ? (isRTL ? `آخر ظهور ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last seen ${formatTimeAgo(friend.lastActiveAt, false)}`)
                 : (isRTL ? 'غير متصل' : 'Offline')}
             </p>
           )}

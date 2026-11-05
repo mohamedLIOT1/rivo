@@ -44,6 +44,7 @@ import { styles } from './artist/artistDetailStyles';
 import ArtistHeroSection from './artist/ArtistHeroSection';
 import ArtistAlbumsSection from './artist/ArtistAlbumsSection';
 import { useArtistDetailData } from './artist/useArtistDetailData';
+import { useTranslation } from '../context/LocalizationContext';
 
 
 const { width } = Dimensions.get('window');
@@ -86,6 +87,7 @@ export default function ArtistDetailModal({
   }, [onTrackAction, onClose]);
   const { likedTrackIds = [], toggleLikeTrack, currentUser } = useUser();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
   const [isFollowing, setIsFollowing] = useState(false);
   const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
   const [isEditArtistOpen, setIsEditArtistOpen] = useState(false);
@@ -171,13 +173,15 @@ export default function ArtistDetailModal({
   }, [visible]);
   if (!visible || !artistName) return null;
 
+  const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
+  const likedSet = React.useMemo(() => new Set((likedTrackIds || []).map(String)), [likedTrackIds]);
+  const downloadedSet = React.useMemo(() => new Set((downloadedTracks || []).map(d => String(d._id || d.id))), [downloadedTracks]);
+
   const renderTrackItem = React.useCallback(({ item: t, index }) => {
     const trackId = String(t._id || t.id || '');
-    const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
-    const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-    const isDl = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(
-      (d) => String(d._id || d.id) === trackId
-    ) || Boolean(t.isDownloaded || t.localAudioUri);
+    const isCurrent = curTrackId !== '' && curTrackId === trackId;
+    const isLiked = likedSet.has(trackId);
+    const isDl = downloadedSet.has(trackId) || Boolean(t.isDownloaded || t.localAudioUri);
 
     const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
     const trackCover = normalizeCoverUri(t.coverUrl || t.cover || artistCover);
@@ -203,7 +207,7 @@ export default function ArtistDetailModal({
           <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
             {numStr}
           </Text>
-          <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
+          <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" fadeDuration={0} />
           <View style={styles.trackDetails}>
             <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
               {t.title || 'Untitled Track'}
@@ -245,7 +249,7 @@ export default function ArtistDetailModal({
         </TouchableOpacity>
       </View>
     );
-  }, [currentTrack, likedTrackIds, downloadedTracks, artistCover, artistName, isDark, handleOpenFull, playTrack, finalTracks, downloadTrack, toggleLikeTrack, handleTrackAction]);
+  }, [curTrackId, likedSet, downloadedSet, artistCover, artistName, isDark, handleOpenFull, playTrack, finalTracks, downloadTrack, toggleLikeTrack, handleTrackAction]);
 
   return (
     <Animated.View
@@ -259,10 +263,10 @@ export default function ArtistDetailModal({
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar matching Image 2 */}
-        <View style={styles.topBar}>
-          <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight]} activeOpacity={0.8}>
-            <ArrowLeft size={20} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} />
-            <Text style={[styles.backText, !isDark && styles.backTextLight]}>BACK</Text>
+        <View style={[styles.topBar, isRTL && { alignItems: 'flex-end' }]}>
+          <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight, isRTL && { flexDirection: 'row-reverse', alignSelf: 'flex-end' }]} activeOpacity={0.8}>
+            <ArrowLeft size={20} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} style={isRTL && { transform: [{ rotate: '180deg' }] }} />
+            <Text style={[styles.backText, !isDark && styles.backTextLight]}>{t('admin.back') || 'BACK'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -273,6 +277,11 @@ export default function ArtistDetailModal({
           data={finalTracks}
           keyExtractor={(t, idx) => String(t._id || t.id || idx)}
           renderItem={renderTrackItem}
+          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 6}
+          windowSize={Platform.OS === 'android' ? 3 : 5}
+          updateCellsBatchingPeriod={50}
+          removeClippedSubviews={Platform.OS === 'android'}
           ListHeaderComponent={(
             <View>
               <ArtistHeroSection
@@ -303,12 +312,12 @@ export default function ArtistDetailModal({
               />
 
               <View style={[styles.sectionContainer, !isDark && styles.sectionContainerLight, { marginBottom: 0, paddingBottom: 0, borderBottomWidth: 0 }]}>
-                <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight, isRTL && { flexDirection: 'row-reverse' }]}>
+                  <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 6 }, isRTL && { flexDirection: 'row-reverse' }]}>
                     <Music size={16} color="#17a398" />
-                    <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>POPULAR TRACKS</Text>
+                    <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>{t('profile.popularTracks')}</Text>
                   </View>
-                  <Text style={styles.sectionCounter}>{finalTracks.length} SONGS</Text>
+                  <Text style={styles.sectionCounter}>{t('profile.tracksCount', { count: finalTracks.length })}</Text>
                 </View>
               </View>
             </View>

@@ -99,7 +99,7 @@ function HomeScreen({
     return Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
   }, [width, numColumns]);
 
-  const { playTrack, currentTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, isLoading, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
@@ -402,16 +402,20 @@ function HomeScreen({
 
   const renderItem = useCallback(({ item }) => {
     const itemId = String(item._id || item.id || '');
+    const isCurrent = curTrackId !== '' && curTrackId === itemId;
     return (
       <SongItem
         track={item}
-        isCurrent={curTrackId !== '' && curTrackId === itemId}
+        isCurrent={isCurrent}
+        isPlaying={isCurrent && isPlaying}
+        isLoading={isCurrent && isLoading}
         isLiked={likedSet.has(itemId)}
+        isDark={isDark}
         onPlay={handlePlaySong}
         onMorePress={handleMoreSong}
       />
     );
-  }, [curTrackId, likedSet, handlePlaySong, handleMoreSong]);
+  }, [curTrackId, isPlaying, isLoading, likedSet, isDark, handlePlaySong, handleMoreSong]);
 
   return (
     <>

@@ -1,9 +1,7 @@
 const path = require('path');
 const fs = require('fs');
-const { spawn, exec, execFile } = require('child_process');
-const crypto = require('crypto');
+const { spawn, execFile } = require('child_process');
 const { uploadsDir } = require('../middleware/upload');
-
 const {
   stemsDir,
   getSafeStemKey,
@@ -12,16 +10,7 @@ const {
   isVocalStemReady,
   createStemAlias
 } = require('./vocalStemUtils');
-
-const modelDir = process.env.AUDIO_SEPARATOR_MODEL_DIR || (process.platform === 'win32' ? 'C:/tmp/audio-separator-models' : '/tmp/audio-separator-models');
-
-// In-memory status map of active & recent jobs: safeKey -> jobObject
-const jobMap = new Map();
-
-// Strict FIFO isolation queue with Concurrency = 1
-const isolationQueue = [];
-let isWorkerRunning = false;
-
+const { prepareLocalAudioInput } = require('./vocalAudioHelper');
 const {
   registerWorkerHeartbeat,
   hasActiveExternalWorker,
@@ -29,6 +18,10 @@ const {
   getNextWorkerJob: getNextWorkerJobInternal,
   completeWorkerJob: completeWorkerJobInternal
 } = require('./vocalWorkerQueue');
+
+const jobMap = new Map();
+const isolationQueue = [];
+let isWorkerRunning = false;
 
 function getWorkerStatus() {
   return getWorkerStatusInternal(isolationQueue);
@@ -52,17 +45,15 @@ function completeWorkerJob(stemKey, vocalSourceFilePath, aliases = [], workerId 
   });
 }
 
-
 /**
- * Get the current progress/status of vocal isolation for a key
+ * Get current progress/status of vocal isolation.
+ * NEVER returns a stem URL until file is verified ready on disk.
  */
 function getVocalIsolationStatus(stemKey, aliases = []) {
   const allKeys = [stemKey, ...aliases].filter(Boolean).map(getSafeStemKey);
 
-  // 1. Check if any key is ready on disk
   for (const k of allKeys) {
     if (isVocalStemReady(k)) {
-      // Ensure other aliases link to this ready stem
       for (const alias of allKeys) {
         if (alias !== k) createStemAlias(k, alias);
       }
@@ -76,7 +67,6 @@ function getVocalIsolationStatus(stemKey, aliases = []) {
     }
   }
 
-  // 2. Check if any key is in-flight or queued
   for (const k of allKeys) {
     if (jobMap.has(k)) {
       const job = jobMap.get(k);
@@ -94,38 +84,31 @@ function getVocalIsolationStatus(stemKey, aliases = []) {
         status: job.status,
         progress: job.progress || 0,
         eta: job.eta || '',
-        url: `/uploads/stems/vocal_${k}.mp3`,
+        url: job.status === 'ready' ? `/uploads/stems/vocal_${k}.mp3` : null,
         error: job.error || null,
         cached: false
       };
     }
   }
 
-  return {
-    status: 'idle',
-    progress: 0,
-    eta: '',
-    url: null,
-    cached: false
-  };
+  return { status: 'idle', progress: 0, eta: '', url: null, cached: false };
 }
 
 /**
- * Process the queue items sequentially (Concurrency = 1)
+ * Process queue items sequentially (Concurrency = 1)
  */
 async function processQueue() {
-  if (isWorkerRunning) return;
-  if (isolationQueue.length === 0) return;
+  if (isWorkerRunning || isolationQueue.length === 0) return;
 
   isWorkerRunning = true;
   const currentTask = isolationQueue.shift();
 
   try {
-    // If stem was prepared in the meantime
     if (isVocalStemReady(currentTask.stemKey)) {
       currentTask.status = 'ready';
       currentTask.progress = 100;
       currentTask.eta = '00:00';
+      currentTask.url = `/uploads/stems/vocal_${currentTask.stemKey}.mp3`;
       for (const alias of currentTask.aliases) {
         if (alias !== currentTask.stemKey) createStemAlias(currentTask.stemKey, alias);
       }
@@ -137,14 +120,11 @@ async function processQueue() {
     currentTask.eta = 'Preparing audio...';
     currentTask.updatedAt = Date.now();
 
-    // If Google Colab T4 is active, wait briefly for it to pull
     if (hasActiveExternalWorker() && !currentTask.claimedByWorker) {
       currentTask.eta = 'Dispatching to Colab GPU...';
       currentTask.progress = 15;
       await new Promise(r => setTimeout(r, 4000));
-      if (isVocalStemReady(currentTask.stemKey) || currentTask.claimedByWorker) {
-        return;
-      }
+      if (isVocalStemReady(currentTask.stemKey) || currentTask.claimedByWorker) return;
     }
 
     await executeSeparation(currentTask);
@@ -153,6 +133,7 @@ async function processQueue() {
     currentTask.status = 'failed';
     currentTask.progress = 0;
     currentTask.eta = 'Isolation unavailable';
+    currentTask.url = null;
     currentTask.error = err.message;
     currentTask.failedAt = Date.now();
   } finally {
@@ -162,7 +143,7 @@ async function processQueue() {
 }
 
 /**
- * Executes a single AI / High-Precision vocal separation job
+ * Executes a single AI vocal separation job
  */
 function executeSeparation(task) {
   return new Promise(async (resolve, reject) => {
@@ -175,92 +156,45 @@ function executeSeparation(task) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
 
-      let localInput = task.inputSource;
-
-      // Step A0: If inputSource is a remote HTTP stream (e.g. googlevideo or proxy), download it locally first
-      if (typeof localInput === 'string' && (localInput.startsWith('http://') || localInput.startsWith('https://'))) {
-        console.log(`[VocalSeparator] Pre-downloading remote audio stream to local buffer for: ${safe}`);
-        task.eta = 'Buffering stream...';
-        task.progress = 10;
-        const downloadedRaw = path.join(tempDir, 'raw_input.m4a');
-
-        try {
-          const axios = require('axios');
-          const dlRes = await axios({
-            method: 'get',
-            url: localInput,
-            responseType: 'stream',
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-              'Accept': '*/*',
-              'Range': 'bytes=0-'
-            },
-            timeout: 45000
-          });
-
-          const writer = fs.createWriteStream(downloadedRaw);
-          await new Promise((resDl, rejDl) => {
-            dlRes.data.pipe(writer);
-            writer.on('finish', resDl);
-            writer.on('error', rejDl);
-          });
-
-          if (fs.existsSync(downloadedRaw) && fs.statSync(downloadedRaw).size > 10000) {
-            localInput = downloadedRaw;
-          }
-        } catch (dlErr) {
-          console.warn(`[VocalSeparator] Direct stream buffering fallback for ${safe}: ${dlErr.message}`);
-        }
-      }
+      // Step A0: Ensure local, readable audio file without 403 Forbidden
+      let localInput = await prepareLocalAudioInput(task.inputSource, safe, task.aliases, tempDir, task);
 
       const tempWavAudio = path.join(tempDir, 'clean_input.wav');
-
-      // Step A: Convert input audio to standard 16-bit PCM WAV
-      console.log(`[VocalSeparator] Converting input to WAV: ${safe}`);
       task.eta = 'Decoding audio...';
       task.progress = 20;
 
+      // Step A: Convert input audio to 16-bit PCM WAV
       await new Promise((resWav, rejWav) => {
         const args1 = ['-y', '-i', localInput, '-vn', '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le', tempWavAudio];
-        execFile('ffmpeg', args1, { timeout: 120000 }, (err, stdout, stderr) => {
+        execFile('ffmpeg', args1, { timeout: 120000 }, (err) => {
           if (!err && fs.existsSync(tempWavAudio) && fs.statSync(tempWavAudio).size > 1000) {
             return resWav();
           }
           const args2 = ['-y', '-i', localInput, '-map', '0:a:0?', '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le', tempWavAudio];
           execFile('ffmpeg', args2, { timeout: 120000 }, (err2, stdout2, stderr2) => {
             if (err2 || !fs.existsSync(tempWavAudio) || fs.statSync(tempWavAudio).size < 1000) {
-              return rejWav(new Error(`Failed to decode audio: ${stderr2 || stderr || err2?.message}`));
+              return rejWav(new Error(`Failed to decode audio: ${stderr2 || err2?.message}`));
             }
             resWav();
           });
         });
       });
 
-      if (!fs.existsSync(tempWavAudio) || fs.statSync(tempWavAudio).size < 1000) {
-        throw new Error('Converted WAV audio file is empty or missing');
-      }
-
       task.progress = 30;
       task.eta = 'Isolating vocals with Cloud GPU (A10G)...';
 
-      // Step B1: Try Cloud ZeroGPU (NVIDIA A10G) first
+      // Step B: AI vocal separation
       const cloudScript = path.join(__dirname, 'cloud_separator.py');
       let cloudDone = false;
       if (fs.existsSync(cloudScript)) {
         try {
-          console.log(`[VocalSeparator] Attempting AI cloud vocal separation for: ${safe}`);
-          task.progress = 30;
-          task.eta = 'Connecting to neural isolation engine...';
           await new Promise((resCloud, rejCloud) => {
             const pyBin = process.platform === 'win32' ? 'python' : 'python3';
-            const pyProc = spawn(pyBin, [cloudScript, tempWavAudio, targetStemPath], {
-              env: { ...process.env }
-            });
+            const pyProc = spawn(pyBin, [cloudScript, tempWavAudio, targetStemPath], { env: { ...process.env } });
 
             pyProc.stdout.on('data', (chunk) => {
               const text = chunk.toString();
-              const lines = text.split('\n');
-              for (const line of lines) {
+              for (const line of text.split('\n')) {
                 const match = line.match(/\[PROGRESS\]\s+(\d+)%\s+(.+)/);
                 if (match) {
                   task.progress = Math.min(99, Math.max(task.progress, parseInt(match[1])));
@@ -299,47 +233,41 @@ function executeSeparation(task) {
             });
           });
         } catch (cloudErr) {
-          console.warn(`[VocalSeparator] Cloud/Local AI isolation error: ${cloudErr.message}`);
+          console.warn(`[VocalSeparator] AI isolation notice: ${cloudErr.message}`);
         }
       }
 
       if (cloudDone) {
-        // Create links for all known aliases
         for (const alias of task.aliases) {
           if (alias !== safe) createStemAlias(safe, alias);
         }
         task.status = 'ready';
         task.progress = 100;
         task.eta = '00:00';
+        task.url = `/uploads/stems/vocal_${safe}.mp3`;
         task.error = null;
-        console.log(`[VocalSeparator] Successfully isolated pure vocal stem via AI model: ${targetStemPath}`);
         return resolve();
       }
 
-      // If AI isolation failed, mark task failed instead of returning audio with music
       throw new Error('AI vocal isolation failed across all cloud and local models');
     } catch (err) {
       reject(err);
     } finally {
       try {
-        if (fs.existsSync(tempDir)) {
-          fs.rmSync(tempDir, { recursive: true, force: true });
-        }
+        if (fs.existsSync(tempDir)) fs.rmSync(tempDir, { recursive: true, force: true });
       } catch {}
     }
   });
 }
 
 /**
- * Start asynchronous AI vocal isolation with Kim_Vocal_2 / High-Precision DSP (Queue Concurrency = 1)
+ * Start asynchronous AI vocal isolation
  */
 function startVocalIsolation(inputSource, stemKey, aliases = [], isPriority = false) {
   const safe = getSafeStemKey(stemKey);
   const allKeys = [safe, ...aliases.map(getSafeStemKey)].filter(Boolean);
-  const targetStemPath = getVocalStemPath(safe);
   const relativeUrl = `/uploads/stems/vocal_${safe}.mp3`;
 
-  // 1. If already on disk
   if (isVocalStemReady(safe)) {
     for (const alias of allKeys) {
       if (alias !== safe) createStemAlias(safe, alias);
@@ -347,15 +275,11 @@ function startVocalIsolation(inputSource, stemKey, aliases = [], isPriority = fa
     return { status: 'ready', progress: 100, eta: '00:00', url: relativeUrl, cached: true };
   }
 
-  // 2. Check if already active or queued
   for (const k of allKeys) {
     if (jobMap.has(k)) {
       const existing = jobMap.get(k);
-      if (existing.status === 'processing') {
-        return existing;
-      }
+      if (existing.status === 'processing') return existing;
       if (existing.status === 'queued') {
-        // If prioritized, promote to front of queue
         if (isPriority) {
           const idx = isolationQueue.indexOf(existing);
           if (idx > 0) {
@@ -365,14 +289,12 @@ function startVocalIsolation(inputSource, stemKey, aliases = [], isPriority = fa
         }
         return existing;
       }
-      // If failed recently (< 15 seconds), don't immediately retry
       if (existing.status === 'failed' && (Date.now() - (existing.failedAt || 0) < 15000)) {
         return existing;
       }
     }
   }
 
-  // 3. Register new job
   const job = {
     stemKey: safe,
     aliases: allKeys,
@@ -380,35 +302,24 @@ function startVocalIsolation(inputSource, stemKey, aliases = [], isPriority = fa
     status: 'queued',
     progress: 5,
     eta: isWorkerRunning ? 'Queued behind active isolation...' : 'Preparing audio...',
-    url: relativeUrl,
+    url: null,
     error: null,
     startedAt: Date.now(),
     updatedAt: Date.now()
   };
 
-  for (const k of allKeys) {
-    jobMap.set(k, job);
-  }
+  for (const k of allKeys) jobMap.set(k, job);
+  if (isPriority) isolationQueue.unshift(job);
+  else isolationQueue.push(job);
 
-  if (isPriority) {
-    isolationQueue.unshift(job);
-  } else {
-    isolationQueue.push(job);
-  }
-
-  // Trigger worker
   setImmediate(processQueue);
-
   return job;
 }
 
 function getJobInputSource(stemKey) {
   const safe = getSafeStemKey(stemKey);
   const job = jobMap.get(safe);
-  if (job && job.inputSource && fs.existsSync(job.inputSource)) {
-    return job.inputSource;
-  }
-  return null;
+  return (job && job.inputSource && fs.existsSync(job.inputSource)) ? job.inputSource : null;
 }
 
 module.exports = {

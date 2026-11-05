@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Music, AlignLeft, Edit3, Trash2, Sparkles, ShieldCheck, Check, Loader2, Tag, Image, Volume2 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ConfirmModal from './ConfirmModal';
+import { useTranslation } from '../context/PreferencesContext';
 
 export default function EditSongModal({ 
   isOpen, 
@@ -12,6 +13,7 @@ export default function EditSongModal({
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
+  const { t, isRTL } = useTranslation();
 
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
@@ -120,22 +122,22 @@ export default function EditSongModal({
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 mb-4 border-b-2 border-dashed border-zinc-700">
+        <div className={`flex items-center justify-between pb-4 mb-4 border-b-2 border-dashed border-zinc-700 ${isRTL ? 'text-right' : 'text-left'}`}>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-[#f59e0b] text-black flex items-center justify-center brutal-border shrink-0">
               <ShieldCheck size={18} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-display font-black text-sm uppercase tracking-wider">
-                  Admin: Edit Song Details
+                <h3 className="font-display font-black text-sm uppercase">
+                  {t('modals.editSongTitle')}
                 </h3>
                 <span className="text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded bg-[#f59e0b] text-black">
-                  Admin Exclusive
+                  {t('modals.adminExclusive')}
                 </span>
               </div>
               <p className={`text-[11px] font-sans ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                Editing song: <strong>{track.title}</strong> — {track.artist}
+                {t('modals.editingSong', { title: track.title, artist: track.artist })}
               </p>
             </div>
           </div>
@@ -144,6 +146,7 @@ export default function EditSongModal({
             className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
               isDark ? 'hover:bg-zinc-800 text-zinc-400 hover:text-white' : 'hover:bg-black/10 text-zinc-600'
             }`}
+            title={t('common.close')}
           >
             <X size={18} />
           </button>
@@ -152,7 +155,7 @@ export default function EditSongModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-              <Music size={13} className="text-[#17a398]" /> Song Title
+              <Music size={13} className="text-[#17a398]" /> {t('modals.songTitle')}
             </label>
             <input
               type="text"
@@ -168,7 +171,7 @@ export default function EditSongModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <Edit3 size={13} className="text-[#17a398]" /> Artist
+                <Edit3 size={13} className="text-[#17a398]" /> {t('modals.artist')}
               </label>
               <input
                 type="text"
@@ -182,13 +185,13 @@ export default function EditSongModal({
             </div>
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <AlignLeft size={13} className="text-[#17a398]" /> Album
+                <AlignLeft size={13} className="text-[#17a398]" /> {t('modals.album')}
               </label>
               <input
                 type="text"
                 value={album}
                 onChange={(e) => setAlbum(e.target.value)}
-                placeholder="Single / Album Name"
+                placeholder={t('modals.albumPlaceholder')}
                 className={`w-full p-2.5 text-xs font-bold rounded-lg brutal-border focus:outline-none ${
                   isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
                 }`}
@@ -199,7 +202,7 @@ export default function EditSongModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <Image size={13} className="text-[#17a398]" /> Cover Artwork URL
+                <Image size={13} className="text-[#17a398]" /> {t('modals.coverUrl')}
               </label>
               <input
                 type="text"
@@ -212,7 +215,7 @@ export default function EditSongModal({
             </div>
             <div>
               <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-                <Tag size={13} className="text-[#17a398]" /> Genre
+                <Tag size={13} className="text-[#17a398]" /> {t('modals.genre')}
               </label>
               <input
                 type="text"
@@ -228,7 +231,7 @@ export default function EditSongModal({
 
           <div>
             <label className="block text-[11px] font-mono font-bold uppercase mb-1 flex items-center gap-1.5">
-              <Volume2 size={13} className="text-[#17a398]" /> Audio Stream URL (Optional / MP3 Source)
+              <Volume2 size={13} className="text-[#17a398]" /> {t('modals.audioUrl')}
             </label>
             <input
               type="text"
@@ -244,7 +247,7 @@ export default function EditSongModal({
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-[11px] font-mono font-bold uppercase flex items-center gap-1.5">
-                <AlignLeft size={13} className="text-[#17a398]" /> Synced Lyrics Timestamps
+                <AlignLeft size={13} className="text-[#17a398]" /> {t('modals.lyrics')}
               </label>
               <button
                 type="button"
@@ -253,14 +256,14 @@ export default function EditSongModal({
                 className="text-[10px] font-mono font-black uppercase flex items-center gap-1 bg-[#26c4b7] text-[#082621] px-2 py-0.5 rounded brutal-border disabled:opacity-40 cursor-pointer"
               >
                 <Sparkles size={11} />
-                <span>{isAutoSyncing ? 'CALIBRATING...' : 'AI TIMESTAMP SYNC'}</span>
+                <span>{isAutoSyncing ? '...' : t('modals.aiSyncTimestamps')}</span>
               </button>
             </div>
             <textarea
               rows="5"
               value={lyricsText}
               onChange={(e) => setLyricsText(e.target.value)}
-              placeholder="Paste plain lyrics text or format manually:&#10;[0:00] Line 1&#10;[0:15] Line 2"
+              placeholder={t('modals.lyricsPlaceholder')}
               className={`w-full p-2.5 text-xs font-mono rounded-lg brutal-border focus:outline-none resize-none leading-relaxed ${
                 isDark ? 'bg-[#1a2421] text-white border-zinc-700 focus:border-[#17a398]' : 'bg-white text-black border-black focus:border-[#17a398]'
               }`}
@@ -273,7 +276,7 @@ export default function EditSongModal({
               className="flex-1 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm flex items-center justify-center gap-2 cursor-pointer rounded-xl"
             >
               <Check size={16} />
-              <span>SAVE SONG</span>
+              <span>{t('modals.saveChanges')}</span>
             </button>
             {onDeleteSong && (
               <button
@@ -282,7 +285,7 @@ export default function EditSongModal({
                 className="px-4 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-500 font-mono text-xs font-bold uppercase brutal-border border-red-500/40 rounded-xl flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 size={15} />
-                <span>DELETE</span>
+                <span>{t('common.delete')}</span>
               </button>
             )}
             <button
@@ -292,7 +295,7 @@ export default function EditSongModal({
                 isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-black border-black'
               }`}
             >
-              CANCEL
+              {t('common.cancel')}
             </button>
           </div>
         </form>

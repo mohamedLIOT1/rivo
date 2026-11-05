@@ -13,12 +13,14 @@ import {
 import { X, Radio, Play, Pause, Sparkles } from 'lucide-react-native';
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useTranslation } from '../context/LocalizationContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme = 'dark' }) {
   const isModalVisible = visible !== undefined ? visible : isOpen;
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioPlayer();
+  const { t, isRTL } = useTranslation();
 
   if (!isModalVisible) return null;
 
@@ -56,19 +58,25 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
       <View style={styles.backdrop}>
         <View style={styles.card}>
           {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerTitleWrap}>
+          <View style={[styles.header, isRTL && { flexDirection: 'row-reverse' }]}>
+            <View style={[styles.headerTitleWrap, isRTL && { flexDirection: 'row-reverse' }]}>
               <View style={styles.radioIconWrap}>
                 <Radio size={18} color="#d4af37" />
               </View>
               <View>
-                <View style={styles.titleRow}>
-                  <Text style={styles.title}>Holy Quran Radio</Text>
+                <View style={[styles.titleRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                  <Text style={[styles.title, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }]}>
+                    {t('quran.title')}
+                  </Text>
                   <View style={styles.liveTag}>
-                    <Text style={styles.liveTagText}>🔴 24/7</Text>
+                    <Text style={[styles.liveTagText, isRTL && { letterSpacing: 0 }]}>
+                      🔴 {t('quran.liveBadge')} 24/7
+                    </Text>
                   </View>
                 </View>
-                <Text style={styles.subtitle}>Official 24/7 Live Broadcast</Text>
+                <Text style={[styles.subtitle, isRTL && { letterSpacing: 0, textAlign: 'right' }]}>
+                  {t('quran.radioSub')}
+                </Text>
               </View>
             </View>
 
@@ -109,14 +117,14 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
                     )}
                   </View>
 
-                  <View style={styles.stationInfo}>
-                    <Text style={[styles.stationTitle, isCurrent && styles.stationTitleActive]} numberOfLines={1}>
+                  <View style={[styles.stationInfo, isRTL && { marginRight: 12, marginLeft: 0 }]}>
+                    <Text style={[styles.stationTitle, isCurrent && styles.stationTitleActive, isRTL && { textAlign: 'right', letterSpacing: 0 }]} numberOfLines={1}>
                       {item.title}
                     </Text>
-                    <Text style={styles.stationArtist} numberOfLines={1}>
+                    <Text style={[styles.stationArtist, isRTL && { textAlign: 'right', letterSpacing: 0 }]} numberOfLines={1}>
                       {item.artist}
                     </Text>
-                    <Text style={styles.stationDesc} numberOfLines={1}>
+                    <Text style={[styles.stationDesc, isRTL && { textAlign: 'right', letterSpacing: 0 }]} numberOfLines={1}>
                       {item.description}
                     </Text>
                   </View>
@@ -137,9 +145,11 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
           />
 
           {/* Footer */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, isRTL && { flexDirection: 'row-reverse' }]}>
             <Sparkles size={12} color="#d4af37" />
-            <Text style={styles.footerText}>Plays in background and lock screen uninterrupted</Text>
+            <Text style={[styles.footerText, isRTL && { letterSpacing: 0, textAlign: 'center' }]}>
+              {t('quran.uninterruptedBroadcast')}
+            </Text>
           </View>
         </View>
       </View>
