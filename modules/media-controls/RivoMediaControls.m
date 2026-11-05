@@ -1,49 +1,8 @@
 #import "RivoMediaControls.h"
+#import "RivoArtworkLoader.h"
 #import <MediaPlayer/MediaPlayer.h>
 #import <AVFoundation/AVFoundation.h>
-#import <WebKit/WebKit.h>
 #import <UserNotifications/UserNotifications.h>
-
-static NSCache<NSString *, UIImage *> *sArtworkCache = nil;
-
-static NSData *CreateSilentWavData(void) {
-    int sampleRate = 8000;
-    int numChannels = 1;
-    int bitsPerSample = 8;
-    int dataSize = sampleRate * 1; // 1 second
-    int fileSize = 36 + dataSize;
-    
-    NSMutableData *data = [NSMutableData dataWithCapacity:fileSize + 8];
-    [data appendBytes:"RIFF" length:4];
-    int32_t fSize = fileSize;
-    [data appendBytes:&fSize length:4];
-    [data appendBytes:"WAVEfmt " length:8];
-    int32_t subchunk1Size = 16;
-    [data appendBytes:&subchunk1Size length:4];
-    int16_t audioFormat = 1; // PCM
-    [data appendBytes:&audioFormat length:2];
-    int16_t channels = numChannels;
-    [data appendBytes:&channels length:2];
-    int32_t sRate = sampleRate;
-    [data appendBytes:&sRate length:4];
-    int32_t byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-    [data appendBytes:&byteRate length:4];
-    int16_t blockAlign = numChannels * (bitsPerSample / 8);
-    [data appendBytes:&blockAlign length:2];
-    int16_t bps = bitsPerSample;
-    [data appendBytes:&bps length:2];
-    [data appendBytes:"data" length:4];
-    int32_t dSize = dataSize;
-    [data appendBytes:&dSize length:4];
-    
-    void *silenceBuffer = malloc(dataSize);
-    if (silenceBuffer) {
-        memset(silenceBuffer, 128, dataSize); // 8-bit PCM silence
-        [data appendBytes:silenceBuffer length:dataSize];
-        free(silenceBuffer);
-    }
-    return data;
-}
 
 @implementation RivoMediaControls
 {
@@ -52,20 +11,16 @@ static NSData *CreateSilentWavData(void) {
     BOOL _audioSessionConfigured;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
-    AVAudioPlayer *_silentPlayer;
 }
 
 RCT_EXPORT_MODULE(RivoMediaControls);
 
-+ (void)initialize {
-    if (self == [RivoMediaControls class]) {
-        sArtworkCache = [[NSCache alloc] init];
-        sArtworkCache.countLimit = 50;
-    }
++ (BOOL)requiresMainQueueSetup {
+    return YES;
 }
 
 - (NSArray<NSString *> *)supportedEvents {
-    return @[@"onMediaAction"];
+    return @[@"onMediaAction", @"onOpenChatFromNotification"];
 }
 
 - (void)startObserving {
@@ -74,10 +29,6 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
 - (void)stopObserving {
     _hasListeners = NO;
-}
-
-+ (BOOL)requiresMainQueueSetup {
-    return YES;
 }
 
 - (instancetype)init {
@@ -95,54 +46,39 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     _audioSessionConfigured = YES;
     @try {
         AVAudioSession *session = [AVAudioSession sharedInstance];
+        NSError *categoryError = nil;
+        AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionAllowBluetooth |
+                                                AVAudioSessionCategoryOptionAllowBluetoothA2DP;
+        if (@available(iOS 10.0, *)) {
+            options |= AVAudioSessionCategoryOptionAllowAirPlay;
+        }
+
         [session setCategory:AVAudioSessionCategoryPlayback
-                 withOptions:(AVAudioSessionCategoryOptionAllowBluetooth |
-                              AVAudioSessionCategoryOptionAllowBluetoothA2DP |
-                              AVAudioSessionCategoryOptionDefaultToSpeaker)
-                       error:nil];
+                 withOptions:options
+                       error:&categoryError];
+
+        if (categoryError) {
+            NSLog(@"[RivoMediaControls] setCategory error: %@", categoryError.localizedDescription);
+        }
+
+        [session setMode:AVAudioSessionModeDefault error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     } @catch (NSException *e) {
-        NSLog(@"[RivoMediaControls] AudioSession configure error: %@", e);
+        NSLog(@"[RivoMediaControls] AudioSession configure exception: %@", e);
     }
 }
 
 - (void)sendActionSafely:(NSString *)action {
-    @try {
-        [self sendEventWithName:@"onMediaAction" body:action];
-    } @catch (NSException *e) {
-        NSLog(@"[RivoMediaControls] sendActionSafely error: %@", e);
-    }
-}
-
-- (WKWebView *)findActiveWebView {
-    for (UIWindow *window in [UIApplication sharedApplication].windows) {
-        WKWebView *found = [self searchWebViewInView:window];
-        if (found) return found;
-    }
-    if (@available(iOS 13.0, *)) {
-        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-            if ([scene isKindOfClass:[UIWindowScene class]]) {
-                UIWindowScene *windowScene = (UIWindowScene *)scene;
-                for (UIWindow *window in windowScene.windows) {
-                    WKWebView *found = [self searchWebViewInView:window];
-                    if (found) return found;
-                }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_hasListeners) {
+            @try {
+                [self sendEventWithName:@"onMediaAction" body:action];
+            } @catch (NSException *e) {
+                NSLog(@"[RivoMediaControls] sendActionSafely exception: %@", e);
             }
         }
-    }
-    return nil;
-}
-
-- (WKWebView *)searchWebViewInView:(UIView *)view {
-    if ([view isKindOfClass:[WKWebView class]]) {
-        return (WKWebView *)view;
-    }
-    for (UIView *subview in view.subviews) {
-        WKWebView *found = [self searchWebViewInView:subview];
-        if (found) return found;
-    }
-    return nil;
+    });
 }
 
 - (void)setupRemoteCommands {
@@ -151,14 +87,16 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
     MPRemoteCommandCenter *center = [MPRemoteCommandCenter sharedCommandCenter];
 
+    // Remove any previously registered targets to prevent duplicate handler invocation
     [center.playCommand removeTarget:nil];
     [center.pauseCommand removeTarget:nil];
     [center.togglePlayPauseCommand removeTarget:nil];
     [center.nextTrackCommand removeTarget:nil];
     [center.previousTrackCommand removeTarget:nil];
     [center.changePlaybackPositionCommand removeTarget:nil];
+    [center.likeCommand removeTarget:nil];
 
-    // Disable 10s skip commands so iOS displays Next / Prev track buttons
+    // Disable unused skip/seek buttons so standard Prev/Next buttons appear on Lock Screen & Dynamic Island
     center.skipForwardCommand.enabled = NO;
     [center.skipForwardCommand removeTarget:nil];
     center.skipBackwardCommand.enabled = NO;
@@ -168,347 +106,80 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     center.seekBackwardCommand.enabled = NO;
     [center.seekBackwardCommand removeTarget:nil];
 
+    // Play Command
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
-            [self->_silentPlayer play];
-        }
-
-        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPlay" expirationHandler:^{
-            if (bgTask != UIBackgroundTaskInvalid) {
-                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                bgTask = UIBackgroundTaskInvalid;
-            }
-        }];
-
         dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
-                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
-
-                WKWebView *wv = [self findActiveWebView];
-                if (wv) {
-                    if (@available(iOS 15.0, *)) {
-                        [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
-                    }
-                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = false; window.__RIVO_IS_PLAYING = true; if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('play'); } else if (typeof window.__RIVO_TOGGLE_PLAY === 'function') { window.__RIVO_TOGGLE_PLAY(); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
-                        if (bgTask != UIBackgroundTaskInvalid) {
-                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                            bgTask = UIBackgroundTaskInvalid;
-                        }
-                    }];
-                } else {
-                    if (bgTask != UIBackgroundTaskInvalid) {
-                        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                        bgTask = UIBackgroundTaskInvalid;
-                    }
-                }
-            } @catch (NSException *e) {
-                if (bgTask != UIBackgroundTaskInvalid) {
-                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                    bgTask = UIBackgroundTaskInvalid;
-                }
-            }
+            NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+            now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
+            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
         });
-
         [self sendActionSafely:@"play"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
+    // Pause Command
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
-            [self->_silentPlayer pause];
-        }
-
-        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPause" expirationHandler:^{
-            if (bgTask != UIBackgroundTaskInvalid) {
-                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                bgTask = UIBackgroundTaskInvalid;
-            }
-        }];
-
         dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
-                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
-
-                WKWebView *wv = [self findActiveWebView];
-                if (wv) {
-                    if (@available(iOS 15.0, *)) {
-                        [wv pauseAllMediaPlaybackWithCompletionHandler:nil];
-                    }
-                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = true; window.__RIVO_IS_PLAYING = false; if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('pause'); } else if (typeof window.__RIVO_TOGGLE_PLAY === 'function') { window.__RIVO_TOGGLE_PLAY(); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
-                        if (bgTask != UIBackgroundTaskInvalid) {
-                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                            bgTask = UIBackgroundTaskInvalid;
-                        }
-                    }];
-                } else {
-                    if (bgTask != UIBackgroundTaskInvalid) {
-                        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                        bgTask = UIBackgroundTaskInvalid;
-                    }
-                }
-            } @catch (NSException *e) {
-                if (bgTask != UIBackgroundTaskInvalid) {
-                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                    bgTask = UIBackgroundTaskInvalid;
-                }
-            }
+            NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+            now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
+            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
         });
-
         [self sendActionSafely:@"pause"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
+    // Toggle Play/Pause Command
     [center.togglePlayPauseCommand setEnabled:YES];
     [center.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaToggle" expirationHandler:^{
-            if (bgTask != UIBackgroundTaskInvalid) {
-                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                bgTask = UIBackgroundTaskInvalid;
-            }
-        }];
-
         dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
-                BOOL willPlay = (currentRate <= 0.0);
-                now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
-                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
-
-                if (willPlay) {
-                    if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) [self->_silentPlayer play];
-                } else {
-                    if (self->_silentPlayer && [self->_silentPlayer isPlaying]) [self->_silentPlayer pause];
-                }
-
-                WKWebView *wv = [self findActiveWebView];
-                if (wv) {
-                    if (@available(iOS 15.0, *)) {
-                        if (!willPlay) [wv pauseAllMediaPlaybackWithCompletionHandler:nil];
-                        else [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
-                    }
-                    NSString *actionStr = willPlay ? @"play" : @"pause";
-                    NSString *script = [NSString stringWithFormat:@"(function(){ try { window.__RIVO_USER_PAUSED = %@; window.__RIVO_IS_PLAYING = %@; if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('%@'); } else if (typeof window.__RIVO_TOGGLE_PLAY === 'function') { window.__RIVO_TOGGLE_PLAY(); } } catch(e){} })(); true;", willPlay ? @"false" : @"true", willPlay ? @"true" : @"false", actionStr];
-                    [wv evaluateJavaScript:script completionHandler:^(id res, NSError *err) {
-                        if (bgTask != UIBackgroundTaskInvalid) {
-                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                            bgTask = UIBackgroundTaskInvalid;
-                        }
-                    }];
-                } else {
-                    if (bgTask != UIBackgroundTaskInvalid) {
-                        [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                        bgTask = UIBackgroundTaskInvalid;
-                    }
-                }
-            } @catch (NSException *e) {
-                if (bgTask != UIBackgroundTaskInvalid) {
-                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                    bgTask = UIBackgroundTaskInvalid;
-                }
-            }
+            NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+            double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
+            BOOL willPlay = (currentRate <= 0.0);
+            now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
+            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
         });
-
         [self sendActionSafely:@"play_pause"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
+    // Next Track Command
     [center.nextTrackCommand setEnabled:YES];
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
-            [self->_silentPlayer play];
-        }
-
-        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaNext" expirationHandler:^{
-            if (bgTask != UIBackgroundTaskInvalid) {
-                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                bgTask = UIBackgroundTaskInvalid;
-            }
-        }];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                WKWebView *wv = [self findActiveWebView];
-                if (wv) {
-                    if (@available(iOS 15.0, *)) {
-                        [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
-                    }
-                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = false; window.__RIVO_IS_PLAYING = true; if (typeof window.__RIVO_NEXT_TRACK === 'function') { window.__RIVO_NEXT_TRACK(); } else if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('next'); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                            if (bgTask != UIBackgroundTaskInvalid) {
-                                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                                bgTask = UIBackgroundTaskInvalid;
-                            }
-                        });
-                    }];
-                } else {
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        if (bgTask != UIBackgroundTaskInvalid) {
-                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                            bgTask = UIBackgroundTaskInvalid;
-                        }
-                    });
-                }
-            } @catch (NSException *e) {
-                if (bgTask != UIBackgroundTaskInvalid) {
-                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                    bgTask = UIBackgroundTaskInvalid;
-                }
-            }
-        });
-
         [self sendActionSafely:@"next"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
+    // Previous Track Command
     [center.previousTrackCommand setEnabled:YES];
     [center.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        if (self->_silentPlayer && ![self->_silentPlayer isPlaying]) {
-            [self->_silentPlayer play];
-        }
-
-        __block UIBackgroundTaskIdentifier bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithName:@"RivoMediaPrev" expirationHandler:^{
-            if (bgTask != UIBackgroundTaskInvalid) {
-                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                bgTask = UIBackgroundTaskInvalid;
-            }
-        }];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                WKWebView *wv = [self findActiveWebView];
-                if (wv) {
-                    if (@available(iOS 15.0, *)) {
-                        [wv setAllMediaPlaybackSuspended:NO completionHandler:nil];
-                    }
-                    [wv evaluateJavaScript:@"(function(){ try { window.__RIVO_USER_PAUSED = false; window.__RIVO_IS_PLAYING = true; if (typeof window.__RIVO_PREV_TRACK === 'function') { window.__RIVO_PREV_TRACK(); } else if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('prev'); } } catch(e){} })(); true;" completionHandler:^(id res, NSError *err) {
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                            if (bgTask != UIBackgroundTaskInvalid) {
-                                [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                                bgTask = UIBackgroundTaskInvalid;
-                            }
-                        });
-                    }];
-                } else {
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        if (bgTask != UIBackgroundTaskInvalid) {
-                            [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                            bgTask = UIBackgroundTaskInvalid;
-                        }
-                    });
-                }
-            } @catch (NSException *e) {
-                if (bgTask != UIBackgroundTaskInvalid) {
-                    [[UIApplication sharedApplication] endBackgroundTask:bgTask];
-                    bgTask = UIBackgroundTaskInvalid;
-                }
-            }
-        });
-
         [self sendActionSafely:@"prev"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
+    // Scrub / Seek Command (Position Slider on Lock Screen and Dynamic Island)
     [center.changePlaybackPositionCommand setEnabled:YES];
     [center.changePlaybackPositionCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
         MPChangePlaybackPositionCommandEvent *posEvent = (MPChangePlaybackPositionCommandEvent *)event;
         if (posEvent) {
             double targetSecs = posEvent.positionTime;
             dispatch_async(dispatch_get_main_queue(), ^{
-                WKWebView *wv = [self findActiveWebView];
-                if (wv) {
-                    NSString *seekScript = [NSString stringWithFormat:@"(function(){ try { if (typeof window.__RIVO_MEDIA_SEEK === 'function') { window.__RIVO_MEDIA_SEEK(%f); } else if (typeof window.__RIVO_MEDIA_ACTION === 'function') { window.__RIVO_MEDIA_ACTION('seek:%f'); } } catch(e){} })(); true;", targetSecs, targetSecs];
-                    [wv evaluateJavaScript:seekScript completionHandler:nil];
-                }
+                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                now[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(targetSecs);
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
             });
-            [self sendActionSafely:[NSString stringWithFormat:@"seek:%f", posEvent.positionTime]];
+            [self sendActionSafely:[NSString stringWithFormat:@"seek:%f", targetSecs]];
         }
         return MPRemoteCommandHandlerStatusSuccess;
     }];
-}
 
-- (UIImage *)loadImageFromSource:(NSString *)source {
-    if (!source || [source length] == 0) return nil;
-
-    // 1. Check in-memory cache
-    UIImage *cached = [sArtworkCache objectForKey:source];
-    if (cached) return cached;
-
-    // 2. Base64 Data URI
-    if ([source hasPrefix:@"data:"]) {
-        NSRange commaRange = [source rangeOfString:@","];
-        if (commaRange.location != NSNotFound) {
-            NSString *base64Str = [source substringFromIndex:commaRange.location + 1];
-            NSData *data = [[NSData alloc] initWithBase64EncodedString:base64Str
-                                                               options:NSDataBase64DecodingIgnoreUnknownCharacters];
-            if (data && [data length] > 0) {
-                UIImage *img = [UIImage imageWithData:data];
-                if (img) {
-                    [sArtworkCache setObject:img forKey:source];
-                    return img;
-                }
-            }
-        }
-        return nil;
-    }
-
-    // 3. Local file path (file:// or /var/... or /private/var/...)
-    NSString *filePath = nil;
-    if ([source hasPrefix:@"file://"]) {
-        NSURL *url = [NSURL URLWithString:source];
-        filePath = [url path];
-        if (!filePath) {
-            filePath = [source substringFromIndex:7];
-        }
-    } else if ([source hasPrefix:@"/var/"] || [source hasPrefix:@"/private/var/"] || [source hasPrefix:@"/Users/"]) {
-        filePath = source;
-    }
-
-    if (filePath && [filePath length] > 0) {
-        if ([[NSFileManager defaultManager] fileExistsAtPath:filePath]) {
-            NSData *data = [NSData dataWithContentsOfFile:filePath];
-            if (data && [data length] > 0) {
-                UIImage *img = [UIImage imageWithData:data];
-                if (img) {
-                    [sArtworkCache setObject:img forKey:source];
-                    return img;
-                }
-            }
-        }
-    }
-
-    // 4. Remote HTTP/HTTPS URL
-    NSString *remoteUrl = source;
-    if ([remoteUrl hasPrefix:@"//"]) {
-        remoteUrl = [@"https:" stringByAppendingString:remoteUrl];
-    } else if ([remoteUrl hasPrefix:@"/"]) {
-        remoteUrl = [@"https://rivo-m.duckdns.org" stringByAppendingString:remoteUrl];
-    } else if ([remoteUrl hasPrefix:@"http://"]) {
-        remoteUrl = [@"https://" stringByAppendingString:[remoteUrl substringFromIndex:7]];
-    }
-
-    if ([remoteUrl hasPrefix:@"https://"]) {
-        NSString *encoded = [remoteUrl stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-        NSURL *url = [NSURL URLWithString:encoded ?: remoteUrl];
-        if (url) {
-            NSData *data = [NSData dataWithContentsOfURL:url options:NSDataReadingUncached error:nil];
-            if (data && [data length] > 0) {
-                UIImage *img = [UIImage imageWithData:data];
-                if (img) {
-                    [sArtworkCache setObject:img forKey:source];
-                    return img;
-                }
-            }
-        }
-    }
-
-    return nil;
+    // Like Command
+    [center.likeCommand setEnabled:YES];
+    [center.likeCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        [self sendActionSafely:@"like"];
+        return MPRemoteCommandHandlerStatusSuccess;
+    }];
 }
 
 RCT_EXPORT_METHOD(showNotification:(NSDictionary *)options) {
@@ -521,97 +192,75 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             [self configureAudioSession];
             [self setupRemoteCommands];
 
-            BOOL isPlaying = [options[@"isPlaying"] boolValue];
-
-            // Maintain silent background audio session so iOS never suspends the app or WKWebView
-            if (isPlaying) {
-                if (!self->_silentPlayer) {
-                    NSData *wavData = CreateSilentWavData();
-                    NSError *err = nil;
-                    self->_silentPlayer = [[AVAudioPlayer alloc] initWithData:wavData error:&err];
-                    self->_silentPlayer.numberOfLoops = -1; // Infinite loop
-                    self->_silentPlayer.volume = 0.01;
-                }
-                if (![self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer prepareToPlay];
-                    [self->_silentPlayer play];
-                }
-            } else {
-                if (self->_silentPlayer && [self->_silentPlayer isPlaying]) {
-                    [self->_silentPlayer pause];
-                }
+            BOOL isLockscreenEnabled = YES;
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            if ([defaults objectForKey:@"rivo_lockscreen_enabled"] != nil) {
+                isLockscreenEnabled = [defaults boolForKey:@"rivo_lockscreen_enabled"];
             }
 
+            if (!isLockscreenEnabled) {
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
+                return;
+            }
+
+            BOOL isPlaying = [options[@"isPlaying"] boolValue];
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
 
+            // Metadata for Lock Screen & Dynamic Island (Now Playing Widget)
+            nowPlaying[MPMediaItemPropertyMediaType] = @(MPMediaTypeMusic);
+            nowPlaying[MPNowPlayingInfoPropertyIsLiveStream] = @(NO);
+
             NSString *title = options[@"title"];
-            if (title && [title length] > 0) {
-                nowPlaying[MPMediaItemPropertyTitle] = title;
-            } else if (!nowPlaying[MPMediaItemPropertyTitle]) {
-                nowPlaying[MPMediaItemPropertyTitle] = @"Rivo Music";
-            }
+            nowPlaying[MPMediaItemPropertyTitle] = (title && title.length > 0) ? title : @"Rivo Music";
 
             NSString *artist = options[@"artist"];
-            if (artist && [artist length] > 0) {
-                nowPlaying[MPMediaItemPropertyArtist] = artist;
-            } else if (!nowPlaying[MPMediaItemPropertyArtist]) {
-                nowPlaying[MPMediaItemPropertyArtist] = @"Rivo";
-            }
+            nowPlaying[MPMediaItemPropertyArtist] = (artist && artist.length > 0) ? artist : @"Rivo";
+
+            nowPlaying[MPMediaItemPropertyAlbumTitle] = @"Rivo Music";
 
             nowPlaying[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? @(1.0) : @(0.0);
             nowPlaying[MPNowPlayingInfoPropertyDefaultPlaybackRate] = @(1.0);
 
             double duration = [options[@"duration"] doubleValue];
-            if (duration > 10000.0) {
-                duration = round(duration / 1000.0);
-            }
-            if (duration > 0) {
-                nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(duration);
-            } else if (!nowPlaying[MPMediaItemPropertyPlaybackDuration]) {
-                nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(240.0);
-            }
+            if (duration > 10000.0) duration = round(duration / 1000.0);
+            nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(duration > 0 ? duration : 240.0);
 
             if (options[@"currentTime"] != nil && ![options[@"currentTime"] isKindOfClass:[NSNull class]]) {
                 double currentTime = [options[@"currentTime"] doubleValue];
-                if (currentTime > 10000.0) {
-                    currentTime = round(currentTime / 1000.0);
-                }
+                if (currentTime > 10000.0) currentTime = round(currentTime / 1000.0);
                 if (currentTime >= 0) {
                     nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime);
                 }
             }
 
+            // Handle Artwork
             NSString *coverUrl = options[@"coverUrl"];
-            if (coverUrl && [coverUrl length] > 0) {
-                UIImage *existingImg = [sArtworkCache objectForKey:coverUrl];
-                if (existingImg) {
-                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:existingImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
-                        return existingImg;
+            if (coverUrl && coverUrl.length > 0) {
+                UIImage *cachedImg = [RivoArtworkLoader cachedImageForSource:coverUrl];
+                if (cachedImg) {
+                    MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:cachedImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
+                        return cachedImg;
                     }];
                     self->_currentArtwork = artwork;
                     self->_currentCoverUrl = [coverUrl copy];
                     nowPlaying[MPMediaItemPropertyArtwork] = artwork;
                 } else if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
                     self->_currentCoverUrl = [coverUrl copy];
-                    self->_currentArtwork = nil;
-                    [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
+                    if (self->_currentArtwork) {
+                        nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
+                    }
 
-                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-                        UIImage *loadedImg = [self loadImageFromSource:coverUrl];
-                        if (loadedImg) {
+                    [RivoArtworkLoader loadImageWithSource:coverUrl completion:^(UIImage * _Nullable loadedImg) {
+                        if (loadedImg && [coverUrl isEqualToString:self->_currentCoverUrl]) {
                             MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc] initWithBoundsSize:loadedImg.size requestHandler:^UIImage * _Nonnull(CGSize size) {
                                 return loadedImg;
                             }];
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                                if ([coverUrl isEqualToString:self->_currentCoverUrl]) {
-                                    self->_currentArtwork = artwork;
-                                    NSMutableDictionary *updated = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                                    updated[MPMediaItemPropertyArtwork] = artwork;
-                                    [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = updated;
-                                }
-                            });
+                            self->_currentArtwork = artwork;
+                            NSMutableDictionary *updated = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+                            updated[MPMediaItemPropertyArtwork] = artwork;
+                            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = updated;
                         }
-                    });
+                    }];
                 } else if (self->_currentArtwork) {
                     nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
                 }
@@ -623,7 +272,7 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlaying;
         } @catch (NSException *e) {
-            NSLog(@"[RivoMediaControls] updatePlayback error: %@", e);
+            NSLog(@"[RivoMediaControls] updatePlayback exception: %@", e);
         }
     });
 }
@@ -631,15 +280,36 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
 RCT_EXPORT_METHOD(hideNotification) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
-            if (self->_silentPlayer) {
-                [self->_silentPlayer stop];
-                self->_silentPlayer = nil;
-            }
             self->_currentCoverUrl = nil;
             self->_currentArtwork = nil;
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
         } @catch (NSException *e) {}
     });
+}
+
+RCT_EXPORT_METHOD(checkNotificationPermission:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+    if (@available(iOS 10.0, *)) {
+        [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
+            BOOL isAllowed = (settings.authorizationStatus == UNAuthorizationStatusAuthorized ||
+                              settings.authorizationStatus == UNAuthorizationStatusProvisional);
+            resolve(@(isAllowed));
+        }];
+    } else {
+        resolve(@(YES));
+    }
+}
+
+RCT_EXPORT_METHOD(requestNotificationPermission:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+    if (@available(iOS 10.0, *)) {
+        UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+        center.delegate = self;
+        [center requestAuthorizationWithOptions:(UNAuthorizationOptionAlert | UNAuthorizationOptionSound | UNAuthorizationOptionBadge)
+                              completionHandler:^(BOOL granted, NSError * _Nullable error) {
+            resolve(@(granted));
+        }];
+    } else {
+        resolve(@(YES));
+    }
 }
 
 RCT_EXPORT_METHOD(showChatNotification:(NSDictionary *)options) {
@@ -691,6 +361,24 @@ RCT_EXPORT_METHOD(dismissAllChatNotifications) {
     if (@available(iOS 10.0, *)) {
         [[UNUserNotificationCenter currentNotificationCenter] removeAllDeliveredNotifications];
     }
+}
+
+RCT_EXPORT_METHOD(setLockScreenEnabled:(BOOL)enabled) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults setBool:enabled forKey:@"rivo_lockscreen_enabled"];
+    [defaults synchronize];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!enabled) {
+            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(isLockScreenEnabled:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    id val = [defaults objectForKey:@"rivo_lockscreen_enabled"];
+    BOOL enabled = (val != nil) ? [defaults boolForKey:@"rivo_lockscreen_enabled"] : YES;
+    resolve(@(enabled));
 }
 
 @end

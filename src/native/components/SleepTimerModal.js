@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
-import { X, Moon, Clock, Ban } from 'lucide-react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform } from 'react-native';
+import { X, Moon, Clock, Ban, CheckCircle } from 'lucide-react-native';
+import { useSleepTimer } from '../context/SleepTimerContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
@@ -10,11 +11,20 @@ const OPTIONS = [
   { label: '30 Minutes', minutes: 30 },
   { label: '45 Minutes', minutes: 45 },
   { label: '60 Minutes', minutes: 60 },
-  { label: 'End of Current Track', minutes: 4 },
+  { label: 'End of Current Track', minutes: 'end_of_track' },
 ];
 
 export default function SleepTimerModal({ visible, onClose }) {
-  const { sleepTimerRemaining, startSleepTimer, cancelSleepTimer } = useAudioPlayer();
+  const sleepTimer = useSleepTimer();
+  const audioPlayer = useAudioPlayer();
+
+  // Support both isolated SleepTimerContext and AudioPlayer fallback
+  const sleepTimerRemaining = sleepTimer?.sleepTimerRemaining ?? null;
+  const sleepTimerMode = sleepTimer?.sleepTimerMode ?? 'off';
+  const startSleepTimer = sleepTimer?.startSleepTimer || audioPlayer?.startSleepTimer;
+  const cancelSleepTimer = sleepTimer?.cancelSleepTimer || audioPlayer?.cancelSleepTimer;
+
+  const isTimerActive = sleepTimerMode !== 'off' || sleepTimerRemaining !== null;
 
   const formatRemaining = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -22,9 +32,16 @@ export default function SleepTimerModal({ visible, onClose }) {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 99999, elevation: Platform.OS === 'android' ? 50 : 0 }]}>
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.sheetOuter}>
           <View style={styles.hardShadow} />
           <View style={styles.sheet}>
@@ -44,19 +61,21 @@ export default function SleepTimerModal({ visible, onClose }) {
               </TouchableOpacity>
             </View>
 
-            {/* Active countdown card */}
-            {sleepTimerRemaining !== null && (
+            {/* Active countdown / status card */}
+            {isTimerActive && (
               <View style={styles.activeCard}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.activeLabel}>TIMER CURRENTLY ACTIVE</Text>
                   <Text style={styles.activeTime}>
-                    Auto-stop in {formatRemaining(sleepTimerRemaining)}
+                    {sleepTimerMode === 'end_of_track'
+                      ? 'Stopping when current track ends'
+                      : `Auto-stop in ${formatRemaining(sleepTimerRemaining || 0)}`}
                   </Text>
                 </View>
                 <TouchableOpacity
                   style={styles.cancelBtn}
                   onPress={() => {
-                    cancelSleepTimer();
+                    if (cancelSleepTimer) cancelSleepTimer();
                     onClose();
                   }}
                 >
@@ -70,10 +89,10 @@ export default function SleepTimerModal({ visible, onClose }) {
             <View style={styles.optionsList}>
               {OPTIONS.map((opt) => (
                 <TouchableOpacity
-                  key={opt.minutes}
+                  key={String(opt.minutes)}
                   style={styles.optionBtn}
                   onPress={() => {
-                    startSleepTimer(opt.minutes);
+                    if (startSleepTimer) startSleepTimer(opt.minutes);
                     onClose();
                   }}
                   activeOpacity={0.8}
@@ -86,7 +105,7 @@ export default function SleepTimerModal({ visible, onClose }) {
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 

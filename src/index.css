@@ -2,6 +2,50 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Arabic & RTL Localization Support ── */
+html[dir="rtl"], [dir="rtl"], body.rtl {
+  font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+
+body.rtl,
+body.rtl * {
+  font-family: 'Cairo', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  letter-spacing: normal !important;
+}
+
+/* Prevent cursive letter detachment in Arabic caused by Tailwind tracking utilities */
+html.rtl,
+html.rtl *,
+body.rtl,
+body.rtl *,
+[dir="rtl"],
+[dir="rtl"] * {
+  letter-spacing: normal !important;
+}
+
+body.rtl svg,
+body.rtl svg * {
+  font-family: inherit;
+}
+
+body.rtl .font-display,
+[dir="rtl"] .font-display {
+  font-family: 'Cairo', 'Space Grotesk', system-ui, sans-serif !important;
+}
+
+body.rtl .font-mono,
+[dir="rtl"] .font-mono {
+  font-family: 'Cairo', 'Space Mono', monospace !important;
+  letter-spacing: normal !important;
+}
+
+/* Maintain canonical LTR structural flow for application shell across all languages */
+#root,
+.app-shell,
+.main-layout {
+  direction: ltr !important;
+}
+
 /* Disable CSS transitions during theme toggle to eliminate lag and stutter */
 .disable-transitions,
 .disable-transitions *,

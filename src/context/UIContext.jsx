@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 const UIContext = createContext(null);
 
@@ -89,6 +89,7 @@ export function UIProvider({ children }) {
   const [chatTargetUser, setChatTargetUser] = useState(null);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [isActivityPanelOpen, setIsActivityPanelOpen] = useState(() => {
@@ -178,7 +179,7 @@ export function UIProvider({ children }) {
     setIsAddToPlaylistOpen(true);
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     globalTheme,
     setGlobalTheme,
     toggleGlobalTheme,
@@ -223,6 +224,8 @@ export function UIProvider({ children }) {
     setUnreadChatCount,
     isShortcutsOpen,
     setIsShortcutsOpen,
+    isSleepTimerOpen,
+    setIsSleepTimerOpen,
     isMobileMenuOpen,
     setIsMobileMenuOpen,
     openMobileMenu,
@@ -237,7 +240,45 @@ export function UIProvider({ children }) {
     pushModalHistory,
     closeModalHistory,
     isClosingModalViaUiRef,
-  };
+  }), [
+    globalTheme,
+    toggleGlobalTheme,
+    isFullPlayerOpen,
+    openFullPlayer,
+    closeFullPlayer,
+    isCreatePlaylistOpen,
+    isAddToPlaylistOpen,
+    addToPlaylistTarget,
+    openAddToPlaylist,
+    isSettingsOpen,
+    isAddSongOpen,
+    isImportSongOpen,
+    isImportPlaylistOpen,
+    isEditSongOpen,
+    editingTrack,
+    openEditSong,
+    isEditAlbumOpen,
+    editingAlbum,
+    openEditAlbum,
+    isAuthOpen,
+    isJamOpen,
+    isChatOpen,
+    chatTargetUser,
+    unreadChatCount,
+    isShortcutsOpen,
+    isSleepTimerOpen,
+    isMobileMenuOpen,
+    openMobileMenu,
+    closeMobileMenu,
+    isActivityPanelOpen,
+    toggleActivityPanel,
+    closeActivityPanel,
+    toastMessage,
+    showToast,
+    clearToast,
+    pushModalHistory,
+    closeModalHistory,
+  ]);
 
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
 }

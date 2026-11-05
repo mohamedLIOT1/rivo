@@ -1,344 +1,27 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
-  View, Text, Image, TouchableOpacity, Modal, StyleSheet, Dimensions,
-  ScrollView, Platform, FlatList, ActivityIndicator, Animated, TextInput, Alert,
-  KeyboardAvoidingView, PanResponder
+  View, Text, TouchableOpacity, Modal, ScrollView, Animated, Platform,
 } from 'react-native';
-import {
-  Lock,
-  ChevronDown, ChevronUp, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Heart,
-  Moon, ListMusic, AlignLeft, Sparkles, Disc, Download, CheckCircle2, RotateCw,
-  MoreHorizontal, Mic, Volume2, Edit3, Plus, Check, X, Trash2, GripVertical, BookOpen, Sliders
-} from 'lucide-react-native';
-import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
+import { ChevronDown, MoreVertical } from 'lucide-react-native';
+import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
-import { useToast } from '../context/ToastContext';
-import { colors } from '../theme/colors';
-import { normalizeCoverUri } from '../utils/coverUtils';
-import { API_BASE_URL } from '../config';
-import { updateDownloadedTrackLyrics } from '../services/downloadManager';
-import CassetteTag from '../ui/CassetteTag';
-import SleepTimerModal from './SleepTimerModal';
-import { parseLrcLyrics } from '../../utils/lrcParser';
 import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
-import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
+import { normalizeCoverUri } from '../utils/coverUtils';
 import QuranMushafViewer from './QuranMushafViewer';
+import SleepTimerModal from './SleepTimerModal';
 
-const { width, height } = Dimensions.get('window');
-const QUEUE_ROW_HEIGHT = 72;
+import { styles, colors } from './fullplayer/fullPlayerStyles';
+import { FullPlayerArtwork } from './fullplayer/FullPlayerArtwork';
+import { FullPlayerTrackInfo } from './fullplayer/FullPlayerTrackInfo';
+import { FullPlayerControls } from './fullplayer/FullPlayerControls';
+import { FullPlayerLyricsView } from './fullplayer/FullPlayerLyricsView';
+import { FullPlayerQueueView } from './fullplayer/FullPlayerQueueView';
 
-const QueueRowItem = React.memo(function QueueRowItem({
-  item,
-  index,
-  isItemPlaying,
-  isDragging,
-  isTargetSlot,
-  isAboveTarget,
-  panHandler,
-  panY,
-  deckBg,
-  deckBorder,
-  textTitle,
-  colors,
-  isDark,
-  onPlay,
-  onRemove,
-  canDrag,
-}) {
-  const itemCover = normalizeCoverUri(item?.coverUrl || item?.cover, item);
+const DEFAULT_COVER = 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=600&q=80';
 
-  return (
-    <Animated.View
-      style={[
-        styles.queueItem,
-        {
-          backgroundColor: isDragging
-            ? (isDark ? '#19332b' : '#c8f2e9')
-            : isTargetSlot
-            ? (isDark ? '#152520' : '#e6f7f3')
-            : isItemPlaying
-            ? (isDark ? '#14201c' : '#e6f4f1')
-            : deckBg,
-          borderColor: (isDragging || isTargetSlot || isItemPlaying) ? colors.mint : deckBorder,
-          transform: [
-            { translateY: isDragging ? panY : 0 },
-            { scale: isDragging ? 1.03 : 1 }
-          ],
-          zIndex: isDragging ? 9999 : 1,
-          elevation: isDragging ? 24 : 0,
-        },
-      ]}
-    >
-      {isTargetSlot && (
-        <View
-          style={[
-            styles.dropIndicatorBar,
-            isAboveTarget ? { top: -2 } : { bottom: -2 },
-            { backgroundColor: colors.mint }
-          ]}
-        />
-      )}
-
-      <TouchableOpacity
-        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-        onPress={onPlay}
-        activeOpacity={0.75}
-        disabled={isDragging}
-      >
-        <Image source={{ uri: itemCover }} style={styles.queueThumb} />
-        <View style={{ flex: 1, marginHorizontal: 10 }}>
-          <Text style={[styles.queueTitle, { color: isItemPlaying ? colors.mint : textTitle }]} numberOfLines={1}>
-            {item?.title || 'Unknown Title'}
-          </Text>
-          <Text style={styles.queueArtist} numberOfLines={1}>{item?.artist || 'Unknown Artist'}</Text>
-        </View>
-      </TouchableOpacity>
-
-      <View style={styles.queueControlsRow}>
-        <TouchableOpacity
-          onPress={onRemove}
-          style={styles.queueActionBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-        >
-          <Trash2 size={15} color="#ef4444" />
-        </TouchableOpacity>
-
-        {canDrag && (
-          <View
-            {...(panHandler || {})}
-            style={[
-              styles.dragHandle,
-              isDragging && { backgroundColor: colors.mint + '44' }
-            ]}
-            hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
-          >
-            <GripVertical size={18} color={isDragging ? colors.mint : (isDark ? '#94a3b8' : '#64748b')} />
-          </View>
-        )}
-      </View>
-    </Animated.View>
-  );
-}, (prev, next) => {
-  return (
-    prev.item === next.item &&
-    prev.isItemPlaying === next.isItemPlaying &&
-    prev.isDragging === next.isDragging &&
-    prev.isTargetSlot === next.isTargetSlot &&
-    prev.isAboveTarget === next.isAboveTarget &&
-    prev.deckBg === next.deckBg &&
-    prev.deckBorder === next.deckBorder &&
-    prev.textTitle === next.textTitle &&
-    prev.canDrag === next.canDrag &&
-    prev.isDark === next.isDark
-  );
-});
-
-const DraggableQueueList = React.memo(function DraggableQueueList({
-  queue,
-  trackId,
-  isDark,
-  colors,
-  deckBg,
-  deckBorder,
-  textTitle,
-  playTrack,
-  removeFromQueue,
-  reorderQueue,
-}) {
-  const [draggingIdx, setDraggingIdx] = useState(null);
-  const [hoverIdx, setHoverIdx] = useState(null);
-  const draggingIdxRef = useRef(null);
-  const hoverIdxRef = useRef(null);
-  const panY = useRef(new Animated.Value(0)).current;
-  const listRef = useRef(null);
-  const scrollOffsetRef = useRef(0);
-  const autoScrollTimerRef = useRef(null);
-
-  const queueLengthRef = useRef(queue.length);
-  useEffect(() => {
-    queueLengthRef.current = queue.length;
-  }, [queue.length]);
-
-  const reorderQueueRef = useRef(reorderQueue);
-  useEffect(() => {
-    reorderQueueRef.current = reorderQueue;
-  }, [reorderQueue]);
-
-  draggingIdxRef.current = draggingIdx;
-  hoverIdxRef.current = hoverIdx;
-
-  const stopAutoScroll = useCallback(() => {
-    if (autoScrollTimerRef.current) {
-      clearInterval(autoScrollTimerRef.current);
-      autoScrollTimerRef.current = null;
-    }
-  }, []);
-
-  const handleAutoScroll = useCallback((moveY) => {
-    // Only auto-scroll when user finger reaches near top or bottom extremities
-    const topLimit = 110;
-    const bottomLimit = height - 130;
-
-    if (moveY < topLimit && scrollOffsetRef.current > 0) {
-      if (!autoScrollTimerRef.current) {
-        autoScrollTimerRef.current = setInterval(() => {
-          if (scrollOffsetRef.current <= 0) {
-            stopAutoScroll();
-            return;
-          }
-          scrollOffsetRef.current = Math.max(0, scrollOffsetRef.current - 12);
-          listRef.current?.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-        }, 40);
-      }
-    } else if (moveY > bottomLimit) {
-      if (!autoScrollTimerRef.current) {
-        autoScrollTimerRef.current = setInterval(() => {
-          scrollOffsetRef.current += 12;
-          listRef.current?.scrollToOffset({ offset: scrollOffsetRef.current, animated: false });
-        }, 40);
-      }
-    } else {
-      stopAutoScroll();
-    }
-  }, [stopAutoScroll]);
-
-  useEffect(() => {
-    return () => stopAutoScroll();
-  }, [stopAutoScroll]);
-
-  const createPanResponder = (index) => {
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
-      onPanResponderTerminationRequest: () => false,
-      onShouldBlockNativeResponder: () => true,
-      onPanResponderGrant: () => {
-        stopAutoScroll();
-        draggingIdxRef.current = index;
-        hoverIdxRef.current = index;
-        setDraggingIdx(index);
-        setHoverIdx(index);
-        panY.setValue(0);
-      },
-      onPanResponderMove: (_, gestureState) => {
-        panY.setValue(gestureState.dy);
-        const deltaSlots = Math.round(gestureState.dy / QUEUE_ROW_HEIGHT);
-        const maxIdx = Math.max(0, queueLengthRef.current - 1);
-        const nextHover = Math.max(0, Math.min(maxIdx, index + deltaSlots));
-        if (hoverIdxRef.current !== nextHover) {
-          hoverIdxRef.current = nextHover;
-          setHoverIdx(nextHover);
-        }
-        handleAutoScroll(gestureState.moveY);
-      },
-      onPanResponderRelease: () => {
-        stopAutoScroll();
-        const from = index;
-        const to = hoverIdxRef.current;
-        const fn = reorderQueueRef.current;
-        if (to !== null && to !== undefined && to !== from && typeof fn === 'function') {
-          fn(from, to);
-        }
-        draggingIdxRef.current = null;
-        hoverIdxRef.current = null;
-        setDraggingIdx(null);
-        setHoverIdx(null);
-        panY.setValue(0);
-      },
-      onPanResponderTerminate: () => {
-        stopAutoScroll();
-        const from = index;
-        const to = hoverIdxRef.current;
-        const fn = reorderQueueRef.current;
-        if (to !== null && to !== undefined && to !== from && typeof fn === 'function') {
-          fn(from, to);
-        }
-        draggingIdxRef.current = null;
-        hoverIdxRef.current = null;
-        setDraggingIdx(null);
-        setHoverIdx(null);
-        panY.setValue(0);
-      },
-    });
-  };
-
-  const panResponders = useMemo(() => {
-    return queue.map((_, i) => createPanResponder(i));
-  }, [queue.length]);
-
-  const renderItem = useCallback(({ item, index }) => {
-    const isItemPlaying = String(item._id || item.id) === trackId;
-    const isDragging = draggingIdx === index;
-    const isTargetSlot = hoverIdx === index && draggingIdx !== null && draggingIdx !== index;
-    const isAboveTarget = hoverIdx !== null && draggingIdx !== null && hoverIdx < draggingIdx;
-
-    return (
-      <QueueRowItem
-        item={item}
-        index={index}
-        isItemPlaying={isItemPlaying}
-        isDragging={isDragging}
-        isTargetSlot={isTargetSlot}
-        isAboveTarget={isAboveTarget}
-        panHandler={panResponders[index] ? panResponders[index].panHandlers : null}
-        panY={panY}
-        deckBg={deckBg}
-        deckBorder={deckBorder}
-        textTitle={textTitle}
-        colors={colors}
-        isDark={isDark}
-        onPlay={() => playTrack(item, queue)}
-        onRemove={() => removeFromQueue && removeFromQueue(index)}
-        canDrag={queue.length > 1}
-      />
-    );
-  }, [trackId, draggingIdx, hoverIdx, panResponders, panY, deckBg, deckBorder, textTitle, colors, isDark, playTrack, queue, removeFromQueue]);
-
-  return (
-    <FlatList
-      ref={listRef}
-      data={queue}
-      scrollEnabled={draggingIdx === null}
-      onScroll={(e) => {
-        scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
-      }}
-      scrollEventThrottle={16}
-      keyExtractor={(item, index) => `${item._id || item.id || 'track'}-${index}`}
-      getItemLayout={(data, index) => ({
-        length: QUEUE_ROW_HEIGHT,
-        offset: QUEUE_ROW_HEIGHT * index,
-        index,
-      })}
-      initialNumToRender={14}
-      maxToRenderPerBatch={10}
-      windowSize={7}
-      removeClippedSubviews={draggingIdx === null && Platform.OS === 'android'}
-      renderItem={renderItem}
-      contentContainerStyle={styles.queueBody}
-      ListEmptyComponent={
-        <View style={{ padding: 40, alignItems: 'center' }}>
-          <Text style={{ color: '#9ca3af', fontFamily: 'monospace' }}>Queue is empty.</Text>
-        </View>
-      }
-    />
-  );
-}, (prev, next) => {
-  return (
-    prev.queue === next.queue &&
-    prev.trackId === next.trackId &&
-    prev.isDark === next.isDark &&
-    prev.deckBg === next.deckBg &&
-    prev.deckBorder === next.deckBorder &&
-    prev.textTitle === next.textTitle
-  );
-});
-
-export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
+export function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const {
-    vocalIsolationStatus,
     currentTrack,
     isPlaying,
     isLoading,
@@ -359,63 +42,38 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
     lyrics,
     isLoadingLyrics,
     setLyrics,
+    saveLyrics,
     downloadedTracks = [],
     downloadingIds = {},
     handleDownloadTrack,
     volume = 0.8,
     setVolume,
-    isMixMode,
-    setIsMixMode,
-    mixDuration,
-    setMixDuration,
-    mixStyle,
-    setMixStyle,
-    triggerManualMix,
+    vocalIsolationStatus,
   } = useAudioPlayer();
 
-  const { currentTime, duration } = useAudioProgress();
-  const { likedTrackIds = [], toggleLikeTrack, token, currentUser } = useUser();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const { isDark } = useTheme();
-  const { showToast } = useToast();
-
-  const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
-  const isCurRadio = useMemo(() => isRadioTrack(currentTrack), [currentTrack]);
-  const nextTrackInQueue = useMemo(() => {
-    if (!displayQueue || displayQueue.length <= 1) return null;
-    const curIdx = displayQueue.findIndex(t => String(t._id || t.id) === String(trackId));
-    if (curIdx >= 0 && curIdx + 1 < displayQueue.length) {
-      return displayQueue[curIdx + 1];
-    }
-    return displayQueue[0];
-  }, [displayQueue, trackId]);
-
-  const displayQueue = useMemo(() => {
-    if (isCurRadio) {
-      const radioQ = (queue || []).filter(isRadioTrack);
-      return radioQ.length > 0 ? radioQ : QURAN_LIVE_STATIONS;
-    }
-    return (queue || []).filter(t => !isRadioTrack(t));
-  }, [queue, isCurRadio]);
-
-  useEffect(() => {
-    if (isCurRadio && activeTab === 'lyrics') {
-      setActiveTab('player');
-    }
-  }, [isCurRadio, activeTab]);
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
-  const [isEditLyricsOpen, setIsEditLyricsOpen] = useState(false);
-  const [lyricsInputText, setLyricsInputText] = useState('');
-  const [isSavingLyrics, setIsSavingLyrics] = useState(false);
-  const lyricsScrollRef = useRef(null);
 
-  // Reel spin animation for the cassette spools
+  const trackId = String(currentTrack?._id || currentTrack?.id || '');
+  const isLiked = likedTrackIds.some(id => String(id) === trackId);
+  const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
+  const isCurRadio = useMemo(() => isRadioTrack(currentTrack), [currentTrack]);
+
+  const isDownloaded = useMemo(() => {
+    return (downloadedTracks || []).some(t => String(t._id || t.id) === trackId);
+  }, [downloadedTracks, trackId]);
+
+  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
+
+  // Reel spin animation for cassette spools
   const spinValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     let anim;
-    if (isPlaying) {
+    if (isPlaying && Platform.OS !== 'android') {
       anim = Animated.loop(
         Animated.timing(spinValue, {
           toValue: 1,
@@ -428,1706 +86,191 @@ export default function FullPlayerModal({ visible, onClose, onTrackAction }) {
       spinValue.setValue(0);
     }
     return () => anim?.stop();
-  }, [isPlaying]);
+  }, [isPlaying, spinValue]);
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
-  // Synced lyrics data structure normalized
-  const lyricsList = useMemo(() => {
-    if (!lyrics) return [];
-    return parseLrcLyrics(lyrics);
-  }, [lyrics]);
+  const rawCover = currentTrack?.coverUrl || currentTrack?.cover || currentTrack?.coverImage || currentTrack?.thumbnail || currentTrack?.artwork || DEFAULT_COVER;
+  const coverUri = normalizeCoverUri(rawCover, currentTrack);
 
-  const activeLyricIndex = useMemo(() => {
-    if (!lyricsList.length) return -1;
-    if (lyricsList[0]?.isUnsynced || lyricsList[0]?.time < 0) return -1;
-    return lyricsList.findIndex((line, idx) => {
-      const nextLine = lyricsList[idx + 1];
-      const curTime = typeof currentTime === 'number' ? currentTime : 0;
-      return curTime >= line.time && (!nextLine || curTime < nextLine.time);
-    });
-  }, [lyricsList, currentTime]);
+  const isVerifiedLyrics = Boolean(currentTrack?.isVerifiedLyrics || lyrics?.isVerified);
+  const lyricsVerifiedBy = currentTrack?.lyricsVerifiedBy || lyrics?.verifiedBy || '';
 
-  useEffect(() => {
-    if (activeTab === 'lyrics' && activeLyricIndex >= 0 && lyricsScrollRef.current) {
-      lyricsScrollRef.current.scrollTo({
-        y: Math.max(0, activeLyricIndex * 48 - 120),
-        animated: true,
-      });
-    }
-  }, [activeLyricIndex, activeTab]);
-
-  const handleOpenEditLyrics = () => {
-    if (Array.isArray(lyricsList) && lyricsList.length > 0) {
-      const formatted = lyricsList.map(l => {
-        const m = Math.floor(l.time / 60);
-        const s = Math.floor(l.time % 60);
-        const cs = Math.floor((l.time % 1) * 100);
-        if (l.isUnsynced || l.time < 0) return l.text;
-        return `[${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(cs).padStart(2, '0')}] ${l.text}`;
-      }).join('\n');
-      setLyricsInputText(formatted);
-    } else {
-      setLyricsInputText('');
-    }
-    setIsEditLyricsOpen(true);
-  };
-
-  const handleSaveLyrics = async () => {
-    if (!currentTrack) return;
-    if (!token) {
-      if (showToast) showToast('Please log in to add or edit lyrics', 'warning');
-      return;
-    }
-    const raw = lyricsInputText.trim();
-    if (!raw) {
-      if (showToast) showToast('Please enter lyrics lines', 'warning');
-      return;
-    }
-    setIsSavingLyrics(true);
-    try {
-      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-      const parsed = lines.map((line, idx) => {
-        const match = line.match(/\[?(\d+):(\d+)(?:\.(\d+))?\]?\s*(.*)/);
-        if (match) {
-          const m = parseInt(match[1]);
-          const s = parseInt(match[2]);
-          const cs = match[3] ? parseInt(match[3].padEnd(2, '0').slice(0, 2)) : 0;
-          const time = m * 60 + s + cs / 100;
-          return { time: Math.round(time * 100) / 100, text: match[4].trim() || line };
-        } else {
-          const songDur = duration || currentTrack?.duration || 180;
-          const step = Math.max(2, (songDur - 10) / Math.max(1, lines.length));
-          return { time: Math.round((5 + idx * step) * 100) / 100, text: line };
-        }
-      });
-
-      const trackId = currentTrack._id || currentTrack.id;
-      const res = await fetch(`${API_BASE_URL}/api/tracks/${trackId}/lyrics`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          trackId,
-          title: currentTrack.title,
-          artist: currentTrack.artist,
-          lyrics: parsed,
-          isVerified: true
-        })
-      });
-
-      if (res.ok) {
-        if (setLyrics) setLyrics(parsed);
-        currentTrack.lyrics = parsed;
-        currentTrack.isVerifiedLyrics = true;
-        await updateDownloadedTrackLyrics(currentTrack, parsed).catch(() => {});
-        if (showToast) showToast('Lyrics saved & synced!', 'success');
-        setIsEditLyricsOpen(false);
-      } else {
-        const res2 = await fetch(`${API_BASE_URL}/api/tracks/update-lyrics`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-          },
-          body: JSON.stringify({
-            trackId,
-            title: currentTrack.title,
-            artist: currentTrack.artist,
-            lyrics: parsed,
-            isVerified: true
-          })
-        });
-        if (res2.ok) {
-          if (setLyrics) setLyrics(parsed);
-          currentTrack.lyrics = parsed;
-          currentTrack.isVerifiedLyrics = true;
-          await updateDownloadedTrackLyrics(currentTrack, parsed).catch(() => {});
-          if (showToast) showToast('Lyrics saved & synced!', 'success');
-          setIsEditLyricsOpen(false);
-        } else {
-          if (showToast) showToast('Failed to save lyrics', 'error');
-        }
-      }
-    } catch (err) {
-      if (showToast) showToast(`Save error: ${err.message}`, 'error');
-    } finally {
-      setIsSavingLyrics(false);
-    }
-  };
-
-  if (!visible || !currentTrack) return null;
-
-  const trackId = String(currentTrack._id || currentTrack.id || '');
-  const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-  const isDownloaded = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(t => String(t._id || t.id) === trackId);
-  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
-  const isVerifiedLyrics = Boolean(
-    currentTrack.isVerified || 
-    currentTrack.lyricsVerified || 
-    currentTrack.isVerifiedLyrics
-  );
-  const lyricsVerifiedBy = currentTrack.verifiedBy || currentTrack.lyricsVerifiedBy || null;
-
-  const formatTime = (secs) => {
-    if (isNaN(secs) || secs === null || secs < 0) return '0:00';
-    const sVal = Math.round(secs);
-    const h = Math.floor(sVal / 3600);
-    const m = Math.floor((sVal % 3600) / 60);
-    const s = Math.floor(sVal % 60);
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-  const progressPercent = effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0;
-  const coverUri = normalizeCoverUri(currentTrack.coverUrl || currentTrack.cover, currentTrack);
-
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubPercent, setScrubPercent] = useState(0);
-  const [scrubTime, setScrubTime] = useState(0);
-  const seekbarViewRef = useRef(null);
-  const seekbarLayoutRef = useRef({ x: 32, width: width - 64 });
-
-  const seekPanResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => !currentTrack?.isLive,
-    onMoveShouldSetPanResponder: () => !currentTrack?.isLive,
-    onPanResponderGrant: (evt) => {
-      const pageX = evt.nativeEvent.pageX;
-      const barX = seekbarLayoutRef.current.x;
-      const barW = Math.max(1, seekbarLayoutRef.current.width);
-      let touchX = pageX - barX;
-      if (evt.nativeEvent.locationX !== undefined && evt.nativeEvent.locationX >= 0 && evt.nativeEvent.locationX <= barW) {
-        touchX = evt.nativeEvent.locationX;
-      }
-      touchX = Math.max(0, Math.min(barW, touchX));
-      const pct = Math.max(0, Math.min(1, touchX / barW));
-      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-      setIsScrubbing(true);
-      setScrubPercent(pct * 100);
-      setScrubTime(Math.round(pct * effDur));
-    },
-    onPanResponderMove: (evt) => {
-      const pageX = evt.nativeEvent.pageX;
-      const barX = seekbarLayoutRef.current.x;
-      const barW = Math.max(1, seekbarLayoutRef.current.width);
-      const touchX = Math.max(0, Math.min(barW, pageX - barX));
-      const pct = Math.max(0, Math.min(1, touchX / barW));
-      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-      setScrubPercent(pct * 100);
-      setScrubTime(Math.round(pct * effDur));
-    },
-    onPanResponderRelease: (evt) => {
-      const pageX = evt.nativeEvent.pageX;
-      const barX = seekbarLayoutRef.current.x;
-      const barW = Math.max(1, seekbarLayoutRef.current.width);
-      const touchX = Math.max(0, Math.min(barW, pageX - barX));
-      const pct = Math.max(0, Math.min(1, touchX / barW));
-      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-      const targetSec = Math.max(0, Math.min(effDur, Math.round(pct * effDur)));
-      setScrubPercent(pct * 100);
-      setScrubTime(targetSec);
-      seekTo(targetSec);
-      setTimeout(() => {
-        setIsScrubbing(false);
-      }, 350);
-    },
-    onPanResponderTerminate: () => {
-      setIsScrubbing(false);
-    }
-  }), [currentTrack?.isLive, duration, currentTrack?.duration, seekTo]);
-
-  const handleVolumePress = (e) => {
-    try {
-      const x = e?.nativeEvent?.locationX;
-      if (typeof x === 'number' && x >= 0) {
-        const ratio = Math.max(0, Math.min(1, x / 75));
-        if (setVolume) setVolume(ratio);
-        return;
-      }
-    } catch {}
-    if (setVolume) {
-      setVolume((volume || 0.8) > 0.1 ? 0 : 0.8);
-    }
-  };
-
-  const deckBg = isDark ? '#0e1614' : '#fdfbf7';
-  const deckBorder = isDark ? '#243632' : colors.ink;
-  const tvBg = isDark ? '#14201c' : '#ede5d3';
-  const textTitle = isDark ? '#fdfbf7' : colors.ink;
-  const textSub = isDark ? colors.mint : colors.tealDark;
+  const deckBg = isDark ? '#0c1815' : '#f4eee0';
+  const deckBorder = isDark ? '#1d3630' : '#e2d7c0';
+  const textTitle = isDark ? '#ffffff' : colors.ink;
+  const textSub = isDark ? '#9ca3af' : '#64748b';
 
   return (
-    <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={[styles.container, { backgroundColor: isDark ? '#050a09' : '#082621' }]}>
-        {/* Subtle Ambient Background Artwork */}
-        <Image
-          source={{ uri: coverUri }}
-          style={styles.ambientCover}
-          blurRadius={40}
-        />
-        <View style={[styles.ambientOverlay, { backgroundColor: isDark ? 'rgba(5, 10, 9, 0.88)' : 'rgba(8, 38, 33, 0.88)' }]} />
-
-        {/* ── Top Header Bar (Matching Reference Screenshot) ── */}
+    <Modal
+      visible={visible}
+      animationType={Platform.OS === 'android' ? 'none' : 'slide'}
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
+      <View style={[styles.container, { backgroundColor: isDark ? '#07100e' : '#f9f6f0' }]}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.topWhiteBtn} activeOpacity={0.8}>
-            <ChevronDown size={20} color="#000000" strokeWidth={3} />
+            <ChevronDown size={22} color="#000000" strokeWidth={2.5} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
             <View style={styles.headerPill}>
-              <Text style={styles.headerPillText}>RIVO HI-FI STEREO • 24-BIT MASTER</Text>
+              <Text style={styles.headerPillText}>RIVO AUDIO</Text>
             </View>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {currentTrack.title || 'Unknown Track'}
+            <Text style={[styles.headerTitle, { color: textTitle }]} numberOfLines={1}>
+              {currentTrack?.title || 'Now Playing'}
             </Text>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity
-              style={styles.topWhiteBtn}
-              activeOpacity={0.8}
-              onPress={() => onTrackAction && onTrackAction(currentTrack)}
-            >
-              <MoreHorizontal size={20} color="#000000" strokeWidth={3} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            onPress={() => onTrackAction?.(currentTrack)}
+            style={styles.topWhiteBtn}
+            activeOpacity={0.8}
+          >
+            <MoreVertical size={20} color="#000000" strokeWidth={2.5} />
+          </TouchableOpacity>
         </View>
 
-        {/* ── Tab Switcher: Now Playing / Lyrics / Queue ── */}
+        {/* Tab switch row */}
         <View style={styles.tabsRow}>
-          {[
-            { id: 'player', label: 'Now Playing' },
-            ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? 'Ayat' : 'Lyrics' }] : []),
-            { id: 'queue', label: isCurRadio ? `Radio Stations (${displayQueue.length})` : `Queue (${displayQueue.length})` },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                style={[
-                  styles.tabBtn,
-                  isActive && styles.activeTabBtn,
-                ]}
-                onPress={() => setActiveTab(tab.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.tabText, isActive && styles.activeTabText]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          <TouchableOpacity
+            onPress={() => setActiveTab('player')}
+            style={[styles.tabBtn, activeTab === 'player' && styles.activeTabBtn]}
+          >
+            <Text style={[styles.tabText, activeTab === 'player' && styles.activeTabText]}>
+              Now Playing
+            </Text>
+          </TouchableOpacity>
+
+          {!isCurRadio && (
+            <TouchableOpacity
+              onPress={() => setActiveTab('lyrics')}
+              style={[styles.tabBtn, activeTab === 'lyrics' && styles.activeTabBtn]}
+            >
+              <Text style={[styles.tabText, activeTab === 'lyrics' && styles.activeTabText]}>
+                Lyrics
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('queue')}
+            style={[styles.tabBtn, activeTab === 'queue' && styles.activeTabBtn]}
+          >
+            <Text style={[styles.tabText, activeTab === 'queue' && styles.activeTabText]}>
+              Queue ({queue?.length || 0})
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* ── Main Tab Content ── */}
+        {/* Tab contents */}
         {activeTab === 'player' && (
-          <ScrollView contentContainerStyle={styles.playerScroll} showsVerticalScrollIndicator={false} bounces={false}>
-            {/* ── Master Cassette Audio Deck / CRT Console ── */}
-            <View style={styles.deckCard}>
-              {/* Deck Top Label */}
+          <ScrollView
+            contentContainerStyle={styles.playerScroll}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.deckCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
               <View style={styles.deckHeader}>
                 <View style={styles.deckHeaderLeft}>
                   <View style={[styles.pulsingDot, isPlaying && styles.pulsingDotActive]} />
-                  <Text style={styles.deckTitle}>
-                    RIVO STEREO DECK // CR-500
-                  </Text>
+                  <Text style={styles.deckTitle}>CASSETTE DECK</Text>
                 </View>
                 <View style={styles.deckBadge}>
-                  <Text style={styles.deckBadgeText}>24-BIT HI-FI</Text>
+                  <Text style={styles.deckBadgeText}>DOLBY NR</Text>
                 </View>
               </View>
 
-              {/* ── Retro TV / CRT Monitor Enclosure ── */}
-              <View style={styles.tvEnclosure}>
-                <View style={styles.tvScreen}>
-                  <Image
-                    source={{ uri: coverUri }}
-                    style={styles.coverImage}
-                    resizeMode="cover"
-                  />
-                  {/* Subtle TV Scanline Overlay effect */}
-                  <View style={styles.tvScanlines} pointerEvents="none" />
-                </View>
+              <FullPlayerArtwork
+                currentTrack={currentTrack}
+                coverUri={coverUri}
+                isPlaying={isPlaying}
+                isDark={isDark}
+                spin={spin}
+                isCurQuran={isCurQuran}
+                isCurRadio={isCurRadio}
+              />
 
-                {/* Cassette Mechanical Spool Bar */}
-                <View style={styles.cassetteSpoolBar}>
-                  <View style={styles.spoolLeft}>
-                    <View style={[styles.liveDot, { backgroundColor: isPlaying ? '#10b981' : '#dc2626' }]} />
-                    <Text style={styles.spoolText}>SIDE A // STEREO</Text>
-                  </View>
+              <FullPlayerTrackInfo
+                currentTrack={currentTrack}
+                trackId={trackId}
+                isLiked={isLiked}
+                toggleLikeTrack={toggleLikeTrack}
+                vocalIsolationStatus={vocalIsolationStatus}
+              />
 
-                  {/* Spinning Tape Wheels */}
-                  <View style={styles.spoolWheels}>
-                    <Animated.View style={[styles.spoolWheel, { transform: [{ rotate: spin }] }]}>
-                      <View style={styles.spoolInnerDot} />
-                    </Animated.View>
-                    <View style={styles.spoolBelt} />
-                    <Animated.View style={[styles.spoolWheel, { transform: [{ rotate: spin }] }]}>
-                      <View style={styles.spoolInnerDot} />
-                    </Animated.View>
-                  </View>
-
-                  <Text style={styles.spoolText}>CRT HI-FI</Text>
-                </View>
-              </View>
-
-              {/* ── Song Title & Action Info Bar ── */}
-              <View style={styles.trackInfoRow}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <View style={styles.genreBadge}>
-                    <Text style={styles.genreBadgeText}>
-                      {(currentTrack.genre || 'IMPORTED').toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.songTitle} numberOfLines={1}>
-                    {currentTrack.title || 'Untitled Track'}
-                  </Text>
-                  <Text style={styles.songArtist} numberOfLines={1}>
-                    {currentTrack.artist || 'Unknown Artist'}
-                  </Text>
-                </View>
-
-                {/* Rounded Heart Button */}
-                <TouchableOpacity
-                  onPress={() => toggleLikeTrack(trackId)}
-                  style={styles.deckHeartBtn}
-                  activeOpacity={0.8}
-                >
-                  <Heart
-                    size={20}
-                    color={isLiked ? colors.crimson : '#9ca3af'}
-                    fill={isLiked ? colors.crimson : 'transparent'}
-                  />
-                </TouchableOpacity>
-              </View>
-
-              {/* ── Seekbar with White Circular Thumb Indicator ── */}
-              <View style={styles.seekSection}>
-                <View
-                  {...seekPanResponder.panHandlers}
-                  onLayout={(e) => {
-                    const { width: layoutW, x: layoutX } = e.nativeEvent.layout;
-                    if (layoutW > 0) {
-                      seekbarLayoutRef.current = { x: layoutX || 32, width: layoutW };
-                    }
-                  }}
-                  style={styles.seekTouchArea}
-                >
-                  <View style={styles.seekTrack} pointerEvents="none">
-                    <View style={[styles.seekFill, { width: currentTrack?.isLive ? '100%' : `${isScrubbing ? scrubPercent : progressPercent}%`, backgroundColor: currentTrack?.isLive ? '#ef4444' : colors.mint }]} pointerEvents="none" />
-                    {!currentTrack?.isLive && (
-                      <View style={[styles.seekThumb, { left: `${Math.max(0, Math.min(100, isScrubbing ? scrubPercent : progressPercent))}%` }]} pointerEvents="none" />
-                    )}
-                  </View>
-                </View>
-                <View style={styles.timeRow}>
-                  {currentTrack?.isLive ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#ef4444' }} />
-                      <Text style={[styles.timeText, { color: '#ef4444', fontWeight: 'bold' }]}>LIVE 24/7 BROADCAST</Text>
-                    </View>
-                  ) : (
-                    <>
-                      <Text style={[styles.timeText, isScrubbing && { color: colors.mint, fontWeight: 'bold' }]}>{formatTime(isScrubbing ? scrubTime : currentTime)}</Text>
-                      <Text style={styles.timeText}>{formatTime(effectiveDuration || duration)}</Text>
-                    </>
-                  )}
-                </View>
-              </View>
-
-                            {/* ── Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) ── */}
-              {!isCurQuran && vocalIsolationStatus?.isProcessing && (
-                <View style={styles.vocalBannerBox}>
-                  <View style={styles.vocalBannerHeader}>
-                    <View style={styles.vocalBannerLeft}>
-                      <View style={styles.vocalPingDot} />
-                      <Text style={styles.vocalBannerTitle} numberOfLines={1}>
-                        ISOLATING VOCALS (AI):{' '}
-                        <Text style={{ color: colors.mint, fontWeight: 'bold' }}>
-                          {vocalIsolationStatus.progress || 0}%
-                        </Text>
-                      </Text>
-                    </View>
-                    <Text style={styles.vocalBannerEta} numberOfLines={1} ellipsizeMode="tail">
-                      {vocalIsolationStatus.eta || 'Isolating...'}
-                    </Text>
-                  </View>
-                  <View style={styles.vocalProgressBarBg}>
-                    <View
-                      style={[
-                        styles.vocalProgressBarFill,
-                        { width: `${Math.max(4, Math.min(100, vocalIsolationStatus.progress || 0))}%` }
-                      ]}
-                    />
-                  </View>
-                </View>
-              )}
-
-              {/* ── Transport Controls ── */}
-              <View style={styles.controlsRow}>
-                {/* Shuffle Button */}
-                <TouchableOpacity
-                  style={styles.transportBtnBox}
-                  onPress={() => toggleShuffle ? toggleShuffle() : setIsShuffle(!isShuffle)}
-                  activeOpacity={0.7}
-                >
-                  <Shuffle size={18} color={isShuffle ? colors.mint : '#9ca3af'} />
-                </TouchableOpacity>
-
-                {/* Skip Prev */}
-                <TouchableOpacity style={styles.transportBtnBox} onPress={playPrevTrack} activeOpacity={0.7}>
-                  <SkipBack size={20} color="#ffffff" fill="#ffffff" />
-                </TouchableOpacity>
-
-                {/* Center Brutalist Play/Pause Button */}
-                <TouchableOpacity
-                  style={styles.mainPlayBtn}
-                  onPress={togglePlay}
-                  activeOpacity={0.8}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator size="small" color="#0b1110" />
-                  ) : isPlaying ? (
-                    <Pause size={24} color="#0b1110" fill="#0b1110" />
-                  ) : (
-                    <Play size={24} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
-                  )}
-                </TouchableOpacity>
-
-                {/* Skip Next */}
-                <TouchableOpacity style={styles.transportBtnBox} onPress={playNextTrack} activeOpacity={0.7}>
-                  <SkipForward size={20} color="#ffffff" fill="#ffffff" />
-                </TouchableOpacity>
-
-                {/* Repeat Button */}
-                <TouchableOpacity style={styles.transportBtnBox} onPress={toggleRepeat} activeOpacity={0.7}>
-                  <Repeat size={18} color={repeatMode !== 'off' ? colors.mint : '#9ca3af'} />
-                  {repeatMode === 'one' && (
-                    <View style={styles.repeatOneBadge}>
-                      <Text style={styles.repeatOneText}>1</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* ── Dashed Divider ── */}
-              <View style={styles.dashedDivider} />
-
-              {/* ── Audio Toolbar Row: Volume + Quick Actions ── */}
-              <View style={styles.audioToolbarRow}>
-                {/* Left: Volume Control */}
-                <View style={styles.volumeGroup}>
-                  <Volume2 size={16} color="#94a3b8" />
-                  <TouchableOpacity activeOpacity={1} onPress={handleVolumePress} style={styles.volTouchArea}>
-                    <View style={styles.volTrack}>
-                      <View style={[styles.volFill, { width: `${Math.round((volume || 0.8) * 100)}%` }]} />
-                      <View style={[styles.volThumb, { left: `${Math.round((volume || 0.8) * 100)}%` }]} />
-                    </View>
-                  </TouchableOpacity>
-                  <Text style={styles.volPercentText}>{Math.round((volume || 0.8) * 100)}%</Text>
-                </View>
-
-                {/* Right: Quick Action Buttons */}
-                <View style={styles.quickActionsGroup}>
-                  {/* Vinyl Disc Toggle */}
-                  <TouchableOpacity
-                    style={styles.quickToolBtn}
-                    onPress={() => setIsSleepTimerOpen(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Disc size={17} color="#94a3b8" />
-                  </TouchableOpacity>
-
-                  {/* Lyrics / Mushaf Quick Button (Hidden for Live Radio) */}
-                  {!isCurRadio && (
-                    <TouchableOpacity
-                      style={styles.quickToolBtnTeal}
-                      onPress={() => setActiveTab('lyrics')}
-                      activeOpacity={0.8}
-                    >
-                      {isCurQuran ? (
-                        <BookOpen size={17} color="#0b1110" strokeWidth={2.4} />
-                      ) : (
-                        <Mic size={17} color="#0b1110" strokeWidth={2.4} />
-                      )}
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Download Button */}
-                  <TouchableOpacity
-                    style={styles.quickToolBtn}
-                    onPress={() => !isDownloaded && !isDownloading && handleDownloadTrack(currentTrack)}
-                    disabled={isDownloading || isDownloaded}
-                    activeOpacity={0.8}
-                  >
-                    {isDownloading ? (
-                      <ActivityIndicator size="small" color="#17a398" />
-                    ) : isDownloaded ? (
-                      <CheckCircle2 size={17} color="#17a398" />
-                    ) : (
-                      <Download size={17} color="#94a3b8" />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <FullPlayerControls
+                currentTrack={currentTrack}
+                isPlaying={isPlaying}
+                isLoading={isLoading}
+                isShuffle={isShuffle}
+                repeatMode={repeatMode}
+                togglePlay={togglePlay}
+                seekTo={seekTo}
+                playNextTrack={playNextTrack}
+                playPrevTrack={playPrevTrack}
+                toggleShuffle={toggleShuffle}
+                setIsShuffle={setIsShuffle}
+                toggleRepeat={toggleRepeat}
+                volume={volume}
+                setVolume={setVolume}
+                isCurRadio={isCurRadio}
+                isCurQuran={isCurQuran}
+                isDownloaded={isDownloaded}
+                isDownloading={isDownloading}
+                handleDownloadTrack={handleDownloadTrack}
+                setIsSleepTimerOpen={setIsSleepTimerOpen}
+                setActiveTab={setActiveTab}
+              />
             </View>
           </ScrollView>
         )}
 
-        {/* ── Lyrics / Quran Mushaf Tab ── */}
-        {activeTab === 'lyrics' && !isCurRadio && (
+        {activeTab === 'lyrics' && (
           isCurQuran ? (
             <View style={{ flex: 1, paddingHorizontal: 8, paddingBottom: 12 }}>
               <QuranMushafViewer track={currentTrack} globalTheme={isDark ? 'dark' : 'light'} />
             </View>
           ) : (
-<ScrollView
-            ref={lyricsScrollRef}
-            contentContainerStyle={styles.lyricsBody}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={[styles.lyricsCard, { backgroundColor: deckBg, borderColor: deckBorder }]}>
-              <View style={[styles.lyricsCardHeaderRow, { borderBottomColor: isDark ? '#1f2e2a' : '#ded2bb' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  {isVerifiedLyrics && (
-                    <View style={styles.verifiedTag}>
-                      <CheckCircle2 size={12} color={colors.mint} />
-                      <Text style={styles.verifiedTagText}>
-                        VERIFIED LYRICS {lyricsVerifiedBy ? (' • BY @' + lyricsVerifiedBy) : ''}
-                      </Text>
-                    </View>
-                  )}
-                  <Text style={[styles.lyricsHeader, { color: textSub }]}>OFFICIAL TRANSCRIPT</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  {isLoadingLyrics && (
-                    <ActivityIndicator size="small" color={colors.mint} />
-                  )}
-                  <TouchableOpacity
-                    onPress={handleOpenEditLyrics}
-                    style={styles.lyricsActionBtn}
-                    activeOpacity={0.8}
-                  >
-                    <Edit3 size={14} color="#000000" strokeWidth={2.5} />
-                    <Text style={styles.lyricsActionBtnText}>EDIT</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {lyricsList.length > 0 ? (
-                <View style={styles.lyricsLinesList}>
-                  {lyricsList.map((line, idx) => {
-                    const isActive = idx === activeLyricIndex;
-                    return (
-                      <TouchableOpacity
-                        key={idx}
-                        onPress={() => seekTo(line.time)}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.lyricLineBox,
-                          isActive && {
-                            backgroundColor: isDark ? 'rgba(23, 163, 152, 0.2)' : 'rgba(23, 163, 152, 0.15)',
-                            borderColor: colors.mint,
-                            borderWidth: 1.5,
-                          }
-                        ]}
-                      >
-                        <Text style={[
-                          styles.lyricLineText,
-                          { color: isActive ? (isDark ? '#ffffff' : colors.ink) : (isDark ? '#9ca3af' : '#4b5563') },
-                          isActive && styles.lyricLineTextActive
-                        ]}>
-                          {line.text}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View style={styles.emptyLyricsBox}>
-                  <ListMusic size={32} color={colors.mint} style={{ marginBottom: 12 }} />
-                  <Text style={[styles.emptyLyricsTitle, { color: textTitle }]}>No Lyrics Found</Text>
-                  <Text style={styles.emptyLyricsText}>
-                    {isLoadingLyrics ? 'Retrieving synchronized lyrics...' : 'Lyrics could not be loaded for this track.'}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleOpenEditLyrics}
-                    style={[styles.lyricsActionBtn, { marginTop: 16, paddingHorizontal: 16 }]}
-                    activeOpacity={0.8}
-                  >
-                    <Plus size={15} color="#000000" strokeWidth={2.5} />
-                    <Text style={styles.lyricsActionBtnText}>ADD / SYNC LYRICS</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          </ScrollView>
-        )
-      )}
-
-        {/* ── Queue Tab ── */}
-        {activeTab === 'queue' && (
-          <View style={{ flex: 1 }}>
-            {queue.length > 0 && (
-              <View style={styles.queueHeaderRow}>
-                <Text style={[styles.queueHeaderTitle, { color: isDark ? colors.mint : colors.ink }]}>
-                  UP NEXT ({queue.length})
-                </Text>
-                <TouchableOpacity
-                  style={styles.clearQueueBtn}
-                  onPress={() => {
-                    Alert.alert(
-                      'Clear Queue',
-                      'Remove all upcoming songs from queue?',
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        { text: 'Clear All', style: 'destructive', onPress: clearQueue }
-                      ]
-                    );
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.clearQueueBtnText}>CLEAR ALL</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <DraggableQueueList
-              queue={displayQueue}
-              trackId={trackId}
+            <FullPlayerLyricsView
+              lyrics={lyrics}
+              isLoadingLyrics={isLoadingLyrics}
               isDark={isDark}
-              colors={colors}
               deckBg={deckBg}
               deckBorder={deckBorder}
               textTitle={textTitle}
-              playTrack={playTrack}
-              removeFromQueue={removeFromQueue}
-              reorderQueue={reorderQueue}
+              textSub={textSub}
+              seekTo={seekTo}
+              onSaveLyrics={saveLyrics || setLyrics}
+              isVerifiedLyrics={isVerifiedLyrics}
+              lyricsVerifiedBy={lyricsVerifiedBy}
             />
-          </View>
+          )
         )}
 
-        {/* Edit / Add Lyrics Modal */}
-        <Modal
-          visible={isEditLyricsOpen}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setIsEditLyricsOpen(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.editLyricsOverlay}
-          >
-            <View style={[styles.editLyricsCard, { backgroundColor: isDark ? '#0e1614' : '#fdfbf7', borderColor: deckBorder }]}>
-              <View style={styles.editLyricsHeader}>
-                <View>
-                  <Text style={[styles.editLyricsTitle, { color: textTitle }]}>
-                    {lyricsList.length > 0 ? 'Edit Synchronized Lyrics' : 'Add Synchronized Lyrics'}
-                  </Text>
-                  <Text style={[styles.editLyricsSubtitle, { color: textSub }]}>
-                    Format: [mm:ss.xx] Lyric text OR line-by-line
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setIsEditLyricsOpen(false)}
-                  style={styles.editLyricsCloseBtn}
-                >
-                  <X size={18} color={textTitle} />
-                </TouchableOpacity>
-              </View>
+        {activeTab === 'queue' && (
+          <FullPlayerQueueView
+            queue={queue || []}
+            trackId={trackId}
+            isDark={isDark}
+            deckBg={deckBg}
+            deckBorder={deckBorder}
+            textTitle={textTitle}
+            playTrack={playTrack}
+            removeFromQueue={removeFromQueue}
+            reorderQueue={reorderQueue}
+            clearQueue={clearQueue}
+          />
+        )}
 
-              <TextInput
-                style={[
-                  styles.editLyricsInput,
-                  {
-                    backgroundColor: isDark ? '#14201c' : '#ede5d3',
-                    color: textTitle,
-                    borderColor: deckBorder,
-                  }
-                ]}
-                multiline
-                value={lyricsInputText}
-                onChangeText={setLyricsInputText}
-                placeholder={"[00:12.50] Lyric line 1\n[00:15.80] Lyric line 2..."}
-                placeholderTextColor={isDark ? '#4b5563' : '#9ca3af'}
-                textAlignVertical="top"
-              />
-
-              <View style={styles.editLyricsActions}>
-                <TouchableOpacity
-                  style={[styles.editLyricsCancelBtn, { borderColor: deckBorder }]}
-                  onPress={() => setIsEditLyricsOpen(false)}
-                  disabled={isSavingLyrics}
-                >
-                  <Text style={[styles.editLyricsCancelText, { color: textTitle }]}>Cancel</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.editLyricsSaveBtn, isSavingLyrics && { opacity: 0.6 }]}
-                  onPress={handleSaveLyrics}
-                  disabled={isSavingLyrics}
-                >
-                  {isSavingLyrics ? (
-                    <ActivityIndicator size="small" color="#000000" />
-                  ) : (
-                    <>
-                      <Check size={16} color="#000000" strokeWidth={3} />
-                      <Text style={styles.editLyricsSaveText}>SAVE & SYNC</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-
-        {/* Sleep Timer Modal */}
         <SleepTimerModal visible={isSleepTimerOpen} onClose={() => setIsSleepTimerOpen(false)} />
       </View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  vocalBannerBox: {
-    marginHorizontal: 4,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(5, 46, 38, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.5)',
-  },
-  vocalBannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-    overflow: 'hidden',
-  },
-  vocalBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
-  },
-  vocalPingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#34d399',
-  },
-  vocalBannerTitle: {
-    fontSize: 10.5,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: 'bold',
-    color: '#ffffff',
-    letterSpacing: 0.3,
-  },
-  vocalBannerEta: {
-    flex: 1,
-    textAlign: 'right',
-    marginLeft: 8,
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#94a3b8',
-  },
-  vocalProgressBarBg: {
-    width: '100%',
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0a100e',
-    overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  vocalProgressBarFill: {
-    height: '100%',
-    backgroundColor: '#10b981',
-    borderRadius: 3,
-  },
-
-  container: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  ambientCover: {
-    ...StyleSheet.absoluteFillObject,
-    opacity: 0.35,
-    transform: [{ scale: 1.3 }],
-  },
-  ambientOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 44 : 12,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    zIndex: 10,
-    maxWidth: 680,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  topWhiteBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  headerPill: {
-    backgroundColor: 'rgba(23,163,152,0.18)',
-    borderWidth: 1,
-    borderColor: '#17a398',
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  headerPillText: {
-    fontSize: 8.5,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '900',
-    color: '#17a398',
-    letterSpacing: 0.5,
-  },
-  headerTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#ffffff',
-    marginTop: 3,
-  },
-  tabsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    zIndex: 10,
-    maxWidth: 400,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  tabBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-  },
-  activeTabBtn: {
-    backgroundColor: '#262f2d',
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9ca3af',
-  },
-  activeTabText: {
-    color: '#ffffff',
-    fontWeight: '900',
-  },
-  playerScroll: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  deckCard: {
-    backgroundColor: '#0c1815',
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: '#1d3630',
-    padding: 14,
-    marginHorizontal: 14,
-    marginBottom: 18,
-    maxWidth: 620,
-    width: '100%',
-    alignSelf: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.7,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  deckHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1d3630',
-    marginBottom: 10,
-  },
-  deckHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  pulsingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#17a398',
-  },
-  pulsingDotActive: {
-    backgroundColor: '#10b981',
-  },
-  deckTitle: {
-    fontSize: 9.5,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '900',
-    color: '#17a398',
-    letterSpacing: 0.6,
-  },
-  deckBadge: {
-    backgroundColor: '#0c1815',
-    borderWidth: 1,
-    borderColor: '#17a398',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-  },
-  deckBadgeText: {
-    fontSize: 8.5,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '900',
-    color: '#17a398',
-  },
-  tvEnclosure: {
-    backgroundColor: '#11201c',
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#233d36',
-    padding: 8,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  tvScreen: {
-    width: '100%',
-    height: Math.min(210, height * 0.26),
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#000000',
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  tvScanlines: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.02)',
-  },
-  cassetteSpoolBar: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#1d3630',
-    borderStyle: 'dashed',
-    paddingHorizontal: 4,
-  },
-  spoolLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  spoolText: {
-    fontSize: 8,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '900',
-    color: '#17a398',
-    letterSpacing: 0.5,
-  },
-  spoolWheels: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  spoolWheel: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#17a398',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  spoolInnerDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#17a398',
-  },
-  spoolBelt: {
-    width: 14,
-    height: 2,
-    backgroundColor: '#17a398',
-    borderRadius: 1,
-  },
-  trackInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  genreBadge: {
-    backgroundColor: '#17a398',
-    alignSelf: 'flex-start',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginBottom: 4,
-  },
-  genreBadgeText: {
-    fontSize: 8,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '900',
-    color: '#0b1110',
-  },
-  songTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: -0.2,
-  },
-  songArtist: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9ca3af',
-    marginTop: 2,
-  },
-  deckHeartBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#13231f',
-    borderWidth: 1,
-    borderColor: '#243a34',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seekSection: {
-    width: '100%',
-    marginBottom: 10,
-  },
-  seekTouchArea: {
-    paddingVertical: 8,
-  },
-  seekTrack: {
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#182b26',
-    position: 'relative',
-  },
-  seekFill: {
-    height: '100%',
-    backgroundColor: '#17a398',
-    borderRadius: 1.5,
-  },
-  seekThumb: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#ffffff',
-    position: 'absolute',
-    top: -4.5,
-    marginLeft: -6,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  timeText: {
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#17a398',
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginVertical: 4,
-  },
-  transportBtnBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#13231f',
-    borderWidth: 1,
-    borderColor: '#243a34',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  repeatOneBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#17a398',
-    borderRadius: 5,
-    width: 10,
-    height: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  repeatOneText: {
-    fontSize: 7,
-    fontWeight: '900',
-    color: '#0b1110',
-  },
-  mainPlayBtn: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: '#4fd1c5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#4fd1c5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  dashedDivider: {
-    borderBottomWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#1f3630',
-    marginVertical: 14,
-  },
-  audioToolbarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  volumeGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    marginRight: 14,
-  },
-  volTouchArea: {
-    flex: 1,
-    paddingVertical: 8,
-  },
-  volTrack: {
-    height: 3,
-    backgroundColor: '#182b26',
-    borderRadius: 1.5,
-    position: 'relative',
-  },
-  volFill: {
-    height: '100%',
-    backgroundColor: '#17a398',
-    borderRadius: 1.5,
-  },
-  volThumb: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ffffff',
-    position: 'absolute',
-    top: -3.5,
-    marginLeft: -5,
-  },
-  volPercentText: {
-    color: '#17a398',
-    fontSize: 10.5,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '800',
-  },
-  quickActionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  quickToolBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#13231f',
-    borderWidth: 1,
-    borderColor: '#243a34',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickToolBtnTeal: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#4fd1c5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  footerPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-  footerPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  lyricsBody: {
-    paddingVertical: 10,
-    paddingBottom: 40,
-  },
-  lyricsCard: {
-    borderRadius: 16,
-    borderWidth: 2,
-    padding: 16,
-    maxWidth: 640,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  lyricsCardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    marginBottom: 12,
-  },
-  lyricsHeader: {
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  verifiedTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(23, 163, 152, 0.15)',
-    borderWidth: 1,
-    borderColor: colors.mint,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  verifiedTagText: {
-    fontSize: 9,
-    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Menlo',
-    fontWeight: '900',
-    color: colors.mint,
-  },
-  lyricsLinesList: {
-    gap: 8,
-  },
-  lyricLineBox: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-  },
-  lyricLineText: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '600',
-  },
-  lyricLineTextActive: {
-    fontWeight: '900',
-    fontSize: 18,
-  },
-  emptyLyricsBox: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  emptyLyricsTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  emptyLyricsText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    textAlign: 'center',
-  },
-  queueBody: {
-    paddingVertical: 10,
-    maxWidth: 640,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  queueItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    paddingHorizontal: 10,
-    height: 64,
-    marginBottom: 8,
-  },
-  dropIndicatorBar: {
-    position: 'absolute',
-    left: 8,
-    right: 8,
-    height: 3,
-    borderRadius: 2,
-    zIndex: 10,
-  },
-  queueThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: '#000000',
-  },
-  queueTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  queueArtist: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginTop: 2,
-  },
-  queueHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  queueHeaderTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
-  },
-  clearQueueBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderWidth: 1,
-    borderColor: '#ef4444',
-  },
-  clearQueueBtnText: {
-    color: '#ef4444',
-    fontSize: 10,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-  },
-  queueControlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  queueActionBtn: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dragHandle: {
-    padding: 6,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 4,
-  },
-  playingIndicator: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.teal,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lyricsActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.mint,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#000000',
-  },
-  lyricsActionBtnText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#000000',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    letterSpacing: 0.5,
-  },
-  editLyricsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  editLyricsCard: {
-    width: '100%',
-    maxHeight: '85%',
-    borderRadius: 16,
-    borderWidth: 2,
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 0,
-    elevation: 8,
-  },
-  editLyricsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  editLyricsTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  editLyricsSubtitle: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginTop: 2,
-  },
-  editLyricsCloseBtn: {
-    padding: 4,
-  },
-  editLyricsInput: {
-    height: 300,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    padding: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  editLyricsActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-  },
-  editLyricsCancelBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1.5,
-  },
-  editLyricsCancelText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  editLyricsSaveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.mint,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#000000',
-  },
-  editLyricsSaveText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#000000',
-  },
-  djDeckCard: {
-    backgroundColor: '#0c1815',
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: '#1f2e2a',
-    padding: 16,
-    marginTop: 14,
-    marginBottom: 20,
-  },
-  djDeckCardActive: {
-    borderColor: '#10b981',
-    backgroundColor: '#0e1f1a',
-  },
-  djHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  djTitle: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: 0.8,
-  },
-  djSubtitle: {
-    fontSize: 9,
-    color: '#94a3b8',
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  djToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1.5,
-  },
-  djToggleBtnActive: {
-    backgroundColor: '#064e3b',
-    borderColor: '#10b981',
-  },
-  djToggleBtnInactive: {
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
-  },
-  djIndicatorDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  djToggleText: {
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  djNextUpBox: {
-    marginTop: 14,
-    backgroundColor: '#07110e',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#162822',
-    padding: 10,
-  },
-  djNextUpLabel: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#10b981',
-    letterSpacing: 0.8,
-  },
-  djCountdownText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#f59e0b',
-  },
-  djNextSongRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  djNextCover: {
-    width: 34,
-    height: 34,
-    borderRadius: 6,
-    backgroundColor: '#1f2e2a',
-  },
-  djNextTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  djNextArtist: {
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 1,
-  },
-  djNoNextText: {
-    fontSize: 11,
-    color: '#64748b',
-    fontStyle: 'italic',
-  },
-  djParamSection: {
-    marginTop: 12,
-  },
-  djParamLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 0.6,
-    marginBottom: 6,
-  },
-  djPillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  djPill: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1f2e2a',
-    backgroundColor: '#13231f',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  djPillActive: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
-  },
-  djPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#cbd5e1',
-  },
-  djPillTextActive: {
-    color: '#0b1110',
-    fontWeight: '900',
-  },
-  djTriggerBtn: {
-    marginTop: 14,
-    backgroundColor: '#f59e0b',
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#000000',
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  djTriggerBtnText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#0b1110',
-    letterSpacing: 0.6,
-  },
-});
+export default React.memo(FullPlayerModal);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share, ActivityIndicator, Platform } from 'react-native';
 import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2, Trash2, FolderDown } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -32,7 +32,7 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheetOuter}>
           <View style={styles.hardShadow} />

@@ -68,8 +68,8 @@ const APP_VERSIONS_DATA = {
         minAppVersion: '1.9.6',
         notes: 'تحديث هوائي فوري v2.3.8 • أحدث التحسينات والإصلاحات',
         notesEn: 'Instant OTA update v2.3.8 • Performance improvements and bug fixes.',
-        bundleSize: 4807809,
-        sizeMb: '4.59 MB'
+        bundleSize: 2958792,
+        sizeMb: '2.82 MB'
       }
     },
     ios: {
@@ -123,8 +123,8 @@ const BETA_VERSIONS_DATA = {
         minAppVersion: '1.9.6',
         notes: 'تحديث هوائي فوري v2.3.8 • أحدث التحسينات والإصلاحات',
         notesEn: 'Instant OTA update v2.3.8 • Performance improvements and bug fixes.',
-        bundleSize: 4807809,
-        sizeMb: '4.59 MB'
+        bundleSize: 2958792,
+        sizeMb: '2.82 MB'
       }
     },
     ios: {
@@ -380,7 +380,17 @@ router.post('/api/app/broadcast-update', adminAuth, (req, res) => {
       const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../../package.json'), 'utf8'));
       const manifest = JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
       if (manifest.platforms?.android) manifest.platforms.android.version = pkg.version;
-      if (manifest.platforms?.ios) manifest.platforms.ios.version = '2.3.0';
+      if (manifest.platforms?.ios) manifest.platforms.ios.version = pkg.version;
+      const dynamicOta = getOtaManifest();
+      if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
+        if (dynamicOta.version) manifest.platforms.android.version = dynamicOta.version;
+        manifest.platforms.android.ota = {
+          ...(manifest.platforms.android.ota || {}),
+          ...dynamicOta,
+          bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
+          minAppVersion: dynamicOta.minAppVersion || '1.9.6'
+        };
+      }
       req.io.emit('app:update_manifest', manifest);
       req.io.emit('app:update_available', manifest);
     } catch {}

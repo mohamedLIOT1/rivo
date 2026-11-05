@@ -1,16 +1,10 @@
 const crypto = require('crypto');
-const { Client: BotClient, MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
-const { Client: SelfClient, RichPresence } = require('discord.js-selfbot-v13');
+const { RichPresence, Client: SelfClient } = require('discord.js-selfbot-v13');
 
 const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
-if (!ENCRYPTION_KEY) {
-  throw new Error('❌ [FATAL] ENCRYPTION_KEY is required in environment variables for Discord activity token security.');
-}
-const BOT_TOKEN = process.env.BOT_TOKEN;
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET || 'rivo-music-secret-key-default-2024';
 const DISCORD_APP_ID = process.env.DISCORD_CLIENT_ID || '1440997674630250506';
 
-// 🔒 Token Encryption & Decryption
 function encryptToken(text) {
   if (!text) return '';
   const key = crypto.createHash('sha256').update(String(ENCRYPTION_KEY)).digest();
@@ -38,6 +32,13 @@ function decryptToken(text) {
   }
 }
 
+const User = require('./models/User');
+
+let ioInstance = null;
+function setIo(io) {
+  ioInstance = io;
+}
+
 const activeUserBots = new Map();
 const userIdleTimers = new Map();
 const assetPathCache = new Map();
@@ -46,33 +47,21 @@ const DEFAULT_BADGE_URL = `${RIVO_BASE_URL}/discord-badge.png`;
 
 function getTrackImageUrl(track) {
   if (!track) return null;
-
-  // 1. Direct cover URL check (uploads, cloud storage, external CDNs, etc.)
   const rawCover = track.cover || track.coverUrl || '';
   if (typeof rawCover === 'string' && rawCover.trim()) {
     let clean = rawCover.trim();
-    if (clean.startsWith('//')) {
-      clean = 'https:' + clean;
-    } else if (clean.startsWith('/')) {
-      clean = RIVO_BASE_URL + clean;
-    } else if (clean.startsWith('uploads/')) {
-      clean = `${RIVO_BASE_URL}/${clean}`;
-    } else if (clean.startsWith('http://')) {
-      clean = clean.replace(/^http:\/\//i, 'https://');
-    }
+    if (clean.startsWith('//')) clean = 'https:' + clean;
+    else if (clean.startsWith('/')) clean = RIVO_BASE_URL + clean;
+    else if (clean.startsWith('uploads/')) clean = `${RIVO_BASE_URL}/${clean}`;
+    else if (clean.startsWith('http://')) clean = clean.replace(/^http:\/\//i, 'https://');
 
-    // If the cover was erroneously set to a YouTube video page, extract thumbnail
     const ytMatch = clean.match(/(?:v=|youtu\.be\/|\/vi\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
     if (ytMatch && ytMatch[1] && !clean.includes('i.ytimg.com')) {
       return `https://i.ytimg.com/vi/${ytMatch[1]}/hqdefault.jpg`;
     }
-
-    if (clean.startsWith('https://')) {
-      return clean;
-    }
+    if (clean.startsWith('https://')) return clean;
   }
 
-  // 2. YouTube ID from youtubeId, audioUrl, or url
   const ytCandidates = [track.youtubeId, track.audioUrl, track.url];
   for (const c of ytCandidates) {
     if (!c || typeof c !== 'string') continue;
@@ -84,40 +73,22 @@ function getTrackImageUrl(track) {
       return `https://i.ytimg.com/vi/${c.trim()}/hqdefault.jpg`;
     }
   }
-
   return DEFAULT_BADGE_URL;
 }
 
 async function resolveDiscordAsset(client, imageUrl) {
   if (!imageUrl || typeof imageUrl !== 'string') return null;
-
-  // Discord native CDN URLs are handled directly by discord.js-selfbot-v13
-  if (imageUrl.startsWith('https://cdn.discordapp.com/') || imageUrl.startsWith('https://media.discordapp.net/')) {
-    return imageUrl;
-  }
-
-  // Already proxied via external/... or mp:
-  if (imageUrl.startsWith('external/') || imageUrl.startsWith('mp:')) {
-    return imageUrl;
-  }
-
-  // Check memory cache to avoid Discord API rate-limits
-  if (assetPathCache.has(imageUrl)) {
-    return assetPathCache.get(imageUrl);
-  }
-
-  if (!client || !client.token || !client.api) {
-    return null;
-  }
+  if (imageUrl.startsWith('https://cdn.discordapp.com/') || imageUrl.startsWith('https://media.discordapp.net/')) return imageUrl;
+  if (imageUrl.startsWith('external/') || imageUrl.startsWith('mp:')) return imageUrl;
+  if (assetPathCache.has(imageUrl)) return assetPathCache.get(imageUrl);
+  if (!client || !client.token || !client.api) return null;
 
   try {
     const res = await RichPresence.getExternal(client, DISCORD_APP_ID, imageUrl);
     if (Array.isArray(res) && res[0]?.external_asset_path) {
       const assetPath = res[0].external_asset_path;
-      // LRU cache limit 3000
       if (assetPathCache.size >= 3000) {
-        const oldestKey = assetPathCache.keys().next().value;
-        assetPathCache.delete(oldestKey);
+        assetPathCache.delete(assetPathCache.keys().next().value);
       }
       assetPathCache.set(imageUrl, assetPath);
       return assetPath;
@@ -125,38 +96,87 @@ async function resolveDiscordAsset(client, imageUrl) {
   } catch (err) {
     console.warn(`[Discord Activity] Proxy external asset failed for ${imageUrl}:`, err.message);
   }
-
   return null;
 }
 
+function getActiveSession(userId) {
+  if (!userId) return null;
+  const session = activeUserBots.get(String(userId));
+  if (!session) return null;
+  return {
+    isPlaying: Boolean(session.isPlaying),
+    currentTrack: session.currentTrack || null,
+    currentTime: session.currentTime || 0,
+    status: session.status,
+    lastHeartbeat: session.lastHeartbeat,
+    lastStartTs: session.lastStartTs,
+    expiresAt: session.expiresAt
+  };
+}
+
+function isUserActivelyPlaying(userId) {
+  if (!userId) return false;
+  const uidStr = String(userId);
+  const session = activeUserBots.get(uidStr);
+  if (!session || !session.currentTrack) return false;
+  const now = Date.now();
+  const trackDur = Number(session.currentTrack.duration) > 0 ? Number(session.currentTrack.duration) : 240;
+  const curSec = Math.max(0, Number(session.currentTime) || 0);
+  const fallbackExpiry = (session.lastStartTs || session.lastHeartbeat || now) + (trackDur - curSec + 180) * 1000;
+  const expiresAt = session.expiresAt || fallbackExpiry;
+  return Boolean(session.currentTrack && (session.isPlaying || now < expiresAt));
+}
+
+const isUserPlaying = isUserActivelyPlaying;
+
 async function disconnectUserSession(userId) {
-  if (userIdleTimers.has(userId)) {
-    clearTimeout(userIdleTimers.get(userId));
-    userIdleTimers.delete(userId);
+  if (!userId) return;
+  const uidStr = String(userId);
+
+  if (userIdleTimers.has(uidStr)) {
+    clearTimeout(userIdleTimers.get(uidStr));
+    userIdleTimers.delete(uidStr);
   }
-  const session = activeUserBots.get(userId);
+
+  const session = activeUserBots.get(uidStr);
   if (session) {
-    activeUserBots.delete(userId);
+    activeUserBots.delete(uidStr);
     session.isPlaying = false;
     session.currentTrack = null;
     session.status = 'disconnected';
-    try {
-      if (session.client) {
-        try {
-          if (session.client.settings && typeof session.client.settings.setCustomStatus === 'function') {
-            await session.client.settings.setCustomStatus(null).catch(() => {});
-          }
-        } catch (e) {}
+    session.lastHeartbeat = 0;
+    session.expiresAt = 0;
+
+    if (session.client) {
+      try {
         if (session.client.user) {
           try {
-            await session.client.user.setPresence({ activities: [], status: 'online' }).catch(() => {});
+            if (typeof session.client.settings?.setCustomStatus === 'function') {
+              await session.client.settings.setCustomStatus(null).catch(() => {});
+            }
           } catch (e) {}
+          try { session.client.user.setActivity(null); } catch (e) {}
+          try { session.client.user.setPresence({ activities: [], status: 'online' }); } catch (e) {}
         }
-        // Give Discord Gateway 200ms to register clear presence before tearing down client
-        await new Promise(r => setTimeout(r, 200));
-        session.client.destroy();
-      }
-    } catch (e) {}
+      } catch (e) {}
+      try { session.client.removeAllListeners?.(); } catch (e) {}
+      try { session.client.destroy(); } catch (e) {}
+    }
+  }
+
+  try {
+    await User.findByIdAndUpdate(uidStr, {
+      $set: { 'currentListening.isPlaying': false, lastActiveAt: new Date() }
+    });
+  } catch (e) {}
+
+  if (ioInstance) {
+    ioInstance.emit('activity:updated', {
+      userId: uidStr,
+      currentListening: { isPlaying: false },
+      isLive: false,
+      isOnline: false
+    });
   }
 }
 
@@ -178,35 +198,23 @@ async function applyTrackPresence(client, track, currentTime = 0) {
 
     const imageUrl = getTrackImageUrl(track);
     let assetKey = null;
-
     if (imageUrl) {
       assetKey = await resolveDiscordAsset(client, imageUrl);
       if (!assetKey && imageUrl !== DEFAULT_BADGE_URL) {
         assetKey = await resolveDiscordAsset(client, DEFAULT_BADGE_URL);
       }
     }
-
     if (assetKey) {
       try {
         r.setAssetsLargeImage(assetKey).setAssetsLargeText(track.album || track.title || 'Rivo');
-      } catch (e) {
-        console.warn('[Discord Activity] setAssetsLargeImage error:', e.message);
-      }
+      } catch (e) {}
     }
 
-    if (durationSec > 0) {
-      r.setEndTimestamp(startTs + durationSec * 1000);
-    }
+    const effectiveDurationSec = durationSec > 0 ? durationSec : 300;
+    r.setEndTimestamp(startTs + effectiveDurationSec * 1000);
 
-    try {
-      r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org');
-    } catch (e) {}
-
-    try {
-      await client.user.setActivity(r);
-    } catch (presenceErr) {
-      console.warn('[Discord Activity] setActivity error:', presenceErr.message);
-    }
+    try { r.addButton('Listen on Rivo', 'https://rivo-m.duckdns.org'); } catch (e) {}
+    try { await client.user.setActivity(r); } catch (e) {}
   } catch (err) {
     console.warn('[Discord Activity] applyTrackPresence error:', err.message);
   }
@@ -217,28 +225,33 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
   const uidStr = String(user._id);
 
   if (!user.discord || !user.discord.token || user.discord.enabled === false) {
-    if (activeUserBots.has(uidStr)) {
-      disconnectUserSession(uidStr);
-    }
+    if (activeUserBots.has(uidStr)) disconnectUserSession(uidStr);
     return;
   }
 
-  // If stopped or paused: IMMEDIATELY clear Discord Rich Presence and destroy session!
+  // If stopped or paused: IMMEDIATELY clear Discord Rich Presence and destroy session
   if (!isPlaying || !track) {
     await disconnectUserSession(uidStr);
     return;
   }
 
-  // Clear idle disconnect timer if user plays again
+  // Calculate remaining track duration + 3-minute grace period (up to 15m, min 60s)
+  const trackDuration = Number(track.duration) > 0 ? Number(track.duration) : 240;
+  const curSec = Math.max(0, Number(currentTime) || 0);
+  const remainingTrackSec = Math.max(0, trackDuration - curSec);
+  const graceSec = 180; // 3-minute grace period for backgrounded playback
+  const remainingMs = Math.min(15 * 60 * 1000, Math.max(60000, (remainingTrackSec + graceSec) * 1000));
+  const now = Date.now();
+  const sessionExpiresAt = now + remainingMs;
+
+  // Dynamic idle watchdog: keep presence active for track duration + grace instead of 25s cutoff
   if (userIdleTimers.has(uidStr)) {
     clearTimeout(userIdleTimers.get(uidStr));
     userIdleTimers.delete(uidStr);
   }
-
-  // Safety idle watchdog: if no listening activity ping is received within 40s, auto-disconnect
   userIdleTimers.set(uidStr, setTimeout(() => {
-    disconnectUserSession(uidStr);
-  }, 40000));
+    disconnectUserSession(uidStr).catch(() => {});
+  }, remainingMs));
 
   const rawToken = decryptToken(user.discord.token);
   if (!rawToken) {
@@ -246,8 +259,6 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
     return;
   }
 
-  const curSec = Math.max(0, Number(currentTime) || 0);
-  const now = Date.now();
   let session = activeUserBots.get(uidStr);
 
   // If already ready, update presence with drift check
@@ -267,9 +278,11 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
       Math.abs(prevDuration - newDuration) >= 2 ||
       driftSec >= 3;
 
+    session.lastHeartbeat = now;
     session.currentTrack = track;
     session.currentTime = curSec;
     session.isPlaying = true;
+    session.expiresAt = sessionExpiresAt;
 
     if (shouldUpdate) {
       session.lastStartTs = now - Math.round(curSec * 1000);
@@ -278,35 +291,52 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
     return;
   }
 
-  // If currently connecting, save track for ready event
   if (session && session.status === 'connecting') {
-    session.currentTrack = track;
-    session.currentTime = curSec;
-    session.isPlaying = true;
-    session.lastStartTs = now - Math.round(curSec * 1000);
-    return;
+    if (now - (session.lastHeartbeat || session.lastStartTs || 0) > 30000) {
+      try { session.client?.destroy(); } catch (e) {}
+      activeUserBots.delete(uidStr);
+    } else {
+      session.lastHeartbeat = now;
+      session.currentTrack = track;
+      session.currentTime = curSec;
+      session.isPlaying = true;
+      session.lastStartTs = now - Math.round(curSec * 1000);
+      session.expiresAt = sessionExpiresAt;
+      return;
+    }
   }
 
-  // Otherwise, create new client instance
   try {
     const client = new SelfClient({ checkUpdate: false });
+    client.on('error', (err) => {
+      console.warn(`[Discord Activity] Client error for user ${uidStr}:`, err?.message || err);
+    });
     session = {
       client,
       status: 'connecting',
       currentTrack: track,
       currentTime: curSec,
       isPlaying: true,
-      lastStartTs: now - Math.round(curSec * 1000)
+      lastStartTs: now - Math.round(curSec * 1000),
+      lastHeartbeat: now,
+      expiresAt: sessionExpiresAt
     };
     activeUserBots.set(uidStr, session);
 
     client.on('ready', () => {
       console.log(`[Discord Activity] User ${uidStr} logged in to Discord as: ${client.user.tag}`);
-      session.status = 'ready';
-      if (session.currentTrack && session.isPlaying) {
-        const elapsedSinceConnect = session.lastStartTs ? Math.max(0, (Date.now() - session.lastStartTs) / 1000) : session.currentTime;
-        applyTrackPresence(client, session.currentTrack, elapsedSinceConnect);
+      if (!activeUserBots.has(uidStr) || session.status === 'disconnected' || !session.isPlaying || !session.currentTrack) {
+        try {
+          client.user.setActivity(null);
+          client.user.setPresence({ activities: [], status: 'online' });
+        } catch (e) {}
+        setTimeout(() => { try { client.destroy(); } catch (e) {} }, 500);
+        return;
       }
+      session.status = 'ready';
+      session.expiresAt = Date.now() + remainingMs;
+      const elapsedSinceConnect = session.lastStartTs ? Math.max(0, (Date.now() - session.lastStartTs) / 1000) : session.currentTime;
+      applyTrackPresence(client, session.currentTrack, elapsedSinceConnect);
     });
 
     client.login(rawToken).catch((err) => {
@@ -318,225 +348,34 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
   }
 }
 
-// 🤖 Helper Discord Bot Integration
-let botClient = null;
+// Background failsafe sweeper: checks for expired Discord sessions
+setInterval(() => {
+  const now = Date.now();
+  for (const [uid, session] of activeUserBots.entries()) {
+    if (session.currentTrack && (session.isPlaying || (session.expiresAt && now < session.expiresAt))) {
+      const trackDuration = Number(session.currentTrack.duration) > 0 ? Number(session.currentTrack.duration) : 240;
+      const curSec = Math.max(0, Number(session.currentTime) || 0);
+      const remainingSec = Math.max(0, trackDuration - curSec) + 180;
+      const dynamicExpiry = (session.lastStartTs || session.lastHeartbeat || now) + (remainingSec * 1000);
+      const expiresAt = session.expiresAt || dynamicExpiry;
+
+      if (now > expiresAt) {
+        console.log(`[Discord Activity] Auto-expiring finished session for user ${uid} (track elapsed)`);
+        disconnectUserSession(uid).catch(() => {});
+      }
+    } else {
+      const lastActive = session.lastHeartbeat || session.lastStartTs || 0;
+      if (now - lastActive > 26000) {
+        console.log(`[Discord Activity] Auto-expiring inactive session for user ${uid}`);
+        disconnectUserSession(uid).catch(() => {});
+      }
+    }
+  }
+}, 10000).unref();
 
 function initDiscordBot(UserModel) {
-  if (!BOT_TOKEN || BOT_TOKEN.includes('ضع_التوكن')) {
-    console.log('[Discord Bot] BOT_TOKEN not configured, skipping helper bot listener.');
-    return;
-  }
-
-  if (botClient) return;
-
-  try {
-    botClient = new BotClient({
-      intents: ['GUILDS', 'GUILD_MESSAGES', 'DIRECT_MESSAGES'],
-      partials: ['CHANNEL']
-    });
-
-    const awaitingUserStep = new Map();
-
-    botClient.on('ready', () => {
-      console.log(`[Discord Bot] Ready and listening as: ${botClient.user.tag}`);
-    });
-
-    botClient.on('messageCreate', async (msg) => {
-      if (msg.author.bot) return;
-      if (msg.guildId || msg.guild) return; // DM only
-      const discordId = msg.author.id;
-      const content = msg.content.trim();
-
-      // Check if user sent a token directly (long string with at least 2 dots)
-      const isPossibleToken = content.length >= 50 && (content.match(/\./g) || []).length >= 2;
-      const stepData = awaitingUserStep.get(discordId);
-
-      // 1. Process Token (either in step TOKEN or pasted directly)
-      if ((stepData && stepData.step === 'TOKEN') || isPossibleToken) {
-        const tokenInput = content.replace(/^token:\s*/i, '').trim();
-        let targetUserId = stepData?.rivoUserId;
-        let targetUserName = stepData?.rivoUserName;
-
-        if (!targetUserId) {
-          const existingUser = await UserModel.findOne({ 'discord.id': discordId });
-          if (existingUser) {
-            targetUserId = existingUser._id;
-            targetUserName = existingUser.name;
-          }
-        }
-
-        if (!targetUserId) {
-          await msg.reply('❌ يرجى إرسال **كود الربط** المكون من 6 أرقام من موقع Rivo أولاً أو كتابة إيميلك المسجل في Rivo.');
-          return;
-        }
-
-        if (tokenInput.length < 40) {
-          await msg.reply('❌ صيغة التوكن غير صحيحة. يرجى التأكد من نسخه بالكامل.');
-          return;
-        }
-
-        // Test token validity
-        const testClient = new SelfClient({ checkUpdate: false });
-        testClient.login(tokenInput).then(async () => {
-          const discordTag = testClient.user.tag;
-          testClient.destroy();
-
-          const encrypted = encryptToken(tokenInput);
-          await UserModel.findByIdAndUpdate(targetUserId, {
-            $set: {
-              'discord.id': discordId,
-              'discord.username': discordTag,
-              'discord.token': encrypted,
-              'discord.enabled': true,
-              'discord.linkCode': '',
-              'discord.linkCodeExpires': null
-            }
-          });
-
-          awaitingUserStep.delete(discordId);
-
-          const successEmbed = new MessageEmbed()
-            .setColor('#17a398')
-            .setTitle('🎉 تم ربط حسابك في Rivo بنجاح!')
-            .setDescription(`تم توصيل الحساب **${discordTag}** بحساب Rivo **${targetUserName}**.\n\n🎵 الآن بمجرد أن تشغل أي أغنية على [موقع Rivo](https://rivo-m.duckdns.org)، ستظهر في بروفايلك مباشرة مثل Spotify!`);
-
-          await msg.reply({ embeds: [successEmbed] });
-        }).catch(async (e) => {
-          await msg.reply('❌ فشل تسجيل الدخول بهذا التوكن! تأكد أنه توكن حسابك الصحيح وغير منتهي الصلاحية.');
-        });
-        return;
-      }
-
-      // 2. Check if input is a 6-digit link code or email
-      const isSixDigit = /^\d{6}$/.test(content);
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(content);
-
-      if ((stepData && stepData.step === 'LINK_CODE') || isSixDigit || isEmail) {
-        const user = await UserModel.findOne({
-          $or: [
-            { 'discord.linkCode': content },
-            { email: content.toLowerCase() },
-            { name: { $regex: new RegExp(`^${content}$`, 'i') } }
-          ]
-        });
-
-        if (!user) {
-          await msg.reply('❌ لم يتم العثور على حساب Rivo بهذا الكود أو الإيميل.\n\nتأكد من الكود أو الإيميل المسجل في موقع Rivo.');
-          return;
-        }
-
-        awaitingUserStep.set(discordId, {
-          step: 'TOKEN',
-          rivoUserId: user._id,
-          rivoUserName: user.name
-        });
-
-        const codeFoundEmbed = new MessageEmbed()
-          .setColor('#17a398')
-          .setTitle(`✅ تم التعرف على حسابك: ${user.name}`)
-          .setDescription('🔑 الآن أرسل **توكن حسابك الشخصي في ديسكورد** هنا في المحادثة لحفظه مشفراً وعرض الأغاني في بروفايلك.\n\n*(إذا كنت لا تعرف كيف تجلب التوكن، اضغط على أحد الأزرار بالأسفل)*');
-
-        const helpRow = new MessageActionRow().addComponents(
-          new MessageButton()
-            .setCustomId('btn_help_mobile')
-            .setLabel('📱 كيف تجيب التوكن من الموبايل؟')
-            .setStyle('PRIMARY'),
-          new MessageButton()
-            .setCustomId('btn_help_pc')
-            .setLabel('💻 كيف تجيب التوكن من الكمبيوتر؟')
-            .setStyle('PRIMARY')
-        );
-
-        await msg.reply({ embeds: [codeFoundEmbed], components: [helpRow] });
-        return;
-      }
-
-      // Default Menu
-      const linkedUser = await UserModel.findOne({ 'discord.id': discordId });
-
-      const welcomeEmbed = new MessageEmbed()
-        .setColor('#17a398')
-        .setTitle('🎧 مرحباً بك في خدمة Rivo Rich Presence')
-        .setDescription(
-          linkedUser
-            ? `✅ حسابك مرتبط حالياً بحساب Rivo: **${linkedUser.name}** (${linkedUser.email})\n\nأي أغنية تشغلها على [موقع Rivo](https://rivo-m.duckdns.org) تظهر في بروفايلك فوراً!`
-            : 'أهلاً بك! يمكنك ربط حسابك هنا ليعرض ديسكورد الأغاني التي تسمعها على Rivo في بروفايلك تلقائياً.'
-        );
-
-      const actionRow = new MessageActionRow().addComponents(
-        new MessageButton()
-          .setCustomId('btn_link_account')
-          .setLabel(linkedUser ? '🔄 تحديث التوكن أو الربط' : '🔗 ربط حساب Rivo')
-          .setStyle('SUCCESS')
-      );
-
-      if (linkedUser) {
-        actionRow.addComponents(
-          new MessageButton()
-            .setCustomId('btn_unlink_account')
-            .setLabel('🗑️ إلغاء الربط')
-            .setStyle('DANGER')
-        );
-      }
-
-      const helpRow = new MessageActionRow().addComponents(
-        new MessageButton()
-          .setCustomId('btn_help_mobile')
-          .setLabel('📱 كيف تجيب التوكن من الموبايل؟')
-          .setStyle('PRIMARY'),
-        new MessageButton()
-          .setCustomId('btn_help_pc')
-          .setLabel('💻 كيف تجيب التوكن من الكمبيوتر؟')
-          .setStyle('PRIMARY')
-      );
-
-      await msg.reply({ embeds: [welcomeEmbed], components: [actionRow, helpRow] });
-    });
-
-    botClient.on('interactionCreate', async (interaction) => {
-      if (!interaction.isButton()) return;
-      const discordId = interaction.user.id;
-
-      if (interaction.customId === 'btn_help_mobile') {
-        const phoneEmbed = new MessageEmbed()
-          .setColor('#00FFFF')
-          .setTitle('📱 طريقة استخراج التوكن من الهاتف')
-          .setDescription('1️⃣ افتح متصفح إنترنت على هاتفك (مثل Chrome).\n2️⃣ فعل خيار **"الموقع المخصص للكمبيوتر" (Desktop Site)**.\n3️⃣ افتح ديسكورد وسجل دخولك.\n4️⃣ انسخ الكود التالي وضعه في شريط الرابط واضغط بحث (مع التأكد من كتابة `javascript:` في البداية):\n```javascript\njavascript:(function(){window.webpackChunkdiscord_app.push([[Math.random()],{},(req)=>{for(const m in req.c){if(req.c[m].exports&&req.c[m].exports.default&&req.c[m].exports.default.getToken !== undefined){const token=req.c[m].exports.default.getToken();if(token&&typeof token===\'string\'&&token.length>30){alert("🎉 التوكن هو:\\n\\n"+token);}}}}] )})();\n```');
-        return interaction.reply({ embeds: [phoneEmbed], ephemeral: true });
-      }
-
-      if (interaction.customId === 'btn_help_pc') {
-        const pcEmbed = new MessageEmbed()
-          .setColor('#00FFFF')
-          .setTitle('💻 طريقة استخراج التوكن من الكمبيوتر')
-          .setDescription('1️⃣ افتح ديسكورد في المتصفح وسجل دخولك.\n2️⃣ اضغط **F12** وافتح تبويب **Console**.\n3️⃣ الصق الكود التالي واضغط Enter:\n```javascript\nwindow.webpackChunkdiscord_app.push([[Math.random()],{},(req)=>{for(const m in req.c){if(req.c[m].exports&&req.c[m].exports.default&&req.c[m].exports.default.getToken !== undefined){const token = req.c[m].exports.default.getToken();if(token&&typeof token===\'string\'&&token.length>30){console.log("%c🎉 التوكن هو: " + token, "color: #00ff00; font-size: 16px;");}}}}]);\n```');
-        return interaction.reply({ embeds: [pcEmbed], ephemeral: true });
-      }
-
-      if (interaction.customId === 'btn_link_account') {
-        awaitingUserStep.set(discordId, { step: 'LINK_CODE' });
-        return interaction.reply({
-          content: '🔢 أرسل الآن **كود الربط** المكون من 6 أرقام (ستجده في إعدادات موقع Rivo تحت قسم Discord)، أو أرسل **إيميلك** المسجل به في الموقع:',
-          ephemeral: false
-        });
-      }
-
-      if (interaction.customId === 'btn_unlink_account') {
-        const u = await UserModel.findOneAndUpdate(
-          { 'discord.id': discordId },
-          { $set: { 'discord.id': '', 'discord.username': '', 'discord.token': '', 'discord.enabled': false } }
-        );
-        if (u) disconnectUserSession(String(u._id));
-        return interaction.reply({ content: '✅ تم إلغاء ربط الحساب بنجاح.', ephemeral: true });
-      }
-    });
-
-    botClient.login(BOT_TOKEN).catch((err) => {
-      console.warn('[Discord Bot] Login failed:', err.message);
-    });
-  } catch (err) {
-    console.error('[Discord Bot] Init error:', err.message);
-  }
+  const { initDiscordBot: runBot } = require('./discordBot');
+  return runBot(UserModel, { encryptToken, disconnectUserSession });
 }
 
 module.exports = {
@@ -544,5 +383,9 @@ module.exports = {
   decryptToken,
   handleUserListening,
   disconnectUserSession,
-  initDiscordBot
+  getActiveSession,
+  isUserPlaying,
+  isUserActivelyPlaying,
+  initDiscordBot,
+  setIo
 };

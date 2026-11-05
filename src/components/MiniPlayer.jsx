@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Loader2, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle, Radio } from 'lucide-react';
-import { useAudioPlayer } from '../context/AudioContext';
+import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { normalizeCoverUrl } from '../utils/coverUtils';
@@ -45,9 +45,10 @@ function MiniPlayer({
   const openFullPlayer = propOpenFullPlayer || onOpenFullPlayer;
   const openAddToPlaylist = propOpenAddToPlaylist || onOpenAddToPlaylist;
   const repeatMode = propRepeatMode || audio?.repeatMode || (isRepeat ? 'all' : 'off');
-  const rawCurrentTime = propCurrentTime !== undefined ? propCurrentTime : (audio?.currentTime || 0);
+  const progress = useAudioProgress();
+  const rawCurrentTime = propCurrentTime !== undefined ? propCurrentTime : (progress?.currentTime ?? audio?.currentTime ?? 0);
   const currentTime = (rawCurrentTime > 86400 && Math.round(rawCurrentTime / 1000) <= 86400) ? Math.round(rawCurrentTime / 1000) : rawCurrentTime;
-  const rawDuration = propDuration !== undefined ? propDuration : (audio?.duration || 210);
+  const rawDuration = propDuration !== undefined ? propDuration : (progress?.duration ?? audio?.duration ?? 210);
   const duration = (rawDuration > 86400 && Math.round(rawDuration / 1000) <= 86400) ? Math.round(rawDuration / 1000) : rawDuration;
   const seekTo = propSeekTo || audio?.seekTo;
   const formatTime = (secs) => {
@@ -77,7 +78,7 @@ function MiniPlayer({
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
 
-  const isMixMode = !isQuran && Boolean(audio?.isMixMode);
+  const isMixMode = !isQuran && Boolean(audio?.isMixMode && (audio?.currentTrack?.isMix || audio?.currentTrack?._isMix || audio?.currentQueue?._isMix || audio?.currentQueue?.isMix || (audio?.currentQueue?.name && String(audio?.currentQueue?.name).toUpperCase().includes('MIX'))));
   const currentQueue = audio?.currentQueue || [];
   const currentQueueIndex = audio?.currentQueueIndex ?? -1;
   const nextMixTrack = isMixMode && currentQueue.length > 1 && currentQueueIndex >= 0

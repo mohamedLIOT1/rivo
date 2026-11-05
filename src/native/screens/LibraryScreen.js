@@ -76,6 +76,7 @@ function LibraryScreen({
   const {
     playTrack,
     playPlaylist,
+    currentTrack,
     tracks: audioTracks,
     downloadedTracks = [],
     handleDownloadTrack,
@@ -100,13 +101,18 @@ function LibraryScreen({
     togglePlaylistVisibility,
     syncUserData,
     addToPlaylist,
+    deletePlaylist,
     token,
   } = useUser();
   const { showToast } = useToast();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const isOffline = appMode === 'offline';
+  const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
+  const likedSet = useMemo(() => new Set((likedTrackIds || []).map(String)), [likedTrackIds]);
   const [selectedView, setSelectedView] = useState(null); // 'liked' | playlistObject
+  const [fetchedLikedTracks, setFetchedLikedTracks] = useState([]);
+  const [isLoadingLiked, setIsLoadingLiked] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
   const [activeMixerPair, setActiveMixerPair] = useState(null);
   const [playlistTransitions, setPlaylistTransitions] = useState({});
@@ -196,13 +202,60 @@ function LibraryScreen({
     return () => sub.remove();
   }, [selectedView]);
 
+  const fetchLikedPlaylist = useCallback(async () => {
+    if (isOffline) return;
+    setIsLoadingLiked(true);
+    try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_BASE_URL}/api/playlists/liked`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.success && Array.isArray(data.tracks)) {
+          setFetchedLikedTracks(data.tracks);
+          return;
+        }
+      }
+    } catch (e) {
+      // Fallback handled below
+    } finally {
+      setIsLoadingLiked(false);
+    }
+
+    if (safeLikedIds.length > 0) {
+      const missing = safeLikedIds.filter(id => id && !trackPoolMap.has(String(id)));
+      if (missing.length > 0) {
+        try {
+          const r = await fetch(`${API_BASE_URL}/api/tracks/by-ids`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: missing })
+          });
+          const d = await r.json();
+          if (d?.success && Array.isArray(d.tracks)) {
+            setFetchedLikedTracks(prev => deduplicateTrackList([...prev, ...d.tracks]));
+          }
+        } catch {}
+      }
+    }
+  }, [isOffline, token, safeLikedIds, trackPoolMap]);
+
+  useEffect(() => {
+    if (selectedView === 'liked') {
+      fetchLikedPlaylist();
+    }
+  }, [selectedView, fetchLikedPlaylist]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await Promise.allSettled([
+      const tasks = [
         syncUserData ? syncUserData() : Promise.resolve(),
         fetchPublicTracks ? fetchPublicTracks() : Promise.resolve()
-      ]);
+      ];
+      if (selectedView === 'liked') {
+        tasks.push(fetchLikedPlaylist());
+      }
+      await Promise.allSettled(tasks);
     } catch {}
     finally {
       setIsRefreshing(false);
@@ -220,7 +273,7 @@ function LibraryScreen({
 
   // Unified track pool
   const trackPoolMap = useMemo(() => {
-    const list = [...(allTracks || []), ...(fetchedTracks || [])];
+    const list = [...(allTracks || []), ...(fetchedTracks || []), ...(fetchedLikedTracks || [])];
     const map = new Map();
     for (const t of list) {
       if (t) {
@@ -229,21 +282,49 @@ function LibraryScreen({
       }
     }
     return map;
-  }, [allTracks, fetchedTracks]);
+  }, [allTracks, fetchedTracks, fetchedLikedTracks]);
 
   // Liked tracks
   const likedTracks = useMemo(() => {
-    return deduplicateTrackList((allTracks || []).filter((t) =>
-      safeLikedIds.includes(String(t?._id || t?.id))
-    ));
-  }, [allTracks, safeLikedIds]);
+    if (isOffline) {
+      return deduplicateTrackList((downloadedTracks || []).filter((t) =>
+        safeLikedIds.includes(String(t?._id || t?.id))
+      ));
+    }
+    const pool = new Map();
+    (allTracks || []).forEach(t => { if (t) pool.set(String(t._id || t.id || ''), t); });
+    (fetchedTracks || []).forEach(t => { if (t) pool.set(String(t._id || t.id || ''), t); });
+    (fetchedLikedTracks || []).forEach(t => { if (t) pool.set(String(t._id || t.id || ''), t); });
+
+    const result = [];
+    const seen = new Set();
+
+    (fetchedLikedTracks || []).forEach(t => {
+      if (!t) return;
+      const tid = String(t._id || t.id || '');
+      if (tid && !seen.has(tid)) {
+        seen.add(tid);
+        result.push(t);
+      }
+    });
+
+    safeLikedIds.forEach(id => {
+      const idStr = String(id);
+      if (!seen.has(idStr) && pool.has(idStr)) {
+        seen.add(idStr);
+        result.push(pool.get(idStr));
+      }
+    });
+
+    return deduplicateTrackList(result);
+  }, [isOffline, downloadedTracks, safeLikedIds, allTracks, fetchedTracks, fetchedLikedTracks]);
 
   // Fetch tracks for currently selected playlist if they aren't in trackPoolMap
   useEffect(() => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
+
     const rawItems = selectedView.tracks || selectedView.trackIds || [];
     if (rawItems.length === 0) return;
-
     const missingIds = rawItems
       .map(item => typeof item === 'object' ? String(item._id || item.id) : String(item))
       .filter(id => id && !trackPoolMap.has(id));
@@ -273,7 +354,7 @@ function LibraryScreen({
         .catch(() => {})
         .finally(() => setIsLoadingTracks(false));
     }
-  }, [selectedView, trackPoolMap]);
+  }, [selectedView]);
 
   // Real tracks list for currently selected playlist
   const activePlaylistTracks = useMemo(() => {
@@ -413,6 +494,10 @@ function LibraryScreen({
   const handlePlayLiked = (shuffle = false) => {
     if (!likedTracks || likedTracks.length === 0) return;
     const list = [...likedTracks];
+    list.isMix = isMixActive;
+    list._isMix = isMixActive;
+    list.name = 'Liked Songs';
+    if (playlistTransitions) list._transitions = playlistTransitions;
     if (shuffle) {
       for (let i = list.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -622,6 +707,37 @@ function LibraryScreen({
     }
   };
 
+  const handleDeleteCurrentPlaylist = (playlistTarget = null) => {
+    const pl = playlistTarget || selectedView;
+    if (!pl || typeof pl !== 'object' || pl === 'liked') return;
+    const plId = String(pl.id || pl._id);
+    const plName = pl.name || 'Playlist';
+
+    Alert.alert(
+      'Delete Playlist',
+      `Are you sure you want to permanently delete "${plName}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (deletePlaylist) {
+                await deletePlaylist(plId);
+              }
+              setIsEditModalOpen(false);
+              setSelectedView(null);
+              showToast(`Deleted playlist "${plName}"`, 'success');
+            } catch (err) {
+              showToast('Failed to delete playlist', 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSetPlaylistAsQueue = () => {
     if (!activePlaylistTracks || activePlaylistTracks.length === 0) {
       showToast('No tracks in playlist to queue', 'warning');
@@ -719,10 +835,15 @@ function LibraryScreen({
         if (typeof setIsMixMode === 'function') setIsMixMode(false);
         if (typeof setActiveTransitions === 'function') setActiveTransitions({});
       }
+      const list = [...activePlaylistTracks];
+      list.isMix = !isItemQuran && isMixActive;
+      list._isMix = !isItemQuran && isMixActive;
+      list.name = selectedView?.name;
+      if (playlistTransitions) list._transitions = playlistTransitions;
       if (typeof playPlaylist === 'function') {
-        playPlaylist(activePlaylistTracks, index);
+        playPlaylist(list, index);
       } else if (typeof playTrack === 'function') {
-        playTrack(item, activePlaylistTracks);
+        playTrack(item, list);
       }
     }
   }, [
@@ -760,6 +881,7 @@ function LibraryScreen({
           <Image
             source={{ uri: normalizeCoverUri(item.cover || item.coverUrl) }}
             style={{ width: 40, height: 40, borderRadius: 6, marginHorizontal: 8, backgroundColor: '#1f2e2a' }}
+            fadeDuration={0}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontSize: 13, fontWeight: '800', color: isDark ? '#ffffff' : '#0b1110' }} numberOfLines={1}>
@@ -820,6 +942,9 @@ function LibraryScreen({
         <SongItem
           track={item}
           index={index + 1}
+          isCurrent={curTrackId !== '' && curTrackId === tAId}
+          isLiked={likedSet.has(tAId)}
+          isDark={isDark}
           showBpmKey={Boolean(!isSelectedPlQuran && isMixActive)}
           onPlay={() => handlePlayTrackItem(item, index)}
           onMorePress={() => handleTrackItemMorePress(item)}
@@ -861,6 +986,8 @@ function LibraryScreen({
     isMixActive,
     handlePlayTrackItem,
     handleTrackItemMorePress,
+    curTrackId,
+    likedSet,
   ]);
 
   const renderPlaylistItem = useCallback(({ item: playlist }) => (
@@ -876,6 +1003,7 @@ function LibraryScreen({
             source={{ uri: normalizeCoverUri(playlist.cover) }}
             style={{ width: '100%', height: '100%' }}
             resizeMode="cover"
+            fadeDuration={0}
           />
         ) : (
           <Disc size={28} color={colors.mint} />
@@ -1046,7 +1174,14 @@ function LibraryScreen({
                   </View>
                 </View>
 
-                {likedTracks.length === 0 ? (
+                {isLoadingLiked && likedTracks.length === 0 ? (
+                  <View style={styles.loadingLikedBox}>
+                    <ActivityIndicator size="large" color={colors.mint} />
+                    <Text style={[styles.loadingLikedText, !isDark && { color: '#0b1110' }]}>
+                      RETRIEVING LIKED RECORDINGS...
+                    </Text>
+                  </View>
+                ) : likedTracks.length === 0 ? (
                   <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
                     <Heart size={36} color={colors.rust} />
                     <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No liked recordings yet</Text>
@@ -1074,6 +1209,7 @@ function LibraryScreen({
                           }}
                           style={{ width: '100%', height: '100%', borderRadius: 8 }}
                           resizeMode="cover"
+                          fadeDuration={0}
                           onError={() => setCoverFailed(true)}
                         />
                       ) : null}
@@ -1108,17 +1244,18 @@ function LibraryScreen({
                         </View>
 
                         <TouchableOpacity
-                          style={styles.editHeroPill}
+                          style={[styles.editHeroPill, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}
                           onPress={() => openEditPlaylist(selectedView)}
                           activeOpacity={0.7}
                         >
-                          <Edit3 size={11} color={colors.mint} />
-                          <Text style={styles.editHeroPillText}>EDIT</Text>
+                          <Edit3 size={11} color={!isDark ? '#082621' : colors.mint} />
+                          <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>EDIT</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
                           style={[
                             styles.editHeroPill,
+                            !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' },
                             isReordering && { backgroundColor: '#f59e0b', borderColor: '#000000' }
                           ]}
                           onPress={() => setIsReordering(!isReordering)}
@@ -1131,10 +1268,19 @@ function LibraryScreen({
                             </>
                           ) : (
                             <>
-                              <Sliders size={11} color={colors.mint} />
-                              <Text style={styles.editHeroPillText}>REORDER</Text>
+                              <Sliders size={11} color={!isDark ? '#082621' : colors.mint} />
+                              <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>REORDER</Text>
                             </>
                           )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.editHeroPill, { borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)' }]}
+                          onPress={() => handleDeleteCurrentPlaylist(selectedView)}
+                          activeOpacity={0.7}
+                        >
+                          <Trash2 size={11} color="#ef4444" />
+                          <Text style={[styles.editHeroPillText, { color: '#ef4444' }]}>DELETE</Text>
                         </TouchableOpacity>
                       </View>
                       <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }]}>{selectedView.name}</Text>
@@ -1156,7 +1302,7 @@ function LibraryScreen({
                           <Shuffle size={14} color={colors.paper} />
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={styles.queueHeroBtn}
+                          style={[styles.queueHeroBtn, !isDark && { backgroundColor: '#e6f7f5', borderColor: '#17a398' }]}
                           onPress={handleSetPlaylistAsQueue}
                           activeOpacity={0.8}
                         >
@@ -1303,6 +1449,7 @@ function LibraryScreen({
                         <Image
                           source={{ uri: normalizeCoverUri(recTrack.cover || recTrack.coverUrl) }}
                           style={styles.recItemCover}
+                          fadeDuration={0}
                         />
                         <View style={{ flex: 1, marginLeft: 10 }}>
                           <Text style={styles.recItemTitle} numberOfLines={1}>
@@ -1338,10 +1485,10 @@ function LibraryScreen({
               </View>
             ) : <View style={{ height: 32 }} />
           }
-          getItemLayout={(data, index) => ({ length: 64, offset: 64 * index, index })}
-          initialNumToRender={14}
-          maxToRenderPerBatch={10}
-          windowSize={7}
+          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+          windowSize={Platform.OS === 'android' ? 3 : 5}
+          updateCellsBatchingPeriod={50}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -1366,9 +1513,10 @@ function LibraryScreen({
           columnWrapperStyle={numCols > 1 ? { gap: 10, marginBottom: 10 } : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={8}
-          maxToRenderPerBatch={6}
-          windowSize={5}
+          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+          windowSize={Platform.OS === 'android' ? 3 : 5}
+          updateCellsBatchingPeriod={50}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
@@ -1384,7 +1532,7 @@ function LibraryScreen({
       {/* ── Edit Playlist Modal ── */}
       <Modal
         visible={isEditModalOpen}
-        animationType="slide"
+        animationType={Platform.OS === 'android' ? 'none' : 'slide'}
         transparent
         onRequestClose={() => setIsEditModalOpen(false)}
       >
@@ -1536,6 +1684,15 @@ function LibraryScreen({
 
             {/* Modal Actions */}
             <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
+                onPress={() => handleDeleteCurrentPlaylist(selectedView)}
+                activeOpacity={0.8}
+              >
+                <Trash2 size={13} color="#ef4444" />
+                <Text style={[styles.modalCancelBtnText, { color: '#ef4444' }]}>DELETE</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => setIsEditModalOpen(false)}
@@ -2375,6 +2532,19 @@ const styles = StyleSheet.create({
     color: '#10b981',
     letterSpacing: 0.3,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  loadingLikedBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    gap: 12,
+  },
+  loadingLikedText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: colors.mint,
+    letterSpacing: 0.8,
   },
 });
 

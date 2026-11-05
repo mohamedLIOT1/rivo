@@ -88,8 +88,6 @@ async function validateSafeUrl(urlString) {
       'youtube.com',
       'youtu.be',
       'ytimg.com',
-      'sndcdn.com',
-      'soundcloud.com',
       'googleusercontent.com',
       'ggpht.com'
     ];

@@ -495,11 +495,10 @@ export function getSurahNumber(item) {
   const rawTitle = typeof item === 'string' ? item : (item.title || item.name || '');
   const normTitle = normalizeArabicText(rawTitle);
 
-  // 1. Direct match for 'سورة X' where X is a number
-  const numMatch = normTitle.match(/(?:سوره|سورة|surah)\s*0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\b|$)/i) ||
-                   normTitle.match(/(?:^|[\s\-_|#])0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\s*[\.\-–\s]|\s*$)/);
-  if (numMatch && numMatch[1]) {
-    const n = parseInt(numMatch[1], 10);
+  // 1. Direct match for explicit 'سورة X' / 'surah X' where X is a number
+  const explicitNumMatch = normTitle.match(/(?:سوره|سورة|surah)\s*0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\b|$)/i);
+  if (explicitNumMatch && explicitNumMatch[1]) {
+    const n = parseInt(explicitNumMatch[1], 10);
     if (n >= 1 && n <= 114) {
       if (typeof item === 'object' && item !== null) item._surahNum = n;
       return n;
@@ -530,7 +529,7 @@ export function getSurahNumber(item) {
     }
   }
 
-  // Pass B: Check two-word pairs anywhere
+  // Pass B: Check two-word pairs anywhere in title
   for (let i = 0; i < words.length - 1; i++) {
     const pair = words[i] + ' ' + words[i+1];
     if (SURAH_KEYWORD_MAP.has(pair)) {
@@ -547,6 +546,19 @@ export function getSurahNumber(item) {
       const res = SURAH_KEYWORD_MAP.get(w);
       if (typeof item === 'object' && item !== null) item._surahNum = res;
       return res;
+    }
+  }
+
+  // 3. Track number prefix only at start of title if NOT a Taraweeh night / Juz / Hijri date
+  const isNightOrJuz = /(?:ليلة|ليله|تراويح|جزء|حزب|ركعة|ركعه|رمضان)/i.test(normTitle);
+  if (!isNightOrJuz) {
+    const leadingTrackNum = normTitle.match(/^0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\s*[\.\-–\s])/);
+    if (leadingTrackNum && leadingTrackNum[1]) {
+      const n = parseInt(leadingTrackNum[1], 10);
+      if (n >= 1 && n <= 114) {
+        if (typeof item === 'object' && item !== null) item._surahNum = n;
+        return n;
+      }
     }
   }
 

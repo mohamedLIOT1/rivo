@@ -14,6 +14,7 @@ import {
 import { X } from 'lucide-react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useNavPreferences } from '../context/NavPreferencesContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import NavHubIcon from '../ui/NavHubIcon';
 
@@ -22,6 +23,7 @@ const ITEM_CIRCLE_SIZE = 50;
 const ARC_RADIUS = 124; // Expanded radial distance for comfortable spacing
 
 export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = false }) {
+  const { t } = useTranslation();
   const { isDark } = useTheme();
   const { visibleMenuItems } = useNavPreferences();
   const [isOpen, setIsOpen] = useState(false);
@@ -52,7 +54,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
 
   // Subtle breathing pulse for closed FAB
   useEffect(() => {
-    if (!isOpen && !dockedSide) {
+    if (!isOpen && !dockedSide && Platform.OS !== 'android') {
       const pulseLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -434,7 +436,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
                         ]}
                         numberOfLines={1}
                       >
-                        {item.label}
+                        {t(`nav.${item.id}`, item.label)}
                       </Text>
                     </Animated.View>
                   );
@@ -484,7 +486,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    elevation: 8,
+    elevation: Platform.OS === 'android' ? 0 : 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
@@ -592,7 +594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    elevation: 6,
+    elevation: Platform.OS === 'android' ? 0 : 6,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
@@ -650,7 +652,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    elevation: 8,
+    elevation: Platform.OS === 'android' ? 0 : 8,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,

@@ -145,10 +145,19 @@ export default function SongRadarModal({
     } catch (err) {
       stopMicrophoneStream();
       setRadarState('error');
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      const errName = err?.name || '';
+      const errMsg = String(err?.message || '').toLowerCase();
+      if (
+        errName === 'NotAllowedError' ||
+        errName === 'PermissionDeniedError' ||
+        errMsg.includes('permission') ||
+        errMsg.includes('denied')
+      ) {
         setErrorMessage('Microphone access was denied. Please allow microphone permissions in your browser address bar and try again.');
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError' || errMsg.includes('not found')) {
+        setErrorMessage('No microphone device found on this system. Please connect an audio input device.');
       } else {
-        setErrorMessage(err.message || 'Unable to access the microphone. Please check your audio input device.');
+        setErrorMessage('Unable to access the microphone. Please check your audio permissions and try again.');
       }
     }
   };

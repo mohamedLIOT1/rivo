@@ -296,6 +296,44 @@ export default function AdminScreen() {
     );
   };
 
+  // Delete User Account
+  const handleDeleteUser = (user) => {
+    const uId = user._id || user.id;
+    if (String(uId) === String(currentUser?._id || currentUser?.id)) {
+      Alert.alert('Action Denied', 'You cannot delete your own admin account.');
+      return;
+    }
+
+    Alert.alert(
+      'DELETE ACCOUNT',
+      `Permanently delete account for "${user.name || user.email}"? This will delete all their playlists and messages. This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_BASE_URL}/api/admin/users/${uId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const data = await res.json().catch(() => ({}));
+              if (res.ok && data.success) {
+                showToast(`Deleted user account: ${user.name || user.email}`, 'info');
+                fetchUsers();
+              } else {
+                showToast(data.error || 'Failed to delete user account', 'error');
+              }
+            } catch {
+              showToast('Error deleting user account', 'error');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Delete Album
   const handleDeleteAlbum = (album) => {
     const albumDisplayName = album.name || album.title || 'Untitled Album';
@@ -671,6 +709,17 @@ export default function AdminScreen() {
                           {isUserAdminRole ? 'DEMOTE' : 'MAKE ADMIN'}
                         </Text>
                       </TouchableOpacity>
+
+                      {!(String(uId) === String(currentUser?._id || currentUser?.id)) && (
+                        <TouchableOpacity
+                          style={[styles.roleToggleBtn, { borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)', marginLeft: 6 }]}
+                          onPress={() => handleDeleteUser(user)}
+                          activeOpacity={0.8}
+                        >
+                          <Trash2 size={12} color="#ef4444" />
+                          <Text style={[styles.roleToggleText, { color: '#ef4444' }]}>DELETE</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   );
                 })}
@@ -1339,6 +1388,13 @@ const styles = StyleSheet.create({
   leaderboardSub: {
     fontSize: 10,
     color: '#64748b',
+  },
+  emptyNotice: {
+    color: '#64748b',
+    fontSize: 12,
+    fontFamily: 'monospace',
+    textAlign: 'center',
+    paddingVertical: 16,
   },
   listeningTimeText: {
     fontFamily: 'monospace',

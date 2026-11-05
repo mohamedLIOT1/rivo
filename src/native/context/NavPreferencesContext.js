@@ -146,20 +146,28 @@ export const NavPreferencesProvider = ({ children }) => {
     return visibleMenuItems[0]?.screen || 'music';
   }, [visibleMenuItems]);
 
+  const value = useMemo(() => ({
+    navStyle,
+    setNavStyle,
+    hiddenMenuItems,
+    toggleMenuItemVisibility,
+    isItemVisible,
+    visibleMenuItems,
+    firstVisibleTab,
+    menuItems: NAV_MENU_ITEMS,
+    isLoaded,
+  }), [
+    navStyle,
+    hiddenMenuItems,
+    toggleMenuItemVisibility,
+    isItemVisible,
+    visibleMenuItems,
+    firstVisibleTab,
+    isLoaded,
+  ]);
+
   return (
-    <NavPreferencesContext.Provider
-      value={{
-        navStyle,
-        setNavStyle,
-        hiddenMenuItems,
-        toggleMenuItemVisibility,
-        isItemVisible,
-        visibleMenuItems,
-        firstVisibleTab,
-        menuItems: NAV_MENU_ITEMS,
-        isLoaded,
-      }}
-    >
+    <NavPreferencesContext.Provider value={value}>
       {children}
     </NavPreferencesContext.Provider>
   );

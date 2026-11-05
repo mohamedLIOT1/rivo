@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -52,7 +52,7 @@ import { INITIAL_TRACKS } from '../data/initialTracks';
 
 const { width } = Dimensions.get('window');
 
-export default function ProfileScreen({
+function ProfileScreen({
   onOpenSettings,
   onOpenAuth,
   onOpenFriendActivity,
@@ -62,6 +62,8 @@ export default function ProfileScreen({
   onOpenFullPlayer,
   onSelectAlbum,
   onSelectArtist,
+  viewingUser,
+  onClearViewingUser,
 }) {
   const {
     currentUser,
@@ -126,7 +128,7 @@ export default function ProfileScreen({
   const [followLoading, setFollowLoading] = useState(false);
   const [selectedPlaylistModal, setSelectedPlaylistModal] = useState(null);
 
-  const handleOpenPlaylistModal = (pl, artistName = 'Listener') => {
+  const handleOpenPlaylistModal = useCallback((pl, artistName = 'Listener') => {
     if (onSelectAlbum && pl) {
       onSelectAlbum({
         id: pl.id || pl._id,
@@ -141,7 +143,7 @@ export default function ProfileScreen({
     } else {
       setSelectedPlaylistModal(pl);
     }
-  };
+  }, [onSelectAlbum]);
 
   const [socialModal, setSocialModal] = useState({
     isOpen: false,
@@ -186,14 +188,26 @@ export default function ProfileScreen({
   };
 
   const handleSelectSocialUser = async (u) => {
-    const targetId = u?._id || u?.id;
+    const targetId = typeof u === 'string' ? u : (u?._id || u?.id);
     if (!targetId) return;
     setSocialModal(p => ({ ...p, isOpen: false }));
     if (String(targetId) === String(currentUser?._id || currentUser?.id)) {
       setViewingProfile(null);
       return;
     }
-    setViewingLoading(true);
+    if (typeof u === 'object' && u !== null && (u.name || u.avatar)) {
+      setViewingProfile(prev => ({
+        ...(prev && (prev.id === targetId || prev._id === targetId) ? prev : {}),
+        id: targetId,
+        _id: targetId,
+        name: u.name || 'Friend',
+        avatar: u.avatar || '',
+        bio: u.bio || '',
+        ...u,
+      }));
+    } else {
+      setViewingLoading(true);
+    }
     try {
       const token = await AsyncStorage.getItem('@rivo_auth_token_v2');
       const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(targetId)}/profile`, {
@@ -206,6 +220,14 @@ export default function ProfileScreen({
     } catch {}
     setViewingLoading(false);
   };
+
+  useEffect(() => {
+    if (viewingUser) {
+      handleSelectSocialUser(viewingUser);
+    } else {
+      setViewingProfile(null);
+    }
+  }, [viewingUser, currentUser]);
 
   const handleToggleFollow = async () => {
     if (!viewingProfile || followLoading) return;
@@ -369,7 +391,7 @@ export default function ProfileScreen({
                 >
                   <View style={styles.socialUserAvatarWrap}>
                     {u.avatar ? (
-                      <Image source={{ uri: normalizeCoverUri(u.avatar) }} style={styles.socialUserAvatar} />
+                      <Image source={{ uri: normalizeCoverUri(u.avatar) }} style={styles.socialUserAvatar} fadeDuration={0} />
                     ) : (
                       <Text style={styles.socialUserLetter}>{u.name ? u.name[0].toUpperCase() : 'U'}</Text>
                     )}
@@ -412,7 +434,10 @@ export default function ProfileScreen({
         {/* Back Button Bar */}
         <TouchableOpacity
           style={styles.backNavBar}
-          onPress={() => setViewingProfile(null)}
+          onPress={() => {
+            setViewingProfile(null);
+            if (onClearViewingUser) onClearViewingUser();
+          }}
           activeOpacity={0.8}
         >
           <ArrowLeft size={16} color="#17a398" strokeWidth={2.5} />
@@ -433,18 +458,20 @@ export default function ProfileScreen({
             </View>
           </View>
 
-          <View style={styles.userHeaderRow}>
+          <View style={styles.profileRow}>
             <View style={styles.avatarWrap}>
               {viewingProfile.avatar ? (
                 <Image
                   source={{ uri: normalizeCoverUri(viewingProfile.avatar) }}
                   style={styles.avatarImg}
+                  fadeDuration={0}
                   resizeMode="cover"
                 />
               ) : (viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? (
                 <Image
                   source={{ uri: 'https://rivo-m.duckdns.org/public/assets/rivo-bot.png' }}
                   style={styles.avatarImg}
+                  fadeDuration={0}
                   resizeMode="cover"
                 />
               ) : (
@@ -461,7 +488,7 @@ export default function ProfileScreen({
               )}
             </View>
 
-            <View style={styles.userInfoCol}>
+            <View style={styles.profileInfo}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={[styles.userName, !isDark && styles.userNameLight]} numberOfLines={1}>
                   {viewingProfile.name || 'User'}
@@ -471,18 +498,25 @@ export default function ProfileScreen({
                 )}
               </View>
 
-              {viewingProfile.bio ? (
-                <Text style={styles.userBioText} numberOfLines={2}>
-                  {viewingProfile.bio}
-                </Text>
-              ) : null}
+              <Text style={[styles.userEmail, !isDark && styles.userEmailLight]} numberOfLines={1}>
+                {viewingProfile.bio ? viewingProfile.bio : `@${viewingProfile.name || 'user'} • Member`}
+              </Text>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <View style={styles.profileBadgesRow}>
                 <View style={styles.rolePill}>
-                  <Text style={styles.rolePillText}>{(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'LISTENER'}</Text>
+                  <Text style={styles.rolePillText}>
+                    {(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'LISTENER'}
+                  </Text>
                 </View>
-                <View style={styles.idPill}>
-                  <Text style={styles.idPillText}>ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}</Text>
+                <View style={[styles.idPill, !isDark && styles.idPillLight]}>
+                  <Text style={[styles.idPillText, !isDark && styles.idPillTextLight]}>
+                    ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={[styles.countPill, !isDark && styles.countPillLight]}>
+                  <Text style={[styles.countPillText, !isDark && styles.countPillTextLight]}>
+                    {vCrates.length} {vCrates.length === 1 ? 'CRATE' : 'CRATES'}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -583,7 +617,7 @@ export default function ProfileScreen({
         {/* Public Playlists Section */}
         <View style={styles.sectionHeader}>
           <Disc size={16} color="#17a398" strokeWidth={2.5} />
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>
             PUBLIC PLAYLISTS ({vCrates.length})
           </Text>
         </View>
@@ -607,7 +641,8 @@ export default function ProfileScreen({
               >
                 <View style={styles.crateItemCoverWrap}>
                   {crate.cover ? (
-                    <Image source={{ uri: normalizeCoverUri(crate.cover) }} style={styles.crateItemCover} />
+                    <Image source={{ uri: normalizeCoverUri(crate.cover) }} style={styles.crateItemCover}
+                    fadeDuration={0} />
                   ) : (
                     <Disc size={20} color="#17a398" />
                   )}
@@ -674,7 +709,8 @@ export default function ProfileScreen({
         <View style={styles.profileRow}>
           <View style={styles.avatarWrap}>
             {currentUser?.avatar ? (
-              <Image source={{ uri: normalizeCoverUri(currentUser.avatar) }} style={styles.avatarImg} />
+              <Image source={{ uri: normalizeCoverUri(currentUser.avatar) }} style={styles.avatarImg}
+                  fadeDuration={0} />
             ) : (
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarLetter}>
@@ -752,19 +788,26 @@ export default function ProfileScreen({
               </View>
             )}
 
-            <Text style={styles.userEmail} numberOfLines={1}>
+            <Text style={[styles.userEmail, !isDark && styles.userEmailLight]} numberOfLines={1}>
               {currentUser?.email || 'Sign in to sync your playlists & Discord presence'}
             </Text>
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <View style={styles.profileBadgesRow}>
               <View style={styles.rolePill}>
                 <Text style={styles.rolePillText}>
                   {currentUser?.role === 'admin' ? 'ADMIN' : 'LISTENER'}
                 </Text>
               </View>
-              <View style={styles.idPill}>
-                <Text style={styles.idPillText}>ID: #{shortId}</Text>
+              <View style={[styles.idPill, !isDark && styles.idPillLight]}>
+                <Text style={[styles.idPillText, !isDark && styles.idPillTextLight]}>ID: #{shortId}</Text>
               </View>
+              {safeCratesCount > 0 && (
+                <View style={[styles.countPill, !isDark && styles.countPillLight]}>
+                  <Text style={[styles.countPillText, !isDark && styles.countPillTextLight]}>
+                    {safeCratesCount} {safeCratesCount === 1 ? 'CRATE' : 'CRATES'}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -889,7 +932,7 @@ export default function ProfileScreen({
 
       {/* ── DISCORD RICH PRESENCE INTEGRATION CARD ── */}
       <TouchableOpacity
-        style={styles.discordCard}
+        style={[styles.discordCard, !isDark && styles.discordCardLight]}
         onPress={() => onOpenSettings && onOpenSettings()}
         activeOpacity={0.85}
       >
@@ -898,8 +941,8 @@ export default function ProfileScreen({
             <Radio size={16} color="#ffffff" strokeWidth={2.5} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.discordTitle}>DISCORD RICH PRESENCE</Text>
-            <Text style={styles.discordSub}>
+            <Text style={[styles.discordTitle, !isDark && styles.discordTitleLight]}>DISCORD RICH PRESENCE</Text>
+            <Text style={[styles.discordSub, !isDark && styles.discordSubLight]}>
               {discordStatus?.linked
                 ? (discordStatus.enabled ? `@${discordStatus.username} • Live sync active` : `@${discordStatus.username} • Sync disabled`)
                 : 'Connect Discord account to broadcast tracks'}
@@ -966,7 +1009,8 @@ export default function ProfileScreen({
                 >
                   <View style={styles.playlistThumb}>
                     {pl.cover ? (
-                      <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg} />
+                      <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg}
+                      fadeDuration={0} />
                     ) : (
                       <Disc size={20} color="#17a398" />
                     )}
@@ -975,7 +1019,7 @@ export default function ProfileScreen({
                     <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight]} numberOfLines={1}>
                       {pl.name}
                     </Text>
-                    <Text style={styles.playlistRowCount}>
+                    <Text style={[styles.playlistRowCount, !isDark && styles.playlistRowCountLight]}>
                       {(pl.tracks || pl.trackIds || []).length} SONGS • {isPublic ? 'PUBLIC' : 'PRIVATE'}
                     </Text>
                   </View>
@@ -1019,28 +1063,28 @@ export default function ProfileScreen({
       {/* ── SETTINGS & LOG OUT BUTTONS ── */}
       <View style={{ marginTop: 24, marginBottom: 30, gap: 10 }}>
         <TouchableOpacity
-          style={styles.actionCard}
+          style={[styles.actionCard, !isDark && styles.actionCardLight]}
           onPress={onOpenSettings}
           activeOpacity={0.85}
         >
-          <View style={[styles.actionIconBox, { backgroundColor: 'rgba(148,163,184,0.18)', borderColor: '#94a3b8' }]}>
-            <SettingsIcon size={18} color="#94a3b8" strokeWidth={2.5} />
+          <View style={[styles.actionIconBox, !isDark && styles.actionIconBoxLight, { backgroundColor: isDark ? 'rgba(148,163,184,0.18)' : '#f1f5f9', borderColor: isDark ? '#94a3b8' : '#cbd5e1' }]}>
+            <SettingsIcon size={18} color={isDark ? '#94a3b8' : '#475569'} strokeWidth={2.5} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Settings</Text>
-            <Text style={styles.actionCardSub}>Audio buffer, theme & account</Text>
+            <Text style={[styles.actionCardSub, !isDark && styles.actionCardSubLight]}>Audio buffer, theme & account</Text>
           </View>
-          <ChevronRight size={16} color="#64748b" />
+          <ChevronRight size={16} color={isDark ? '#64748b' : '#94a3b8'} />
         </TouchableOpacity>
 
         {currentUser ? (
           <TouchableOpacity
-            style={styles.logoutBtn}
+            style={[styles.logoutBtn, !isDark && styles.logoutBtnLight]}
             onPress={logout}
             activeOpacity={0.85}
           >
             <LogOut size={16} color="#ef4444" strokeWidth={2.5} />
-            <Text style={styles.logoutBtnText}>LOG OUT</Text>
+            <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight]}>LOG OUT</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -1219,12 +1263,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  userHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   avatarWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+    width: 72,
+    height: 72,
+    borderRadius: 20,
     backgroundColor: '#0b1110',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#17a398',
     overflow: 'hidden',
     alignItems: 'center',
@@ -1243,12 +1292,18 @@ const styles = StyleSheet.create({
   },
   avatarLetter: {
     color: '#0b1110',
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
   },
   profileInfo: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 16,
+    justifyContent: 'center',
+  },
+  userInfoCol: {
+    flex: 1,
+    marginLeft: 16,
+    justifyContent: 'center',
   },
   userName: {
     color: '#ffffff',
@@ -1260,39 +1315,88 @@ const styles = StyleSheet.create({
   },
   verifiedBadge: {
     backgroundColor: '#17a398',
-    width: 15,
-    height: 15,
+    width: 16,
+    height: 16,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   userEmail: {
     color: '#94a3b8',
-    fontSize: 11,
+    fontSize: 11.5,
     marginTop: 2,
+  },
+  userEmailLight: {
+    color: '#475569',
+  },
+  profileBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    flexWrap: 'wrap',
   },
   rolePill: {
     backgroundColor: '#17a398',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rolePillText: {
     color: '#0b1110',
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '900',
+    letterSpacing: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   idPill: {
-    backgroundColor: '#1f2e2a',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
+    backgroundColor: '#1b2825',
+    borderWidth: 1,
+    borderColor: '#263d37',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idPillLight: {
+    backgroundColor: '#e2e8f0',
+    borderColor: '#cbd5e1',
   },
   idPillText: {
     color: '#94a3b8',
+    fontSize: 9.5,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.5,
+  },
+  idPillTextLight: {
+    color: '#334155',
+  },
+  countPill: {
+    backgroundColor: '#141d1b',
+    borderWidth: 1,
+    borderColor: '#263330',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  countPillLight: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+  },
+  countPillText: {
+    color: '#17a398',
     fontSize: 9,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  countPillTextLight: {
+    color: '#0f766e',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -1375,6 +1479,10 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
   },
+  discordCardLight: {
+    backgroundColor: '#f5f7ff',
+    borderColor: '#818cf8',
+  },
   discordHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1395,9 +1503,15 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.8,
   },
+  discordTitleLight: {
+    color: '#1e1b4b',
+  },
   discordSub: {
     color: '#94a3b8',
     fontSize: 10,
+  },
+  discordSubLight: {
+    color: '#4338ca',
   },
   discordPulseWrap: {
     flexDirection: 'row',
@@ -1424,8 +1538,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
   },
+  discordDescLight: {
+    color: '#312e81',
+  },
   sectionHeader: {
-    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
   },
   sectionTitle: {
     color: '#94a3b8',
@@ -1475,6 +1595,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 1,
   },
+  actionCardSubLight: {
+    color: '#64748b',
+  },
+  actionIconBoxLight: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+  },
   playlistRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1515,6 +1642,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 1,
   },
+  playlistRowCountLight: {
+    color: '#64748b',
+  },
   playlistPlayBtn: {
     backgroundColor: '#17a398',
     width: 28,
@@ -1534,11 +1664,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 8,
   },
+  logoutBtnLight: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+  },
   logoutBtnText: {
     color: '#ef4444',
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.8,
+  },
+  logoutBtnTextLight: {
+    color: '#dc2626',
   },
   signInBtn: {
     backgroundColor: '#17a398',
@@ -1808,7 +1945,7 @@ const styles = StyleSheet.create({
     borderColor: '#0b1110',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 4,
+    elevation: Platform.OS === 'android' ? 0 : 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
@@ -1994,3 +2131,5 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 });
+
+export default React.memo(ProfileScreen);

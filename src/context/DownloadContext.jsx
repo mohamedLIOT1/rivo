@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { saveTrackOffline, removeTrackOffline, getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { API_BASE_URL } from '../config';
 
@@ -10,6 +10,16 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
   const [isBatchDownloading, setIsBatchDownloading] = useState(false);
   const [batchStats, setBatchStats] = useState({ current: 0, total: 0, playlistName: '' });
   const [downloadProgress, setDownloadProgress] = useState({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
+  const lastProgressTimeRef = useRef(0);
+
+  // Throttled progress updater to eliminate high-frequency React render storms during file chunk downloads
+  const handleThrottledProgress = useCallback((p) => {
+    const now = Date.now();
+    if (now - lastProgressTimeRef.current >= 400 || p?.percent === 100 || p?.percent === 0) {
+      lastProgressTimeRef.current = now;
+      setDownloadProgress(p);
+    }
+  }, []);
 
   const activeAbortControllerRef = useRef(null);
   const isCancelledRef = useRef(false);
@@ -30,7 +40,6 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
       }
       setDownloadingTrackId(null);
       setDownloadProgress({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
-    setDownloadProgress({ percent: 0, speedText: '0 KB/s', loadedMb: '0', totalMb: '0' });
       showToast?.('Cancelled download for this track');
       return;
     }
@@ -85,7 +94,7 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
     try {
       const result = await saveTrackOffline(nextTrack, {
         signal: abortController.signal,
-        onProgress: (p) => setDownloadProgress(p)
+        onProgress: handleThrottledProgress
       });
 
       if (result && !abortController.signal.aborted && !isCancelledRef.current) {
@@ -258,8 +267,9 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
     showToast?.('Song removed from offline downloads');
   }, [setTracks, showToast]);
 
-  const value = {
+  const value = useMemo(() => ({
     downloadingTrackId,
+    downloadProgress,
     queuedTrackIds,
     isBatchDownloading,
     batchStats,
@@ -270,7 +280,20 @@ export function DownloadProvider({ children, tracks, setTracks, showToast }) {
     cancelAllDownloads,
     isTrackDownloading,
     isTrackQueued,
-  };
+  }), [
+    downloadingTrackId,
+    downloadProgress,
+    queuedTrackIds,
+    isBatchDownloading,
+    batchStats,
+    downloadTrack,
+    removeOfflineTrack,
+    cancelTrackDownload,
+    downloadAllTracks,
+    cancelAllDownloads,
+    isTrackDownloading,
+    isTrackQueued,
+  ]);
 
   return (
     <DownloadContext.Provider value={value}>

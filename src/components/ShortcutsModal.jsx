@@ -1,7 +1,11 @@
 import React from 'react';
 import { X, Command, Play, SkipForward, SkipBack, Volume2, VolumeX, Heart, Shuffle, Repeat, HelpCircle } from 'lucide-react';
+import { useUI } from '../context/UIContext';
 
 export default function ShortcutsModal({ isOpen, onClose }) {
+  const { globalTheme } = useUI();
+  const isDark = globalTheme === 'dark';
+
   if (!isOpen) return null;
 
   const shortcuts = [
@@ -41,22 +45,34 @@ export default function ShortcutsModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-150">
-      <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full max-w-lg overflow-hidden relative">
+      <div className={`brutal-border-thick brutal-shadow-lg w-full max-w-lg overflow-hidden relative transition-colors ${
+        isDark ? 'bg-[#0e1715] text-[#fdfbf7] border-[#263330]' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110]'
+      }`}>
         
         {/* Header */}
-        <div className="px-5 py-4 border-b-2 border-[#0b1110] flex items-center justify-between bg-[#ede5d3]">
+        <div className={`px-5 py-4 border-b-2 flex items-center justify-between transition-colors ${
+          isDark ? 'border-[#263330] bg-[#141d1b]' : 'border-[#0b1110] bg-[#ede5d3]'
+        }`}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-[#082621] text-[#26c4b7] brutal-border flex items-center justify-center">
+            <div className={`w-8 h-8 brutal-border flex items-center justify-center ${
+              isDark ? 'bg-[#17a398] text-[#082621] border-[#17a398]' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110]'
+            }`}>
               <Command size={16} />
             </div>
             <div>
-              <h3 className="font-mono font-black uppercase text-[#082621] text-sm">Keyboard Shortcuts</h3>
-              <p className="text-[11px] text-[#082621]/70 font-sans">Navigate Rivo with keyboard shortcuts</p>
+              <h3 className={`font-mono font-black uppercase text-sm ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                Keyboard Shortcuts
+              </h3>
+              <p className={`text-[11px] font-sans ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                Navigate Rivo with keyboard shortcuts
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="brutal-btn p-1 bg-[#fdfbf7] brutal-border hover:bg-[#ded2bb] text-[#0b1110]"
+            className={`brutal-btn p-1 brutal-border transition-colors ${
+              isDark ? 'bg-[#1b2623] text-white hover:bg-[#263531] border-[#263330]' : 'bg-[#fdfbf7] text-[#0b1110] hover:bg-[#ded2bb] border-[#0b1110]'
+            }`}
           >
             <X size={16} />
           </button>
@@ -73,14 +89,20 @@ export default function ShortcutsModal({ isOpen, onClose }) {
                 {cat.items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="flex items-center justify-between py-1.5 px-2 bg-[#ede5d3] brutal-border text-xs"
+                    className={`flex items-center justify-between py-1.5 px-2 brutal-border text-xs transition-colors ${
+                      isDark ? 'bg-[#141d1b] border-[#263330]' : 'bg-[#ede5d3] border-[#0b1110]'
+                    }`}
                   >
-                    <span className="text-xs text-[#082621] font-medium font-sans">{item.desc}</span>
+                    <span className={`text-xs font-medium font-sans ${isDark ? 'text-zinc-200' : 'text-[#082621]'}`}>
+                      {item.desc}
+                    </span>
                     <div className="flex items-center gap-1 shrink-0">
                       {item.keys.map((k, kIdx) => (
                         <kbd
                           key={kIdx}
-                          className="min-w-[22px] px-2 py-0.5 bg-[#fdfbf7] brutal-border text-[#082621] font-mono text-[10px] font-black text-center"
+                          className={`min-w-[22px] px-2 py-0.5 brutal-border font-mono text-[10px] font-black text-center ${
+                            isDark ? 'bg-[#0b1110] text-[#17a398] border-[#263330]' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110]'
+                          }`}
                         >
                           {k}
                         </kbd>
@@ -94,11 +116,17 @@ export default function ShortcutsModal({ isOpen, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-2.5 border-t-2 border-[#0b1110] bg-[#ede5d3] flex items-center justify-between text-xs font-mono text-[#082621]">
-          <span>Tap <kbd className="px-1 py-0.5 bg-[#fdfbf7] brutal-border font-bold">?</kbd> anytime to toggle</span>
+        <div className={`px-5 py-2.5 border-t-2 flex items-center justify-between text-xs font-mono transition-colors ${
+          isDark ? 'border-[#263330] bg-[#141d1b] text-zinc-400' : 'border-[#0b1110] bg-[#ede5d3] text-[#082621]'
+        }`}>
+          <span>Tap <kbd className={`px-1 py-0.5 brutal-border font-bold ${
+            isDark ? 'bg-[#0b1110] text-white border-[#263330]' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110]'
+          }`}>?</kbd> anytime to toggle</span>
           <button
             onClick={onClose}
-            className="brutal-btn px-4 py-1 bg-[#082621] text-[#26c4b7] font-mono font-black text-xs uppercase brutal-border brutal-shadow-sm cursor-pointer"
+            className={`brutal-btn px-4 py-1 font-mono font-black text-xs uppercase brutal-border brutal-shadow-sm cursor-pointer ${
+              isDark ? 'bg-[#17a398] text-[#082621] border-[#17a398]' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110]'
+            }`}
           >
             DISMISS
           </button>

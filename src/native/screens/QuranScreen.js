@@ -1,12 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   TextInput,
   Image,
+  Platform,
 } from 'react-native';
 import { BookOpen, Search, Play, Pause, Disc, User, Volume2, Radio, ArrowLeft } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -29,8 +31,9 @@ import {
   isRadioTrack,
 } from '../../utils/quranUtils';
 
-export default function QuranScreen({ onTrackAction }) {
-  const { playTrack, currentTrack, isPlaying, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
+function QuranScreen({ onTrackAction }) {
+  const { playTrack, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
+  const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
   const { tracks: userTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
@@ -124,96 +127,130 @@ export default function QuranScreen({ onTrackAction }) {
     return sortQuranTracks(result);
   }, [quranTracks, selectedReciter, searchQuery]);
 
-  return (
-    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
-      {/* Header Banner with Arabic Aesthetic */}
-      <View style={styles.bannerOuter}>
-        <View style={styles.bannerShadow} />
-        <View style={styles.banner}>
-          <View style={styles.bannerTopRow}>
-            <View style={styles.quranPill}>
-              <BookOpen size={13} color={colors.ink} />
-              <Text style={styles.quranPillText}>HOLY QURAN AUDIO</Text>
+  const handlePlayTrack = useCallback((track) => {
+    playTrack(track, displayedTracks);
+  }, [playTrack, displayedTracks]);
+
+  const handleMorePress = useCallback((track) => {
+    if (onTrackAction) onTrackAction(track);
+  }, [onTrackAction]);
+
+  const keyExtractor = useCallback((track, idx) => {
+    return String(track?._id || track?.id || `quran-${idx}`);
+  }, []);
+
+  const handlePlayAll = useCallback(() => {
+    if (displayedTracks.length > 0) {
+      playTrack(displayedTracks[0], displayedTracks);
+    }
+  }, [displayedTracks, playTrack]);
+
+  const handleClearFilter = useCallback(() => {
+    setSelectedReciter(null);
+    setSearchQuery('');
+  }, []);
+
+  const renderSongItem = useCallback(({ item: track, index }) => {
+    const sNum = getSurahNumber(track);
+    const displayIndex = (sNum >= 1 && sNum <= 114) ? sNum : (index + 1);
+    return (
+      <SongItem
+        key={track._id || track.id || index}
+        track={track}
+        index={displayIndex}
+        showBpmKey={false}
+        onPlay={handlePlayTrack}
+        onMorePress={handleMorePress}
+      />
+    );
+  }, [handlePlayTrack, handleMorePress]);
+
+  const renderHeader = useMemo(() => {
+    return (
+      <View>
+        {/* Header Banner with Arabic Aesthetic */}
+        <View style={styles.bannerOuter}>
+          <View style={styles.bannerShadow} />
+          <View style={styles.banner}>
+            <View style={styles.bannerTopRow}>
+              <View style={styles.quranPill}>
+                <BookOpen size={13} color={colors.ink} />
+                <Text style={styles.quranPillText}>HOLY QURAN AUDIO</Text>
+              </View>
+              <CassetteTag label="RECITATIONS" bg={colors.ink} textColor={colors.mint} />
             </View>
-            <CassetteTag label="RECITATIONS" bg={colors.ink} textColor={colors.mint} />
-          </View>
 
-          <Text style={styles.arabicTitle}>The Holy Quran</Text>
-          <TouchableOpacity style={styles.radioBannerBtn} onPress={() => setIsRadioModalOpen(true)} activeOpacity={0.85}>
-            <Radio size={16} color="#000000" strokeWidth={2.5} />
-            <Text style={styles.radioBannerBtnText}>Holy Quran Radio (Live 24/7)</Text>
-          </TouchableOpacity>
-          <Text style={styles.arabicSub}>
-            Listen to soulful recitations ordered by the Holy Quran with high audio fidelity.
-          </Text>
+            <Text style={styles.arabicTitle}>The Holy Quran</Text>
+            <TouchableOpacity style={styles.radioBannerBtn} onPress={() => setIsRadioModalOpen(true)} activeOpacity={0.85}>
+              <Radio size={16} color="#000000" strokeWidth={2.5} />
+              <Text style={styles.radioBannerBtnText}>Holy Quran Radio (Live 24/7)</Text>
+            </TouchableOpacity>
+            <Text style={styles.arabicSub}>
+              Listen to soulful recitations ordered by the Holy Quran with high audio fidelity.
+            </Text>
 
-          {/* Search bar inside Quran */}
-          <View style={styles.searchBar}>
-            <Search size={16} color={colors.ink} style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search surah or reciter..."
-              placeholderTextColor={colors.grayText}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
+            {/* Search bar inside Quran */}
+            <View style={styles.searchBar}>
+              <Search size={16} color={colors.ink} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search surah or reciter..."
+                placeholderTextColor={colors.grayText}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
           </View>
         </View>
-      </View>
 
-      {/* Reciters Horizontal Carousel */}
-      <View style={styles.recitersSection}>
-        <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }]}>RECITERS</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.reciterScroll}
-        >
-          <TouchableOpacity
-            style={[
-              styles.reciterPill,
-              selectedReciter === null && styles.reciterPillActive,
-            ]}
-            onPress={() => setSelectedReciter(null)}
+        {/* Reciters Horizontal Carousel */}
+        <View style={styles.recitersSection}>
+          <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }]}>RECITERS</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.reciterScroll}
           >
-            <Text
+            <TouchableOpacity
               style={[
-                styles.reciterPillText,
-                selectedReciter === null && styles.reciterPillTextActive,
+                styles.reciterPill,
+                selectedReciter === null && styles.reciterPillActive,
               ]}
+              onPress={() => setSelectedReciter(null)}
             >
-              All Reciters ({recitersList.length})
-            </Text>
-          </TouchableOpacity>
-
-          {recitersList.map((r) => {
-            const active = selectedReciter === r.name;
-            return (
-              <TouchableOpacity
-                key={r.name}
-                style={[styles.reciterPill, active && styles.reciterPillActive]}
-                onPress={() => setSelectedReciter(active ? null : r.name)}
+              <Text
+                style={[
+                  styles.reciterPillText,
+                  selectedReciter === null && styles.reciterPillTextActive,
+                ]}
               >
-                <Text
-                  style={[
-                    styles.reciterPillText,
-                    active && styles.reciterPillTextActive,
-                  ]}
-                >
-                  {r.name} ({r.count})
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+                All Reciters ({recitersList.length})
+              </Text>
+            </TouchableOpacity>
 
-      {/* Main Content Area */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* VIEW 1: No reciter selected & no search -> Show Reciter Cards (prevent dumping 457 tracks!) */}
+            {recitersList.map((r) => {
+              const active = selectedReciter === r.name;
+              return (
+                <TouchableOpacity
+                  key={r.name}
+                  style={[styles.reciterPill, active && styles.reciterPillActive]}
+                  onPress={() => setSelectedReciter(active ? null : r.name)}
+                >
+                  <Text
+                    style={[
+                      styles.reciterPillText,
+                      active && styles.reciterPillTextActive,
+                    ]}
+                  >
+                    {r.name} ({r.count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Subheader / Grid Area */}
         {!selectedReciter && !searchQuery.trim() ? (
           <View style={styles.reciterGridSection}>
             <View style={styles.reciterGridHeader}>
@@ -252,7 +289,6 @@ export default function QuranScreen({ onTrackAction }) {
             </View>
           </View>
         ) : (
-          /* VIEW 2: Reciter chosen OR user searching -> Show Canonical Sorted Surahs */
           <>
             {selectedReciter && (
               <View style={[styles.selectedReciterBanner, !isDark && styles.selectedReciterBannerLight]}>
@@ -278,7 +314,7 @@ export default function QuranScreen({ onTrackAction }) {
                 {displayedTracks.length > 0 && (
                   <TouchableOpacity
                     style={styles.playAllBtn}
-                    onPress={() => playTrack(displayedTracks[0], displayedTracks)}
+                    onPress={handlePlayAll}
                     activeOpacity={0.8}
                   >
                     <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -295,61 +331,64 @@ export default function QuranScreen({ onTrackAction }) {
                 {displayedTracks.length} Surahs Available
               </Text>
               {(selectedReciter || searchQuery.trim()) && (
-                <TouchableOpacity onPress={() => { setSelectedReciter(null); setSearchQuery(''); }}>
+                <TouchableOpacity onPress={handleClearFilter}>
                   <Text style={styles.clearFilterText}>Clear Filter ✕</Text>
                 </TouchableOpacity>
               )}
             </View>
-
-            {displayedTracks.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <BookOpen size={36} color={colors.mint} />
-                <Text style={styles.emptyTitle}>
-                  {isOffline ? 'No downloaded recitations' : 'No matching recitations'}
-                </Text>
-                <Text style={styles.emptySub}>
-                  {isOffline
-                    ? 'No recitations downloaded yet. Download tracks online to play them offline.'
-                    : 'Try searching with another surah or reciter name.'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.tracksList}>
-                {displayedTracks.slice(0, visibleLimit).map((track, idx) => {
-                  const sNum = getSurahNumber(track);
-                  const displayIndex = (sNum >= 1 && sNum <= 114) ? sNum : (idx + 1);
-                  return (
-                    <SongItem
-                      key={track._id || track.id || idx}
-                      track={track}
-                      index={displayIndex}
-                      showBpmKey={false}
-                      onPlay={(t) => playTrack(t, displayedTracks)}
-                      onMorePress={() => onTrackAction && onTrackAction(track)}
-                    />
-                  );
-                })}
-
-                {displayedTracks.length > visibleLimit && (
-                  <TouchableOpacity
-                    style={styles.loadMoreBtn}
-                    onPress={() => setVisibleLimit((prev) => prev + 35)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.loadMoreText}>
-                      Show more recitations ({displayedTracks.length - visibleLimit} remaining) ↓
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
           </>
         )}
-      </ScrollView>
+      </View>
+    );
+  }, [
+    isDark,
+    searchQuery,
+    selectedReciter,
+    recitersList,
+    displayedTracks,
+    handlePlayAll,
+    handleClearFilter,
+  ]);
+
+  const renderEmpty = useCallback(() => {
+    if (!selectedReciter && !searchQuery.trim()) return null;
+    return (
+      <View style={styles.emptyCard}>
+        <BookOpen size={36} color={colors.mint} />
+        <Text style={styles.emptyTitle}>
+          {isOffline ? 'No downloaded recitations' : 'No matching recitations'}
+        </Text>
+        <Text style={styles.emptySub}>
+          {isOffline
+            ? 'No recitations downloaded yet. Download tracks online to play them offline.'
+            : 'Try searching with another surah or reciter name.'}
+        </Text>
+      </View>
+    );
+  }, [selectedReciter, searchQuery, isOffline]);
+
+  return (
+    <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
+      <FlatList
+        data={selectedReciter || searchQuery.trim() ? displayedTracks : []}
+        keyExtractor={keyExtractor}
+        renderItem={renderSongItem}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        windowSize={Platform.OS === 'android' ? 3 : 5}
+        initialNumToRender={Platform.OS === 'android' ? 8 : 10}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 6 : 10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
+      />
       <QuranRadioModal isOpen={isRadioModalOpen} visible={isRadioModalOpen} onClose={() => setIsRadioModalOpen(false)} />
     </View>
   );
 }
+
+export default React.memo(QuranScreen);
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -546,7 +585,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
     shadowRadius: 5,
-    elevation: 3,
+    elevation: Platform.OS === 'android' ? 0 : 3,
   },
   radioBannerBtnText: {
     fontFamily: 'monospace',

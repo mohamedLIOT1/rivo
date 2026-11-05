@@ -8,6 +8,7 @@ const {
   detectQuranReciter,
   escapeRegex
 } = require('../utils/helpers');
+const { autoGenerateAndSaveArtistBio } = require('./artists/artistBioHelper');
 
 // Get all artists with track & album counts
 router.get('/', async (req, res) => {
@@ -122,13 +123,27 @@ router.get('/:name', async (req, res) => {
       ...t
     }));
 
+    let bio = artistDoc?.bio || '';
+    if (!bio || !bio.trim()) {
+      const isQuran = Boolean(detectQuranReciter(canonicalName || rawName) || tracks.some(t => t.isQuran));
+      const distinctGenres = [...new Set(tracks.map(t => t.genre).filter(Boolean))];
+      const targetName = artistDoc?.name || canonicalName || rawName;
+
+      const bioPromise = autoGenerateAndSaveArtistBio(targetName, distinctGenres, isQuran);
+      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(''), 2500));
+      const fastBio = await Promise.race([bioPromise, timeoutPromise]);
+      if (fastBio) {
+        bio = fastBio;
+      }
+    }
+
     const artistData = {
       id: canonicalName.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
       name: artistDoc?.name || canonicalName,
       avatar: artistDoc?.cover || artistDoc?.avatar || tracks[0]?.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
       cover: artistDoc?.cover || tracks[0]?.cover || '',
       banner: artistDoc?.banner || '',
-      bio: artistDoc?.bio || '',
+      bio,
       isVerified: Boolean(artistDoc?.isVerified),
       aliases,
       trackCount: tracks.length,

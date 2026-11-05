@@ -139,16 +139,6 @@ export const getSurahPageRange = (title = '', artist = '') => {
   if (!title) return null;
   const cleanTitle = String(title).trim().toLowerCase();
 
-  // Try direct number match e.g. "017" or "17" or "Surah 17"
-  const numMatch = cleanTitle.match(/(?:surah|سورة|سوره)?\s*#?\s*(\d{1,3})\b/i);
-  if (numMatch) {
-    const num = parseInt(numMatch[1], 10);
-    if (num >= 1 && num <= 114) {
-      const match = SURAH_METADATA.find(s => s.id === num);
-      if (match) return match;
-    }
-  }
-
   // Normalize Arabic text for searching
   const norm = (str) => String(str)
     .replace(/[إأآا]/g, 'ا')
@@ -160,15 +150,49 @@ export const getSurahPageRange = (title = '', artist = '') => {
 
   const normTitle = norm(cleanTitle);
 
-  // Exact or contains match on Surah names
-  for (const s of SURAH_METADATA) {
+  // 1. Prioritize Surah name matching (exact or contained canonical names)
+  const sortedSurahs = [...SURAH_METADATA].sort((a, b) => b.name.length - a.name.length);
+  for (const s of sortedSurahs) {
     const normSurah = norm(s.name);
-    if (normTitle.includes(normSurah) || cleanTitle.includes(s.englishName.toLowerCase())) {
+    const wordPattern = new RegExp('(^|\\s)' + normSurah + '(\\s|$)', 'i');
+    if (wordPattern.test(normTitle) || cleanTitle.includes(s.englishName.toLowerCase())) {
       return s;
     }
   }
 
-  // Fallback if Quran track but exact Surah not isolated
+  // Check if any Surah is preceded by "سورة" or "سوره"
+  for (const s of sortedSurahs) {
+    const normSurah = norm(s.name);
+    if (normTitle.includes('سورة ' + normSurah) || normTitle.includes('سوره ' + normSurah)) {
+      return s;
+    }
+  }
+
+  // 2. Strict number match: ONLY if explicitly prefixed by "سورة" / "سوره" / "surah"
+  // NEVER treat Taraweeh nights ("ليلة 27"), Juz ("جزء 27"), or dates as Surah numbers!
+  const explicitNumMatch = cleanTitle.match(/(?:surah|سورة|سوره)\s*#?\s*0*([1-9][0-9]?|10[0-9]|11[0-4])\b/i);
+  if (explicitNumMatch) {
+    const num = parseInt(explicitNumMatch[1], 10);
+    if (num >= 1 && num <= 114) {
+      const match = SURAH_METADATA.find(s => s.id === num);
+      if (match) return match;
+    }
+  }
+
+  // 3. Track number prefix at start of title (e.g. "027 - An-Naml")
+  const isNightOrJuz = /(?:ليلة|ليله|تراويح|جزء|حزب|ركعة|ركعه|رمضان)/i.test(normTitle);
+  if (!isNightOrJuz) {
+    const leadingTrackNumMatch = cleanTitle.match(/^0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\s*[\.\-–\s])/);
+    if (leadingTrackNumMatch) {
+      const num = parseInt(leadingTrackNumMatch[1], 10);
+      if (num >= 1 && num <= 114) {
+        const match = SURAH_METADATA.find(s => s.id === num);
+        if (match) return match;
+      }
+    }
+  }
+
+  // Fallback if Quran track but exact Surah not isolated (Holy Quran general range)
   return {
     id: 1,
     name: 'القرآن الكريم',

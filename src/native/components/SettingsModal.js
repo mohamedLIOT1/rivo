@@ -20,8 +20,12 @@ import {
   setLockScreenEnabled,
   isLockScreenEnabled,
 } from '../services/mediaControls';
+import LockscreenSettingCard from './settings/LockscreenSettingCard';
+import LanguageSettingCard from './settings/LanguageSettingCard';
+import { useTranslation } from '../context/LocalizationContext';
 
 export default function SettingsModal({ visible, onClose }) {
+  const { t, isRTL } = useTranslation();
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
   const { isDark, toggleTheme } = useTheme();
@@ -57,7 +61,7 @@ export default function SettingsModal({ visible, onClose }) {
     AsyncStorage.setItem('@rivo_lockscreen_enabled', String(val)).catch(() => {});
     setLockScreenEnabled(val);
     if (showToast) {
-      showToast(val ? 'Lock Screen Player enabled' : 'Lock Screen Player disabled', 'info');
+      showToast(val ? 'Full-Screen Lock Player enabled' : 'Full-Screen Lock Player disabled (Notification bar stays active)', 'info');
     }
   };
 
@@ -232,16 +236,16 @@ export default function SettingsModal({ visible, onClose }) {
 
   const handleLogout = () => {
     Alert.alert(
-      'DISENGAGE SESSION',
-      'Are you sure you want to log out from Rivo?',
+      t('settings.logoutConfirmTitle'),
+      t('settings.logoutConfirmDesc'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Log Out',
+          text: t('settings.logout'),
           style: 'destructive',
           onPress: async () => {
             await logout();
-            showToast('Logged out', 'info');
+            showToast(t('settings.loggedOutToast'), 'info');
             onClose();
           },
         },
@@ -256,7 +260,7 @@ export default function SettingsModal({ visible, onClose }) {
   const textMuted = isDark ? '#9ca3af' : colors.inkMuted;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.modalCard}>
           <View style={[styles.hardShadow, { backgroundColor: isDark ? '#050a09' : colors.ink }]} />
@@ -264,8 +268,8 @@ export default function SettingsModal({ visible, onClose }) {
             {/* Header */}
             <View style={[styles.header, { backgroundColor: cardBg, borderBottomColor: borderColor }]}>
               <View style={{ flex: 1 }}>
-                <CassetteTag label="SYSTEM CONSOLE" bg={colors.ink} textColor={colors.mint} />
-                <Text style={[styles.headerTitle, { color: textTitle }]}>SETTINGS & ENGINE</Text>
+                <CassetteTag label={t('settings.systemConsole')} bg={colors.ink} textColor={colors.mint} />
+                <Text style={[styles.headerTitle, { color: textTitle }]}>{t('settings.title')}</Text>
               </View>
               <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: cardBg, borderColor }]}>
                 <X size={20} color={textTitle} />
@@ -273,19 +277,28 @@ export default function SettingsModal({ visible, onClose }) {
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              {/* ── Language Selector ── */}
+              <LanguageSettingCard
+                cardBg={cardBg}
+                borderColor={borderColor}
+                textTitle={textTitle}
+                textMuted={textMuted}
+                isDark={isDark}
+              />
+
               {/* ── Navigation & Interface Style ── */}
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Compass size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>NAVIGATION & INTERFACE</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.navigationInterface')}</Text>
                 </View>
 
                 {/* Navigation Style Toggle Switch */}
                 <View style={[styles.switchRow, { marginTop: 8 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>Floating Navigation Button</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.floatingNavTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
-                      Enable draggable floating hub with 4-edge hiding instead of classic bottom bar
+                      {t('settings.floatingNavDesc')}
                     </Text>
                   </View>
                   <Switch
@@ -298,7 +311,7 @@ export default function SettingsModal({ visible, onClose }) {
 
                 {/* Style Selector Buttons */}
                 <View style={{ marginTop: 12 }}>
-                  <Text style={[styles.label, { color: textMuted, marginBottom: 8 }]}>Navigation Menu Layout:</Text>
+                  <Text style={[styles.label, { color: textMuted, marginBottom: 8 }]}>{t('settings.navLayoutLabel')}</Text>
                   <View style={styles.navStyleRow}>
                     <TouchableOpacity
                       style={[
@@ -316,7 +329,7 @@ export default function SettingsModal({ visible, onClose }) {
                           navStyle === 'classic' ? styles.navStyleBtnTextActive : { color: textTitle },
                         ]}
                       >
-                        CLASSIC TABS (DEFAULT)
+                        {t('settings.classicTabsLabel')}
                       </Text>
                     </TouchableOpacity>
 
@@ -336,7 +349,7 @@ export default function SettingsModal({ visible, onClose }) {
                           navStyle === 'fab' ? styles.navStyleBtnTextActive : { color: textTitle },
                         ]}
                       >
-                        FLOATING HUB (DRAGGABLE)
+                        {t('settings.floatingHubLabel')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -345,9 +358,9 @@ export default function SettingsModal({ visible, onClose }) {
                 {/* Theme Mode Toggle Row */}
                 <View style={[styles.switchRow, { marginTop: 14 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>Dark Aesthetic Theme</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.darkThemeTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
-                      {isDark ? 'Deep apothecary emerald dark mode' : 'Warm vintage paper light mode'}
+                      {isDark ? t('settings.darkThemeDescDark') : t('settings.darkThemeDescLight')}
                     </Text>
                   </View>
                   <Switch
@@ -361,10 +374,10 @@ export default function SettingsModal({ visible, onClose }) {
                 {/* Menu Selections Visibility (Show / Hide) */}
                 <View style={{ marginTop: 14 }}>
                   <Text style={[styles.label, { color: textMuted, marginBottom: 4 }]}>
-                    Active Menu Selections:
+                    {t('settings.activeMenuSelections')}
                   </Text>
                   <Text style={[styles.switchDesc, { color: textMuted, marginBottom: 10 }]}>
-                    Toggle which sections appear in your navigation hub.
+                    {t('settings.toggleSectionsDesc')}
                   </Text>
 
                   {menuItems.map((item) => {
@@ -387,7 +400,7 @@ export default function SettingsModal({ visible, onClose }) {
                             />
                           </View>
                           <Text style={[styles.switchTitle, { color: visible ? textTitle : textMuted }]}>
-                            {item.label}
+                            {t(`nav.${item.id}`, item.label)}
                           </Text>
                         </View>
 
@@ -404,38 +417,28 @@ export default function SettingsModal({ visible, onClose }) {
               </View>
 
               {/* ── Lockscreen & Media Widget Controls ── */}
-              <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
-                <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
-                  <Smartphone size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>LOCKSCREEN & MEDIA WIDGET</Text>
-                </View>
+              <LockscreenSettingCard
+                isEnabled={isLockscreenEnabled}
+                onToggle={toggleLockscreen}
+                isDark={isDark}
+                cardBg={cardBg}
+                borderColor={borderColor}
+                textTitle={textTitle}
+                textMuted={textMuted}
+              />
 
-                {/* Enable Lockscreen Player Toggle */}
-                <View style={[styles.switchRow, { marginTop: 8 }]}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>Lockscreen Controls & Overlay</Text>
-                    <Text style={[styles.switchDesc, { color: textMuted }]}>
-                      Displays native immersive lockscreen playback controls when device is locked
+              {Platform.OS === 'android' && (
+                <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor, marginTop: -4 }]}>
+                  <View style={{ padding: 4 }}>
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.mint, marginBottom: 4, letterSpacing: 0.5 }}>
+                      📱 HOME SCREEN APP WIDGETS
+                    </Text>
+                    <Text style={{ fontSize: 11, color: textMuted, lineHeight: 16 }}>
+                      Long-press your phone's home screen, tap "Widgets", and select Rivo (4×1 Compact Bar or 4×2 Full Player) for live background playback controls.
                     </Text>
                   </View>
-                  <Switch
-                    value={isLockscreenEnabled}
-                    onValueChange={toggleLockscreen}
-                    trackColor={{ false: isDark ? '#1a2624' : '#e2e8f0', true: colors.mint }}
-                    thumbColor="#ffffff"
-                  />
                 </View>
-
-                {/* Android Launcher Widgets Info */}
-                <View style={{ marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: isDark ? '#0b1614' : '#f0fdf4', borderWidth: 1, borderColor }}>
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.mint, marginBottom: 4, letterSpacing: 0.5 }}>
-                    📱 HOME SCREEN APP WIDGETS
-                  </Text>
-                  <Text style={{ fontSize: 11, color: textMuted, lineHeight: 16 }}>
-                    Long-press your phone's home screen, tap "Widgets", and select Rivo (4×1 Compact Bar or 4×2 Full Player) for live background playback controls.
-                  </Text>
-                </View>
-              </View>
+              )}
 
               {/* ── Discord Rich Presence ── */}
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
@@ -539,14 +542,14 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Volume2 size={18} color={colors.teal} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>AUDIO PREFERENCES</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.audioPreferences')}</Text>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>Vocal-Only Mode</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.vocalIsolationTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
-                      Automatically remove instrumental music from songs (AI-powered)
+                      {t('settings.vocalIsolationDesc')}
                     </Text>
                   </View>
                   <Switch
@@ -562,13 +565,13 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Volume2 size={18} color={colors.teal} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>APP EXPERIENCE</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.appExperience')}</Text>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 10 }]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>Tactile Brutalist Haptics</Text>
-                    <Text style={[styles.switchDesc, { color: textMuted }]}>Physical vibrations on vinyl controls</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.hapticTitle')}</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>{t('settings.hapticDesc')}</Text>
                   </View>
                   <Switch
                     value={hapticFeedback}
@@ -583,18 +586,18 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <HardDrive size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>OFFLINE VAULT & STORAGE</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.offlineVaultStorage')}</Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: textMuted }]}>Location:</Text>
+                  <Text style={[styles.label, { color: textMuted }]}>{t('settings.internalStorage')}:</Text>
                   <Text style={[styles.valueMono, { color: textTitle }]} numberOfLines={1}>
-                    {storageInfo?.folderLabel || 'Internal App Storage'}
+                    {storageInfo?.folderLabel || t('settings.internalStorage')}
                   </Text>
                 </View>
 
                 <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: textMuted }]}>Vault Files:</Text>
+                  <Text style={[styles.label, { color: textMuted }]}>{t('settings.storageUsed')}:</Text>
                   <Text style={[styles.valueMono, { color: textTitle }]}>
                     {storageInfo ? `${storageInfo.totalCount} tracks (${(storageInfo.totalBytes / 1048576).toFixed(1)} MB)` : 'Scanning...'}
                   </Text>
@@ -608,7 +611,7 @@ export default function SettingsModal({ visible, onClose }) {
                     activeOpacity={0.8}
                   >
                     <FolderPlus size={14} color={colors.ink} />
-                    <Text style={styles.storageActionText}>IMPORT MP3s</Text>
+                    <Text style={styles.storageActionText}>{t('settings.localImportTitle')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -618,14 +621,14 @@ export default function SettingsModal({ visible, onClose }) {
                     activeOpacity={0.8}
                   >
                     <RefreshCw size={13} color={colors.mint} />
-                    <Text style={styles.storageActionTextSec}>RE-SYNC VAULT</Text>
+                    <Text style={styles.storageActionTextSec}>{t('settings.scanVaultTitle')}</Text>
                   </TouchableOpacity>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 12 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>Auto-Cache Completed Songs</Text>
-                    <Text style={[styles.switchDesc, { color: textMuted }]}>Automatically save songs to Vault when listened to the end</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.autoDownloadFinishedTitle')}</Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }]}>{t('settings.autoDownloadFinishedDesc')}</Text>
                   </View>
                   <Switch
                     value={Boolean(autoDownloadFinished)}
@@ -640,19 +643,19 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Server size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>AUDIO CLOUD MATRIX</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.audioCloudMatrix')}</Text>
                 </View>
                 <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: textMuted }]}>Endpoint:</Text>
+                  <Text style={[styles.label, { color: textMuted }]}>{t('settings.serverStatus')}</Text>
                   <Text style={[styles.valueMono, { color: textTitle }]} numberOfLines={1}>
                     {API_BASE_URL.replace('https://', '')}
                   </Text>
                 </View>
                 <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: textMuted }]}>Status:</Text>
+                  <Text style={[styles.label, { color: textMuted }]}>{t('common.info')}:</Text>
                   <View style={styles.statusPill}>
                     <View style={styles.greenDot} />
-                    <Text style={styles.statusText}>OPERATIONAL</Text>
+                    <Text style={styles.statusText}>{t('settings.onlineStatus')}</Text>
                   </View>
                 </View>
                 <View style={styles.infoRow}>
@@ -666,19 +669,19 @@ export default function SettingsModal({ visible, onClose }) {
                 <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                   <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                     <ShieldCheck size={18} color={colors.teal} />
-                    <Text style={[styles.sectionTitle, { color: textTitle }]}>ACCOUNT DETAILS</Text>
+                    <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.accountDetails')}</Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={[styles.label, { color: textMuted }]}>Username:</Text>
+                    <Text style={[styles.label, { color: textMuted }]}>{t('settings.loggedInAs')}</Text>
                     <Text style={[styles.valueMono, { color: textTitle }]}>@{currentUser.name || currentUser.username}</Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={[styles.label, { color: textMuted }]}>Email:</Text>
+                    <Text style={[styles.label, { color: textMuted }]}>{t('settings.emailLabel')}</Text>
                     <Text style={[styles.valueMono, { color: textTitle }]}>{currentUser.email}</Text>
                   </View>
                   <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
                     <LogOut size={16} color={colors.rust} />
-                    <Text style={styles.logoutBtnText}>DISENGAGE SESSION</Text>
+                    <Text style={styles.logoutBtnText}>{t('settings.logout')}</Text>
                   </TouchableOpacity>
                 </View>
               )}

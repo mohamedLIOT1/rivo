@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Platform } from 'react-native';
 import { X, Plus, FolderPlus, Music, Check } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
@@ -57,7 +57,7 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'fade'} transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.cardOuter}>
           <View style={styles.hardShadow} />
@@ -114,6 +114,10 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
                 data={playlists}
                 keyExtractor={(item, index) => String(item._id || item.id || index)}
                 style={{ maxHeight: 280 }}
+                windowSize={5}
+                maxToRenderPerBatch={8}
+                initialNumToRender={8}
+                removeClippedSubviews={true}
                 renderItem={({ item }) => {
                   const pId = item._id || item.id;
                   const count = Array.isArray(item.tracks) ? item.tracks.length : 0;

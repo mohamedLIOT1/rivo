@@ -156,7 +156,7 @@ export default function UserDetailModal({
     if (visible) {
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 220,
+        duration: Platform.OS === 'android' ? 0 : 220,
         useNativeDriver: true,
       }).start();
     }
@@ -165,7 +165,7 @@ export default function UserDetailModal({
   const handleClose = () => {
     Animated.timing(slideAnim, {
       toValue: SCREEN_HEIGHT,
-      duration: 180,
+      duration: Platform.OS === 'android' ? 0 : 180,
       useNativeDriver: true,
     }).start(() => {
       onClose && onClose();
@@ -196,13 +196,13 @@ export default function UserDetailModal({
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={handleClose} style={styles.backBtn} activeOpacity={0.8}>
-            <ArrowLeft size={18} color="#fdfbf7" strokeWidth={2.5} />
-            <Text style={styles.backText}>RETURN</Text>
+          <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight]} activeOpacity={0.8}>
+            <ArrowLeft size={18} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} />
+            <Text style={[styles.backText, !isDark && styles.backTextLight]}>RETURN</Text>
           </TouchableOpacity>
 
-          <View style={styles.badgePill}>
-            <Text style={styles.badgePillText}>{isBotProfile ? 'SYSTEM BOT' : 'COMMUNITY LISTENER PROFILE'}</Text>
+          <View style={[styles.badgePill, !isDark && styles.badgePillLight]}>
+            <Text style={[styles.badgePillText, !isDark && styles.badgePillTextLight]}>{isBotProfile ? 'SYSTEM BOT' : 'COMMUNITY LISTENER PROFILE'}</Text>
           </View>
         </View>
 
@@ -212,7 +212,7 @@ export default function UserDetailModal({
           showsVerticalScrollIndicator={false}
         >
           {/* Hero Section */}
-          <View style={styles.heroCard}>
+          <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
             <View style={styles.avatarWrap}>
               {resolvedBotAvatar ? (
                 <Image source={{ uri: resolvedBotAvatar }} style={styles.avatarImg} resizeMode="cover" />
@@ -224,7 +224,7 @@ export default function UserDetailModal({
             </View>
 
             <View style={styles.nameRow}>
-              <Text style={styles.userName}>{displayName}</Text>
+              <Text style={[styles.userName, !isDark && styles.userNameLight]}>{displayName}</Text>
               {(currentProfile.isVerified || currentProfile.role === 'admin' || isBotProfile) && (
                 <View style={styles.verifiedBadge}>
                   <ShieldCheck size={14} color="#17a398" strokeWidth={2.5} />
@@ -238,11 +238,11 @@ export default function UserDetailModal({
             </View>
 
             {currentProfile.bio ? (
-              <Text style={styles.userBio}>{currentProfile.bio}</Text>
+              <Text style={[styles.userBio, !isDark && { color: '#57534e' }]}>{currentProfile.bio}</Text>
             ) : null}
 
             {/* Stats Row */}
-            <View style={styles.statsRow}>
+            <View style={[styles.statsRow, !isDark && styles.statsRowLight]}>
               <View style={styles.statItem}>
                 <Text style={styles.statNum}>{followersCount}</Text>
                 <Text style={styles.statLabel}>FOLLOWERS</Text>
@@ -324,11 +324,11 @@ export default function UserDetailModal({
 
           {/* Real-time Listening Activity */}
           {activity && (activity.track || activity.title) && (
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeaderRow}>
+            <View style={[styles.sectionContainer, !isDark && styles.sectionContainerLight]}>
+              <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Radio size={14} color="#f59e0b" strokeWidth={2.5} />
-                  <Text style={styles.sectionTitle}>CURRENTLY STREAMING</Text>
+                  <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>CURRENTLY STREAMING</Text>
                 </View>
                 <View style={styles.liveIndicator}>
                   <View style={styles.liveDot} />
@@ -337,7 +337,7 @@ export default function UserDetailModal({
               </View>
 
               <TouchableOpacity
-                style={styles.activityCard}
+                style={[styles.activityCard, !isDark && styles.activityCardLight]}
                 onPress={() => {
                   const t = activity.track || activity;
                   if (t) playTrack(t);
@@ -349,10 +349,10 @@ export default function UserDetailModal({
                   style={styles.activityCover}
                 />
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.activityTitle} numberOfLines={1}>
+                  <Text style={[styles.activityTitle, !isDark && styles.activityTitleLight]} numberOfLines={1}>
                     {activity.track?.title || activity.title || 'Live Stream'}
                   </Text>
-                  <Text style={styles.activityArtist} numberOfLines={1}>
+                  <Text style={[styles.activityArtist, !isDark && { color: '#57534e' }]} numberOfLines={1}>
                     {activity.track?.artist || activity.artist || displayName}
                   </Text>
                 </View>
@@ -365,11 +365,11 @@ export default function UserDetailModal({
           )}
 
           {/* Public Playlists Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeaderRow}>
+          <View style={[styles.sectionContainer, !isDark && styles.sectionContainerLight]}>
+            <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Disc size={14} color="#17a398" strokeWidth={2.5} />
-                <Text style={styles.sectionTitle}>PUBLIC PLAYLISTS</Text>
+                <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>PUBLIC PLAYLISTS</Text>
               </View>
               <Text style={styles.sectionCounter}>{playlists.length} CREATED</Text>
             </View>
@@ -390,7 +390,7 @@ export default function UserDetailModal({
                   return (
                     <TouchableOpacity
                       key={pl.id || pl._id || idx}
-                      style={styles.playlistRow}
+                      style={[styles.playlistRow, !isDark && styles.playlistRowLight]}
                       onPress={() => {
                         if (onSelectAlbum && pl) {
                           onSelectAlbum({
@@ -414,10 +414,10 @@ export default function UserDetailModal({
                         style={styles.playlistThumb}
                       />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.playlistName} numberOfLines={1}>
+                        <Text style={[styles.playlistName, !isDark && styles.playlistNameLight]} numberOfLines={1}>
                           {pl.name || 'Untitled Playlist'}
                         </Text>
-                        <Text style={styles.playlistTrackCount}>
+                        <Text style={[styles.playlistTrackCount, !isDark && { color: '#57534e' }]}>
                           {plTracks.length} recordings
                         </Text>
                       </View>
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#0b1110',
     zIndex: 110,
-    elevation: 20,
+    elevation: Platform.OS === 'android' ? 0 : 20,
   },
   container: {
     flex: 1,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.5, shadowRadius: 0 },
-      android: { elevation: 4 },
+      android: { elevation: 0 },
     }),
   },
   avatarWrap: {
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0 },
-      android: { elevation: 3 },
+      android: { elevation: 0 },
     }),
   },
   bioCardLight: {
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0 },
-      android: { elevation: 3 },
+      android: { elevation: 0 },
     }),
   },
   sectionHeaderRow: {
@@ -895,5 +895,55 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontSize: 11,
     color: '#6b7280',
+  },
+  // ── Light Theme Adaptations ──
+  backBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  backTextLight: {
+    color: '#0b1110',
+  },
+  badgePillLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  badgePillTextLight: {
+    color: '#082621',
+  },
+  heroCardLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  userNameLight: {
+    color: '#0b1110',
+  },
+  statsRowLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  sectionContainerLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  sectionHeaderRowLight: {
+    borderBottomColor: '#d6c8b0',
+  },
+  sectionTitleLight: {
+    color: '#0b1110',
+  },
+  activityCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  activityTitleLight: {
+    color: '#0b1110',
+  },
+  playlistRowLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  playlistNameLight: {
+    color: '#0b1110',
   },
 });

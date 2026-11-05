@@ -5,16 +5,21 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.WritableMap
+import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
-import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
+import com.facebook.react.modules.core.PermissionAwareActivity
+import com.facebook.react.modules.core.PermissionListener
 
 class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -55,16 +60,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         val context = reactContext.applicationContext
         val intent = Intent(context, MediaNotificationService::class.java).apply {
             action = MediaNotificationService.ACTION_SHOW
-            if (options.hasKey("title")) putExtra("title", options.getString("title"))
-            if (options.hasKey("artist")) putExtra("artist", options.getString("artist"))
-            if (options.hasKey("coverUrl")) putExtra("coverUrl", options.getString("coverUrl"))
-            if (options.hasKey("isPlaying")) putExtra("isPlaying", options.getBoolean("isPlaying"))
-            if (options.hasKey("repeatMode")) putExtra("repeatMode", options.getString("repeatMode"))
-            else if (options.hasKey("isRepeat")) putExtra("isRepeat", options.getBoolean("isRepeat"))
-            if (options.hasKey("isShuffle")) putExtra("isShuffle", options.getBoolean("isShuffle"))
-            if (options.hasKey("isLiked")) putExtra("isLiked", options.getBoolean("isLiked"))
-            if (options.hasKey("duration")) putExtra("duration", options.getDouble("duration"))
-            if (options.hasKey("currentTime")) putExtra("currentTime", options.getDouble("currentTime"))
+            copyOptionsToIntent(options, this)
         }
 
         try {
@@ -73,33 +69,43 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             } else {
                 context.startService(intent)
             }
-        } catch (e: Throwable) {
-            // Ignore start failures if app is restricted
-        }
+        } catch (_: Throwable) {}
     }
 
     @ReactMethod
     fun updatePlayback(options: ReadableMap) {
         val context = reactContext.applicationContext
+        val isPlaying = if (options.hasKey("isPlaying")) options.getBoolean("isPlaying") else false
+
         val intent = Intent(context, MediaNotificationService::class.java).apply {
-            action = MediaNotificationService.ACTION_UPDATE
-            if (options.hasKey("title")) putExtra("title", options.getString("title"))
-            if (options.hasKey("artist")) putExtra("artist", options.getString("artist"))
-            if (options.hasKey("coverUrl")) putExtra("coverUrl", options.getString("coverUrl"))
-            if (options.hasKey("isPlaying")) putExtra("isPlaying", options.getBoolean("isPlaying"))
-            if (options.hasKey("repeatMode")) putExtra("repeatMode", options.getString("repeatMode"))
-            else if (options.hasKey("isRepeat")) putExtra("isRepeat", options.getBoolean("isRepeat"))
-            if (options.hasKey("isShuffle")) putExtra("isShuffle", options.getBoolean("isShuffle"))
-            if (options.hasKey("isLiked")) putExtra("isLiked", options.getBoolean("isLiked"))
-            if (options.hasKey("duration")) putExtra("duration", options.getDouble("duration"))
-            if (options.hasKey("currentTime")) putExtra("currentTime", options.getDouble("currentTime"))
+            action = if (MediaNotificationService.instance == null && isPlaying) {
+                MediaNotificationService.ACTION_SHOW
+            } else {
+                MediaNotificationService.ACTION_UPDATE
+            }
+            copyOptionsToIntent(options, this)
         }
 
         try {
-            context.startService(intent)
-        } catch (e: Throwable) {
-            // Ignore update failures
-        }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && MediaNotificationService.instance == null && isPlaying) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    private fun copyOptionsToIntent(options: ReadableMap, intent: Intent) {
+        if (options.hasKey("title")) intent.putExtra("title", options.getString("title"))
+        if (options.hasKey("artist")) intent.putExtra("artist", options.getString("artist"))
+        if (options.hasKey("coverUrl")) intent.putExtra("coverUrl", options.getString("coverUrl"))
+        if (options.hasKey("isPlaying")) intent.putExtra("isPlaying", options.getBoolean("isPlaying"))
+        if (options.hasKey("repeatMode")) intent.putExtra("repeatMode", options.getString("repeatMode"))
+        else if (options.hasKey("isRepeat")) intent.putExtra("isRepeat", options.getBoolean("isRepeat"))
+        if (options.hasKey("isShuffle")) intent.putExtra("isShuffle", options.getBoolean("isShuffle"))
+        if (options.hasKey("isLiked")) intent.putExtra("isLiked", options.getBoolean("isLiked"))
+        if (options.hasKey("duration")) intent.putExtra("duration", options.getDouble("duration"))
+        if (options.hasKey("currentTime")) intent.putExtra("currentTime", options.getDouble("currentTime"))
     }
 
     @ReactMethod
@@ -110,7 +116,76 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         }
         try {
             context.startService(intent)
-        } catch (e: Throwable) {}
+        } catch (_: Throwable) {}
+    }
+
+    @ReactMethod
+    fun checkNotificationPermission(promise: Promise) {
+        try {
+            val enabled = NotificationManagerCompat.from(reactContext).areNotificationsEnabled()
+            promise.resolve(enabled)
+        } catch (e: Throwable) {
+            promise.resolve(true)
+        }
+    }
+
+    @ReactMethod
+    fun requestNotificationPermission(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val isEnabled = NotificationManagerCompat.from(reactContext).areNotificationsEnabled()
+                if (isEnabled) {
+                    promise.resolve(true)
+                    return
+                }
+
+                val activity = reactContext.currentActivity
+                if (activity is PermissionAwareActivity) {
+                    val permissions = arrayOf(android.Manifest.permission.POST_NOTIFICATIONS)
+                    activity.requestPermissions(permissions, 9541, object : PermissionListener {
+                        override fun onRequestPermissionsResult(
+                            requestCode: Int,
+                            permissions: Array<String>,
+                            grantResults: IntArray
+                        ): Boolean {
+                            if (requestCode == 9541) {
+                                val granted = grantResults.isNotEmpty() &&
+                                    grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                promise.resolve(granted)
+                                return true
+                            }
+                            return false
+                        }
+                    })
+                } else {
+                    promise.resolve(isEnabled)
+                }
+            } else {
+                promise.resolve(NotificationManagerCompat.from(reactContext).areNotificationsEnabled())
+            }
+        } catch (e: Throwable) {
+            promise.resolve(false)
+        }
+    }
+
+    @ReactMethod
+    fun openNotificationSettings(promise: Promise) {
+        try {
+            val intent = Intent().apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                    putExtra(Settings.EXTRA_APP_PACKAGE, reactContext.packageName)
+                } else {
+                    action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                    data = Uri.parse("package:${reactContext.packageName}")
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            reactContext.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Throwable) {
+            promise.resolve(false)
+        }
     }
 
     @ReactMethod
@@ -118,6 +193,9 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         try {
             val prefs = reactContext.getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
             prefs.edit().putBoolean("lockscreen_overlay_enabled", enabled).apply()
+            if (!enabled) {
+                LockScreenActivity.dismissIfShowing()
+            }
         } catch (_: Throwable) {}
     }
 
@@ -133,14 +211,43 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun addListener(eventName: String) {
-        // Required for React Native built-in EventEmitter calls
+    fun canDrawOverlays(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                promise.resolve(Settings.canDrawOverlays(reactContext))
+            } else {
+                promise.resolve(true)
+            }
+        } catch (e: Throwable) {
+            promise.resolve(true)
+        }
     }
 
     @ReactMethod
-    fun removeListeners(count: Int) {
-        // Required for React Native built-in EventEmitter calls
+    fun requestOverlayPermission(promise: Promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + reactContext.packageName)
+                ).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                reactContext.startActivity(intent)
+                promise.resolve(true)
+            } else {
+                promise.resolve(true)
+            }
+        } catch (e: Throwable) {
+            promise.resolve(false)
+        }
     }
+
+    @ReactMethod
+    fun addListener(eventName: String) {}
+
+    @ReactMethod
+    fun removeListeners(count: Int) {}
 
     private fun createChatNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -204,9 +311,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
 
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             notificationManager?.notify(CHAT_NOTIF_TAG, notifId, builder.build())
-        } catch (e: Throwable) {
-            // Ignore notification errors
-        }
+        } catch (_: Throwable) {}
     }
 
     @ReactMethod
@@ -216,7 +321,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             val notifId = (senderId.hashCode() and 0x7FFFFFFF)
             notificationManager?.cancel(CHAT_NOTIF_TAG, notifId)
-        } catch (e: Throwable) {}
+        } catch (_: Throwable) {}
     }
 
     @ReactMethod
@@ -225,7 +330,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             val context = reactContext.applicationContext
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             notificationManager?.cancel(CHAT_NOTIF_TAG, 0)
-        } catch (e: Throwable) {}
+        } catch (_: Throwable) {}
     }
 
     private fun sendEventInternal(action: String) {
@@ -238,7 +343,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
 
     fun emitChatNotificationEvent(senderId: String, roomCode: String? = null) {
         if (reactContext.hasActiveReactInstance()) {
-            val map = com.facebook.react.bridge.Arguments.createMap().apply {
+            val map = Arguments.createMap().apply {
                 putString("senderId", senderId)
                 if (roomCode != null) putString("roomCode", roomCode)
             }
@@ -249,7 +354,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
-    fun getInitialChatSenderId(promise: com.facebook.react.bridge.Promise) {
+    fun getInitialChatSenderId(promise: Promise) {
         try {
             val currentActivity = reactContext.currentActivity
             val intent = currentActivity?.intent
@@ -265,169 +370,22 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    // OTA & APK Installation Delegations to RivoOtaHelper
     @ReactMethod
-    fun installApk(filePath: String, promise: com.facebook.react.bridge.Promise) {
-        try {
-            val context = reactContext.currentActivity ?: reactContext.applicationContext
-            val cleanPath = filePath.replace("file://", "")
-            val file = java.io.File(cleanPath)
-            if (!file.exists()) {
-                promise.reject("FILE_NOT_FOUND", "APK file does not exist at $cleanPath")
-                return
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (!context.packageManager.canRequestPackageInstalls()) {
-                    val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                        data = android.net.Uri.parse("package:${context.packageName}")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(settingsIntent)
-                    promise.reject("PERMISSION_REQUIRED", "Please allow Rivo to install unknown apps from settings, then click update again.")
-                    return
-                }
-            }
-
-            val uri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
-                context,
-                "com.rivo.app.fileprovider",
-                file
-            )
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(intent)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("INSTALL_ERROR", e.message, e)
-        }
-    }
+    fun installApk(filePath: String, promise: Promise) = RivoOtaHelper.installApk(reactContext, filePath, promise)
 
     @ReactMethod
-    fun applyOtaBundle(tempFilePath: String, promise: com.facebook.react.bridge.Promise) {
-        try {
-            val context = reactContext.applicationContext
-            val cleanPath = tempFilePath.replace("file://", "")
-            val srcFile = java.io.File(cleanPath)
-            if (!srcFile.exists() || srcFile.length() < 1024) {
-                promise.reject("INVALID_BUNDLE", "Downloaded bundle is missing or invalid")
-                return
-            }
-
-            val otaDir = java.io.File(context.filesDir, "rivo_ota")
-            if (!otaDir.exists()) {
-                otaDir.mkdirs()
-            }
-
-            val targetFile = java.io.File(otaDir, "index.android.bundle")
-            val targetBackup = java.io.File(otaDir, "index.android.bundle.bak")
-
-            if (targetFile.exists()) {
-                targetFile.copyTo(targetBackup, overwrite = true)
-            }
-
-            srcFile.copyTo(targetFile, overwrite = true)
-            try { srcFile.delete() } catch (ignored: Exception) {}
-
-            promise.resolve(targetFile.absolutePath)
-        } catch (e: Exception) {
-            promise.reject("APPLY_ERROR", e.message, e)
-        }
-    }
+    fun applyOtaBundle(tempFilePath: String, promise: Promise) = RivoOtaHelper.applyOtaBundle(reactContext, tempFilePath, promise)
 
     @ReactMethod
-    fun reloadApp(promise: com.facebook.react.bridge.Promise) {
-        try {
-            val activity = reactContext.currentActivity
-            val context = reactContext.applicationContext
-            val packageManager = context.packageManager
-            val intent = packageManager.getLaunchIntentForPackage(context.packageName)
-            if (intent != null) {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                val pendingIntent = android.app.PendingIntent.getActivity(
-                    context,
-                    123456,
-                    intent,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        android.app.PendingIntent.FLAG_CANCEL_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                    } else {
-                        android.app.PendingIntent.FLAG_CANCEL_CURRENT
-                    }
-                )
-                val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? android.app.AlarmManager
-                alarmManager?.set(
-                    android.app.AlarmManager.RTC,
-                    System.currentTimeMillis() + 250,
-                    pendingIntent
-                )
-
-                activity?.finishAffinity()
-                activity?.finishAndRemoveTask()
-                android.os.Process.killProcess(android.os.Process.myPid())
-                System.exit(0)
-                promise.resolve(true)
-            } else {
-                promise.reject("RELOAD_ERROR", "Launch intent unavailable")
-            }
-        } catch (e: Exception) {
-            try {
-                reactContext.currentActivity?.finishAndRemoveTask()
-                android.os.Process.killProcess(android.os.Process.myPid())
-                System.exit(0)
-            } catch (e2: Exception) {}
-            promise.resolve(true)
-        }
-    }
+    fun reloadApp(promise: Promise) = RivoOtaHelper.reloadApp(reactContext, promise)
 
     @ReactMethod
-    fun exitAndRemoveTask(promise: com.facebook.react.bridge.Promise) {
-        try {
-            val activity = reactContext.currentActivity
-            activity?.finishAndRemoveTask()
-            android.os.Process.killProcess(android.os.Process.myPid())
-            System.exit(0)
-            promise.resolve(true)
-        } catch (e: Exception) {
-            try {
-                System.exit(0)
-            } catch (e2: Exception) {}
-            promise.resolve(true)
-        }
-    }
+    fun exitAndRemoveTask(promise: Promise) = RivoOtaHelper.exitAndRemoveTask(reactContext, promise)
 
     @ReactMethod
-    fun clearOtaBundle(promise: com.facebook.react.bridge.Promise) {
-        try {
-            val otaDir = java.io.File(reactContext.applicationContext.filesDir, "rivo_ota")
-            if (otaDir.exists()) {
-                otaDir.deleteRecursively()
-            }
-            promise.resolve(true)
-        } catch (e: Exception) {
-            promise.reject("CLEAR_ERROR", e.message, e)
-        }
-    }
+    fun clearOtaBundle(promise: Promise) = RivoOtaHelper.clearOtaBundle(reactContext, promise)
 
     @ReactMethod
-    fun getOtaInfo(promise: com.facebook.react.bridge.Promise) {
-        try {
-            val otaFile = java.io.File(reactContext.applicationContext.filesDir, "rivo_ota/index.android.bundle")
-            val map = Arguments.createMap()
-            if (otaFile.exists() && otaFile.isFile) {
-                map.putBoolean("exists", true)
-                map.putDouble("size", otaFile.length().toDouble())
-                map.putDouble("lastModified", otaFile.lastModified().toDouble())
-            } else {
-                map.putBoolean("exists", false)
-                map.putDouble("size", 0.0)
-                map.putDouble("lastModified", 0.0)
-            }
-            promise.resolve(map)
-        } catch (e: Exception) {
-            promise.reject("INFO_ERROR", e.message, e)
-        }
-    }
+    fun getOtaInfo(promise: Promise) = RivoOtaHelper.getOtaInfo(reactContext, promise)
 }

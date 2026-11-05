@@ -1,5 +1,5 @@
 import { usePreferences } from '../context/PreferencesContext';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff, Settings } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
@@ -28,12 +28,30 @@ export default function Navigation({
   globalTheme = 'dark',
   libraryMode = 'music',
   likedTrackIds = [],
+  tracks = [],
   selectedPlaylist = null,
   onSelectLikedSongs,
   onSelectPlaylist,
 }) {
   const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
+
+  const filteredLikedCount = useMemo(() => {
+    if (!likedTrackIds || likedTrackIds.length === 0) return 0;
+    if (Array.isArray(tracks) && tracks.length > 0) {
+      const isQuran = (t) => {
+        const g = (t.genre || '').toLowerCase();
+        const a = (t.artist || '').toLowerCase();
+        return g.includes('quran') || g.includes('recitation') || a.includes('qari') || a.includes('reciter') || a.includes('القرآن') || a.includes('سورة');
+      };
+      const likedSet = new Set(likedTrackIds.map(String));
+      const matching = tracks.filter(t => likedSet.has(String(t.id || t._id)));
+      if (matching.length > 0) {
+        return matching.filter(t => libraryMode === 'quran' ? isQuran(t) : !isQuran(t)).length;
+      }
+    }
+    return likedTrackIds.length;
+  }, [likedTrackIds, tracks, libraryMode]);
 
   const isInstalledClient = typeof window !== 'undefined' && Boolean(
     window.RIVO_DESKTOP || 
@@ -43,27 +61,27 @@ export default function Navigation({
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
   );
 
-  const { showMusic, showQuran } = usePreferences();
+  const { showMusic, showQuran, t, isRTL } = usePreferences();
 
   const mainNavItems = [
-    ...(showMusic ? [{ id: 'home', label: 'Home', icon: Home }] : []),
-    { id: 'search', label: 'Search', icon: Search },
-    { id: 'library', label: 'Library', icon: Disc },
-    ...(showQuran ? [{ id: 'quran', label: 'Quran', icon: BookOpen }] : []),
+    ...(showMusic ? [{ id: 'home', label: t('nav.home'), icon: Home }] : []),
+    { id: 'search', label: t('nav.search'), icon: Search },
+    { id: 'library', label: t('nav.library'), icon: Disc },
+    ...(showQuran ? [{ id: 'quran', label: t('nav.quran'), icon: BookOpen }] : []),
     ...(!isInstalledClient ? [
-      { id: 'download', label: 'Download App', icon: DownloadCloud }
+      { id: 'download', label: t('nav.download') || t('nav.downloadApp') || 'Download App', icon: DownloadCloud }
     ] : []),
-    { id: 'stats', label: 'Listening Activity', icon: Activity },
+    { id: 'stats', label: t('nav.stats'), icon: Activity },
     ...(currentUser && isUserAdmin(currentUser) ? [
-      { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
+      { id: 'admin', label: t('nav.admin'), icon: ShieldCheck }
     ] : [])
   ];
 
   const mobileNavItems = [
-    ...(showMusic ? [{ id: 'home', label: 'Music', icon: Music }] : []),
-    ...(showQuran ? [{ id: 'quran', label: 'Quran', icon: BookOpen }] : []),
-    { id: 'library', label: 'Library', icon: Disc },
-    { id: 'search', label: 'Search', icon: Search },
+    ...(showMusic ? [{ id: 'home', label: t('nav.music'), icon: Music }] : []),
+    ...(showQuran ? [{ id: 'quran', label: t('nav.quran'), icon: BookOpen }] : []),
+    { id: 'library', label: t('nav.library'), icon: Disc },
+    { id: 'search', label: t('nav.search'), icon: Search },
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])
@@ -100,7 +118,7 @@ export default function Navigation({
             <div className={`text-[10px] font-mono font-black uppercase px-2 mb-1 tracking-wider ${
               isDark ? 'text-zinc-500' : 'text-zinc-500'
             }`}>
-              Discover
+              {t('nav.discover') || 'Discover'}
             </div>
 
             {mainNavItems.map((item) => {
@@ -146,7 +164,7 @@ export default function Navigation({
           >
             <div className="flex items-center gap-2.5">
               <Radio size={16} className="text-[#17a398] animate-pulse" strokeWidth={2.5} />
-              <span>Live Jam</span>
+              <span>{t('nav.liveJam') || 'Live Jam'}</span>
             </div>
             <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
               RADIO
@@ -168,7 +186,7 @@ export default function Navigation({
                 title="View full library"
               >
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>{libraryMode === 'quran' ? 'Quran Library' : 'Your Library'}</span>
+                <span>{libraryMode === 'quran' ? (t('nav.quranLibrary') || 'Quran Library') : (t('nav.yourLibrary') || 'Your Library')}</span>
               </button>
 
               <div className="flex items-center gap-1">
@@ -207,9 +225,9 @@ export default function Navigation({
             {/* Filter Pills */}
             <div className="flex gap-1 mb-2 px-1">
               {[
-                { id: 'all', label: 'All' },
-                { id: 'playlists', label: 'Playlists' },
-                { id: 'artists', label: 'Artists' },
+                { id: 'all', label: t('nav.all') || 'All' },
+                { id: 'playlists', label: t('nav.playlists') || 'Playlists' },
+                { id: 'artists', label: libraryMode === 'quran' ? (t('nav.reciters') || 'Reciters') : (t('nav.artists') || 'Artists') },
               ].map(({ id: filterId, label: filterLabel }) => {
                 const active = libraryFilter === filterId;
                 return (
@@ -250,26 +268,28 @@ export default function Navigation({
                         : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
                       <Heart size={12} fill="currentColor" />
                     </div>
-                    <div className="truncate">
-                      <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>
-                        {libraryMode === 'quran' ? 'Favorite Surahs' : 'Liked Songs'}
+                    <div className="truncate flex-1 min-w-0">
+                      <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>
+                        {libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorite Surahs') : (t('library.likedSongs') || 'Liked Songs')}
                       </div>
-                      <span className="text-[10px] font-mono text-zinc-500 font-normal">
-                        {likedTrackIds && likedTrackIds.length > 0
-                          ? `${likedTrackIds.length} ${libraryMode === 'quran' ? (likedTrackIds.length === 1 ? 'surah' : 'surahs') : (likedTrackIds.length === 1 ? 'song' : 'songs')}`
-                          : 'Favorites'}
+                      <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
+                        {filteredLikedCount > 0
+                          ? `${filteredLikedCount} ${libraryMode === 'quran' 
+                              ? (filteredLikedCount === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
+                              : (filteredLikedCount === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}`
+                          : (libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorites') : (t('library.likedSongs') || 'Favorites'))}
                       </span>
                     </div>
                   </div>
-                  {likedTrackIds && likedTrackIds.length > 0 && (
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                  {filteredLikedCount > 0 && (
+                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
                       isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ded2bb] text-[#0b1110]'
                     }`}>
-                      {likedTrackIds.length}
+                      {filteredLikedCount}
                     </span>
                   )}
                 </div>
@@ -293,7 +313,7 @@ export default function Navigation({
                         : isDark ? 'bg-zinc-900/90 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-white hover:bg-[#ede5d3]'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {pl.cover ? (
                         <img 
                           src={pl.cover} 
@@ -309,14 +329,16 @@ export default function Navigation({
                           {pl.name ? pl.name[0].toUpperCase() : 'P'}
                         </div>
                       )}
-                      <div className="truncate">
-                        <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`}>{pl.name}</div>
-                        <span className="text-[10px] font-mono text-zinc-500 font-normal">
-                          {count} {isQuranContent(pl) || libraryMode === 'quran' ? (count === 1 ? 'surah' : 'surahs') : (count === 1 ? 'song' : 'songs')}
+                      <div className="truncate flex-1 min-w-0">
+                        <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>{pl.name}</div>
+                        <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
+                          {count} {isQuranContent(pl) || libraryMode === 'quran' 
+                            ? (count === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
+                            : (count === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}
                         </span>
                       </div>
                     </div>
-                    <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded ${
+                    <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded shrink-0 ${
                       isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
                     }`}>
                       {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : 'LIST'}
@@ -330,13 +352,13 @@ export default function Navigation({
                   isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
                 }`}>
                   <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
-                    {libraryMode === 'quran' ? 'No Quran playlists yet' : 'No playlists yet'}
+                    {libraryMode === 'quran' ? (t('library.noQuranPlaylistsYet') || 'No Quran playlists yet') : (t('library.noPlaylistsYet') || 'No playlists yet')}
                   </p>
                   <button
                     onClick={openCreatePlaylistModal}
                     className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
                   >
-                    {libraryMode === 'quran' ? '+ Create Quran Playlist' : '+ Create Playlist'}
+                    {libraryMode === 'quran' ? (t('library.createQuranPlaylist') || '+ Create Quran Playlist') : (t('library.createPlaylist') || '+ Create Playlist')}
                   </button>
                 </div>
               )}
@@ -383,10 +405,10 @@ export default function Navigation({
             >
               <div className="flex items-center gap-2">
                 <WifiOff size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>Offline Vault</span>
+                <span>{t('library.offlineVault') || 'الخزنة المحلية'}</span>
               </div>
               <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110]">
-                SWITCH
+                {isRTL ? 'تبديل' : 'SWITCH'}
               </span>
             </button>
           </div>

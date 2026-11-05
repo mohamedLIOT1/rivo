@@ -8,10 +8,21 @@ import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isQuranContent } from '../../utils/quranUtils';
 
+const MiniProgressBar = React.memo(function MiniProgressBar({ isLive, isDark, defaultDuration }) {
+  const { currentTime, duration } = useAudioProgress();
+  const effectiveDuration = (duration && duration > 0) ? duration : (defaultDuration || 240);
+  const progressPercent = isLive ? 100 : (effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0);
+
+  return (
+    <View style={[styles.progressTrack, !isDark && styles.progressTrackLight]}>
+      <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: isLive ? '#ef4444' : colors.mint }]} />
+    </View>
+  );
+});
+
 function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode, vocalIsolationStatus } = useAudioPlayer();
-  const { currentTime, duration } = useAudioProgress();
+  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode, vocalIsolationStatus, queue } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
 
@@ -25,8 +36,6 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const isQuran = isQuranContent(currentTrack);
   const isLive = Boolean(currentTrack?.isLive || currentTrack?.genre === 'quran-radio');
-  const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-  const progressPercent = isLive ? 100 : (effectiveDuration > 0 ? Math.min(100, (currentTime / effectiveDuration) * 100) : 0);
   const rawCover = currentTrack?.coverUrl || currentTrack?.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
 
@@ -56,10 +65,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
           onPress={onOpenFullPlayer}
           activeOpacity={0.9}
         >
-        {/* Top Progress Line */}
-        <View style={[styles.progressTrack, !isDark && styles.progressTrackLight]}>
-          <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: isLive ? '#ef4444' : colors.mint }]} />
-        </View>
+        {/* Top Progress Line (Isolated to MiniProgressBar to prevent re-rendering MiniPlayer at 4Hz) */}
+        <MiniProgressBar isLive={isLive} isDark={isDark} defaultDuration={Number(currentTrack?.duration || 240)} />
 
         <View style={styles.contentRow}>
           {/* Cover Art */}
@@ -82,7 +89,7 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
                   <Text style={{ color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text>
                 </View>
               )}
-              {isMixMode && (
+              {Boolean(isMixMode && (currentTrack?.isMix || currentTrack?._isMix || queue?.isMix || queue?._isMix || (queue?.name && String(queue.name).toUpperCase().includes('MIX')))) && (
                 <View style={{ backgroundColor: '#f59e0b', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                   <Text style={{ color: '#0b1110', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>🎛️ MIX</Text>
                 </View>
@@ -192,7 +199,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: Platform.OS === 'android' ? 0 : 8,
   },
   containerLight: {
     backgroundColor: '#ffffff',
@@ -201,7 +208,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
-    elevation: 4,
+    elevation: Platform.OS === 'android' ? 0 : 4,
   },
   progressTrack: {
     height: 2.5,

@@ -17,14 +17,14 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
       togglePlay();
       return;
     }
-    // Play with live flags
+    // Play with live flags and isolate entire radio station queue
     playTrack({
       ...station,
       isLive: true,
       isRadio: true,
       isQuran: true,
       duration: Infinity
-    });
+    }, QURAN_LIVE_STATIONS);
   };
 
   return (

@@ -18,6 +18,7 @@ import ImportSongModal from './ImportSongModal';
 import ChatModal from './ChatModal';
 import ShortcutsModal from './ShortcutsModal';
 import DesktopUpdateModal from './DesktopUpdateModal';
+import SleepTimerModal from './SleepTimerModal';
 
 export default function AppModals({
   audio,
@@ -87,6 +88,8 @@ export default function AppModals({
     setChatTargetUser,
     isShortcutsOpen,
     setIsShortcutsOpen,
+    isSleepTimerOpen,
+    setIsSleepTimerOpen,
     showToast,
   } = useUI();
 
@@ -112,8 +115,6 @@ export default function AppModals({
   const {
     currentTrack,
     isPlaying,
-    currentTime,
-    duration,
     seekTo,
     volume,
     setVolume,
@@ -161,8 +162,6 @@ export default function AppModals({
         toggleDownload={handleDownload}
         isOpen={isFullPlayerOpen}
         onClose={closeFullPlayer}
-        currentTime={currentTime}
-        duration={duration}
         seekTo={seekTo}
         volume={volume}
         setVolume={setVolume}
@@ -365,6 +364,11 @@ export default function AppModals({
       />
 
       <DesktopUpdateModal />
+
+      <SleepTimerModal
+        isOpen={isSleepTimerOpen}
+        onClose={() => setIsSleepTimerOpen(false)}
+      />
     </>
   );
 }

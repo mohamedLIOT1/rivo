@@ -252,7 +252,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
               </View>
             ) : (
               <Text style={[styles.idleText, !isDark && styles.idleTextLight]}>
-                {item.isOnline ? 'Online • Browsing crates' : (item.lastActiveAt ? `Offline • ${formatLastSeen(item.lastActiveAt, false)}` : 'Offline')}
+                {item.isOnline ? 'Online • Browsing crates' : (item.lastActiveAt ? `Offline • ${formatTimeAgo(item.lastActiveAt)}` : 'Offline')}
               </Text>
             )}
           </View>

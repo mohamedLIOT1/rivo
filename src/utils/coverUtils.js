@@ -6,7 +6,23 @@ export const DEFAULT_COVER = 'https://images.unsplash.com/photo-1514525253161-7a
  * Normalizes cover URLs so relative paths (e.g. /uploads/...) resolve
  * against API_BASE_URL instead of tauri.localhost on Windows desktop.
  */
+const coverCache = new Map();
+const MAX_COVER_CACHE = 600;
+
 export function normalizeCoverUrl(cover, track = null) {
+  const cacheKey = (cover || '') + '_' + (track?._id || track?.id || track?.youtubeId || '');
+  if (cacheKey && coverCache.has(cacheKey)) {
+    return coverCache.get(cacheKey);
+  }
+  const result = _computeNormalizeCoverUrl(cover, track);
+  if (cacheKey) {
+    if (coverCache.size >= MAX_COVER_CACHE) coverCache.clear();
+    coverCache.set(cacheKey, result);
+  }
+  return result;
+}
+
+function _computeNormalizeCoverUrl(cover, track = null) {
   // Hardcoded guarantee for ANONYMOUS by TUL8TE & Lege-Cy to prevent wrong cached covers
   const trackTitle = String(track?.title || track?.name || '').trim().toLowerCase();
   const trackArtist = String(track?.artist || '').trim().toLowerCase();

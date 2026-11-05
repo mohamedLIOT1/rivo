@@ -30,6 +30,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import CassetteTag from '../ui/CassetteTag';
@@ -66,8 +67,9 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const genreColumns = width >= 1024 ? 4 : width >= 600 ? 3 : 2;
   const genreCardWidth = Math.floor((width - albumPadding - (genreColumns - 1) * albumGap) / genreColumns);
 
-  const { playTrack, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
-  const { tracks: userTracks, albums: userAlbums = [], fetchPublicTracks } = useUser();
+  const { playTrack, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
+  const { tracks: userTracks, albums: userAlbums = [], likedTrackIds = [], toggleLikeTrack, fetchPublicTracks } = useUser();
+  const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
@@ -81,6 +83,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   };
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
 
   const [query, setQuery] = useState(initialQuery || '');
 
@@ -129,10 +132,11 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       return;
     }
 
+    const controller = new AbortController();
     setIsSearchingRemote(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(trimmed)}`);
+        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           if (data?.success && Array.isArray(data.tracks)) {
@@ -145,6 +149,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      controller.abort();
     };
   }, [query, isOffline, activeFilter]);
 
@@ -165,13 +170,14 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       return;
     }
 
+    const controller = new AbortController();
     setIsSearchingUsers(true);
     userSearchTimeoutRef.current = setTimeout(async () => {
       try {
         const url = trimmed
           ? `${API_BASE_URL}/api/users/search?q=${encodeURIComponent(trimmed)}`
           : `${API_BASE_URL}/api/users/search`;
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           if (data?.success && Array.isArray(data.users)) {
@@ -184,6 +190,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
 
     return () => {
       if (userSearchTimeoutRef.current) clearTimeout(userSearchTimeoutRef.current);
+      controller.abort();
     };
   }, [query, activeFilter, isOffline]);
 
@@ -336,22 +343,36 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const hasSearch = query.trim().length > 0 || Boolean(selectedGenre);
 
   const handlePlaySong = useCallback((track) => {
-    playTrack(track, filteredTracks);
-  }, [playTrack, filteredTracks]);
+    playTrack(track, [track]);
+  }, [playTrack]);
 
   const handleSongMorePress = useCallback((track) => {
     if (onTrackAction) onTrackAction(track);
   }, [onTrackAction]);
 
-  const renderSongItem = useCallback(({ item, index }) => (
-    <SongItem
-      key={item._id || item.id || index}
-      track={item}
-      index={index + 1}
-      onPlay={handlePlaySong}
-      onMorePress={handleSongMorePress}
-    />
-  ), [handlePlaySong, handleSongMorePress]);
+  const handleToggleLike = useCallback((id) => {
+    toggleLikeTrack && toggleLikeTrack(id);
+  }, [toggleLikeTrack]);
+
+  const renderSongItem = useCallback(({ item, index }) => {
+    const itemId = String(item._id || item.id || '');
+    const isCurrent = curTrackId !== '' && curTrackId === itemId;
+    return (
+      <SongItem
+        key={itemId || index}
+        track={item}
+        index={index + 1}
+        isCurrent={isCurrent}
+        isPlaying={isCurrent && isPlaying}
+        isLoading={isCurrent && isLoading}
+        isLiked={Array.isArray(likedTrackIds) ? likedTrackIds.includes(itemId) : false}
+        onPlay={handlePlaySong}
+        onMorePress={handleSongMorePress}
+        onToggleLike={handleToggleLike}
+        isDark={isDark}
+      />
+    );
+  }, [curTrackId, isPlaying, isLoading, likedTrackIds, handlePlaySong, handleSongMorePress, handleToggleLike, isDark]);
 
   const isShowingSongs = hasSearch && (activeFilter === 'all' || activeFilter === 'songs');
   const songData = useMemo(() => {
@@ -365,7 +386,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         <View style={styles.genresSection}>
           <View style={styles.sectionTitleRow}>
             <Disc size={16} color={colors.mint} />
-            <Text style={styles.sectionHeading}>POPULAR GENRES & MOODS</Text>
+            <Text style={styles.sectionHeading}>{t('search.genresMoods')}</Text>
           </View>
 
           <View style={styles.genresGrid}>
@@ -395,7 +416,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           <View style={styles.sectionTitleRow}>
             <Users size={16} color="#06b6d4" strokeWidth={2.4} />
             <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-              PEOPLE & LISTENERS
+              {t('search.peopleListeners')}
             </Text>
             <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
               <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
@@ -409,8 +430,8 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             activeFilter === 'people' && (
               <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
                 <Users size={36} color="#06b6d4" />
-                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No listeners found.</Text>
-                <Text style={styles.emptySub}>Try searching with a different user name.</Text>
+                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>{t('search.noListenersFound')}</Text>
+                <Text style={styles.emptySub}>{t('search.noListenersSub')}</Text>
               </View>
             )
           ) : (
@@ -436,6 +457,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                         <Image
                           source={{ uri: normalizeCoverUri(u.avatar) }}
                           style={styles.personAvatar}
+                          fadeDuration={0}
                         />
                       ) : (
                         <View style={styles.personAvatarFallback}>
@@ -476,7 +498,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           <View style={styles.sectionTitleRow}>
             <Users size={16} color="#17a398" strokeWidth={2.4} />
             <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-              ARTISTS
+              {t('search.artists')}
             </Text>
             <View style={styles.countBadge}>
               <Text style={styles.countBadgeText}>{matchingArtists.length}</Text>
@@ -498,6 +520,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                       source={{ uri: normalizeCoverUri(coverUri) }}
                       style={styles.artistAvatar}
                       resizeMode="cover"
+                      fadeDuration={0}
                     />
                   </View>
                   <Text style={[styles.artistName, !isDark && styles.artistNameLight]} numberOfLines={1}>
@@ -519,7 +542,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           <View style={styles.sectionTitleRow}>
             <Layers size={16} color="#f59e0b" strokeWidth={2.4} />
             <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
-              ALBUMS
+              {t('search.albums')}
             </Text>
             <View style={[styles.countBadge, { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: '#f59e0b' }]}>
               <Text style={[styles.countBadgeText, { color: '#f59e0b' }]}>{matchingAlbums.length}</Text>
@@ -544,6 +567,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                       source={{ uri: normalizeCoverUri(coverUri) }}
                       style={styles.albumCover}
                       resizeMode="cover"
+                      fadeDuration={0}
                     />
                   </View>
                   <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
@@ -563,7 +587,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       {isShowingSongs && filteredTracks.length > 0 && (
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsCount}>
-            FOUND {filteredTracks.length} SONGS
+            {t('search.foundSongs', { count: filteredTracks.length })}
           </Text>
         </View>
       )}
@@ -594,7 +618,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         activeOpacity={0.8}
       >
         <Text style={styles.loadMoreText}>
-          SHOW MORE ({filteredTracks.length - visibleSongLimit} MORE TRACKS)
+          {t('search.showMore', { count: filteredTracks.length - visibleSongLimit })}
         </Text>
       </TouchableOpacity>
     );
@@ -605,8 +629,8 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     return (
       <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
         <Disc size={36} color={colors.teal} />
-        <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>No matching songs found.</Text>
-        <Text style={styles.emptySub}>Try searching for another artist, album or track title.</Text>
+        <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>{t('search.noSongsFound')}</Text>
+        <Text style={styles.emptySub}>{t('search.noSongsSub')}</Text>
       </View>
     );
   }, [isShowingSongs, filteredTracks.length, isDark, colors.teal]);
@@ -616,15 +640,15 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       {/* Header & Search Bar */}
       <View style={[styles.searchHeader, !isDark && styles.searchHeaderLight]}>
         <View style={styles.headerTitleRow}>
-          <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]}>EXPLORE & SEARCH</Text>
-          <CassetteTag label={isOffline ? 'OFFLINE SONGS' : 'ONLINE'} bg={colors.ink} textColor={colors.mint} />
+          <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]}>{t('search.exploreSearch')}</Text>
+          <CassetteTag label={isOffline ? t('search.offlineSongs') : t('search.onlineSongs')} bg={colors.ink} textColor={colors.mint} />
         </View>
 
         <View style={[styles.inputContainer, !isDark && styles.inputContainerLight]}>
           <SearchIcon size={18} color={!isDark ? '#0b1110' : colors.ink} style={styles.searchIcon} />
           <TextInput
             style={[styles.searchInput, !isDark && { color: '#0b1110' }]}
-            placeholder="Search songs, artists, albums..."
+            placeholder={t('search.placeholder')}
             placeholderTextColor={!isDark ? '#78716c' : colors.grayText}
             value={query}
             onChangeText={(txt) => {
@@ -673,7 +697,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               activeOpacity={0.8}
             >
               <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'all' && styles.filterPillTextActive]}>
-                ALL
+                {t('search.filterAll')}
               </Text>
             </TouchableOpacity>
 
@@ -684,7 +708,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             >
               <Music size={12} color={activeFilter === 'songs' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
               <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'songs' && styles.filterPillTextActive]}>
-                SONGS ({filteredTracks.length})
+                {t('search.filterSongs', { count: filteredTracks.length })}
               </Text>
             </TouchableOpacity>
 
@@ -695,7 +719,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             >
               <Users size={12} color={activeFilter === 'artists' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
               <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'artists' && styles.filterPillTextActive]}>
-                ARTISTS ({matchingArtists.length})
+                {t('search.artists')} ({matchingArtists.length})
               </Text>
             </TouchableOpacity>
 
@@ -706,7 +730,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             >
               <Layers size={12} color={activeFilter === 'albums' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
               <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'albums' && styles.filterPillTextActive]}>
-                ALBUMS ({matchingAlbums.length})
+                {t('search.albums')} ({matchingAlbums.length})
               </Text>
             </TouchableOpacity>
 
@@ -717,7 +741,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             >
               <Users size={12} color={activeFilter === 'people' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
               <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'people' && styles.filterPillTextActive]}>
-                PEOPLE ({userResults.length})
+                {t('search.filterPeople', { count: userResults.length })}
               </Text>
             </TouchableOpacity>
           </ScrollView>
@@ -733,9 +757,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={8}
-        windowSize={5}
+        initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+        windowSize={Platform.OS === 'android' ? 3 : 5}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl
@@ -757,8 +782,12 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           onTrackAction={onTrackAction}
           onOpenFullPlayer={onOpenFullPlayer}
           onSelectArtist={(artistName) => {
-            setSelectedAlbum(null);
-            setSelectedArtist({ name: artistName });
+            if (onSelectArtist) {
+              onSelectArtist(artistName);
+            } else {
+              setSelectedAlbum(null);
+              setSelectedArtist(typeof artistName === 'object' ? artistName : { name: artistName });
+            }
           }}
         />
       )}

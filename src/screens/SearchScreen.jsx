@@ -305,7 +305,7 @@ export default function SearchScreen({
   };
 
   const handlePlayOnlineTrack = (track) => {
-    onSelectTrack(track, [...localFiltered, ...onlineResults]);
+    onSelectTrack(track, [track]);
   };
 
   return (
@@ -957,7 +957,7 @@ export default function SearchScreen({
                         {localFiltered.map((track, idx) => (
                           <div
                             key={track.id || track._id || idx}
-                            onClick={() => onSelectTrack(track, localFiltered)}
+                            onClick={() => onSelectTrack(track, [track])}
                             className={`flex items-center justify-between p-3 brutal-border transition-transform hover:translate-x-1 cursor-pointer group ${
                               isDark 
                                 ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#202f2b]' 
@@ -1015,7 +1015,7 @@ export default function SearchScreen({
                               <button
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  onSelectTrack(track, localFiltered); 
+                                  onSelectTrack(track, [track]); 
                                 }}
                                 className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer"
                                 title="Play"

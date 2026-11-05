@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { getOfflineTracks, removeTrackOffline } from '../utils/offlineStorage';
 import { isUserAdmin } from '../utils/adminUtils';
 import { normalizeCoverUrl } from '../utils/coverUtils';
@@ -615,7 +615,7 @@ export function UserProvider({ children }) {
     return { success: true };
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     currentUser, setCurrentUser, login, logout,
     tracks, setTracks,
     playlists, setPlaylists,
@@ -631,7 +631,22 @@ export function UserProvider({ children }) {
     isSyncing,
     syncFromServer,
     API_BASE_URL: API,
-  };
+  }), [
+    currentUser, login, logout,
+    tracks,
+    playlists,
+    likedTrackIds,
+    toggleLike,
+    followedArtists,
+    toggleFollowArtist, isFollowingArtist,
+    deleteTrack,
+    deletePlaylist,
+    savePublicPlaylist,
+    unsavePublicPlaylist,
+    removeTrackFromPlaylist,
+    isSyncing,
+    syncFromServer,
+  ]);
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 }

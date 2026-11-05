@@ -17,12 +17,15 @@ import {
   Info
 } from 'lucide-react';
 import { APP_VERSION } from '../version';
+import { usePreferences } from '../context/PreferencesContext';
 
 export default function DownloadScreen({ globalTheme = 'dark' }) {
   const [detectedOs, setDetectedOs] = useState('windows');
   const [showIosGuide, setShowIosGuide] = useState(false);
   const [platformVersions, setPlatformVersions] = useState(null);
   const isDark = globalTheme === 'dark';
+  const { language, isRTL } = usePreferences();
+  const isAr = language === 'ar';
 
   useEffect(() => {
     let active = true;
@@ -59,7 +62,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
   const apps = [
     {
       id: 'windows',
-      name: 'Rivo for Windows',
+      name: isAr ? 'ريفو لويندوز' : 'Rivo for Windows',
       osLabel: 'Windows 10 / 11 (64-bit)',
       badge: 'NATIVE DESKTOP',
       version: `v${winVer}`,
@@ -68,7 +71,13 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       icon: Monitor,
       downloadUrl: platformVersions?.windows?.downloadUrl || '/downloads/Rivo.exe',
       directName: `Rivo-v${winVer}.exe`,
-      highlights: [
+      highlights: isAr ? [
+        'مزامنة فورية لحالة الاستماع مع ديسكورد بدون إضافات',
+        'أزرار تحكم مدمجة في شريط المهام وشاشة القفل',
+        'تحديثات تلقائية فورية دون الحاجة لإعادة التثبيت',
+        'حفظ المقاطع تلقائياً في مجلد التنزيلات المحلي',
+        'حزمة متكاملة بدون متطلبات تشغيل ناقصة'
+      ] : [
         'Official Discord Rich Presence sync (No extensions needed)',
         'Native Windows media session & taskbar playback controls',
         'Automatic in-place self-updater without website redirects',
@@ -79,7 +88,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
     },
     {
       id: 'android',
-      name: 'Rivo for Android',
+      name: isAr ? 'ريفو للأندرويد' : 'Rivo for Android',
       osLabel: 'Android 8.0 & Above',
       badge: 'HYBRID HI-FI',
       version: `v${androidVer}`,
@@ -88,7 +97,12 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       icon: Smartphone,
       downloadUrl: platformVersions?.android?.downloadUrl || '/downloads/Rivo.apk',
       directName: `Rivo-v${androidVer}.apk`,
-      highlights: [
+      highlights: isAr ? [
+        'واجهة ريفو الكاملة: جميع القوائم والملف الشخصي ونشاط الأصدقاء',
+        'محادثات فورية، غرف بث مباشر Jam، ومزامنة ديسكورد',
+        'تحكم كامل من شاشة القفل والتشغيل المتواصل في الخلفية',
+        'خزنة كاملة للاستماع والتشغيل بدون اتصال بالإنترنت'
+      ] : [
         'Complete Rivo Web UI: all playlists, full profile & Friend Activity',
         'Real-time Chat, Live Jam Rooms & Discord Rich Presence sync',
         'Lock screen controls & background audio streaming',
@@ -98,7 +112,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
     },
     {
       id: 'ios',
-      name: 'Rivo for iOS',
+      name: isAr ? 'ريفو للآيفون (iOS)' : 'Rivo for iOS',
       osLabel: 'iOS 15.0 & Above',
       badge: 'HYBRID HI-FI',
       version: `v${iosVer}`,
@@ -107,7 +121,13 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       icon: Apple,
       downloadUrl: platformVersions?.ios?.downloadUrl || '/downloads/Rivo.ipa',
       directName: `Rivo-v${iosVer}.ipa`,
-      highlights: [
+      highlights: isAr ? [
+        'واجهة ريفو الكاملة بتصميم فائق الخفة والسرعة',
+        'ملف شخصي، دردشة لحظية، وبث Jam مباشر',
+        'مزامنة حالة التشغيل على ديسكورد فورياً',
+        'دعم عناصر تحكم Apple والتشغيل في الخلفية',
+        'خزنة تشغيل محلية للمقاطع بدون اتصال بالإنترنت'
+      ] : [
         'Complete Rivo Web UI: 100% web design, all playlists & songs',
         'Full Profile, real-time Chat, Live Jam & Friend Activity',
         'Live Discord Rich Presence sync across devices',
@@ -133,27 +153,32 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
         <div className="relative z-10 max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-sm border mb-4 bg-teal-500/10 border-teal-500/30 text-teal-400 font-mono text-xs font-bold tracking-wider uppercase">
             <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-            Official Multi-Platform Releases
+            {isAr ? 'الإصدارات الرسمية لجميع الأجهزة' : 'Official Multi-Platform Releases'}
           </div>
 
           <h1 className={`text-3xl md:text-5xl font-black tracking-tight mb-4 uppercase ${isDark ? 'text-white' : 'text-[#0f2824]'}`}>
-            GET <span className="text-[#17a398]">RIVO</span> ON ANY DEVICE
+            {isAr ? (
+              <>حمّل تطبيق <span className="text-[#17a398]">ريفو</span> على جميع أجهزتك</>
+            ) : (
+              <>GET <span className="text-[#17a398]">RIVO</span> ON ANY DEVICE</>
+            )}
           </h1>
 
           <p className={`text-sm md:text-base leading-relaxed mb-6 font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
-            Experience crystal-clear 24-bit Hi-Fi music streaming, seamless background playback, offline caching, 
-            and official Discord Rich Presence sync across all your devices.
+            {isAr 
+              ? 'استمتع بدقة صوت فائقة 24-بت بدون إعلانات مع تشغيل سلس في الخلفية ومزامنة ديسكورد وحفظ بدون إنترنت عبر كافة أجهزتك.' 
+              : 'Experience crystal-clear 24-bit Hi-Fi music streaming, seamless background playback, offline caching, and official Discord Rich Presence sync across all your devices.'}
           </p>
 
           <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
             <div className="flex items-center gap-1.5 text-teal-400 font-bold">
-              <CheckCircle className="w-4 h-4" /> Zero Ads & Uncapped Bitrate
+              <CheckCircle className="w-4 h-4" /> {isAr ? 'بدون إعلانات وبأعلى دقة صوتية' : 'Zero Ads & Uncapped Bitrate'}
             </div>
             <div className="flex items-center gap-1.5 text-teal-400 font-bold">
-              <CheckCircle className="w-4 h-4" /> Native Audio Controls
+              <CheckCircle className="w-4 h-4" /> {isAr ? 'تحكم صوتي مدمج بالنظام' : 'Native Audio Controls'}
             </div>
             <div className="flex items-center gap-1.5 text-teal-400 font-bold">
-              <CheckCircle className="w-4 h-4" /> In-App Auto-Updates
+              <CheckCircle className="w-4 h-4" /> {isAr ? 'تحديثات تلقائية فورية' : 'In-App Auto-Updates'}
             </div>
           </div>
         </div>
@@ -182,8 +207,8 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
               }`}
             >
               {app.isRecommended && (
-                <div className="absolute -top-3 left-6 px-2.5 py-0.5 bg-[#17a398] text-black font-mono font-black text-[10px] tracking-wider uppercase shadow-[2px_2px_0px_#000]">
-                  ★ RECOMMENDED FOR YOUR DEVICE
+                <div className={`absolute -top-3 px-2.5 py-0.5 bg-[#17a398] text-black font-mono font-black text-[10px] tracking-wider uppercase shadow-[2px_2px_0px_#000] ${isAr ? 'right-6' : 'left-6'}`}>
+                  {isAr ? '★ موصى به لجهازك' : '★ RECOMMENDED FOR YOUR DEVICE'}
                 </div>
               )}
 
@@ -232,7 +257,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
                   }`}
                 >
                   <Download className="w-4 h-4" />
-                  DOWNLOAD {app.fileType}
+                  {isAr ? `تحميل (${app.fileType})` : `DOWNLOAD ${app.fileType}`}
                 </a>
 
                 {app.id === 'ios' && (
@@ -241,7 +266,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
                     className="w-full mt-2.5 flex items-center justify-center gap-1.5 text-[11px] font-mono text-[#17a398] hover:underline"
                   >
                     <Info className="w-3.5 h-3.5" />
-                    How to install on iPhone?
+                    {isAr ? 'كيفية التثبيت على الآيفون؟' : 'How to install on iPhone?'}
                     {showIosGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
                 )}
@@ -255,23 +280,31 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       {showIosGuide && (
         <div className={`brutal-border p-6 mb-12 shadow-[4px_4px_0px_#000] ${isDark ? 'bg-[#0f1918] border-[#1f2e2c]' : 'bg-amber-50 border-amber-300'}`}>
           <h4 className="text-base font-bold text-teal-400 mb-2 uppercase font-mono flex items-center gap-2">
-            <Apple className="w-4 h-4" /> Installing Rivo on iOS (No Jailbreak Required)
+            <Apple className="w-4 h-4" /> {isAr ? 'تثبيت ريفو على الآيفون (بدون جلبريك)' : 'Installing Rivo on iOS (No Jailbreak Required)'}
           </h4>
-          <p className="text-xs text-slate-300 mb-4 leading-relaxed">
-            Because Apple restricts direct IPA installation from Safari, you can install the Rivo IPA easily using any free sideloading utility:
+          <p className={`text-xs mb-4 leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>
+            {isAr
+              ? 'نظراً لقيود آبل على التحميل المباشر من Safari، يمكنك تثبيت ملف Rivo.ipa بسهولة باستخدام أي أداة تثبيت مجانية:'
+              : 'Because Apple restricts direct IPA installation from Safari, you can install the Rivo IPA easily using any free sideloading utility:'}
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
             <div className="p-3 bg-black/30 border border-white/5 rounded">
-              <span className="text-teal-400 font-bold block mb-1">1. Scarlet (Direct Sideload)</span>
-              Download directly without computer at <a href="https://usescarlet.com" target="_blank" rel="noreferrer" className="text-teal-300 underline">usescarlet.com</a>, then import Rivo.ipa.
+              <span className="text-teal-400 font-bold block mb-1">{isAr ? '1. سكارلت (تثبيت مباشر)' : '1. Scarlet (Direct Sideload)'}</span>
+              {isAr
+                ? <>حمّل الأداة مباشرة بدون كمبيوتر عبر <a href="https://usescarlet.com" target="_blank" rel="noreferrer" className="text-teal-300 underline">usescarlet.com</a> ثم استورد ملف Rivo.ipa.</>
+                : <>Download directly without computer at <a href="https://usescarlet.com" target="_blank" rel="noreferrer" className="text-teal-300 underline">usescarlet.com</a>, then import Rivo.ipa.</>}
             </div>
             <div className="p-3 bg-black/30 border border-white/5 rounded">
-              <span className="text-teal-400 font-bold block mb-1">2. AltStore (PC / Mac)</span>
-              Free and official sideloading tool. Open AltStore on your phone and choose "Install IPA".
+              <span className="text-teal-400 font-bold block mb-1">{isAr ? '2. ألت ستور (كمبيوتر / ماك)' : '2. AltStore (PC / Mac)'}</span>
+              {isAr
+                ? 'أداة تثبيت رسمية مجانية ومفتوحة المصدر. افتح AltStore على هاتفك واختر تثبيت IPA.'
+                : 'Free and official sideloading tool. Open AltStore on your phone and choose "Install IPA".'}
             </div>
             <div className="p-3 bg-black/30 border border-white/5 rounded">
-              <span className="text-teal-400 font-bold block mb-1">3. Sideloadly / TrollStore</span>
-              Drag and drop Rivo.ipa into Sideloadly with your Apple ID for permanent signing.
+              <span className="text-teal-400 font-bold block mb-1">{isAr ? '3. سايد لودلي / ترول ستور' : '3. Sideloadly / TrollStore'}</span>
+              {isAr
+                ? 'اسحب ملف Rivo.ipa داخل Sideloadly باستخدام حساب Apple ID الخاص بك للشهادة الدائمة.'
+                : 'Drag and drop Rivo.ipa into Sideloadly with your Apple ID for permanent signing.'}
             </div>
           </div>
         </div>
@@ -286,15 +319,21 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
               <RefreshCw className="w-5 h-5" />
             </div>
             <div>
-              <h4 className="font-bold text-sm text-white uppercase">Built-in Update Engine</h4>
-              <p className="text-xs text-slate-400 font-mono">Zero Maintenance Required</p>
+              <h4 className="font-bold text-sm text-white uppercase">
+                {isAr ? 'محرك التحديث التلقائي الفوري' : 'Built-in Update Engine'}
+              </h4>
+              <p className="text-xs text-slate-400 font-mono">
+                {isAr ? 'تشغيل وتحديث فوري بدون أي صيانة يدوية' : 'Zero Maintenance Required'}
+              </p>
             </div>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed mb-4">
-            Every release of Rivo checks for updates seamlessly upon startup. When a new version is released, the app prompts you with a 1-click update option.
+            {isAr
+              ? 'يتحقق ريفو تلقائياً من وجود تحديثات جديدة عند بدء التشغيل. عند توفر إصدار جديد، يظهر لك إشعار للتحديث الفوري بنقرة واحدة.'
+              : 'Every release of Rivo checks for updates seamlessly upon startup. When a new version is released, the app prompts you with a 1-click update option.'}
           </p>
           <div className="flex items-center gap-2 text-xs font-mono text-emerald-400">
-            <ShieldCheck className="w-4 h-4" /> Always verified against official Rivo releases.
+            <ShieldCheck className="w-4 h-4" /> {isAr ? 'يتم التحقق دائماً وتوقيع الحزم رسمياً من خوادم ريفو.' : 'Always verified against official Rivo releases.'}
           </div>
         </div>
       </div>

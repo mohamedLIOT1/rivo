@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  FlatList,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -39,6 +40,10 @@ import { matchesArtist, getCanonicalArtistName, getArtistAliasNote } from '../..
 import MiniPlayer from './MiniPlayer';
 import AddAlbumModal from './AddAlbumModal';
 import EditArtistModal from './EditArtistModal';
+import { styles } from './artist/artistDetailStyles';
+import ArtistHeroSection from './artist/ArtistHeroSection';
+import ArtistAlbumsSection from './artist/ArtistAlbumsSection';
+import { useArtistDetailData } from './artist/useArtistDetailData';
 
 
 const { width } = Dimensions.get('window');
@@ -99,138 +104,19 @@ export default function ArtistDetailModal({
   const artistKey = artistName.toLowerCase();
   const aliasNote = useMemo(() => getArtistAliasNote(artistName), [artistName]);
 
-  const [remoteTracks, setRemoteTracks] = useState([]);
-  const [remoteAlbums, setRemoteAlbums] = useState([]);
-
-  useEffect(() => {
-    if (!visible || !artistName) {
-      setRemoteTracks([]);
-      setRemoteAlbums([]);
-      return;
-    }
-    let isMounted = true;
-    (async () => {
-      try {
-        const cleanName = encodeURIComponent(artistName);
-        const [trRes, albRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/tracks?artist=${cleanName}`),
-          fetch(`${API_BASE_URL}/api/albums?artist=${cleanName}`)
-        ]);
-        if (trRes.ok) {
-          const trData = await trRes.json();
-          const list = Array.isArray(trData) ? trData : (trData.tracks || []);
-          if (isMounted && list.length > 0) setRemoteTracks(list);
-        }
-        if (albRes.ok) {
-          const albData = await albRes.json();
-          const list = Array.isArray(albData) ? albData : (albData.albums || []);
-          if (isMounted && list.length > 0) setRemoteAlbums(list);
-        }
-      } catch (err) {
-        console.warn('ArtistDetailModal fetch error:', err);
-      }
-    })();
-    return () => { isMounted = false; };
-  }, [visible, artistName]);
-
-  // Filter local artist tracks (supporting aliases, multiple artists per track)
-  const effectiveAllTracks = (allTracks && allTracks.length > 0) ? allTracks : INITIAL_TRACKS;
-  const artistTracks = useMemo(() => {
-    if (!artistName) return [];
-    return (effectiveAllTracks || []).filter((t) => {
-      if (!t || !t.artist) return false;
-      return matchesArtist(t, artist) || matchesArtist(t, artistName) || matchesArtist(t, rawArtistName) || t.artist.toLowerCase().includes(artistKey);
-    });
-  }, [effectiveAllTracks, artist, artistName, rawArtistName, artistKey]);
-
-  // Merge local tracks + remote database tracks deduplicated
-  const finalTracks = useMemo(() => {
-    const map = new Map();
-    artistTracks.forEach(t => {
-      const id = String(t.id || t._id || t.title);
-      map.set(id, t);
-    });
-    remoteTracks.forEach(t => {
-      const id = String(t.id || t._id || t.title);
-      if (!map.has(id)) {
-        map.set(id, t);
-      } else {
-        map.set(id, { ...map.get(id), ...t });
-      }
-    });
-    return Array.from(map.values());
-  }, [artistTracks, remoteTracks]);
-
-  // Discography Albums for this artist strictly like Web ArtistScreen.jsx
-  const combinedAlbums = useMemo(() => {
-    const map = new Map();
-    (remoteAlbums || []).forEach(a => {
-      if (!a) return;
-      const key = (a.name || a.title || '').toLowerCase().trim();
-      if (key) map.set(key, a);
-    });
-    (allAlbums || []).forEach(a => {
-      if (!a) return;
-      const key = (a.name || a.title || '').toLowerCase().trim();
-      if (key && !map.has(key)) map.set(key, a);
-    });
-    return Array.from(map.values());
-  }, [remoteAlbums, allAlbums]);
-
-  const finalAlbums = useMemo(() => {
-    if (!artistName) return [];
-    const albumMap = new Map();
-
-    combinedAlbums.forEach(a => {
-      if (!a || !a.artist) return;
-      if (
-        matchesArtist(a, artist) ||
-        matchesArtist(a, artistName) ||
-        matchesArtist(a, rawArtistName) ||
-        a.artist.trim().toLowerCase() === artistKey ||
-        a.artist.toLowerCase().includes(artistKey)
-      ) {
-        // Collect all tracks belonging to this album from finalTracks
-        const matchingTracks = finalTracks.filter(t => {
-          if (!t) return false;
-          const tId = String(t.id || t._id || '');
-          const inIds = Array.isArray(a.trackIds) && a.trackIds.map(String).includes(tId);
-          const tAlb = (t.album || '').trim().toLowerCase();
-          const aName = (a.name || a.title || '').trim().toLowerCase();
-          return inIds || (tAlb && aName && tAlb === aName);
-        });
-
-        const allTrackIds = Array.from(new Set([
-          ...(Array.isArray(a.trackIds) ? a.trackIds.map(String) : []),
-          ...matchingTracks.map(t => String(t.id || t._id))
-        ]));
-
-        const resolvedCover = a.cover || a.coverUrl || matchingTracks[0]?.cover || matchingTracks[0]?.coverUrl;
-        const key = (a.name || a.title || '').toLowerCase().trim();
-
-        if (key && !albumMap.has(key)) {
-          albumMap.set(key, {
-            ...a,
-            id: a.id || a._id,
-            name: a.name || a.title,
-            artist: a.artist || artistName,
-            tracks: matchingTracks,
-            trackIds: allTrackIds,
-            trackCount: Math.max(allTrackIds.length, matchingTracks.length, a.trackCount || 0, a.songsCount || 0),
-            cover: resolvedCover,
-            isAlbum: true,
-            isPublic: true,
-          });
-        }
-      }
-    });
-
-    return Array.from(albumMap.values());
-  }, [combinedAlbums, finalTracks, artistKey, artistName, rawArtistName, artist]);
-
-    const artistCover = (typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl))
-    ? (artist.avatar || artist.cover || artist.coverUrl)
-    : (finalTracks[0]?.coverUrl || finalTracks[0]?.cover || '');
+  const {
+    finalTracks,
+    finalAlbums,
+    artistCover,
+  } = useArtistDetailData({
+    artist,
+    artistName,
+    rawArtistName,
+    artistKey,
+    visible,
+    allTracks,
+    allAlbums,
+  });
 
   const handlePlayAll = (shuffle = false) => {
     if (finalTracks.length === 0) return;
@@ -259,7 +145,7 @@ export default function ArtistDetailModal({
     if (visible) {
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 220,
+        duration: Platform.OS === 'android' ? 0 : 220,
         useNativeDriver: true,
       }).start();
     }
@@ -268,7 +154,7 @@ export default function ArtistDetailModal({
   const handleClose = () => {
     Animated.timing(slideAnim, {
       toValue: SCREEN_HEIGHT,
-      duration: 180,
+      duration: Platform.OS === 'android' ? 0 : 180,
       useNativeDriver: true,
     }).start(() => {
       onClose && onClose();
@@ -285,6 +171,82 @@ export default function ArtistDetailModal({
   }, [visible]);
   if (!visible || !artistName) return null;
 
+  const renderTrackItem = React.useCallback(({ item: t, index }) => {
+    const trackId = String(t._id || t.id || '');
+    const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
+    const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
+    const isDl = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(
+      (d) => String(d._id || d.id) === trackId
+    ) || Boolean(t.isDownloaded || t.localAudioUri);
+
+    const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
+    const trackCover = normalizeCoverUri(t.coverUrl || t.cover || artistCover);
+
+    return (
+      <View style={{ paddingHorizontal: 16 }}>
+        <TouchableOpacity
+          key={trackId || index}
+          style={[styles.trackRow, isCurrent && styles.trackRowActive]}
+          onPress={() => {
+            if (isCurrent) {
+              if (handleOpenFull) {
+                handleOpenFull();
+              } else {
+                playTrack(t, finalTracks);
+              }
+            } else {
+              playTrack(t, finalTracks);
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
+            {numStr}
+          </Text>
+          <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
+          <View style={styles.trackDetails}>
+            <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
+              {t.title || 'Untitled Track'}
+            </Text>
+            <Text style={[styles.trackArtist, !isDark && styles.trackArtistLight]} numberOfLines={1}>
+              {t.artist || artistName}
+            </Text>
+          </View>
+          <Text style={styles.trackDuration}>{formatDuration(t.duration)}</Text>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => downloadTrack && downloadTrack(t)}
+            activeOpacity={0.7}
+          >
+            {isDl ? (
+              <CheckCircle2 size={16} color="#17a398" />
+            ) : (
+              <Download size={16} color="#6b7280" />
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => toggleLikeTrack && toggleLikeTrack(trackId)}
+            activeOpacity={0.7}
+          >
+            <Heart
+              size={16}
+              color={isLiked ? '#dc2626' : '#6b7280'}
+              fill={isLiked ? '#dc2626' : 'transparent'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => handleTrackAction(t)}
+            activeOpacity={0.7}
+          >
+            <MoreVertical size={16} color="#9ca3af" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [currentTrack, likedTrackIds, downloadedTracks, artistCover, artistName, isDark, handleOpenFull, playTrack, finalTracks, downloadTrack, toggleLikeTrack, handleTrackAction]);
+
   return (
     <Animated.View
       style={[
@@ -298,261 +260,65 @@ export default function ArtistDetailModal({
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar matching Image 2 */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={handleClose} style={styles.backBtn} activeOpacity={0.8}>
-            <ArrowLeft size={20} color="#fdfbf7" strokeWidth={2.5} />
-            <Text style={styles.backText}>BACK</Text>
+          <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight]} activeOpacity={0.8}>
+            <ArrowLeft size={20} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} />
+            <Text style={[styles.backText, !isDark && styles.backTextLight]}>BACK</Text>
           </TouchableOpacity>
         </View>
 
-        <ScrollView
+        <FlatList
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-        >
-          {/* Hero Section matching Image 2 */}
-          <View style={styles.heroSection}>
-            {/* Centered Big Artist Image */}
-            <View style={styles.avatarWrapper}>
-              <Image
-                source={{ uri: normalizeCoverUri(artistCover) }}
-                style={styles.avatarImg}
-                resizeMode="cover"
+          data={finalTracks}
+          keyExtractor={(t, idx) => String(t._id || t.id || idx)}
+          renderItem={renderTrackItem}
+          ListHeaderComponent={(
+            <View>
+              <ArtistHeroSection
+                artistCover={artistCover}
+                artistName={artistName}
+                finalTracksCount={finalTracks.length}
+                finalAlbumsCount={finalAlbums.length}
+                isDark={isDark}
+                isFollowing={isFollowing}
+                setIsFollowing={setIsFollowing}
+                handlePlayAll={handlePlayAll}
+                addToQueue={addToQueue}
+                finalTracks={finalTracks}
+                isAdmin={isAdmin}
+                setIsAddAlbumOpen={setIsAddAlbumOpen}
+                setIsEditArtistOpen={setIsEditArtistOpen}
+                styles={styles}
               />
-            </View>
 
-            {/* Verified Artist Badge */}
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedText}>VERIFIED ARTIST</Text>
-              <CheckCircle2 size={12} color="#17a398" style={{ marginLeft: 4 }} />
-            </View>
+              <ArtistAlbumsSection
+                finalAlbums={finalAlbums}
+                isAdmin={isAdmin}
+                isDark={isDark}
+                artistCover={artistCover}
+                setIsAddAlbumOpen={setIsAddAlbumOpen}
+                onSelectAlbum={onSelectAlbum}
+                styles={styles}
+              />
 
-            {/* Large Artist Name */}
-            <Text style={styles.artistName} numberOfLines={2}>
-              {artistName}
-            </Text>
-
-            {/* Counter Pills */}
-            <View style={styles.metaPill}>
-              <Text style={styles.metaPillText}>{finalTracks.length} Tracks</Text>
-              <Text style={styles.metaDot}>•</Text>
-              <Text style={styles.metaPillText}>{finalAlbums.length} Albums</Text>
-            </View>
-
-            {/* Action Buttons Row */}
-            <View style={styles.actionRow}>
-              {/* Big Yellow Play Button */}
-              <TouchableOpacity
-                style={styles.playBtn}
-                onPress={() => handlePlayAll(false)}
-                activeOpacity={0.85}
-              >
-                <Play size={20} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
-              </TouchableOpacity>
-
-              {/* Queue All */}
-              <TouchableOpacity
-                style={styles.queueBtn}
-                onPress={() => {
-                  if (addToQueue && finalTracks.length > 0) addToQueue(finalTracks);
-                }}
-                activeOpacity={0.8}
-              >
-                <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
-                <Text style={styles.queueBtnText}>QUEUE ALL</Text>
-              </TouchableOpacity>
-
-              {/* Follow / Following */}
-              <TouchableOpacity
-                style={[styles.followBtn, isFollowing && styles.followBtnActive]}
-                onPress={() => setIsFollowing(!isFollowing)}
-                activeOpacity={0.8}
-              >
-                {isFollowing ? (
-                  <Check size={14} color="#0b1110" strokeWidth={3} />
-                ) : (
-                  <UserPlus size={14} color="#fdfbf7" strokeWidth={2.2} />
-                )}
-                <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
-                  {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Admin Controls Dedicated Row — never pushes outside screen bounds */}
-            {isAdmin && (
-              <View style={styles.adminActionRow}>
-                <TouchableOpacity
-                  style={styles.addAlbumHeroBtn}
-                  onPress={() => setIsAddAlbumOpen(true)}
-                  activeOpacity={0.8}
-                >
-                  <Plus size={13} color="#0b1110" strokeWidth={2.8} />
-                  <Text style={styles.addAlbumHeroBtnText}>ADD ALBUM</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.editArtistHeroBtn}
-                  onPress={() => setIsEditArtistOpen(true)}
-                  activeOpacity={0.8}
-                >
-                  <Edit size={13} color="#0b1110" strokeWidth={2.5} />
-                  <Text style={styles.editArtistHeroBtnText}>EDIT ARTIST PAGE</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          {/* Discography / Albums Section matching Image 2 */}
-          {(finalAlbums.length > 0 || isAdmin) && (
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeaderRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Disc size={16} color="#17a398" />
-                  <Text style={styles.sectionTitle}>DISCOGRAPHY / ALBUMS</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={styles.sectionCounter}>{finalAlbums.length} ALBUMS</Text>
-                  {isAdmin && (
-                    <TouchableOpacity
-                      style={styles.headerAddBtn}
-                      onPress={() => setIsAddAlbumOpen(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Plus size={11} color="#0b1110" strokeWidth={2.8} />
-                      <Text style={styles.headerAddBtnText}>ADD ALBUM</Text>
-                    </TouchableOpacity>
-                  )}
+              <View style={[styles.sectionContainer, !isDark && styles.sectionContainerLight, { marginBottom: 0, paddingBottom: 0, borderBottomWidth: 0 }]}>
+                <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Music size={16} color="#17a398" />
+                    <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>POPULAR TRACKS</Text>
+                  </View>
+                  <Text style={styles.sectionCounter}>{finalTracks.length} SONGS</Text>
                 </View>
               </View>
-
-              {finalAlbums.length > 0 ? (
-                <View style={styles.albumGrid}>
-                  {finalAlbums.map((album, idx) => {
-                    const albumKey = album.id || album.name || idx;
-                    const albCover = normalizeCoverUri(album.cover || album.coverUrl || artistCover);
-                    const songCount = (album.tracks && album.tracks.length) || (album.trackIds && album.trackIds.length) || 0;
-
-                    return (
-                      <TouchableOpacity
-                        key={albumKey}
-                        style={styles.albumCard}
-                        onPress={() => onSelectAlbum && onSelectAlbum(album)}
-                        activeOpacity={0.85}
-                      >
-                        <Image source={{ uri: albCover }} style={styles.albumCover} resizeMode="cover" />
-                        <Text style={styles.albumCardTitle} numberOfLines={1}>
-                          {album.name || 'Untitled Album'}
-                        </Text>
-                        <Text style={styles.albumCardSub}>
-                          ALBUM • {songCount} songs
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : (
-                <View style={styles.emptyAlbumBox}>
-                  <Text style={styles.emptyAlbumText}>No official albums added for this artist yet.</Text>
-                  <TouchableOpacity
-                    style={styles.uploadFirstBtn}
-                    onPress={() => setIsAddAlbumOpen(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Plus size={13} color="#0b1110" strokeWidth={2.8} />
-                    <Text style={styles.uploadFirstBtnText}>UPLOAD FIRST ALBUM</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
           )}
-
-          {/* Popular Tracks Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Music size={16} color="#17a398" />
-                <Text style={styles.sectionTitle}>POPULAR TRACKS</Text>
-              </View>
-              <Text style={styles.sectionCounter}>{finalTracks.length} SONGS</Text>
-            </View>
-
-            {finalTracks.map((t, index) => {
-              const trackId = String(t._id || t.id || '');
-              const isCurrent = String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '';
-              const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
-              const isDl = (Array.isArray(downloadedTracks) ? downloadedTracks : []).some(
-                (d) => String(d._id || d.id) === trackId
-              ) || Boolean(t.isDownloaded || t.localAudioUri);
-
-              const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
-              const trackCover = normalizeCoverUri(t.coverUrl || t.cover || artistCover);
-
-              return (
-                <TouchableOpacity
-                  key={trackId || index}
-                  style={[styles.trackRow, isCurrent && styles.trackRowActive]}
-                  onPress={() => {
-                    if (isCurrent) {
-                      if (handleOpenFull) {
-                        handleOpenFull();
-                      } else {
-                        playTrack(t, finalTracks);
-                      }
-                    } else {
-                      playTrack(t, finalTracks);
-                    }
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.trackNum, isCurrent && styles.trackNumActive]}>
-                    {numStr}
-                  </Text>
-                  <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
-                  <View style={styles.trackDetails}>
-                    <Text style={[styles.trackTitle, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
-                      {t.title || 'Untitled Track'}
-                    </Text>
-                    <Text style={styles.trackArtist} numberOfLines={1}>
-                      {t.artist || artistName}
-                    </Text>
-                  </View>
-                  <Text style={styles.trackDuration}>{formatDuration(t.duration)}</Text>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() => downloadTrack && downloadTrack(t)}
-                    activeOpacity={0.7}
-                  >
-                    {isDl ? (
-                      <CheckCircle2 size={16} color="#17a398" />
-                    ) : (
-                      <Download size={16} color="#6b7280" />
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() => toggleLikeTrack && toggleLikeTrack(trackId)}
-                    activeOpacity={0.7}
-                  >
-                    <Heart
-                      size={16}
-                      color={isLiked ? '#dc2626' : '#6b7280'}
-                      fill={isLiked ? '#dc2626' : 'transparent'}
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.iconBtn}
-                    onPress={() => handleTrackAction(t)}
-                    activeOpacity={0.7}
-                  >
-                    <MoreVertical size={16} color="#9ca3af" />
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={{ height: currentTrack ? 120 : 60 }} />
-        </ScrollView>
+          ListFooterComponent={<View style={{ height: currentTrack ? 120 : 60 }} />}
+          windowSize={5}
+          maxToRenderPerBatch={10}
+          initialNumToRender={10}
+          removeClippedSubviews={true}
+        />
 
         {/* Floating Mini Player matching home screen experience */}
         {currentTrack && (
@@ -580,417 +346,3 @@ export default function ArtistDetailModal({
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  fullScreenWrapper: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#0b1110',
-    zIndex: 120,
-    elevation: 20,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#0b1110',
-    paddingTop: Platform.OS === 'ios' ? 48 : 16,
-  },
-  containerLight: {
-    backgroundColor: '#f4ede1',
-  },
-  topBar: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-    maxWidth: 760,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#141d1b',
-    borderWidth: 1.5,
-    borderColor: '#000000',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 6,
-  },
-  backText: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    letterSpacing: 0.5,
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    maxWidth: 760,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  heroSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  avatarWrapper: {
-    width: 140,
-    height: 140,
-    borderRadius: 14,
-    borderWidth: 2,
-    borderColor: '#000000',
-    overflow: 'hidden',
-    backgroundColor: '#141d1b',
-    marginBottom: 14,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.5, shadowRadius: 0 },
-      android: { elevation: 4 },
-    }),
-  },
-  avatarImg: {
-    width: '100%',
-    height: '100%',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#082621',
-    borderWidth: 1,
-    borderColor: '#17a398',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  verifiedText: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#26c4b7',
-    letterSpacing: 0.5,
-  },
-  artistName: {
-    fontFamily: 'monospace',
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  metaPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141d1b',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    gap: 6,
-    marginBottom: 16,
-  },
-  metaPillText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#9ca3af',
-  },
-  metaDot: {
-    color: '#6b7280',
-    fontSize: 10,
-  },
-  addAlbumHeroBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#17a398',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
-  },
-  addAlbumHeroBtnText: {
-    color: '#0b1110',
-    fontSize: 11,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  editArtistHeroBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
-  },
-  editArtistHeroBtnText: {
-    color: '#0b1110',
-    fontSize: 11,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  headerAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#17a398',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1.2,
-    borderColor: '#0b1110',
-  },
-  headerAddBtnText: {
-    color: '#0b1110',
-    fontSize: 9.5,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  emptyAlbumBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    backgroundColor: '#141d1b',
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#243b37',
-    marginTop: 8,
-    gap: 12,
-  },
-  emptyAlbumText: {
-    color: '#9ca3af',
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  uploadFirstBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#17a398',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: '#0b1110',
-  },
-  uploadFirstBtnText: {
-    color: '#0b1110',
-    fontSize: 11,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    width: '100%',
-    paddingHorizontal: 8,
-  },
-  adminActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-    width: '100%',
-    paddingHorizontal: 8,
-  },
-  playBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: '#f59e0b',
-    borderWidth: 2,
-    borderColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.3, shadowRadius: 0 },
-      android: { elevation: 3 },
-    }),
-  },
-  queueBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#182320',
-    borderWidth: 1.5,
-    borderColor: '#000000',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    gap: 6,
-  },
-  queueBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    letterSpacing: 0.3,
-  },
-  followBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141d1b',
-    borderWidth: 1.5,
-    borderColor: '#000000',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    gap: 6,
-  },
-  followBtnActive: {
-    backgroundColor: '#17a398',
-  },
-  followBtnText: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    letterSpacing: 0.3,
-  },
-  followBtnTextActive: {
-    color: '#0b1110',
-  },
-  sectionContainer: {
-    backgroundColor: '#141d1b',
-    borderWidth: 2,
-    borderColor: '#000000',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0 },
-      android: { elevation: 4 },
-    }),
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 10,
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  sectionTitle: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    letterSpacing: 0.5,
-  },
-  sectionCounter: {
-    fontFamily: 'monospace',
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#17a398',
-  },
-  albumGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  albumCard: {
-    width: ALBUM_CARD_WIDTH,
-    backgroundColor: '#182320',
-    borderWidth: 1.5,
-    borderColor: '#000000',
-    borderRadius: 10,
-    padding: 10,
-  },
-  albumCover: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#000000',
-    marginBottom: 8,
-    backgroundColor: '#0b1110',
-  },
-  albumCardTitle: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#fdfbf7',
-    marginBottom: 2,
-  },
-  albumCardSub: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    color: '#26c4b7',
-    fontWeight: '700',
-  },
-  trackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-    borderRadius: 6,
-    marginVertical: 1,
-  },
-  trackRowActive: {
-    backgroundColor: 'rgba(23,163,152,0.12)',
-  },
-  trackNum: {
-    width: 24,
-    fontFamily: 'monospace',
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#6b7280',
-  },
-  trackNumActive: {
-    color: '#17a398',
-  },
-  trackThumb: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#000000',
-    marginRight: 10,
-    backgroundColor: '#182320',
-  },
-  trackDetails: {
-    flex: 1,
-    marginRight: 8,
-  },
-  trackTitle: {
-    fontFamily: 'monospace',
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#fdfbf7',
-    marginBottom: 2,
-  },
-  trackTitleActive: {
-    color: '#26c4b7',
-  },
-  trackArtist: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    color: '#9ca3af',
-  },
-  trackDuration: {
-    fontFamily: 'monospace',
-    fontSize: 10,
-    color: '#6b7280',
-    marginRight: 8,
-  },
-  iconBtn: {
-    padding: 6,
-  },
-});

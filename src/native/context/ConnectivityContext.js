@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -72,7 +72,7 @@ export function ConnectivityProvider({ children }) {
     setAppMode(mode);
   }, []);
 
-  const value = {
+  const value = useMemo(() => ({
     networkState,
     appMode,
     setAppMode,
@@ -82,7 +82,7 @@ export function ConnectivityProvider({ children }) {
     toggleMode,
     resetToAuto,
     ready,
-  };
+  }), [networkState, appMode, setMode, toggleMode, resetToAuto, ready]);
 
   return (
     <ConnectivityContext.Provider value={value}>

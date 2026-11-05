@@ -166,7 +166,7 @@ export default function AddAlbumModal({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={Platform.OS === 'android' ? 'none' : 'slide'}
       presentationStyle="formSheet"
       onRequestClose={onClose}
     >
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
-    elevation: 4,
+    elevation: Platform.OS === 'android' ? 0 : 2,
     marginTop: 10,
   },
   createBtnText: {

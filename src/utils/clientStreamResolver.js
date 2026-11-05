@@ -1,10 +1,35 @@
 /**
  * Direct Client-Side YouTube Audio Stream Resolver via Innertube API
  * Zero-proxy, zero-delay direct client stream extraction.
- * Handles client contexts: VISIONOS, ANDROID_VR, ANDROID, WEB_EMBEDDED_PLAYER.
+ * Includes in-memory stream caching with TTL to guarantee instant (<1ms) playback starts.
  */
 
-const INNERTUBE_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+import { INNERTUBE_KEY, CLIENT_CONFIGS } from './streamClientConfigs';
+
+// ── In-Memory Stream Cache with TTL ──────────────────────────────────────────
+const streamCache = new Map();
+const STREAM_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
+
+export function getStreamFromCache(key) {
+  if (!key) return null;
+  const entry = streamCache.get(String(key));
+  if (!entry) return null;
+  if (Date.now() - (entry.timestamp || 0) > STREAM_CACHE_TTL) {
+    streamCache.delete(String(key));
+    return null;
+  }
+  return entry.data;
+}
+
+export function setStreamInCache(key, data) {
+  if (!key || !data) return;
+  streamCache.set(String(key), { data, timestamp: Date.now() });
+}
+
+export function clearStreamCache(key) {
+  if (!key) return;
+  streamCache.delete(String(key));
+}
 
 // In-memory visitor cache to speed up successive requests
 let cachedVisitorData = '';
@@ -144,6 +169,10 @@ export async function searchYouTubeClientSide(queryOrOptions, signal = null) {
 export async function resolveClientSideYouTubeStream(ytId, signal = null) {
   if (!ytId || signal?.aborted) return null;
 
+  // 1. Check in-memory stream cache first (<1ms)
+  const cached = getStreamFromCache(ytId);
+  if (cached) return cached;
+
   try {
     let visitorData = '';
     let sts = 20744;
@@ -155,7 +184,7 @@ export async function resolveClientSideYouTubeStream(ytId, signal = null) {
     // Try fetching watch page if visitor data not yet cached
     if (!visitorData) {
       const pageController = new AbortController();
-      const pageTimeout = setTimeout(() => pageController.abort(), 2500);
+      const pageTimeout = setTimeout(() => pageController.abort(), 2000);
       const onPageAbort = () => {
         clearTimeout(pageTimeout);
         try { pageController.abort(); } catch {}
@@ -201,94 +230,11 @@ export async function resolveClientSideYouTubeStream(ytId, signal = null) {
 
     if (signal?.aborted) return null;
 
-    // Client contexts: VISIONOS and ANDROID_VR provide direct non-ciphered stream URLs
-    // followed by ANDROID and WEB_EMBEDDED_PLAYER
-    const clientConfigs = [
-      {
-        name: 'VISIONOS',
-        client: {
-          clientName: 'VISIONOS',
-          clientVersion: '1.02',
-          deviceMake: 'Apple',
-          deviceModel: 'RealityDevice17,1',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-          osName: 'visionOS',
-          osVersion: '26.5.23O471',
-          hl: 'en',
-          timeZone: 'UTC',
-          utcOffsetMinutes: 0
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-          'X-Youtube-Client-Name': '101',
-          'X-Youtube-Client-Version': '1.02',
-          'Origin': 'https://www.youtube.com'
-        }
-      },
-      {
-        name: 'ANDROID_VR',
-        client: {
-          clientName: 'ANDROID_VR',
-          clientVersion: '1.61.48',
-          deviceMake: 'Oculus',
-          deviceModel: 'Quest 3',
-          osName: 'Android',
-          osVersion: '12',
-          hl: 'en',
-          gl: 'US'
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36 (KHTML, like Gecko) OculusBrowser/34.0.0.12 Chrome/122.0.6261.120 VR Safari/537.36',
-          'X-Youtube-Client-Name': '28',
-          'X-Youtube-Client-Version': '1.61.48'
-        }
-      },
-      {
-        name: 'ANDROID',
-        client: {
-          clientName: 'ANDROID',
-          clientVersion: '19.29.35',
-          androidSdkVersion: 30,
-          osName: 'Android',
-          osVersion: '11',
-          hl: 'en',
-          gl: 'US'
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'com.google.android.youtube/19.29.35 (Linux; U; Android 11) gzip',
-          'X-Youtube-Client-Name': '3',
-          'X-Youtube-Client-Version': '19.29.35'
-        }
-      },
-      {
-        name: 'WEB_EMBEDDED_PLAYER',
-        client: {
-          clientName: 'WEB_EMBEDDED_PLAYER',
-          clientVersion: '1.20240726.01.00',
-          hl: 'en',
-          gl: 'US'
-        },
-        thirdParty: {
-          embedUrl: 'https://www.google.com'
-        },
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-          'X-Youtube-Client-Name': '56',
-          'X-Youtube-Client-Version': '1.20240726.01.00',
-          'Origin': 'https://www.youtube.com'
-        }
-      }
-    ];
-
-    for (const cfg of clientConfigs) {
+    for (const cfg of CLIENT_CONFIGS) {
       if (signal?.aborted) return null;
 
       const playerController = new AbortController();
-      const playerTimeout = setTimeout(() => playerController.abort(), 4000);
+      const playerTimeout = setTimeout(() => playerController.abort(), 3500);
       const onPlayerAbort = () => {
         clearTimeout(playerTimeout);
         try { playerController.abort(); } catch {}
@@ -333,7 +279,6 @@ export async function resolveClientSideYouTubeStream(ytId, signal = null) {
           const data = await res.json();
           if (data?.playabilityStatus?.status === 'OK') {
             const formats = (data.streamingData?.adaptiveFormats || []).concat(data.streamingData?.formats || []);
-            // Prioritize official AAC (itag 140), then Opus (itag 251), then AAC-LC (itag 139), then any audio stream
             const audio140 = formats.find(f => f.itag === 140 && f.url);
             const audio251 = formats.find(f => f.itag === 251 && f.url);
             const audio139 = formats.find(f => f.itag === 139 && f.url);
@@ -347,7 +292,7 @@ export async function resolveClientSideYouTubeStream(ytId, signal = null) {
                 ? rawSec
                 : (rawMs && !isNaN(rawMs) && rawMs > 0 ? Math.round(rawMs / 1000) : null);
 
-              return {
+              const result = {
                 url: chosen.url,
                 duration: durationSec,
                 contentLength: chosen.contentLength ? parseInt(chosen.contentLength, 10) : null,
@@ -355,6 +300,9 @@ export async function resolveClientSideYouTubeStream(ytId, signal = null) {
                 author: data.videoDetails?.author || null,
                 toString() { return this.url; }
               };
+
+              setStreamInCache(ytId, result);
+              return result;
             }
           }
         }
@@ -371,13 +319,23 @@ export async function resolveClientSideYouTubeStream(ytId, signal = null) {
 
 /**
  * High-level YouTube stream resolver for a Track object.
- * Extracts video ID, searches if missing, and resolves direct stream.
+ * Extracts video ID, searches if missing, and resolves direct stream with caching.
  */
 export async function resolveDirectYouTubeAudio(track, signal = null) {
   if (!track || signal?.aborted) return null;
 
-  const targetUrl = track.resolvedAudioUrl || track.audioUrl || track.url || '';
   const trackId = String(track.id || track._id || '');
+  const cachedTrack = getStreamFromCache(trackId);
+  if (cachedTrack) {
+    return {
+      url: cachedTrack.url,
+      duration: cachedTrack.duration || track.duration,
+      cover: track.cover || track.coverUrl,
+      track: { ...track, duration: cachedTrack.duration || track.duration }
+    };
+  }
+
+  const targetUrl = track.resolvedAudioUrl || track.audioUrl || track.url || '';
 
   let ytId = extractYtId(track.youtubeId) ||
              extractYtId(targetUrl) ||
@@ -411,7 +369,7 @@ export async function resolveDirectYouTubeAudio(track, signal = null) {
           ? directResult.duration
           : (Number(track.duration) || 210);
 
-        return {
+        const resultObj = {
           url: directStream,
           duration,
           cover: track.cover || track.coverUrl || `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
@@ -421,6 +379,9 @@ export async function resolveDirectYouTubeAudio(track, signal = null) {
             youtubeId: ytId
           }
         };
+
+        if (trackId) setStreamInCache(trackId, resultObj);
+        return resultObj;
       }
     } catch (e) {
       if (signal?.aborted) return null;

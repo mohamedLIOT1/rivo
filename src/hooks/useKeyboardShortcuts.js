@@ -23,6 +23,8 @@ export function useKeyboardShortcuts({
   seekTo,
   currentTime,
   duration,
+  getCurrentTime,
+  getDuration,
   volume,
   setVolume,
   setIsShuffle,
@@ -35,10 +37,46 @@ export function useKeyboardShortcuts({
   const currentTimeRef = useRef(currentTime);
   const durationRef = useRef(duration);
   const volumeRef = useRef(volume);
+  const getCurrentTimeRef = useRef(getCurrentTime);
+  const getDurationRef = useRef(getDuration);
 
   useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
   useEffect(() => { durationRef.current = duration; }, [duration]);
   useEffect(() => { volumeRef.current = volume; }, [volume]);
+  useEffect(() => { getCurrentTimeRef.current = getCurrentTime; }, [getCurrentTime]);
+  useEffect(() => { getDurationRef.current = getDuration; }, [getDuration]);
+
+  const getCurTime = () => {
+    if (typeof getCurrentTimeRef.current === 'function') {
+      try {
+        const val = getCurrentTimeRef.current();
+        if (val !== undefined && val !== null && !isNaN(val)) return Number(val);
+      } catch {}
+    }
+    if (typeof currentTimeRef.current === 'function') {
+      try {
+        const val = currentTimeRef.current();
+        if (val !== undefined && val !== null && !isNaN(val)) return Number(val);
+      } catch {}
+    }
+    return Number(currentTimeRef.current) || 0;
+  };
+
+  const getDur = () => {
+    if (typeof getDurationRef.current === 'function') {
+      try {
+        const val = getDurationRef.current();
+        if (val !== undefined && val !== null && !isNaN(val)) return Number(val);
+      } catch {}
+    }
+    if (typeof durationRef.current === 'function') {
+      try {
+        const val = durationRef.current();
+        if (val !== undefined && val !== null && !isNaN(val)) return Number(val);
+      } catch {}
+    }
+    return Number(durationRef.current) || 999999;
+  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -105,8 +143,8 @@ export function useKeyboardShortcuts({
       if (e.code === 'MediaFastForward' || e.key === 'MediaFastForward') {
         e.preventDefault();
         e.stopPropagation();
-        const cur = currentTimeRef.current || 0;
-        const dur = durationRef.current || 999999;
+        const cur = getCurTime();
+        const dur = getDur();
         seekTo(Math.min(dur, cur + 10));
         return;
       }
@@ -114,7 +152,7 @@ export function useKeyboardShortcuts({
       if (e.code === 'MediaRewind' || e.key === 'MediaRewind') {
         e.preventDefault();
         e.stopPropagation();
-        const cur = currentTimeRef.current || 0;
+        const cur = getCurTime();
         seekTo(Math.max(0, cur - 10));
         return;
       }
@@ -150,8 +188,8 @@ export function useKeyboardShortcuts({
       if (e.code === 'ArrowRight' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 5;
-        const cur = currentTimeRef.current || 0;
-        const dur = durationRef.current || 999999;
+        const cur = getCurTime();
+        const dur = getDur();
         seekTo(Math.min(dur, cur + step));
         return;
       }
@@ -159,7 +197,7 @@ export function useKeyboardShortcuts({
       if (e.code === 'ArrowLeft' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 5;
-        const cur = currentTimeRef.current || 0;
+        const cur = getCurTime();
         seekTo(Math.max(0, cur - step));
         return;
       }
@@ -167,7 +205,7 @@ export function useKeyboardShortcuts({
       // 6. YouTube standard J (seek back 10s)
       if (e.code === 'KeyJ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        const cur = currentTimeRef.current || 0;
+        const cur = getCurTime();
         seekTo(Math.max(0, cur - 10));
         return;
       }

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { API_BASE_URL } from '../config';
+import { translate, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from '../i18n';
 
 const PreferencesContext = createContext(null);
 
@@ -9,7 +10,33 @@ const DEFAULT_CONTENT_MODES = {
 };
 
 export function PreferencesProvider({ children, currentUser }) {
-  const language = 'en';
+  const [language, setLanguageState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rivo_language') || localStorage.getItem('@rivo_language_preference');
+      if (saved === 'ar' || saved === 'en') return saved;
+    } catch {}
+    return DEFAULT_LANGUAGE;
+  });
+
+  const isRTL = language === 'ar';
+  // Keep structural shell dir as 'ltr' so modern web app layout (sidebar left, friends right, player bar) stays intact
+  const dir = 'ltr';
+
+  // Apply language attributes to document while preserving stable LTR application shell
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.dir = 'ltr';
+      document.body.dir = 'ltr';
+      document.documentElement.lang = language;
+      if (isRTL) {
+        document.documentElement.classList.add('rtl');
+        document.body.classList.add('rtl');
+      } else {
+        document.documentElement.classList.remove('rtl');
+        document.body.classList.remove('rtl');
+      }
+    }
+  }, [language, isRTL]);
 
   const [vocalOnlyMode, setVocalOnlyModeState] = useState(() => {
     try {
@@ -18,16 +45,18 @@ export function PreferencesProvider({ children, currentUser }) {
     return false;
   });
 
-  const toggleVocalOnlyMode = (overrideVal) => {
-    const next = typeof overrideVal === 'boolean' ? overrideVal : !vocalOnlyMode;
-    setVocalOnlyModeState(next);
-    try {
-      localStorage.setItem('rivo_vocal_only', next ? 'true' : 'false');
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('rivo-vocal-mode-changed', { detail: { enabled: next } }));
-      }
-    } catch {}
-  };
+  const toggleVocalOnlyMode = useCallback((overrideVal) => {
+    setVocalOnlyModeState(prev => {
+      const next = typeof overrideVal === 'boolean' ? overrideVal : !prev;
+      try {
+        localStorage.setItem('rivo_vocal_only', next ? 'true' : 'false');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('rivo-vocal-mode-changed', { detail: { enabled: next } }));
+        }
+      } catch {}
+      return next;
+    });
+  }, []);
 
   const [contentModes, setContentModesState] = useState(() => {
     try {
@@ -36,15 +65,6 @@ export function PreferencesProvider({ children, currentUser }) {
     } catch {}
     return DEFAULT_CONTENT_MODES;
   });
-
-  // Permanently enforce English and LTR layout
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.dir = 'ltr';
-      document.documentElement.lang = 'en';
-    }
-    localStorage.removeItem('rivo_language');
-  }, []);
 
   // Sync preferences from server if user is logged in
   useEffect(() => {
@@ -56,28 +76,30 @@ export function PreferencesProvider({ children, currentUser }) {
     })
       .then(res => res.json())
       .then(data => {
-        if (data?.success && data?.preferences?.contentModes) {
-          setContentModesState(prev => ({
-            ...prev,
-            ...data.preferences.contentModes
-          }));
-          localStorage.setItem('rivo_content_modes', JSON.stringify(data.preferences.contentModes));
+        if (data?.success && data?.preferences) {
+          if (data.preferences.contentModes) {
+            setContentModesState(prev => ({
+              ...prev,
+              ...data.preferences.contentModes
+            }));
+            localStorage.setItem('rivo_content_modes', JSON.stringify(data.preferences.contentModes));
+          }
+          if (data.preferences.preferredLanguage === 'ar' || data.preferences.preferredLanguage === 'en') {
+            setLanguageState(data.preferences.preferredLanguage);
+            localStorage.setItem('rivo_language', data.preferences.preferredLanguage);
+          }
         }
       })
       .catch(() => {});
   }, [currentUser?.id, currentUser?._id]);
 
-  const setLanguage = () => {};
-
-  // Toggle Content Mode (e.g. disable music for Islamic mode)
-  const toggleContentMode = (modeKey, isEnabled) => {
-    const updated = {
-      ...contentModes,
-      [modeKey]: isEnabled
-    };
-
-    setContentModesState(updated);
-    localStorage.setItem('rivo_content_modes', JSON.stringify(updated));
+  const setLanguage = useCallback((newLang) => {
+    if (newLang !== 'ar' && newLang !== 'en') return;
+    setLanguageState(newLang);
+    try {
+      localStorage.setItem('rivo_language', newLang);
+      localStorage.setItem('@rivo_language_preference', newLang);
+    } catch {}
 
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
     if (token) {
@@ -87,30 +109,74 @@ export function PreferencesProvider({ children, currentUser }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ contentModes: updated })
+        body: JSON.stringify({ preferredLanguage: newLang })
       }).catch(() => {});
     }
-  };
+  }, []);
+
+  const t = useCallback((keyPath, params) => {
+    return translate(language, keyPath, params);
+  }, [language]);
+
+  // Toggle Content Mode (e.g. disable music for Islamic mode)
+  const toggleContentMode = useCallback((modeKey, isEnabled) => {
+    setContentModesState(prev => {
+      const updated = {
+        ...prev,
+        [modeKey]: isEnabled
+      };
+      localStorage.setItem('rivo_content_modes', JSON.stringify(updated));
+
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      if (token) {
+        fetch(`${API_BASE_URL}/api/users/preferences`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ contentModes: updated })
+        }).catch(() => {});
+      }
+      return updated;
+    });
+  }, []);
 
   const showMusic = contentModes.music !== false;
   const showQuran = contentModes.quran !== false;
 
+  const value = useMemo(() => ({
+    language,
+    isRTL,
+    dir,
+    setLanguage,
+    t,
+    supportedLanguages: SUPPORTED_LANGUAGES,
+    contentModes,
+    toggleContentMode,
+    showMusic,
+    showQuran,
+    showPodcasts: false,
+    showAudiobooks: false,
+    isPureIslamicMode: !showMusic,
+    vocalOnlyMode,
+    toggleVocalOnlyMode
+  }), [
+    language,
+    isRTL,
+    dir,
+    setLanguage,
+    t,
+    contentModes,
+    toggleContentMode,
+    showMusic,
+    showQuran,
+    vocalOnlyMode,
+    toggleVocalOnlyMode
+  ]);
+
   return (
-    <PreferencesContext.Provider
-      value={{
-        language: 'en',
-        setLanguage,
-        contentModes,
-        toggleContentMode,
-        showMusic,
-        showQuran,
-        showPodcasts: false,
-        showAudiobooks: false,
-        isPureIslamicMode: !showMusic,
-        vocalOnlyMode,
-        toggleVocalOnlyMode
-      }}
-    >
+    <PreferencesContext.Provider value={value}>
       {children}
     </PreferencesContext.Provider>
   );
@@ -120,8 +186,12 @@ export function usePreferences() {
   const ctx = useContext(PreferencesContext);
   if (!ctx) {
     return {
-      language: 'en',
+      language: DEFAULT_LANGUAGE,
+      isRTL: false,
+      dir: 'ltr',
       setLanguage: () => {},
+      t: (k) => k,
+      supportedLanguages: SUPPORTED_LANGUAGES,
       contentModes: DEFAULT_CONTENT_MODES,
       toggleContentMode: () => {},
       showMusic: true,
@@ -134,4 +204,9 @@ export function usePreferences() {
     };
   }
   return ctx;
+}
+
+export function useTranslation() {
+  const { language, isRTL, dir, setLanguage, t, supportedLanguages } = usePreferences();
+  return { language, isRTL, dir, setLanguage, t, supportedLanguages };
 }

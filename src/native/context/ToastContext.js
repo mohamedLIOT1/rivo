@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity, Image, Platform, StatusBar } from 'react-native';
 import { MessageSquare } from 'lucide-react-native';
 import { colors } from '../theme/colors';
@@ -12,7 +12,7 @@ export const ToastProvider = ({ children }) => {
   const slideAnim = useRef(new Animated.Value(-30)).current;
   const timeoutRef = useRef(null);
 
-  const dismissToast = () => {
+  const dismissToast = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     Animated.parallel([
       Animated.timing(opacityAnim, {
@@ -26,9 +26,9 @@ export const ToastProvider = ({ children }) => {
         useNativeDriver: true,
       }),
     ]).start(() => setToast(null));
-  };
+  }, [opacityAnim, slideAnim]);
 
-  const showToast = (messageOrObj, type = 'info', options = {}) => {
+  const showToast = useCallback((messageOrObj, type = 'info', options = {}) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
     let message = '';
@@ -86,7 +86,7 @@ export const ToastProvider = ({ children }) => {
     timeoutRef.current = setTimeout(() => {
       dismissToast();
     }, duration);
-  };
+  }, [dismissToast, opacityAnim, slideAnim]);
 
   const handlePress = () => {
     if (toast && typeof toast.onPress === 'function') {
@@ -100,8 +100,13 @@ export const ToastProvider = ({ children }) => {
 
   const isChat = toast?.type === 'chat';
 
+  const value = useMemo(() => ({
+    showToast,
+    dismissToast,
+  }), [showToast, dismissToast]);
+
   return (
-    <ToastContext.Provider value={{ showToast, dismissToast }}>
+    <ToastContext.Provider value={value}>
       {children}
       {toast && (
         isChat ? (
@@ -208,7 +213,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
-    elevation: 8,
+    elevation: Platform.OS === 'android' ? 1 : 8,
   },
   indicator: {
     width: 8,
@@ -249,7 +254,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
-    elevation: 12,
+    elevation: Platform.OS === 'android' ? 1 : 12,
   },
   chatAvatarWrapper: {
     position: 'relative',

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Alert,
@@ -15,6 +16,7 @@ import { Download, Play, Pause, Trash2, HardDrive, WifiOff, Disc, Wifi, FolderPl
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -29,14 +31,119 @@ import {
   scanOfflineVault,
   getStorageLocationInfo,
   deduplicateTrackList,
+  reanchorDocumentUri,
 } from '../services/downloadManager';
 
 const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 
-export default function OfflineScreen() {
+const OfflineTrackItem = React.memo(function OfflineTrackItem({
+  track,
+  trackId,
+  isActive,
+  isPlaying,
+  isSelected,
+  isSelectMode,
+  isDark,
+  onPress,
+  onPlay,
+  onExport,
+  onDelete,
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onPress}
+      style={[
+        styles.trackCard,
+        !isDark && styles.trackCardLight,
+        isSelected && {
+          borderColor: colors.mint,
+          backgroundColor: 'rgba(52,211,153,0.12)',
+        },
+      ]}
+    >
+      {isSelectMode && (
+        <View style={styles.selectCheckWrapper}>
+          <View style={[styles.selectCheckBox, isSelected && styles.selectCheckBoxActive]}>
+            {isSelected && <Check size={13} color={colors.ink} strokeWidth={3} />}
+          </View>
+        </View>
+      )}
+
+      <View style={styles.coverBox}>
+        <View style={styles.coverPlaceholder}>
+          <Disc size={20} color="#1c332e" />
+        </View>
+        <Image
+          source={{
+            uri: normalizeCoverUri(track?.coverUrl || track?.cover, track),
+          }}
+          style={styles.cover}
+        />
+      </View>
+
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight]} numberOfLines={1}>
+          {track?.title || 'Untitled'}
+        </Text>
+        <Text style={[styles.trackArtist, !isDark && styles.trackArtistLight]} numberOfLines={1}>
+          {track?.artist || 'Unknown Artist'}
+        </Text>
+        <View style={styles.badgeRow}>
+          <View
+            style={[
+              styles.localPill,
+              isQuranContent(track) && {
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16,185,129,0.16)',
+              },
+              track?.isLocalImport && !isQuranContent(track) && {
+                borderColor: colors.mint,
+                backgroundColor: 'rgba(52,211,153,0.12)',
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.localPillText,
+                isQuranContent(track) && { color: '#6ee7b7' },
+                track?.isLocalImport && !isQuranContent(track) && { color: colors.mint },
+              ]}
+            >
+              {isQuranContent(track) ? 'HOLY QURAN' : track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE SONG'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {!isSelectMode && (
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.playBtn} onPress={onPlay}>
+            {isActive && isPlaying ? (
+              <Pause size={15} color={colors.ink} fill={colors.ink} />
+            ) : (
+              <Play size={15} color={colors.ink} fill={colors.ink} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.exportBtn} onPress={onExport}>
+            <FolderDown size={15} color="#10b981" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.deleteBtn} onPress={onDelete}>
+            <Trash2 size={15} color={colors.rust} />
+          </TouchableOpacity>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+});
+
+function OfflineScreen() {
   const { playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue, removeDownloadedTrack: contextRemoveTrack, removeDownloadedTracksBatch: contextRemoveBatch, downloadedTracks = [] } = useAudioPlayer();
   const { showToast } = useToast();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
   const [offlineTracks, setOfflineTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [storageUsed, setStorageUsed] = useState(0);
@@ -257,7 +364,7 @@ export default function OfflineScreen() {
     );
   };
 
-  const handlePlayOffline = (track) => {
+  const handlePlayOffline = useCallback((track) => {
     if (!track) return;
     const trackId = String(track._id || track.id || '');
     const currentId = String(currentTrack?._id || currentTrack?.id || '');
@@ -265,21 +372,83 @@ export default function OfflineScreen() {
       togglePlay();
       return;
     }
-    const audioUri = track.localAudioUri || track.nativeAudioUri || track.audioUrl;
+    const rawAudioUri = track.localAudioUri || track.nativeAudioUri || track.audioUrl;
+    const audioUri = reanchorDocumentUri(rawAudioUri);
     playTrack({
       ...track,
       id: trackId,
       _id: trackId,
       title: track.title || 'Untitled',
       artist: track.artist || 'Unknown Artist',
-      audioUrl: audioUri,
+      localAudioUri: audioUri,
       nativeAudioUri: audioUri,
-    }, (offlineTracks || []).filter(Boolean));
-  };
+      audioUrl: audioUri,
+    }, (offlineTracks || []).map(t => ({
+      ...t,
+      localAudioUri: reanchorDocumentUri(t?.localAudioUri),
+      nativeAudioUri: reanchorDocumentUri(t?.nativeAudioUri),
+      audioUrl: reanchorDocumentUri(t?.audioUrl),
+    })).filter(Boolean));
+  }, [currentTrack, togglePlay, playTrack, offlineTracks]);
 
-  return (
-    <View style={{ flex: 1, backgroundColor: !isDark ? '#fdfbf7' : colors.ink }}>
-      <ScrollView style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]} contentContainerStyle={[styles.content, isSelectMode && { paddingBottom: 110 }]}>
+  const keyExtractor = useCallback((track, idx) => {
+    return String(track?._id || track?.id || idx);
+  }, []);
+
+  const handleExportTrack = useCallback(async (track) => {
+    try {
+      showToast('Preparing audio export...', 'info');
+      await exportTrackAudioFile(track);
+      showToast('Export dialog opened!', 'success');
+    } catch (e) {
+      showToast(e.message || 'Export failed', 'error');
+    }
+  }, [showToast]);
+
+  const renderTrackItem = useCallback(({ item: track, index }) => {
+    if (!track) return null;
+    const trackId = String(track._id || track.id || index);
+    const currentId = String(currentTrack?._id || currentTrack?.id || '');
+    const active = Boolean(currentTrack && trackId === currentId);
+    const isSelected = selectedIds.includes(trackId);
+
+    return (
+      <OfflineTrackItem
+        key={trackId}
+        track={track}
+        trackId={trackId}
+        isActive={active}
+        isPlaying={isPlaying}
+        isSelected={isSelected}
+        isSelectMode={isSelectMode}
+        isDark={isDark}
+        onPress={() => {
+          if (isSelectMode) {
+            toggleSelectTrack(trackId);
+          } else {
+            handlePlayOffline(track);
+          }
+        }}
+        onPlay={() => handlePlayOffline(track)}
+        onExport={() => handleExportTrack(track)}
+        onDelete={() => handleDelete(track)}
+      />
+    );
+  }, [
+    currentTrack,
+    isPlaying,
+    selectedIds,
+    isSelectMode,
+    isDark,
+    toggleSelectTrack,
+    handlePlayOffline,
+    handleExportTrack,
+    handleDelete,
+  ]);
+
+  const renderHeader = useMemo(() => {
+    return (
+      <View>
         {/* Offline Storage Status Card */}
         <View style={styles.heroOuter}>
           <View style={styles.heroShadow} />
@@ -288,9 +457,9 @@ export default function OfflineScreen() {
               <CassetteTag label="NO WI-FI REQUIRED" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
             </View>
 
-            <Text style={[styles.heroTitle, !isDark && styles.heroTitleLight]}>OFFLINE SONGS</Text>
+            <Text style={[styles.heroTitle, !isDark && styles.heroTitleLight]}>{t('offline.title')}</Text>
             <Text style={[styles.heroSub, !isDark && styles.heroSubLight, { marginBottom: 12 }]}>
-              Audio tracks saved on your device for zero-latency, offline listening.
+              {t('offline.subtitle')}
             </Text>
 
             {/* Storage & Location Info Box */}
@@ -315,7 +484,7 @@ export default function OfflineScreen() {
                 activeOpacity={0.8}
               >
                 <FolderPlus size={14} color={colors.ink} />
-                <Text style={styles.heroActionText}>IMPORT</Text>
+                <Text style={styles.heroActionText}>{t('offline.importBtn')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -325,7 +494,7 @@ export default function OfflineScreen() {
                 activeOpacity={0.8}
               >
                 <HardDrive size={13} color={colors.ink} />
-                <Text style={styles.heroActionText}>FOLDER</Text>
+                <Text style={styles.heroActionText}>{t('offline.folderBtn')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -335,7 +504,7 @@ export default function OfflineScreen() {
                 activeOpacity={0.8}
               >
                 <RefreshCw size={13} color={colors.mint} />
-                <Text style={styles.heroActionTextSec}>SCAN</Text>
+                <Text style={styles.heroActionTextSec}>{t('offline.scanBtn')}</Text>
               </TouchableOpacity>
 
               {(offlineTracks || []).length > 0 && (
@@ -353,7 +522,7 @@ export default function OfflineScreen() {
                 >
                   <CheckSquare size={13} color={isSelectMode ? '#ffffff' : colors.mint} />
                   <Text style={[styles.heroActionTextSec, isSelectMode && { color: '#ffffff' }]}>
-                    {isSelectMode ? 'CANCEL' : 'SELECT'}
+                    {isSelectMode ? t('offline.cancelBtn') : t('offline.selectBtn')}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -381,11 +550,13 @@ export default function OfflineScreen() {
           </View>
         </View>
 
-        {/* Offline Tracks List */}
+        {/* Offline Tracks List Header */}
         <View style={styles.listSection}>
           <View style={[styles.listHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
-            <Text style={[styles.listTitle, !isDark && styles.listTitleLight]}>DOWNLOADED VAULT</Text>
-            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>{searchQuery ? `${displayedTracks.length} OF ${(offlineTracks || []).length}` : `${(offlineTracks || []).length} SAVED`}</Text>
+            <Text style={[styles.listTitle, !isDark && styles.listTitleLight]}>{t('offline.downloadedVault')}</Text>
+            <Text style={[styles.listCount, !isDark && styles.listCountLight]}>
+              {searchQuery ? t('offline.filteredCount', { filtered: displayedTracks.length, total: (offlineTracks || []).length }) : t('offline.savedCount', { count: (offlineTracks || []).length })}
+            </Text>
           </View>
 
           {/* Category Folder Filter Tabs */}
@@ -425,7 +596,7 @@ export default function OfflineScreen() {
                   style={[
                     styles.folderTabText,
                     !isDark && styles.folderTabTextLight,
-                    folderTab === 'music' && styles.folderTabTextActive,
+                    folderTab === 'music' && styles.folderTabBtnActive,
                   ]}
                   numberOfLines={1}
                 >
@@ -446,7 +617,7 @@ export default function OfflineScreen() {
                   style={[
                     styles.folderTabText,
                     !isDark && styles.folderTabTextLight,
-                    folderTab === 'quran' && styles.folderTabTextActive,
+                    folderTab === 'quran' && styles.folderTabBtnActive,
                   ]}
                   numberOfLines={1}
                 >
@@ -455,179 +626,114 @@ export default function OfflineScreen() {
               </TouchableOpacity>
             </View>
           )}
-
-          {(!offlineTracks || offlineTracks.length === 0) ? (
-            <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
-              <WifiOff size={40} color={colors.teal} />
-              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>No offline songs saved</Text>
-              <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
-                Switch to online mode and tap the download icon on any song to save it for offline playback — no Wi-Fi needed.
-              </Text>
-              <View style={styles.goOnlineBanner}>
-                <Wifi size={13} color={colors.teal} />
-                <Text style={styles.goOnlineText}>
-                  Use the toggle button to go online and download songs
-                </Text>
-              </View>
-            </View>
-          ) : (filteredOfflineTracks.length === 0 && searchQuery.trim().length > 0) ? (
-            <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
-              <Search size={36} color={colors.mint} />
-              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, { marginTop: 8 }]}>No Matching Songs</Text>
-              <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
-                No downloaded songs found matching "{searchQuery}"
-              </Text>
-              <TouchableOpacity
-                onPress={() => setSearchQuery('')}
-                style={[styles.heroActionBtnSec, { marginTop: 12, paddingHorizontal: 16 }]}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.heroActionTextSec}>CLEAR SEARCH</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (displayedTracks.length === 0) ? (
-            <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
-              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
-                {folderTab === 'quran' ? 'No Quran Recitations' : 'No Music Tracks'}
-              </Text>
-              <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
-                {folderTab === 'quran' 
-                  ? 'No Quran audio files found in offline storage.' 
-                  : 'No music audio files found in offline storage.'}
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.tracksList}>
-              {(displayedTracks || []).filter(Boolean).map((track, idx) => {
-                const trackId = String(track?._id || track?.id || idx);
-                const currentId = String(currentTrack?._id || currentTrack?.id || '');
-                const active = Boolean(currentTrack && trackId === currentId);
-                const isSelected = selectedIds.includes(trackId);
-
-                return (
-                  <TouchableOpacity
-                    key={trackId}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      if (isSelectMode) {
-                        toggleSelectTrack(trackId);
-                      } else {
-                        handlePlayOffline(track);
-                      }
-                    }}
-                    style={[
-                      styles.trackCard,
-                      !isDark && styles.trackCardLight,
-                      isSelected && {
-                        borderColor: colors.mint,
-                        backgroundColor: 'rgba(52,211,153,0.12)',
-                      },
-                    ]}
-                  >
-                    {isSelectMode && (
-                      <View style={styles.selectCheckWrapper}>
-                        <View style={[styles.selectCheckBox, isSelected && styles.selectCheckBoxActive]}>
-                          {isSelected && <Check size={13} color={colors.ink} strokeWidth={3} />}
-                        </View>
-                      </View>
-                    )}
-
-                    <View style={styles.coverBox}>
-                      <View style={styles.coverPlaceholder}>
-                        <Disc size={20} color="#1c332e" />
-                      </View>
-                      <Image
-                        source={{
-                          uri: normalizeCoverUri(track?.coverUrl || track?.cover, track),
-                        }}
-                        style={styles.cover}
-                      />
-                    </View>
-
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight]} numberOfLines={1}>
-                        {track?.title || 'Untitled'}
-                      </Text>
-                      <Text style={[styles.trackArtist, !isDark && styles.trackArtistLight]} numberOfLines={1}>
-                        {track?.artist || 'Unknown Artist'}
-                      </Text>
-                      <View style={styles.badgeRow}>
-                        <View style={[
-                          styles.localPill,
-                          isQuranContent(track) && {
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16,185,129,0.16)',
-                          },
-                          track?.isLocalImport && !isQuranContent(track) && {
-                            borderColor: colors.mint,
-                            backgroundColor: 'rgba(52,211,153,0.12)',
-                          }
-                        ]}>
-                          <Text style={[
-                            styles.localPillText,
-                            isQuranContent(track) && { color: '#6ee7b7' },
-                            track?.isLocalImport && !isQuranContent(track) && { color: colors.mint }
-                          ]}>
-                            {isQuranContent(track) ? 'HOLY QURAN' : track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE SONG'}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {!isSelectMode && (
-                      <View style={styles.actions}>
-                        <TouchableOpacity
-                          style={styles.playBtn}
-                          onPress={() => handlePlayOffline(track)}
-                        >
-                          {active && isPlaying ? (
-                            <Pause size={15} color={colors.ink} fill={colors.ink} />
-                          ) : (
-                            <Play size={15} color={colors.ink} fill={colors.ink} />
-                          )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.exportBtn}
-                          onPress={async () => {
-                            try {
-                              showToast('Preparing audio export...', 'info');
-                              await exportTrackAudioFile(track);
-                              showToast('Export dialog opened!', 'success');
-                            } catch (e) {
-                              showToast(e.message || 'Export failed', 'error');
-                            }
-                          }}
-                        >
-                          <FolderDown size={15} color="#10b981" />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.deleteBtn}
-                          onPress={() => handleDelete(track)}
-                        >
-                          <Trash2 size={15} color={colors.rust} />
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
         </View>
-      </ScrollView>
+      </View>
+    );
+  }, [
+    isDark,
+    storageInfo,
+    storageUsed,
+    offlineTracks,
+    actionLoading,
+    isSelectMode,
+    searchQuery,
+    displayedTracks.length,
+    folderTab,
+    musicCount,
+    quranCount,
+    handleImportAudio,
+    handleImportFolder,
+    handleScanVault,
+  ]);
+
+  const renderEmpty = useCallback(() => {
+    if (!offlineTracks || offlineTracks.length === 0) {
+      return (
+        <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
+          <WifiOff size={40} color={colors.teal} />
+          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>{t('offline.noOfflineSongs')}</Text>
+          <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
+            {t('offline.noOfflineSub')}
+          </Text>
+          <View style={styles.goOnlineBanner}>
+            <Wifi size={13} color={colors.teal} />
+            <Text style={styles.goOnlineText}>
+              {t('offline.goOnlineText')}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+    if (filteredOfflineTracks.length === 0 && searchQuery.trim().length > 0) {
+      return (
+        <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
+          <Search size={36} color={colors.mint} />
+          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, { marginTop: 8 }]}>{t('offline.noMatchingSongs')}</Text>
+          <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
+            {t('offline.noMatchingSub', { query: searchQuery })}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setSearchQuery('')}
+            style={[styles.heroActionBtnSec, { marginTop: 12, paddingHorizontal: 16 }]}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.heroActionTextSec}>{t('offline.clearSearch')}</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    if (displayedTracks.length === 0) {
+      return (
+        <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
+          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
+            {folderTab === 'quran' ? 'No Quran Recitations' : 'No Music Tracks'}
+          </Text>
+          <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
+            {folderTab === 'quran' 
+              ? 'No Quran audio files found in offline storage.' 
+              : 'No music audio files found in offline storage.'}
+          </Text>
+        </View>
+      );
+    }
+    return null;
+  }, [
+    offlineTracks,
+    filteredOfflineTracks.length,
+    searchQuery,
+    displayedTracks.length,
+    folderTab,
+    isDark,
+  ]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: !isDark ? '#fdfbf7' : colors.ink }}>
+      <FlatList
+        style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
+        data={displayedTracks}
+        keyExtractor={keyExtractor}
+        renderItem={renderTrackItem}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmpty}
+        contentContainerStyle={[styles.content, isSelectMode && { paddingBottom: 110 }]}
+        showsVerticalScrollIndicator={false}
+        windowSize={Platform.OS === 'android' ? 3 : 5}
+        initialNumToRender={Platform.OS === 'android' ? 8 : 10}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 6 : 10}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={Platform.OS === 'android'}
+      />
 
       {/* Floating Tactical Multi-Select Bottom Action Deck */}
       {isSelectMode && (
         <View style={[styles.selectActionBar, { bottom: currentTrack ? (Platform.OS === 'ios' ? 134 : 118) : 20 }]}>
           <View style={styles.selectInfoRow}>
             <Text style={styles.selectCountBadge}>{selectedIds.length}</Text>
-            <Text style={styles.selectCountText}>Selected</Text>
+            <Text style={styles.selectCountText}>{t('offline.selectedCount')}</Text>
           </View>
           <TouchableOpacity onPress={handleSelectAll} style={styles.selectActionBtnSec}>
             <Text style={styles.selectActionBtnTextSec}>
-              {selectedIds.length > 0 && selectedIds.length === ((searchQuery.trim() ? filteredOfflineTracks : offlineTracks) || []).length ? 'Deselect All' : 'Select All'}
+              {selectedIds.length > 0 && selectedIds.length === ((searchQuery.trim() ? filteredOfflineTracks : offlineTracks) || []).length ? t('offline.deselectAll') : t('offline.selectAll')}
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -636,7 +742,7 @@ export default function OfflineScreen() {
             style={[styles.selectActionBtn, selectedIds.length === 0 && { opacity: 0.4 }]}
           >
             <ListPlus size={14} color={colors.ink} />
-            <Text style={styles.selectActionBtnText}>Queue</Text>
+            <Text style={styles.selectActionBtnText}>{t('offline.queueSelected')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleBatchDelete}
@@ -644,13 +750,15 @@ export default function OfflineScreen() {
             style={[styles.selectActionBtnDanger, selectedIds.length === 0 && { opacity: 0.4 }]}
           >
             <Trash2 size={14} color="#ffffff" />
-            <Text style={styles.selectActionBtnTextDanger}>Delete</Text>
+            <Text style={styles.selectActionBtnTextDanger}>{t('offline.deleteSelected')}</Text>
           </TouchableOpacity>
         </View>
       )}
     </View>
   );
 }
+
+export default React.memo(OfflineScreen);
 
 const styles = StyleSheet.create({
   container: {
@@ -1051,7 +1159,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    elevation: 8,
+    elevation: Platform.OS === 'android' ? 0 : 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
@@ -1150,7 +1258,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.35,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: Platform.OS === 'android' ? 0 : 3,
   },
   folderTabText: {
     color: '#8da8a3',

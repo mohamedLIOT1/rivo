@@ -1,32 +1,7 @@
-import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform } from 'react-native';
+import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform, PermissionsAndroid } from 'react-native';
+import { normalizeCoverUri } from '../utils/coverUtils';
 
 const { RivoMediaControls } = NativeModules;
-
-import { API_BASE_URL } from '../config';
-
-const normalizeCoverUrl = (url) => {
-  if (!url || typeof url !== 'string') return '';
-  const trimmed = url.trim();
-  if (trimmed.startsWith('data:')) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('file://')) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('/var/') || trimmed.startsWith('/private/var/') || trimmed.startsWith('/Users/')) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('//')) {
-    return `https:${trimmed}`;
-  }
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    return `${API_BASE_URL}${trimmed}`;
-  }
-  if (trimmed.startsWith('http://')) {
-    return `https://${trimmed.slice(7)}`;
-  }
-  return trimmed;
-};
 
 export const showMediaNotification = (
   track,
@@ -37,14 +12,13 @@ export const showMediaNotification = (
 ) => {
   if (!RivoMediaControls) return;
   try {
-    const rawCover = track?.coverUrl || track?.cover || '';
-    const safeRepeatMode = typeof repeatMode === 'string'
-      ? repeatMode
-      : (repeatMode ? 'all' : 'off');
+    const rawCover = track?.coverUrl || track?.cover || track?.coverImage || track?.thumbnail || '';
+    const safeCover = normalizeCoverUri(rawCover, track);
+    const safeRepeatMode = typeof repeatMode === 'string' ? repeatMode : (repeatMode ? 'all' : 'off');
     RivoMediaControls.showNotification({
       title: track?.title || 'Unknown Track',
       artist: track?.artist || 'Unknown Artist',
-      coverUrl: normalizeCoverUrl(rawCover),
+      coverUrl: safeCover,
       isPlaying: Boolean(isPlaying),
       repeatMode: safeRepeatMode,
       isRepeat: safeRepeatMode !== 'off',
@@ -53,9 +27,7 @@ export const showMediaNotification = (
       duration: Number(track?.duration || 240),
       currentTime: Number(track?.currentTime !== undefined ? track.currentTime : 0),
     });
-  } catch (e) {
-    // Graceful fallback
-  }
+  } catch (e) {}
 };
 
 export const updateMediaNotification = (
@@ -67,9 +39,7 @@ export const updateMediaNotification = (
 ) => {
   if (!RivoMediaControls) return;
   try {
-    const safeRepeatMode = typeof repeatMode === 'string'
-      ? repeatMode
-      : (repeatMode ? 'all' : 'off');
+    const safeRepeatMode = typeof repeatMode === 'string' ? repeatMode : (repeatMode ? 'all' : 'off');
     const payload = {
       isPlaying: Boolean(isPlaying),
       repeatMode: safeRepeatMode,
@@ -80,7 +50,8 @@ export const updateMediaNotification = (
     if (track) {
       payload.title = track.title || 'Unknown Track';
       payload.artist = track.artist || 'Unknown Artist';
-      payload.coverUrl = normalizeCoverUrl(track.coverUrl || track.cover || '');
+      const rawCover = track.coverUrl || track.cover || track.coverImage || track.thumbnail || '';
+      payload.coverUrl = normalizeCoverUri(rawCover, track);
       if (track.duration !== undefined && track.duration !== null) {
         payload.duration = Number(track.duration);
       }
@@ -102,22 +73,156 @@ export const hideMediaNotification = () => {
   } catch (e) {}
 };
 
-export const subscribeToMediaActions = (callback) => {
-  if (!RivoMediaControls) return () => {};
+export const subscribeToMediaActions = (callbackOrHandlers) => {
+  const noop = () => {};
+  noop.remove = noop;
+  if (!RivoMediaControls || !callbackOrHandlers) return noop;
   try {
     const emitter = Platform.OS === 'ios'
       ? new NativeEventEmitter(RivoMediaControls)
       : DeviceEventEmitter;
 
-    const subscription = emitter.addListener('onMediaAction', (action) => {
-      if (callback) callback(action);
+    const subscription = emitter.addListener('onMediaAction', (rawAction) => {
+      try {
+        if (!rawAction) return;
+
+        if (typeof callbackOrHandlers === 'function') {
+          callbackOrHandlers(rawAction);
+          return;
+        }
+
+        if (typeof callbackOrHandlers === 'object' && callbackOrHandlers !== null) {
+          let actionName = '';
+          let seekPos = null;
+
+          if (typeof rawAction === 'string') {
+            const trimmed = rawAction.trim();
+            if (trimmed.startsWith('seek:')) {
+              actionName = 'seek';
+              const parsed = parseFloat(trimmed.slice(5));
+              seekPos = isNaN(parsed) ? 0 : parsed;
+            } else {
+              actionName = trimmed;
+            }
+          } else if (typeof rawAction === 'object') {
+            actionName = rawAction.action || rawAction.name || rawAction.type || '';
+            if (typeof actionName === 'string' && actionName.startsWith('seek:')) {
+              const parsed = parseFloat(actionName.slice(5));
+              seekPos = isNaN(parsed) ? 0 : parsed;
+              actionName = 'seek';
+            }
+            const rawPos = rawAction.position ?? rawAction.pos ?? rawAction.currentTime ?? rawAction.seconds;
+            if (rawPos !== undefined && rawPos !== null) {
+              const parsed = Number(rawPos);
+              seekPos = isNaN(parsed) ? 0 : parsed;
+            }
+          }
+
+          const normalized = String(actionName || '').toLowerCase().trim();
+
+          switch (normalized) {
+            case 'play':
+              if (typeof callbackOrHandlers.onPlay === 'function') callbackOrHandlers.onPlay();
+              else if (typeof callbackOrHandlers.onPlayPause === 'function') callbackOrHandlers.onPlayPause();
+              else if (typeof callbackOrHandlers.togglePlay === 'function') callbackOrHandlers.togglePlay();
+              break;
+            case 'pause':
+              if (typeof callbackOrHandlers.onPause === 'function') callbackOrHandlers.onPause();
+              else if (typeof callbackOrHandlers.onPlayPause === 'function') callbackOrHandlers.onPlayPause();
+              else if (typeof callbackOrHandlers.togglePlay === 'function') callbackOrHandlers.togglePlay();
+              break;
+            case 'play_pause':
+            case 'playpause':
+            case 'toggle':
+            case 'toggleplay':
+              if (typeof callbackOrHandlers.onPlayPause === 'function') callbackOrHandlers.onPlayPause();
+              else if (typeof callbackOrHandlers.togglePlay === 'function') callbackOrHandlers.togglePlay();
+              else if (typeof callbackOrHandlers.onPlay === 'function') callbackOrHandlers.onPlay();
+              break;
+            case 'next':
+              callbackOrHandlers.onNext?.();
+              break;
+            case 'prev':
+            case 'previous':
+              callbackOrHandlers.onPrev?.() || callbackOrHandlers.onPrevious?.();
+              break;
+            case 'seek':
+              callbackOrHandlers.onSeek?.(seekPos !== null ? seekPos : 0);
+              break;
+            case 'like':
+              callbackOrHandlers.onLike?.();
+              break;
+            case 'repeat':
+              callbackOrHandlers.onRepeat?.();
+              break;
+            case 'shuffle':
+              callbackOrHandlers.onShuffle?.();
+              break;
+            case 'forward':
+              callbackOrHandlers.onForward?.();
+              break;
+            default:
+              if (typeof callbackOrHandlers[actionName] === 'function') {
+                callbackOrHandlers[actionName](seekPos);
+              } else if (typeof callbackOrHandlers.onAction === 'function') {
+                callbackOrHandlers.onAction(rawAction, seekPos);
+              }
+              break;
+          }
+        }
+      } catch (handlerErr) {}
     });
-    return () => {
-      subscription.remove();
+
+    const unsubscribe = () => {
+      try {
+        if (subscription && typeof subscription.remove === 'function') {
+          subscription.remove();
+        }
+      } catch (e) {}
     };
+    unsubscribe.remove = unsubscribe;
+    return unsubscribe;
   } catch (e) {
-    return () => {};
+    return noop;
   }
+};
+
+export const checkNotificationPermission = async () => {
+  if (RivoMediaControls && typeof RivoMediaControls.checkNotificationPermission === 'function') {
+    try {
+      return await RivoMediaControls.checkNotificationPermission();
+    } catch (e) {}
+  }
+  if (Platform.OS === 'android' && Platform.Version >= 33) {
+    try {
+      return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    } catch (e) {}
+  }
+  return true;
+};
+
+export const requestNotificationPermission = async () => {
+  if (RivoMediaControls && typeof RivoMediaControls.requestNotificationPermission === 'function') {
+    try {
+      return await RivoMediaControls.requestNotificationPermission();
+    } catch (e) {}
+  }
+  if (Platform.OS === 'android' && Platform.Version >= 33) {
+    try {
+      const res = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      return res === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (e) {}
+  }
+  return true;
+};
+
+export const openNotificationSettings = async () => {
+  if (RivoMediaControls && typeof RivoMediaControls.openNotificationSettings === 'function') {
+    try {
+      return await RivoMediaControls.openNotificationSettings();
+    } catch (e) {}
+  }
+  return false;
 };
 
 export const showChatNotification = (options) => {
@@ -148,9 +253,7 @@ export const dismissAllChatNotifications = () => {
 };
 
 export const installApk = async (filePath) => {
-  if (!RivoMediaControls || !RivoMediaControls.installApk) {
-    return;
-  }
+  if (!RivoMediaControls || !RivoMediaControls.installApk) return;
   return RivoMediaControls.installApk(filePath);
 };
 
@@ -164,23 +267,18 @@ export const getInitialChatSenderId = async () => {
 };
 
 export const subscribeToChatNotification = (callback) => {
-  if (!RivoMediaControls) return () => {};
+  if (!RivoMediaControls || Platform.OS === 'ios') return () => {};
   try {
-    const emitter = Platform.OS === 'ios'
-      ? new NativeEventEmitter(RivoMediaControls)
-      : DeviceEventEmitter;
+    const emitter = DeviceEventEmitter;
 
     const subscription = emitter.addListener('onOpenChatFromNotification', (data) => {
       if (callback) callback(data);
     });
-    return () => {
-      subscription.remove();
-    };
+    return () => { subscription.remove(); };
   } catch (e) {
     return () => {};
   }
 };
-
 
 export const applyOtaBundle = async (filePath) => {
   if (!RivoMediaControls || !RivoMediaControls.applyOtaBundle) return null;
@@ -216,7 +314,6 @@ export const hasNativeProcessRestart = () => {
   return Boolean(RivoMediaControls && typeof RivoMediaControls.exitAndRemoveTask === 'function');
 };
 
-
 export const setLockScreenEnabled = (enabled) => {
   if (RivoMediaControls && typeof RivoMediaControls.setLockScreenEnabled === 'function') {
     try {
@@ -232,4 +329,24 @@ export const isLockScreenEnabled = async () => {
     } catch (e) {}
   }
   return true;
+};
+
+export const canDrawOverlays = async () => {
+  if (Platform.OS !== 'android') return true;
+  if (RivoMediaControls && typeof RivoMediaControls.canDrawOverlays === 'function') {
+    try {
+      return await RivoMediaControls.canDrawOverlays();
+    } catch (e) {}
+  }
+  return true;
+};
+
+export const requestOverlayPermission = async () => {
+  if (Platform.OS !== 'android') return true;
+  if (RivoMediaControls && typeof RivoMediaControls.requestOverlayPermission === 'function') {
+    try {
+      return await RivoMediaControls.requestOverlayPermission();
+    } catch (e) {}
+  }
+  return false;
 };

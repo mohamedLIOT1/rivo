@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../config';
 import { resumeAudioContext } from '../utils/audioEngine';
@@ -18,7 +18,7 @@ const getStoredToken = () => {
 
 export function JamProvider({ children }) {
   const { currentUser } = useUser();
-  const { currentTrack, isPlaying, currentTime, setJamSync, syncRemotePlayState } = useAudioPlayer();
+  const { currentTrack, isPlaying, setJamSync, syncRemotePlayState, audioRef } = useAudioPlayer();
   const { showToast, setIsJamOpen, setIsChatOpen, setChatTargetUser, setUnreadChatCount, isChatOpen, chatTargetUser } = useUI();
 
   const [socket, setSocket] = useState(null);
@@ -51,6 +51,7 @@ export function JamProvider({ children }) {
       ? { id: cur.id || cur._id, name: cur.name, avatar: cur.avatar }
       : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
 
+    const curTime = audioRef?.current?.currentTime || 0;
     if (!jamSessionRef.current?.code) {
       const initialRoom = {
         code,
@@ -59,7 +60,7 @@ export function JamProvider({ children }) {
         hostOnlyControl: false,
         currentTrack: currentTrack || null,
         isPlaying: Boolean(isPlaying),
-        currentTime: Number(currentTime) || 0,
+        currentTime: curTime,
         updatedAt: Date.now(),
         queue: [],
         members: [{
@@ -79,7 +80,7 @@ export function JamProvider({ children }) {
         user: userPayload,
         currentTrack: currentTrack || null,
         isPlaying: Boolean(isPlaying),
-        currentTime: Number(currentTime) || 0
+        currentTime: curTime
       });
       showToast(`Jam Session active: ${code}`);
     } else {
@@ -90,7 +91,7 @@ export function JamProvider({ children }) {
       setIsJamOpen(true);
     }
     return code;
-  }, [socket, currentTrack, isPlaying, currentTime, setJamSync, showToast, setIsJamOpen]);
+  }, [socket, currentTrack, isPlaying, audioRef, setJamSync, showToast, setIsJamOpen]);
 
   const startJamWithTargetUser = useCallback((target) => {
     const code = startJam(true);
@@ -184,6 +185,20 @@ export function JamProvider({ children }) {
           : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
         s.emit('jam:join_room', { roomCode: jamSessionRef.current.code, user: userPayload });
       }
+    });
+
+    s.on('jam:room_created', (room) => {
+      setJamSession(room);
+      setJamSync({ socket: s, jamSession: room });
+    });
+
+    s.on('jam_updated', (room) => {
+      setJamSession(room);
+      setJamSync({ socket: s, jamSession: room });
+    });
+
+    s.on('jam:control_mode_changed', ({ hostOnlyControl }) => {
+      setJamSession(prev => prev ? ({ ...prev, hostOnlyControl: Boolean(hostOnlyControl) }) : null);
     });
 
     s.on('jam:room_updated', (room) => {
@@ -288,7 +303,7 @@ export function JamProvider({ children }) {
     }
   }, [socket, jamSession, setJamSync]);
 
-  const value = {
+  const value = useMemo(() => ({
     socket,
     jamSession,
     startJam,
@@ -297,7 +312,7 @@ export function JamProvider({ children }) {
     leaveJam,
     transferHost,
     kickMember,
-  };
+  }), [socket, jamSession, startJam, startJamWithTargetUser, joinJam, leaveJam, transferHost, kickMember]);
 
   return <JamContext.Provider value={value}>{children}</JamContext.Provider>;
 }

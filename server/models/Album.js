@@ -20,5 +20,6 @@ AlbumSchema.index({ artist: 1, createdAt: -1 });
 AlbumSchema.index({ isPublic: 1, updatedAt: -1 });
 AlbumSchema.index({ trackIds: 1 });
 AlbumSchema.index({ createdAt: -1 });
+AlbumSchema.index({ updatedAt: -1 });
 
 module.exports = mongoose.models.Album || mongoose.model('Album', AlbumSchema);

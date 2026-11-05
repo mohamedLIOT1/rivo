@@ -15,7 +15,8 @@ if not os.path.exists(KEY):
     else:
         KEY = None
 
-HOST = "ubuntu@rivo-m.duckdns.org"
+HOST = "ubuntu@172.31.5.43"
+JUMP_HOST = "ubuntu@13.53.117.74"
 REMOTE_DIR = "/home/ubuntu/rivo"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -23,6 +24,8 @@ def run_ssh(cmd):
     full_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
     if KEY:
         full_cmd.extend(["-i", KEY])
+    if JUMP_HOST:
+        full_cmd.extend(["-J", JUMP_HOST])
     full_cmd.extend([HOST, cmd])
     print(f"[SSH] {cmd}", flush=True)
     res = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', stdin=subprocess.DEVNULL)
@@ -38,6 +41,8 @@ def upload_file(local_path, remote_path):
     cmd = ["scp", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
     if KEY:
         cmd.extend(["-i", KEY])
+    if JUMP_HOST:
+        cmd.extend(["-J", JUMP_HOST])
     cmd.extend([local_path, f"{HOST}:{remote_path}"])
     print(f"[SCP] {os.path.basename(local_path)} -> {remote_path}", flush=True)
     res = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', stdin=subprocess.DEVNULL)
@@ -154,6 +159,8 @@ def sync_assets_and_metadata():
     meta_files = [
         ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
         ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
+        ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
+        ("public/downloads/Rivo-v2.3.8.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.apk"),
         ("public/downloads/Rivo-v2.3.8.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.ipa"),
         ("public/downloads/Rivo-v2.3.7.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.7.ipa"),
         ("public/downloads/Rivo-v2.3.5.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.5.ipa"),
@@ -185,6 +192,7 @@ def main():
     parser.add_argument("--server-only", action="store_true", help="Only sync server files and reload PM2")
     parser.add_argument("--dist-only", action="store_true", help="Only build and sync web dist")
     parser.add_argument("--skip-build", action="store_true", help="Skip Vite build (use existing dist)")
+    parser.add_argument("--ota-only", action="store_true", help="Only sync OTA bundle and manifest")
     args = parser.parse_args()
 
     version = get_current_version()
@@ -194,7 +202,12 @@ def main():
 
     run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server {REMOTE_DIR}/dist /home/ubuntu/dist")
 
-    if args.dist_only:
+    if args.ota_only:
+        print("\n🚀 [OTA] Syncing Android OTA bundle and manifest...", flush=True)
+        upload_file(os.path.join(BASE_DIR, "public/downloads/ota/index.android.bundle"), f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle")
+        upload_file(os.path.join(BASE_DIR, "server/ota-manifest.json"), f"{REMOTE_DIR}/server/ota-manifest.json")
+        restart_and_verify()
+    elif args.dist_only:
         build_and_sync_frontend(skip_build=args.skip_build)
     elif args.server_only:
         sync_server()

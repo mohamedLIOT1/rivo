@@ -9,40 +9,48 @@ import { normalizeCoverUri } from '../utils/coverUtils';
 import { getTrackMusicalData, getCamelotColor } from '../utils/musicAnalysis';
 import { isQuranContent } from '../../utils/quranUtils';
 
-export default React.memo(function SongItem({
+function areEqualSongItem(prev, next) {
+  const prevId = String(prev.track?._id || prev.track?.id || '');
+  const nextId = String(next.track?._id || next.track?.id || '');
+  if (prevId !== nextId) return false;
+  if (Boolean(prev.isCurrent) !== Boolean(next.isCurrent)) return false;
+  if (Boolean(prev.isPlaying) !== Boolean(next.isPlaying)) return false;
+  if (Boolean(prev.isLiked) !== Boolean(next.isLiked)) return false;
+  if (Boolean(prev.isLoading) !== Boolean(next.isLoading)) return false;
+  if (Boolean(prev.isDark) !== Boolean(next.isDark)) return false;
+  if (Boolean(prev.isDownloaded) !== Boolean(next.isDownloaded)) return false;
+  if (Boolean(prev.showBpmKey) !== Boolean(next.showBpmKey)) return false;
+  if (prev.track?.title !== next.track?.title) return false;
+  if (prev.track?.artist !== next.track?.artist) return false;
+  return true;
+}
+
+export const SongItemPure = React.memo(function SongItemPure({
   track,
   onPlay,
   onOpenActionMenu,
   onMorePress,
-  isCurrent: propIsCurrent,
-  isLiked: propIsLiked,
-  showBpmKey: propShowBpmKey,
+  onToggleLike,
+  isCurrent = false,
+  isPlaying = false,
+  isLoading = false,
+  isLiked = false,
+  isDownloaded = false,
+  showBpmKey = false,
+  isDark = true,
 }) {
-  const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [], isMixMode } = useAudioPlayer();
-  const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
+
+  const rawCover = track?.coverUrl || track?.cover || track?.coverImage || track?.thumbnail || track?.artwork || track?.remoteCoverUrl || track?.originalCoverUrl || track?.albumCover || '';
+
+  React.useEffect(() => {
+    setImageError(false);
+  }, [track?._id, track?.id, rawCover]);
 
   if (!track) return null;
 
   const handleAction = onOpenActionMenu || onMorePress;
-
   const trackId = String(track._id || track.id || '');
-  const isCurrent = propIsCurrent !== undefined 
-    ? propIsCurrent 
-    : (String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '');
-  const isLiked = propIsLiked !== undefined
-    ? propIsLiked
-    : (Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false);
-  const safeDownloaded = Array.isArray(downloadedTracks) ? downloadedTracks : [];
-  const isDownloaded = safeDownloaded.some(t => {
-    if (trackId && String(t._id || t.id) === trackId) return true;
-    const tTitle = (t.title || '').trim().toLowerCase();
-    const tArtist = (t.artist || '').trim().toLowerCase();
-    const curTitle = (track.title || '').trim().toLowerCase();
-    const curArtist = (track.artist || '').trim().toLowerCase();
-    return Boolean(curTitle && tTitle && curTitle === tTitle && (!curArtist || !tArtist || curArtist === tArtist));
-  });
 
   const isQuran = Boolean(
     track.isQuran ||
@@ -52,11 +60,10 @@ export default React.memo(function SongItem({
     (track.title && /سورة|سوره|قرآن|قران/i.test(track.title))
   );
 
-  const shouldShowBpmKey = !isQuran && (propShowBpmKey === true);
+  const shouldShowBpmKey = !isQuran && (showBpmKey === true);
   const musicalData = React.useMemo(() => shouldShowBpmKey ? getTrackMusicalData(track) : null, [shouldShowBpmKey, track]);
   const camelotColor = React.useMemo(() => musicalData ? getCamelotColor(musicalData.key) : null, [musicalData]);
 
-  const rawCover = track.coverUrl || track.cover || track.coverImage || '';
   const coverSourceUri = imageError ? normalizeCoverUri(null, track) : normalizeCoverUri(rawCover, track);
 
   return (
@@ -66,11 +73,7 @@ export default React.memo(function SongItem({
         !isDark && styles.containerLight,
         isCurrent && (isDark ? styles.activeContainer : styles.activeContainerLight)
       ]}
-      onPress={() => {
-        if (isCurrent) togglePlay();
-        else if (onPlay) onPlay(track);
-        else if (playTrack) playTrack(track);
-      }}
+      onPress={() => onPlay && onPlay(track)}
       activeOpacity={0.8}
     >
       {/* Cover Image */}
@@ -116,7 +119,7 @@ export default React.memo(function SongItem({
       <View style={styles.actions}>
         {/* Heart */}
         <TouchableOpacity
-          onPress={() => toggleLikeTrack(trackId)}
+          onPress={() => onToggleLike && onToggleLike(trackId)}
           style={styles.iconBtn}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -141,11 +144,7 @@ export default React.memo(function SongItem({
         {/* Teal Square Play Button */}
         <TouchableOpacity
           style={styles.playBtn}
-          onPress={() => {
-            if (isCurrent) togglePlay();
-            else if (onPlay) onPlay(track);
-            else if (playTrack) playTrack(track);
-          }}
+          onPress={() => onPlay && onPlay(track)}
           activeOpacity={0.85}
         >
           {isCurrent && isLoading ? (
@@ -159,7 +158,42 @@ export default React.memo(function SongItem({
       </View>
     </TouchableOpacity>
   );
-});
+}, areEqualSongItem);
+
+function ContextSongItem(props) {
+  const { isDark = true } = useTheme?.() || {};
+  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { likedTrackIds = [], toggleLikeTrack } = useUser();
+  const trackId = String(props.track?._id || props.track?.id || '');
+  const isCurrent = props.isCurrent !== undefined ? props.isCurrent : (String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '');
+  const isLiked = props.isLiked !== undefined ? props.isLiked : (Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false);
+
+  const handlePlay = props.onPlay || (() => {
+    if (isCurrent) togglePlay();
+    else if (playTrack) playTrack(props.track);
+  });
+
+  return (
+    <SongItemPure
+      {...props}
+      isDark={props.isDark !== undefined ? props.isDark : isDark}
+      isCurrent={isCurrent}
+      isPlaying={props.isPlaying !== undefined ? props.isPlaying : (isCurrent && isPlaying)}
+      isLoading={props.isLoading !== undefined ? props.isLoading : (isCurrent && isLoading)}
+      isLiked={isLiked}
+      onPlay={handlePlay}
+      onToggleLike={props.onToggleLike || toggleLikeTrack}
+    />
+  );
+}
+
+export default React.memo(function SongItem(props) {
+  // If parent screen passes isCurrent and onPlay, bypass context subscription entirely (Zero render storm on playback start!)
+  if (props.isCurrent !== undefined && props.onPlay) {
+    return <SongItemPure isDark={props.isDark !== undefined ? props.isDark : true} {...props} />;
+  }
+  return <ContextSongItem {...props} />;
+}, areEqualSongItem);
 
 const styles = StyleSheet.create({
   container: {

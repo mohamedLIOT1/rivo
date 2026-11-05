@@ -30,6 +30,7 @@ import {
 } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { APP_VERSION } from '../version';
 
 const { width } = Dimensions.get('window');
@@ -64,6 +65,7 @@ const FEATURES = [
 export default function IntroAuthModal({ visible, onClose, initialMode = 'intro' }) {
   const { login, register, currentUser } = useUser();
   const { showToast } = useToast();
+  const { isDark = true } = useTheme();
 
   // Mode: 'intro' | 'login' | 'register'
   const [mode, setMode] = useState(initialMode);
@@ -105,7 +107,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
   return (
     <Modal
       visible={visible}
-      animationType="fade"
+      animationType={Platform.OS === 'android' ? 'none' : 'fade'}
       transparent={true}
       onRequestClose={onClose}
     >
@@ -115,10 +117,10 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
           keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
           style={styles.keyboardWrap}
         >
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, !isDark && styles.modalCardLight]}>
             {/* Top Close Button */}
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-              <X size={18} color="#94a3b8" />
+            <TouchableOpacity style={[styles.closeBtn, !isDark && styles.closeBtnLight]} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <X size={18} color={!isDark ? '#0b1110' : '#94a3b8'} />
             </TouchableOpacity>
 
             <ScrollView
@@ -137,11 +139,11 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.appTitle}>RIVO</Text>
+                <Text style={[styles.appTitle, !isDark && styles.appTitleLight]}>RIVO</Text>
                 <View style={styles.versionPill}>
                   <Text style={styles.versionText}>v{APP_VERSION} • MUSIC STREAMING</Text>
                 </View>
-                <Text style={styles.tagline}>
+                <Text style={[styles.tagline, !isDark && styles.taglineLight]}>
                   Music streaming, offline downloads & synchronized listening.
                 </Text>
               </View>
@@ -154,13 +156,13 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                     {FEATURES.map((feat, i) => {
                       const IconComp = feat.icon;
                       return (
-                        <View key={i} style={styles.featureItem}>
+                        <View key={i} style={[styles.featureItem, !isDark && styles.featureItemLight]}>
                           <View style={[styles.featIconBox, { backgroundColor: `${feat.color}20`, borderColor: feat.color }]}>
                             <IconComp size={18} color={feat.color} strokeWidth={2.5} />
                           </View>
                           <View style={styles.featTextBox}>
-                            <Text style={styles.featTitle}>{feat.title}</Text>
-                            <Text style={styles.featDesc}>{feat.desc}</Text>
+                            <Text style={[styles.featTitle, !isDark && styles.featTitleLight]}>{feat.title}</Text>
+                            <Text style={[styles.featDesc, !isDark && styles.featDescLight]}>{feat.desc}</Text>
                           </View>
                         </View>
                       );
@@ -192,8 +194,8 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                       onPress={onClose}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.guestBtnText}>CONTINUE AS GUEST</Text>
-                      <ArrowRight size={13} color="#94a3b8" />
+                      <Text style={[styles.guestBtnText, !isDark && styles.guestBtnTextLight]}>CONTINUE AS GUEST</Text>
+                      <ArrowRight size={13} color={!isDark ? '#57534e' : '#94a3b8'} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -203,7 +205,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
               {(mode === 'login' || mode === 'register') && (
                 <View style={styles.formSection}>
                   {/* Mode Toggle Tabs */}
-                  <View style={styles.tabSwitch}>
+                  <View style={[styles.tabSwitch, !isDark && styles.tabSwitchLight]}>
                     <TouchableOpacity
                       style={[styles.tabBtn, mode === 'login' && styles.tabBtnActive]}
                       onPress={() => {
@@ -211,7 +213,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                         setErrorMessage('');
                       }}
                     >
-                      <Text style={[styles.tabBtnText, mode === 'login' && styles.tabBtnTextActive]}>
+                      <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, mode === 'login' && styles.tabBtnTextActive]}>
                         SIGN IN
                       </Text>
                     </TouchableOpacity>
@@ -222,7 +224,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                         setErrorMessage('');
                       }}
                     >
-                      <Text style={[styles.tabBtnText, mode === 'register' && styles.tabBtnTextActive]}>
+                      <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, mode === 'register' && styles.tabBtnTextActive]}>
                         REGISTER
                       </Text>
                     </TouchableOpacity>
@@ -236,11 +238,11 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
 
                   {mode === 'register' && (
                     <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>FULL NAME</Text>
+                      <Text style={[styles.inputLabel, !isDark && styles.inputLabelLight]}>FULL NAME</Text>
                       <TextInput
-                        style={styles.input}
+                        style={[styles.input, !isDark && styles.inputLight]}
                         placeholder="e.g. Karim Tarek"
-                        placeholderTextColor="#64748b"
+                        placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
                         value={name}
                         onChangeText={setName}
                         autoCapitalize="words"
@@ -249,11 +251,11 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                   )}
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>EMAIL OR USERNAME</Text>
+                    <Text style={[styles.inputLabel, !isDark && styles.inputLabelLight]}>EMAIL OR USERNAME</Text>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, !isDark && styles.inputLight]}
                       placeholder="listener@rivo.fm"
-                      placeholderTextColor="#64748b"
+                      placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
                       value={email}
                       onChangeText={setEmail}
                       autoCapitalize="none"
@@ -262,12 +264,12 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>PASSWORD</Text>
+                    <Text style={[styles.inputLabel, !isDark && styles.inputLabelLight]}>PASSWORD</Text>
                     <View style={styles.passwordRow}>
                       <TextInput
-                        style={[styles.input, { flex: 1, paddingRight: 40 }]}
+                        style={[styles.input, !isDark && styles.inputLight, { flex: 1, paddingRight: 40 }]}
                         placeholder="••••••••"
-                        placeholderTextColor="#64748b"
+                        placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry={!showPassword}
@@ -279,9 +281,9 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
                         {showPassword ? (
-                          <EyeOff size={16} color="#94a3b8" />
+                          <EyeOff size={16} color={!isDark ? '#57534e' : '#94a3b8'} />
                         ) : (
-                          <Eye size={16} color="#94a3b8" />
+                          <Eye size={16} color={!isDark ? '#57534e' : '#94a3b8'} />
                         )}
                       </TouchableOpacity>
                     </View>
@@ -317,7 +319,7 @@ export default function IntroAuthModal({ visible, onClose, initialMode = 'intro'
                       onPress={onClose}
                       style={{ paddingVertical: 6 }}
                     >
-                      <Text style={styles.guestSkipText}>Skip as Guest</Text>
+                      <Text style={[styles.guestSkipText, !isDark && styles.guestSkipTextLight]}>Skip as Guest</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -608,5 +610,51 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     fontWeight: '700',
+  },
+  // ── Light Theme Adaptations ──
+  modalCardLight: {
+    backgroundColor: '#f4ede1',
+    borderColor: '#0b1110',
+  },
+  closeBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  appTitleLight: {
+    color: '#0b1110',
+  },
+  taglineLight: {
+    color: '#57534e',
+  },
+  featureItemLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  featTitleLight: {
+    color: '#0b1110',
+  },
+  featDescLight: {
+    color: '#57534e',
+  },
+  guestBtnTextLight: {
+    color: '#57534e',
+  },
+  tabSwitchLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  tabBtnTextLight: {
+    color: '#57534e',
+  },
+  inputLabelLight: {
+    color: '#57534e',
+  },
+  inputLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+    color: '#0b1110',
+  },
+  guestSkipTextLight: {
+    color: '#57534e',
   },
 });

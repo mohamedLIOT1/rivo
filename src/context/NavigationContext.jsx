@@ -119,13 +119,20 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
       setSelectedArtist(null);
       setSelectedPlaylist(null);
     } else if (screen === 'artist') {
-      if (params.artist) {
-        const artistObj = typeof params.artist === 'string'
-          ? { name: params.artist.trim(), id: params.artist.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-') }
-          : params.artist;
-        setSelectedArtist(artistObj);
-      } else if (params.name) {
-        setSelectedArtist({ name: params.name, id: params.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') });
+      const artParam = params.artist;
+      const nameParam = params.name || (typeof artParam === 'string' ? artParam : artParam?.name);
+      if (artParam && typeof artParam === 'object') {
+        const safeId = artParam.id || encodeURIComponent(artParam.name || '').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+        setSelectedArtist({ ...artParam, id: safeId });
+      } else if (nameParam) {
+        const cleanName = String(nameParam).trim();
+        const safeId = encodeURIComponent(cleanName).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+        setSelectedArtist(prev => {
+          if (prev && prev.name && prev.name.toLowerCase() === cleanName.toLowerCase()) {
+            return prev;
+          }
+          return { name: cleanName, id: safeId };
+        });
       }
       setSelectedPlaylist(null);
       setViewingProfileUserId(null);
@@ -191,13 +198,14 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
 
   const handleSelectArtist = useCallback((artist) => {
     if (!artist) return;
-    const name = typeof artist === 'string' ? artist.trim() : (artist.name || '').trim();
+    const name = typeof artist === 'string' ? artist.trim() : (artist.name || artist.artist || '').trim();
     if (!name) return;
+    const safeId = encodeURIComponent(name).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     const artistObj = typeof artist === 'string'
-      ? { name, id: name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') }
-      : artist;
+      ? { name, id: safeId }
+      : { ...artist, name, id: artist.id || safeId };
     setSelectedArtist(artistObj);
-    navigateTo('artist', { name: artistObj.name });
+    navigateTo('artist', { name: artistObj.name, artist: artistObj });
   }, [navigateTo]);
 
   const handleSelectPlaylistView = useCallback((pl) => {
@@ -246,8 +254,18 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
         setViewingProfileUserId(params.userId || null);
         setSelectedArtist(null);
         setSelectedPlaylist(null);
-      } else if (screen === 'artist' && params.name) {
-        setSelectedArtist({ name: params.name, id: params.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') });
+      } else if (screen === 'artist') {
+        const artName = params.name;
+        if (artName) {
+          const cleanName = String(artName).trim();
+          const safeId = encodeURIComponent(cleanName).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+          setSelectedArtist(prev => {
+            if (prev && prev.name && prev.name.toLowerCase() === cleanName.toLowerCase()) {
+              return prev;
+            }
+            return { name: cleanName, id: safeId };
+          });
+        }
         setSelectedPlaylist(null);
         setViewingProfileUserId(null);
       } else if (screen === 'playlist') {
@@ -280,7 +298,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     return () => window.removeEventListener('popstate', handlePopState);
   }, [getLikedSongsPlaylist]);
 
-  const value = {
+  const value = useMemo(() => ({
     currentScreen,
     setCurrentScreen,
     topSearchQuery,
@@ -299,7 +317,20 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     handleSelectArtist,
     handleSelectPlaylistView,
     getLikedSongsPlaylist,
-  };
+  }), [
+    currentScreen,
+    topSearchQuery,
+    selectedArtist,
+    selectedPlaylist,
+    libraryMode,
+    viewingProfileUserId,
+    navigateTo,
+    goToScreen,
+    handleNavigateBack,
+    handleSelectArtist,
+    handleSelectPlaylistView,
+    getLikedSongsPlaylist,
+  ]);
 
   return <NavigationContext.Provider value={value}>{children}</NavigationContext.Provider>;
 }

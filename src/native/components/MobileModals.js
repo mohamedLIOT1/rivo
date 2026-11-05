@@ -9,7 +9,6 @@ import SettingsModal from './SettingsModal';
 import JamRoomModal from './JamRoomModal';
 import FriendActivityModal from './FriendActivityModal';
 import IntroAuthModal from './IntroAuthModal';
-import UserDetailModal from './UserDetailModal';
 import AlbumDetailModal from './AlbumDetailModal';
 import ArtistDetailModal from './ArtistDetailModal';
 import { useUser } from '../context/UserContext';
@@ -48,6 +47,11 @@ export default function MobileModals({
   currentUser,
   setActiveTab,
 }) {
+  const hasMountedFullPlayerRef = React.useRef(false);
+  if (isFullPlayerOpen) {
+    hasMountedFullPlayerRef.current = true;
+  }
+
   return (
     <>
       {Boolean(selectedAlbum) && (
@@ -81,7 +85,7 @@ export default function MobileModals({
           onTrackAction={(track) => setActionTrack && setActionTrack(track)}
         />
       )}
-      {isFullPlayerOpen && (
+      {hasMountedFullPlayerRef.current && (
         <FullPlayerModal
           visible={isFullPlayerOpen}
           onClose={() => setIsFullPlayerOpen(false)}
@@ -140,31 +144,12 @@ export default function MobileModals({
             const myId = currentUser?._id || currentUser?.id;
             const targetId = target?._id || target?.id;
             if (targetId && myId && String(targetId) === String(myId)) {
-              setActiveTab('profile');
+              if (setViewingUser) setViewingUser(null);
             } else {
-              setViewingUser(target);
+              if (setViewingUser) setViewingUser(target);
             }
+            if (setActiveTab) setActiveTab('profile');
           }}
-        />
-      )}
-
-      {Boolean(viewingUser) && (
-        <UserDetailModal
-          visible={Boolean(viewingUser)}
-          user={viewingUser}
-          userId={viewingUser?._id || viewingUser?.id}
-          onClose={() => setViewingUser(null)}
-          onOpenChat={(target) => {
-            setViewingUser(null);
-            setChatTargetUser(target);
-            setIsChatOpen(true);
-          }}
-          onOpenJam={() => {
-            setViewingUser(null);
-            setIsJamOpen(true);
-          }}
-          onOpenFullPlayer={() => setIsFullPlayerOpen(true)}
-          onSelectAlbum={(alb) => setSelectedAlbum && setSelectedAlbum(alb)}
         />
       )}
 
@@ -186,6 +171,17 @@ export default function MobileModals({
         <FriendActivityModal
           visible={isFriendActivityOpen}
           onClose={() => setIsFriendActivityOpen(false)}
+          onViewProfile={(target) => {
+            setIsFriendActivityOpen(false);
+            const myId = currentUser?._id || currentUser?.id;
+            const targetId = target?._id || target?.id;
+            if (targetId && myId && String(targetId) === String(myId)) {
+              if (setViewingUser) setViewingUser(null);
+            } else {
+              if (setViewingUser) setViewingUser(target);
+            }
+            if (setActiveTab) setActiveTab('profile');
+          }}
         />
       )}
 

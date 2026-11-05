@@ -143,17 +143,30 @@ export default function SongRadarModal({
     setCountdown(6);
 
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
+      let permissionGranted = false;
+      try {
+        const permission = await Audio.requestPermissionsAsync();
+        permissionGranted = Boolean(permission?.granted);
+      } catch (permErr) {
+        console.warn('[SongRadar] Audio.requestPermissionsAsync error:', permErr);
+        permissionGranted = false;
+      }
+
+      if (!permissionGranted) {
+        await stopRecordingSafely();
         setRadarState('error');
-        setErrorMessage('Microphone access was denied. Please allow microphone permissions in system settings to use Song Radar.');
+        setErrorMessage('Microphone access is required for Song Radar. Please enable microphone permissions in your device settings.');
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+      } catch (audioModeErr) {
+        console.warn('[SongRadar] setAudioModeAsync error:', audioModeErr);
+      }
 
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
@@ -188,7 +201,17 @@ export default function SongRadarModal({
     } catch (err) {
       await stopRecordingSafely();
       setRadarState('error');
-      setErrorMessage(err.message || 'Unable to access microphone on this device.');
+      const rawMsg = String(err?.message || '');
+      if (
+        rawMsg.includes('NSMicrophoneUsageDescription') ||
+        rawMsg.includes('permission') ||
+        rawMsg.includes('Permission') ||
+        rawMsg.includes('ExponentAV')
+      ) {
+        setErrorMessage('Microphone access is required for Song Radar. Please enable microphone permissions in your device settings.');
+      } else {
+        setErrorMessage('Unable to access microphone on this device. Please check your audio settings.');
+      }
     }
   };
 
@@ -265,10 +288,10 @@ export default function SongRadarModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'fade'} transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheetOuter}>
-          <View style={styles.hardShadow} />
+          <View style={[styles.hardShadow, !isDark && { backgroundColor: '#000000' }]} />
           
           <View style={[styles.sheet, !isDark && styles.sheetLight]}>
             {/* Header */}
@@ -348,9 +371,9 @@ export default function SongRadarModal({
                     Hold your phone close to the music source or sing the lyrics.
                   </Text>
 
-                  <View style={styles.timerBadge}>
+                  <View style={[styles.timerBadge, !isDark && styles.timerBadgeLight]}>
                     <View style={styles.greenDot} />
-                    <Text style={styles.timerText}>{countdown}s remaining</Text>
+                    <Text style={[styles.timerText, !isDark && { color: '#047857' }]}>{countdown}s remaining</Text>
                   </View>
 
                   <TouchableOpacity
@@ -392,7 +415,7 @@ export default function SongRadarModal({
 
                   {/* Album Cover & Details */}
                   <View style={styles.trackCard}>
-                    <View style={styles.coverBox}>
+                    <View style={[styles.coverBox, !isDark && styles.coverBoxLight]}>
                       {matchDetails.cover ? (
                         <Image
                           source={{ uri: normalizeCoverUri(matchDetails.cover) }}
@@ -408,11 +431,11 @@ export default function SongRadarModal({
                     <Text style={[styles.trackTitle, !isDark && styles.textDark]} numberOfLines={1}>
                       {matchDetails.title}
                     </Text>
-                    <Text style={styles.trackArtist} numberOfLines={1}>
+                    <Text style={[styles.trackArtist, !isDark && { color: '#047857' }]} numberOfLines={1}>
                       {matchDetails.artist}
                     </Text>
                     {matchDetails.album && matchDetails.album !== 'Single' && (
-                      <Text style={styles.trackAlbum} numberOfLines={1}>
+                      <Text style={[styles.trackAlbum, !isDark && { color: '#57534e' }]} numberOfLines={1}>
                         {matchDetails.album}
                       </Text>
                     )}
@@ -638,7 +661,7 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 2,
     borderColor: '#0b1110',
-    elevation: 3,
+    elevation: Platform.OS === 'android' ? 0 : 2,
   },
   primaryBtnText: {
     fontSize: 12,
@@ -673,7 +696,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 12,
-    elevation: 6,
+    elevation: Platform.OS === 'android' ? 0 : 2,
   },
   timerBadge: {
     flexDirection: 'row',
@@ -841,5 +864,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     width: '100%',
+  },
+  // ── Light Theme Adaptations ──
+  timerBadgeLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#10b981',
+  },
+  coverBoxLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
   },
 });

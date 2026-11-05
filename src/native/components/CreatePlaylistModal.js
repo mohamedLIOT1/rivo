@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Switch,
   ScrollView,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Image,
@@ -298,7 +299,7 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -640,12 +641,17 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                                 </Text>
                               </View>
                             ) : (
-                              <ScrollView
+                              <FlatList
                                 nestedScrollEnabled={true}
                                 style={{ maxHeight: 200 }}
                                 showsVerticalScrollIndicator={true}
-                              >
-                                {filteredDeviceTracks.map((t) => {
+                                data={filteredDeviceTracks}
+                                keyExtractor={(t) => String(t._id || t.id)}
+                                windowSize={3}
+                                maxToRenderPerBatch={8}
+                                initialNumToRender={8}
+                                removeClippedSubviews={true}
+                                renderItem={({ item: t }) => {
                                   const id = String(t._id || t.id);
                                   const isChecked = selectedTrackIds.includes(id);
                                   return (
@@ -697,8 +703,8 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                                       </View>
                                     </TouchableOpacity>
                                   );
-                                })}
-                              </ScrollView>
+                                }}
+                              />
                             )}
                           </View>
                         </View>

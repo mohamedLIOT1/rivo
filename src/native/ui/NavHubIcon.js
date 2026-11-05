@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { memo } from 'react';
 import Svg, { Rect } from 'react-native-svg';
 
-export default function NavHubIcon({ size = 20, color = '#17a398' }) {
+function NavHubIcon({ size = 20, color = '#17a398' }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       {/* ⊞ Minimal 4-Dots Grid */}
@@ -12,3 +12,5 @@ export default function NavHubIcon({ size = 20, color = '#17a398' }) {
     </Svg>
   );
 }
+
+export default memo(NavHubIcon);

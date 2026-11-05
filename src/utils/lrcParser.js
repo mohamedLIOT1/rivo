@@ -7,15 +7,30 @@
 export function parseLrcLyrics(input) {
   if (!input) return [];
 
-  // 1. If input is already an array of lyric objects
+  // Handle object with lyrics property (e.g. API response wrapper)
+  if (typeof input === 'object' && !Array.isArray(input) && input.lyrics) {
+    return parseLrcLyrics(input.lyrics);
+  }
+
+  // 1. If input is already an array of lyric objects or strings
   if (Array.isArray(input)) {
-    const valid = input.filter(item => item && typeof item.text === 'string');
+    if (input.length === 0) return [];
+    if (input.every(item => typeof item === 'string')) {
+      return parseLrcLyrics(input.join('\n'));
+    }
+    const valid = input.filter(item => item && (typeof item.text === 'string' || typeof item === 'string'));
     if (valid.length > 0) {
       return valid
-        .map((item, idx) => ({
-          time: typeof item.time === 'number' && !isNaN(item.time) ? item.time : idx * 5,
-          text: String(item.text).trim()
-        }))
+        .map((item, idx) => {
+          if (typeof item === 'string') {
+            return { time: -1, isUnsynced: true, text: item.trim() };
+          }
+          return {
+            ...item,
+            time: typeof item.time === 'number' && !isNaN(item.time) ? item.time : idx * 5,
+            text: String(item.text).trim()
+          };
+        })
         .filter(item => item.text.length > 0)
         .sort((a, b) => a.time - b.time);
     }

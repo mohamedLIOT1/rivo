@@ -231,7 +231,7 @@ export default function JamRoomModal({
                 <div className="flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1">
                   {(() => {
                     const myMember = (jamSession.members || []).find(m => m.socketId === socket?.id || (currentUser?.id && (m.id === currentUser.id || m._id === currentUser.id)));
-                    const isCurrentUserHost = Boolean(myMember?.isHost || jamSession.hostId === socket?.id);
+                    const isCurrentUserHost = Boolean(myMember?.isHost || jamSession.hostId === socket?.id || (currentUser?.id && jamSession.hostUserId && String(jamSession.hostUserId) === String(currentUser.id || currentUser._id)));
 
                     return (jamSession.members || []).map((m) => (
                       <div key={m.id || m.socketId} className={`flex items-center justify-between p-2 brutal-border text-xs rounded-lg ${

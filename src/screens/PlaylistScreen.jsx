@@ -13,6 +13,7 @@ import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import { getTrackMusicalData, checkHarmonicCompatibility, getRecommendedTransition, getCamelotColor, calculateBarsDuration } from '../utils/musicAnalysis';
 import { useAudioPlayer, shuffleArray } from '../context/AudioContext';
 import { useDownloadManager } from '../context/DownloadContext';
+import { usePreferences } from '../context/PreferencesContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -47,6 +48,7 @@ export default function PlaylistScreen({
   onToast = () => {},
 }) {
   const isDark = globalTheme === 'dark';
+  const { language, t, isRTL } = usePreferences();
   const [remotePlaylist, setRemotePlaylist] = useState(null);
 
   const playlist = useMemo(() => {
@@ -260,9 +262,13 @@ export default function PlaylistScreen({
     const missing = playlist.trackIds.map(String).filter(id => !knownIds.has(id));
 
     if (missing.length > 0) {
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       fetch(`${API_BASE_URL}/api/tracks/by-ids`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ ids: missing })
       })
       .then(r => r.json())
@@ -839,15 +845,15 @@ export default function PlaylistScreen({
               isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700' : 'bg-[#fdfbf7] hover:bg-[#ede5d3] text-[#0b1110] border-black'
             }`}
           >
-            <ArrowLeft size={15} />
-            <span className="hidden sm:inline">Return</span>
+            <ArrowLeft size={15} className={isRTL ? "rotate-180" : ""} />
+            <span className="hidden sm:inline">{t?.('library.returnBtn') || 'Return'}</span>
           </button>
 
           <div className={`inline-flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-0.5 sm:py-1 brutal-border text-[9px] sm:text-[10px] font-mono font-black uppercase truncate ${
             isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
           }`}>
-            <span className="hidden sm:inline">OFFICIAL AUDIO PRESCRIPTION</span>
-            <span className="sm:hidden">PRESCRIPTION</span>
+            <span className="hidden sm:inline">{t?.('library.officialPlaylist') || 'OFFICIAL AUDIO PRESCRIPTION'}</span>
+            <span className="sm:hidden">{t?.('library.officialPlaylist') || 'PRESCRIPTION'}</span>
             <span>•</span>
             <span>BATCH #{String(playlist.id || '99').slice(-4)}</span>
           </div>
@@ -859,7 +865,7 @@ export default function PlaylistScreen({
             {playlist.isLikedSongs ? (
               <div className="w-full h-full bg-[#dc2626] flex flex-col items-center justify-center text-[#fdfbf7] p-2 sm:p-4 text-center">
                 <Heart className="w-8 h-8 sm:w-16 sm:h-16" fill="#fdfbf7" />
-                <span className="font-mono text-[8px] sm:text-xs font-black uppercase tracking-widest mt-1 sm:mt-2">{isQuran ? 'FAVORITE SURAHS' : 'LIKED SONGS'}</span>
+                <span className="font-mono text-[8px] sm:text-xs font-black uppercase mt-1 sm:mt-2">{isQuran ? (t?.('library.favoriteSurahs') || 'FAVORITE SURAHS') : (t?.('library.likedSongs') || 'LIKED SONGS')}</span>
               </div>
             ) : (
               <>
@@ -896,7 +902,7 @@ export default function PlaylistScreen({
           <div className="flex-1 min-w-0 text-left">
             <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-2 flex-wrap">
               <span className="bg-[#082621] text-[#26c4b7] text-[9px] sm:text-[10px] font-mono font-black uppercase px-2 py-0.5 sm:px-2.5 sm:py-1 brutal-border">
-                {isSiteAlbum ? (isQuran ? 'SURAH COLLECTION' : 'OFFICIAL ALBUM') : playlist.isLikedSongs ? (isQuran ? 'FAVORITE SURAHS' : 'LIKED SONGS') : (isQuran ? 'QURAN PLAYLIST' : 'PLAYLIST')}
+                {isSiteAlbum ? (isQuran ? (t?.('library.surahCollection') || 'SURAH COLLECTION') : (t?.('library.officialAlbum') || 'OFFICIAL ALBUM')) : playlist.isLikedSongs ? (isQuran ? (t?.('library.favoriteSurahs') || 'FAVORITE SURAHS') : (t?.('library.likedSongs') || 'LIKED SONGS')) : (isQuran ? (t?.('library.quranPlaylist') || 'QURAN PLAYLIST') : (t?.('library.playlist') || 'PLAYLIST'))}
               </span>
 
               {/* Public/Private Badge & Action Buttons (Hidden for Site Albums) */}
@@ -966,7 +972,9 @@ export default function PlaylistScreen({
               <h1 className={`text-xl sm:text-3xl md:text-5xl font-display font-black tracking-tight leading-tight line-clamp-2 ${
                 isDark ? 'text-white' : 'text-[#082621]'
               }`}>
-                {playlist.name}
+                {playlist.isLikedSongs 
+                  ? (isQuran ? (t?.('library.favoriteSurahs') || 'Favorite Surahs') : (t?.('library.likedSongs') || 'Liked Songs'))
+                  : playlist.name}
               </h1>
               {!playlist.isLikedSongs && isOwner && (
                 <button
@@ -1024,7 +1032,9 @@ export default function PlaylistScreen({
             <p className={`hidden sm:block text-sm sm:text-base md:text-lg mt-2.5 font-sans font-normal leading-relaxed max-w-2xl ${
               isDark ? 'text-zinc-200' : 'text-[#082621]'
             }`}>
-              {playlist.description || (isSiteAlbum ? (isQuran ? `Recitations by ${playlist.artist || 'Reciter'}` : `Official album by ${playlist.artist || 'Artist'}`) : (isQuran ? 'Quran playlist on Rivo.' : 'Custom playlist on Rivo.'))}
+              {playlist.description || (playlist.isLikedSongs 
+                ? (isQuran ? (t?.('library.likedQuranDesc') || 'Your favorite surahs and recitations in one place.') : (t?.('library.likedSongsDesc') || 'Your favorite tracks in one place.'))
+                : (isSiteAlbum ? (isQuran ? `Recitations by ${playlist.artist || 'Reciter'}` : `Official album by ${playlist.artist || 'Artist'}`) : (isQuran ? 'Quran playlist on Rivo.' : 'Custom playlist on Rivo.')))}
             </p>
 
             <div className={`flex items-center gap-2 sm:gap-3 mt-1.5 sm:mt-4 pt-1 sm:pt-3 sm:border-t text-[10px] sm:text-xs font-mono font-bold ${
@@ -1032,9 +1042,9 @@ export default function PlaylistScreen({
             }`}>
               <span className={`px-1.5 py-0.2 sm:px-2 sm:py-0.5 brutal-border ${
                 isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] border-black'
-              }`}>{isSiteAlbum ? (isQuran ? 'COLLECTION' : 'ALBUM') : (isQuran ? 'QURAN' : 'PLAYLIST')}</span>
+              }`}>{isSiteAlbum ? (isQuran ? (t?.('library.surahCollection') || 'COLLECTION') : (t?.('library.officialAlbum') || 'ALBUM')) : (isQuran ? (t?.('library.quranPlaylist') || 'QURAN') : (t?.('library.playlist') || 'PLAYLIST'))}</span>
               <span>•</span>
-              <span>{playlistTracks.length} {isQuran ? (playlistTracks.length === 1 ? 'SURAH' : 'SURAHS') : (playlistTracks.length === 1 ? 'TRACK' : 'TRACKS')}</span>
+              <span>{playlistTracks.length} {isQuran ? (playlistTracks.length === 1 ? (t?.('library.surahSingle') || 'سورة') : (t?.('library.surahPlural') || 'سور')) : (playlistTracks.length === 1 ? (t?.('library.trackSingle') || 'مقطع') : (t?.('library.trackPlural') || 'مقاطع'))}</span>
               <span>•</span>
               <span>{formatDurationSum()}</span>
             </div>
@@ -1219,7 +1229,7 @@ export default function PlaylistScreen({
             title={jamSession ? "Add playlist to Jam Queue" : "Add playlist to Queue"}
           >
             <ListPlus size={16} strokeWidth={2.5} className="text-[#26c4b7]" />
-            <span>{jamSession ? "ADD TO JAM" : "QUEUE PLAYLIST"}</span>
+            <span>{jamSession ? (t?.('library.addToJam') || 'ADD TO JAM') : (t?.('library.queuePlaylist') || 'QUEUE PLAYLIST')}</span>
           </button>
 
           {/* Save to Library button (for other users' public playlists or albums) */}
@@ -1279,7 +1289,7 @@ export default function PlaylistScreen({
               ) : playlistTracks.every(t => t.downloaded) ? (
                 <div className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
                   <CheckCircle2 size={15} />
-                  <span>All Downloaded</span>
+                  <span>{isRTL ? 'تم التحميل بالكامل' : 'All Downloaded'}</span>
                 </div>
               ) : (
                 <button
@@ -1289,10 +1299,10 @@ export default function PlaylistScreen({
                       ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border-zinc-700' 
                       : 'bg-white text-zinc-900 hover:bg-[#ede5d3] border-black'
                   }`}
-                  title="Download all songs in this playlist one by one"
+                  title={isRTL ? "تحميل جميع المقاطع في هذه القائمة" : "Download all songs in this playlist one by one"}
                 >
                   <Download size={14} strokeWidth={2.5} className="text-[#17a398]" />
-                  <span>Download All ({playlistTracks.filter(t => !t.downloaded).length})</span>
+                  <span>{t?.('library.downloadAll') || 'Download All'} ({playlistTracks.filter(t => !t.downloaded).length})</span>
                 </button>
               )}
             </div>
@@ -1352,7 +1362,7 @@ export default function PlaylistScreen({
               title="Toggle multi-select mode"
             >
               <CheckSquare size={14} strokeWidth={2.5} className={isSelectMode ? 'text-[#0b1110]' : 'text-[#17a398]'} />
-              <span>{isSelectMode ? 'Cancel Select' : 'Select'}</span>
+              <span>{isSelectMode ? (t?.('library.cancelSelect') || 'Cancel Select') : (t?.('library.select') || 'Select')}</span>
             </button>
           )}
         </div>
@@ -1364,7 +1374,7 @@ export default function PlaylistScreen({
             }`} />
             <input
               type="text"
-              placeholder="Search in prescription list..."
+              placeholder={t?.('library.searchInPlaylist') || 'Search in prescription list...'}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`w-full brutal-border pl-8 sm:pl-9 pr-3 sm:pr-4 py-1.5 sm:py-2 text-xs font-mono focus:outline-none ${
@@ -1406,16 +1416,16 @@ export default function PlaylistScreen({
                   '#'
                 )}
               </span>
-              <span className={isPlaylistMixActive ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? 'SURAH & RECITER' : 'TITLE'}</span>
+              <span className={isPlaylistMixActive ? "col-span-6 md:col-span-4" : "col-span-6 md:col-span-5"}>{isQuran ? (t?.('library.surahs') || (isRTL ? 'السور والتلاوات' : 'SURAH & RECITER')) : (t?.('library.titleHeader') || 'TITLE')}</span>
               {isPlaylistMixActive && (
                 <>
                   <span className="hidden sm:block col-span-1 text-center text-emerald-400 font-mono font-bold">BPM</span>
                   <span className="hidden sm:block col-span-1 text-center text-emerald-400 font-mono font-bold">KEY</span>
                 </>
               )}
-              <span className="hidden md:block col-span-2">{isQuran ? 'COLLECTION' : 'ALBUM'}</span>
-              <span className="hidden lg:block col-span-2 font-mono text-zinc-400">DATE ADDED</span>
-              <span className={isPlaylistMixActive ? "col-span-5 md:col-span-1 text-right pr-2" : "col-span-5 md:col-span-2 text-right pr-2"}>ACTIONS</span>
+              <span className="hidden md:block col-span-2">{isQuran ? (t?.('library.collectionHeader') || 'COLLECTION') : (t?.('library.albumHeader') || 'ALBUM')}</span>
+              <span className="hidden lg:block col-span-2 font-mono text-zinc-400">{t?.('library.dateAddedHeader') || 'DATE ADDED'}</span>
+              <span className={isPlaylistMixActive ? "col-span-5 md:col-span-1 text-right pr-2" : "col-span-5 md:col-span-2 text-right pr-2"}>{t?.('library.actionsHeader') || 'ACTIONS'}</span>
             </div>
 
             {filteredPlaylistTracks.map((track, i) => {
@@ -1923,7 +1933,7 @@ export default function PlaylistScreen({
             <span className="font-mono text-xs font-black bg-[#17a398] text-[#0b1110] px-2 py-0.5 rounded-full">
               {selectedTrackIds.size}
             </span>
-            <span className="font-display font-black text-xs hidden sm:inline">Selected</span>
+            <span className="font-display font-black text-xs hidden sm:inline">{t?.('library.selected') || (isRTL ? 'محدد' : 'Selected')}</span>
           </div>
 
           {/* Select All / Deselect All */}
@@ -1933,7 +1943,7 @@ export default function PlaylistScreen({
               isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110]'
             }`}
           >
-            {selectedTrackIds.size === filteredPlaylistTracks.length ? 'Deselect All' : 'Select All'}
+            {selectedTrackIds.size === filteredPlaylistTracks.length ? (t?.('common.deselectAll') || 'Deselect All') : (t?.('common.selectAll') || 'Select All')}
           </button>
 
           {/* Add to Queue */}
@@ -1941,10 +1951,10 @@ export default function PlaylistScreen({
             disabled={selectedTrackIds.size === 0}
             onClick={handleBatchQueue}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#082621] text-[#26c4b7] hover:bg-[#0b1110] text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer"
-            title="Add selected tracks to queue"
+            title={isRTL ? "إضافة المقاطع المحددة إلى قائمة الانتظار" : "Add selected tracks to queue"}
           >
             <ListPlus size={14} />
-            <span className="hidden sm:inline">Queue</span>
+            <span className="hidden sm:inline">{t?.('common.queue') || 'Queue'}</span>
           </button>
 
           {/* Add to Playlist */}
@@ -1952,10 +1962,10 @@ export default function PlaylistScreen({
             disabled={selectedTrackIds.size === 0}
             onClick={handleBatchPlaylist}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17a398] text-[#0b1110] hover:bg-[#26c4b7] text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer"
-            title="Add selected tracks to a playlist"
+            title={isRTL ? "إضافة المقاطع المحددة إلى قائمة تشغيل" : "Add selected tracks to a playlist"}
           >
             <FolderPlus size={14} strokeWidth={2.5} />
-            <span className="hidden sm:inline">Playlist</span>
+            <span className="hidden sm:inline">{t?.('library.playlist') || 'Playlist'}</span>
           </button>
 
           {/* Download */}
@@ -1965,10 +1975,10 @@ export default function PlaylistScreen({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer ${
               isDark ? 'bg-zinc-800 text-teal-400 hover:bg-zinc-700' : 'bg-white text-teal-700 hover:bg-[#ede5d3]'
             }`}
-            title="Download selected tracks offline"
+            title={isRTL ? "تحميل المقاطع المحددة بدون إنترنت" : "Download selected tracks offline"}
           >
             <Download size={14} />
-            <span className="hidden sm:inline">Download</span>
+            <span className="hidden sm:inline">{isRTL ? 'تحميل' : 'Download'}</span>
           </button>
 
           {/* Delete / Remove (if allowed) */}
@@ -1977,10 +1987,10 @@ export default function PlaylistScreen({
               disabled={selectedTrackIds.size === 0}
               onClick={handleBatchDelete}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/20 text-red-500 hover:bg-red-500/30 text-xs font-mono font-black uppercase brutal-border disabled:opacity-40 cursor-pointer"
-              title="Remove selected tracks"
+              title={isRTL ? "إزالة المقاطع المحددة" : "Remove selected tracks"}
             >
               <Trash2 size={14} />
-              <span className="hidden sm:inline">Remove</span>
+              <span className="hidden sm:inline">{t?.('common.remove') || 'Remove'}</span>
             </button>
           )}
 

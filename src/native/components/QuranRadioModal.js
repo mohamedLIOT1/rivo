@@ -50,7 +50,7 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
     <Modal
       visible={Boolean(isModalVisible)}
       transparent
-      animationType="slide"
+      animationType={Platform.OS === 'android' ? 'none' : 'slide'}
       onRequestClose={onClose}
     >
       <View style={styles.backdrop}>
@@ -82,6 +82,10 @@ export default function QuranRadioModal({ isOpen, visible, onClose, globalTheme 
             data={QURAN_LIVE_STATIONS}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listContent}
+            windowSize={5}
+            maxToRenderPerBatch={10}
+            initialNumToRender={10}
+            removeClippedSubviews={true}
             renderItem={({ item }) => {
               const curId = String(currentTrack?._id || currentTrack?.id || '');
               const isCurrent = curId === item.id;

@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { X, Settings, ShieldCheck, Check, Radio, Copy, ExternalLink, Unlink, Download, FolderOpen, Globe, Music, BookOpen, Mic } from 'lucide-react';
+import React from 'react';
+import { X, FolderOpen, Download } from 'lucide-react';
 import { usePreferences } from '../context/PreferencesContext';
 import { FULL_VERSION } from '../version';
-import { API_BASE_URL } from '../config';
 import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage';
+import LanguageSettingCard from './settings/LanguageSettingCard';
+import ContentPreferencesCard from './settings/ContentPreferencesCard';
+import DiscordSettingCard from './settings/DiscordSettingCard';
 
 export default function SettingsModal({
   isOpen,
@@ -13,128 +15,9 @@ export default function SettingsModal({
   globalTheme = 'dark'
 }) {
   const isDark = globalTheme === 'dark';
-  const { contentModes, toggleContentMode, vocalOnlyMode, toggleVocalOnlyMode } = usePreferences();
-  const [discordStatus, setDiscordStatus] = useState(null);
-  const [linkCode, setLinkCode] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
-  const [showTokenInput, setShowTokenInput] = useState(false);
-  const [discordLoading, setDiscordLoading] = useState(false);
-  const [discordMsg, setDiscordMsg] = useState('');
-  const [copiedCode, setCopiedCode] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-    if (!token) return;
-
-    fetch(`${API_BASE_URL}/api/discord/status`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.error) setDiscordStatus(data);
-      })
-      .catch(() => {});
-  }, [isOpen]);
-
-  useEffect(() => {
-    const handleMsg = (e) => {
-      if (e.data?.type === 'RIVO_LINK_SUCCESS' && e.data.username) {
-        setDiscordStatus({ linked: true, username: e.data.username, enabled: true });
-        setDiscordMsg(`Linked successfully as @${e.data.username}!`);
-      }
-    };
-    window.addEventListener('message', handleMsg);
-    return () => window.removeEventListener('message', handleMsg);
-  }, []);
-
-  const handleGenerateCode = async () => {
-    setDiscordLoading(true);
-    setDiscordMsg('');
-    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/discord/link-code`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.code) {
-        setLinkCode(data.code);
-        setDiscordMsg('Send this code to the Rivo Discord bot in DM!');
-      }
-    } catch (e) {
-      setDiscordMsg('Failed to generate link code');
-    } finally {
-      setDiscordLoading(false);
-    }
-  };
-
-  const handleToggleDiscord = async () => {
-    if (!discordStatus) return;
-    const next = !discordStatus.enabled;
-    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-    try {
-      await fetch(`${API_BASE_URL}/api/discord/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ enabled: next })
-      });
-      setDiscordStatus({ ...discordStatus, enabled: next });
-    } catch (e) {}
-  };
-
-  const handleUnlinkDiscord = async () => {
-    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-    try {
-      await fetch(`${API_BASE_URL}/api/discord/unlink`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setDiscordStatus({ linked: false, username: '', enabled: false });
-      setLinkCode('');
-      setDiscordMsg('Discord account unlinked');
-    } catch (e) {}
-  };
-
-  const handleConnectToken = async () => {
-    if (!tokenInput.trim()) return;
-    setDiscordLoading(true);
-    setDiscordMsg('');
-    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/discord/link-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ token: tokenInput.trim() })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setDiscordStatus({ linked: true, username: data.username, enabled: true });
-        setTokenInput('');
-        setShowTokenInput(false);
-        setDiscordMsg(`Connected as ${data.username}!`);
-      } else {
-        setDiscordMsg(data.error || 'Connection failed');
-      }
-    } catch (e) {
-      setDiscordMsg('Failed to connect Discord account');
-    } finally {
-      setDiscordLoading(false);
-    }
-  };
-
-  const handleCopyCode = () => {
-    if (!linkCode) return;
-    navigator.clipboard?.writeText(linkCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
+  const { vocalOnlyMode, toggleVocalOnlyMode, t } = usePreferences();
 
   if (!isOpen) return null;
-
-  const isLoggedIn = Boolean(
-    localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token')
-  );
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
@@ -148,11 +31,16 @@ export default function SettingsModal({
             <div className="w-3 h-3 bg-[#17a398] brutal-border" />
             <h3 className={`text-base font-mono font-black uppercase ${
               isDark ? 'text-[#26c4b7]' : 'text-[#082621]'
-            }`}>Audio & App Settings</h3>
+            }`}>
+              {t('settings.settingsTitle')}
+            </h3>
           </div>
-          <button onClick={onClose} className={`brutal-btn p-1 brutal-border ${
-            isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110] border-[#0b1110]'
-          }`}>
+          <button
+            onClick={onClose}
+            className={`brutal-btn p-1 brutal-border cursor-pointer ${
+              isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700' : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110] border-[#0b1110]'
+            }`}
+          >
             <X size={18} />
           </button>
         </div>
@@ -166,261 +54,64 @@ export default function SettingsModal({
               R
             </div>
             <div>
-              <h4 className="font-mono font-black uppercase text-sm text-[#26c4b7]">Rivo Hi-Fi Audio</h4>
-              <p className={`text-[11px] ${isDark ? 'text-zinc-300' : 'text-[#ded2bb]'}`}>Unlimited Streaming • 24-Bit Acoustic Fidelity • Zero Loss</p>
+              <h4 className="font-mono font-black uppercase text-sm text-[#26c4b7]">
+                {t('settings.hifiAudio')}
+              </h4>
+              <p className={`text-[11px] ${isDark ? 'text-zinc-300' : 'text-[#ded2bb]'}`}>
+                {t('settings.hifiDesc')}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ── Content Preferences ── */}
-        <div className={`py-3.5 border-b-2 p-3 brutal-border mb-3 ${
-          isDark ? 'border-zinc-700 bg-zinc-800/40' : 'border-[#0b1110] bg-[#f2ecde]/40'
-        }`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-              Content Preferences
-            </span>
-            <span className="text-[9px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">
-              Cloud Synced ☁️
-            </span>
-          </div>
-          <p className={`text-[11px] mb-3 leading-relaxed ${isDark ? 'text-zinc-300' : 'text-[#082621]/70'}`}>
-            Customize your listening experience. Toggle music or Quran content to focus on the sound relief you prefer. Changes sync automatically across all your devices.
-          </p>
+        {/* ── 1. Language Setting Card (English / العربية) ── */}
+        <LanguageSettingCard isDark={isDark} />
 
-          <div className="space-y-2">
-            {/* Music Toggle */}
-            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-              isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <Music size={16} className={contentModes.music !== false ? 'text-emerald-400' : 'text-zinc-500'} />
-                <div>
-                  <span className="text-xs font-bold block text-white">Music & Songs</span>
-                  <span className="text-[10px] text-zinc-400 block">
-                    {contentModes.music !== false ? 'Enabled (Shows songs in feeds and search)' : 'Hidden (Pure Quran mode)'}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => toggleContentMode('music', contentModes.music === false)}
-                className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
-                  contentModes.music !== false
-                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
-                    : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
-                }`}
-              >
-                {contentModes.music !== false ? 'ENABLED' : 'HIDDEN'}
-              </button>
-            </div>
+        {/* ── 2. Content Preferences (Music / Quran) ── */}
+        <ContentPreferencesCard isDark={isDark} />
 
-            {/* Quran Toggle */}
-            <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
-              isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
-            }`}>
-              <div className="flex items-center gap-2.5">
-                <BookOpen size={16} className="text-emerald-400" />
-                <div>
-                  <span className="text-xs font-bold block text-white">Holy Quran & Recitations</span>
-                  <span className="text-[10px] text-zinc-400 block">Mushaf pages, recitations, reciters, and 24/7 live radios</span>
-                </div>
-              </div>
-              <button
-                onClick={() => toggleContentMode('quran', contentModes.quran === false)}
-                className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
-                  contentModes.quran !== false
-                    ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
-                    : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
-                }`}
-              >
-                {contentModes.quran !== false ? 'ENABLED' : 'HIDDEN'}
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* ── 3. Discord Rich Presence Integration ── */}
+        <DiscordSettingCard isOpen={isOpen} isDark={isDark} />
 
-        {/* Discord Rich Presence Integration Section */}
-        <div className={`py-4 border-b-2 p-3 brutal-border mb-3 ${
-          isDark ? 'border-zinc-700 bg-zinc-800/60' : 'border-[#0b1110] bg-[#f2ecde]/50'
-        }`}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#5865F2] inline-block animate-pulse" />
-              <span className={`text-xs font-mono font-black uppercase ${
-                isDark ? 'text-white' : 'text-[#082621]'
-              }`}>Discord Rich Presence</span>
-            </div>
-            {discordStatus?.linked && (
-              <span className="text-[10px] font-mono font-bold bg-[#5865F2] text-white px-1.5 py-0.5 brutal-border">
-                {discordStatus.username || 'CONNECTED'}
-              </span>
-            )}
-          </div>
-          <p className={`text-[11px] mb-3 ${
-            isDark ? 'text-zinc-300' : 'text-[#082621]/70'
-          }`}>
-            Displays your live listening track, cover &amp; progress on your Discord profile with Rivo.
-          </p>
-
-          {!isLoggedIn ? (
-            <p className="text-[11px] font-mono text-[#f59e0b] bg-[#082621] p-2 brutal-border">
-              ⚠️ Log in to Rivo to connect your Discord account.
-            </p>
-          ) : discordStatus?.linked ? (
-            <div className="flex flex-col gap-2">
-              <div className={`flex items-center justify-between p-2 brutal-border ${
-                isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
-              }`}>
-                <div>
-                  <span className={`text-[11px] font-mono font-bold block ${
-                    isDark ? 'text-white' : 'text-[#082621]'
-                  }`}>Sync Listening Status</span>
-                  <span className={`text-[9px] font-mono ${
-                    isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                  }`}>
-                    {discordStatus.enabled ? '🟢 Live on your Discord profile' : '⏸️ Sync is currently paused'}
-                  </span>
-                </div>
-                <button
-                  onClick={handleToggleDiscord}
-                  className={`brutal-btn px-3 py-1.5 text-[10px] font-mono font-black uppercase brutal-border transition flex items-center gap-1.5 cursor-pointer ${
-                    discordStatus.enabled ? 'bg-[#17a398] hover:bg-[#26c4b7] text-white' : 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-600'
-                  }`}
-                  title={discordStatus.enabled ? 'Click to Pause' : 'Click to Enable'}
-                >
-                  <span className={`w-2 h-2 rounded-full ${discordStatus.enabled ? 'bg-emerald-300 animate-pulse' : 'bg-amber-500'}`} />
-                  {discordStatus.enabled ? 'ACTIVE' : 'PAUSED (CLICK)'}
-                </button>
-              </div>
-              <button
-                onClick={handleUnlinkDiscord}
-                className="brutal-btn w-full py-1 text-[11px] font-mono font-bold bg-[#fee2e2] hover:bg-red-200 text-red-700 brutal-border flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Unlink size={13} />
-                Unlink Discord Profile
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {linkCode ? (
-                <div className={`p-3 brutal-border text-center ${
-                  isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
-                }`}>
-                  <p className={`text-[10px] font-mono mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]/70'}`}>Your 6-Digit Bot Link Code:</p>
-                  <div className="flex items-center justify-center gap-2 mb-1">
-                    <span className="text-xl font-mono font-black tracking-widest text-[#5865F2] bg-white px-3 py-1 brutal-border">
-                      {linkCode}
-                    </span>
-                    <button
-                      onClick={handleCopyCode}
-                      className={`brutal-btn p-1.5 brutal-border ${isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-white' : 'bg-[#ede5d3] hover:bg-white text-black'}`}
-                      title="Copy Code"
-                    >
-                      {copiedCode ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                    </button>
-                  </div>
-                  <p className={`text-[10px] mb-2 ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
-                    Send this code to the Rivo Discord bot in DM to link your account.
-                  </p>
-                  <a
-                    href="https://discord.com/users/1440997674630250506"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="brutal-btn inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#5865F2] hover:bg-[#4752c4] text-white font-mono text-[11px] font-bold uppercase brutal-border brutal-shadow-sm transition"
-                  >
-                    Open RIVO Bot in Discord ↗
-                  </a>
-                </div>
-              ) : (
-                <button
-                  onClick={handleGenerateCode}
-                  disabled={discordLoading}
-                  className="brutal-btn py-1.5 bg-[#5865F2] hover:bg-[#4752c4] text-white font-mono text-xs font-bold uppercase brutal-border brutal-shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Radio size={14} />
-                  {discordLoading ? 'Generating...' : 'Get Discord Link Code'}
-                </button>
-              )}
-
-              {/* Direct Token Link Toggle */}
-              <div>
-                <button
-                  type="button"
-                  onClick={() => setShowTokenInput(!showTokenInput)}
-                  className="text-[10px] font-mono font-bold text-[#17a398] underline hover:text-[#26c4b7] mt-1"
-                >
-                  {showTokenInput ? '▲ Hide Direct Token Input' : '▼ Or Connect Directly via User Token'}
-                </button>
-
-                {showTokenInput && (
-                  <div className={`mt-2 p-2.5 brutal-border flex flex-col gap-2 ${
-                    isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
-                  }`}>
-                    <input
-                      type="password"
-                      placeholder="Paste Discord User Token here..."
-                      value={tokenInput}
-                      onChange={(e) => setTokenInput(e.target.value)}
-                      className={`w-full text-xs font-mono p-1.5 brutal-border focus:outline-none ${
-                        isDark ? 'bg-zinc-950 text-white border-zinc-700' : 'bg-white text-[#0b1110] border-[#0b1110]'
-                      }`}
-                    />
-                    <button
-                      onClick={handleConnectToken}
-                      disabled={discordLoading || !tokenInput.trim()}
-                      className="brutal-btn py-1 bg-[#17a398] hover:bg-[#13847b] text-white font-mono text-xs font-bold brutal-border cursor-pointer disabled:opacity-50"
-                    >
-                      {discordLoading ? 'Connecting...' : 'Connect Token (Encrypted)'}
-                    </button>
-                    <p className={`text-[9px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-                      Tokens are encrypted with AES-256 and stored securely for presence updates only.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {discordMsg && (
-                <p className={`text-[10px] font-mono text-center font-bold mt-1 ${isDark ? 'text-[#26c4b7]' : 'text-[#082621]'}`}>
-                  {discordMsg}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Offline Mode Toggle */}
+        {/* ── 4. Offline Storage Mode ── */}
         <div className={`flex items-center justify-between py-3 border-b-2 ${
           isDark ? 'border-zinc-700' : 'border-[#0b1110]'
         }`}>
           <div>
-            <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Offline Storage Mode</span>
-            <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>Only play downloaded offline tracks</p>
+            <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+              {t('settings.offlineStorageMode')}
+            </span>
+            <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              {t('settings.offlineStorageDesc')}
+            </p>
           </div>
           <button
+            type="button"
             onClick={() => setIsOfflineMode(!isOfflineMode)}
-            className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm ${
+            className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer ${
               isOfflineMode 
                 ? (isDark ? 'bg-[#17a398] text-white' : 'bg-[#082621] text-[#26c4b7]') 
                 : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621]')
             }`}
           >
-            {isOfflineMode ? 'ACTIVE' : 'DISABLED'}
+            {isOfflineMode ? t('settings.active') : t('settings.disabled')}
           </button>
         </div>
 
-        {/* Vocal-Only Mode Toggle (Music-Free) */}
+        {/* ── 5. Vocal-Only Mode Toggle (Music-Free) ── */}
         <div className={`flex items-center justify-between py-3 border-b-2 ${
           isDark ? 'border-zinc-700' : 'border-[#0b1110]'
         }`}>
           <div>
             <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-              Vocal-Only Mode
+              {t('settings.vocalOnlyMode')}
             </span>
             <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Automatically remove instrumental music from songs
+              {t('settings.vocalOnlyDesc')}
             </p>
           </div>
           <button
+            type="button"
             onClick={() => toggleVocalOnlyMode()}
             className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm cursor-pointer ${
               vocalOnlyMode 
@@ -428,29 +119,29 @@ export default function SettingsModal({
                 : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621]')
             }`}
           >
-            {vocalOnlyMode ? 'ACTIVE' : 'DISABLED'}
+            {vocalOnlyMode ? t('settings.active') : t('settings.disabled')}
           </button>
         </div>
 
-        {/* Desktop Downloads Folder */}
+        {/* ── 6. Desktop Downloads Folder (Tauri Only) ── */}
         {isTauriDesktop && (
           <div className={`flex items-center justify-between py-3 border-b-2 ${
             isDark ? 'border-zinc-700' : 'border-[#0b1110]'
           }`}>
             <div>
               <span className={`text-xs font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-                Downloaded Songs Folder
+                {t('settings.localImportTitle')}
               </span>
               <p className={`text-[11px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                Offline MP3s with embedded ID3 tags & verified lyrics
+                {t('settings.localImportDesc')}
               </p>
             </div>
             <button
+              type="button"
               onClick={openDesktopDownloadsDir}
               className={`brutal-btn px-3 py-1 text-xs font-mono font-black uppercase brutal-border brutal-shadow-sm flex items-center gap-1.5 cursor-pointer ${
                 isDark ? 'bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600' : 'bg-[#ede5d3] text-[#0b1110] hover:bg-[#ded2bb] border-black'
               }`}
-              title="Open folder in File Explorer"
             >
               <FolderOpen size={13} />
               <span>Open Folder ↗</span>
@@ -458,7 +149,7 @@ export default function SettingsModal({
           </div>
         )}
 
-
+        {/* ── Download Apps Banner ── */}
         <a
           href="/download"
           onClick={(e) => {
@@ -469,19 +160,21 @@ export default function SettingsModal({
               window.dispatchEvent(new PopStateEvent('popstate'));
             }
           }}
-          className="brutal-btn w-full mb-3 py-2.5 bg-[#17a398] hover:bg-[#148f85] text-black font-mono text-xs font-black uppercase brutal-border flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_#000]"
+          className="brutal-btn w-full mb-3 mt-4 py-2.5 bg-[#17a398] hover:bg-[#148f85] text-black font-mono text-xs font-black uppercase brutal-border flex items-center justify-center gap-2 cursor-pointer shadow-[2px_2px_0px_#000]"
         >
-          <Download size={15} /> GET APPS (WINDOWS / ANDROID / IOS)
+          <Download size={15} /> {t('settings.downloadApps')}
         </a>
 
+        {/* ── Save Settings Button ── */}
         <button
+          type="button"
           onClick={onClose}
           className="brutal-btn w-full py-2.5 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow cursor-pointer"
         >
-          SAVE SETTINGS
+          {t('settings.saveSettings')}
         </button>
 
-        {/* Version Information */}
+        {/* ── Version Footer ── */}
         <div className={`mt-4 pt-3 border-t-2 text-center ${isDark ? 'border-zinc-700' : 'border-[#0b1110]'}`}>
           <p className="font-mono text-[11px] font-black uppercase tracking-wider text-[#17a398]">
             Rivo Music Streaming {FULL_VERSION}

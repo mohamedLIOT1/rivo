@@ -244,10 +244,12 @@ export default function ProfileScreen({
   };
 
   useEffect(() => {
-    if (viewingUserId) {
+    if (viewingUserId && String(viewingUserId).trim() !== String(currentUser?._id || currentUser?.id || '').trim()) {
       handleViewUserProfile(viewingUserId);
+    } else {
+      setViewingProfile(null);
     }
-  }, [viewingUserId]);
+  }, [viewingUserId, currentUser]);
 
   const [followLoading, setFollowLoading] = useState(false);
 

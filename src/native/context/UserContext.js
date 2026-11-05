@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
-import { INITIAL_TRACKS, INITIAL_ALBUMS } from '../data/initialTracks';
 import { deduplicateTrackList } from '../services/downloadManager';
 
 const UserContext = createContext();
@@ -28,9 +27,9 @@ export const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [token, setToken] = useState(null);
   const [isAuthLoaded, setIsAuthLoaded] = useState(false);
-  const [tracks, setTracks] = useState(INITIAL_TRACKS);
+  const [tracks, setTracks] = useState([]);
   const [playlists, setPlaylists] = useState([]);
-  const [albums, setAlbums] = useState(INITIAL_ALBUMS || []);
+  const [albums, setAlbums] = useState([]);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
 
   useEffect(() => {
@@ -91,62 +90,53 @@ export const UserProvider = ({ children }) => {
         syncUserData(activeToken).catch(() => {});
       }
 
-      // 2. BACKGROUND PATH: Load cached tracks, playlists, albums without blocking user account
-      setTimeout(async () => {
-        try {
-          const [cachedTracks, cachedPlaylists, cachedAlbums] = await Promise.all([
-            AsyncStorage.getItem(CACHE_TRACKS_KEY),
-            AsyncStorage.getItem(CACHE_PLAYLISTS_KEY),
-            AsyncStorage.getItem(CACHE_ALBUMS_KEY)
-          ]);
+      // 2. Direct deterministic cache hydration without setTimeout artificial delay
+      try {
+        const [cachedTracks, cachedPlaylists, cachedAlbums] = await Promise.all([
+          AsyncStorage.getItem(CACHE_TRACKS_KEY),
+          AsyncStorage.getItem(CACHE_PLAYLISTS_KEY),
+          AsyncStorage.getItem(CACHE_ALBUMS_KEY)
+        ]);
 
-          if (cachedAlbums) {
-            try {
-              const parsedAlb = JSON.parse(cachedAlbums);
-              if (Array.isArray(parsedAlb)) setAlbums(parsedAlb);
-            } catch {}
-          }
-
-          if (cachedPlaylists) {
-            try {
-              const parsedPl = JSON.parse(cachedPlaylists);
-              if (Array.isArray(parsedPl)) {
-                setPlaylists(normalizePlaylists(parsedPl));
-              }
-            } catch {}
-          }
-
-          if (cachedTracks) {
-            try {
-              const parsed = JSON.parse(cachedTracks);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                const updatedParsed = parsed.map(t => {
-                  if (!t) return t;
-                  const tid = String(t._id || t.id || '');
-                  if (tid.startsWith('6aad57190ece10647dd1e91')) {
-                    const matched = INITIAL_TRACKS.find(it => (it.title || '').toLowerCase() === (t.title || '').toLowerCase());
-                    return matched || t;
-                  }
-                  return t;
-                });
-                const cleaned = deduplicateTrackList(updatedParsed.filter(t => 
-                  t &&
-                  t.source !== 'SoundCloud' &&
-                  t.album !== 'SoundCloud' &&
-                  !String(t.audioUrl || '').includes('soundcloud.com') &&
-                  !String(t.audioUrl || '').includes('sndcdn.com') &&
-                  !String(t.id || t._id || '').startsWith('sc-')
-                ));
-                if (cleaned.length > 6) {
-                  setTracks(cleaned);
-                }
-              }
-            } catch {}
-          }
-        } catch (err) {
-          console.warn('Background cache load notice:', err);
+        if (cachedAlbums) {
+          try {
+            const parsedAlb = JSON.parse(cachedAlbums);
+            if (Array.isArray(parsedAlb)) {
+              setAlbums(prev => (prev && prev.length > 0 ? prev : parsedAlb));
+            }
+          } catch {}
         }
-      }, 0);
+
+        if (cachedPlaylists) {
+          try {
+            const parsedPl = JSON.parse(cachedPlaylists);
+            if (Array.isArray(parsedPl)) {
+              setPlaylists(prev => (prev && prev.length > 0 ? prev : normalizePlaylists(parsedPl)));
+            }
+          } catch {}
+        }
+
+        if (cachedTracks) {
+          try {
+            const parsed = JSON.parse(cachedTracks);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const cleaned = deduplicateTrackList(parsed.filter(t => 
+                t &&
+                t.source !== 'SoundCloud' &&
+                t.album !== 'SoundCloud' &&
+                !String(t.audioUrl || '').includes('soundcloud.com') &&
+                !String(t.audioUrl || '').includes('sndcdn.com') &&
+                !String(t.id || t._id || '').startsWith('sc-')
+              ));
+              if (cleaned.length > 0) {
+                setTracks(prev => (prev && prev.length > 0 ? prev : cleaned));
+              }
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Direct cache load notice:', err);
+      }
     } catch (e) {
       console.warn('loadStoredAuth error:', e);
       setIsAuthLoaded(true);
@@ -171,7 +161,17 @@ export const UserProvider = ({ children }) => {
           !String(t.id || t._id || '').startsWith('sc-')
         ));
         if (cleaned.length > 0) {
-          setTracks(cleaned);
+          setTracks(prev => {
+            if (
+              prev &&
+              prev.length === cleaned.length &&
+              (prev[0]?._id || prev[0]?.id) === (cleaned[0]?._id || cleaned[0]?.id) &&
+              (prev[prev.length - 1]?._id || prev[prev.length - 1]?.id) === (cleaned[cleaned.length - 1]?._id || cleaned[cleaned.length - 1]?.id)
+            ) {
+              return prev;
+            }
+            return cleaned;
+          });
           AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
         }
       }
@@ -184,7 +184,17 @@ export const UserProvider = ({ children }) => {
         const albData = await albRes.json();
         const albList = Array.isArray(albData?.albums) ? albData.albums : [];
         if (albList.length > 0) {
-          setAlbums(albList);
+          setAlbums(prev => {
+            if (
+              prev &&
+              prev.length === albList.length &&
+              (prev[0]?._id || prev[0]?.id) === (albList[0]?._id || albList[0]?.id) &&
+              (prev[prev.length - 1]?._id || prev[prev.length - 1]?.id) === (albList[albList.length - 1]?._id || albList[albList.length - 1]?.id)
+            ) {
+              return prev;
+            }
+            return albList;
+          });
           AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
         }
       }
@@ -532,33 +542,56 @@ export const UserProvider = ({ children }) => {
     if (res.ok) await syncUserData();
   };
 
+  const value = useMemo(() => ({
+    currentUser,
+    token,
+    isAuthLoaded,
+    tracks,
+    playlists,
+    albums,
+    likedTrackIds,
+    login,
+    register,
+    logout,
+    updateProfile,
+    toggleLikeTrack,
+    fetchPublicTracks,
+    syncUserData,
+    createPlaylist,
+    updatePlaylist,
+    updatePlaylistTransitions,
+    uploadPlaylistCover,
+    togglePlaylistVisibility,
+    addToPlaylist,
+    removeTrackFromPlaylist,
+    deletePlaylist,
+  }), [
+    currentUser,
+    token,
+    isAuthLoaded,
+    tracks,
+    playlists,
+    albums,
+    likedTrackIds,
+    login,
+    register,
+    logout,
+    updateProfile,
+    toggleLikeTrack,
+    fetchPublicTracks,
+    syncUserData,
+    createPlaylist,
+    updatePlaylist,
+    updatePlaylistTransitions,
+    uploadPlaylistCover,
+    togglePlaylistVisibility,
+    addToPlaylist,
+    removeTrackFromPlaylist,
+    deletePlaylist,
+  ]);
+
   return (
-    <UserContext.Provider
-      value={{
-        currentUser,
-        token,
-        isAuthLoaded,
-        tracks,
-        playlists,
-        albums,
-        likedTrackIds,
-        login,
-        register,
-        logout,
-        updateProfile,
-        toggleLikeTrack,
-        fetchPublicTracks,
-        syncUserData,
-        createPlaylist,
-        updatePlaylist,
-        updatePlaylistTransitions,
-        uploadPlaylistCover,
-        togglePlaylistVisibility,
-        addToPlaylist,
-        removeTrackFromPlaylist,
-        deletePlaylist,
-      }}
-    >
+    <UserContext.Provider value={value}>
       {children}
     </UserContext.Provider>
   );

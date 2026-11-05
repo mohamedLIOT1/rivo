@@ -29,6 +29,10 @@ TrackSchema.index({ audioUrl: 1 });
 TrackSchema.index({ plays: -1 });
 TrackSchema.index({ createdAt: -1 });
 TrackSchema.index({ isQuran: 1 });
+TrackSchema.index({ genre: 1 });
+TrackSchema.index({ genre: 1, plays: -1 });
 TrackSchema.index({ contentType: 1 });
+TrackSchema.index({ id: 1 }, { sparse: true });
+TrackSchema.index({ addedBy: 1 });
 
 module.exports = mongoose.models.Track || mongoose.model('Track', TrackSchema);

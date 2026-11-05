@@ -149,11 +149,20 @@ export function parseLocation(pathname = '/', search = '') {
     return { screen: 'playlist', params: { albumName: name } };
   }
 
-  // /artist/:name
-  if (lowerPath.startsWith('/artist/')) {
-    const rawName = cleanPath.substring(8);
-    const name = rawName ? decodeURIComponent(rawName) : '';
-    return { screen: 'artist', params: { name } };
+  // /artist/:name or /artist
+  if (lowerPath.startsWith('/artist')) {
+    let rawName = cleanPath.substring(7);
+    if (rawName.startsWith('/')) rawName = rawName.substring(1);
+    let name = '';
+    try {
+      name = rawName ? decodeURIComponent(rawName) : '';
+    } catch {
+      name = rawName;
+    }
+    if (name) {
+      return { screen: 'artist', params: { name } };
+    }
+    return { screen: 'home', params: {} };
   }
 
   return { screen: 'home', params: {} };

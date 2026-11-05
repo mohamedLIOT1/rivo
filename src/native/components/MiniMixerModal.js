@@ -719,7 +719,7 @@ export default function MiniMixerModal({
   const activeStyleObj = TRANSITION_STYLES.find(t => t.id === style) || TRANSITION_STYLES[0];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.sheetContainer}>
           {/* ── Modal Header ── */}
@@ -1075,7 +1075,7 @@ export default function MiniMixerModal({
                           shadowColor: st.color,
                           shadowOpacity: 0.35,
                           shadowRadius: 8,
-                          elevation: 4,
+                          elevation: Platform.OS === 'android' ? 0 : 2,
                         },
                       ]}
                       onPress={() => setStyle(st.id)}
@@ -1568,7 +1568,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     shadowOpacity: 0.8,
     shadowRadius: 6,
-    elevation: 5,
+    elevation: Platform.OS === 'android' ? 0 : 2,
   },
   markerInnerLine: {
     width: 1,
@@ -1826,7 +1826,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: '#ffffff',
     borderWidth: 2,
-    elevation: 3,
+    elevation: Platform.OS === 'android' ? 0 : 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.4,

@@ -14,6 +14,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const axios = require('axios');
 const { Server } = require('socket.io');
@@ -23,9 +24,11 @@ const { auth, adminAuth, optionalAuth } = require('./middleware/auth');
 const { uploadsDir } = require('./middleware/upload');
 const { validateSafeUrl } = require('./utils/security');
 const { searchTracksInternal, isQuranContent, ensureYtDlpBinary, initWarmYtWorker } = require('./utils/helpers');
+const { syncUserLikedTracks } = require('./utils/likedTracksSync');
 
 const app = express();
 app.set('trust proxy', 1);
+app.set('etag', 'strong');
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -47,8 +50,12 @@ const allowedCorsOrigins = [
 
 const corsOriginHandler = (origin, callback) => {
   // Allow non-browser requests (e.g., mobile native apps, curl, Capacitor/Tauri, server-to-server)
-  if (!origin || origin === 'null') {
+  if (!origin) {
     return callback(null, true);
+  }
+  // Block untrusted null origin from credentials reflection
+  if (origin === 'null') {
+    return callback(null, false);
   }
   const isAllowed = allowedCorsOrigins.includes(origin) ||
     /^https?:\/\/(?:[a-zA-Z0-9-]+\.)*duckdns\.org(:\d+)?$/.test(origin) ||
@@ -78,6 +85,22 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+const shouldCompress = (req, res) => {
+  if (req.headers['x-no-compression']) {
+    return false;
+  }
+  const path = req.path || '';
+  if (path.includes('/stream') || path.includes('/proxy-audio') || path.includes('/downloads/')) {
+    return false;
+  }
+  return compression.filter(req, res);
+};
+
+app.use(compression({
+  filter: shouldCompress,
+  threshold: 1024
+}));
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -157,369 +180,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Authorized Beta Testing Accounts & Admins (configurable via environment variable)
-const defaultBetaEmails = [
-  'whooareyou152@gmail.com',
-  'alicrafter85@gmail.com',
-  'test@liofy.com',
-  'lio@gmail.com',
-  'test1@gmail.com',
-  'test@gmail.com',
-  't1@gmail.com',
-  'rio288631@gmail.com'
-];
-const envBetaEmails = process.env.BETA_TESTER_EMAILS
-  ? process.env.BETA_TESTER_EMAILS.split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-  : defaultBetaEmails;
-const BETA_TESTER_EMAILS = new Set(envBetaEmails);
-
-function isBetaTester(user) {
-  if (!user) return false;
-  if (user.role === 'admin' || user.isAdmin === true) return true;
-  const email = (user.email || '').trim().toLowerCase();
-  if (email && BETA_TESTER_EMAILS.has(email)) return true;
-  return false;
-}
-
-// App Version Manifest — STABLE Channel (Default for normal users)
-const APP_VERSIONS_DATA = {
-  publishedAt: new Date().toISOString(),
-  channel: 'stable',
-  platforms: {
-    web: {
-      version: '2.2.8',
-      name: 'Rivo Web',
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
-    },
-    windows: {
-      version: '2.2.8',
-      name: 'Rivo Desktop for Windows (EXE)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.8.exe',
-      mandatory: false,
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
-    },
-    android: {
-      version: '2.2.8',
-      build: 121,
-      name: 'Rivo for Android (APK)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.8.apk',
-      mandatory: false,
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
-    },
-    ios: {
-      version: '2.2.8',
-      build: 121,
-      name: 'Rivo for iOS (IPA)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.8.ipa',
-      mandatory: false,
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
-    }
-  }
-};
-
-// Known beta tester IPs for instant cold-boot detection (configurable via BETA_TESTER_IPS)
-const envBetaIps = process.env.BETA_TESTER_IPS
-  ? process.env.BETA_TESTER_IPS.split(',').map(ip => ip.trim()).filter(Boolean)
-  : ['41.47.189.60'];
-const knownBetaIps = new Set(envBetaIps);
-
-// App Version Manifest — BETA Channel (For designated testers & admins only)
-const BETA_VERSIONS_DATA = {
-  publishedAt: new Date().toISOString(),
-  channel: 'stable', // Intentionally 'stable' so client-side cold-boot gate doesn't reject it
-  platforms: {
-    web: {
-      version: '2.2.8',
-      name: 'Rivo Web (Beta)',
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
-    },
-    windows: {
-      version: '2.2.8',
-      name: 'Rivo Desktop for Windows (Beta)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.2.8.exe',
-      mandatory: false,
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.'
-    },
-    android: {
-      version: '2.2.8',
-      build: 121,
-      name: 'Rivo for Android (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.2.8.apk',
-      mandatory: false,
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
-      notesEn: 'Instant OTA update v2.2.8 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.',
-      ota: {
-        enabled: true,
-        version: '2.2.8',
-        bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.6',
-        notes: 'تحديث فوري v2.2.8: تحسين مظهر الميني بلاير ونقل زر التنقل وإزالة كارت الرادار.',
-        notesEn: 'Instant OTA update v2.2.8 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
-      }
-    },
-    ios: {
-      version: '2.2.8',
-      build: 121,
-      name: 'Rivo for iOS (Beta Testing)',
-      downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.2.8.ipa',
-      mandatory: false,
-      notes: 'Update v2.2.8 • تحسين مظهر الميني بلاير، زر تنقل جانبي أنيق، وتنظيف شاشة البحث.',
-      notesEn: 'Instant update v2.2.8 • Grounded MiniPlayer layout, discrete bottom-right navigation pill, clean search interface.'
-    }
-  }
-};
-
-// Helper to read dynamic OTA manifest if present
-const getOtaManifest = () => {
-  try {
-    const otaFile = path.join(__dirname, 'ota-manifest.json');
-    if (fs.existsSync(otaFile)) {
-      const manifest = JSON.parse(fs.readFileSync(otaFile, 'utf8'));
-      if (manifest && (!manifest.sizeMb || !manifest.bundleSize)) {
-        const bundlePath = path.join(__dirname, '../public/downloads/ota/index.android.bundle');
-        if (fs.existsSync(bundlePath)) {
-          const stat = fs.statSync(bundlePath);
-          if (!manifest.bundleSize) manifest.bundleSize = stat.size;
-          if (!manifest.sizeMb) manifest.sizeMb = `${(stat.size / 1048576).toFixed(2)} MB`;
-        }
-      }
-      return manifest;
-    }
-  } catch (e) {}
-  return null;
-};
-
-// Dual-channel version check endpoint
-app.get('/api/app/version', optionalAuth, (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-
-  const clientIp = req.ip || req.connection?.remoteAddress || '';
-  const cleanIp = clientIp.replace(/^.*:/, '');
-  const isLoopback = cleanIp === '127.0.0.1' || cleanIp === '1' || cleanIp === '::1';
-  const reqEmail = (req.query.email || req.user?.email || '').trim().toLowerCase();
-  const reqChannel = (req.query.channel || '').trim().toLowerCase();
-  const clientVersion = (req.query.currentVersion || req.headers['x-app-version'] || '').trim();
-
-  const isBetaTesterUser = isBetaTester(req.user) || (reqEmail && BETA_TESTER_EMAILS.has(reqEmail));
-  if (isBetaTesterUser && cleanIp && !isLoopback) {
-    knownBetaIps.add(cleanIp);
-  }
-
-  const isBetaClient = (clientVersion && (clientVersion.startsWith('1.9.6') || clientVersion.startsWith('1.9.7') || clientVersion.startsWith('1.9.8') || clientVersion.startsWith('1.9.9'))) || reqChannel === 'beta' || (!isLoopback && knownBetaIps.has(cleanIp)) || isBetaTesterUser;
-
-  const manifest = isBetaClient
-    ? JSON.parse(JSON.stringify(BETA_VERSIONS_DATA))
-    : JSON.parse(JSON.stringify(APP_VERSIONS_DATA));
-
-  // Always dynamically ensure versions match package.json
-  try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8'));
-    if (pkg && pkg.version) {
-      if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
-      if (manifest.platforms && manifest.platforms.windows) {
-        manifest.platforms.windows.version = pkg.version;
-        manifest.platforms.windows.directFile = `Rivo-v${pkg.version}.exe`;
-      }
-      if (manifest.platforms && manifest.platforms.android) {
-        manifest.platforms.android.version = pkg.version;
-        manifest.platforms.android.directFile = `Rivo-v${pkg.version}.apk`;
-      }
-      if (manifest.platforms && manifest.platforms.ios) {
-        manifest.platforms.ios.version = pkg.version;
-        manifest.platforms.ios.directFile = `Rivo-v${pkg.version}.ipa`;
-      }
-    }
-  } catch (e) {}
-
-  // Dynamically compute exact file sizes from disk (in binary MB / MiB matching Windows Explorer & mobile managers)
-  try {
-    const downloadsDir = path.join(__dirname, '../public/downloads');
-    const calcSize = (filename) => {
-      const p = path.join(downloadsDir, filename);
-      if (fs.existsSync(p)) {
-        const bytes = fs.statSync(p).size;
-        const mb = bytes / (1024 * 1024);
-        return mb >= 10 ? `${mb.toFixed(1)} MB` : `${mb.toFixed(2)} MB`;
-      }
-      return null;
-    };
-    if (manifest.platforms?.windows) {
-      const sz = calcSize(manifest.platforms.windows.directFile) || calcSize('Rivo.exe') || calcSize('Rivo_Setup.exe');
-      if (sz) manifest.platforms.windows.fileSize = sz;
-    }
-    if (manifest.platforms?.android) {
-      const sz = calcSize(manifest.platforms.android.directFile) || calcSize('Rivo.apk');
-      if (sz) manifest.platforms.android.fileSize = sz;
-    }
-    if (manifest.platforms?.ios) {
-      const sz = calcSize(manifest.platforms.ios.directFile) || calcSize('Rivo.ipa');
-      if (sz) manifest.platforms.ios.fileSize = sz;
-    }
-  } catch (e) {}
-
-  // Always apply dynamic fast OTA bundle to all mobile users if enabled
-  const dynamicOta = getOtaManifest();
-  if (dynamicOta && dynamicOta.enabled && manifest.platforms?.android) {
-    if (dynamicOta.version) {
-      manifest.platforms.android.version = dynamicOta.version;
-    }
-    manifest.platforms.android.ota = {
-      ...(manifest.platforms.android.ota || {}),
-      ...dynamicOta,
-      bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
-      minAppVersion: dynamicOta.minAppVersion || '1.9.0'
-    };
-  }
-
-  res.json(manifest);
-});
-
-// Dynamic OTA bundle download route
-app.get(['/downloads/ota/:filename', '/api/downloads/ota/:filename'], (req, res) => {
-  const filename = path.basename(req.params.filename);
-  const otaFile = path.join(__dirname, '../public/downloads/ota', filename);
-  if (fs.existsSync(otaFile)) {
-    res.setHeader('Content-Type', 'application/javascript');
-    return res.sendFile(otaFile);
-  }
-  return res.status(404).json({ error: 'OTA bundle not found' });
-});
-
-// Dynamic download routes for Windows EXE, Android APK, and iOS IPA releases
-app.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) => {
-  const filename = path.basename(req.params.filename);
-  const localFile = path.join(__dirname, '../public/downloads', filename);
-
-  // 1. Serve local file if already present in public/downloads
-  if (fs.existsSync(localFile)) {
-    return res.download(localFile, filename);
-  }
-
-  // 2. If any APK was requested and exact file not found, serve the active Rivo.apk
-  if (filename.toLowerCase().endsWith('.apk')) {
-    const mainApk = path.join(__dirname, '../public/downloads/Rivo.apk');
-    if (fs.existsSync(mainApk)) {
-      return res.download(mainApk, filename);
-    }
-    const altApk = path.join(__dirname, '../public/downloads/Rivo-v1.9.7.apk');
-    if (fs.existsSync(altApk)) {
-      return res.download(altApk, filename);
-    }
-  }
-
-  // 3. If iOS IPA was requested and exact file not found, serve the active Rivo.ipa
-  if (filename.toLowerCase().endsWith('.ipa')) {
-    const mainIpa = path.join(__dirname, '../public/downloads/Rivo.ipa');
-    if (fs.existsSync(mainIpa)) {
-      return res.download(mainIpa, filename);
-    }
-    const altIpa = path.join(__dirname, '../public/downloads/Rivo-v1.9.7.9.ipa');
-    if (fs.existsSync(altIpa)) {
-      return res.download(altIpa, filename);
-    }
-    const anyIpa = path.join(__dirname, '../public/downloads/Rivo-v1.9.6.ipa');
-    if (fs.existsSync(anyIpa)) {
-      return res.download(anyIpa, filename);
-    }
-  }
-
-  // 4. If Windows EXE is requested
-  if (filename.toLowerCase().endsWith('.exe')) {
-    const mainExe = path.join(__dirname, '../public/downloads/Rivo_Setup.exe');
-    if (fs.existsSync(mainExe)) {
-      return res.download(mainExe, filename);
-    }
-    const altExe = path.join(__dirname, '../public/downloads/Rivo.exe');
-    if (fs.existsSync(altExe)) {
-      return res.download(altExe, filename);
-    }
-  }
-
-  // 5. Final fallback if local files truly do not exist on disk
-  const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
-  if (vMatch) {
-    const requestedVersion = vMatch[1];
-    return res.redirect(`https://github.com/mohamedLIOT1/rivo/releases/download/v${requestedVersion}/${filename}`);
-  }
-
-  const ver = APP_VERSIONS_DATA.platforms.android.version || '1.9.9.0';
-
-  if (filename.endsWith('.apk')) {
-    return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);
-  }
-  if (filename.endsWith('.ipa')) {
-    return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.ipa`);
-  }
-  if (filename.endsWith('.exe')) {
-    return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe`);
-  }
-
-  return res.status(404).json({ error: 'File not found' });
-});
-
-// Secure Webhook for automated deployment on GitHub push
-const DEPLOY_SECRET = process.env.DEPLOY_SECRET;
-let isDeploying = false;
-
-app.post('/api/deploy-webhook', (req, res) => {
-  if (!DEPLOY_SECRET) {
-    return res.status(503).json({ error: 'Deployment webhook is disabled. Set DEPLOY_SECRET in .env to enable.' });
-  }
-
-  const secret = req.headers['x-webhook-secret'] || req.body?.secret || req.query?.secret;
-  if (!secret || typeof secret !== 'string') {
-    return res.status(403).json({ error: 'Unauthorized: Missing or invalid deploy secret header/body' });
-  }
-
-  const userHash = crypto.createHash('sha256').update(String(secret)).digest();
-  const serverHash = crypto.createHash('sha256').update(String(DEPLOY_SECRET)).digest();
-
-  if (!crypto.timingSafeEqual(userHash, serverHash)) {
-    return res.status(403).json({ error: 'Unauthorized: Invalid deploy secret' });
-  }
-
-  if (isDeploying) {
-    return res.status(429).json({ message: 'Deployment already in progress' });
-  }
-
-  isDeploying = true;
-  res.json({ success: true, message: 'Deployment started in background' });
-
-  const { exec } = require('child_process');
-  const projectRoot = path.join(__dirname, '..');
-  const nodeBinDir = path.dirname(process.execPath);
-  const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
-
-  const deployCmd = 'git config --global --add safe.directory "*" 2>/dev/null || true; git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true; git fetch origin main --force && git reset --hard origin/main && npm run build && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/cookies.txt 2>/dev/null || true; cp -a cookies.txt server/cookies.txt 2>/dev/null || true)';
-
-  console.log('[DeployWebhook] Starting auto-deployment with bash...');
-  exec(deployCmd, { 
-    cwd: projectRoot, 
-    timeout: 300000, 
-    shell: '/bin/bash',
-    env: { ...process.env, PATH: fullPath }
-  }, (error, stdout, stderr) => {
-    isDeploying = false;
-    if (error) {
-      console.error('[DeployWebhook] Execution error:', error);
-      console.error('[DeployWebhook] Stderr:', stderr);
-    } else {
-      console.log('[DeployWebhook] Deployment finished successfully!');
-    }
-    console.log('[DeployWebhook] Respawning PM2 process...');
-    setTimeout(() => {
-      process.exit(0);
-    }, 1000);
-  });
-});
+// Mount System Versioning, OTA, and Deploy Webhook Routes
+const {
+  router: systemRouter,
+  APP_VERSIONS_DATA,
+  BETA_VERSIONS_DATA,
+  BETA_TESTER_EMAILS,
+  isBetaTester
+} = require('./routes/system');
+app.use(systemRouter);
 
 try {
   const srcDist = path.join(__dirname, '../dist');
@@ -536,9 +205,16 @@ try {
     const srcAssets = path.join(srcDist, 'assets');
     const targetAssets = path.join(targetDist, 'assets');
     if (fs.existsSync(srcAssets)) {
-      if (!fs.existsSync(targetAssets)) fs.mkdirSync(targetAssets, { recursive: true });
-      for (const af of fs.readdirSync(srcAssets)) {
-        fs.copyFileSync(path.join(srcAssets, af), path.join(targetAssets, af));
+      if (typeof fs.cpSync === 'function') {
+        fs.cpSync(srcAssets, targetAssets, { recursive: true });
+      } else {
+        if (!fs.existsSync(targetAssets)) fs.mkdirSync(targetAssets, { recursive: true });
+        for (const af of fs.readdirSync(srcAssets)) {
+          const srcAf = path.join(srcAssets, af);
+          if (fs.statSync(srcAf).isFile()) {
+            fs.copyFileSync(srcAf, path.join(targetAssets, af));
+          }
+        }
       }
     }
     console.log('[Startup] Successfully synced fresh web dist to /home/ubuntu/dist');
@@ -548,15 +224,6 @@ try {
 }
 
 console.log('🚀 Rivo Server v1.9.3 (Auto-Deploy Enabled)');
-
-// Broadcast app update notification to all active web and mobile clients (Admin Only)
-app.post('/api/app/broadcast-update', adminAuth, (req, res) => {
-  if (io) {
-    io.emit('app:update_manifest', APP_VERSIONS_DATA);
-    io.emit('app:update_available', APP_VERSIONS_DATA);
-  }
-  res.json({ success: true, message: 'Update notification broadcasted to all connected clients', data: APP_VERSIONS_DATA });
-});
 
 // Direct downloads static route
 app.use('/downloads', (req, res, next) => {
@@ -586,43 +253,68 @@ app.get('/api/sync', auth, async (req, res) => {
       audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
     }).sort({ createdAt: -1 }).limit(3000).lean();
 
-    const formatted = allTracks.map(t => ({
-      id: String(t._id),
-      _id: String(t._id),
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      cover: (t.cover && typeof t.cover === 'string' && (t.cover.startsWith('/uploads/') || t.cover.startsWith('uploads/')))
-        ? (t.cover.startsWith('/') ? t.cover : `/${t.cover}`)
-        : t.cover,
-      audioUrl: t.audioUrl,
-      duration: t.duration || 180,
-      genre: t.genre,
-      source: t.source,
-      isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre)),
-      addedBy: t.addedBy,
-      lyrics: t.lyrics || [],
-      color: t.color || '#1DB954',
-      liked: (user.likedTrackIds || []).includes(String(t._id)),
-    }));
+    const { validLikedIds, extraTracks } = await syncUserLikedTracks(user, allTracks);
+    const validLikedSet = new Set(validLikedIds.map(String));
+
+    const formatted = allTracks.map(t => {
+      const tid = String(t._id);
+      const isLk = validLikedSet.has(tid) || (t.id && validLikedSet.has(String(t.id))) || (t.youtubeId && validLikedSet.has(String(t.youtubeId)));
+      return {
+        id: tid,
+        _id: tid,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        cover: (t.cover && typeof t.cover === 'string' && (t.cover.startsWith('/uploads/') || t.cover.startsWith('uploads/')))
+          ? (t.cover.startsWith('/') ? t.cover : `/${t.cover}`)
+          : t.cover,
+        audioUrl: t.audioUrl,
+        duration: t.duration || 180,
+        genre: t.genre,
+        source: t.source,
+        isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre)),
+        addedBy: t.addedBy,
+        lyrics: t.lyrics || [],
+        color: t.color || '#1DB954',
+        liked: isLk,
+      };
+    });
+
+    // Merge any newly resolved liked tracks
+    for (const xt of extraTracks) {
+      if (!formatted.some(t => String(t.id || t._id) === String(xt.id || xt._id))) {
+        formatted.unshift({
+          ...xt,
+          color: '#1DB954',
+          liked: true
+        });
+      }
+    }
 
     let userPlaylists = user.playlists || [];
     if (!userPlaylists.some(p => p.isLikedSongs || p.id === 'liked' || p.name === 'Liked Songs')) {
       userPlaylists = [
-        { id: 'liked', name: 'Liked Songs', trackIds: (user.likedTrackIds || []).map(String), isLikedSongs: true, isPublic: false },
+        { id: 'liked', name: 'Liked Songs', trackIds: validLikedIds.map(String), isLikedSongs: true, isPublic: false },
         ...userPlaylists
       ];
+    } else {
+      userPlaylists = userPlaylists.map(p => {
+        if (p.isLikedSongs || p.id === 'liked' || p.name === 'Liked Songs') {
+          return { ...p, trackIds: validLikedIds.map(String) };
+        }
+        return p;
+      });
     }
 
     res.json({
       success: true,
-      user,
+      user: { ...user, likedTrackIds: validLikedIds },
       tracks: formatted,
       playlists: userPlaylists.map(p => ({
         ...p,
         isQuran: Boolean(p.isQuran || isQuranContent(p.name, '', '', '', p.description))
       })),
-      likedTrackIds: user.likedTrackIds || [],
+      likedTrackIds: validLikedIds,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -644,6 +336,9 @@ app.get('/api/proxy-audio', async (req, res) => {
   };
 
   req.on('close', () => {
+    if (!res.writableEnded) cleanupStream();
+  });
+  res.on('close', () => {
     if (!res.writableEnded) cleanupStream();
   });
   res.on('error', cleanupStream);
@@ -677,10 +372,19 @@ app.get('/api/proxy-audio', async (req, res) => {
       if (!res.headersSent) res.status(500).end();
     });
 
+    const clientOrigin = req.headers.origin;
+    if (clientOrigin) {
+      corsOriginHandler(clientOrigin, (err, allowed) => {
+        if (!err && allowed) {
+          res.setHeader('Access-Control-Allow-Origin', clientOrigin);
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
+      });
+    }
+
     res.set({
       'Content-Type': r.headers['content-type'] || 'audio/mpeg',
-      'Accept-Ranges': 'bytes',
-      'Access-Control-Allow-Origin': '*'
+      'Accept-Ranges': 'bytes'
     });
     if (r.headers['content-length']) res.set('Content-Length', r.headers['content-length']);
     if (r.headers['content-range']) res.set('Content-Range', r.headers['content-range']);
@@ -706,10 +410,7 @@ app.use('/api/ai',        require('./routes/ai'));
 app.use('/api/admin',     require('./routes/admin'));
 app.use('/api/recognize', require('./routes/recognize'));
 
-// SoundCloud fallback disabled routes
-app.get(['/api/soundcloud/fallback', '/api/tracks/fallback-stream'], (req, res) => {
-  res.status(404).json({ success: false, error: 'SoundCloud fallback disabled' });
-});
+
 
 // Fallback SPA routing with fallback search paths and error safety
 app.get('*', (req, res, next) => {

@@ -232,7 +232,11 @@ export default function ScreenRouter({
             }
             return selectedPlaylist;
           })()}
-          tracks={isQuranContent(selectedPlaylist) ? quranTracks : musicTracks}
+          tracks={
+            (selectedPlaylist?.isLikedSongs || String(selectedPlaylist?.id || selectedPlaylist?._id) === 'liked')
+              ? (tracks || [])
+              : (isQuranContent(selectedPlaylist) ? quranTracks : musicTracks)
+          }
           likedTrackIds={likedTrackIds}
           currentUser={currentUser}
           onSelectTrack={playTrack}
@@ -259,9 +263,9 @@ export default function ScreenRouter({
         />
       )}
 
-      {currentScreen === 'artist' && selectedArtist && (
+      {currentScreen === 'artist' && (
         <ArtistScreen
-          artist={selectedArtist}
+          artist={selectedArtist || { name: 'Artist' }}
           tracks={tracks}
           albums={albums}
           onSelectTrack={playTrack}

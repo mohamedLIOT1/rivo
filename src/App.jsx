@@ -18,6 +18,7 @@ import { dataService } from './services/dataService';
 
 import { UserProvider, useUser } from './context/UserContext';
 import { AudioProvider, useAudioPlayer } from './context/AudioContext';
+import { SleepTimerProvider } from './context/SleepTimerContext';
 import { DownloadProvider } from './context/DownloadContext';
 import DownloadProgressWidget from './components/DownloadProgressWidget';
 import { UIProvider, useUI } from './context/UIContext';
@@ -38,7 +39,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
   const audio = useAudioPlayer();
   const {
     currentTrack, setCurrentTrack, isPlaying, setIsPlaying,
-    currentTime, duration,
+    currentTime = 0, duration = 0,
     volume, setVolume,
     isShuffle, setIsShuffle, toggleShuffle,
     isRepeat, setIsRepeat, repeatMode, toggleRepeat,
@@ -73,6 +74,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     goToScreen,
     navigateTo,
     handleSelectPlaylistView,
+    handleSelectArtist,
   } = useNavigation();
 
   const {
@@ -120,8 +122,10 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     playNextTrack,
     playPrevTrack,
     seekTo,
-    currentTime,
-    duration,
+    currentTime: audio?.currentTime ?? currentTime ?? 0,
+    duration: audio?.duration ?? duration ?? 0,
+    getCurrentTime: () => audio?.currentTime ?? 0,
+    getDuration: () => audio?.duration ?? 0,
     volume,
     setVolume,
     setIsShuffle,
@@ -412,7 +416,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
 
   return (
     <DownloadProvider tracks={tracks} setTracks={setTracks} showToast={showToast}>
-      <div className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
+      <div dir="ltr" className="flex flex-col text-[#0b1110] overflow-hidden select-none font-sans" style={{ height: '100dvh', background: '#082621' }}>
         {/* Top Header */}
         <AppHeader
           currentUser={currentUser}
@@ -444,6 +448,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
             toggleActivityPanel={toggleActivityPanel}
             globalTheme={globalTheme}
             likedTrackIds={likedTrackIds}
+            tracks={tracks}
             selectedPlaylist={selectedPlaylist}
             onSelectLikedSongs={() => goToScreen('liked')}
             onSelectPlaylist={handleSelectPlaylistView}
@@ -507,6 +512,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
               else navigateTo('profile');
             }}
             globalTheme={globalTheme}
+            onOpenAuth={() => setIsAuthOpen(true)}
           />
         </div>
 
@@ -525,8 +531,6 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
           toggleDownload={handleDownload}
           openFullPlayer={openFullPlayer}
           onOpenFullPlayer={openFullPlayer}
-          currentTime={currentTime}
-          duration={duration}
           seekTo={seekTo}
           volume={volume}
           setVolume={setVolume}
@@ -540,6 +544,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
           jamSession={jamSession}
           onLeaveJam={leaveJam}
           onJoinJam={joinJam}
+          onSelectArtist={handleSelectArtist}
           currentUser={currentUser}
           globalTheme={globalTheme}
         />
@@ -613,11 +618,13 @@ export default function App() {
     <PreferencesProvider currentUser={currentUser}>
       <UIProvider>
         <AudioProvider tracks={tracks} setTracks={setTracks}>
-          <JamProvider>
+          <SleepTimerProvider>
+            <JamProvider>
             <NavigationProvider likedTrackIds={likedTrackIds} playlists={playlists} albums={albums}>
               <MainAppShell albums={albums} setAlbums={setAlbums} />
             </NavigationProvider>
           </JamProvider>
+          </SleepTimerProvider>
         </AudioProvider>
       </UIProvider>
     </PreferencesProvider>

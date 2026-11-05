@@ -67,6 +67,8 @@ UserSchema.index({ lastActiveAt: -1 });
 UserSchema.index({ totalListeningSeconds: -1 });
 UserSchema.index({ weeklyWeek: 1, weeklyListeningSeconds: -1 });
 UserSchema.index({ 'currentListening.isPlaying': 1, lastActiveAt: -1 });
+UserSchema.index({ 'currentListening.title': 1 });
+UserSchema.index({ 'currentListening.updatedAt': -1 });
 UserSchema.index({ 'playlists.id': 1 });
 UserSchema.index({ 'playlists._id': 1 });
 UserSchema.index({ 'discord.linkCode': 1 });
@@ -75,5 +77,7 @@ UserSchema.index({ role: 1 });
 UserSchema.index({ followers: 1 });
 UserSchema.index({ following: 1 });
 UserSchema.index({ likedTrackIds: 1 });
+UserSchema.index({ createdAt: -1 });
+UserSchema.index({ 'discord.id': 1 });
 
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

@@ -15,6 +15,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import AlbumDetailModal from '../components/AlbumDetailModal';
@@ -24,6 +25,63 @@ import { normalizeCoverUri } from '../utils/coverUtils';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 import { deduplicateTrackList } from '../services/downloadManager';
+
+const keyExtractor = (item, index) => String(item._id || item.id || index);
+
+const AlbumCard = React.memo(function AlbumCard({
+  album,
+  isDark,
+  width,
+  onSelect,
+  onPlay,
+}) {
+  const coverUri = album.cover || album.coverUrl || album.tracks?.[0]?.cover || album.tracks?.[0]?.coverUrl;
+  const normalizedCover = useMemo(() => normalizeCoverUri(coverUri), [coverUri]);
+
+  const handleSelect = useCallback(() => {
+    onSelect(album);
+  }, [album, onSelect]);
+
+  const handlePlay = useCallback((e) => {
+    e?.stopPropagation?.();
+    onPlay(album);
+  }, [album, onPlay]);
+
+  return (
+    <TouchableOpacity
+      style={[styles.albumCard, !isDark && styles.albumCardLight, { width }]}
+      onPress={handleSelect}
+      activeOpacity={0.85}
+    >
+      <View style={styles.albumCoverWrap}>
+        <View style={styles.albumCoverPlaceholder}>
+          <Disc size={36} color="#1f3630" strokeWidth={1.5} />
+        </View>
+        <Image
+          source={{ uri: normalizedCover }}
+          style={styles.albumCover}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+        <TouchableOpacity
+          style={styles.albumPlayOverlay}
+          onPress={handlePlay}
+          activeOpacity={0.8}
+        >
+          <View style={styles.albumPlayPill}>
+            <Play size={11} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+          </View>
+        </TouchableOpacity>
+      </View>
+      <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
+        {album.name}
+      </Text>
+      <Text style={styles.albumArtist} numberOfLines={1}>
+        {album.artist || 'Various Artists'}
+      </Text>
+    </TouchableOpacity>
+  );
+});
 
 function HomeScreen({
   onOpenAddSong,
@@ -37,12 +95,15 @@ function HomeScreen({
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
   const albumGap = 10;
   const albumPadding = 24;
-  const albumCardWidth = Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
+  const albumCardWidth = useMemo(() => {
+    return Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
+  }, [width, numColumns]);
 
   const { playTrack, currentTrack, downloadedTracks = [] } = useAudioPlayer();
   const { currentUser, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
   const isOffline = appMode === 'offline';
   const [activeFilter, setActiveFilter] = useState(initialFilter);
 
@@ -78,6 +139,7 @@ function HomeScreen({
         const key = t.album.trim().toLowerCase();
         if (!map.has(key)) {
           map.set(key, {
+            id: `derived-${key}`,
             name: t.album.trim(),
             artist: t.artist || 'Various Artists',
             cover: t.cover,
@@ -88,8 +150,18 @@ function HomeScreen({
         }
       }
     });
-    return Array.from(map.values()).slice(0, 16);
+    return Array.from(map.values())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 16);
   }, [albums, userTracks]);
+
+  const handleSelectAlbumCard = useCallback((album) => {
+    if (onSelectAlbum) {
+      onSelectAlbum(album);
+    } else {
+      setSelectedAlbum(album);
+    }
+  }, [onSelectAlbum]);
 
   const handlePlayAlbum = useCallback((album) => {
     let albTracks = [];
@@ -115,6 +187,11 @@ function HomeScreen({
 
   const getGreeting = () => {
     const hour = new Date().getHours();
+    if (isRTL) {
+      if (hour < 12) return 'صباح الخير';
+      if (hour < 18) return 'مساء الخير';
+      return 'أهلاً بك';
+    }
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
@@ -163,7 +240,7 @@ function HomeScreen({
         <View style={[styles.labPill, !isDark && styles.labPillLight]}>
           <View style={[styles.pulseDot, isOffline && { backgroundColor: '#f59e0b' }]} />
           <Text style={[styles.labPillText, !isDark && styles.labPillTextLight]}>
-            {isOffline ? '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION' : `🎵 ${currentMood.label.toUpperCase()}`}
+            {isOffline ? (isRTL ? '📼 الخزنة المحلية • استهلاك صفر للبيانات' : '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION') : `🎵 ${currentMood.label.toUpperCase()}`}
           </Text>
         </View>
 
@@ -171,7 +248,7 @@ function HomeScreen({
         <Text style={[styles.greetingTitle, !isDark && styles.greetingTitleLight]}>
           {getGreeting()},{' '}
           <Text style={{ color: '#17a398' }}>
-            {currentUser?.name ? currentUser.name.split(' ')[0] : 'Listener'}.
+            {currentUser?.name ? currentUser.name.split(' ')[0] : (isRTL ? 'مستمع' : 'Listener')}.
           </Text>
         </Text>
 
@@ -189,7 +266,7 @@ function HomeScreen({
             activeOpacity={0.85}
           >
             <Play size={14} color="#0b1110" fill="#0b1110" />
-            <Text style={styles.playTopChartsBtnText}>PLAY TOP CHARTS (10)</Text>
+            <Text style={styles.playTopChartsBtnText}>{isRTL ? 'تشغيل قائمة الأفضل (10)' : 'PLAY TOP CHARTS (10)'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -198,7 +275,7 @@ function HomeScreen({
             activeOpacity={0.85}
           >
             <Plus size={15} color="#0b1110" strokeWidth={2.5} />
-            <Text style={styles.addTrackBtnText}>+ Add Track</Text>
+            <Text style={styles.addTrackBtnText}>{isRTL ? '+ إضافة مقطع' : '+ Add Track'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -212,7 +289,7 @@ function HomeScreen({
             <View style={styles.albumsTitleGroup}>
               <Disc size={18} color="#f59e0b" strokeWidth={2.4} />
               <Text style={[styles.albumsSectionTitle, !isDark && styles.albumsSectionTitleLight]}>
-                Featured Albums
+                {isRTL ? 'ألبومات مميزة' : 'Featured Albums'}
               </Text>
               <View style={styles.albumsCountPill}>
                 <Text style={styles.albumsCountText}>
@@ -224,46 +301,16 @@ function HomeScreen({
 
           {/* 2-Column Grid */}
           <View style={styles.albumsGrid}>
-            {displayAlbums.slice(0, 8).map((alb, index) => {
-              const coverUri = alb.cover || alb.coverUrl || alb.tracks?.[0]?.cover || alb.tracks?.[0]?.coverUrl;
-              return (
-                <TouchableOpacity
-                  key={alb.id || alb._id || alb.name || String(index)}
-                  style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
-                  onPress={() => onSelectAlbum ? onSelectAlbum(alb) : setSelectedAlbum(alb)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.albumCoverWrap}>
-                    <View style={styles.albumCoverPlaceholder}>
-                      <Disc size={36} color="#1f3630" strokeWidth={1.5} />
-                    </View>
-                    <Image
-                      source={{ uri: normalizeCoverUri(coverUri) }}
-                      style={styles.albumCover}
-                      resizeMode="cover"
-                    />
-                    <TouchableOpacity
-                      style={styles.albumPlayOverlay}
-                      onPress={(e) => {
-                        e?.stopPropagation?.();
-                        handlePlayAlbum(alb);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.albumPlayPill}>
-                        <Play size={11} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
-                      </View>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
-                    {alb.name}
-                  </Text>
-                  <Text style={styles.albumArtist} numberOfLines={1}>
-                    {alb.artist || 'Various Artists'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {displayAlbums.slice(0, 8).map((alb, index) => (
+              <AlbumCard
+                key={alb._id || alb.id || alb.name || `album-${index}`}
+                album={alb}
+                isDark={isDark}
+                width={albumCardWidth}
+                onSelect={handleSelectAlbumCard}
+                onPlay={handlePlayAlbum}
+              />
+            ))}
           </View>
         </View>
       )}
@@ -272,9 +319,9 @@ function HomeScreen({
           SECTION HEADER & FILTER PILLS
           ───────────────────────────────────────── */}
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>Daily Rotation & Favorites</Text>
+        <Text style={styles.sectionTitle}>{isRTL ? 'التشغيل اليومي والمفضلة' : 'Daily Rotation & Favorites'}</Text>
         <View style={styles.topTracksBadge}>
-          <Text style={styles.topTracksText}>TOP TRACKS</Text>
+          <Text style={styles.topTracksText}>{isRTL ? 'الأكثر استماعاً' : 'TOP TRACKS'}</Text>
         </View>
       </View>
 
@@ -286,7 +333,7 @@ function HomeScreen({
           activeOpacity={0.8}
         >
           <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-            All
+            {t('common.all')}
           </Text>
         </TouchableOpacity>
 
@@ -296,7 +343,7 @@ function HomeScreen({
           activeOpacity={0.8}
         >
           <Text style={[styles.filterPillText, activeFilter === 'music' && styles.filterPillTextActive]}>
-            Music
+            {t('nav.music')}
           </Text>
         </TouchableOpacity>
 
@@ -307,13 +354,13 @@ function HomeScreen({
             activeOpacity={0.8}
           >
             <Text style={[styles.filterPillText, activeFilter === 'downloaded' && styles.filterPillTextActive]}>
-              Downloaded ({downloadedTracks.length})
+              {isRTL ? `المحملة (${downloadedTracks.length})` : `Downloaded (${downloadedTracks.length})`}
             </Text>
           </TouchableOpacity>
         )}
       </View>
     </View>
-  ), [currentUser?.name, displayTracks, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, playTrack, handlePlayAlbum]);
+  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -372,13 +419,14 @@ function HomeScreen({
         style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}
         contentContainerStyle={styles.content}
         data={visibleTracks}
-        keyExtractor={(item, index) => item._id || item.id || String(index)}
+        keyExtractor={keyExtractor}
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={10}
-        maxToRenderPerBatch={8}
-        windowSize={5}
+        initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+        windowSize={Platform.OS === 'android' ? 3 : 5}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -399,8 +447,12 @@ function HomeScreen({
           onTrackAction={onTrackAction}
           onOpenFullPlayer={onOpenFullPlayer}
           onSelectArtist={(artistName) => {
-            setSelectedAlbum(null);
-            setSelectedArtist({ name: artistName });
+            if (onSelectArtist) {
+              onSelectArtist(artistName);
+            } else {
+              setSelectedAlbum(null);
+              setSelectedArtist(typeof artistName === 'object' ? artistName : { name: artistName });
+            }
           }}
         />
       )}
@@ -452,7 +504,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 6,
-    elevation: 2,
+    elevation: Platform.OS === 'android' ? 0 : 2,
   },
   watermark: {
     position: 'absolute',

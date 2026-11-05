@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { colors } from '../theme/colors';
 
-export default function CassetteTag({ label, bg = colors.deepForest, textColor = colors.tealLight, style }) {
+function CassetteTag({ label, bg = colors.deepForest, textColor = colors.tealLight, style }) {
   return (
     <View style={[styles.tag, { backgroundColor: bg }, style]}>
       <Text style={[styles.text, { color: textColor }]}>
@@ -11,6 +11,8 @@ export default function CassetteTag({ label, bg = colors.deepForest, textColor =
     </View>
   );
 }
+
+export default memo(CassetteTag);
 
 const styles = StyleSheet.create({
   tag: {

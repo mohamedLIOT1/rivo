@@ -39,11 +39,17 @@ router.post('/link-token', auth, async (req, res) => {
 
     const { Client: SelfClient } = require('discord.js-selfbot-v13');
     const testClient = new SelfClient({ checkUpdate: false });
+    testClient.on('error', () => {});
 
-    await testClient.login(token);
-    const discordTag = testClient.user.tag;
-    const discordId = testClient.user.id;
-    testClient.destroy();
+    let discordTag = '';
+    let discordId = '';
+    try {
+      await testClient.login(token);
+      discordTag = testClient.user?.tag || '';
+      discordId = testClient.user?.id || '';
+    } finally {
+      try { testClient.destroy(); } catch (e) {}
+    }
 
     const encrypted = discordActivity.encryptToken(token);
     const user = await User.findByIdAndUpdate(req.user.id, {

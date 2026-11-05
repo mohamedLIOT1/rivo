@@ -56,7 +56,8 @@ const AlbumTrackRow = React.memo(({
   onToggleLike,
   onTrackAction,
   styles,
-  formatDuration
+  formatDuration,
+  isDark = true,
 }) => {
   const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
   const trackCover = normalizeCoverUri(track.coverUrl || track.cover || coverUri);
@@ -81,13 +82,13 @@ const AlbumTrackRow = React.memo(({
         {numStr}
       </Text>
 
-      <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" />
+      <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" fadeDuration={0} />
 
       <View style={styles.trackDetails}>
-        <Text style={[styles.trackTitle, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
+        <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
           {track.title || 'Untitled Track'}
         </Text>
-        <Text style={styles.trackArtist} numberOfLines={1}>
+        <Text style={[styles.trackArtist, !isDark && styles.trackArtistLight]} numberOfLines={1}>
           {track.artist || albumArtist}
         </Text>
       </View>
@@ -132,6 +133,7 @@ const AlbumTrackRow = React.memo(({
     prev.isCurrent === next.isCurrent &&
     prev.isLiked === next.isLiked &&
     prev.isDl === next.isDl &&
+    prev.isDark === next.isDark &&
     prev.coverUri === next.coverUri &&
     prev.albumArtist === next.albumArtist &&
     (prev.track?._id || prev.track?.id) === (next.track?._id || next.track?.id) &&
@@ -446,7 +448,7 @@ export default function AlbumDetailModal({
     if (visible) {
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 220,
+        duration: Platform.OS === 'android' ? 0 : 220,
         useNativeDriver: true,
       }).start();
     }
@@ -455,7 +457,7 @@ export default function AlbumDetailModal({
   const handleClose = () => {
     Animated.timing(slideAnim, {
       toValue: SCREEN_HEIGHT,
-      duration: 180,
+      duration: Platform.OS === 'android' ? 0 : 180,
       useNativeDriver: true,
     }).start(() => {
       onClose && onClose();
@@ -485,13 +487,13 @@ export default function AlbumDetailModal({
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar matching Image 3 */}
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={handleClose} style={styles.backBtn} activeOpacity={0.8}>
-            <ArrowLeft size={20} color="#fdfbf7" strokeWidth={2.5} />
-            <Text style={styles.backText}>RETURN</Text>
+          <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight]} activeOpacity={0.8}>
+            <ArrowLeft size={20} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} />
+            <Text style={[styles.backText, !isDark && styles.backTextLight]}>RETURN</Text>
           </TouchableOpacity>
 
-          <View style={styles.batchBadge}>
-            <Text style={styles.batchText}>OFFICIAL AUDIO PRESCRIPTION • BATCH #{batchNumber}</Text>
+          <View style={[styles.batchBadge, !isDark && styles.batchBadgeLight]}>
+            <Text style={[styles.batchText, !isDark && styles.batchTextLight]}>OFFICIAL AUDIO PRESCRIPTION • BATCH #{batchNumber}</Text>
           </View>
         </View>
 
@@ -501,19 +503,15 @@ export default function AlbumDetailModal({
           showsVerticalScrollIndicator={false}
           data={filteredTracks}
           keyExtractor={(t, idx) => String(t._id || t.id || idx)}
-          initialNumToRender={14}
-          maxToRenderPerBatch={12}
-          windowSize={7}
+          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+          windowSize={Platform.OS === 'android' ? 3 : 5}
+          updateCellsBatchingPeriod={50}
           removeClippedSubviews={Platform.OS === 'android'}
-          getItemLayout={(data, index) => ({
-            length: 64,
-            offset: 64 * index,
-            index,
-          })}
           ListHeaderComponent={(
             <View>
               {/* Hero Card matching Image 3 */}
-              <View style={styles.heroCard}>
+              <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
                 <View style={styles.heroLayout}>
                   {/* Cover Art with RIVO-TAPE badge */}
                   <View style={styles.coverWrapper}>
@@ -521,6 +519,7 @@ export default function AlbumDetailModal({
                       source={{ uri: normalizeCoverUri(coverUri) }}
                       style={styles.heroCover}
                       resizeMode="cover"
+                      fadeDuration={0}
                     />
                     <View style={styles.tapeBadge}>
                       <Text style={styles.tapeText}>RIVO-TAPE</Text>
@@ -535,7 +534,7 @@ export default function AlbumDetailModal({
                       </Text>
                     </View>
 
-                    <Text style={styles.albumTitle} numberOfLines={2}>
+                    <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={2}>
                       {albumTitle}
                     </Text>
 
@@ -548,22 +547,22 @@ export default function AlbumDetailModal({
                       }}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.albumArtist}>
+                      <Text style={[styles.albumArtist, !isDark && styles.albumArtistLight]}>
                         {isPlaylist ? 'Curated by ' : 'Album by '}
                         <Text style={styles.artistHighlight}>{albumArtist}</Text>
                       </Text>
                     </TouchableOpacity>
 
                     <View style={styles.statsPillRow}>
-                      <View style={[styles.statsPill, isPlaylist && { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
-                        <Text style={[styles.statsPillText, isPlaylist && { color: '#17a398' }]}>
+                      <View style={[styles.statsPill, !isDark && styles.statsPillLight, isPlaylist && { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
+                        <Text style={[styles.statsPillText, !isDark && styles.statsPillTextLight, isPlaylist && { color: '#17a398' }]}>
                           {isPlaylist ? 'PLAYLIST' : 'ALBUM'}
                         </Text>
                       </View>
                       <Text style={styles.statsDot}>•</Text>
-                      <Text style={styles.statsMeta}>{effectiveAlbumTracks.length} TRACKS</Text>
+                      <Text style={[styles.statsMeta, !isDark && styles.statsMetaLight]}>{effectiveAlbumTracks.length} TRACKS</Text>
                       <Text style={styles.statsDot}>•</Text>
-                      <Text style={styles.statsMeta}>{totalMinutes} MIN</Text>
+                      <Text style={[styles.statsMeta, !isDark && styles.statsMetaLight]}>{totalMinutes} MIN</Text>
                     </View>
                   </View>
                 </View>
@@ -581,7 +580,7 @@ export default function AlbumDetailModal({
 
                   {/* Queue Playlist Button */}
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={[styles.actionBtn, !isDark && styles.actionBtnLight]}
                     onPress={() => {
                       if (addMultipleToQueue && effectiveAlbumTracks.length > 0) {
                         addMultipleToQueue(effectiveAlbumTracks);
@@ -590,51 +589,51 @@ export default function AlbumDetailModal({
                     activeOpacity={0.8}
                   >
                     <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
-                    <Text style={styles.actionBtnText}>{isPlaylist ? 'QUEUE PLAYLIST' : 'QUEUE ALL'}</Text>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight]}>{isPlaylist ? 'QUEUE PLAYLIST' : 'QUEUE ALL'}</Text>
                   </TouchableOpacity>
 
                   {/* Save to Library Button */}
                   <TouchableOpacity
-                    style={[styles.actionBtn, isSaved && styles.actionBtnActive]}
+                    style={[styles.actionBtn, !isDark && styles.actionBtnLight, isSaved && styles.actionBtnActive]}
                     onPress={handleToggleSave}
                     activeOpacity={0.8}
                   >
                     {isSaved ? (
                       <BookmarkCheck size={15} color="#17a398" strokeWidth={2.4} />
                     ) : (
-                      <BookmarkPlus size={15} color="#fdfbf7" strokeWidth={2.2} />
+                      <BookmarkPlus size={15} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.2} />
                     )}
-                    <Text style={styles.actionBtnText}>{isSaved ? 'SAVED' : 'SAVE'}</Text>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight]}>{isSaved ? 'SAVED' : 'SAVE'}</Text>
                   </TouchableOpacity>
 
                   {/* Download All Button */}
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={[styles.actionBtn, !isDark && styles.actionBtnLight]}
                     onPress={handleDownloadAll}
                     activeOpacity={0.8}
                   >
                     <Download size={15} color="#26c4b7" strokeWidth={2.2} />
-                    <Text style={styles.actionBtnText}>DOWNLOAD ({effectiveAlbumTracks.length})</Text>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight]}>DOWNLOAD ({effectiveAlbumTracks.length})</Text>
                   </TouchableOpacity>
 
                   {/* Shuffle Button */}
                   <TouchableOpacity
-                    style={styles.actionBtn}
+                    style={[styles.actionBtn, !isDark && styles.actionBtnLight]}
                     onPress={() => handlePlayAll(true)}
                     activeOpacity={0.8}
                   >
                     <Shuffle size={15} color="#f59e0b" strokeWidth={2.2} />
-                    <Text style={styles.actionBtnText}>SHUFFLE</Text>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight]}>SHUFFLE</Text>
                   </TouchableOpacity>
                 </View>
 
                 {/* Prescription Search Bar matching Image 3 */}
-                <View style={styles.searchBar}>
-                  <Search size={16} color="#6b7280" style={{ marginRight: 8 }} />
+                <View style={[styles.searchBar, !isDark && styles.searchBarLight]}>
+                  <Search size={16} color={!isDark ? '#57534e' : '#6b7280'} style={{ marginRight: 8 }} />
                   <TextInput
-                    style={styles.searchInput}
+                    style={[styles.searchInput, !isDark && styles.searchInputLight]}
                     placeholder="Search in prescription list..."
-                    placeholderTextColor="#6b7280"
+                    placeholderTextColor={!isDark ? '#78716c' : '#6b7280'}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                     autoCorrect={false}
@@ -643,10 +642,10 @@ export default function AlbumDetailModal({
               </View>
 
               {/* Table Header matching Image 3 */}
-              <View style={styles.tableHeader}>
-                <Text style={[styles.colHeader, { width: 34 }]}>#</Text>
-                <Text style={[styles.colHeader, { flex: 1, paddingLeft: 8 }]}>TITLE & ARTIST</Text>
-                <Text style={[styles.colHeader, { width: 90, textAlign: 'right' }]}>ACTIONS</Text>
+              <View style={[styles.tableHeader, !isDark && styles.tableHeaderLight]}>
+                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { width: 34 }]}>#</Text>
+                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { flex: 1, paddingLeft: 8 }]}>TITLE & ARTIST</Text>
+                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { width: 90, textAlign: 'right' }]}>ACTIONS</Text>
               </View>
             </View>
           )}
@@ -674,6 +673,7 @@ export default function AlbumDetailModal({
                 onTrackAction={handleTrackAction}
                 styles={styles}
                 formatDuration={formatDuration}
+                isDark={isDark}
               />
             );
           }}
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: '#0b1110',
     zIndex: 120,
-    elevation: 20,
+    elevation: Platform.OS === 'android' ? 0 : 20,
   },
   container: {
     flex: 1,
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 0.4, shadowRadius: 0 },
-      android: { elevation: 4 },
+      android: { elevation: 0 },
     }),
   },
   heroLayout: {
@@ -901,7 +901,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.3, shadowRadius: 0 },
-      android: { elevation: 3 },
+      android: { elevation: 0 },
     }),
   },
   actionBtn: {
@@ -1015,5 +1015,66 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     padding: 6,
+  },
+  // ── Light Theme Adaptations ──
+  backBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  backTextLight: {
+    color: '#0b1110',
+  },
+  batchBadgeLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  batchTextLight: {
+    color: '#082621',
+  },
+  heroCardLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  albumTitleLight: {
+    color: '#0b1110',
+  },
+  albumArtistLight: {
+    color: '#57534e',
+  },
+  statsPillLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  statsPillTextLight: {
+    color: '#0b1110',
+  },
+  statsMetaLight: {
+    color: '#57534e',
+  },
+  actionBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  actionBtnTextLight: {
+    color: '#0b1110',
+  },
+  searchBarLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  searchInputLight: {
+    color: '#0b1110',
+  },
+  tableHeaderLight: {
+    borderBottomColor: '#d6c8b0',
+  },
+  colHeaderLight: {
+    color: '#57534e',
+  },
+  trackTitleLight: {
+    color: '#0b1110',
+  },
+  trackArtistLight: {
+    color: '#57534e',
   },
 });

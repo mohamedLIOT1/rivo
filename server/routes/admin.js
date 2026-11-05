@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const { User, Track, Album } = require('../models');
+const { User, Track, Album, Message } = require('../models');
 const { adminAuth, isAdminUser, isVerifiedUser } = require('../middleware/auth');
 
 // Analytics Endpoint
@@ -91,6 +91,35 @@ router.patch('/users/:id/role', adminAuth, async (req, res) => {
     res.json({ success: true, user });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete user account (Admin only)
+router.delete('/users/:id', adminAuth, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (!mongoose.isValidObjectId(targetId)) {
+      return res.status(400).json({ success: false, error: 'Invalid user ID format' });
+    }
+    if (String(targetId) === String(req.user.id)) {
+      return res.status(400).json({ success: false, error: 'Cannot delete your own admin account' });
+    }
+
+    const user = await User.findById(targetId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Clean up references in database
+    await Promise.all([
+      User.findByIdAndDelete(targetId),
+      User.updateMany({}, { $pull: { followers: targetId, following: targetId } }),
+      Message.deleteMany({ $or: [{ sender: targetId }, { recipient: targetId }] }),
+    ]);
+
+    res.json({ success: true, message: `User ${user.name} deleted successfully` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

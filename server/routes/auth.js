@@ -1,9 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { User } = require('../models');
+const mongoose = require('mongoose');
+const { User, Track } = require('../models');
 const { auth, makeToken, isAdminUser, isVerifiedUser, revokedTokens } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/security');
+
+async function sanitizeUserLikedTracks(userObj, userId) {
+  if (!userObj || !Array.isArray(userObj.likedTrackIds) || userObj.likedTrackIds.length === 0) {
+    return userObj;
+  }
+  try {
+    const rawIds = userObj.likedTrackIds.map(String);
+    const validObjectIds = rawIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+    const validTracks = await Track.find({ _id: { $in: validObjectIds } }).select('_id');
+    const validSet = new Set(validTracks.map(t => String(t._id)));
+    const cleanIds = rawIds.filter(id => validSet.has(id));
+
+    if (cleanIds.length !== rawIds.length) {
+      userObj.likedTrackIds = cleanIds;
+      if (userId) {
+        User.updateOne({ _id: userId }, { $set: { likedTrackIds: cleanIds } }).catch(() => {});
+      }
+    }
+  } catch (err) {}
+  return userObj;
+}
 
 router.post('/register', async (req, res) => {
   try {
@@ -90,6 +112,7 @@ router.post('/login', async (req, res) => {
     userObj.isVerified = isVerifiedUser(userObj.name);
     userObj.followersCount = (user.followers || []).length;
     userObj.followingCount = (user.following || []).length;
+    await sanitizeUserLikedTracks(userObj, user._id);
     res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -128,6 +151,7 @@ router.get('/me', auth, async (req, res) => {
     userObj.isVerified = isVerifiedUser(userObj.name);
     userObj.followersCount = (user.followers || []).length;
     userObj.followingCount = (user.following || []).length;
+    await sanitizeUserLikedTracks(userObj, user._id);
     res.json({ success: true, user: userObj });
   } catch (e) {
     res.status(500).json({ error: e.message });

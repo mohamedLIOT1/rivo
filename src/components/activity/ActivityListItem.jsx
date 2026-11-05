@@ -20,6 +20,17 @@ function formatTimeAgo(dateStr, isRTL) {
   return isRTL ? `منذ ${days} يوم` : `${days}d ago`;
 }
 
+function formatCompactPill(lastActiveAt, isRTL) {
+  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'OFFLINE';
+  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'OFFLINE';
+  if (diffSec < 60) return isRTL ? 'الآن' : 'NOW';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}M`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}H`;
+  const days = Math.floor(diffSec / 86400);
+  return `${days}D`;
+}
+
 function ActivityListItemComponent({
   friend,
   isDark = true,
@@ -42,7 +53,7 @@ function ActivityListItemComponent({
 
   return (
     <div
-      className={`group relative p-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 ${
+      className={`group relative p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
         isDark
           ? 'bg-[#141d1b] border-[#263330] hover:border-[#384c47]'
           : 'bg-[#ede5d3] border-[#0b1110] hover:bg-white'
@@ -54,7 +65,7 @@ function ActivityListItemComponent({
           e.stopPropagation();
           onOpenUserProfile?.(friend);
         }}
-        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+        className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
         title={`View ${friend.name || 'user'}'s profile`}
       >
         {/* Avatar */}
@@ -64,10 +75,10 @@ function ActivityListItemComponent({
               src={friend.avatar}
               alt={friend.name || 'Friend'}
               onError={() => setImgError(true)}
-              className="w-10 h-10 rounded-xl object-cover"
+              className="w-10.5 h-10.5 rounded-xl object-cover ring-1 ring-black/10"
             />
           ) : (
-            <div className="w-10 h-10 rounded-xl bg-[#17a398] flex items-center justify-center font-black text-sm text-[#0b1110] select-none">
+            <div className="w-10.5 h-10.5 rounded-xl bg-[#17a398] flex items-center justify-center font-black text-sm text-[#0b1110] select-none shadow-xs">
               {friend.name ? friend.name[0].toUpperCase() : 'U'}
             </div>
           )}
@@ -75,7 +86,7 @@ function ActivityListItemComponent({
           {/* Status Dot */}
           {isLive ? (
             <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#10b981] border-2 border-[#0b1110] rounded-full animate-pulse shadow-[0_0_6px_#10b981]"
+              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#10b981] border-2 border-[#0b1110] rounded-full animate-pulse shadow-[0_0_6px_#10b981]"
               title="Listening Live"
             />
           ) : isOnline ? (
@@ -91,42 +102,52 @@ function ActivityListItemComponent({
           )}
         </div>
 
-        {/* Friend Info & Current Track */}
-        <div className="flex-1 min-w-0 pr-1">
-          {/* Name & Status Badge Row */}
-          <div className="flex items-center justify-between gap-1.5 mb-0.5">
-            <div className="flex items-center gap-1 min-w-0 max-w-[145px]">
+        {/* Friend Info & Current Track - Takes full available width */}
+        <div className="flex-1 min-w-0">
+          {/* Name & Status / Time Pill Row */}
+          <div className="flex items-center justify-between gap-2 mb-1 w-full min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <span
-                className={`text-xs font-extrabold truncate hover:underline ${
+                className={`text-xs font-black truncate hover:underline ${
                   isDark ? 'text-white' : 'text-[#082621]'
                 }`}
                 title={friend.name || 'Anonymous Listener'}
               >
                 {friend.name || 'Anonymous Listener'}
               </span>
-              {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
+              {friend.isVerified && <VerifiedBadge userOrName={friend} size={12} />}
             </div>
 
+            {/* Time / Status pill cleanly positioned on the top-right */}
             {isLive ? (
-              <span className="flex items-center gap-1 text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] uppercase shrink-0">
+              <span className="flex items-center gap-1 text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded-md bg-[#17a398] text-[#0b1110] uppercase shrink-0 shadow-xs">
                 <Radio size={9} strokeWidth={3} className="shrink-0 animate-pulse" />
                 {isRTL ? 'مباشر' : 'LIVE'}
               </span>
             ) : isOnline ? (
-              <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#334155] text-[#cbd5e1] uppercase shrink-0">
+              <span className="text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded-md bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 uppercase shrink-0">
                 {isRTL ? 'متصل' : 'ONLINE'}
               </span>
-            ) : null}
+            ) : (
+              <span
+                className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded-md uppercase shrink-0 ${
+                  isDark ? 'bg-zinc-800 text-zinc-400 border border-zinc-700/60' : 'bg-[#e5dcce] text-zinc-600 border border-[#0b1110]/15'
+                }`}
+                title={friend.lastActiveAt ? (isRTL ? `آخر نشاط: ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last active: ${formatTimeAgo(friend.lastActiveAt, false)}`) : 'Offline'}
+              >
+                {formatCompactPill(friend.lastActiveAt, isRTL)}
+              </span>
+            )}
           </div>
 
-          {/* Listening State / Track Info Row */}
+          {/* Listening State / Track Info Row - Full flex width */}
           {isLive && listening ? (
             <div
               onClick={(e) => {
                 e.stopPropagation();
                 onPlayFriendTrack?.(friend);
               }}
-              className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
+              className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
               title={`${isRTL ? 'يستمع إلى' : 'Playing'}: ${listening.title || 'Playing song'}`}
             >
               <Disc
@@ -135,7 +156,7 @@ function ActivityListItemComponent({
                 style={{ animationDuration: '3s' }}
                 strokeWidth={2.4}
               />
-              <p className="text-[11px] truncate leading-tight text-[#26c4b7] font-bold">
+              <p className="text-[11px] truncate leading-tight text-[#26c4b7] font-bold flex-1 min-w-0">
                 {isRTL ? 'يستمع إلى: ' : 'Playing: '}{listening.title || 'Playing song'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
               </p>
@@ -146,12 +167,12 @@ function ActivityListItemComponent({
                 e.stopPropagation();
                 onPlayFriendTrack?.(friend);
               }}
-              className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
+              className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
               title={`${isRTL ? 'متوقف مؤقتاً' : 'Paused'}: ${listening.title || 'Track'}`}
             >
               <Disc size={11} className="shrink-0 text-[#f59e0b]" strokeWidth={2} />
               <p
-                className={`text-[11px] truncate leading-tight ${
+                className={`text-[11px] truncate leading-tight flex-1 min-w-0 ${
                   isDark ? 'text-[#fcd34d]' : 'text-[#b45309]'
                 }`}
               >
@@ -165,22 +186,21 @@ function ActivityListItemComponent({
                 e.stopPropagation();
                 onPlayFriendTrack?.(friend);
               }}
-              className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
+              className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
               title={`${isRTL ? 'آخر استماع' : 'Last played'}: ${listening.title || 'Track'}`}
             >
               <Disc size={11} className="shrink-0 text-[#64748b]" strokeWidth={1.8} />
-              <p className="text-[11px] truncate leading-tight text-[#64748b]">
+              <p className="text-[11px] truncate leading-tight text-[#94a3b8] flex-1 min-w-0">
                 {isRTL ? 'آخر استماع: ' : 'Last played: '}{listening.title || 'Track'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
-                {friend.lastActiveAt ? ` (${formatTimeAgo(friend.lastActiveAt, isRTL)})` : ''}
               </p>
             </div>
           ) : (
-            <p className="text-[11px] font-mono text-[#64748b] truncate leading-tight">
+            <p className="text-[11px] font-mono text-[#64748b] truncate leading-tight flex-1 min-w-0">
               {isOnline
-                ? (isRTL ? 'متصل الآن' : 'Online • In app')
+                ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Exploring music')
                 : friend.lastActiveAt
-                ? (isRTL ? `غير متصل • ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Offline • ${formatTimeAgo(friend.lastActiveAt, false)}`)
+                ? (isRTL ? `آخر نشاط ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last active ${formatTimeAgo(friend.lastActiveAt, false)}`)
                 : (isRTL ? 'غير متصل' : 'Offline')}
             </p>
           )}
@@ -194,21 +214,21 @@ function ActivityListItemComponent({
             e.stopPropagation();
             onPlayFriendTrack?.(friend);
           }}
-          className="flex items-center gap-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] px-2.5 py-1.5 rounded-lg text-[10px] font-black brutal-border cursor-pointer transition shrink-0 brutal-shadow-xs"
+          className="flex items-center gap-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] px-3 py-1.5 rounded-lg text-[10.5px] font-black uppercase brutal-border cursor-pointer transition shrink-0 brutal-shadow-xs ml-1"
           title={`Tune in to ${friend.name}`}
         >
           <Play size={11} fill="#0b1110" color="#0b1110" />
           <span>TUNE IN</span>
         </button>
       ) : (
-        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
           {onStartJamWithUser && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onStartJamWithUser(friend);
               }}
-              className="w-7 h-7 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs"
+              className="w-7.5 h-7.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs"
               title={`Invite ${friend.name || 'friend'} to Jam`}
             >
               <Radio size={12} strokeWidth={2.5} className="animate-pulse" />
@@ -221,7 +241,7 @@ function ActivityListItemComponent({
                 e.stopPropagation();
                 openChatModal(friend);
               }}
-              className={`w-7 h-7 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs ${
+              className={`w-7.5 h-7.5 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs ${
                 isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
               }`}
               title={`Message ${friend.name || 'friend'}`}

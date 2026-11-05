@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -37,13 +37,13 @@ function formatSeconds(secs) {
   return `${minutes}m`;
 }
 
-export default function StatsScreen({ onBack }) {
+function StatsScreen({ onBack }) {
   const { currentUser, token, likedTrackIds = [] } = useUser();
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentWeek, setCurrentWeek] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await fetch(`${API_BASE_URL}/api/stats/leaderboard`, {
@@ -61,7 +61,7 @@ export default function StatsScreen({ onBack }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -649,3 +649,5 @@ const styles = StyleSheet.create({
     color: colors.mint,
   },
 });
+
+export default React.memo(StatsScreen);

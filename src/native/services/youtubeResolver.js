@@ -1,6 +1,7 @@
-import { isQuranContent } from '../../utils/quranUtils';
+import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
 import * as FileSystem from 'expo-file-system';
 import { API_BASE_URL } from '../config';
+import { INNERTUBE_KEY, CLIENT_CONFIGS } from '../../utils/streamClientConfigs';
 
 const streamCache = new Map();
 const streamDurationCache = new Map();
@@ -127,6 +128,18 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       } else {
         return cachedUrl;
       }
+    }
+  }
+
+  // Also check direct ytId cache
+  const earlyYtId = extractYouTubeId(track.youtubeId || track.audioUrl || track.url);
+  if (earlyYtId && streamCache.has(earlyYtId) && !track.isRetry && !isVocalOnly) {
+    const cachedEntry = streamCache.get(earlyYtId);
+    const cachedUrl = typeof cachedEntry === 'object' && cachedEntry !== null ? cachedEntry.url : cachedEntry;
+    const cachedTime = typeof cachedEntry === 'object' && cachedEntry !== null ? cachedEntry.timestamp : 0;
+    if (cachedUrl && (!cachedTime || Date.now() - cachedTime <= STREAM_CACHE_TTL)) {
+      if (trackId) setStreamInCache(trackId, cachedUrl);
+      return cachedUrl;
     }
   }
 
@@ -344,14 +357,24 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     return fullUrl;
   }
 
-  // 2. Direct MP3/M4A/AAC stream URL (non-YouTube)
+  // 2. Direct radio / live stream URL or direct MP3/M4A/AAC stream URL (non-YouTube)
   if (
     rawUrl.startsWith('http') &&
     !rawUrl.includes('youtube.com') &&
     !rawUrl.includes('youtu.be') &&
     !rawUrl.includes('soundcloud.com') &&
     !rawUrl.includes('sndcdn.com') &&
-    (rawUrl.endsWith('.mp3') || rawUrl.endsWith('.m4a'))
+    (
+      track.isRadio ||
+      track.isLive ||
+      isRadioTrack(track) ||
+      rawUrl.endsWith('.mp3') ||
+      rawUrl.endsWith('.m4a') ||
+      rawUrl.endsWith('.aac') ||
+      rawUrl.includes('/radio/') ||
+      rawUrl.includes('/station/') ||
+      rawUrl.includes('radiojar.com')
+    )
   ) {
     if (trackId) setStreamInCache(trackId, rawUrl);
     return rawUrl;
@@ -362,7 +385,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
   // 3. Server-side Stream Resolution (Primary: /stream endpoint checks local cache, uploads & DB instantly)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     const onParentAbort = () => {
       clearTimeout(timeoutId);
       try { controller.abort(); } catch {}
@@ -401,11 +424,11 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
           }
         }
       } catch (e) {
-        if (controller.signal.aborted || signal?.aborted) return null;
+        if (signal?.aborted) return null;
       }
 
       // 3b. Resolve stream via /api/tracks/resolve-stream
-      if (!controller.signal.aborted && !signal?.aborted) {
+      if (!signal?.aborted) {
         try {
           const resolveRes = await fetch(
             `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${encodeURIComponent(rawTitle || cleanTitle)}&artist=${encodeURIComponent(rawArtist || cleanArtist)}&url=${encodeURIComponent(rawUrl)}&id=${encodeURIComponent(trackId)}${durParam}${albumParam}`,
@@ -425,7 +448,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
             }
           }
         } catch (e) {
-          if (controller.signal.aborted || signal?.aborted) return null;
+          if (signal?.aborted) return null;
         }
       }
     } finally {
@@ -776,90 +799,93 @@ export const resolveClientSideYouTubeStream = async (ytId, signal = null) => {
 
     if (signal?.aborted) return null;
 
-    const playerBody = {
-      context: {
-        client: {
-          clientName: 'VISIONOS',
-          clientVersion: '1.02',
-          deviceMake: 'Apple',
-          deviceModel: 'RealityDevice17,1',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-          osName: 'visionOS',
-          osVersion: '26.5.23O471',
-          hl: 'en',
-          timeZone: 'UTC',
-          utcOffsetMinutes: 0
-        },
+    const configs = (CLIENT_CONFIGS && CLIENT_CONFIGS.length > 0) ? CLIENT_CONFIGS : [{
+      name: 'VISIONOS',
+      client: {
+        clientName: 'VISIONOS', clientVersion: '1.02', deviceMake: 'Apple', deviceModel: 'RealityDevice17,1',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+        osName: 'visionOS', osVersion: '26.5.23O471', hl: 'en', timeZone: 'UTC', utcOffsetMinutes: 0
       },
-      videoId: ytId,
-      playbackContext: {
-        contentPlaybackContext: {
-          html5Preference: 'HTML5_PREF_WANTS',
-          signatureTimestamp: sts
-        }
-      },
-      contentCheckOk: true,
-      racyCheckOk: true
-    };
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
-      'X-Youtube-Client-Name': '101',
-      'X-Youtube-Client-Version': '1.02',
-      'Origin': 'https://www.youtube.com'
-    };
-    if (cookies) headers['Cookie'] = cookies;
-    if (visitorData) headers['X-Goog-Visitor-Id'] = visitorData;
-
-    const playerController = new AbortController();
-    const playerTimeout = setTimeout(() => playerController.abort(), 6000);
-    const onPlayerAbort = () => {
-      clearTimeout(playerTimeout);
-      try { playerController.abort(); } catch {}
-    };
-    if (signal) {
-      if (signal.aborted) {
-        clearTimeout(playerTimeout);
-        return null;
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+        'X-Youtube-Client-Name': '101', 'X-Youtube-Client-Version': '1.02', 'Origin': 'https://www.youtube.com'
       }
-      signal.addEventListener('abort', onPlayerAbort, { once: true });
-    }
+    }];
 
-    const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(playerBody),
-      signal: playerController.signal,
-    });
-    clearTimeout(playerTimeout);
-    if (signal && onPlayerAbort) signal.removeEventListener('abort', onPlayerAbort);
+    for (const cfg of configs) {
+      if (signal?.aborted) return null;
+      const playerBody = {
+        context: { client: cfg.client },
+        videoId: ytId,
+        playbackContext: {
+          contentPlaybackContext: {
+            html5Preference: 'HTML5_PREF_WANTS',
+            signatureTimestamp: sts
+          }
+        },
+        contentCheckOk: true,
+        racyCheckOk: true
+      };
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.playabilityStatus?.status === 'OK') {
-        const formats = (data.streamingData?.adaptiveFormats || []).concat(data.streamingData?.formats || []);
-        // Prioritize official AAC (itag 140), then Opus (itag 251), then any audio
-        const audio140 = formats.find(f => f.itag === 140 && f.url);
-        const audio251 = formats.find(f => f.itag === 251 && f.url);
-        const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
-        const chosen = audio140 || audio251 || anyAudio;
-        if (chosen?.url) {
-          const rawSec = parseInt(data.videoDetails?.lengthSeconds, 10);
-          const rawMs = parseInt(chosen.approxDurationMs, 10);
-          const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0)
-            ? rawSec
-            : (rawMs && !isNaN(rawMs) && rawMs > 0 ? Math.round(rawMs / 1000) : null);
+      const headers = { ...cfg.headers };
+      if (cookies) headers['Cookie'] = cookies;
+      if (visitorData) headers['X-Goog-Visitor-Id'] = visitorData;
 
-          return {
-            url: chosen.url,
-            duration: durationSec,
-            contentLength: chosen.contentLength ? parseInt(chosen.contentLength, 10) : null,
-            title: data.videoDetails?.title || null,
-            author: data.videoDetails?.author || null,
-            toString() { return this.url; }
-          };
+      const playerController = new AbortController();
+      const playerTimeout = setTimeout(() => playerController.abort(), 4500);
+      const onPlayerAbort = () => {
+        clearTimeout(playerTimeout);
+        try { playerController.abort(); } catch {}
+      };
+      if (signal) {
+        if (signal.aborted) {
+          clearTimeout(playerTimeout);
+          return null;
         }
+        signal.addEventListener('abort', onPlayerAbort, { once: true });
+      }
+
+      try {
+        const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}&prettyPrint=false`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(playerBody),
+          signal: playerController.signal,
+        });
+        clearTimeout(playerTimeout);
+        if (signal && onPlayerAbort) signal.removeEventListener('abort', onPlayerAbort);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.playabilityStatus?.status === 'OK') {
+            const formats = (data.streamingData?.adaptiveFormats || []).concat(data.streamingData?.formats || []);
+            // Prioritize official AAC (itag 140), then Opus (itag 251), then any audio
+            const audio140 = formats.find(f => f.itag === 140 && f.url);
+            const audio251 = formats.find(f => f.itag === 251 && f.url);
+            const anyAudio = formats.find(f => f.mimeType?.startsWith('audio') && f.url);
+            const chosen = audio140 || audio251 || anyAudio;
+            if (chosen?.url) {
+              const rawSec = parseInt(data.videoDetails?.lengthSeconds, 10);
+              const rawMs = parseInt(chosen.approxDurationMs, 10);
+              const durationSec = (rawSec && !isNaN(rawSec) && rawSec > 0)
+                ? rawSec
+                : (rawMs && !isNaN(rawMs) && rawMs > 0 ? Math.round(rawMs / 1000) : null);
+
+              return {
+                url: chosen.url,
+                duration: durationSec,
+                contentLength: chosen.contentLength ? parseInt(chosen.contentLength, 10) : null,
+                title: data.videoDetails?.title || null,
+                author: data.videoDetails?.author || null,
+                toString() { return this.url; }
+              };
+            }
+          }
+        }
+      } catch (e) {
+        clearTimeout(playerTimeout);
+        if (signal && onPlayerAbort) signal.removeEventListener('abort', onPlayerAbort);
       }
     }
   } catch (err) {}

@@ -3,6 +3,7 @@ package com.rivo.app
 import android.app.Application
 import android.content.Context
 import android.content.res.Configuration
+import java.util.concurrent.Executors
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -66,6 +67,12 @@ class MainApplication : Application(), ReactApplication {
   override val reactHost: ReactHost
     get() = ReactNativeHostWrapper.createReactHost(applicationContext, reactNativeHost)
 
+  private fun cleanupOldInstallersAsync() {
+    Executors.newSingleThreadExecutor().execute {
+      cleanupOldInstallers()
+    }
+  }
+
   private fun cleanupOldInstallers() {
     try {
       val targetDirs = listOf(
@@ -88,7 +95,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
-    cleanupOldInstallers()
+    cleanupOldInstallersAsync()
     SoLoader.init(this, false)
     if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
       // If you opted-in for the New Architecture, we load the native entry point for this app.

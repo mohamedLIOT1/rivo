@@ -13,7 +13,6 @@
 - `package.json`: `"version": "x.y.z"`
 - `app.json`: `"version": "x.y.z"`, `"android.versionCode"`, `"ios.buildNumber"`
 - `android/app/build.gradle`: `versionCode`, `versionName`
-- `desktop-app/Form1.cs`: `currentVersion = "x.y.z"`
 - `server/index.js`: كائن `APP_VERSIONS_DATA`
 
 ---

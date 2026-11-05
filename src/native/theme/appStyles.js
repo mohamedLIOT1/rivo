@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 
 export const styles = StyleSheet.create({
   safeArea: {
@@ -249,7 +249,14 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.6,
     shadowRadius: 16,
-    elevation: 12,
+    elevation: Platform.OS === 'android' ? 0 : 12,
+  },
+  menuSheetLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    shadowColor: '#64748b',
+    shadowOpacity: 0.15,
+    elevation: Platform.OS === 'android' ? 0 : 12,
   },
   menuHeader: {
     flexDirection: 'row',
@@ -260,12 +267,18 @@ export const styles = StyleSheet.create({
     paddingBottom: 8,
     marginBottom: 6,
   },
+  menuHeaderLight: {
+    borderBottomColor: '#f1f5f9',
+  },
   menuTitle: {
     fontSize: 11,
     fontWeight: '900',
     color: '#17a398',
     letterSpacing: 1,
     fontFamily: 'monospace',
+  },
+  menuTitleLight: {
+    color: '#0d9488',
   },
   menuSection: {
     marginBottom: 6,
@@ -279,6 +292,9 @@ export const styles = StyleSheet.create({
     marginBottom: 3,
     marginTop: 2,
     textTransform: 'uppercase',
+  },
+  menuSectionHeaderLight: {
+    color: '#0d9488',
   },
   menuItem: {
     flexDirection: 'row',
@@ -299,6 +315,9 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#fdfbf7',
+  },
+  menuItemTextLight: {
+    color: '#0f172a',
   },
   headerModePill: {
     flexDirection: 'row',
@@ -377,12 +396,18 @@ export const styles = StyleSheet.create({
     borderTopColor: '#1e332f',
     alignItems: 'center',
   },
+  menuFooterLight: {
+    borderTopColor: '#f1f5f9',
+  },
   menuFooterVersion: {
     fontFamily: 'monospace',
     fontWeight: '900',
     fontSize: 11,
     color: '#17a398',
     letterSpacing: 0.5,
+  },
+  menuFooterVersionLight: {
+    color: '#0d9488',
   },
   menuFooterSub: {
     fontFamily: 'monospace',
@@ -409,7 +434,7 @@ export const styles = StyleSheet.create({
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 0.8,
     shadowRadius: 0,
-    elevation: 8,
+    elevation: Platform.OS === 'android' ? 0 : 8,
   },
   updateHeaderRow: {
     flexDirection: 'row',

@@ -1,13 +1,17 @@
 const path = require('path');
 const fs = require('fs');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execFile } = require('child_process');
 const crypto = require('crypto');
 const { uploadsDir } = require('../middleware/upload');
 
-const stemsDir = path.join(uploadsDir, 'stems');
-if (!fs.existsSync(stemsDir)) {
-  try { fs.mkdirSync(stemsDir, { recursive: true }); } catch {}
-}
+const {
+  stemsDir,
+  getSafeStemKey,
+  resolveCanonicalStemKey,
+  getVocalStemPath,
+  isVocalStemReady,
+  createStemAlias
+} = require('./vocalStemUtils');
 
 const modelDir = process.env.AUDIO_SEPARATOR_MODEL_DIR || (process.platform === 'win32' ? 'C:/tmp/audio-separator-models' : '/tmp/audio-separator-models');
 
@@ -18,147 +22,36 @@ const jobMap = new Map();
 const isolationQueue = [];
 let isWorkerRunning = false;
 
-// Active connected external GPU workers (e.g. Google Colab)
-const activeWorkers = new Map();
-
-function registerWorkerHeartbeat(workerId = 'Colab-Worker') {
-  activeWorkers.set(workerId, { lastSeen: Date.now(), id: workerId });
-}
-
-function hasActiveExternalWorker() {
-  const now = Date.now();
-  for (const [id, w] of activeWorkers.entries()) {
-    if (now - w.lastSeen < 20000) {
-      return true;
-    }
-  }
-  return false;
-}
+const {
+  registerWorkerHeartbeat,
+  hasActiveExternalWorker,
+  getWorkerStatus: getWorkerStatusInternal,
+  getNextWorkerJob: getNextWorkerJobInternal,
+  completeWorkerJob: completeWorkerJobInternal
+} = require('./vocalWorkerQueue');
 
 function getWorkerStatus() {
-  const now = Date.now();
-  const list = [];
-  for (const [id, w] of activeWorkers.entries()) {
-    if (now - w.lastSeen < 30000) {
-      list.push({ id, online: true, lastSeenSecondsAgo: Math.round((now - w.lastSeen) / 1000) });
-    }
-  }
-  return {
-    hasWorker: list.length > 0,
-    workers: list,
-    queueLength: isolationQueue.length
-  };
+  return getWorkerStatusInternal(isolationQueue);
 }
 
 function getNextWorkerJob(workerId = 'Colab-Worker') {
-  registerWorkerHeartbeat(workerId);
-  if (isolationQueue.length === 0) return null;
-
-  // Find first task not already being processed by external worker
-  const task = isolationQueue.find(t => t.status === 'queued' || (t.status === 'processing' && !t.claimedByWorker));
-  if (!task) return null;
-
-  task.claimedByWorker = workerId;
-  task.claimedAt = Date.now();
-  task.status = 'processing';
-  task.eta = 'Processing on Google Colab T4 GPU...';
-  task.progress = 25;
-  task.updatedAt = Date.now();
-
-  return {
-    stemKey: task.stemKey,
-    aliases: task.aliases || [],
-    inputSource: task.inputSource,
-    title: task.title || task.stemKey
-  };
+  return getNextWorkerJobInternal(isolationQueue, workerId);
 }
 
 function completeWorkerJob(stemKey, vocalSourceFilePath, aliases = [], workerId = 'Colab-Worker') {
-  registerWorkerHeartbeat(workerId);
-  const safe = getSafeStemKey(stemKey);
-  const targetStemPath = getVocalStemPath(safe);
-  const allKeys = [safe, ...aliases.map(getSafeStemKey)].filter(Boolean);
-
-  if (fs.existsSync(vocalSourceFilePath) && fs.statSync(vocalSourceFilePath).size > 10000) {
-    fs.copyFileSync(vocalSourceFilePath, targetStemPath);
-
-    for (const alias of allKeys) {
-      if (alias !== safe) createStemAlias(safe, alias);
-    }
-
-    const job = jobMap.get(safe);
-    if (job) {
-      job.status = 'ready';
-      job.progress = 100;
-      job.eta = '00:00';
-      job.error = null;
-      job.updatedAt = Date.now();
-    }
-
-    // Remove from queue if still present
-    const idx = isolationQueue.findIndex(t => t.stemKey === safe);
-    if (idx !== -1) isolationQueue.splice(idx, 1);
-
-    console.log(`[VocalSeparator] Completed by worker [${workerId}] -> ${targetStemPath}`);
-    return true;
-  }
-  return false;
+  return completeWorkerJobInternal({
+    stemKey,
+    vocalSourceFilePath,
+    aliases,
+    workerId,
+    getSafeStemKey,
+    getVocalStemPath,
+    createStemAlias,
+    jobMap,
+    isolationQueue
+  });
 }
 
-function getSafeStemKey(identifier) {
-  if (!identifier || typeof identifier !== 'string') {
-    return 'unknown_' + Date.now();
-  }
-  const clean = identifier.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
-  if (clean.length > 64) {
-    return crypto.createHash('md5').update(clean).digest('hex');
-  }
-  return clean;
-}
-
-function resolveCanonicalStemKey({ trackId, url, title, artist }) {
-  if (url) {
-    const vidMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-    if (vidMatch && vidMatch[1]) return `yt_${vidMatch[1]}`;
-  }
-  if (trackId) {
-    if (trackId.startsWith('yt_')) return trackId;
-    if (/^[a-zA-Z0-9_-]{11}$/.test(trackId)) return `yt_${trackId}`;
-  }
-  if (title) {
-    const cleanT = String(title).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-    const cleanA = String(artist || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
-    if (cleanT) {
-      return `ta_${crypto.createHash('md5').update(`${cleanT}_${cleanA}`).digest('hex')}`;
-    }
-  }
-  if (trackId) return `tr_${getSafeStemKey(trackId)}`;
-  if (url) return `url_${crypto.createHash('md5').update(url).digest('hex')}`;
-  return 'unknown_' + Date.now();
-}
-
-function getVocalStemPath(stemKey) {
-  const safe = getSafeStemKey(stemKey);
-  return path.join(stemsDir, `vocal_${safe}.mp3`);
-}
-
-function isVocalStemReady(stemKey) {
-  const filePath = getVocalStemPath(stemKey);
-  return fs.existsSync(filePath) && fs.statSync(filePath).size > 10000;
-}
-
-function createStemAlias(primaryKey, aliasKey) {
-  if (!primaryKey || !aliasKey || primaryKey === aliasKey) return;
-  const primaryFile = getVocalStemPath(primaryKey);
-  const aliasFile = getVocalStemPath(aliasKey);
-  if (!fs.existsSync(primaryFile)) return;
-  if (fs.existsSync(aliasFile)) return;
-  try {
-    fs.linkSync(primaryFile, aliasFile);
-  } catch {
-    try { fs.copyFileSync(primaryFile, aliasFile); } catch {}
-  }
-}
 
 /**
  * Get the current progress/status of vocal isolation for a key
@@ -328,13 +221,13 @@ function executeSeparation(task) {
       task.progress = 20;
 
       await new Promise((resWav, rejWav) => {
-        const convertCmd = `ffmpeg -y -i "${localInput}" -vn -ar 44100 -ac 2 -c:a pcm_s16le "${tempWavAudio}"`;
-        exec(convertCmd, { timeout: 120000 }, (err, stdout, stderr) => {
+        const args1 = ['-y', '-i', localInput, '-vn', '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le', tempWavAudio];
+        execFile('ffmpeg', args1, { timeout: 120000 }, (err, stdout, stderr) => {
           if (!err && fs.existsSync(tempWavAudio) && fs.statSync(tempWavAudio).size > 1000) {
             return resWav();
           }
-          const fbCmd = `ffmpeg -y -i "${localInput}" -map 0:a:0? -ar 44100 -ac 2 -c:a pcm_s16le "${tempWavAudio}"`;
-          exec(fbCmd, { timeout: 120000 }, (err2, stdout2, stderr2) => {
+          const args2 = ['-y', '-i', localInput, '-map', '0:a:0?', '-ar', '44100', '-ac', '2', '-c:a', 'pcm_s16le', tempWavAudio];
+          execFile('ffmpeg', args2, { timeout: 120000 }, (err2, stdout2, stderr2) => {
             if (err2 || !fs.existsSync(tempWavAudio) || fs.statSync(tempWavAudio).size < 1000) {
               return rejWav(new Error(`Failed to decode audio: ${stderr2 || stderr || err2?.message}`));
             }

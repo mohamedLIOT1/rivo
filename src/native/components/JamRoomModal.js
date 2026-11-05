@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  FlatList,
   Image,
   Alert,
   Clipboard,
   useWindowDimensions,
   Animated,
   PanResponder,
+  Platform,
 } from 'react-native';
 import {
   X,
@@ -124,7 +126,7 @@ function DraggableJamQueue({
               isDragging && {
                 transform: [{ translateY: panY }, { scale: 1.03 }],
                 zIndex: 9999,
-                elevation: 20,
+                elevation: Platform.OS === 'android' ? 0 : 12,
                 borderColor: '#17a398',
                 backgroundColor: '#1a2e29',
                 shadowColor: '#17a398',
@@ -204,6 +206,8 @@ export default function JamRoomModal({ visible, onClose }) {
   const {
     socket,
     jamSession,
+    isCurrentUserHost: socketIsHost,
+    createJam,
     joinJam,
     leaveJam,
     addToJamQueue,
@@ -289,7 +293,7 @@ export default function JamRoomModal({ visible, onClose }) {
   const handleCreateJam = () => {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const code = `JAM-${randomNum}`;
-    joinJam(code, currentTrack, isPlaying, progress?.currentTime || 0);
+    if (typeof createJam === 'function') { createJam(code, currentTrack, isPlaying, progress?.currentTime || 0); } else { joinJam(code, currentTrack, isPlaying, progress?.currentTime || 0); }
     showToast(`Created Jam Room ${code}`, 'success');
   };
 
@@ -359,10 +363,12 @@ export default function JamRoomModal({ visible, onClose }) {
 
   const myId = String(currentUser?._id || currentUser?.id || '');
   const isCurrentUserHost = Boolean(
-    jamSession &&
+    socketIsHost ||
+    (jamSession &&
       ((jamSession.hostUserId && myId && String(jamSession.hostUserId) === myId) ||
         (jamSession.hostId && socket?.id && jamSession.hostId === socket.id) ||
-        (jamSession.members || []).some(m => (m.socketId === socket?.id || (myId && String(m.id || m._id) === myId)) && m.isHost))
+        (jamSession.members || []).some(m => (m.socketId === socket?.id || (myId && String(m.id || m._id) === myId)) && m.isHost) ||
+        (jamSession.members?.length === 1 && jamSession.members[0]?.isHost)))
   );
   const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
 
@@ -438,12 +444,23 @@ export default function JamRoomModal({ visible, onClose }) {
 
   const renderCurrentTrack = () => {
     const activeTrack = jamSession?.currentTrack || currentTrack;
-    const isRoomPlaying = jamSession?.isPlaying !== undefined ? jamSession.isPlaying : isPlaying;
+    const isRoomPlaying = isCurrentUserHost
+      ? isPlaying
+      : (jamSession?.isPlaying !== undefined ? Boolean(jamSession.isPlaying) : isPlaying);
     const curTime = (progress?.currentTime !== undefined && progress?.currentTime > 0)
       ? progress.currentTime
       : (jamSession?.currentTime || progress?.currentTime || 0);
     const durTime = progress?.duration || activeTrack?.duration || 240;
     const progressPercent = durTime > 0 ? Math.min(100, Math.max(0, (curTime / durTime) * 100)) : 0;
+
+    const handleTogglePlay = () => {
+      if (!canControl) return;
+      const nextPlaying = !isRoomPlaying;
+      togglePlay();
+      if (syncJamPlayState) {
+        syncJamPlayState(nextPlaying, activeTrack, curTime);
+      }
+    };
 
     return activeTrack ? (
       <View style={styles.syncedTrackCard}>
@@ -517,7 +534,7 @@ export default function JamRoomModal({ visible, onClose }) {
           <TouchableOpacity
             style={[styles.playerPlayPauseBtn, !canControl && { opacity: 0.35 }]}
             disabled={!canControl}
-            onPress={togglePlay}
+            onPress={handleTogglePlay}
             activeOpacity={0.8}
           >
             {isRoomPlaying ? (
@@ -747,13 +764,18 @@ export default function JamRoomModal({ visible, onClose }) {
             )}
           </View>
 
-          <ScrollView
+          <FlatList
             nestedScrollEnabled={true}
             style={styles.searchResultsList}
             contentContainerStyle={{ gap: 6, paddingBottom: 6 }}
             showsVerticalScrollIndicator={true}
-          >
-            {filteredTracks.map((track) => {
+            data={filteredTracks}
+            keyExtractor={(track) => String(track._id || track.id)}
+            windowSize={3}
+            maxToRenderPerBatch={8}
+            initialNumToRender={8}
+            removeClippedSubviews={true}
+            renderItem={({ item: track }) => {
               const tId = track._id || track.id;
               const isQueued = justAddedId === tId;
               return (
@@ -807,8 +829,8 @@ export default function JamRoomModal({ visible, onClose }) {
                   </TouchableOpacity>
                 </View>
               );
-            })}
-          </ScrollView>
+            }}
+          />
         </View>
       )}
 
@@ -831,7 +853,7 @@ export default function JamRoomModal({ visible, onClose }) {
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={[styles.overlay, isLandscape && { justifyContent: 'center', alignItems: 'center' }]}>
         <View style={[styles.sheetOuter, isLandscape && { width: '94%', maxWidth: 960, height: '94%', maxHeight: '94%' }]}>
           <View style={styles.hardShadow} />
