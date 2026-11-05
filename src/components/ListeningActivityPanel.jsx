@@ -1,42 +1,85 @@
-import React, { useState, useEffect } from 'react';
-import { X, Play, Music, Radio, MessageSquare, RefreshCw, Users, Search, Disc } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { X, RefreshCw, Users, Search, Radio, Headphones } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import VerifiedBadge from './VerifiedBadge';
-import { useAudioPlayer } from '../context/AudioContext';
 import { usePreferences } from '../context/PreferencesContext';
+import { useUI } from '../context/UIContext';
+import GuestActivityCard from './activity/GuestActivityCard';
+import ActivityListItem from './activity/ActivityListItem';
 
 export default function ListeningActivityPanel({
   isOpen,
   onClose,
   onSelectTrack,
+  onPlayTrack,
   openProfileScreen,
+  onViewProfile,
   openChatModal,
+  onOpenChat,
   onStartJamWithUser,
   currentUser,
   globalTheme = 'dark',
   socket,
-  onViewProfile
+  onOpenAuth
 }) {
   const isDark = globalTheme === 'dark';
   const { language } = usePreferences();
+  const { setIsAuthOpen } = useUI() || {};
+
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { currentTrack, isPlaying } = useAudioPlayer();
 
-  const handleOpenUserProfile = (user) => {
+  const handleOpenAuth = useCallback(() => {
+    if (onOpenAuth) {
+      onOpenAuth();
+    } else if (setIsAuthOpen) {
+      setIsAuthOpen(true);
+    }
+  }, [onOpenAuth, setIsAuthOpen]);
+
+  const handleOpenUserProfile = useCallback((user) => {
     if (onViewProfile) {
       onViewProfile(user);
     } else if (openProfileScreen) {
       openProfileScreen(user);
     }
-  };
+  }, [onViewProfile, openProfileScreen]);
 
-  const fetchActivity = async () => {
+  const handlePlayFriendTrack = useCallback((friend) => {
+    if (!friend.currentListening) return;
+    const t = friend.currentListening;
+    const trackPayload = {
+      id: t.id || `friend_track_${friend.id}`,
+      title: t.title,
+      artist: t.artist,
+      cover: t.cover || friend.avatar,
+      audioUrl: t.audioUrl || ''
+    };
+    if (onPlayTrack) {
+      onPlayTrack(trackPayload);
+    } else if (onSelectTrack) {
+      onSelectTrack(trackPayload);
+    }
+  }, [onPlayTrack, onSelectTrack]);
+
+  const handleChatWithUser = useCallback((friend) => {
+    if (openChatModal) {
+      openChatModal(friend);
+    } else if (onOpenChat) {
+      onOpenChat(friend);
+    }
+  }, [openChatModal, onOpenChat]);
+
+  const fetchActivity = useCallback(async (signal) => {
+    if (!currentUser) {
+      setActivities([]);
+      return;
+    }
     setIsLoading(true);
     try {
       const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const res = await fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+        signal,
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       if (res.ok) {
@@ -46,22 +89,36 @@ export default function ListeningActivityPanel({
         }
       }
     } catch (err) {
-      console.warn('Error fetching listening activity:', err);
+      if (err.name !== 'AbortError') {
+        console.warn('Error fetching listening activity:', err);
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentUser]);
 
+  // Fetch when opened, poll every 25s if user is logged in
   useEffect(() => {
-    if (!isOpen) return;
-    fetchActivity();
-    const interval = setInterval(fetchActivity, 25000);
-    return () => clearInterval(interval);
-  }, [isOpen]);
+    if (!isOpen || !currentUser) {
+      setActivities([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetchActivity(controller.signal);
+
+    const interval = setInterval(() => {
+      fetchActivity();
+    }, 25000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [isOpen, currentUser, fetchActivity]);
 
   // Real-time socket event listeners for instant activity & presence updates
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !currentUser) return;
 
     const handleActivityUpdated = (data) => {
       if (!data || !data.userId) return;
@@ -90,7 +147,6 @@ export default function ListeningActivityPanel({
             return {
               ...friend,
               isOnline,
-              // If user went offline, they cannot be live listening
               isLive: !isOnline ? false : (data.isLive !== undefined ? Boolean(data.isLive) : friend.isLive)
             };
           }
@@ -106,45 +162,49 @@ export default function ListeningActivityPanel({
       socket.off('activity:updated', handleActivityUpdated);
       socket.off('user:status', handleUserStatus);
     };
-  }, [socket]);
+  }, [socket, currentUser]);
 
-  const formatTimeAgo = (dateStr) => {
-    if (!dateStr) return '';
-    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (diff < 60) return 'now';
-    if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-    return `${Math.floor(diff / 86400)}d`;
-  };
+  // Show all followed friends (online, offline, recent or inactive); community suggestions only when online & listening
+  const validActivities = useMemo(() => {
+    if (!currentUser) return [];
+    const myId = String(currentUser.id || currentUser._id || '');
+    const myName = (currentUser.name || '').trim().toLowerCase();
+    const myEmail = (currentUser.email || '').trim().toLowerCase();
 
-  const handlePlayFriendTrack = (friend) => {
-    if (!friend.currentListening) return;
-    const t = friend.currentListening;
-    onSelectTrack?.({
-      id: t.id || `friend_track_${friend.id}`,
-      title: t.title,
-      artist: t.artist,
-      cover: t.cover || friend.avatar,
-      audioUrl: t.audioUrl || ''
+    return activities.filter((friend) => {
+      // Exclude the logged-in user themselves so their own track never appears as a friend
+      const friendId = String(friend.id || friend._id || '');
+      if (myId && friendId === myId) return false;
+      if (myName && (friend.name || '').trim().toLowerCase() === myName) return false;
+      if (myEmail && (friend.email || '').trim().toLowerCase() === myEmail) return false;
+
+      // Community listeners: MUST be online and actually listening
+      if (friend.isCommunity) {
+        return Boolean(friend.isOnline && (friend.isLive || friend.currentListening?.isPlaying));
+      }
+      // Followed friends: show all followed friends
+      return true;
     });
-  };
+  }, [activities, currentUser]);
+
+  const filteredActivities = useMemo(() => {
+    if (!searchQuery.trim()) return validActivities;
+    const q = searchQuery.toLowerCase();
+    return validActivities.filter((friend) => {
+      const nameMatch = friend.name?.toLowerCase().includes(q);
+      const trackMatch = friend.currentListening?.title?.toLowerCase().includes(q);
+      const artistMatch = friend.currentListening?.artist?.toLowerCase().includes(q);
+      return nameMatch || trackMatch || artistMatch;
+    });
+  }, [validActivities, searchQuery]);
 
   if (!isOpen) return null;
 
-  const liveCount = activities.filter((a) => Boolean(a.isLive)).length;
-
-  const filteredActivities = activities.filter((friend) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    const nameMatch = friend.name?.toLowerCase().includes(q);
-    const trackMatch = friend.currentListening?.title?.toLowerCase().includes(q);
-    const artistMatch = friend.currentListening?.artist?.toLowerCase().includes(q);
-    return nameMatch || trackMatch || artistMatch;
-  });
+  const isGuest = !currentUser;
+  const isCommunity = validActivities.some((a) => a.isCommunity);
+  const liveCount = validActivities.filter((a) => Boolean(a.isLive && a.currentListening)).length;
 
   return (
-    /* Outer container: On mobile (< md) renders as centered popup modal overlay matching ChatModal.
-       On desktop (md:), docks cleanly as right sidebar. */
     <div
       onClick={onClose}
       className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none md:static md:inset-auto md:bg-transparent md:backdrop-blur-none md:p-0 md:z-10 md:w-72 md:h-full md:shrink-0 md:flex md:items-stretch md:justify-start"
@@ -172,30 +232,34 @@ export default function ListeningActivityPanel({
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-xs font-mono font-black uppercase tracking-wider">
-                  {activities.some(a => a.isCommunity) && !activities.some(a => !a.isCommunity) ? 'LIVE ACTIVITY' : 'FRIEND ACTIVITY'}
+                  FRIEND ACTIVITY
                 </h3>
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] rounded">
-                  {activities.length}
+                  {isGuest ? 0 : filteredActivities.length}
                 </span>
               </div>
-              <span className="text-[9.5px] font-mono text-zinc-400 block mt-0.5">
-                {liveCount > 0 
-                  ? `🎧 ${liveCount} live right now` 
-                  : (activities.some(a => a.isCommunity) ? 'Live community listeners' : 'Live listening status')}
+              <span className="text-[9.5px] font-mono text-zinc-400 block mt-0.5 uppercase">
+                {isGuest
+                  ? 'Connect & share in real-time'
+                  : liveCount > 0
+                  ? `${liveCount} LISTENING LIVE`
+                  : 'DISCORD & COMMUNITY RADAR'}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={fetchActivity}
-              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                isDark ? 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white' : 'bg-white text-[#082621] border-black hover:bg-[#ded2bb]'
-              }`}
-              title="Refresh Activity"
-            >
-              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
-            </button>
+            {!isGuest && (
+              <button
+                onClick={() => fetchActivity()}
+                className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                  isDark ? 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white' : 'bg-white text-[#082621] border-black hover:bg-[#ded2bb]'
+                }`}
+                title="Refresh Activity"
+              >
+                <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+              </button>
+            )}
             <button
               onClick={onClose}
               className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
@@ -208,8 +272,8 @@ export default function ListeningActivityPanel({
           </div>
         </div>
 
-        {/* Search Filter when 3+ friends */}
-        {activities.length > 2 && (
+        {/* Search Filter when 3+ items */}
+        {!isGuest && validActivities.length > 2 && (
           <div className={`p-2 border-b shrink-0 ${isDark ? 'border-zinc-800 bg-[#121917]' : 'border-[#0b1110]/20 bg-[#f5efe3]'}`}>
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
@@ -234,187 +298,38 @@ export default function ListeningActivityPanel({
           </div>
         )}
 
-        {/* Friends Activity List */}
+        {/* Body content */}
         <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-          {filteredActivities.length > 0 ? (
-            filteredActivities.map((friend) => {
-              const listening = friend.currentListening;
-              const isLive = Boolean(friend.isLive);
-              const isOnline = Boolean(friend.isOnline);
-              const timeAgo = formatTimeAgo(friend.lastActiveAt || listening?.updatedAt);
-
-              return (
-                <div
-                  key={friend.id}
-                  className={`group relative p-2.5 rounded-xl brutal-border transition-all flex items-center gap-2.5 ${
-                    isDark
-                      ? 'bg-[#182320] border-zinc-700 hover:bg-[#202f2b]'
-                      : 'bg-[#ede5d3] border-black hover:bg-white'
-                  }`}
-                >
-                  {/* User Avatar - click opens profile */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenUserProfile(friend);
-                    }}
-                    className="relative shrink-0 cursor-pointer hover:scale-105 transition-transform"
-                    title={`View ${friend.name}'s profile`}
-                  >
-                    <div className="w-10 h-10 rounded-lg brutal-border overflow-hidden bg-white">
-                      <img
-                        src={friend.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-                        alt={friend.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    {isLive ? (
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-emerald-500 border border-[#0b1110] rounded-full animate-pulse flex items-center justify-center shadow-[0_0_8px_#10b981]" title="Listening Live Now">
-                        <span className="w-1.5 h-1.5 bg-white rounded-full" />
-                      </span>
-                    ) : isOnline ? (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border border-[#0b1110] rounded-full" title="Online (Idle)" />
-                    ) : (
-                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-zinc-500 border border-[#0b1110] rounded-full" title="Offline" />
-                    )}
-                  </div>
-
-                  {/* Friend Info & Current Track */}
-                  <div className="flex-1 min-w-0 pr-1">
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenUserProfile(friend);
-                      }}
-                      className="flex items-center gap-1.5 mb-0.5 cursor-pointer"
-                    >
-                      <span className={`text-xs font-bold truncate max-w-[110px] hover:underline ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-                        {friend.name}
-                      </span>
-                      {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
-
-                      {isLive ? (
-                        <span className="text-[9px] font-mono font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase shrink-0">
-                          Listening Now
-                        </span>
-                      ) : isOnline ? (
-                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-700/50 text-zinc-300 border border-zinc-600/50 uppercase shrink-0">
-                          Online
-                        </span>
-                      ) : (
-                        <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-500 border border-zinc-700/40 uppercase shrink-0">
-                          Offline {timeAgo ? `• ${timeAgo}` : ''}
-                        </span>
-                      )}
-                      {friend.isCommunity && (
-                        <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30 uppercase shrink-0">
-                          Community
-                        </span>
-                      )}
-                    </div>
-
-                    {isLive && listening ? (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); handlePlayFriendTrack(friend); }}
-                        className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-                        title={`Listening now: ${listening.title}`}
-                      >
-                        <Disc size={11} className="shrink-0 text-[#17a398] animate-spin" style={{ animationDuration: '3s' }} />
-                        <p className="text-[11px] truncate leading-tight text-[#17a398] font-bold">
-                          {listening.title} <span className="opacity-50">•</span> {listening.artist}
-                        </p>
-                      </div>
-                    ) : listening && isOnline ? (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); handlePlayFriendTrack(friend); }}
-                        className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-                        title={`Last played: ${listening.title}`}
-                      >
-                        <Disc size={11} className="shrink-0 text-zinc-400" />
-                        <p className={`text-[10.5px] truncate leading-tight ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                          <span className="opacity-60 text-[9.5px]">Paused:</span> {listening.title} <span className="opacity-50">•</span> {listening.artist}
-                        </p>
-                      </div>
-                    ) : listening && !isOnline ? (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); handlePlayFriendTrack(friend); }}
-                        className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-                        title={`Last played before disconnect: ${listening.title}`}
-                      >
-                        <Disc size={11} className="shrink-0 text-zinc-600" />
-                        <p className={`text-[10px] truncate leading-tight ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
-                          <span className="opacity-60 text-[9px]">Last played:</span> {listening.title}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-[#082621]/50'}`}>
-                        {isOnline ? 'Online • Browsing crates' : 'Offline'}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Actions: Always visible on mobile for easy touch, visible on hover on desktop */}
-                  <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    {/* Play friend track */}
-                    {listening && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePlayFriendTrack(friend);
-                        }}
-                        className="w-7 h-7 bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] brutal-border flex items-center justify-center transition-all cursor-pointer rounded-lg brutal-shadow-xs"
-                        title={`Listen to ${listening.title}`}
-                      >
-                        <Play size={11} fill="currentColor" className="ml-0.5 text-[#0b1110]" />
-                      </button>
-                    )}
-
-                    {/* Jam Session Invite */}
-                    {onStartJamWithUser && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStartJamWithUser(friend);
-                        }}
-                        className="w-7 h-7 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center transition-all cursor-pointer rounded-lg brutal-shadow-xs"
-                        title={`Invite ${friend.name} to Jam`}
-                      >
-                        <Radio size={12} strokeWidth={2.5} className="animate-pulse" />
-                      </button>
-                    )}
-
-                    {/* Direct Chat */}
-                    {openChatModal && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openChatModal(friend);
-                        }}
-                        className={`w-7 h-7 brutal-border flex items-center justify-center transition-all cursor-pointer rounded-lg brutal-shadow-xs ${
-                          isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
-                        }`}
-                        title={`Message ${friend.name}`}
-                      >
-                        <MessageSquare size={12} strokeWidth={2} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+          {isGuest ? (
+            <GuestActivityCard onOpenAuth={handleOpenAuth} isDark={isDark} />
+          ) : filteredActivities.length > 0 ? (
+            filteredActivities.map((friend) => (
+              <ActivityListItem
+                key={friend.id}
+                friend={friend}
+                isDark={isDark}
+                onPlayFriendTrack={handlePlayFriendTrack}
+                onOpenUserProfile={handleOpenUserProfile}
+                onStartJamWithUser={onStartJamWithUser}
+                openChatModal={handleChatWithUser}
+              />
+            ))
           ) : (
             <div className="text-center py-10 px-3">
-              <Users size={30} className={`mx-auto mb-2 ${isDark ? 'text-zinc-600' : 'text-[#082621]/40'}`} />
-              <h4 className={`text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>
-                {searchQuery 
-                  ? 'NO MATCHING FRIENDS' 
-                  : 'NO FRIEND ACTIVITY'}
+              <div className="w-12 h-12 rounded-xl bg-zinc-800/60 brutal-border flex items-center justify-center mx-auto mb-3 text-zinc-400">
+                <Radio size={22} className="opacity-70" />
+              </div>
+              <h4 className={`text-xs font-mono font-black uppercase mb-1.5 tracking-wider ${
+                isDark ? 'text-zinc-200' : 'text-[#082621]'
+              }`}>
+                {searchQuery ? 'NO MATCHING FRIENDS' : 'NO LIVE SESSIONS'}
               </h4>
-              <p className={`text-[11px] font-sans leading-relaxed ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              <p className={`text-[11px] font-sans leading-relaxed max-w-[220px] mx-auto ${
+                isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+              }`}>
                 {searchQuery
                   ? `No friends or tracks matching "${searchQuery}".`
-                  : 'Follow other users to see what they are listening to in real-time.'}
+                  : 'No live sessions right now • Play a track to start the vibe!'}
               </p>
             </div>
           )}
@@ -430,15 +345,23 @@ export default function ListeningActivityPanel({
             <span className="w-2 h-2 rounded-full bg-[#17a398] animate-ping" />
             <span className="font-bold">RIVO LIVE SYNC</span>
           </div>
-          <button
-            onClick={() => openChatModal?.()}
-            className={`flex items-center gap-1 font-black uppercase cursor-pointer px-2.5 py-1 rounded-lg brutal-border text-[10px] brutal-shadow-xs ${
-              isDark ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-white text-[#082621] hover:bg-[#ded2bb]'
-            }`}
-          >
-            <MessageSquare size={11} />
-            <span>MESSAGES</span>
-          </button>
+          {isGuest ? (
+            <button
+              onClick={handleOpenAuth}
+              className="flex items-center gap-1 font-black uppercase cursor-pointer px-2.5 py-1 rounded-lg brutal-border text-[10px] brutal-shadow-xs bg-[#17a398] text-[#0b1110] hover:bg-[#26c4b7]"
+            >
+              <span>SIGN IN</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleChatWithUser()}
+              className={`flex items-center gap-1 font-black uppercase cursor-pointer px-2.5 py-1 rounded-lg brutal-border text-[10px] brutal-shadow-xs ${
+                isDark ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-white text-[#082621] hover:bg-[#ded2bb]'
+              }`}
+            >
+              <span>MESSAGES</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

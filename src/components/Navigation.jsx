@@ -53,7 +53,7 @@ export default function Navigation({
     ...(!isInstalledClient ? [
       { id: 'download', label: 'Download App', icon: DownloadCloud }
     ] : []),
-    { id: 'stats', label: 'Stats & History', icon: Activity },
+    { id: 'stats', label: 'Listening Activity', icon: Activity },
     ...(currentUser && isUserAdmin(currentUser) ? [
       { id: 'admin', label: 'Admin Portal', icon: ShieldCheck }
     ] : [])
@@ -396,7 +396,13 @@ export default function Navigation({
             isDark ? 'bg-[#141d1b] border-zinc-800' : 'bg-[#ede5d3] border-black'
           }`}>
             <button
-              onClick={openAuthModal}
+              onClick={() => {
+                if (currentUser) {
+                  setCurrentScreen('profile');
+                } else {
+                  openAuthModal();
+                }
+              }}
               className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
               title={currentUser ? "Account Profile" : "Log In"}
             >

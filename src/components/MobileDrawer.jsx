@@ -202,7 +202,7 @@ export default function MobileDrawer({
               }`}
             >
               <Activity size={16} className="text-[#17a398]" strokeWidth={2.5} />
-              <span>Stats & History</span>
+              <span>Listening Activity</span>
             </a>
 
             {isUserAdmin(currentUser) && (

@@ -24,13 +24,15 @@ import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useSocket } from '../context/SocketContext';
+import { useTheme } from '../context/ThemeContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import UserDetailModal from './UserDetailModal';
 
-export default function FriendActivityModal({ visible, onClose }) {
+export default function FriendActivityModal({ visible, onClose, onViewProfile }) {
   const { token, currentUser } = useUser();
   const { playTrack } = useAudioPlayer();
   const { socket } = useSocket();
+  const { isDark = true } = useTheme();
 
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -107,20 +109,29 @@ export default function FriendActivityModal({ visible, onClose }) {
     };
   }, [socket, visible]);
 
-  const liveCount = useMemo(() => {
-    return activities.filter(a => Boolean(a.isLive && a.currentListening)).length;
-  }, [activities]);
-
   const filtered = useMemo(() => {
-    if (!searchQuery.trim()) return activities;
+    const myId = String(currentUser?.id || currentUser?._id || '');
+    const myName = (currentUser?.name || '').trim().toLowerCase();
+    let list = activities.filter((f) => {
+      const friendId = String(f.id || f._id || '');
+      if (myId && friendId === myId) return false;
+      if (myName && (f.name || '').trim().toLowerCase() === myName) return false;
+      return true;
+    });
+
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return activities.filter((f) => {
+    return list.filter((f) => {
       const nameMatch = f.name?.toLowerCase().includes(q);
       const songMatch = f.currentListening?.title?.toLowerCase().includes(q);
       const artistMatch = f.currentListening?.artist?.toLowerCase().includes(q);
       return nameMatch || songMatch || artistMatch;
     });
-  }, [activities, searchQuery]);
+  }, [activities, searchQuery, currentUser]);
+
+  const liveCount = useMemo(() => {
+    return filtered.filter(a => Boolean(a.isLive && a.currentListening)).length;
+  }, [filtered]);
 
   const handleListenAlong = (friend) => {
     if (!friend.currentListening) return;
@@ -139,22 +150,49 @@ export default function FriendActivityModal({ visible, onClose }) {
     }
   };
 
+  const formatLastSeen = (dateStr, isOnline) => {
+    if (isOnline) return 'Active now';
+    if (!dateStr) return 'Offline';
+    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (isNaN(diffSec) || diffSec < 0) return 'Offline';
+    if (diffSec < 60) return 'Active just now';
+    if (diffSec < 3600) {
+      const mins = Math.floor(diffSec / 60);
+      return `Active ${mins}m ago`;
+    }
+    if (diffSec < 86400) {
+      const hours = Math.floor(diffSec / 3600);
+      return `Offline ${hours}h ago`;
+    }
+    const days = Math.floor(diffSec / 86400);
+    return `Offline ${days}d ago`;
+  };
+
+  const handleOpenProfile = (friend) => {
+    if (onViewProfile) {
+      onClose();
+      onViewProfile(friend);
+    } else {
+      setSelectedUser(friend);
+    }
+  };
+
   const renderFriendItem = ({ item }) => {
     const isLive = Boolean(item.isLive && item.currentListening);
     const listening = item.currentListening;
 
     return (
-      <View style={styles.friendCard}>
+      <View style={[styles.friendCard, !isDark && styles.friendCardLight]}>
         {/* Avatar and name clickable to open profile */}
         <TouchableOpacity
           style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-          onPress={() => setSelectedUser(item)}
+          onPress={() => handleOpenProfile(item)}
           activeOpacity={0.7}
         >
           {/* Avatar */}
           <View style={styles.avatarWrap}>
             {item.avatar ? (
-              <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} />
+              <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} fadeDuration={0} />
             ) : (
               <View style={styles.avatarFallback}>
                 <Text style={styles.avatarLetter}>
@@ -163,7 +201,7 @@ export default function FriendActivityModal({ visible, onClose }) {
               </View>
             )}
             {item.isLive ? (
-              <View style={[styles.onlineDot, { backgroundColor: '#10b981', borderColor: '#0b1110', borderWidth: 2 }]} />
+              <View style={[styles.onlineDot, { backgroundColor: '#10b981', borderColor: !isDark ? '#f4ede1' : '#0b1110', borderWidth: 2 }]} />
             ) : item.isOnline ? (
               <View style={[styles.onlineDot, { backgroundColor: '#34d399' }]} />
             ) : (
@@ -174,7 +212,7 @@ export default function FriendActivityModal({ visible, onClose }) {
           {/* Info */}
           <View style={styles.infoCol}>
             <View style={styles.nameRow}>
-              <Text style={styles.friendName} numberOfLines={1}>
+              <Text style={[styles.friendName, !isDark && styles.friendNameLight]} numberOfLines={1}>
                 {item.name || 'Anonymous Listener'}
               </Text>
               {isLive ? (
@@ -188,7 +226,9 @@ export default function FriendActivityModal({ visible, onClose }) {
                 </View>
               ) : (
                 <View style={[styles.liveBadge, { backgroundColor: '#1e293b' }]}>
-                  <Text style={[styles.liveBadgeText, { color: '#64748b' }]}>OFFLINE</Text>
+                  <Text style={[styles.liveBadgeText, { color: '#94a3b8' }]}>
+                    {formatLastSeen(item.lastActiveAt, false).toUpperCase()}
+                  </Text>
                 </View>
               )}
             </View>
@@ -197,15 +237,16 @@ export default function FriendActivityModal({ visible, onClose }) {
               <View style={styles.trackInfoRow}>
                 <Disc size={12} color="#26c4b7" strokeWidth={2.4} />
                 <Text style={[styles.trackTitle, { color: '#26c4b7', fontWeight: '700' }]} numberOfLines={1}>
-                  {listening.title || 'Playing song'}
+                  Playing: {listening.title || 'Playing song'}
                   {listening.artist ? ` • ${listening.artist}` : ''}
                 </Text>
               </View>
             ) : listening && item.isOnline ? (
               <View style={styles.trackInfoRow}>
-                <Disc size={11} color="#64748b" strokeWidth={2} />
-                <Text style={[styles.trackTitle, { color: '#94a3b8' }]} numberOfLines={1}>
+                <Disc size={11} color="#f59e0b" strokeWidth={2} />
+                <Text style={[styles.trackTitle, { color: !isDark ? '#b45309' : '#fcd34d' }]} numberOfLines={1}>
                   Paused: {listening.title || 'Track'}
+                  {listening.artist ? ` • ${listening.artist}` : ''}
                 </Text>
               </View>
             ) : listening && !item.isOnline ? (
@@ -213,11 +254,12 @@ export default function FriendActivityModal({ visible, onClose }) {
                 <Disc size={11} color="#475569" strokeWidth={1.8} />
                 <Text style={[styles.trackTitle, { color: '#64748b' }]} numberOfLines={1}>
                   Last played: {listening.title || 'Track'}
+                  {listening.artist ? ` • ${listening.artist}` : ''}
                 </Text>
               </View>
             ) : (
-              <Text style={styles.idleText}>
-                {item.isOnline ? 'Online • Browsing crates' : 'Offline'}
+              <Text style={[styles.idleText, !isDark && styles.idleTextLight]}>
+                {item.isOnline ? 'Online • Browsing crates' : (item.lastActiveAt ? `Offline • ${formatLastSeen(item.lastActiveAt, false)}` : 'Offline')}
               </Text>
             )}
           </View>
@@ -239,17 +281,17 @@ export default function FriendActivityModal({ visible, onClose }) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.container}>
+        <View style={[styles.container, !isDark && styles.containerLight]}>
           {/* Header */}
-          <View style={styles.header}>
+          <View style={[styles.header, !isDark && styles.headerLight]}>
             <View style={styles.headerLeft}>
               <View style={styles.iconCircle}>
                 <Users size={18} color="#0b1110" strokeWidth={2.8} />
               </View>
               <View>
-                <Text style={styles.headerTitle}>FRIEND ACTIVITY</Text>
+                <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]}>FRIEND ACTIVITY</Text>
                 <Text style={styles.headerSub}>
                   {liveCount > 0 ? `${liveCount} LISTENING LIVE` : 'DISCORD & COMMUNITY RADAR'}
                 </Text>
@@ -264,22 +306,22 @@ export default function FriendActivityModal({ visible, onClose }) {
                 {isLoading ? (
                   <ActivityIndicator size="small" color="#17a398" />
                 ) : (
-                  <RefreshCw size={16} color="#94a3b8" />
+                  <RefreshCw size={16} color={!isDark ? '#0b1110' : '#94a3b8'} />
                 )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                <X size={18} color="#ffffff" />
+              <TouchableOpacity style={[styles.closeBtn, !isDark && styles.closeBtnLight]} onPress={onClose}>
+                <X size={18} color={!isDark ? '#0b1110' : '#ffffff'} />
               </TouchableOpacity>
             </View>
           </View>
 
           {/* Search Box */}
-          <View style={styles.searchBox}>
-            <Search size={15} color="#64748b" />
+          <View style={[styles.searchBox, !isDark && styles.searchBoxLight]}>
+            <Search size={15} color={!isDark ? '#0b1110' : '#64748b'} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, !isDark && styles.searchInputLight]}
               placeholder="Search friends or tracks..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -289,13 +331,13 @@ export default function FriendActivityModal({ visible, onClose }) {
           {isLoading && activities.length === 0 ? (
             <View style={styles.emptyWrap}>
               <ActivityIndicator size="large" color="#17a398" />
-              <Text style={styles.emptyTitle}>Scanning friend radar...</Text>
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>Scanning friend radar...</Text>
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.emptyWrap}>
               <Users size={40} color="#17a398" />
-              <Text style={styles.emptyTitle}>No activity found</Text>
-              <Text style={styles.emptyDesc}>
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>No activity found</Text>
+              <Text style={[styles.emptyDesc, !isDark && styles.emptyDescLight]}>
                 When your friends or community members play songs on Rivo or Discord, their tracks will appear here live.
               </Text>
             </View>
@@ -306,17 +348,24 @@ export default function FriendActivityModal({ visible, onClose }) {
               renderItem={renderFriendItem}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
+              initialNumToRender={Platform.OS === 'android' ? 5 : 8}
+              maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+              windowSize={Platform.OS === 'android' ? 3 : 5}
+              updateCellsBatchingPeriod={50}
+              removeClippedSubviews={Platform.OS === 'android'}
             />
           )}
         </View>
       </View>
 
-      <UserDetailModal
-        visible={Boolean(selectedUser)}
-        user={selectedUser}
-        userId={selectedUser?.id || selectedUser?._id}
-        onClose={() => setSelectedUser(null)}
-      />
+      {!onViewProfile && (
+        <UserDetailModal
+          visible={Boolean(selectedUser)}
+          user={selectedUser}
+          userId={selectedUser?.id || selectedUser?._id}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
     </Modal>
   );
 }
@@ -531,5 +580,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 17,
+  },
+  // ── Light Theme Adaptations ──
+  containerLight: {
+    backgroundColor: '#f4ede1',
+    borderColor: '#0b1110',
+  },
+  headerLight: {
+    borderBottomColor: '#d6c8b0',
+  },
+  headerTitleLight: {
+    color: '#0b1110',
+  },
+  closeBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  searchBoxLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  searchInputLight: {
+    color: '#0b1110',
+  },
+  friendCardLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  friendNameLight: {
+    color: '#0b1110',
+  },
+  idleTextLight: {
+    color: '#57534e',
+  },
+  emptyTitleLight: {
+    color: '#0b1110',
+  },
+  emptyDescLight: {
+    color: '#57534e',
   },
 });
